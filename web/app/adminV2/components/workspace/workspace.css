@@ -5488,14 +5488,15 @@
   box-shadow: none !important;
 }
 
-[data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] [data-jrm-metadata-band] {
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, rgba(255, 255, 255, 0.42) 88%, rgba(0, 69, 140, 0.055)) 0%,
-    color-mix(in srgb, rgba(255, 255, 255, 0.28) 90%, rgba(0, 162, 131, 0.04)) 100%
-  );
-  border-radius: 0 0 0.65rem 0.65rem;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+/* Snapshot summary grid: denser controls + tighter rhythm (record header, not form stack) */
+[data-adminv2-record-modal-tone="cleaning-v2"] [data-jrm-snapshot-grid] select.adminv2-jrm-snapshot-select {
+  min-height: 1.45rem !important;
+  padding-top: 0.1rem !important;
+  padding-bottom: 0.1rem !important;
+  font-size: 0.8125rem !important;
+  line-height: 1.25 !important;
+  background-position: calc(100% - 12px) calc(50% + 1px), calc(100% - 8px) calc(50% + 1px) !important;
+  background-size: 4px 4px, 4px 4px !important;
 }
 
 /* Lower chapters: single-column inline record rows (label | control) */

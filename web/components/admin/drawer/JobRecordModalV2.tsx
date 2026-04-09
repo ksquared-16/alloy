@@ -134,33 +134,25 @@ function buildJobRecordModalV2OverviewSections(): EntityDrawerSectionConfig[] {
 
 export const JOB_RECORD_MODAL_V2_OVERVIEW_SECTIONS = buildJobRecordModalV2OverviewSections();
 
-/** Minimal record controls — chrome from `.adminv2-jrm-record-select` (workspace.css) */
+/** Minimal record controls — chrome from `.adminv2-jrm-record-select` (workspace.css); snapshot grid uses compact overrides */
 const recordSelectClass =
-    "adminv2-job-record-primary-input adminv2-job-record-modal-v2-input adminv2-jrm-record-select w-full min-w-0 max-w-full text-sm font-medium text-alloy-forge disabled:opacity-60";
+    "adminv2-job-record-primary-input adminv2-job-record-modal-v2-input adminv2-jrm-record-select adminv2-jrm-snapshot-select w-full min-w-0 max-w-full font-medium text-alloy-forge disabled:opacity-60";
 const textActionClass =
     "adminv2-jrm-text-action text-[11px] font-medium text-alloy-blue hover:underline underline-offset-2 decoration-alloy-blue/40 bg-transparent border-0 p-0 cursor-pointer shrink-0";
 const textActionMutedClass =
     "adminv2-jrm-text-action text-[11px] font-medium text-alloy-midnight/55 hover:text-alloy-midnight/80 hover:underline underline-offset-2 bg-transparent border-0 p-0 cursor-pointer shrink-0";
 
-function JrmRecordRow(props: {
-    label: string;
-    children: React.ReactNode;
-    id?: string;
-    withDivider?: boolean;
-}) {
-    const { label, children, id, withDivider = true } = props;
+/** Compact label-over-control cell for the snapshot summary grid */
+function JrmSnapCell(props: { label: string; children: ReactNode; className?: string }) {
     return (
-        <div
-            id={id}
-            className={`adminv2-jrm-record-row flex flex-col gap-1 py-2.5 sm:flex-row sm:items-start sm:justify-between sm:gap-6 ${withDivider ? "border-b border-solid border-[rgba(39,63,82,0.07)]" : ""}`}
-        >
-            <span
-                className="text-[10px] font-semibold uppercase tracking-[0.09em] shrink-0 pt-0.5 sm:w-[7.25rem]"
+        <div className={`min-w-0 ${props.className ?? ""}`}>
+            <div
+                className="mb-0.5 text-[9px] font-semibold uppercase leading-none tracking-[0.1em]"
                 style={{ color: derived.textSecondary }}
             >
-                {label}
-            </span>
-            <div className="min-w-0 flex-1 flex flex-wrap items-center gap-x-2 gap-y-1 sm:justify-end">{children}</div>
+                {props.label}
+            </div>
+            <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">{props.children}</div>
         </div>
     );
 }
@@ -259,140 +251,183 @@ export default function JobRecordModalV2(props: JobRecordModalV2Props) {
             </div>
 
             <div
-                className="adminv2-jrm-snapshot-card rounded-2xl px-1 py-1 sm:px-2 sm:py-2"
+                className="adminv2-jrm-snapshot-card rounded-xl px-1.5 py-1 sm:px-2 sm:py-1.5"
                 data-adminv2-job-record-modal-v2-top="true"
                 style={shell}
             >
-                <p className="text-[10px] font-semibold uppercase tracking-[0.12em] px-0.5 pb-2" style={{ color: derived.textSecondary }}>
+                <p
+                    className="px-0.5 pb-1 text-[9px] font-semibold uppercase tracking-[0.12em] leading-none"
+                    style={{ color: derived.textSecondary }}
+                >
                     Record snapshot
                 </p>
-                <div className="adminv2-jrm-snapshot-rows px-0.5">
-                    <JrmRecordRow label="Status">
-                        <select
-                            id="job-modal-v2-status"
-                            value={sk}
-                            onChange={(e) => props.setFormData((f) => ({ ...f, status_key: e.target.value || null }))}
-                            onBlur={props.onBlurSave}
-                            disabled={!props.canMutate}
-                            className={recordSelectClass}
-                        >
-                            <option value="">— None —</option>
-                            {statusOptions.map((s) => (
-                                <option key={s.status_key} value={s.status_key}>
-                                    {s.status_label ?? s.status_key}
-                                </option>
-                            ))}
-                        </select>
-                    </JrmRecordRow>
-                    <JrmRecordRow label="Assigned vendor" id="job-assign-vendor-section">
-                        <select
-                            value={String(props.formData.assigned_vendor_id ?? "")}
-                            onChange={(e) => props.setFormData((f) => ({ ...f, assigned_vendor_id: e.target.value || null }))}
-                            onBlur={props.onBlurSave}
-                            disabled={!props.canMutate}
-                            className={recordSelectClass}
-                            aria-label="Assigned vendor"
-                        >
-                            <option value="">(none)</option>
-                            {props.jobVendorOptions.map((v) => (
-                                <option key={v.id} value={v.id}>
-                                    {v.label}
-                                </option>
-                            ))}
-                        </select>
-                        {vid ? (
-                            <button type="button" onClick={() => props.openDrawer("vendors", vid)} className={textActionClass}>
-                                Open
-                            </button>
-                        ) : null}
-                    </JrmRecordRow>
-                    <JrmRecordRow label="Primary person">
-                        <select
-                            id="job-modal-v2-contact"
-                            value={String(props.formData.primary_contact_id ?? "")}
-                            onChange={(e) => props.setFormData((f) => ({ ...f, primary_contact_id: e.target.value }))}
-                            onBlur={props.onBlurSave}
-                            disabled={!props.canMutate || props.primaryContactDisabled}
-                            className={recordSelectClass}
-                        >
-                            <option value="">(none)</option>
-                            {props.jobContactOptions.map((c) => (
-                                <option key={c.id} value={c.id}>
-                                    {c.label}
-                                </option>
-                            ))}
-                        </select>
-                    </JrmRecordRow>
-                    <JrmRecordRow label="Service location">
-                        <select
-                            id="job-modal-v2-location"
-                            value={String(props.formData.location_id ?? "")}
-                            onChange={(e) => props.setFormData((f) => ({ ...f, location_id: e.target.value || null }))}
-                            onBlur={props.onBlurSave}
-                            disabled={!props.canMutate}
-                            className={recordSelectClass}
-                        >
-                            <option value="">(none)</option>
-                            {props.jobLocationOptions.map((loc) => (
-                                <option key={loc.id} value={loc.id}>
-                                    {loc.label}
-                                </option>
-                            ))}
-                        </select>
-                        {String(props.formData.location_id ?? "").trim() ? (
-                            <button
-                                type="button"
-                                onClick={() => props.openDrawer("locations", String(props.formData.location_id))}
-                                className={textActionClass}
+                <div data-jrm-snapshot-grid="true" className="adminv2-jrm-snapshot-grid space-y-1.5 px-0.5">
+                    <div className="grid grid-cols-1 gap-x-2.5 gap-y-1.5 md:grid-cols-3">
+                        <JrmSnapCell label="Status">
+                            <select
+                                id="job-modal-v2-status"
+                                value={sk}
+                                onChange={(e) => props.setFormData((f) => ({ ...f, status_key: e.target.value || null }))}
+                                onBlur={props.onBlurSave}
+                                disabled={!props.canMutate}
+                                className={recordSelectClass}
                             >
-                                Open
-                            </button>
-                        ) : null}
-                        {props.canMutate ? (
-                            <button type="button" onClick={props.openJobLocationChange} className={textActionMutedClass}>
-                                Change
-                            </button>
-                        ) : null}
-                    </JrmRecordRow>
-                    <JrmRecordRow label="Next visit" withDivider={false}>
-                        <span className="text-sm font-medium leading-snug tabular-nums" style={{ color: neutral.textPrimary }}>
-                            {nextLabel}
-                        </span>
-                        {props.firstSchedule && !props.rescheduleFormActive ? (
-                            <button type="button" onClick={() => props.openReschedule(props.firstSchedule!)} className={textActionClass}>
-                                Reschedule
-                            </button>
-                        ) : null}
-                    </JrmRecordRow>
-                </div>
-
-                <div
-                    data-jrm-metadata-band="true"
-                    className="adminv2-jrm-metadata-band mt-2 border-t border-solid border-[rgba(39,63,82,0.08)] px-0.5 pt-3"
-                >
-                    <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2 text-sm">
-                        <span style={{ color: neutral.textPrimary }}>
-                            <span className="mr-1.5 text-[11px] font-medium uppercase tracking-wide opacity-60">Total</span>
-                            <span className="font-semibold tabular-nums">
-                                {Number.isFinite(totalCents) ? formatMoneyFromCents(totalCents) : "—"}
-                            </span>
-                        </span>
-                        <span style={{ color: neutral.textPrimary }}>
-                            <span className="mr-1.5 text-[11px] font-medium uppercase tracking-wide opacity-60">Outstanding</span>
-                            <span className="font-semibold tabular-nums">
-                                {Number.isFinite(balCents) ? formatMoneyFromCents(balCents) : "—"}
-                            </span>
-                        </span>
+                                <option value="">— None —</option>
+                                {statusOptions.map((s) => (
+                                    <option key={s.status_key} value={s.status_key}>
+                                        {s.status_label ?? s.status_key}
+                                    </option>
+                                ))}
+                            </select>
+                        </JrmSnapCell>
+                        <div id="job-assign-vendor-section" className="min-w-0">
+                            <JrmSnapCell label="Assigned vendor">
+                                <select
+                                    value={String(props.formData.assigned_vendor_id ?? "")}
+                                    onChange={(e) => props.setFormData((f) => ({ ...f, assigned_vendor_id: e.target.value || null }))}
+                                    onBlur={props.onBlurSave}
+                                    disabled={!props.canMutate}
+                                    className={recordSelectClass}
+                                    aria-label="Assigned vendor"
+                                >
+                                    <option value="">(none)</option>
+                                    {props.jobVendorOptions.map((v) => (
+                                        <option key={v.id} value={v.id}>
+                                            {v.label}
+                                        </option>
+                                    ))}
+                                </select>
+                                {vid ? (
+                                    <button type="button" onClick={() => props.openDrawer("vendors", vid)} className={textActionClass}>
+                                        Open
+                                    </button>
+                                ) : null}
+                            </JrmSnapCell>
+                        </div>
+                        <JrmSnapCell label="Primary person">
+                            <select
+                                id="job-modal-v2-contact"
+                                value={String(props.formData.primary_contact_id ?? "")}
+                                onChange={(e) => props.setFormData((f) => ({ ...f, primary_contact_id: e.target.value }))}
+                                onBlur={props.onBlurSave}
+                                disabled={!props.canMutate || props.primaryContactDisabled}
+                                className={recordSelectClass}
+                            >
+                                <option value="">(none)</option>
+                                {props.jobContactOptions.map((c) => (
+                                    <option key={c.id} value={c.id}>
+                                        {c.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </JrmSnapCell>
                     </div>
-                    <p className="mt-2 text-[13px] leading-relaxed" style={{ color: derived.textSecondary }}>
-                        <span className="font-medium" style={{ color: neutral.textPrimary }}>
-                            {serviceType}
-                        </span>
-                        <span className="opacity-50"> · </span>
-                        {formatServiceFrequencyReadLabel(r.service_frequency_key)}
-                        <span className="opacity-50"> · </span>
-                        Recurring {recurring}
-                    </p>
+
+                    <div className="grid grid-cols-1 gap-x-2.5 gap-y-1 md:grid-cols-2">
+                        <JrmSnapCell label="Service location">
+                            <select
+                                id="job-modal-v2-location"
+                                value={String(props.formData.location_id ?? "")}
+                                onChange={(e) => props.setFormData((f) => ({ ...f, location_id: e.target.value || null }))}
+                                onBlur={props.onBlurSave}
+                                disabled={!props.canMutate}
+                                className={recordSelectClass}
+                            >
+                                <option value="">(none)</option>
+                                {props.jobLocationOptions.map((loc) => (
+                                    <option key={loc.id} value={loc.id}>
+                                        {loc.label}
+                                    </option>
+                                ))}
+                            </select>
+                            {String(props.formData.location_id ?? "").trim() ? (
+                                <button
+                                    type="button"
+                                    onClick={() => props.openDrawer("locations", String(props.formData.location_id))}
+                                    className={textActionClass}
+                                >
+                                    Open
+                                </button>
+                            ) : null}
+                            {props.canMutate ? (
+                                <button type="button" onClick={props.openJobLocationChange} className={textActionMutedClass}>
+                                    Change
+                                </button>
+                            ) : null}
+                        </JrmSnapCell>
+                        <JrmSnapCell label="Next visit">
+                            <span className="text-[13px] font-medium leading-tight tabular-nums" style={{ color: neutral.textPrimary }}>
+                                {nextLabel}
+                            </span>
+                            {props.firstSchedule && !props.rescheduleFormActive ? (
+                                <button type="button" onClick={() => props.openReschedule(props.firstSchedule!)} className={textActionClass}>
+                                    Reschedule
+                                </button>
+                            ) : null}
+                        </JrmSnapCell>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-x-2.5 gap-y-1 border-t border-solid border-[rgba(39,63,82,0.06)] pt-1.5 sm:grid-cols-3 xl:grid-cols-5">
+                        <div className="min-w-0">
+                            <div
+                                className="mb-0.5 text-[9px] font-semibold uppercase leading-none tracking-[0.1em]"
+                                style={{ color: derived.textSecondary }}
+                            >
+                                Total
+                            </div>
+                            <div className="text-[13px] font-semibold tabular-nums leading-tight" style={{ color: neutral.textPrimary }}>
+                                {Number.isFinite(totalCents) ? formatMoneyFromCents(totalCents) : "—"}
+                            </div>
+                        </div>
+                        <div className="min-w-0">
+                            <div
+                                className="mb-0.5 text-[9px] font-semibold uppercase leading-none tracking-[0.1em]"
+                                style={{ color: derived.textSecondary }}
+                            >
+                                Outstanding
+                            </div>
+                            <div className="text-[13px] font-semibold tabular-nums leading-tight" style={{ color: neutral.textPrimary }}>
+                                {Number.isFinite(balCents) ? formatMoneyFromCents(balCents) : "—"}
+                            </div>
+                        </div>
+                        <div className="min-w-0 xl:col-span-1">
+                            <div
+                                className="mb-0.5 text-[9px] font-semibold uppercase leading-none tracking-[0.1em]"
+                                style={{ color: derived.textSecondary }}
+                            >
+                                Service
+                            </div>
+                            <div
+                                className="truncate text-[13px] font-medium leading-tight"
+                                style={{ color: neutral.textPrimary }}
+                                title={serviceType}
+                            >
+                                {serviceType}
+                            </div>
+                        </div>
+                        <div className="min-w-0">
+                            <div
+                                className="mb-0.5 text-[9px] font-semibold uppercase leading-none tracking-[0.1em]"
+                                style={{ color: derived.textSecondary }}
+                            >
+                                Frequency
+                            </div>
+                            <div className="truncate text-[13px] font-medium leading-tight" style={{ color: neutral.textPrimary }}>
+                                {formatServiceFrequencyReadLabel(r.service_frequency_key)}
+                            </div>
+                        </div>
+                        <div className="min-w-0 col-span-2 sm:col-span-1 xl:col-span-1">
+                            <div
+                                className="mb-0.5 text-[9px] font-semibold uppercase leading-none tracking-[0.1em]"
+                                style={{ color: derived.textSecondary }}
+                            >
+                                Recurring
+                            </div>
+                            <div className="text-[13px] font-medium leading-tight" style={{ color: neutral.textPrimary }}>
+                                {recurring}
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
 
