@@ -56,7 +56,7 @@ import {
     JobDrawerV2SignalsStrip,
     deriveJobDrawerSignalLines,
     JobDrawerV2PrimaryActions,
-    JobDrawerV2OverviewShell,
+    JobRecordPrimaryPanel,
     JobDrawerV2TimelineCard,
 } from "@/components/admin/drawer/JobDrawerV2";
 import { AdminCollectPaymentModal, type AdminCollectPaymentModalContext } from "@/components/admin/AdminCollectPaymentModal";
@@ -280,6 +280,66 @@ function canEditInDrawer(type: string): type is (typeof EDITABLE_TYPES)[number] 
 /** Shared spacing: 24px container (drawer body has p-6), 16px between rows, section title with divider */
 const DRAWER_SECTION_HEADER_CLASS = "text-xs font-semibold uppercase tracking-wider text-[#59678b] border-b border-[#e6e8ec] pb-2 mb-4";
 const DRAWER_ROW_SPACING = "space-y-4";
+
+/** Curated collapsible sections for Admin V2 job Record tab (replaces flat overview + field_definitions dump). */
+function buildJobDrawerV2OverviewSections(): EntityDrawerSectionConfig[] {
+    const pres = getEntityPresentation("jobs").drawer?.overviewSections ?? [];
+    const ps = pres.find((s) => s.key === "property_service");
+    const sched = pres.find((s) => s.key === "scheduling");
+    const notes = pres.find((s) => s.key === "notes");
+    const rec = pres.find((s) => s.key === "record_info");
+    const propertyFields: EntityDrawerFieldConfig[] = [
+        { key: "title", label: "Title", span: 1, renderHint: "text", editable: true },
+        { key: "service_key", label: "Service", span: 1, renderHint: "text", editable: true },
+        { key: "job_type", label: "Job type", span: 1, renderHint: "text", editable: true },
+        ...(ps?.fields ?? []),
+    ];
+    const schedFields = (sched?.fields ?? []).filter((f) => f.key !== "_next_schedule");
+    const pb = getJobPricingBreakdownSection();
+    const bill = getJobOverviewBillingSummarySection();
+    return [
+        {
+            key: "property_service_v2",
+            title: "Property & service details",
+            defaultExpanded: true,
+            collapsible: true,
+            gridCols: 2,
+            fields: propertyFields,
+            locked: true,
+        },
+        {
+            key: "rrs_snapshot",
+            title: "Resolver context",
+            defaultExpanded: false,
+            collapsible: true,
+            gridCols: 1,
+            fields: [],
+            locked: true,
+        },
+        {
+            key: "scheduling_v2",
+            title: sched?.title ?? "Scheduling",
+            defaultExpanded: false,
+            collapsible: true,
+            gridCols: 2,
+            fields: schedFields,
+            locked: true,
+        },
+        { ...pb, defaultExpanded: false },
+        { ...bill, defaultExpanded: false },
+        {
+            key: "internal_metadata_v2",
+            title: "Internal / metadata",
+            defaultExpanded: false,
+            collapsible: true,
+            gridCols: 2,
+            fields: [...(notes?.fields ?? []), ...(rec?.fields ?? [])],
+            locked: true,
+        },
+    ];
+}
+
+const JOB_DRAWER_V2_OVERVIEW_SECTIONS = buildJobDrawerV2OverviewSections();
 
 /** Entity types that use inline-edit; always show inputs, save on blur or Save (no overview read/edit toggle). */
 const INLINE_EDIT_ENTITY_TYPES = ["contacts", "customers", "vendors", "opportunities", "schedules", "customer_members", "payments", "service_offerings", "service_plan_templates", "addons", "persons"] as const;
@@ -511,6 +571,8 @@ function LinkedRow({
 
 /** Job drawer: Relationships collapsible section (Customer, Primary contact, Location, Opportunity, Work unit, Default vendor). */
 function JobDrawerRelationshipsSection(props: {
+    /** Admin V2 Record tab: status/customer/vendor/WU live in the primary panel — only contact, location, opportunity here. */
+    omitPrimaryAssignments?: boolean;
     /** Admin V2 drawer — token borders and typography (same behavior). */
     uiVariant?: "legacy" | "adminV2";
     formData: Record<string, unknown>;
@@ -540,6 +602,9 @@ function JobDrawerRelationshipsSection(props: {
 }) {
     const p = props;
     const v2 = p.uiVariant === "adminV2";
+    const omit = p.omitPrimaryAssignments === true;
+    const sectionTitle =
+        v2 && omit ? "Contact & location" : v2 ? "Customer & assignments" : "Relationships";
     return (
         <div
             className={v2 ? "rounded-[10px] border border-solid pb-1" : "border-b border-[#e6e8ec]"}
@@ -555,50 +620,54 @@ function JobDrawerRelationshipsSection(props: {
                 }
                 style={v2 ? { color: "rgba(39, 63, 82, 0.65)" } : undefined}
             >
-                {v2 ? "Customer & assignments" : "Relationships"}
+                {sectionTitle}
                 <span className={v2 ? "text-alloy-midnight/50" : "text-alloy-midnight opacity-60"}>
                     {p.jobExpandedSections.relationships ? "▼" : "▶"}
                 </span>
             </button>
             {p.jobExpandedSections.relationships && (
                 <div className={`space-y-3 pb-3 ${v2 ? "px-3" : ""}`}>
-                    <div id="job-assign-vendor-section">
-                        <strong className="text-alloy-midnight/70 block mb-2">Default {p.vendorSingular}</strong>
-                        <div className="flex flex-wrap items-center gap-2">
-                            <select value={p.jobAssignedVendorId ?? ""} onChange={(e) => p.setJobAssignedVendorId(e.target.value || null)} className="px-2 py-1.5 border rounded text-sm min-w-[140px]">
-                                <option value="">(none)</option>
-                                {p.jobVendorOptions.map((v) => (
-                                    <option key={v.id} value={v.id}>
-                                        {v.label}
-                                    </option>
-                                ))}
-                            </select>
-                            {p.jobAssignedVendorId ? (
-                                <button type="button" onClick={() => p.openDrawer({ type: "vendors", id: p.jobAssignedVendorId as string })} className="text-xs px-2 py-1 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20">
-                                    Open
-                                </button>
-                            ) : null}
-                            <button type="button" disabled={p.jobAssignedVendorSaving} onClick={p.saveJobAssignedVendor} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">
-                                {p.jobAssignedVendorSaving ? "Saving…" : "Save"}
-                            </button>
-                        </div>
-                        {p.canMutate && (
-                            <label className="flex items-center gap-2 mt-2 text-sm text-alloy-midnight/70">
-                                <input type="checkbox" checked={p.applyVendorToUpcoming} onChange={(e) => p.setApplyVendorToUpcoming(e.target.checked)} />
-                                Apply to all upcoming schedules
-                            </label>
-                        )}
-                    </div>
-                    <div>
-                        <label className="block text-sm text-alloy-midnight/70 mb-0.5">{p.customerSingular}</label>
-                        <div className="flex gap-2 items-center flex-wrap">
-                            <select value={String(p.formData.customer_id ?? "")} onChange={(e) => p.setFormData((f) => ({ ...f, customer_id: e.target.value, primary_contact_id: "", opportunity_id: "" }))} disabled={!p.canMutate} className="flex-1 min-w-[140px] px-2 py-1.5 border rounded text-sm disabled:opacity-60">
-                                <option value="">(none)</option>
-                                {p.jobCustomerOptions.map((c) => <option key={c.id} value={c.id}>{c.name ?? c.id}</option>)}
-                            </select>
-                            {String(p.formData.customer_id ?? "").trim() ? <button type="button" onClick={() => p.openDrawer({ type: "customers", id: String(p.formData.customer_id) })} className="text-xs px-2 py-1 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20">Open</button> : null}
-                        </div>
-                    </div>
+                    {!omit && (
+                        <>
+                            <div id="job-assign-vendor-section">
+                                <strong className="text-alloy-midnight/70 block mb-2">Default {p.vendorSingular}</strong>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <select value={p.jobAssignedVendorId ?? ""} onChange={(e) => p.setJobAssignedVendorId(e.target.value || null)} className="px-2 py-1.5 border rounded text-sm min-w-[140px]">
+                                        <option value="">(none)</option>
+                                        {p.jobVendorOptions.map((v) => (
+                                            <option key={v.id} value={v.id}>
+                                                {v.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {p.jobAssignedVendorId ? (
+                                        <button type="button" onClick={() => p.openDrawer({ type: "vendors", id: p.jobAssignedVendorId as string })} className="text-xs px-2 py-1 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20">
+                                            Open
+                                        </button>
+                                    ) : null}
+                                    <button type="button" disabled={p.jobAssignedVendorSaving} onClick={p.saveJobAssignedVendor} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">
+                                        {p.jobAssignedVendorSaving ? "Saving…" : "Save"}
+                                    </button>
+                                </div>
+                                {p.canMutate && (
+                                    <label className="flex items-center gap-2 mt-2 text-sm text-alloy-midnight/70">
+                                        <input type="checkbox" checked={p.applyVendorToUpcoming} onChange={(e) => p.setApplyVendorToUpcoming(e.target.checked)} />
+                                        Apply to all upcoming schedules
+                                    </label>
+                                )}
+                            </div>
+                            <div>
+                                <label className="block text-sm text-alloy-midnight/70 mb-0.5">{p.customerSingular}</label>
+                                <div className="flex gap-2 items-center flex-wrap">
+                                    <select value={String(p.formData.customer_id ?? "")} onChange={(e) => p.setFormData((f) => ({ ...f, customer_id: e.target.value, primary_contact_id: "", opportunity_id: "" }))} disabled={!p.canMutate} className="flex-1 min-w-[140px] px-2 py-1.5 border rounded text-sm disabled:opacity-60">
+                                        <option value="">(none)</option>
+                                        {p.jobCustomerOptions.map((c) => <option key={c.id} value={c.id}>{c.name ?? c.id}</option>)}
+                                    </select>
+                                    {String(p.formData.customer_id ?? "").trim() ? <button type="button" onClick={() => p.openDrawer({ type: "customers", id: String(p.formData.customer_id) })} className="text-xs px-2 py-1 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20">Open</button> : null}
+                                </div>
+                            </div>
+                        </>
+                    )}
                     <div>
                         <label className="block text-sm text-alloy-midnight/70 mb-0.5">Primary {p.contactSingular}</label>
                         <select value={String(p.formData.primary_contact_id ?? "")} onChange={(e) => p.setFormData((f) => ({ ...f, primary_contact_id: e.target.value }))} disabled={!p.canMutate || p.primaryContactDisabled} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60">
@@ -627,23 +696,25 @@ function JobDrawerRelationshipsSection(props: {
                             {String(p.formData.opportunity_id ?? "").trim() ? <button type="button" onClick={() => p.openDrawer({ type: "opportunities", id: String(p.formData.opportunity_id) })} className="text-xs px-2 py-1 border border-alloy-stone/50 rounded hover:bg-alloy-stone/20">Open</button> : null}
                         </div>
                     </div>
-                    <div>
-                        <label className="block text-sm text-alloy-midnight/70 mb-0.5">Work unit</label>
-                        <p className="text-xs text-alloy-midnight/50 mb-1">Optional hierarchy queue (department · work unit).</p>
-                        <select
-                            value={String(p.formData.work_unit_id ?? "")}
-                            onChange={(e) => p.setFormData((f) => ({ ...f, work_unit_id: e.target.value || null }))}
-                            disabled={!p.canMutate}
-                            className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60"
-                        >
-                            <option value="">Unassigned</option>
-                            {p.jobWorkUnitOptions.map((o) => (
-                                <option key={o.id} value={o.id}>
-                                    {o.label}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
+                    {!omit && (
+                        <div>
+                            <label className="block text-sm text-alloy-midnight/70 mb-0.5">Work unit</label>
+                            <p className="text-xs text-alloy-midnight/50 mb-1">Optional hierarchy queue (department · work unit).</p>
+                            <select
+                                value={String(p.formData.work_unit_id ?? "")}
+                                onChange={(e) => p.setFormData((f) => ({ ...f, work_unit_id: e.target.value || null }))}
+                                disabled={!p.canMutate}
+                                className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60"
+                            >
+                                <option value="">Unassigned</option>
+                                {p.jobWorkUnitOptions.map((o) => (
+                                    <option key={o.id} value={o.id}>
+                                        {o.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
@@ -3581,10 +3652,11 @@ export default function AdminEntityDrawer() {
         ledger: "Ledger",
     };
 
-    /** Admin V2 job record modal: drop resolver-only tab — RRS merges into Record (overview). Legacy /admin unchanged. */
+    /** Admin V2 job record modal: Record, Related, Activity, Financials only (no RRS/documents tabs). */
     const jobDrawerV2TabListResolved = useMemo((): DrawerTabKey[] => {
         if (!isJobRecordModalTarget || drawer.type !== "jobs") return tabList;
-        return tabList.filter((t) => t !== "rrs_overview");
+        const allow = new Set<DrawerTabKey>(["overview", "related", "activity", "financials"]);
+        return tabList.filter((t) => allow.has(t));
     }, [isJobRecordModalTarget, drawer.type, tabList]);
 
     const jobDrawerV2TabLabelsResolved = useMemo(() => {
@@ -3598,7 +3670,7 @@ export default function AdminEntityDrawer() {
     useEffect(() => {
         if (!isJobDrawerV2 || drawer.type !== "jobs" || !drawer.id || drawer.id === "new") return;
         setJobExpandedSections({
-            relationships: true,
+            relationships: false,
             financials: false,
             scheduling: false,
             ledger: false,
@@ -3608,6 +3680,13 @@ export default function AdminEntityDrawer() {
     /** Removed RRS-only tab in V2 — migrate any stale selection. */
     useEffect(() => {
         if (isJobRecordModalTarget && drawer.type === "jobs" && drawerTab === "rrs_overview") {
+            setDrawerTab("overview");
+        }
+    }, [isJobRecordModalTarget, drawer.type, drawerTab]);
+
+    /** Documents tab removed from V2 tab strip — migrate stale selection. */
+    useEffect(() => {
+        if (isJobRecordModalTarget && drawer.type === "jobs" && drawerTab === "documents") {
             setDrawerTab("overview");
         }
     }, [isJobRecordModalTarget, drawer.type, drawerTab]);
@@ -4333,9 +4412,13 @@ export default function AdminEntityDrawer() {
         }
         if (drawer.type === "jobs" && data && !(data as { _create?: boolean })._create && drawer.id && drawer.id !== "new") {
             const jobRec = entityDrawerOverviewData as Record<string, unknown>;
-            return {
+            const base: Record<string, React.ReactNode> = {
                 job_pricing_breakdown: <JobPricingBreakdown record={jobRec} />,
             };
+            if (isJobRecordModalTarget) {
+                base.rrs_snapshot = <JobRrsOverviewTab jobId={drawer.id} variant="adminV2" />;
+            }
+            return base;
         }
         return {};
     }, [
@@ -4356,6 +4439,7 @@ export default function AdminEntityDrawer() {
         statusDefsForDrawer,
         isEditing,
         refetch,
+        isJobRecordModalTarget,
     ]);
 
     const configDrivenOverviewSections = useMemo((): EntityDrawerSectionConfig[] => {
@@ -4926,19 +5010,7 @@ export default function AdminEntityDrawer() {
 
     const drawerStatusBadge = overviewData && !loading && !(overviewData as { _create?: boolean })?._create ? (
         drawer.type === "jobs" && isJobExistingView ? (
-            isJobDrawerV2 ? (
-                <div className="flex flex-wrap items-center gap-2">
-                    <StatusBadge
-                        label={
-                            String((overviewData as { _status_display?: string | null })._status_display ?? "").trim() ||
-                            getStatusLabel((overviewData as { status_key?: string }).status_key) ||
-                            String((overviewData as { status_key?: string }).status_key ?? "").trim() ||
-                            "—"
-                        }
-                        variant={getStatusVariant((overviewData as { status_key?: string }).status_key)}
-                    />
-                </div>
-            ) : (
+            isJobDrawerV2 ? null : (
                 <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge
                         label={
@@ -5178,7 +5250,7 @@ export default function AdminEntityDrawer() {
             {error && <p className="text-alloy-ember">Error: {error}</p>}
             {data && !loading && dataMatchesDrawer && (
                 <div
-                    className={`space-y-6 ${isJobDrawerV2 && drawer.type === "jobs" ? "max-w-none" : ""}`}
+                    className={`${isJobDrawerV2 && drawer.type === "jobs" ? "space-y-3 max-w-none" : "space-y-6"}`}
                     data-adminv2-job-drawer-body={isJobDrawerV2 && drawer.type === "jobs" ? "true" : undefined}
                 >
                     {saveError && <p className="text-alloy-ember text-sm">{saveError}</p>}
@@ -6860,16 +6932,20 @@ export default function AdminEntityDrawer() {
                                 </div>
                             ) : drawer.type === "jobs" && drawer.id && drawer.id !== "new" ? (
                                 <div className="space-y-4">
-                                    <section>
-                                        <h3 className={DRAWER_SECTION_HEADER_CLASS}>Timeline</h3>
-                                        <ul className="space-y-1.5 text-sm text-alloy-forge/90">
-                                            {data?.created_at != null ? <li>Job created: {formatDateTime(String(data.created_at))}</li> : null}
-                                            {data?.updated_at != null ? <li>Updated: {formatDateTime(String(data.updated_at))}</li> : null}
-                                        </ul>
-                                        {!data?.created_at && !data?.updated_at && (
-                                            <p className="text-sm text-alloy-midnight/60">No activity recorded.</p>
-                                        )}
-                                    </section>
+                                    {isJobDrawerV2 ? (
+                                        <JobDrawerV2TimelineCard data={(data ?? null) as Record<string, unknown> | null} />
+                                    ) : (
+                                        <section>
+                                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Timeline</h3>
+                                            <ul className="space-y-1.5 text-sm text-alloy-forge/90">
+                                                {data?.created_at != null ? <li>Job created: {formatDateTime(String(data.created_at))}</li> : null}
+                                                {data?.updated_at != null ? <li>Updated: {formatDateTime(String(data.updated_at))}</li> : null}
+                                            </ul>
+                                            {!data?.created_at && !data?.updated_at && (
+                                                <p className="text-sm text-alloy-midnight/60">No activity recorded.</p>
+                                            )}
+                                        </section>
+                                    )}
                                 </div>
                             ) : drawer.type === "discount_redemptions" && drawer.id ? (
                                 <div className="space-y-4">
@@ -6948,72 +7024,76 @@ export default function AdminEntityDrawer() {
                         )}
                     {drawerTab === "overview" && useConfigDrivenOverview && presentationType && (
                         isJobDrawerV2 && drawer.type === "jobs" ? (
-                            <JobDrawerV2OverviewShell
-                                primary={
-                                    <>
-                                        {drawer.id && drawer.id !== "new" && !(data as { _create?: boolean })?._create ? (
-                                            <div
-                                                className="space-y-3 pb-1"
-                                                data-entity-drawer-rrs-overview-embedded
-                                            >
-                                                <JobRrsOverviewTab jobId={drawer.id} variant="adminV2" />
-                                            </div>
-                                        ) : null}
-                                        <div className="adminv2-job-record-fielddeck rounded-[10px] border border-solid border-[rgba(39,63,82,0.14)] bg-white p-3 shadow-sm sm:p-4">
-                                            <EntityDrawerOverview
-                                                entityType={presentationType}
-                                                data={entityDrawerOverviewData}
-                                                customSectionContent={overviewCustomContent}
-                                                overviewSectionsOverride={
-                                                    configDrivenOverviewSections.length > 0 ? configDrivenOverviewSections : undefined
-                                                }
-                                                selectOptionsByFieldKey={overviewSelectOptionsByFieldKey}
-                                                isEditing={isEditing}
-                                                formData={formData}
-                                                onFieldChange={(key, value) => {
-                                                    setFormData((prev) => ({ ...prev, [key]: value }));
-                                                }}
-                                                onBlur={() => {
-                                                    if (drawer.type === "jobs" && jobFormDirty) saveEdit();
-                                                    else if (nonJobFormDirty) saveEdit();
-                                                }}
-                                                canEdit={!!canMutate}
-                                                statusDefs={statusDefsForDrawer}
-                                                getStatusLabel={getStatusLabel}
-                                                onOpenDrawer={(type, id) => openDrawer({ type: type as AdminDrawerEntityType, id })}
-                                            />
-                                        </div>
-                                        <JobDrawerRelationshipsSection
-                                            uiVariant="adminV2"
-                                            formData={formData}
-                                            setFormData={setFormData}
-                                            canMutate={canMutate}
-                                            jobExpandedSections={jobExpandedSections}
-                                            setJobExpandedSections={setJobExpandedSections}
-                                            jobCustomerOptions={jobCustomerOptions}
-                                            jobContactOptions={jobContactOptions}
-                                            primaryContactDisabled={primaryContactDisabled}
-                                            jobLocationOptions={jobLocationOptions}
-                                            jobWorkUnitOptions={jobWorkUnitOptions}
-                                            jobOpportunityOptions={jobOpportunityOptions}
-                                            jobVendorOptions={jobVendorsForAssign}
-                                            jobAssignedVendorId={jobAssignedVendorId}
-                                            setJobAssignedVendorId={setJobAssignedVendorId}
-                                            jobAssignedVendorSaving={jobAssignedVendorSaving}
-                                            applyVendorToUpcoming={applyVendorToUpcoming}
-                                            setApplyVendorToUpcoming={setApplyVendorToUpcoming}
-                                            customerSingular={customerSingular}
-                                            contactSingular={contactSingular}
-                                            opportunitySingular={opportunitySingular}
-                                            vendorSingular={vendorSingular}
-                                            openDrawer={openDrawer}
-                                            openJobLocationChange={openJobLocationChange}
-                                            saveJobAssignedVendor={saveJobAssignedVendor}
-                                        />
-                                    </>
-                                }
-                                rail={<JobDrawerV2TimelineCard data={(entityDrawerOverviewData ?? null) as Record<string, unknown> | null} />}
-                            />
+                            <div
+                                className="space-y-3 [&_section[data-entity-section]]:mb-3 [&_[data-entity-drawer-overview]]:pt-2"
+                                data-adminv2-job-record-overview="true"
+                            >
+                                <JobRecordPrimaryPanel
+                                    record={(entityDrawerOverviewData ?? null) as Record<string, unknown> | null}
+                                    formData={formData}
+                                    setFormData={setFormData}
+                                    canMutate={!!canMutate}
+                                    statusDefs={statusDefsForDrawer}
+                                    onBlur={() => {
+                                        if (drawer.type === "jobs" && jobFormDirty) saveEdit();
+                                    }}
+                                    jobCustomerOptions={jobCustomerOptions}
+                                    jobVendorOptions={jobVendorsForAssign}
+                                    jobWorkUnitOptions={jobWorkUnitOptions}
+                                    firstSchedule={jobSchedules[0] ?? null}
+                                    rescheduleFormActive={!!rescheduleForm}
+                                    openReschedule={openReschedule}
+                                    openDrawer={openDrawer}
+                                />
+                                <EntityDrawerOverview
+                                    entityType={presentationType}
+                                    data={entityDrawerOverviewData}
+                                    customSectionContent={overviewCustomContent}
+                                    overviewSectionsOverride={JOB_DRAWER_V2_OVERVIEW_SECTIONS}
+                                    selectOptionsByFieldKey={overviewSelectOptionsByFieldKey}
+                                    isEditing={isEditing || drawer.type === "jobs"}
+                                    formData={formData}
+                                    onFieldChange={(key, value) => {
+                                        setFormData((prev) => ({ ...prev, [key]: value }));
+                                    }}
+                                    onBlur={() => {
+                                        if (drawer.type === "jobs" && jobFormDirty) saveEdit();
+                                        else if (nonJobFormDirty) saveEdit();
+                                    }}
+                                    canEdit={!!canMutate}
+                                    statusDefs={statusDefsForDrawer}
+                                    getStatusLabel={getStatusLabel}
+                                    onOpenDrawer={(type, id) => openDrawer({ type: type as AdminDrawerEntityType, id })}
+                                />
+                                <JobDrawerRelationshipsSection
+                                    omitPrimaryAssignments
+                                    uiVariant="adminV2"
+                                    formData={formData}
+                                    setFormData={setFormData}
+                                    canMutate={canMutate}
+                                    jobExpandedSections={jobExpandedSections}
+                                    setJobExpandedSections={setJobExpandedSections}
+                                    jobCustomerOptions={jobCustomerOptions}
+                                    jobContactOptions={jobContactOptions}
+                                    primaryContactDisabled={primaryContactDisabled}
+                                    jobLocationOptions={jobLocationOptions}
+                                    jobWorkUnitOptions={jobWorkUnitOptions}
+                                    jobOpportunityOptions={jobOpportunityOptions}
+                                    jobVendorOptions={jobVendorsForAssign}
+                                    jobAssignedVendorId={jobAssignedVendorId}
+                                    setJobAssignedVendorId={setJobAssignedVendorId}
+                                    jobAssignedVendorSaving={jobAssignedVendorSaving}
+                                    applyVendorToUpcoming={applyVendorToUpcoming}
+                                    setApplyVendorToUpcoming={setApplyVendorToUpcoming}
+                                    customerSingular={customerSingular}
+                                    contactSingular={contactSingular}
+                                    opportunitySingular={opportunitySingular}
+                                    vendorSingular={vendorSingular}
+                                    openDrawer={openDrawer}
+                                    openJobLocationChange={openJobLocationChange}
+                                    saveJobAssignedVendor={saveJobAssignedVendor}
+                                />
+                            </div>
                         ) : (
                             <EntityDrawerOverview
                                 entityType={presentationType}
