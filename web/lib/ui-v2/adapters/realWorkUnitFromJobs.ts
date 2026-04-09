@@ -102,7 +102,7 @@ export function buildRealWorkUnitWorkspaceModel(input: {
         sortCaption: "Ordered by API default (typically newest activity first).",
         rollupSummary:
             mode === "unassigned"
-                ? "Jobs with no work unit assigned."
+                ? "Jobs with no vendor assigned yet — assign a vendor to clear this lane."
                 : mode === "scheduled_today"
                   ? "Next visit falls on today’s local calendar date."
                   : "Overdue visit or outstanding receivable in the merged sample.",
@@ -127,7 +127,7 @@ export function buildRealWorkUnitWorkspaceModel(input: {
             laneStatusLine: `Department ${deptName.trim() || departmentId} — ${headline.toLowerCase()}.`,
             recommendedActionLine:
                 mode === "unassigned"
-                    ? "Open a job, set Work unit in the snapshot (or overview), save — closing the drawer refreshes the list."
+                    ? "Open a job, assign a vendor in the snapshot — the job leaves this lane when saved; work unit is optional routing elsewhere."
                     : "Select a row to triage in the drawer, or jump to All jobs from the rail.",
         },
         signals,

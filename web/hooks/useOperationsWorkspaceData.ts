@@ -52,9 +52,9 @@ export function useOperationsWorkspaceData(departmentId: string) {
                 const [dRes, wRes, uRes, deptJobsRes, unassignedJobsRes] = await Promise.all([
                     fetch("/api/admin/departments"),
                     fetch(`/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`),
-                    fetch("/api/admin/jobs?unassigned_work_unit=true&limit=1"),
+                    fetch("/api/admin/jobs?assigned_vendor_unassigned=true&limit=1"),
                     fetch(`/api/admin/jobs?department_id=${encodeURIComponent(departmentId)}&limit=200`),
-                    fetch("/api/admin/jobs?unassigned_work_unit=true&limit=200"),
+                    fetch("/api/admin/jobs?assigned_vendor_unassigned=true&limit=200"),
                 ]);
                 const dj = (await dRes.json().catch(() => ({}))) as { items?: Dept[]; error?: string };
                 const wj = (await wRes.json().catch(() => ({}))) as { items?: WU[]; error?: string };

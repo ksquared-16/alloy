@@ -29,7 +29,7 @@ async function loadWorkspaceRollup(): Promise<{
         workUnitsRes,
         jobsSampleRes,
     ] = await Promise.all([
-        fetch("/api/admin/jobs?unassigned_work_unit=true&limit=1"),
+        fetch("/api/admin/jobs?assigned_vendor_unassigned=true&limit=1"),
         fetch("/api/admin/jobs?limit=1"),
         fetch(`/api/admin/schedules?${qs.toString()}`),
         fetch("/api/admin/work-units"),

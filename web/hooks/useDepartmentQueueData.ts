@@ -41,7 +41,7 @@ export function useDepartmentQueueData(departmentId: string, mode: DepartmentJob
             setError(null);
             try {
                 if (mode === "unassigned") {
-                    const jRes = await fetch("/api/admin/jobs?unassigned_work_unit=true&limit=200");
+                    const jRes = await fetch("/api/admin/jobs?assigned_vendor_unassigned=true&limit=200");
                     const jj = (await jRes.json().catch(() => ({}))) as { jobs?: AdminJobListRow[]; error?: string };
                     if (!jRes.ok) throw new Error(jj.error ?? "Failed to load jobs");
                     if (!cancelled) setJobs(jj.jobs ?? []);

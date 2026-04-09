@@ -22,7 +22,10 @@ export async function GET(request: NextRequest) {
   const assignedVendorId = (searchParams.get("assigned_vendor_id") ?? "").trim();
   const workUnitIdParam = (searchParams.get("work_unit_id") ?? "").trim();
   const departmentIdParam = (searchParams.get("department_id") ?? "").trim();
+  /** Legacy: jobs with no work_unit_id (admin table filter). Prefer `assigned_vendor_unassigned` for Operations lane. */
   const unassignedWorkUnit = searchParams.get("unassigned_work_unit") === "true";
+  /** Operations “Unassigned Jobs” lane (cleaning): no vendor assigned yet. */
+  const assignedVendorUnassigned = searchParams.get("assigned_vendor_unassigned") === "true";
   const limit = Math.min(Number(searchParams.get("limit")) || 200, 200);
 
   const supabase = createAdminClient();
@@ -30,7 +33,22 @@ export async function GET(request: NextRequest) {
   /** When set, restrict jobs to these work_unit ids (department filter). */
   let departmentWorkUnitIds: string[] | null = null;
 
-  if (unassignedWorkUnit) {
+  if (assignedVendorUnassigned && unassignedWorkUnit) {
+    return NextResponse.json(
+      { error: "Use only one of assigned_vendor_unassigned or unassigned_work_unit" },
+      { status: 400 }
+    );
+  }
+  if (assignedVendorUnassigned && assignedVendorId) {
+    return NextResponse.json(
+      { error: "assigned_vendor_unassigned cannot be combined with assigned_vendor_id" },
+      { status: 400 }
+    );
+  }
+
+  if (assignedVendorUnassigned) {
+    // mutually exclusive with work_unit_id / department_id (enforced on client)
+  } else if (unassignedWorkUnit) {
     // mutually exclusive with work_unit_id / department_id (enforced on client)
   } else if (workUnitIdParam) {
     const wuOk = await assertRowOrg(supabase, "work_units", workUnitIdParam, ctx.orgId);
@@ -79,7 +97,9 @@ export async function GET(request: NextRequest) {
   if (assignedVendorId) {
     q = q.eq("assigned_vendor_id", assignedVendorId);
   }
-  if (unassignedWorkUnit) {
+  if (assignedVendorUnassigned) {
+    q = q.is("assigned_vendor_id", null);
+  } else if (unassignedWorkUnit) {
     q = q.is("work_unit_id", null);
   } else if (workUnitIdParam) {
     q = q.eq("work_unit_id", workUnitIdParam);

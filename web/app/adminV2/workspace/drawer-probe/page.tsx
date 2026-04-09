@@ -20,7 +20,7 @@ export default function AdminV2WorkspaceDrawerProbePage() {
       setLoading(true);
       setLoadError(null);
       try {
-        const res = await fetch("/api/admin/jobs?unassigned_work_unit=true&limit=1");
+        const res = await fetch("/api/admin/jobs?assigned_vendor_unassigned=true&limit=1");
         const json = (await res.json()) as { jobs?: { id: string }[]; error?: string };
         if (!res.ok) {
           setLoadError(json.error ?? res.statusText);

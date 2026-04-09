@@ -21,7 +21,7 @@ const OPERATIONS: DepartmentWorkspaceLayout = {
                 {
                     id: "unassigned_jobs",
                     eyebrow: "Triage",
-                    label: "No work unit",
+                    label: "No vendor",
                     metric: "jobs.unassigned_count",
                 },
                 {
@@ -53,7 +53,7 @@ const OPERATIONS: DepartmentWorkspaceLayout = {
                 {
                     kind: "unassigned_jobs_triage",
                     label: "Unassigned jobs",
-                    description: "Jobs with no work unit — triage before assignment.",
+                    description: "Jobs with no vendor assigned — assign a vendor to exit this lane.",
                 },
                 {
                     kind: "department_workspace_route",

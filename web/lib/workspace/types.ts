@@ -41,7 +41,7 @@ export type WorkspaceSignalsBlock = {
 
 /**
  * Queue entry kinds:
- * - `unassigned_jobs_triage` → bridge route + existing GET /api/admin/jobs?unassigned_work_unit=true (interpreter later).
+ * - `unassigned_jobs_triage` → GET /api/admin/jobs?assigned_vendor_unassigned=true (Operations: no vendor yet; interpreter later).
  * - `work_unit_key` → bind to a row from GET /api/admin/work-units; navigation when no route is deferred-only.
  */
 export type WorkspaceQueueEntry =
