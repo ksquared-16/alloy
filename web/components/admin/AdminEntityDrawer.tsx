@@ -3414,6 +3414,18 @@ export default function AdminEntityDrawer() {
         }
     }, [initialInlineFormSnapshot]);
 
+    /** Must be declared before any early return — used by job Record links (hook order). */
+    const openEntityFromJobRecord = useCallback(
+        (entityType: AdminDrawerEntityType, id: string) => {
+            openDrawer({
+                type: entityType,
+                id,
+                ...(entityType === "jobs" ? { jobRecordSurface: "full" as const } : {}),
+            });
+        },
+        [openDrawer]
+    );
+
     const hasCustomer = typeof formData.customer_id === "string" && formData.customer_id.trim().length > 0;
     const primaryContactDisabled = !hasCustomer || jobContactOptionsLoading || (hasCustomer && jobContactOptions.length === 0);
     const isJobExistingView = drawer.type === "jobs" && data && typeof data === "object" && !(data as Record<string, unknown>)._create;
@@ -5229,17 +5241,6 @@ export default function AdminEntityDrawer() {
                 ? String(title)
                 : "—";
     const headerSubtitleResolved = jobV2MetaSubtitle ?? drawerHeaderRecordSubtitle ?? undefined;
-
-    const openEntityFromJobRecord = useCallback(
-        (entityType: AdminDrawerEntityType, id: string) => {
-            openDrawer({
-                type: entityType,
-                id,
-                ...(entityType === "jobs" ? { jobRecordSurface: "full" as const } : {}),
-            });
-        },
-        [openDrawer]
-    );
 
     return (
         <Drawer
