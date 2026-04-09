@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { derived, neutral } from "@/styles/tokens/colors";
 import type { ResolvedRecordPayload } from "@/lib/rrs/types";
 
 function formatRrsValue(v: unknown): string {
@@ -22,7 +23,14 @@ function parseEntityError(json: unknown, res: Response): string {
     return res.status === 404 ? "Not found" : "Failed to load";
 }
 
-export default function JobRrsOverviewTab({ jobId }: { jobId: string }) {
+export default function JobRrsOverviewTab({
+    jobId,
+    variant = "legacy",
+}: {
+    jobId: string;
+    /** Admin V2 job drawer — resolver-first primary tab; cleaner hierarchy, no debug chrome. */
+    variant?: "legacy" | "adminV2";
+}) {
     const [payload, setPayload] = useState<ResolvedRecordPayload | null>(null);
     const [err, setErr] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
@@ -50,37 +58,68 @@ export default function JobRrsOverviewTab({ jobId }: { jobId: string }) {
         };
     }, [jobId]);
 
-    if (loading) return <p className="text-sm text-alloy-midnight/60 py-4">Loading resolver overview…</p>;
+    const v2 = variant === "adminV2";
+
+    if (loading) {
+        return (
+            <p className="text-sm py-4" style={{ color: v2 ? derived.textSecondary : undefined }}>
+                {v2 ? "Loading overview…" : "Loading resolver overview…"}
+            </p>
+        );
+    }
     if (err) return <p className="text-sm text-red-600 py-4">{err}</p>;
     if (!payload) return null;
 
+    const sectionBorder = v2 ? { borderBottomColor: derived.border } : undefined;
+
     return (
-        <div className="space-y-6" data-job-rrs-overview>
-            <p className="text-xs text-alloy-midnight/50">
-                Resolver surface <code className="text-[11px]">overview</code>
-                {payload.overview_layout?.template_key ? (
-                    <>
-                        {" "}
-                        · layout <code className="text-[11px]">{payload.overview_layout.template_key}</code>
-                    </>
-                ) : null}
-            </p>
-            <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-alloy-forge/75 border-b border-admin-border pb-2 mb-3">
-                    Fields
+        <div className="space-y-6" data-job-rrs-overview={v2 ? "adminV2" : undefined}>
+            {!v2 ? (
+                <p className="text-xs text-alloy-midnight/50">
+                    Resolver surface <code className="text-[11px]">overview</code>
+                    {payload.overview_layout?.template_key ? (
+                        <>
+                            {" "}
+                            · layout <code className="text-[11px]">{payload.overview_layout.template_key}</code>
+                        </>
+                    ) : null}
+                </p>
+            ) : null}
+            <div
+                className={v2 ? "rounded-[10px] border border-solid bg-white p-4 shadow-sm sm:p-5" : ""}
+                style={v2 ? { borderColor: derived.border, backgroundColor: neutral.surface } : undefined}
+            >
+                <h3
+                    className={`text-xs font-semibold uppercase tracking-wide pb-2 mb-3 ${v2 ? "" : "text-alloy-forge/75 border-b border-admin-border"}`}
+                    style={v2 ? { color: derived.textSecondary, borderBottomWidth: 1, borderBottomStyle: "solid", ...sectionBorder } : undefined}
+                >
+                    Record
                 </h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
                     {payload.fields.map((f) => (
                         <div key={f.key} className="text-sm">
-                            <div className="text-xs font-medium text-alloy-midnight/55">{f.label}</div>
-                            <div className="text-alloy-midnight/90 mt-0.5 break-words">{formatRrsValue(f.value)}</div>
+                            <div
+                                className={`text-xs font-medium ${v2 ? "" : "text-alloy-midnight/55"}`}
+                                style={v2 ? { color: derived.textSecondary } : undefined}
+                            >
+                                {f.label}
+                            </div>
+                            <div
+                                className={`mt-0.5 break-words ${v2 ? "" : "text-alloy-midnight/90"}`}
+                                style={v2 ? { color: neutral.textPrimary } : undefined}
+                            >
+                                {formatRrsValue(f.value)}
+                            </div>
                         </div>
                     ))}
                 </div>
             </div>
             {payload.relationship_groups.length > 0 ? (
                 <div className="space-y-4">
-                    <h3 className="text-xs font-semibold uppercase tracking-wide text-alloy-forge/75 border-b border-admin-border pb-2">
+                    <h3
+                        className={`text-xs font-semibold uppercase tracking-wide pb-2 ${v2 ? "" : "text-alloy-forge/75 border-b border-admin-border"}`}
+                        style={v2 ? { color: derived.textSecondary, borderBottomWidth: 1, borderBottomStyle: "solid", ...sectionBorder } : undefined}
+                    >
                         Relationships
                     </h3>
                     {payload.relationship_groups.map((g) => (

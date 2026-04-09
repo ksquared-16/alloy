@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import "@/app/adminV2/components/workspace/workspace.css";
@@ -852,6 +852,8 @@ export default function AdminEntityDrawer() {
     const [jobContactOptionsLoading, setJobContactOptionsLoading] = useState(false);
     const [jobCreateSaving, setJobCreateSaving] = useState(false);
     const [drawerTab, setDrawerTab] = useState<DrawerTabKey>("overview");
+    /** Set default tab once per open; avoids resetting tab when pathname changes while drawer stays open. */
+    const entityDrawerTabInitKeyRef = useRef<string>("");
     const [memberCustomers, setMemberCustomers] = useState<{ id: string; name: string | null }[]>([]);
     const [memberCreateSaving, setMemberCreateSaving] = useState(false);
     const [memberCreateError, setMemberCreateError] = useState<string | null>(null);
@@ -1036,6 +1038,7 @@ export default function AdminEntityDrawer() {
 
     useEffect(() => {
         if (!drawer.type || !drawer.id) {
+            entityDrawerTabInitKeyRef.current = "";
             setData(null);
             setError(null);
             setIsEditing(false);
@@ -1075,7 +1078,15 @@ export default function AdminEntityDrawer() {
         setPersonRelatedData(null);
             return;
         }
-        setDrawerTab("overview");
+        const entityOpenKey = `${drawer.type}:${drawer.id}`;
+        if (entityDrawerTabInitKeyRef.current !== entityOpenKey) {
+            entityDrawerTabInitKeyRef.current = entityOpenKey;
+            setDrawerTab(
+                drawer.type === "jobs" && pathname?.startsWith("/adminV2/workspace")
+                    ? "rrs_overview"
+                    : "overview"
+            );
+        }
         setContactRelatedData(null);
         setCustomerRelatedData(null);
         setVendorRelatedData(null);
@@ -1100,6 +1111,8 @@ export default function AdminEntityDrawer() {
             .then(setData)
             .catch((e) => setError(e.message))
             .finally(() => setLoading(false));
+    // pathname read only when entity identity changes (see entityDrawerTabInitKeyRef); omit from deps so tab is not reset on SPA navigation.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [drawer.type, drawer.id, drawer.jobRecordSurface]);
 
     useEffect(() => {
@@ -3566,6 +3579,32 @@ export default function AdminEntityDrawer() {
         ledger: "Ledger",
     };
 
+    /** Admin V2 job drawer: resolver-first tab order and clearer labels (legacy /admin unchanged). */
+    const jobDrawerV2TabListResolved = useMemo((): DrawerTabKey[] => {
+        if (!isJobDrawerV2 || drawer.type !== "jobs") return tabList;
+        if (!tabList.includes("rrs_overview")) return tabList;
+        return ["rrs_overview", ...tabList.filter((t) => t !== "rrs_overview")];
+    }, [isJobDrawerV2, drawer.type, tabList]);
+
+    const jobDrawerV2TabLabelsResolved = useMemo(() => {
+        if (!isJobDrawerV2 || drawer.type !== "jobs") return tabLabels;
+        return {
+            ...tabLabels,
+            rrs_overview: "Overview",
+            overview: "Details & fields",
+        };
+    }, [isJobDrawerV2, drawer.type, tabLabels]);
+
+    useEffect(() => {
+        if (!isJobDrawerV2 || drawer.type !== "jobs" || !drawer.id || drawer.id === "new") return;
+        setJobExpandedSections({
+            relationships: false,
+            financials: false,
+            scheduling: false,
+            ledger: false,
+        });
+    }, [isJobDrawerV2, drawer.type, drawer.id]);
+
     const hasFieldDefsForOverview = useMemo(() => {
         if (!overviewData || (overviewData as { _create?: boolean })._create) return false;
         const defs = (overviewData._field_definitions as { is_visible_in_drawer?: boolean }[] | undefined) ?? [];
@@ -5063,7 +5102,12 @@ export default function AdminEntityDrawer() {
         ["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "persons", "vendors", "locations", "payments", "discount_redemptions", "service_offerings", "service_plan_templates", "addons", "subscriptions", "documents"].includes(drawer.type) &&
         !(overviewData as { _create?: boolean })?._create ? (
             isJobDrawerV2 && drawer.type === "jobs" ? (
-                <JobDrawerV2TabBar tabs={tabList} tabLabels={tabLabels} active={drawerTab} onSelect={setDrawerTab} />
+                <JobDrawerV2TabBar
+                    tabs={jobDrawerV2TabListResolved}
+                    tabLabels={jobDrawerV2TabLabelsResolved}
+                    active={drawerTab}
+                    onSelect={setDrawerTab}
+                />
             ) : (
                 <div className="flex gap-0.5 rounded-lg border border-admin-border bg-white p-0.5">
                     {tabList.map((tab) => (
@@ -5113,12 +5157,15 @@ export default function AdminEntityDrawer() {
             zIndexPanel={70}
             accentColor={drawer.type ? DRAWER_ACCENT_COLORS[drawer.type] : undefined}
             variant={drawerShellVariant}
-            panelClassName={isJobDrawerV2 ? "max-w-3xl" : undefined}
+            panelClassName={isJobDrawerV2 ? "max-w-5xl" : undefined}
         >
             {showDrawerBodyLoading && <p className="text-alloy-midnight/60">Loading…</p>}
             {error && <p className="text-alloy-ember">Error: {error}</p>}
             {data && !loading && dataMatchesDrawer && (
-                <div className="space-y-6">
+                <div
+                    className={`space-y-6 ${isJobDrawerV2 && drawer.type === "jobs" ? "max-w-none" : ""}`}
+                    data-adminv2-job-drawer-body={isJobDrawerV2 && drawer.type === "jobs" ? "true" : undefined}
+                >
                     {saveError && <p className="text-alloy-ember text-sm">{saveError}</p>}
                     {((drawer.type === "contacts" || drawer.type === "customer_members") && (data as { _person_id?: string | null })?._person_id) && (
                         <div className="rounded-lg border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm text-amber-900">
@@ -6879,8 +6926,11 @@ export default function AdminEntityDrawer() {
                         drawer.id &&
                         drawer.id !== "new" &&
                         !(data as { _create?: boolean })?._create && (
-                            <div className="space-y-0 pt-5" data-entity-drawer-rrs-overview>
-                                <JobRrsOverviewTab jobId={drawer.id} />
+                            <div
+                                className={isJobDrawerV2 ? "space-y-0 pt-1" : "space-y-0 pt-5"}
+                                data-entity-drawer-rrs-overview
+                            >
+                                <JobRrsOverviewTab jobId={drawer.id} variant={isJobDrawerV2 ? "adminV2" : "legacy"} />
                             </div>
                         )}
                     {drawerTab === "overview" && useConfigDrivenOverview && presentationType && (
