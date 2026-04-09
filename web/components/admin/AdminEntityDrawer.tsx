@@ -3336,6 +3336,12 @@ export default function AdminEntityDrawer() {
     const primaryContactDisabled = !hasCustomer || jobContactOptionsLoading || (hasCustomer && jobContactOptions.length === 0);
     const isJobExistingView = drawer.type === "jobs" && data && typeof data === "object" && !(data as Record<string, unknown>)._create;
     const isJobDrawerV2 = drawerShellVariant === "adminV2" && isJobExistingView;
+    /** Modal shell for /adminV2 jobs — use before data loads so geometry never flashes sidebar-first. */
+    const isJobRecordModalTarget =
+        drawerShellVariant === "adminV2" &&
+        drawer.type === "jobs" &&
+        !!drawer.id &&
+        drawer.id !== "new";
     const hasServerJobPaymentSummary = !!jobPaymentSummaryFromApi;
     const paymentStatusLabel = hasServerJobPaymentSummary
         ? jobPaymentStatusKeyLabel(jobPaymentSummaryFromApi.payment_status_key)
@@ -3577,22 +3583,22 @@ export default function AdminEntityDrawer() {
 
     /** Admin V2 job record modal: drop resolver-only tab — RRS merges into Record (overview). Legacy /admin unchanged. */
     const jobDrawerV2TabListResolved = useMemo((): DrawerTabKey[] => {
-        if (!isJobDrawerV2 || drawer.type !== "jobs") return tabList;
+        if (!isJobRecordModalTarget || drawer.type !== "jobs") return tabList;
         return tabList.filter((t) => t !== "rrs_overview");
-    }, [isJobDrawerV2, drawer.type, tabList]);
+    }, [isJobRecordModalTarget, drawer.type, tabList]);
 
     const jobDrawerV2TabLabelsResolved = useMemo(() => {
-        if (!isJobDrawerV2 || drawer.type !== "jobs") return tabLabels;
+        if (!isJobRecordModalTarget || drawer.type !== "jobs") return tabLabels;
         return {
             ...tabLabels,
             overview: "Record",
         };
-    }, [isJobDrawerV2, drawer.type, tabLabels]);
+    }, [isJobRecordModalTarget, drawer.type, tabLabels]);
 
     useEffect(() => {
         if (!isJobDrawerV2 || drawer.type !== "jobs" || !drawer.id || drawer.id === "new") return;
         setJobExpandedSections({
-            relationships: false,
+            relationships: true,
             financials: false,
             scheduling: false,
             ledger: false,
@@ -3601,10 +3607,10 @@ export default function AdminEntityDrawer() {
 
     /** Removed RRS-only tab in V2 — migrate any stale selection. */
     useEffect(() => {
-        if (isJobDrawerV2 && drawer.type === "jobs" && drawerTab === "rrs_overview") {
+        if (isJobRecordModalTarget && drawer.type === "jobs" && drawerTab === "rrs_overview") {
             setDrawerTab("overview");
         }
-    }, [isJobDrawerV2, drawer.type, drawerTab]);
+    }, [isJobRecordModalTarget, drawer.type, drawerTab]);
 
     const hasFieldDefsForOverview = useMemo(() => {
         if (!overviewData || (overviewData as { _create?: boolean })._create) return false;
@@ -5098,31 +5104,29 @@ export default function AdminEntityDrawer() {
     );
 
     const drawerHeaderExtra =
-        overviewData &&
-        !loading &&
-        ["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "persons", "vendors", "locations", "payments", "discount_redemptions", "service_offerings", "service_plan_templates", "addons", "subscriptions", "documents"].includes(drawer.type) &&
-        !(overviewData as { _create?: boolean })?._create ? (
-            isJobDrawerV2 && drawer.type === "jobs" ? (
-                <JobDrawerV2TabBar
-                    tabs={jobDrawerV2TabListResolved}
-                    tabLabels={jobDrawerV2TabLabelsResolved}
-                    active={drawerTab}
-                    onSelect={setDrawerTab}
-                />
-            ) : (
-                <div className="flex gap-0.5 rounded-lg border border-admin-border bg-white p-0.5">
-                    {tabList.map((tab) => (
-                        <button
-                            key={tab}
-                            type="button"
-                            onClick={() => setDrawerTab(tab)}
-                            className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${drawerTab === tab ? "bg-alloy-blue text-white shadow-sm" : "text-alloy-forge/80 hover:bg-alloy-stone/50"}`}
-                        >
-                            {tabLabels[tab] ?? tab}
-                        </button>
-                    ))}
-                </div>
-            )
+        isJobRecordModalTarget && drawer.type === "jobs" ? (
+            <JobDrawerV2TabBar
+                tabs={jobDrawerV2TabListResolved}
+                tabLabels={jobDrawerV2TabLabelsResolved}
+                active={drawerTab}
+                onSelect={setDrawerTab}
+            />
+        ) : overviewData &&
+          !loading &&
+          ["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "persons", "vendors", "locations", "payments", "discount_redemptions", "service_offerings", "service_plan_templates", "addons", "subscriptions", "documents"].includes(drawer.type) &&
+          !(overviewData as { _create?: boolean })?._create ? (
+            <div className="flex gap-0.5 rounded-lg border border-admin-border bg-white p-0.5">
+                {tabList.map((tab) => (
+                    <button
+                        key={tab}
+                        type="button"
+                        onClick={() => setDrawerTab(tab)}
+                        className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${drawerTab === tab ? "bg-alloy-blue text-white shadow-sm" : "text-alloy-forge/80 hover:bg-alloy-stone/50"}`}
+                    >
+                        {tabLabels[tab] ?? tab}
+                    </button>
+                ))}
+            </div>
         ) : undefined;
 
     const jobV2MetaSubtitle =
@@ -5158,10 +5162,19 @@ export default function AdminEntityDrawer() {
             zIndexPanel={70}
             accentColor={drawer.type ? DRAWER_ACCENT_COLORS[drawer.type] : undefined}
             variant={drawerShellVariant}
-            presentation={isJobDrawerV2 ? "modal" : "sidebar"}
-            panelClassName={isJobDrawerV2 ? "max-w-5xl" : undefined}
+            presentation={isJobRecordModalTarget ? "modal" : "sidebar"}
+            panelClassName={isJobRecordModalTarget ? "max-w-6xl" : undefined}
         >
-            {showDrawerBodyLoading && <p className="text-alloy-midnight/60">Loading…</p>}
+            {showDrawerBodyLoading &&
+                (isJobRecordModalTarget ? (
+                    <div className="space-y-4 px-1 py-2" aria-busy="true" aria-label="Loading job">
+                        <div className="h-4 max-w-md w-full animate-pulse rounded-md bg-alloy-stone/25" />
+                        <div className="h-28 animate-pulse rounded-xl bg-alloy-stone/15" />
+                        <div className="h-40 animate-pulse rounded-xl bg-alloy-stone/12" />
+                    </div>
+                ) : (
+                    <p className="text-alloy-midnight/60">Loading…</p>
+                ))}
             {error && <p className="text-alloy-ember">Error: {error}</p>}
             {data && !loading && dataMatchesDrawer && (
                 <div
@@ -6970,38 +6983,36 @@ export default function AdminEntityDrawer() {
                                                 onOpenDrawer={(type, id) => openDrawer({ type: type as AdminDrawerEntityType, id })}
                                             />
                                         </div>
-                                        <JobDrawerV2TimelineCard data={(entityDrawerOverviewData ?? null) as Record<string, unknown> | null} />
+                                        <JobDrawerRelationshipsSection
+                                            uiVariant="adminV2"
+                                            formData={formData}
+                                            setFormData={setFormData}
+                                            canMutate={canMutate}
+                                            jobExpandedSections={jobExpandedSections}
+                                            setJobExpandedSections={setJobExpandedSections}
+                                            jobCustomerOptions={jobCustomerOptions}
+                                            jobContactOptions={jobContactOptions}
+                                            primaryContactDisabled={primaryContactDisabled}
+                                            jobLocationOptions={jobLocationOptions}
+                                            jobWorkUnitOptions={jobWorkUnitOptions}
+                                            jobOpportunityOptions={jobOpportunityOptions}
+                                            jobVendorOptions={jobVendorsForAssign}
+                                            jobAssignedVendorId={jobAssignedVendorId}
+                                            setJobAssignedVendorId={setJobAssignedVendorId}
+                                            jobAssignedVendorSaving={jobAssignedVendorSaving}
+                                            applyVendorToUpcoming={applyVendorToUpcoming}
+                                            setApplyVendorToUpcoming={setApplyVendorToUpcoming}
+                                            customerSingular={customerSingular}
+                                            contactSingular={contactSingular}
+                                            opportunitySingular={opportunitySingular}
+                                            vendorSingular={vendorSingular}
+                                            openDrawer={openDrawer}
+                                            openJobLocationChange={openJobLocationChange}
+                                            saveJobAssignedVendor={saveJobAssignedVendor}
+                                        />
                                     </>
                                 }
-                                rail={
-                                    <JobDrawerRelationshipsSection
-                                        uiVariant="adminV2"
-                                        formData={formData}
-                                        setFormData={setFormData}
-                                        canMutate={canMutate}
-                                        jobExpandedSections={jobExpandedSections}
-                                        setJobExpandedSections={setJobExpandedSections}
-                                        jobCustomerOptions={jobCustomerOptions}
-                                        jobContactOptions={jobContactOptions}
-                                        primaryContactDisabled={primaryContactDisabled}
-                                        jobLocationOptions={jobLocationOptions}
-                                        jobWorkUnitOptions={jobWorkUnitOptions}
-                                        jobOpportunityOptions={jobOpportunityOptions}
-                                        jobVendorOptions={jobVendorsForAssign}
-                                        jobAssignedVendorId={jobAssignedVendorId}
-                                        setJobAssignedVendorId={setJobAssignedVendorId}
-                                        jobAssignedVendorSaving={jobAssignedVendorSaving}
-                                        applyVendorToUpcoming={applyVendorToUpcoming}
-                                        setApplyVendorToUpcoming={setApplyVendorToUpcoming}
-                                        customerSingular={customerSingular}
-                                        contactSingular={contactSingular}
-                                        opportunitySingular={opportunitySingular}
-                                        vendorSingular={vendorSingular}
-                                        openDrawer={openDrawer}
-                                        openJobLocationChange={openJobLocationChange}
-                                        saveJobAssignedVendor={saveJobAssignedVendor}
-                                    />
-                                }
+                                rail={<JobDrawerV2TimelineCard data={(entityDrawerOverviewData ?? null) as Record<string, unknown> | null} />}
                             />
                         ) : (
                             <EntityDrawerOverview

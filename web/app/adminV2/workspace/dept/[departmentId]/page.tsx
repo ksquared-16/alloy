@@ -21,7 +21,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
     const params = useParams();
     const departmentId = typeof params.departmentId === "string" ? params.departmentId : "";
 
-    const { dept, title, runtime, error } = useOperationsWorkspaceData(departmentId);
+    const { dept, title, runtime, error, loading } = useOperationsWorkspaceData(departmentId);
 
     const layout = useMemo(
         () => layoutForAdminV2Slice(getDepartmentWorkspaceLayout(dept?.key ?? null)),
@@ -33,21 +33,30 @@ export default function AdminV2WorkspaceDepartmentPage() {
             variant="bridge"
             breadcrumbs={[
                 { href: WORKSPACE_BASE, label: "Workspace" },
-                { href: `${WORKSPACE_BASE}/dept/${departmentId}`, label: title },
+                { href: `${WORKSPACE_BASE}/dept/${departmentId}`, label: loading ? "…" : title },
             ]}
-            title={title}
-            subtitle="Operations workspace — signals, queues, and actions are opinionated defaults from the shared registry."
+            title={loading ? "Loading…" : title}
+            subtitle="Live queues and attention lanes for this department — layout comes from the workspace registry."
         >
             {error && <p className="text-sm text-amber-800 px-1">{error}</p>}
-            <WorkspaceRenderer
-                layout={layout}
-                departmentId={departmentId}
-                runtime={runtime}
-                presentation="department_bridge"
-                bridgeBriefTitle={title}
-                bridgeBriefSubtitle="Live job samples power the strip; queues link to real routes under this workspace."
-                workspaceBasePath={WORKSPACE_BASE}
-            />
+            {loading || !dept ? (
+                <div
+                    className="rounded-xl border px-4 py-10 text-center text-sm text-alloy-midnight/55"
+                    style={{ borderColor: "var(--d-border, rgba(39,63,82,0.14))" }}
+                >
+                    Loading department workspace…
+                </div>
+            ) : (
+                <WorkspaceRenderer
+                    layout={layout}
+                    departmentId={departmentId}
+                    runtime={runtime}
+                    presentation="department_bridge"
+                    bridgeBriefTitle={title}
+                    bridgeBriefSubtitle="Use the lanes below — signal strip is a quick read; drill into queues for work."
+                    workspaceBasePath={WORKSPACE_BASE}
+                />
+            )}
         </WorkspaceChrome>
     );
 }

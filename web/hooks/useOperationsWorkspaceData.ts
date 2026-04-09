@@ -13,6 +13,7 @@ type Dept = { id: string; name: string | null; key?: string | null };
 type WU = { id: string; name: string | null; department_id: string; key?: string | null };
 
 export function useOperationsWorkspaceData(departmentId: string) {
+    const [loading, setLoading] = useState(true);
     const [dept, setDept] = useState<Dept | null>(null);
     const [workUnits, setWorkUnits] = useState<WU[]>([]);
     const [unassignedTotal, setUnassignedTotal] = useState<number | null>(null);
@@ -46,6 +47,7 @@ export function useOperationsWorkspaceData(departmentId: string) {
         let cancelled = false;
         (async () => {
             try {
+                setLoading(true);
                 setDerivedError(null);
                 const [dRes, wRes, uRes, deptJobsRes, unassignedJobsRes] = await Promise.all([
                     fetch("/api/admin/departments"),
@@ -98,6 +100,8 @@ export function useOperationsWorkspaceData(departmentId: string) {
                 }
             } catch (e) {
                 if (!cancelled) setError((e as Error).message);
+            } finally {
+                if (!cancelled) setLoading(false);
             }
         })();
         return () => {
@@ -105,5 +109,5 @@ export function useOperationsWorkspaceData(departmentId: string) {
         };
     }, [departmentId]);
 
-    return { dept, workUnits, title, runtime, error: error ?? derivedError };
+    return { dept, workUnits, title, runtime, error: error ?? derivedError, loading };
 }

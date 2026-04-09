@@ -4325,12 +4325,23 @@
 /* Org workspace root — slightly larger tiles and room for stat lines */
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-company-v2-dept-grid--workspace-root {
   gap: 20px;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
 }
 
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-company-dept-tile--workspace-root {
-  min-height: 168px;
-  padding: 14px 14px 14px 13px;
+  display: flex;
+  flex-direction: column;
+  min-height: 200px;
+  padding: 16px 16px 14px 15px;
+}
+
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-company-dept-tile--workspace-root .adminv2-ws-company-dept-tile-desc {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+[data-production-workspace-bridge="true"] .adminv2-ws-wu-queue-item-wrap + .adminv2-ws-wu-queue-item-wrap {
+  margin-top: 10px;
 }
 
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-company-dept-tile {

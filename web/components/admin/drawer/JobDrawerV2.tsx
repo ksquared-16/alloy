@@ -313,11 +313,11 @@ export function JobDrawerV2PrimaryActions(props: {
 export function JobDrawerV2OverviewShell(props: { primary: ReactNode; rail: ReactNode }) {
     return (
         <div
-            className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(260px,320px)] lg:items-start"
+            className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(220px,260px)] lg:items-start lg:gap-5"
             style={shell}
         >
             <div className="min-w-0 space-y-4">{props.primary}</div>
-            <aside className="min-w-0 space-y-4 lg:sticky lg:top-0" aria-label="Relationships and actions">
+            <aside className="min-w-0 space-y-3 lg:sticky lg:top-2" aria-label="Record meta">
                 {props.rail}
             </aside>
         </div>

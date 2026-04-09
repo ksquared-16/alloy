@@ -123,13 +123,18 @@ export function buildRealWorkUnitWorkspaceModel(input: {
         primaryQueue,
         workSummary: null,
         actionsRail: {
-            primaries: [
-                { id: "back_department", label: "Department workspace", variant: "primary" },
-                { id: "open_admin_jobs", label: "All jobs", variant: "secondary" },
+            primaries: [],
+            systemActions: [
+                { id: "back_department", label: "← Department overview", variant: "primary" },
+                { id: "open_admin_jobs", label: "All jobs (admin table)", variant: "secondary" },
             ],
-            overflow: [
-                { id: "open_schedules", label: "Schedules" },
-                { id: "open_work_units", label: "Work units" },
+            quickOperations: [
+                { id: "open_schedules", label: "Schedules calendar" },
+                { id: "open_work_units", label: "Configure work units" },
+            ],
+            systemStatusLines: [
+                "Open a row for the job modal · Back returns to the department surface.",
+                `Sample ≤200 jobs · ${deptName.trim() || "this department"}.`,
             ],
         },
         contextRail: emptyContextRail,

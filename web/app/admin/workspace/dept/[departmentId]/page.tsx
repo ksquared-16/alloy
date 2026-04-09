@@ -11,7 +11,7 @@ export default function WorkspaceDepartmentPage() {
     const params = useParams();
     const departmentId = typeof params.departmentId === "string" ? params.departmentId : "";
 
-    const { dept, title, runtime, error } = useOperationsWorkspaceData(departmentId);
+    const { dept, title, runtime, error, loading } = useOperationsWorkspaceData(departmentId);
 
     const layout = useMemo(() => getDepartmentWorkspaceLayout(dept?.key ?? null), [dept?.key]);
 
@@ -20,20 +20,26 @@ export default function WorkspaceDepartmentPage() {
             variant="bridge"
             breadcrumbs={[
                 { href: "/admin/workspace", label: "Workspace" },
-                { href: `/admin/workspace/dept/${departmentId}`, label: title },
+                { href: `/admin/workspace/dept/${departmentId}`, label: loading ? "…" : title },
             ]}
-            title={title}
-            subtitle="Configurable operational surface — blocks are driven by workspace layout config, not hardcoded department pages."
+            title={loading ? "Loading…" : title}
+            subtitle="Live queues and attention for this department — layout comes from the workspace registry."
         >
             {error && <p className="text-sm text-amber-800 px-1">{error}</p>}
-            <WorkspaceRenderer
-                layout={layout}
-                departmentId={departmentId}
-                runtime={runtime}
-                presentation="department_bridge"
-                bridgeBriefTitle={title}
-                bridgeBriefSubtitle="Signals and queues use live org data; registry drives layout."
-            />
+            {loading || !dept ? (
+                <div className="rounded-xl border border-admin-border px-4 py-10 text-center text-sm text-alloy-midnight/55">
+                    Loading department workspace…
+                </div>
+            ) : (
+                <WorkspaceRenderer
+                    layout={layout}
+                    departmentId={departmentId}
+                    runtime={runtime}
+                    presentation="department_bridge"
+                    bridgeBriefTitle={title}
+                    bridgeBriefSubtitle="Signal strip is a quick read — primary work is in the lanes below."
+                />
+            )}
         </WorkspaceChrome>
     );
 }

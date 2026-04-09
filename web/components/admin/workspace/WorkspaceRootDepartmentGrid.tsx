@@ -96,36 +96,38 @@ export function WorkspaceRootDepartmentGrid({
                             const tone = deptToneForKey(d.key);
                             const desc =
                                 (d.description && String(d.description).trim()) ||
-                                `Open the ${d.name} workspace — work units and queues live inside.`;
+                                `Signals, throughput lanes, and work units for ${d.name}.`;
                             const wu = deptTileStats?.[d.id]?.workUnitCount;
                             const statsLine =
-                                wu != null && wu >= 0 ? `${wu} work unit${wu === 1 ? "" : "s"} in this department` : null;
+                                wu != null && wu >= 0 ? `${wu} work unit${wu === 1 ? "" : "s"}` : null;
                             return (
                                 <Link
                                     key={d.id}
                                     href={`${base}/dept/${encodeURIComponent(d.id)}`}
                                     className={[
-                                        "adminv2-ws-company-dept-tile block text-left no-underline text-inherit rounded-[inherit] focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-blue/35",
+                                        "adminv2-ws-company-dept-tile group block h-full text-left no-underline text-inherit rounded-[inherit] focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-blue/35",
                                         root ? "adminv2-ws-company-dept-tile--workspace-root" : "",
                                     ]
                                         .filter(Boolean)
                                         .join(" ")}
                                     data-ws-company-dept-key={d.key}
                                     data-ws-company-dept-tone={tone}
-                                    aria-label={`Open ${d.name} department`}
+                                    aria-label={`${d.name} department workspace`}
                                 >
                                     <div className="adminv2-ws-company-dept-tile-head">
                                         <h3 className="adminv2-ws-company-dept-tile-name">{d.name}</h3>
                                     </div>
-                                    <p className="adminv2-ws-company-dept-tile-desc">{desc}</p>
-                                    {statsLine ? (
-                                        <p className="text-xs font-medium leading-snug" style={{ color: derived.textSecondary }}>
-                                            {statsLine}
+                                    <p className="adminv2-ws-company-dept-tile-desc flex-1">{desc}</p>
+                                    <div className="mt-auto pt-2 flex flex-col gap-1">
+                                        {statsLine ? (
+                                            <p className="text-xs font-semibold tabular-nums" style={{ color: neutral.textPrimary }}>
+                                                {statsLine}
+                                            </p>
+                                        ) : null}
+                                        <p className="text-[11px] font-medium leading-snug" style={{ color: derived.textSecondary }}>
+                                            Queues · attention · command rail
                                         </p>
-                                    ) : null}
-                                    <p className="mt-3 text-xs font-semibold" style={{ color: brand.primary }}>
-                                        Open department →
-                                    </p>
+                                    </div>
                                 </Link>
                             );
                         })}
