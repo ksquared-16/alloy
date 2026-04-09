@@ -49,16 +49,18 @@ export function useOperationsWorkspaceData(departmentId: string) {
             try {
                 setLoading(true);
                 setDerivedError(null);
-                const [dRes, wRes, uRes, deptJobsRes, unassignedJobsRes] = await Promise.all([
+                const [dRes, wRes, uRes, stRes, deptJobsRes, unassignedJobsRes] = await Promise.all([
                     fetch("/api/admin/departments"),
                     fetch(`/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`),
                     fetch("/api/admin/jobs?assigned_vendor_unassigned=true&limit=1"),
+                    fetch("/api/admin/jobs?scheduled_on=today&limit=1"),
                     fetch(`/api/admin/jobs?department_id=${encodeURIComponent(departmentId)}&limit=200`),
                     fetch("/api/admin/jobs?assigned_vendor_unassigned=true&limit=200"),
                 ]);
                 const dj = (await dRes.json().catch(() => ({}))) as { items?: Dept[]; error?: string };
                 const wj = (await wRes.json().catch(() => ({}))) as { items?: WU[]; error?: string };
                 const uj = (await uRes.json().catch(() => ({}))) as { total?: number; error?: string };
+                const stj = (await stRes.json().catch(() => ({}))) as { total?: number; error?: string };
                 const djJobs = (await deptJobsRes.json().catch(() => ({}))) as {
                     jobs?: JobRowForWorkspaceMetrics[];
                     error?: string;
@@ -72,6 +74,8 @@ export function useOperationsWorkspaceData(departmentId: string) {
                 if (!wRes.ok) throw new Error(wj.error ?? "Work units request failed");
                 if (uRes.ok && typeof uj.total === "number" && !cancelled) setUnassignedTotal(uj.total);
                 else if (!uRes.ok) setUnassignedTotal(null);
+                if (stRes.ok && typeof stj.total === "number" && !cancelled) setScheduledTodayCount(stj.total);
+                else if (!stRes.ok) setScheduledTodayCount(null);
 
                 let mergeErr: string | null = null;
                 const deptRows = deptJobsRes.ok ? (djJobs.jobs ?? []) : [];
@@ -85,7 +89,6 @@ export function useOperationsWorkspaceData(departmentId: string) {
                 const counts = computeOperationsSignalCounts(mergedRows, now);
                 const att = computeAttentionCategoryRuntime(mergedRows, now);
                 if (!cancelled) {
-                    setScheduledTodayCount(counts.scheduledToday);
                     setNeedsAttentionCount(counts.needsAttention);
                     setHighTouchCount(counts.highTouch);
                     setAttention(att);

@@ -99,12 +99,15 @@ export function buildRealWorkUnitWorkspaceModel(input: {
         title: headline,
         countBadge: jobs.length,
         items: jobs.map(jobToQueueItem),
-        sortCaption: "Ordered by API default (typically newest activity first).",
+        sortCaption:
+            mode === "scheduled_today"
+                ? "Ordered by first visit time on the org’s local calendar day."
+                : "Ordered by API default (typically newest activity first).",
         rollupSummary:
             mode === "unassigned"
                 ? "Jobs with no vendor assigned yet — assign a vendor to clear this lane."
                 : mode === "scheduled_today"
-                  ? "Next visit falls on today’s local calendar date."
+                  ? "Jobs with at least one non-canceled visit scheduled in the org’s local “today” (timezone from org settings)."
                   : "Overdue visit or outstanding receivable in the merged sample.",
     };
 

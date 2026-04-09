@@ -8,37 +8,27 @@ import {
     type WorkspaceRootDeptTileStats,
 } from "@/components/admin/workspace/WorkspaceRootDepartmentGrid";
 
-function startEndLocalDay(): { from: string; to: string } {
-    const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-    return { from: start.toISOString(), to: end.toISOString() };
-}
-
 async function loadWorkspaceRollup(): Promise<{
     metrics: WorkspaceRootMetrics;
     deptTileStats: WorkspaceRootDeptTileStats;
 }> {
-    const { from, to } = startEndLocalDay();
-    const qs = new URLSearchParams({ from, to, limit: "1" });
-
     const [
         unassignedRes,
         activeJobsRes,
-        schedulesRes,
+        jobsScheduledTodayRes,
         workUnitsRes,
         jobsSampleRes,
     ] = await Promise.all([
         fetch("/api/admin/jobs?assigned_vendor_unassigned=true&limit=1"),
         fetch("/api/admin/jobs?limit=1"),
-        fetch(`/api/admin/schedules?${qs.toString()}`),
+        fetch("/api/admin/jobs?scheduled_on=today&limit=1"),
         fetch("/api/admin/work-units"),
         fetch("/api/admin/jobs?limit=200"),
     ]);
 
     const unassignedJson = (await unassignedRes.json().catch(() => ({}))) as { total?: number };
     const activeJson = (await activeJobsRes.json().catch(() => ({}))) as { total?: number };
-    const schedJson = (await schedulesRes.json().catch(() => ({}))) as { total?: number };
+    const schedJson = (await jobsScheduledTodayRes.json().catch(() => ({}))) as { total?: number };
     const wuJson = (await workUnitsRes.json().catch(() => ({}))) as { items?: { department_id?: string }[]; error?: string };
     const jobsSampleJson = (await jobsSampleRes.json().catch(() => ({}))) as {
         jobs?: { receivable_outstanding_cents?: number | null }[];
@@ -47,7 +37,7 @@ async function loadWorkspaceRollup(): Promise<{
 
     const unassignedJobs = unassignedRes.ok ? (typeof unassignedJson.total === "number" ? unassignedJson.total : null) : null;
     const activeJobs = activeJobsRes.ok ? (typeof activeJson.total === "number" ? activeJson.total : null) : null;
-    const visitsToday = schedulesRes.ok ? (typeof schedJson.total === "number" ? schedJson.total : null) : null;
+    const visitsToday = jobsScheduledTodayRes.ok ? (typeof schedJson.total === "number" ? schedJson.total : null) : null;
 
     const deptTileStats: WorkspaceRootDeptTileStats = {};
     if (workUnitsRes.ok && Array.isArray(wuJson.items)) {

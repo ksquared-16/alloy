@@ -1,12 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import {
-    filterJobsNeedsAttention,
-    filterJobsScheduledToday,
-    mergeJobListsById,
-    type JobRowForWorkspaceMetrics,
-} from "@/lib/workspace/deriveDepartmentJobMetrics";
+import { filterJobsNeedsAttention, mergeJobListsById, type JobRowForWorkspaceMetrics } from "@/lib/workspace/deriveDepartmentJobMetrics";
 
 export type DepartmentJobsQueueMode = "unassigned" | "scheduled_today" | "needs_attention";
 
@@ -45,6 +40,11 @@ export function useDepartmentQueueData(departmentId: string, mode: DepartmentJob
                     const jj = (await jRes.json().catch(() => ({}))) as { jobs?: AdminJobListRow[]; error?: string };
                     if (!jRes.ok) throw new Error(jj.error ?? "Failed to load jobs");
                     if (!cancelled) setJobs(jj.jobs ?? []);
+                } else if (mode === "scheduled_today") {
+                    const jRes = await fetch("/api/admin/jobs?scheduled_on=today&limit=200");
+                    const jj = (await jRes.json().catch(() => ({}))) as { jobs?: AdminJobListRow[]; error?: string };
+                    if (!jRes.ok) throw new Error(jj.error ?? "Failed to load jobs");
+                    if (!cancelled) setJobs(jj.jobs ?? []);
                 } else {
                     const [deptJobsRes, unassignedJobsRes] = await Promise.all([
                         fetch(`/api/admin/jobs?department_id=${encodeURIComponent(departmentId)}&limit=200`),
@@ -61,11 +61,7 @@ export function useDepartmentQueueData(departmentId: string, mode: DepartmentJob
                     if (!deptJobsRes.ok) throw new Error(dj.error ?? "Department jobs request failed");
                     if (!unassignedJobsRes.ok) throw new Error(uj.error ?? "Unassigned jobs request failed");
                     const merged = mergeJobListsById(dj.jobs ?? [], uj.jobs ?? []);
-                    const now = new Date();
-                    const filtered =
-                        mode === "scheduled_today"
-                            ? filterJobsScheduledToday(merged, now)
-                            : filterJobsNeedsAttention(merged);
+                    const filtered = filterJobsNeedsAttention(merged);
                     if (!cancelled) setJobs(filtered);
                 }
             } catch (e) {
