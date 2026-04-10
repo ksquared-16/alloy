@@ -60,6 +60,7 @@ import {
     JobDrawerV2TimelineCard,
 } from "@/components/admin/drawer/JobDrawerV2";
 import JobRecordModalV2, { isCleaningJobRecord } from "@/components/admin/drawer/JobRecordModalV2";
+import ScheduleRecordModalV2 from "@/components/admin/drawer/ScheduleRecordModalV2";
 import { AdminCollectPaymentModal, type AdminCollectPaymentModalContext } from "@/components/admin/AdminCollectPaymentModal";
 import { JobReceivableChargesPanel, jobTotalSummaryLabel } from "@/components/admin/JobReceivableChargesPanel";
 import { JobManualChargeForm } from "@/components/admin/JobManualChargeForm";
@@ -3463,9 +3464,16 @@ export default function AdminEntityDrawer() {
         drawer.type === "jobs" &&
         !!drawer.id &&
         drawer.id !== "new";
+    /** Centered record modal for workspace schedules (parity with jobs; avoids sidebar-first legacy chrome). */
+    const isScheduleRecordModalTarget =
+        drawerShellVariant === "adminV2" &&
+        drawer.type === "schedules" &&
+        !!drawer.id &&
+        drawer.id !== "new";
     /** Centered record modal for jobs and for linked entities opened from a job (same Admin V2 stack). */
     const useAdminV2RecordModalPresentation =
-        drawerShellVariant === "adminV2" && (isJobRecordModalTarget || stack.length > 0);
+        drawerShellVariant === "adminV2" &&
+        (isJobRecordModalTarget || isScheduleRecordModalTarget || stack.length > 0);
     const hasServerJobPaymentSummary = !!jobPaymentSummaryFromApi;
     const paymentStatusLabel = hasServerJobPaymentSummary
         ? jobPaymentStatusKeyLabel(jobPaymentSummaryFromApi.payment_status_key)
@@ -3652,6 +3660,10 @@ export default function AdminEntityDrawer() {
         !!overviewData &&
         !(overviewData as { _create?: boolean })._create &&
         isCleaningJobRecord(overviewData as Record<string, unknown>);
+    const showScheduleRecordModalV2 =
+        isScheduleRecordModalTarget &&
+        !!overviewData &&
+        !(overviewData as { _create?: boolean })._create;
     const showDrawerBodyLoading =
         !!drawer.id && drawer.id !== "new" && (loading || (data != null && !dataMatchesDrawer));
 
@@ -5343,11 +5355,15 @@ export default function AdminEntityDrawer() {
             variant={drawerShellVariant}
             presentation={useAdminV2RecordModalPresentation ? "modal" : "sidebar"}
             panelClassName={useAdminV2RecordModalPresentation ? "max-w-7xl" : undefined}
-            recordModalTone={showJobRecordModalV2 ? "cleaning-v2" : undefined}
+            recordModalTone={showJobRecordModalV2 || showScheduleRecordModalV2 ? "cleaning-v2" : undefined}
         >
             {showDrawerBodyLoading &&
-                (isJobRecordModalTarget ? (
-                    <div className="space-y-4 px-1 py-2" aria-busy="true" aria-label="Loading job">
+                (isJobRecordModalTarget || isScheduleRecordModalTarget ? (
+                    <div
+                        className="space-y-4 px-1 py-2"
+                        aria-busy="true"
+                        aria-label={isJobRecordModalTarget ? "Loading job" : "Loading schedule"}
+                    >
                         <div className="h-4 max-w-md w-full animate-pulse rounded-md bg-alloy-stone/25" />
                         <div className="h-28 animate-pulse rounded-xl bg-alloy-stone/15" />
                         <div className="h-40 animate-pulse rounded-xl bg-alloy-stone/12" />
@@ -5358,8 +5374,9 @@ export default function AdminEntityDrawer() {
             {error && <p className="text-alloy-ember">Error: {error}</p>}
             {data && !loading && dataMatchesDrawer && (
                 <div
-                    className={`${isJobDrawerV2 && drawer.type === "jobs" ? "space-y-3 max-w-none" : "space-y-6"}`}
+                    className={`${isJobDrawerV2 && drawer.type === "jobs" ? "space-y-3 max-w-none" : showScheduleRecordModalV2 ? "space-y-3 max-w-none" : "space-y-6"}`}
                     data-adminv2-job-drawer-body={isJobDrawerV2 && drawer.type === "jobs" ? "true" : undefined}
+                    data-adminv2-schedule-drawer-body={showScheduleRecordModalV2 ? "true" : undefined}
                 >
                     {saveError && <p className="text-alloy-ember text-sm">{saveError}</p>}
                     {((drawer.type === "contacts" || drawer.type === "customer_members") && (data as { _person_id?: string | null })?._person_id) && (
@@ -7210,6 +7227,24 @@ export default function AdminEntityDrawer() {
                                     </div>
                                 </div>
                             )
+                        ) : showScheduleRecordModalV2 ? (
+                            <ScheduleRecordModalV2
+                                entityType={presentationType}
+                                data={entityDrawerOverviewData}
+                                customSectionContent={overviewCustomContent}
+                                overviewSectionsOverride={configDrivenOverviewSections.length > 0 ? configDrivenOverviewSections : undefined}
+                                selectOptionsByFieldKey={overviewSelectOptionsByFieldKey}
+                                isEditing={isEditing}
+                                formData={formData}
+                                onFieldChange={(key, value) => {
+                                    setFormData((prev) => ({ ...prev, [key]: value }));
+                                }}
+                                onBlur={() => { if (drawer.type === "jobs" && jobFormDirty) saveEdit(); else if (nonJobFormDirty) saveEdit(); }}
+                                canEdit={!!canMutate}
+                                statusDefs={statusDefsForDrawer}
+                                getStatusLabel={getStatusLabel}
+                                onOpenDrawer={(type, id) => openDrawer({ type: type as AdminDrawerEntityType, id })}
+                            />
                         ) : (
                             <EntityDrawerOverview
                                 entityType={presentationType}
