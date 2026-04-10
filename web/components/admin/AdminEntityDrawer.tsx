@@ -72,6 +72,8 @@ import {
     type PaymentRowLike,
 } from "@/lib/admin/jobPaymentSummary";
 import { isScheduleCanceledStatusKey } from "@/lib/admin/scheduleCanceledStatus";
+import { useRecordChromeConfig } from "@/hooks/useRecordChromeConfig";
+import { applyOverviewSectionOrder } from "@/lib/recordChrome/types";
 
 function dispatchAfterPaymentRun(jobId: string, scheduleId: string | null) {
     window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "jobs", id: jobId } }));
@@ -1675,6 +1677,26 @@ export default function AdminEntityDrawer() {
             setCollectPaymentOpen(true);
         }
     }, [drawer.type, drawer.id, data, paymentParentJobId]);
+
+    const handleRecordChromeJobAction = useCallback(
+        (eventKey: string) => {
+            if (eventKey === "collect_payment") {
+                setPaymentToast(null);
+                openCollectPayment();
+                return;
+            }
+            if (eventKey === "assign_vendor") {
+                setJobExpandedSections((s) => ({ ...s, relationships: true }));
+                requestAnimationFrame(() => {
+                    document.getElementById("job-assign-vendor-section")?.scrollIntoView({
+                        behavior: "smooth",
+                        block: "nearest",
+                    });
+                });
+            }
+        },
+        [openCollectPayment]
+    );
 
     useEffect(() => {
         if (!paymentToast) return;
@@ -3431,6 +3453,8 @@ export default function AdminEntityDrawer() {
     const primaryContactDisabled = !hasCustomer || jobContactOptionsLoading || (hasCustomer && jobContactOptions.length === 0);
     const isJobExistingView = drawer.type === "jobs" && data && typeof data === "object" && !(data as Record<string, unknown>)._create;
     const isJobDrawerV2 = drawerShellVariant === "adminV2" && isJobExistingView;
+    const recordChromeJob = useRecordChromeConfig(isJobDrawerV2 ? "job" : null);
+    const recordChromeSchedule = useRecordChromeConfig(drawer.type === "schedules" ? "schedule" : null);
     /** Modal shell for /adminV2 jobs — use before data loads so geometry never flashes sidebar-first. */
     const isJobRecordModalTarget =
         drawerShellVariant === "adminV2" &&
@@ -3559,11 +3583,57 @@ export default function AdminEntityDrawer() {
             </button>
         ) : null;
 
+    const onScheduleRecordChromeAction = useCallback(
+        (eventKey: string) => {
+            if (!data || (data as { canceled_at?: string | null }).canceled_at) return;
+            if (eventKey === "reschedule") {
+                setScheduleRescheduleForm({
+                    start_at: (data.start_at as string) ? new Date(data.start_at as string).toISOString().slice(0, 16) : "",
+                    end_at: (data.end_at as string) ? new Date(data.end_at as string).toISOString().slice(0, 16) : "",
+                    copy_assignment: !!((data as { _assignment?: { id?: string } })._assignment?.id),
+                });
+            }
+            if (eventKey === "cancel_schedule") {
+                setScheduleCancelPrompt(true);
+            }
+        },
+        [data]
+    );
+
+    const scheduleChromePrimary = (recordChromeSchedule.actions ?? []).filter((a) => a.placement === "primary");
+    const scheduleChromeSecondary = (recordChromeSchedule.actions ?? []).filter((a) => a.placement === "secondary");
+    const hasScheduleChromeActions = scheduleChromePrimary.length + scheduleChromeSecondary.length > 0;
+
     const scheduleHeaderQuickActionsNode =
-        isScheduleExistingView && drawer.id && (schedulePaymentQuickActionsNode != null || scheduleAssignVendorHeaderButton != null) ? (
+        isScheduleExistingView &&
+        drawer.id &&
+        (schedulePaymentQuickActionsNode != null ||
+            scheduleAssignVendorHeaderButton != null ||
+            hasScheduleChromeActions) ? (
             <div className="flex flex-wrap gap-2 items-center">
+                {scheduleChromePrimary.map((a) => (
+                    <button
+                        key={a.id}
+                        type="button"
+                        disabled={!canMutate && a.event_key === "reschedule"}
+                        onClick={() => onScheduleRecordChromeAction(a.event_key)}
+                        className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
+                    >
+                        {a.label}
+                    </button>
+                ))}
                 {schedulePaymentQuickActionsNode}
                 {scheduleAssignVendorHeaderButton}
+                {scheduleChromeSecondary.map((a) => (
+                    <button
+                        key={a.id}
+                        type="button"
+                        onClick={() => onScheduleRecordChromeAction(a.event_key)}
+                        className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30"
+                    >
+                        {a.label}
+                    </button>
+                ))}
             </div>
         ) : null;
 
@@ -4850,8 +4920,12 @@ export default function AdminEntityDrawer() {
                 (a, b) => schedRank(a.key) - schedRank(b.key) || a.key.localeCompare(b.key)
             );
         }
+        const scheduleOrder = recordChromeSchedule.layout?.config_json?.overview_section_order;
+        if (drawer.type === "schedules" && scheduleOrder?.length) {
+            overviewSections = applyOverviewSectionOrder(overviewSections, scheduleOrder);
+        }
         return overviewSections;
-    }, [drawer.type, overviewData, presentationType]);
+    }, [drawer.type, overviewData, presentationType, recordChromeSchedule.layout]);
 
     const overviewSelectOptionsByFieldKey = useMemo((): Record<string, { value: string; label: string }[]> => {
         const out: Record<string, { value: string; label: string }[]> = {};
@@ -5138,6 +5212,8 @@ export default function AdminEntityDrawer() {
                         setData={setData}
                         refetch={refetch}
                         router={router}
+                        recordChromeActions={recordChromeJob.actions}
+                        onRecordChromeAction={handleRecordChromeJobAction}
                     />
                 ) : (
                     jobQuickActionsNode
@@ -7081,6 +7157,7 @@ export default function AdminEntityDrawer() {
                                     selectOptionsByFieldKey={overviewSelectOptionsByFieldKey}
                                     getStatusLabel={getStatusLabel}
                                     isEditing={isEditing || drawer.type === "jobs"}
+                                    recordChromeLayout={recordChromeJob.layout}
                                 />
                             ) : (
                                 <div

@@ -8,6 +8,7 @@ import { StatusBadge } from "@/components/admin/StatusBadge";
 import type { JobPaymentsSummaryFromApi } from "@/lib/admin/jobPaymentSummary";
 import type { StatusDefOption } from "@/components/admin/entity/EntityDrawerOverview";
 import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
+import type { RecordActionRow } from "@/lib/recordChrome/types";
 
 const shell: CSSProperties = {
     color: neutral.textPrimary,
@@ -587,6 +588,9 @@ export function JobDrawerV2PrimaryActions(props: {
     setData: Dispatch<SetStateAction<Record<string, unknown> | null>>;
     refetch: () => void;
     router: { refresh: () => void };
+    /** When set, primary/secondary actions come from record chrome (above RRS); legacy payment/assign row is omitted. */
+    recordChromeActions?: RecordActionRow[] | null;
+    onRecordChromeAction?: (eventKey: string) => void;
 }) {
     const btnBase: CSSProperties = {
         fontSize: 13,
@@ -605,20 +609,53 @@ export function JobDrawerV2PrimaryActions(props: {
         color: "#fff",
     };
     const p = props;
+    const useChrome = (p.recordChromeActions?.length ?? 0) > 0 && p.onRecordChromeAction;
+    const chromePrimary = (p.recordChromeActions ?? []).filter((a) => a.placement === "primary");
+    const chromeSecondary = (p.recordChromeActions ?? []).filter((a) => a.placement === "secondary");
     return (
         <div className="flex flex-wrap items-center gap-2" data-adminv2-job-record-primary-actions="true">
-            <button
-                type="button"
-                disabled={!p.canMutate}
-                onClick={() => {
-                    p.clearPaymentToast();
-                    p.openCollectPayment();
-                }}
-                style={primaryBtn}
-                className="min-h-[36px] font-semibold shadow-sm disabled:opacity-50"
-            >
-                Add payment
-            </button>
+            {useChrome ? (
+                <>
+                    {chromePrimary.map((a) => (
+                        <button
+                            key={a.id}
+                            type="button"
+                            disabled={!p.canMutate && a.event_key === "collect_payment"}
+                            onClick={() => p.onRecordChromeAction?.(a.event_key)}
+                            style={primaryBtn}
+                            className="min-h-[36px] font-semibold shadow-sm disabled:opacity-50"
+                        >
+                            {a.label}
+                        </button>
+                    ))}
+                    {chromeSecondary.map((a) => (
+                        <button
+                            key={a.id}
+                            type="button"
+                            onClick={() => p.onRecordChromeAction?.(a.event_key)}
+                            style={btnBase}
+                            className="min-h-[36px] font-medium shadow-sm"
+                        >
+                            {a.label}
+                        </button>
+                    ))}
+                </>
+            ) : (
+                <>
+                    <button
+                        type="button"
+                        disabled={!p.canMutate}
+                        onClick={() => {
+                            p.clearPaymentToast();
+                            p.openCollectPayment();
+                        }}
+                        style={primaryBtn}
+                        className="min-h-[36px] font-semibold shadow-sm disabled:opacity-50"
+                    >
+                        Add payment
+                    </button>
+                </>
+            )}
             {p.hasServerJobPaymentSummary && p.jobPaymentSummaryFromApi?.payment_status_key === "failed" && (
                 <button
                     type="button"
@@ -666,7 +703,7 @@ export function JobDrawerV2PrimaryActions(props: {
             >
                 {p.jobActionLoading === "mark_completed" ? "…" : "Mark complete"}
             </button>
-            {p.canMutate && (
+            {!useChrome && p.canMutate && (
                 <button
                     type="button"
                     onClick={() => {

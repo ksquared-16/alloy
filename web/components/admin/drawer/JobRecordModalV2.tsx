@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties, Dispatch, ReactNode, SetStateAction } from "react";
+import { useMemo, type CSSProperties, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
 import { formatDateTime, formatMoneyFromCents } from "@/lib/adminFormatters";
 import {
@@ -14,6 +14,7 @@ import {
 import EntityDrawerOverview from "@/components/admin/entity/EntityDrawerOverview";
 import type { StatusDefOption } from "@/components/admin/entity/EntityDrawerOverview";
 import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
+import { applyOverviewSectionOrder, type RecordLayoutRow } from "@/lib/recordChrome/types";
 
 const shell: CSSProperties = {
     color: neutral.textPrimary,
@@ -182,6 +183,8 @@ export interface JobRecordModalV2Props {
     getStatusLabel: (key: string) => string | null;
     /** Mirrors AdminEntityDrawer overview edit toggle (jobs are typically inline-edit). */
     isEditing: boolean;
+    /** Optional DB-driven section order (record chrome above RRS). */
+    recordChromeLayout?: RecordLayoutRow | null;
 }
 
 /**
@@ -189,6 +192,14 @@ export interface JobRecordModalV2Props {
  * Owns top summary + curated lower sections; does not use the generic primary panel + field-deck composition.
  */
 export default function JobRecordModalV2(props: JobRecordModalV2Props) {
+    const overviewSectionsResolved = useMemo(
+        () =>
+            applyOverviewSectionOrder(
+                JOB_RECORD_MODAL_V2_OVERVIEW_SECTIONS,
+                props.recordChromeLayout?.config_json?.overview_section_order
+            ),
+        [props.recordChromeLayout]
+    );
     const r = props.record ?? {};
     const totalRaw = r.display_total_cents ?? r.total_cents ?? r.gross_price_cents ?? r.estimated_total_cents;
     const totalCents = typeof totalRaw === "number" ? totalRaw : typeof totalRaw === "string" ? parseFloat(totalRaw) : NaN;
@@ -459,7 +470,7 @@ export default function JobRecordModalV2(props: JobRecordModalV2Props) {
                     entityType={props.presentationType}
                     data={props.entityDrawerOverviewData}
                     customSectionContent={props.customSectionContent}
-                    overviewSectionsOverride={JOB_RECORD_MODAL_V2_OVERVIEW_SECTIONS}
+                    overviewSectionsOverride={overviewSectionsResolved}
                     selectOptionsByFieldKey={props.selectOptionsByFieldKey}
                     isEditing={props.isEditing}
                     formData={props.formData}
