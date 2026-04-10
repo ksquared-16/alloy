@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { normalizeQueueDefinitionForCreate } from "@/lib/rrs/queue/queueDefinitionV1";
 
 const KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 
@@ -12,26 +13,6 @@ function normalizeKey(raw: string): string {
         .replace(/[^a-z0-9_]/g, "_")
         .replace(/_+/g, "_")
         .replace(/^_|_$/g, "");
-}
-
-function parseQueueDefinition(raw: unknown): Record<string, unknown> {
-    if (raw === undefined || raw === null) return {};
-    if (typeof raw === "object" && !Array.isArray(raw) && raw !== null) {
-        return raw as Record<string, unknown>;
-    }
-    if (typeof raw === "string") {
-        const t = raw.trim();
-        if (!t) return {};
-        try {
-            const p = JSON.parse(t) as unknown;
-            if (typeof p === "object" && p !== null && !Array.isArray(p)) {
-                return p as Record<string, unknown>;
-            }
-        } catch {
-            throw new Error("INVALID_QUEUE_JSON");
-        }
-    }
-    throw new Error("INVALID_QUEUE_JSON");
 }
 
 /** GET: list work units for current org. Optional ?department_id= */
@@ -119,15 +100,11 @@ export async function POST(request: NextRequest) {
     const sort_order = typeof body.sort_order === "number" && !Number.isNaN(body.sort_order) ? body.sort_order : 0;
     const is_active = body.is_active !== false;
 
-    let queue_definition: Record<string, unknown>;
-    try {
-        queue_definition = parseQueueDefinition(body.queue_definition);
-    } catch (e) {
-        if ((e as Error).message === "INVALID_QUEUE_JSON") {
-            return NextResponse.json({ error: "queue_definition must be a JSON object" }, { status: 400 });
-        }
-        throw e;
+    const qdNorm = normalizeQueueDefinitionForCreate(body.queue_definition);
+    if (!qdNorm.ok) {
+        return NextResponse.json({ error: qdNorm.error }, { status: 400 });
     }
+    const queue_definition = qdNorm.value;
 
     if (!key) {
         return NextResponse.json({ error: "key is required" }, { status: 400 });

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildJobQueueIntent, parseQueueDefinitionV1 } from "@/lib/rrs/queue/queueDefinitionV1";
+import {
+    buildJobQueueIntent,
+    getQueueDefinitionStoredVersion,
+    normalizeQueueDefinitionForCreate,
+    parseQueueDefinitionV1,
+    parseQueueDefinitionV1Strict,
+    queueDefinitionV1Schema,
+} from "@/lib/rrs/queue/queueDefinitionV1";
 
 describe("parseQueueDefinitionV1", () => {
     it("returns null for empty object", () => {
@@ -40,6 +47,64 @@ describe("parseQueueDefinitionV1", () => {
             limit: 99999,
         });
         expect(hi!.limit).toBe(500);
+    });
+});
+
+describe("parseQueueDefinitionV1Strict", () => {
+    it("rejects unknown top-level keys", () => {
+        const r = parseQueueDefinitionV1Strict({
+            version: 1,
+            entity_type: "job",
+            sort: { by: "updated_at", direction: "desc" },
+            limit: 10,
+            extra: 1,
+        });
+        expect(r.ok).toBe(false);
+        if (!r.ok) expect(r.error).toContain("unknown key");
+    });
+
+    it("rejects empty object", () => {
+        const r = parseQueueDefinitionV1Strict({});
+        expect(r.ok).toBe(false);
+    });
+
+    it("accepts minimal valid v1", () => {
+        const r = parseQueueDefinitionV1Strict({
+            version: 1,
+            entity_type: "job",
+            sort: { by: "updated_at", direction: "desc" },
+            limit: 50,
+        });
+        expect(r.ok).toBe(true);
+    });
+
+    it("queueDefinitionV1Schema exposes parseStrict and getStoredVersion", () => {
+        expect(queueDefinitionV1Schema.getStoredVersion({})).toBe(0);
+        expect(queueDefinitionV1Schema.getStoredVersion({ version: 1 })).toBe(1);
+        expect(getQueueDefinitionStoredVersion(null)).toBe(0);
+    });
+});
+
+describe("normalizeQueueDefinitionForCreate", () => {
+    it("accepts empty object as {}", () => {
+        const r = normalizeQueueDefinitionForCreate({});
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(Object.keys(r.value)).toHaveLength(0);
+    });
+
+    it("rejects non-v1 when non-empty", () => {
+        const r = normalizeQueueDefinitionForCreate({ foo: 1 });
+        expect(r.ok).toBe(false);
+    });
+
+    it("accepts strict v1", () => {
+        const r = normalizeQueueDefinitionForCreate({
+            version: 1,
+            entity_type: "job",
+            sort: { by: "updated_at", direction: "desc" },
+            limit: 5,
+        });
+        expect(r.ok).toBe(true);
     });
 });
 

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import { getQueueDefinitionStoredVersion } from "@/lib/rrs/queue/queueDefinitionV1";
 import type { DepartmentRow } from "../departments/DepartmentsClient";
 
 export type WorkUnitRow = {
@@ -47,6 +48,8 @@ export default function WorkUnitsClient() {
     const [modalSortOrder, setModalSortOrder] = useState(0);
     const [modalActive, setModalActive] = useState(true);
     const [modalQueueJson, setModalQueueJson] = useState("{}");
+    /** Optimistic concurrency for PATCH `queue_definition` (see `expected_queue_definition_version`). */
+    const [modalQueueExpectedVersion, setModalQueueExpectedVersion] = useState(0);
     const [modalSaving, setModalSaving] = useState(false);
     const [modalError, setModalError] = useState<string | null>(null);
 
@@ -119,6 +122,7 @@ export default function WorkUnitsClient() {
         setModalSortOrder(0);
         setModalActive(true);
         setModalQueueJson("{}");
+        setModalQueueExpectedVersion(0);
         setModalError(null);
         setModalOpen(true);
     };
@@ -132,6 +136,7 @@ export default function WorkUnitsClient() {
         setModalSortOrder(row.sort_order);
         setModalActive(row.is_active);
         setModalQueueJson(stringifyQueue(row.queue_definition));
+        setModalQueueExpectedVersion(getQueueDefinitionStoredVersion(row.queue_definition));
         setModalError(null);
         setModalOpen(true);
     };
@@ -156,18 +161,22 @@ export default function WorkUnitsClient() {
             setModalError("Department is required.");
             return;
         }
-        let queue_definition: Record<string, unknown>;
+        let queueParsed: Record<string, unknown>;
         try {
             const p = JSON.parse(modalQueueJson.trim() || "{}") as unknown;
             if (typeof p !== "object" || p === null || Array.isArray(p)) {
                 setModalError("Queue definition must be a JSON object.");
                 return;
             }
-            queue_definition = p as Record<string, unknown>;
+            queueParsed = p as Record<string, unknown>;
         } catch {
             setModalError("Invalid JSON in queue definition.");
             return;
         }
+
+        /** Empty object clears stored queue_definition (server treats null as clear to `{}`). */
+        const queue_definition =
+            Object.keys(queueParsed).length === 0 ? null : queueParsed;
 
         setModalSaving(true);
         setModalError(null);
@@ -184,6 +193,7 @@ export default function WorkUnitsClient() {
                         sort_order: modalSortOrder,
                         is_active: modalActive,
                         queue_definition,
+                        expected_queue_definition_version: modalQueueExpectedVersion,
                     }),
                 });
                 const json = await res.json().catch(() => ({}));
