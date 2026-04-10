@@ -13,6 +13,7 @@
 | **Track A Batch 1** (integrity, overview config, queue v1, resolver v0) | [`implementation/track-a-batch-1.md`](./implementation/track-a-batch-1.md) |
 | **V2 workspace slice 1** (cleaning org: dept → work unit → queue → record) | [`implementation/v2-workspace-slice-1-cleaning.md`](./implementation/v2-workspace-slice-1-cleaning.md) |
 | **GPT / project source pack file list** | [`architecture/source-pack-index.md`](./architecture/source-pack-index.md) |
+| **Configuration system (doctrine + model + surfaces + API)** | [`architecture/configuration-doctrine.md`](./architecture/configuration-doctrine.md) · [`config-model-spec.md`](./architecture/config-model-spec.md) · [`config-surfaces-spec.md`](./architecture/config-surfaces-spec.md) · [`config-api-contract.md`](./architecture/config-api-contract.md) |
 | **Where schema truth lives** | [`audits/schema-reference-guide.md`](./audits/schema-reference-guide.md) |
 | **How the app is wired today** (Next.js, Supabase, major flows) | [`implementation/ARCHITECTURE.md`](./implementation/ARCHITECTURE.md) |
 | **Admin IA & hierarchy planning (V1 + V2 shells)** | [`implementation/SYSTEM_STRUCTURE_V1.md`](./implementation/SYSTEM_STRUCTURE_V1.md) |

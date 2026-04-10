@@ -2,7 +2,7 @@
 
 **Full doc map:** [`../README.md`](../README.md) (implementation plans, audits, archive).
 
-This folder holds **current product and platform doctrine** for record rendering, relationships, overview layout, workspace vs record semantics, and org/department/work-unit scope. Treat these documents as the **canonical reference** when planning foundation work.
+This folder holds **current product and platform doctrine** for record rendering, relationships, overview layout, workspace vs record semantics, org/department/work-unit scope, and **configuration vs fixed platform behavior**. Treat these documents as the **canonical reference** when planning foundation work.
 
 **UI V1 and Admin V2 demo shells are not the source of truth** for the future record/workspace system; they may lag or contradict doctrine here.
 
@@ -17,6 +17,10 @@ This folder holds **current product and platform doctrine** for record rendering
 | [Overview layout](./overview-layout-doctrine.md) | Structured summary surfaces, config + layout metadata, no page builder |
 | [Workspace, work unit, scope](./workspace-work-unit-scope-doctrine.md) | Record vs execution vs coordination; queues; drawer vs full record; org/location/department |
 | [Implementation gap audit](./implementation-gap-audit.md) | Doctrine vs current Supabase/config/code (living document) |
+| [Configuration doctrine](./configuration-doctrine.md) | What is configurable vs system-controlled; AI guardrails (future) |
+| [Config model spec](./config-model-spec.md) | Entities, relationships, DB vs code, **current inventory audit** |
+| [Config surfaces spec](./config-surfaces-spec.md) | Where settings live; how config affects workspace/records (no UI build) |
+| [Config API contract](./config-api-contract.md) | Read/write patterns; future AI + unified writes |
 | [Source pack index](./source-pack-index.md) | **Files to load** into GPT/project context |
 
 **Future AI:** Constrained, config-level assistance (layout suggestions, queue ordering, signals) is described under [Workspace doctrine — Future AI](./workspace-work-unit-scope-doctrine.md#future-ai-compatibility-not-implementation-now).

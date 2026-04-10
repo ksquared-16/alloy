@@ -14,6 +14,10 @@
 | `architecture/workspace-work-unit-scope-doctrine.md` | Record vs work unit vs queue vs drawer; org/location/department. |
 | `architecture/deferred-decisions.md` | **Explicit deferrals** — avoids re-litigating scope. |
 | `architecture/implementation-gap-audit.md` | Doctrine vs current DB/code — **living** gap list. |
+| `architecture/configuration-doctrine.md` | Config vs fixed behavior; safe vs system-controlled. |
+| `architecture/config-model-spec.md` | Config entities, DB vs code, inventory audit. |
+| `architecture/config-surfaces-spec.md` | Settings IA target; how config affects layers. |
+| `architecture/config-api-contract.md` | Read/write/API patterns; future AI contract. |
 
 ## Tier 2 — Implementation bridge (load for Track A)
 
