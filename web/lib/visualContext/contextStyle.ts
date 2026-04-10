@@ -49,7 +49,10 @@ function chromaForAlloyFamily(family: AlloyVisualFamily): { primary: string; sec
     }
 }
 
-/** Section / header presentation — contextual only; never used for primary CTAs. */
+/**
+ * Context as signal, not surface tint: headers stay white; one right-edge rail carries identity.
+ * Work panels use rails / rules / optional very light wash only.
+ */
 function buildContextualPresentationTokens(resolved: ResolvedVisualContext, strength: number): CSSProperties {
     const { primary, secondary } = chromaForAlloyFamily(resolved.alloyFamily);
     const fam = resolved.alloyFamily;
@@ -59,9 +62,14 @@ function buildContextualPresentationTokens(resolved: ResolvedVisualContext, stre
     if (fam === "bend_pine") labelAccent = secondary;
     if (fam === "neutral" || fam === "midnight_blue") labelAccent = palette.midnightForge;
 
-    const washStrong = `color-mix(in srgb, #ffffff ${Math.max(0, 100 - Math.round(5 + 11 * t))}%, ${primary})`;
-    const washMid = `color-mix(in srgb, #ffffff ${Math.max(0, 100 - Math.round(2.5 + 6 * t))}%, ${primary})`;
-    const washSoft = `color-mix(in srgb, #ffffff ${Math.max(0, 100 - Math.round(1 + 3 * t))}%, ${primary})`;
+    /** Subtle vertical accent on the right edge of header/control deck (not a full-width wash). */
+    const headerRailOpacity = Math.min(0.62, 0.28 + t * 0.22);
+    const headerRailAccent =
+        fam === "amber"
+            ? `color-mix(in srgb, ${primary} ${Math.round(headerRailOpacity * 100)}%, #ffffff)`
+            : fam === "bend_pine"
+              ? `color-mix(in srgb, ${secondary} ${Math.round(headerRailOpacity * 100)}%, #ffffff)`
+              : `color-mix(in srgb, ${primary} ${Math.round(headerRailOpacity * 100)}%, #ffffff)`;
 
     const rail =
         fam === "amber"
@@ -70,17 +78,13 @@ function buildContextualPresentationTokens(resolved: ResolvedVisualContext, stre
               ? `color-mix(in srgb, ${secondary} 52%, var(--d-border))`
               : `color-mix(in srgb, ${primary} 45%, var(--d-border))`;
 
-    const sectionWash = `color-mix(in srgb, #ffffff 91%, ${fam === "bend_pine" ? secondary : primary} 9%)`;
+    const sectionWash = `color-mix(in srgb, #ffffff 96%, ${fam === "bend_pine" ? secondary : primary} 4%)`;
 
     return {
         ["--vc-label-accent" as string]: labelAccent,
-        ["--vc-context-header-start" as string]: washStrong,
-        ["--vc-context-header-mid" as string]: washMid,
-        ["--vc-context-header-end" as string]: washSoft,
+        ["--vc-header-rail-accent" as string]: headerRailAccent,
         ["--vc-section-rail" as string]: rail,
         ["--vc-section-panel-wash" as string]: sectionWash,
-        ["--vc-drawer-header-bg" as string]: `linear-gradient(102deg, ${washStrong} 0%, ${washMid} 48%, ${washSoft} 100%)`,
-        ["--vc-drawer-body-veil" as string]: `color-mix(in srgb, ${palette.riverStone} 93%, ${primary} 7%)`,
     };
 }
 
@@ -194,27 +198,26 @@ export function workspaceTileContextStyle(hints: VisualContextResolveHints): CSS
 export function recordSurfaceContextStyle(hints: VisualContextResolveHints): CSSProperties {
     const resolved = resolveVisualContext(hints);
     const merged = mergeOperationalVisualTokens({ ...hints, layer: "record" });
-    const { primary, secondary } = chromaForAlloyFamily(resolved.alloyFamily);
-    const family = resolved.alloyFamily;
     let strength = Math.min(1, LAYER_STRENGTH.record + laneKeyToVisualBias(hints.laneKey) * 0.12);
-    if (family === "amber" && resolved.amberEmphasis === "strong") {
+    if (resolved.alloyFamily === "amber" && resolved.amberEmphasis === "strong") {
         strength = Math.min(1, strength * 1.08);
     }
 
-    const rim =
-        family === "bend_pine"
-            ? `color-mix(in srgb, ${secondary} ${Math.round(38 + 35 * strength)}%, ${neutral.surface})`
-            : family === "alloy_blue"
-              ? `color-mix(in srgb, ${primary} ${Math.round(32 + 30 * strength)}%, ${neutral.surface})`
-              : family === "amber"
-                ? `color-mix(in srgb, ${primary} ${Math.round(28 + 28 * strength)}%, ${neutral.surface})`
-                : family === "midnight_blue"
-                  ? `color-mix(in srgb, ${primary} ${Math.round(22 + 20 * strength)}%, ${neutral.surface})`
-                  : `color-mix(in srgb, ${palette.midnightForge} ${Math.round(18 + 12 * strength)}%, ${neutral.surface})`;
+    /** Record modal: Bend Pine–led chrome — precise, not themed; semantic resolver unchanged above. */
+    const pine = palette.bendPine;
+    const rim = `color-mix(in srgb, ${pine} ${Math.round(26 + 18 * strength)}%, ${neutral.surface})`;
+    const labelForRecord = `color-mix(in srgb, ${pine} 38%, ${palette.midnightForge})`;
+    const headerRailRecord = `color-mix(in srgb, ${pine} 52%, #ffffff)`;
+    const tabUnderline = `color-mix(in srgb, ${pine} 55%, transparent)`;
 
     return {
         ...departmentWorkspaceShellBaseStyle,
         ...merged,
         ["--vc-record-rim" as string]: rim,
+        ["--vc-label-accent" as string]: labelForRecord,
+        ["--vc-header-rail-accent" as string]: headerRailRecord,
+        ["--vc-drawer-header-bg" as string]: "#ffffff",
+        ["--vc-drawer-body-veil" as string]: neutral.background,
+        ["--vc-record-tab-underline" as string]: tabUnderline,
     };
 }

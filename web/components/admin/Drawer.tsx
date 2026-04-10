@@ -85,13 +85,9 @@ export default function Drawer({
     const panelStyle: CSSProperties = isModal
         ? {
               zIndex: zIndexPanel,
-              backgroundColor: cleaningRecordModalTone
-                  ? "color-mix(in srgb, #ffffff 94%, var(--vc-drawer-body-veil, #f6f8fc))"
-                  : neutral.surface,
+              backgroundColor: neutral.surface,
               color: neutral.textPrimary,
-              borderColor: cleaningRecordModalTone
-                  ? "color-mix(in srgb, rgba(39, 63, 82, 0.1) 82%, var(--vc-label-accent, rgba(39, 63, 82, 0.08)) 18%)"
-                  : derived.border,
+              borderColor: derived.border,
               boxShadow: cleaningRecordModalTone
                   ? "0 12px 40px rgba(39, 63, 82, 0.1), 0 2px 8px rgba(39, 63, 82, 0.04)"
                   : derived.cardShadow,
@@ -123,7 +119,7 @@ export default function Drawer({
         isModal && isV2
             ? cleaningRecordModalTone
                 ? {
-                      background: `radial-gradient(ellipse 120% 80% at 50% -10%, color-mix(in srgb, var(--vc-drawer-body-veil) 96%, transparent) 0%, transparent 55%), linear-gradient(180deg, var(--vc-drawer-body-veil) 0%, color-mix(in srgb, var(--vc-drawer-body-veil) 88%, ${derived.canvasFieldDepth}) 52%, color-mix(in srgb, var(--vc-drawer-body-veil) 94%, ${palette.midnightForge}) 100%)`,
+                      backgroundColor: neutral.background,
                       color: neutral.textPrimary,
                   }
                 : {
@@ -143,9 +139,11 @@ export default function Drawer({
                         ? {
                               ...(cleaningRecordModalTone
                                   ? {
-                                        background: "var(--vc-drawer-header-bg)",
-                                        borderBottomColor:
-                                            "color-mix(in srgb, rgba(39, 63, 82, 0.1) 78%, var(--vc-label-accent, rgba(39, 63, 82, 0.12)) 22%)",
+                                        backgroundColor: "var(--vc-drawer-header-bg, #ffffff)",
+                                        borderBottomColor: derived.border,
+                                        borderRightWidth: 3,
+                                        borderRightStyle: "solid",
+                                        borderRightColor: "var(--vc-header-rail-accent)",
                                     }
                                   : {
                                         backgroundColor: neutral.surface,
@@ -231,12 +229,8 @@ export default function Drawer({
                         style={
                             isV2
                                 ? {
-                                      borderTopColor: cleaningRecordModalTone
-                                          ? "color-mix(in srgb, rgba(39, 63, 82, 0.09) 80%, rgba(0, 69, 140, 0.06))"
-                                          : derived.border,
-                                      backgroundColor: cleaningRecordModalTone
-                                          ? "color-mix(in srgb, #ffffff 97%, rgba(39, 63, 82, 0.02))"
-                                          : undefined,
+                                      borderTopColor: derived.border,
+                                      backgroundColor: cleaningRecordModalTone ? neutral.surface : undefined,
                                   }
                                 : undefined
                         }
@@ -275,7 +269,7 @@ export default function Drawer({
                         className={`pointer-events-auto flex max-h-[min(920px,92vh)] w-full flex-col overflow-hidden rounded-2xl border border-solid shadow-2xl animate-in fade-in zoom-in-[0.99] duration-300 ${cleaningRecordModalTone ? "min-h-[min(520px,78vh)]" : ""} ${panelClassName ?? "max-w-5xl"}`}
                         style={
                             cleaningRecordModalTone && recordModalContextStyle
-                                ? { ...panelStyle, ...recordModalContextStyle }
+                                ? { ...recordModalContextStyle, ...panelStyle }
                                 : panelStyle
                         }
                         role="dialog"
