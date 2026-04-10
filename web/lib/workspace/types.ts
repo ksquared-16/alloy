@@ -18,7 +18,7 @@ export type WorkspaceAttentionCategoryKey =
 /** Metric keys the client can resolve today; extend as new signal providers ship. */
 export type WorkspaceSignalMetricKey =
     | "jobs.unassigned_count"
-    | "jobs.scheduled_today_count"
+    | "schedules.scheduled_today_count"
     | "jobs.needs_attention_count"
     | "jobs.high_value_attention_count";
 

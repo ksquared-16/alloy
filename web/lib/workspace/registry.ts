@@ -27,8 +27,8 @@ const OPERATIONS: DepartmentWorkspaceLayout = {
                 {
                     id: "scheduled_today",
                     eyebrow: "Today",
-                    label: "Jobs on schedule (today)",
-                    metric: "jobs.scheduled_today_count",
+                    label: "Visits scheduled (today)",
+                    metric: "schedules.scheduled_today_count",
                 },
                 {
                     id: "needs_attention",
@@ -59,7 +59,7 @@ const OPERATIONS: DepartmentWorkspaceLayout = {
                     kind: "department_workspace_route",
                     segment: "scheduled-today",
                     label: "Scheduled today",
-                    description: "Jobs with a visit scheduled for today in the org’s timezone (schedule-backed).",
+                    description: "Visit occurrences on the org’s local calendar day (one row per schedule; timezone from org settings).",
                 },
                 {
                     kind: "department_workspace_route",

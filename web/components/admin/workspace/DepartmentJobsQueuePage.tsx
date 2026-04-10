@@ -34,7 +34,7 @@ export function DepartmentJobsQueuePage({
 }) {
     const router = useRouter();
     const { openDrawer, drawer } = useAdminDrawer();
-    const { jobs, loading, error, refetch } = useDepartmentQueueData(departmentId, mode);
+    const { jobs, schedules, loading, error, refetch } = useDepartmentQueueData(departmentId, mode);
     const drawerWasOpen = useRef(false);
 
     useEffect(() => {
@@ -53,14 +53,19 @@ export function DepartmentJobsQueuePage({
                 deptName,
                 mode,
                 jobs,
+                schedules: mode === "scheduled_today" ? schedules : undefined,
             }),
-        [departmentId, deptName, mode, jobs]
+        [departmentId, deptName, mode, jobs, schedules]
     );
 
     const onWorkspaceAction = useCallback(
         (action: WorkspaceAction) => {
             if (action.type === "queue.item.action" && action.actionId === "open_record") {
-                openDrawer({ type: "jobs", id: action.itemId, jobRecordSurface: "drawer" });
+                if (mode === "scheduled_today") {
+                    openDrawer({ type: "schedules", id: action.itemId });
+                } else {
+                    openDrawer({ type: "jobs", id: action.itemId, jobRecordSurface: "drawer" });
+                }
                 return;
             }
             if (action.type === "navigate" && action.href) {
@@ -80,7 +85,7 @@ export function DepartmentJobsQueuePage({
                 else if (id === "open_work_units") router.push("/admin/system/work-units");
             }
         },
-        [departmentId, openDrawer, router, workspaceBase]
+        [departmentId, mode, openDrawer, router, workspaceBase]
     );
 
     return (

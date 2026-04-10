@@ -21,7 +21,7 @@ async function loadWorkspaceRollup(): Promise<{
     ] = await Promise.all([
         fetch("/api/admin/jobs?assigned_vendor_unassigned=true&limit=1"),
         fetch("/api/admin/jobs?limit=1"),
-        fetch("/api/admin/jobs?scheduled_on=today&limit=1"),
+        fetch("/api/admin/schedules?scheduled_on=today&limit=1"),
         fetch("/api/admin/work-units"),
         fetch("/api/admin/jobs?limit=200"),
     ]);

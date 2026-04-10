@@ -9,8 +9,6 @@ import { assertAllowedStatusKey, fetchEffectiveStatusDefinitions } from "@/lib/a
 import { fetchJobStatusKeyByFk, effectiveJobStatusKey, resolveJobStatusRowByOrgAndKey } from "@/lib/admin/jobEffectiveStatusKey";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { computeJobBalanceSnapshot } from "@/lib/admin/jobPaymentBalances";
-import { fetchOrgTimeZoneIana, resolveScheduledOnBounds } from "@/lib/admin/orgLocalDayBounds";
-
 /** GET: list jobs for current org. Admin/ops. Exclude archived by default. */
 export async function GET(request: NextRequest) {
   const ctx = await getAdminContext();
@@ -27,29 +25,12 @@ export async function GET(request: NextRequest) {
   const unassignedWorkUnit = searchParams.get("unassigned_work_unit") === "true";
   /** Operations “Unassigned Jobs” lane (cleaning): no vendor assigned yet. */
   const assignedVendorUnassigned = searchParams.get("assigned_vendor_unassigned") === "true";
-  /**
-   * Operations “Today’s Schedule” lane: jobs with ≥1 non-canceled schedule whose start_at falls in the org-local calendar day.
-   * Values: `today` or `YYYY-MM-DD`. Source of truth: `schedules` + org_settings.metadata.timezone (IANA).
-   */
-  const scheduledOnRaw = (searchParams.get("scheduled_on") ?? "").trim();
   const limit = Math.min(Number(searchParams.get("limit")) || 200, 200);
 
   const supabase = createAdminClient();
 
   /** When set, restrict jobs to these work_unit ids (department filter). */
   let departmentWorkUnitIds: string[] | null = null;
-
-  if (scheduledOnRaw) {
-    if (assignedVendorUnassigned || unassignedWorkUnit || workUnitIdParam || departmentIdParam) {
-      return NextResponse.json(
-        {
-          error:
-            "scheduled_on cannot be combined with assigned_vendor_unassigned, unassigned_work_unit, work_unit_id, or department_id",
-        },
-        { status: 400 }
-      );
-    }
-  }
 
   if (assignedVendorUnassigned && unassignedWorkUnit) {
     return NextResponse.json(
@@ -96,172 +77,48 @@ export async function GET(request: NextRequest) {
     departmentWorkUnitIds = deptWuIds;
   }
 
-  /** Operations “Today’s Schedule” — schedules are source of truth for org-local calendar day. */
-  let scheduleDayFirstStartByJobId: Map<string, string> | null = null;
-
   let rows: Record<string, unknown>[] | null = null;
   let count: number | null = null;
 
-  if (scheduledOnRaw) {
-    const so = scheduledOnRaw.toLowerCase();
-    if (so !== "today" && !/^\d{4}-\d{2}-\d{2}$/.test(scheduledOnRaw)) {
-      return NextResponse.json({ error: "scheduled_on must be `today` or YYYY-MM-DD" }, { status: 400 });
-    }
-    let bounds: { dayStartUtc: Date; dayEndExclusiveUtc: Date };
-    try {
-      const tz = await fetchOrgTimeZoneIana(supabase, ctx.orgId);
-      bounds = resolveScheduledOnBounds(scheduledOnRaw, tz);
-    } catch (e) {
-      return NextResponse.json(
-        { error: e instanceof Error ? e.message : "Invalid scheduled_on" },
-        { status: 400 }
-      );
-    }
+  let q = supabase
+    .from("jobs")
+    .select(
+      "id, created_at, updated_at, title, description, job_status_id, status_key, service_key, job_number, job_number_for_customer, is_recurring, customer_id, assigned_vendor_id, location_id, work_unit_id, metadata, archived_at, gross_price_cents, estimated_total_cents, discount_amount, discounted",
+      { count: "exact" }
+    )
+    .eq("org_id", ctx.orgId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
 
-    const { data: schedRows, error: schedErr } = await supabase
-      .from("schedules")
-      .select("job_id, start_at")
-      .eq("org_id", ctx.orgId)
-      .is("canceled_at", null)
-      .gte("start_at", bounds.dayStartUtc.toISOString())
-      .lt("start_at", bounds.dayEndExclusiveUtc.toISOString())
-      .order("start_at", { ascending: true });
-
-    if (schedErr) {
-      return NextResponse.json({ error: schedErr.message }, { status: 500 });
-    }
-
-    const firstStart = new Map<string, string>();
-    const orderedUniqueJobIds: string[] = [];
-    for (const r of schedRows ?? []) {
-      const row = r as { job_id: string; start_at: string };
-      if (!firstStart.has(row.job_id)) {
-        firstStart.set(row.job_id, row.start_at);
-        orderedUniqueJobIds.push(row.job_id);
-      }
-    }
-
-    if (orderedUniqueJobIds.length === 0) {
-      return NextResponse.json({ jobs: [], total: 0 });
-    }
-
-    const maxScan = Math.min(orderedUniqueJobIds.length, 5000);
-    const scanIds = orderedUniqueJobIds.slice(0, maxScan);
-    const { data: thinJobs, error: thinErr } = await supabase
-      .from("jobs")
-      .select("id, archived_at, title, job_number_for_customer")
-      .eq("org_id", ctx.orgId)
-      .in("id", scanIds);
-    if (thinErr) {
-      return NextResponse.json({ error: thinErr.message }, { status: 500 });
-    }
-
-    const thinById = new Map((thinJobs ?? []).map((j) => [(j as { id: string }).id, j as { archived_at?: string | null }]));
-    let visibleOrdered = orderedUniqueJobIds.filter((id) => {
-      const t = thinById.get(id);
-      if (!t) return false;
-      if (!includeArchived && t.archived_at != null) return false;
-      return true;
-    });
-
-    if (statusKey) {
-      const { data: skRows } = await supabase
-        .from("jobs")
-        .select("id, status_key")
-        .eq("org_id", ctx.orgId)
-        .in("id", visibleOrdered)
-        .eq("status_key", statusKey);
-      const allow = new Set((skRows ?? []).map((r) => (r as { id: string }).id));
-      visibleOrdered = visibleOrdered.filter((id) => allow.has(id));
-    }
-    if (assignedVendorId) {
-      const { data: vRows } = await supabase
-        .from("jobs")
-        .select("id")
-        .eq("org_id", ctx.orgId)
-        .in("id", visibleOrdered)
-        .eq("assigned_vendor_id", assignedVendorId);
-      const allow = new Set((vRows ?? []).map((r) => (r as { id: string }).id));
-      visibleOrdered = visibleOrdered.filter((id) => allow.has(id));
-    }
-
-    if (search) {
-      const safe = search.replace(/,/g, " ").trim();
-      const term = `%${safe}%`;
-      const { data: searchRows } = await supabase
-        .from("jobs")
-        .select("id, title, job_number_for_customer")
-        .eq("org_id", ctx.orgId)
-        .in("id", visibleOrdered)
-        .or(`title.ilike.${term},job_number_for_customer.ilike.${term}`);
-      const allow = new Set((searchRows ?? []).map((r) => (r as { id: string }).id));
-      visibleOrdered = visibleOrdered.filter((id) => allow.has(id));
-    }
-
-    const totalMatches = visibleOrdered.length;
-    const pageIds = visibleOrdered.slice(0, limit);
-    scheduleDayFirstStartByJobId = firstStart;
-
-    if (pageIds.length === 0) {
-      return NextResponse.json({ jobs: [], total: totalMatches });
-    }
-
-    const { data: jobRows, error: jobFetchErr } = await supabase
-      .from("jobs")
-      .select(
-        "id, created_at, updated_at, title, description, job_status_id, status_key, service_key, job_number, job_number_for_customer, is_recurring, customer_id, assigned_vendor_id, location_id, work_unit_id, metadata, archived_at, gross_price_cents, estimated_total_cents, discount_amount, discounted"
-      )
-      .eq("org_id", ctx.orgId)
-      .in("id", pageIds);
-
-    if (jobFetchErr) {
-      return NextResponse.json({ error: jobFetchErr.message }, { status: 500 });
-    }
-
-    const byId = new Map((jobRows ?? []).map((j) => [(j as { id: string }).id, j]));
-    rows = pageIds.map((id) => byId.get(id)).filter(Boolean) as Record<string, unknown>[];
-    count = totalMatches;
-  } else {
-    let q = supabase
-      .from("jobs")
-      .select(
-        "id, created_at, updated_at, title, description, job_status_id, status_key, service_key, job_number, job_number_for_customer, is_recurring, customer_id, assigned_vendor_id, location_id, work_unit_id, metadata, archived_at, gross_price_cents, estimated_total_cents, discount_amount, discounted",
-        { count: "exact" }
-      )
-      .eq("org_id", ctx.orgId)
-      .order("created_at", { ascending: false })
-      .limit(limit);
-
-    if (!includeArchived) {
-      q = q.is("archived_at", null);
-    }
-    if (statusKey) {
-      q = q.eq("status_key", statusKey);
-    }
-    if (assignedVendorId) {
-      q = q.eq("assigned_vendor_id", assignedVendorId);
-    }
-    if (assignedVendorUnassigned) {
-      q = q.is("assigned_vendor_id", null);
-    } else if (unassignedWorkUnit) {
-      q = q.is("work_unit_id", null);
-    } else if (workUnitIdParam) {
-      q = q.eq("work_unit_id", workUnitIdParam);
-    } else if (departmentWorkUnitIds) {
-      q = q.in("work_unit_id", departmentWorkUnitIds);
-    }
-
-    if (search) {
-      const safe = search.replace(/,/g, " ").trim();
-      const term = `%${safe}%`;
-      q = q.or(`title.ilike.${term},job_number_for_customer.ilike.${term}`);
-    }
-
-    const { data: qrows, error, count: qcount } = await q;
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    rows = qrows ?? [];
-    count = qcount ?? rows.length;
+  if (!includeArchived) {
+    q = q.is("archived_at", null);
   }
+  if (statusKey) {
+    q = q.eq("status_key", statusKey);
+  }
+  if (assignedVendorId) {
+    q = q.eq("assigned_vendor_id", assignedVendorId);
+  }
+  if (assignedVendorUnassigned) {
+    q = q.is("assigned_vendor_id", null);
+  } else if (unassignedWorkUnit) {
+    q = q.is("work_unit_id", null);
+  } else if (workUnitIdParam) {
+    q = q.eq("work_unit_id", workUnitIdParam);
+  } else if (departmentWorkUnitIds) {
+    q = q.in("work_unit_id", departmentWorkUnitIds);
+  }
+
+  if (search) {
+    const safe = search.replace(/,/g, " ").trim();
+    const term = `%${safe}%`;
+    q = q.or(`title.ilike.${term},job_number_for_customer.ilike.${term}`);
+  }
+
+  const { data: qrows, error, count: qcount } = await q;
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  rows = qrows ?? [];
+  count = qcount ?? rows.length;
 
   const jobs = rows ?? [];
   const jobIds = jobs.map((j) => (j as { id: string }).id);
@@ -282,15 +139,13 @@ export async function GET(request: NextRequest) {
   const jobStatusFkIds = jobs.map((j) => (j as { job_status_id?: string | null }).job_status_id);
   const jobKeyByFk = await fetchJobStatusKeyByFk(supabase, jobStatusFkIds);
 
-  const useScheduledOnDayLane = scheduleDayFirstStartByJobId != null && scheduleDayFirstStartByJobId.size > 0;
-
   const [custRes, vendorRes, locationRes, nextSchedulesRes] = await Promise.all([
     customerIds.length ? supabase.from("customers").select("id, name").in("id", customerIds) : { data: [] },
     vendorIds.length
       ? supabase.from("vendors").select("id, name, company_name, email, phone, primary_person_id").in("id", vendorIds)
       : { data: [] },
     locationIds.length ? supabase.from("locations").select("id, label, address1, city, postal_code").in("id", locationIds) : { data: [] },
-    jobIds.length && !useScheduledOnDayLane
+    jobIds.length
       ? supabase
           .from("schedules")
           .select("job_id, start_at")
@@ -315,16 +170,9 @@ export async function GET(request: NextRequest) {
     return [l.id, summary];
   }));
   const nextScheduleByJobId = new Map<string, string>();
-  if (useScheduledOnDayLane && scheduleDayFirstStartByJobId) {
-    for (const jid of jobIds) {
-      const st = scheduleDayFirstStartByJobId.get(jid);
-      if (st) nextScheduleByJobId.set(jid, st);
-    }
-  } else {
-    for (const s of nextSchedulesRes.data ?? []) {
-      const row = s as { job_id: string; start_at: string };
-      if (!nextScheduleByJobId.has(row.job_id)) nextScheduleByJobId.set(row.job_id, row.start_at);
-    }
+  for (const s of nextSchedulesRes.data ?? []) {
+    const row = s as { job_id: string; start_at: string };
+    if (!nextScheduleByJobId.has(row.job_id)) nextScheduleByJobId.set(row.job_id, row.start_at);
   }
 
   type WuRow = { id: string; name: string | null; department_id: string };

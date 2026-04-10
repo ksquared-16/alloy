@@ -32,7 +32,7 @@ export function useOperationsWorkspaceData(departmentId: string) {
         () => ({
             metrics: {
                 "jobs.unassigned_count": unassignedTotal,
-                "jobs.scheduled_today_count": scheduledTodayCount,
+                "schedules.scheduled_today_count": scheduledTodayCount,
                 "jobs.needs_attention_count": needsAttentionCount,
                 "jobs.high_value_attention_count": highTouchCount,
             },
@@ -53,14 +53,14 @@ export function useOperationsWorkspaceData(departmentId: string) {
                     fetch("/api/admin/departments"),
                     fetch(`/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`),
                     fetch("/api/admin/jobs?assigned_vendor_unassigned=true&limit=1"),
-                    fetch("/api/admin/jobs?scheduled_on=today&limit=1"),
+                    fetch("/api/admin/schedules?scheduled_on=today&limit=1"),
                     fetch(`/api/admin/jobs?department_id=${encodeURIComponent(departmentId)}&limit=200`),
                     fetch("/api/admin/jobs?assigned_vendor_unassigned=true&limit=200"),
                 ]);
                 const dj = (await dRes.json().catch(() => ({}))) as { items?: Dept[]; error?: string };
                 const wj = (await wRes.json().catch(() => ({}))) as { items?: WU[]; error?: string };
                 const uj = (await uRes.json().catch(() => ({}))) as { total?: number; error?: string };
-                const stj = (await stRes.json().catch(() => ({}))) as { total?: number; error?: string };
+                const stj = (await stRes.json().catch(() => ({}))) as { total?: number; schedules?: unknown[]; error?: string };
                 const djJobs = (await deptJobsRes.json().catch(() => ({}))) as {
                     jobs?: JobRowForWorkspaceMetrics[];
                     error?: string;

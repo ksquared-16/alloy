@@ -6,7 +6,11 @@ import type {
     SignalVm,
     WorkUnitWorkspaceModel,
 } from "@/lib/ui-v2/workspace-types";
-import type { AdminJobListRow, DepartmentJobsQueueMode } from "@/hooks/useDepartmentQueueData";
+import type {
+    AdminJobListRow,
+    AdminScheduleListRow,
+    DepartmentJobsQueueMode,
+} from "@/hooks/useDepartmentQueueData";
 import { formatDateTime, formatMoneyFromDollars } from "@/lib/adminFormatters";
 
 const MODE_HEADLINE: Record<DepartmentJobsQueueMode, string> = {
@@ -14,6 +18,67 @@ const MODE_HEADLINE: Record<DepartmentJobsQueueMode, string> = {
     scheduled_today: "Scheduled today",
     needs_attention: "Needs attention",
 };
+
+function formatScheduleLocalTime(iso: string, tz: string | null | undefined): string {
+    try {
+        return new Intl.DateTimeFormat("en-US", {
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true,
+            timeZone: tz && tz.trim() ? tz : "UTC",
+        }).format(new Date(iso));
+    } catch {
+        return new Intl.DateTimeFormat("en-US", {
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true,
+            timeZone: "UTC",
+        }).format(new Date(iso));
+    }
+}
+
+function scheduleJobLabel(s: AdminScheduleListRow): string {
+    const t = (s._job_title ?? "").trim();
+    if (t) return t;
+    const sk = (s._service_key ?? "").trim();
+    if (sk) return sk;
+    return s.job_id ? s.job_id.slice(-6) : "Visit";
+}
+
+function scheduleToQueueItem(s: AdminScheduleListRow): QueueItemVm {
+    const timeLabel = formatScheduleLocalTime(s.start_at, s.timezone);
+    const jobLbl = scheduleJobLabel(s);
+    const title = `${timeLabel} · ${jobLbl}`;
+    const subtitle = [s._customer_name?.trim(), s._status_display?.trim()].filter(Boolean).join(" · ");
+    const vendorLabel = (s._assigned_vendor_name ?? "").trim();
+
+    const metaLines: { label: string; value: string }[] = [];
+    const loc = (s._location_label ?? "").trim();
+    if (loc) {
+        metaLines.push({ label: "Location", value: loc });
+    }
+    if (vendorLabel) {
+        metaLines.push({ label: "Vendor", value: vendorLabel });
+    }
+    const sn = (s.schedule_number ?? "").trim();
+    if (sn) {
+        metaLines.push({ label: "Schedule #", value: sn });
+    }
+
+    const startMs = new Date(s.start_at).getTime();
+    const overdue = !Number.isNaN(startMs) && startMs < Date.now();
+    let urgencyTier: QueueItemVm["urgencyTier"] = "standard";
+    if (overdue) urgencyTier = "warning";
+
+    return {
+        id: s.id,
+        title,
+        subtitle: subtitle || undefined,
+        quickActions: [{ id: "open", label: "Open" }],
+        metaLines: metaLines.length > 0 ? metaLines : undefined,
+        urgencyTier,
+    };
+}
 
 function jobToQueueItem(j: AdminJobListRow): QueueItemVm {
     const subtitle = [j._customer_name?.trim(), j._status_display?.trim()].filter(Boolean).join(" · ");
@@ -60,23 +125,28 @@ function jobToQueueItem(j: AdminJobListRow): QueueItemVm {
 }
 
 /**
- * Maps live job rows into the Admin V2 `WorkUnitWorkspace` view model (same shell as the UI V2 mock).
- * No invented business facts — copy explains API sampling limits.
+ * Maps live job rows (or schedule rows for “today”) into the Admin V2 `WorkUnitWorkspace` view model.
  */
 export function buildRealWorkUnitWorkspaceModel(input: {
     departmentId: string;
     deptName: string;
     mode: DepartmentJobsQueueMode;
     jobs: AdminJobListRow[];
+    schedules?: AdminScheduleListRow[];
 }): WorkUnitWorkspaceModel {
     const { departmentId, deptName, mode, jobs } = input;
+    const schedules = input.schedules ?? [];
+    const useSchedules = mode === "scheduled_today";
+    const rowCount = useSchedules ? schedules.length : jobs.length;
     const headline = MODE_HEADLINE[mode];
+
+    const laneNoun = useSchedules ? (rowCount === 1 ? "visit" : "visits") : rowCount === 1 ? "job" : "jobs";
 
     const signals: SignalVm[] = [
         {
             id: "queue_depth",
-            severity: jobs.length > 0 ? "info" : "warning",
-            title: `${jobs.length} job${jobs.length === 1 ? "" : "s"} in this lane`,
+            severity: rowCount > 0 ? "info" : "warning",
+            title: `${rowCount} ${laneNoun} in this lane`,
             description: undefined,
             actions: [{ id: "nav_jobs", label: "All jobs" }],
         },
@@ -90,28 +160,33 @@ export function buildRealWorkUnitWorkspaceModel(input: {
     ];
 
     const kpis: KPIVm[] = [
-        { id: "k_shown", label: "Rows shown", value: String(jobs.length) },
+        { id: "k_shown", label: "Rows shown", value: String(rowCount) },
         { id: "k_cap", label: "Sample cap", value: "200", unit: "rows / source" },
     ];
 
     const primaryQueue: QueueVm = {
         id: `lane-${mode}-${departmentId}`,
         title: headline,
-        countBadge: jobs.length,
-        items: jobs.map(jobToQueueItem),
+        countBadge: rowCount,
+        items: useSchedules ? schedules.map(scheduleToQueueItem) : jobs.map(jobToQueueItem),
         sortCaption:
             mode === "scheduled_today"
-                ? "Ordered by first visit time on the org’s local calendar day."
+                ? "Ordered by visit start time on the org’s local calendar day."
                 : "Ordered by API default (typically newest activity first).",
         rollupSummary:
             mode === "unassigned"
                 ? "Jobs with no vendor assigned yet — assign a vendor to clear this lane."
                 : mode === "scheduled_today"
-                  ? "Jobs with at least one non-canceled visit scheduled in the org’s local “today” (timezone from org settings)."
+                  ? "Non-canceled visits starting on the org’s local “today” (timezone from org settings) — one row per schedule."
                   : "Overdue visit or outstanding receivable in the merged sample.",
     };
 
     const emptyContextRail: ContextBlockVm = { groups: [] };
+
+    const openRowHint =
+        mode === "scheduled_today"
+            ? "Open a row for the schedule drawer · Back returns to the department surface."
+            : "Open a row for the job modal · Back returns to the department surface.";
 
     return {
         workspaceLevel: "work_unit",
@@ -122,7 +197,9 @@ export function buildRealWorkUnitWorkspaceModel(input: {
             headline,
             subline: `${deptName.trim() || "Department"} · live data`,
             bodyParagraphs: [
-                "Same job records as the rest of Alloy — resolver-backed drawer opens from each row.",
+                useSchedules
+                    ? "Each row is one schedule occurrence; the drawer opens that visit for cancel/reschedule/assign."
+                    : "Same job records as the rest of Alloy — resolver-backed drawer opens from each row.",
                 "Counts are limited to the current API sample (up to 200 rows per request).",
             ],
         },
@@ -131,7 +208,9 @@ export function buildRealWorkUnitWorkspaceModel(input: {
             recommendedActionLine:
                 mode === "unassigned"
                     ? "Open a job, assign a vendor in the snapshot — the job leaves this lane when saved; work unit is optional routing elsewhere."
-                    : "Select a row to triage in the drawer, or jump to All jobs from the rail.",
+                    : mode === "scheduled_today"
+                      ? "Select a row to open the schedule in the drawer, or jump to All jobs from the rail."
+                      : "Select a row to triage in the drawer, or jump to All jobs from the rail.",
         },
         signals,
         kpis,
@@ -148,8 +227,8 @@ export function buildRealWorkUnitWorkspaceModel(input: {
                 { id: "open_work_units", label: "Configure work units" },
             ],
             systemStatusLines: [
-                "Open a row for the job modal · Back returns to the department surface.",
-                `Sample ≤200 jobs · ${deptName.trim() || "this department"}.`,
+                openRowHint,
+                `Sample ≤200 ${useSchedules ? "schedules" : "jobs"} · ${deptName.trim() || "this department"}.`,
             ],
         },
         contextRail: emptyContextRail,

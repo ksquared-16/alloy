@@ -7,6 +7,7 @@ import {
   effectiveScheduleStatusKey,
   resolveScheduleStatusRowByKey,
 } from "@/lib/admin/scheduleEffectiveStatusKey";
+import { fetchOrgTimeZoneIana, resolveScheduledOnBounds } from "@/lib/admin/orgLocalDayBounds";
 
 /** GET: list schedules for current org. Admin/ops. Exclude canceled by default. */
 export async function GET(request: NextRequest) {
@@ -22,35 +23,106 @@ export async function GET(request: NextRequest) {
   const statusKey = (searchParams.get("status_key") ?? "").trim();
   const from = (searchParams.get("from") ?? "").trim();
   const to = (searchParams.get("to") ?? "").trim();
+  /** Org-local calendar day: `today` or `YYYY-MM-DD` (IANA TZ from org_settings.metadata). */
+  const scheduledOnRaw = (searchParams.get("scheduled_on") ?? "").trim();
   const limit = Math.min(Number(searchParams.get("limit")) || 200, 200);
 
   const supabase = createAdminClient();
-  let q = supabase
-    .from("schedules")
-    .select(
-      "id, job_id, org_id, location_id, schedule_number, start_at, end_at, timezone, status_key, schedule_status_id, assigned_vendor_id, created_at, canceled_at, canceled_by, cancel_reason, duration_minutes",
-      { count: "exact" }
-    )
-    .eq("org_id", ctx.orgId)
-    .order("start_at", { ascending: false })
-    .limit(limit);
 
-  if (!includeCanceled) {
-    q = q.is("canceled_at", null);
+  if (scheduledOnRaw && (from || to)) {
+    return NextResponse.json(
+      { error: "Use either scheduled_on or from/to, not both" },
+      { status: 400 }
+    );
   }
-  if (jobId) q = q.eq("job_id", jobId);
-  if (statusKey) q = q.eq("status_key", statusKey);
-  if (from) q = q.gte("start_at", from);
-  if (to) q = q.lte("start_at", to);
 
-  const { data: rows, error, count } = await q;
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  let dayMeta: { scheduled_on: string; timezone: string } | undefined;
 
-  const list = rows ?? [];
+  let rows: unknown[] | null = null;
+  let queryError: { message: string } | null = null;
+  let count: number | null = null;
+
+  if (scheduledOnRaw) {
+    const so = scheduledOnRaw.toLowerCase();
+    if (so !== "today" && !/^\d{4}-\d{2}-\d{2}$/.test(scheduledOnRaw)) {
+      return NextResponse.json({ error: "scheduled_on must be `today` or YYYY-MM-DD" }, { status: 400 });
+    }
+    let bounds: { dayStartUtc: Date; dayEndExclusiveUtc: Date };
+    let tz: string;
+    try {
+      tz = await fetchOrgTimeZoneIana(supabase, ctx.orgId);
+      bounds = resolveScheduledOnBounds(scheduledOnRaw, tz);
+    } catch (e) {
+      return NextResponse.json(
+        { error: e instanceof Error ? e.message : "Invalid scheduled_on" },
+        { status: 400 }
+      );
+    }
+    dayMeta = { scheduled_on: scheduledOnRaw, timezone: tz };
+    /** Inner join non-archived jobs so totals and rows match the former jobs-based “today” lane. */
+    let dayQ = supabase
+      .from("schedules")
+      .select(
+        `id, job_id, org_id, location_id, schedule_number, start_at, end_at, timezone, status_key, schedule_status_id, assigned_vendor_id, created_at, canceled_at, canceled_by, cancel_reason, duration_minutes,
+        jobs!inner(archived_at)`,
+        { count: "exact" }
+      )
+      .eq("org_id", ctx.orgId)
+      .gte("start_at", bounds.dayStartUtc.toISOString())
+      .lt("start_at", bounds.dayEndExclusiveUtc.toISOString())
+      .is("jobs.archived_at", null)
+      .order("start_at", { ascending: true })
+      .limit(limit);
+    if (!includeCanceled) {
+      dayQ = dayQ.is("canceled_at", null);
+    }
+    if (jobId) dayQ = dayQ.eq("job_id", jobId);
+    if (statusKey) dayQ = dayQ.eq("status_key", statusKey);
+    const res = await dayQ;
+    rows = res.data as unknown[] | null;
+    queryError = res.error;
+    count = res.count ?? null;
+  } else {
+    let q = supabase
+      .from("schedules")
+      .select(
+        "id, job_id, org_id, location_id, schedule_number, start_at, end_at, timezone, status_key, schedule_status_id, assigned_vendor_id, created_at, canceled_at, canceled_by, cancel_reason, duration_minutes",
+        { count: "exact" }
+      )
+      .eq("org_id", ctx.orgId)
+      .order("start_at", { ascending: false })
+      .limit(limit);
+
+    if (!includeCanceled) {
+      q = q.is("canceled_at", null);
+    }
+    if (jobId) q = q.eq("job_id", jobId);
+    if (statusKey) q = q.eq("status_key", statusKey);
+    if (from) q = q.gte("start_at", from);
+    if (to) q = q.lte("start_at", to);
+
+    const res = await q;
+    rows = res.data as unknown[] | null;
+    queryError = res.error;
+    count = res.count ?? null;
+  }
+
+  if (queryError) return NextResponse.json({ error: queryError.message }, { status: 500 });
+
+  const listRaw = rows ?? [];
+  const list = listRaw.map((row) => {
+    const r = row as Record<string, unknown>;
+    if ("jobs" in r) {
+      const { jobs: _drop, ...rest } = r;
+      return rest;
+    }
+    return r;
+  });
+
   const scheduleIds = list.map((s) => (s as { id: string }).id);
   const jobIds = [...new Set(list.map((s) => (s as { job_id: string }).job_id).filter(Boolean))] as string[];
   const { data: jobs } = jobIds.length
-    ? await supabase.from("jobs").select("id, title, customer_id, assigned_vendor_id").in("id", jobIds)
+    ? await supabase.from("jobs").select("id, title, service_key, customer_id, assigned_vendor_id").in("id", jobIds)
     : { data: [] };
   const jobMap = new Map((jobs ?? []).map((j) => [(j as { id: string }).id, j]));
   const customerIds = [...new Set((jobs ?? []).map((j) => (j as { customer_id?: string }).customer_id).filter(Boolean))] as string[];
@@ -108,6 +180,7 @@ export async function GET(request: NextRequest) {
       ...s,
       status_key: effectiveSk,
       _job_title: job ? (job as { title: string | null }).title ?? null : null,
+      _service_key: job ? (job as { service_key?: string | null }).service_key ?? null : null,
       _customer_name: customerId ? customerMap.get(customerId) ?? null : null,
       _assigned_vendor_name,
       _location_label,
@@ -115,7 +188,16 @@ export async function GET(request: NextRequest) {
     };
   });
 
-  return NextResponse.json({ schedules, total: count ?? schedules.length });
+  const payload: {
+    schedules: typeof schedules;
+    total: number;
+    meta?: { scheduled_on: string; timezone: string };
+  } = {
+    schedules,
+    total: count ?? schedules.length,
+  };
+  if (dayMeta) payload.meta = dayMeta;
+  return NextResponse.json(payload);
 }
 
 /** POST: create schedule. Admin only. job_id required; job must belong to org. */
