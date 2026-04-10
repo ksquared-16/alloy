@@ -539,7 +539,15 @@ export default function EntityDrawerOverview({
     handleBlur();
   };
 
-  const renderOverviewField = (field: EntityDrawerFieldConfig, opts?: { row?: boolean; scheduleFieldTier?: ScheduleFieldVisualTier }): ReactNode => {
+  const renderOverviewField = (
+    field: EntityDrawerFieldConfig,
+    opts?: {
+      row?: boolean;
+      scheduleFieldTier?: ScheduleFieldVisualTier;
+      /** v2 snapshot: label + value only — no card chrome (operational summary). */
+      scheduleChromePresentation?: "cards" | "flat";
+    }
+  ): ReactNode => {
     const key = field.key;
     let displayFallback: unknown = undefined;
     if (entityType === "schedules") {
@@ -658,6 +666,20 @@ export default function EntityDrawerOverview({
       showLabel: !scheduleSnapRow,
       ...(scheduleSnapRow && tier ? { valueEmphasis: tier } : {}),
     };
+    if (scheduleSnapRow && opts?.scheduleChromePresentation === "flat") {
+      const valClass =
+        tier === "primary"
+          ? "text-[15px] font-semibold tracking-tight text-alloy-midnight"
+          : tier === "supporting"
+            ? "text-xs font-normal text-alloy-forge/85"
+            : "text-sm font-medium text-alloy-midnight/88";
+      return (
+        <div key={field.key} className="min-w-0" data-schedule-flat-field={field.key}>
+          <div className="mb-0.5 text-[8px] font-semibold uppercase tracking-[0.1em] text-alloy-forge/50">{field.label}</div>
+          <div className={`${valClass} leading-snug`}>{showFieldEdit ? <>{editNode}</> : <>{displayValue}</>}</div>
+        </div>
+      );
+    }
     if (scheduleSnapRow) {
       return (
         <ScheduleSnapCell key={field.key} label={field.label} tier={tier ?? "secondary"}>
@@ -677,7 +699,12 @@ export default function EntityDrawerOverview({
           ? "grid-cols-1 sm:grid-cols-3"
           : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4";
 
-  const renderScheduleChromeField = (token: string, cellKey: string, tierBreak: boolean) => {
+  const renderScheduleChromeField = (
+    token: string,
+    cellKey: string,
+    tierBreak: boolean,
+    presentation: "cards" | "flat" = "cards"
+  ) => {
     const resolvedKey = resolveScheduleOverviewRowFieldKey(token);
     const tier = getScheduleOverviewFieldTier(resolvedKey);
     if (resolvedKey === "_contact_email" && !shouldShowScheduleContactEmailRow(record)) {
@@ -698,15 +725,22 @@ export default function EntityDrawerOverview({
       : "min-w-0";
     return (
       <div key={cellKey} className={groupClass}>
-        {renderOverviewField(field, { row: true, scheduleFieldTier: tier })}
+        {renderOverviewField(field, {
+          row: true,
+          scheduleFieldTier: tier,
+          scheduleChromePresentation: presentation,
+        })}
       </div>
     );
   };
 
   return (
-    <div className="space-y-0 pt-4" data-entity-drawer-overview>
+    <div
+      className={`space-y-0 ${entityType === "schedules" ? "pt-2 [&_section[data-entity-section]]:mb-3" : "pt-4"}`}
+      data-entity-drawer-overview
+    >
       {useScheduleLayoutV2 && layoutBlocks?.length && entityType === "schedules" ? (
-        <div className="mb-3 space-y-2.5" data-schedule-layout-version="2">
+        <div className="mb-2 space-y-1.5" data-schedule-layout-version="2">
           {layoutBlocks.map((block) => {
             if (block.type === "section_group") return null;
             if (block.type === "snapshot") {
@@ -715,24 +749,24 @@ export default function EntityDrawerOverview({
                   key={block.key}
                   data-schedule-layout-block="snapshot"
                   data-block-key={block.key}
-                  className="rounded-xl border border-admin-border/45 bg-white/95 px-2.5 py-2.5 shadow-sm sm:px-3"
+                  className="rounded-lg border border-admin-border/40 bg-white px-2 py-1.5 shadow-sm sm:px-2.5 sm:py-2"
                 >
                   {block.title ? (
-                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-alloy-forge/65">
+                    <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-alloy-forge/60">
                       {block.title}
                     </p>
                   ) : null}
-                  <div className="space-y-2.5">
+                  <div className="divide-y divide-alloy-stone/15">
                     {block.groups.map((group, gi) => (
                       <div
                         key={`${block.key}-g-${gi}`}
-                        className="rounded-lg border border-admin-border/30 bg-alloy-stone/[0.04] p-2 sm:p-2.5"
+                        className="flex flex-col gap-1.5 py-2 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:gap-3"
                       >
-                        <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-alloy-forge/55">
+                        <span className="shrink-0 pt-0.5 text-[8px] font-semibold uppercase tracking-[0.12em] text-alloy-forge/45 sm:w-[7.5rem]">
                           {group.label}
-                        </p>
+                        </span>
                         <div
-                          className={`grid gap-x-2.5 gap-y-2 ${rowGridClass(
+                          className={`min-w-0 flex-1 grid gap-x-3 gap-y-1.5 ${rowGridClass(
                             Math.min(4, Math.max(1, group.fields.length))
                           )}`}
                         >
@@ -743,7 +777,12 @@ export default function EntityDrawerOverview({
                               prevResolvedKey != null ? getScheduleOverviewFieldTier(prevResolvedKey) : null;
                             const tier = getScheduleOverviewFieldTier(resolvedKey);
                             const tierBreak = ci > 0 && prevTier != null && tier !== prevTier;
-                            return renderScheduleChromeField(token, `${block.key}-${gi}-${ci}-${resolvedKey}`, tierBreak);
+                            return renderScheduleChromeField(
+                              token,
+                              `${block.key}-${gi}-${ci}-${resolvedKey}`,
+                              tierBreak,
+                              "flat"
+                            );
                           })}
                         </div>
                       </div>
@@ -757,16 +796,44 @@ export default function EntityDrawerOverview({
                 key={block.key}
                 data-schedule-layout-block="secondary_summary"
                 data-block-key={block.key}
-                className="flex flex-wrap gap-2 rounded-lg border border-dashed border-admin-border/35 bg-alloy-stone/[0.03] px-2 py-1.5 sm:px-2.5"
+                className="border-t border-alloy-stone/20 pt-2"
               >
-                {block.fields.map((token, ci) => {
-                  const prevResolvedKey = ci > 0 ? resolveScheduleOverviewRowFieldKey(block.fields[ci - 1]!) : null;
-                  const resolvedKey = resolveScheduleOverviewRowFieldKey(token);
-                  const prevTier = prevResolvedKey != null ? getScheduleOverviewFieldTier(prevResolvedKey) : null;
-                  const tier = getScheduleOverviewFieldTier(resolvedKey);
-                  const tierBreak = ci > 0 && prevTier != null && tier !== prevTier;
-                  return renderScheduleChromeField(token, `${block.key}-ss-${ci}-${resolvedKey}`, tierBreak);
-                })}
+                <div className="flex flex-wrap items-baseline gap-x-10 gap-y-2">
+                  {block.fields.map((token) => {
+                    const resolvedKey = resolveScheduleOverviewRowFieldKey(token);
+                    if (!scheduleSnapshot) return null;
+                    if (resolvedKey === "service_type") {
+                      const text = scheduleSnapshot.service.label?.trim() || "—";
+                      return (
+                        <div key={`${block.key}-svc`} className="min-w-0">
+                          <span className="mr-2 text-[8px] font-semibold uppercase tracking-[0.1em] text-alloy-forge/45">
+                            Service
+                          </span>
+                          <span className="text-[13px] font-medium text-alloy-midnight/90">{text}</span>
+                        </div>
+                      );
+                    }
+                    if (resolvedKey === "price_cents") {
+                      const cents = scheduleSnapshot.service.price;
+                      const text =
+                        cents != null && Number.isFinite(cents) ? formatMoneyFromCents(cents) : "—";
+                      return (
+                        <div key={`${block.key}-price`} className="min-w-0">
+                          <span className="mr-2 text-[8px] font-semibold uppercase tracking-[0.1em] text-alloy-forge/45">
+                            Price
+                          </span>
+                          <span className="text-[13px] font-semibold tabular-nums text-alloy-midnight">{text}</span>
+                        </div>
+                      );
+                    }
+                    return renderScheduleChromeField(
+                      token,
+                      `${block.key}-ss-${resolvedKey}`,
+                      false,
+                      "flat"
+                    );
+                  })}
+                </div>
               </div>
             );
           })}

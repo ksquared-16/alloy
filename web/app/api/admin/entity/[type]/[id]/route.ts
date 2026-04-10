@@ -420,7 +420,9 @@ export async function GET(
             if (jobId) {
                 const { data: job } = await supabase
                     .from("jobs")
-                    .select("id, title, customer_id, primary_contact_id, primary_person_id, opportunity_id, vertical_id, job_status_id, assigned_vendor_id, location_id")
+                    .select(
+                        "id, title, customer_id, primary_contact_id, primary_person_id, opportunity_id, vertical_id, job_status_id, assigned_vendor_id, location_id, service_key, job_type, gross_price_cents, estimated_total_cents"
+                    )
                     .eq("id", jobId)
                     .eq("org_id", orgId)
                     .single();

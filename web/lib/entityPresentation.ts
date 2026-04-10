@@ -770,8 +770,8 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
             { key: "end_at", label: "End", span: 1, renderHint: "datetime", editable: true },
             { key: "timezone", label: "Timezone", span: 1, renderHint: "text", editable: true },
             { key: "time_window", label: "Time window", span: 1, renderHint: "text" },
-            { key: "service_type", label: "Service", span: 1, renderHint: "text" },
-            { key: "price_cents", label: "Price", span: 1, renderHint: "money", editable: true },
+            { key: "service_type", label: "Service", span: 1, renderHint: "text", editable: false },
+            { key: "price_cents", label: "Price", span: 1, renderHint: "money", editable: false },
             { key: "_customer_name", label: "Account", span: 1, renderHint: "text" },
             { key: "_contact_phone", label: "Phone", span: 1, renderHint: "phone" },
             { key: "_contact_email", label: "Email", span: 1, renderHint: "text" },
@@ -783,7 +783,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
         {
           key: "property_service",
           title: "Property / service details",
-          defaultExpanded: true,
+          defaultExpanded: false,
           collapsible: true,
           gridCols: 2,
           fields: [

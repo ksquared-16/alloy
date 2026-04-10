@@ -4951,6 +4951,11 @@ export default function AdminEntityDrawer() {
         if (drawer.type === "schedules" && scheduleOrder?.length) {
             overviewSections = applyOverviewSectionOrder(overviewSections, scheduleOrder);
         }
+        /** Schedule overview tab: snapshot already shows status/timing — keep property + history only (tabs hold the rest). */
+        if (drawer.type === "schedules" && overviewSections.length > 0) {
+            const keepScheduleOverview = new Set<string>(["property_service", "reschedule_history"]);
+            overviewSections = overviewSections.filter((s) => keepScheduleOverview.has(s.key));
+        }
         return overviewSections;
     }, [drawer.type, overviewData, presentationType, recordChromeSchedule.layout]);
 
