@@ -4,6 +4,7 @@ import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdm
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { formatRecurrenceLabel } from "@/lib/adminFormatters";
 import { attachDirectFkRelationshipDisplays } from "@/lib/admin/relationshipDisplayAttach";
+import { computeScheduleHydratedDisplay } from "@/lib/admin/scheduleRecordSnapshot";
 import { attachFieldDefinitionsAndValues } from "@/lib/admin/entityFieldRegistryAttach";
 import { computeJobDisplayTotalCents, type JobPriceInput } from "@/lib/admin/jobDisplayPrice";
 import {
@@ -666,6 +667,7 @@ export async function GET(
 
             await attachFieldDefinitionsAndValues(supabase, out, "schedules", id);
             await attachDirectFkRelationshipDisplays(supabase, orgId, "schedules", out);
+            computeScheduleHydratedDisplay(out);
             return NextResponse.json(out);
         }
         if (type === "locations") {

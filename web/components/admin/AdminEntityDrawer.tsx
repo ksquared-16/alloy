@@ -852,6 +852,7 @@ export default function AdminEntityDrawer() {
     const [scheduleCreateSaving, setScheduleCreateSaving] = useState(false);
 
     useEffect(() => {
+        setSaveError(null);
         if (drawer.type === "schedules" && drawer.id === "new") setScheduleCreateForm({ start_at: "", end_at: "", timezone: "" });
     }, [drawer.type, drawer.id]);
     type JobPaymentRowUi = {

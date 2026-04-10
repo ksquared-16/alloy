@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, useMemo } from "react";
 import {
   getEntityPresentation,
   type EntityPresentationType,
@@ -21,6 +21,9 @@ import {
   scheduleOverviewRowTokenLabel,
   scheduleSectionsAfterRowExtraction,
 } from "@/lib/admin/scheduleOverviewRows";
+import { getScheduleOverviewFieldTier, type ScheduleFieldVisualTier } from "@/lib/admin/scheduleFieldPresentation";
+import { getScheduleSnapshot, scheduleOverviewValueFromSnapshot } from "@/lib/admin/scheduleRecordSnapshot";
+import ScheduleSnapCell from "@/components/admin/drawer/ScheduleSnapCell";
 import {
   opportunityOverviewRelationshipReadLabel,
   opportunityOverviewStatusBadgeLabel,
@@ -478,6 +481,10 @@ export default function EntityDrawerOverview({
     : baseSections;
 
   const record = data ?? {};
+  const scheduleSnapshot = useMemo(
+    () => (entityType === "schedules" ? getScheduleSnapshot(record) : null),
+    [entityType, record]
+  );
   const editFormData = formData ?? record;
   const handleFieldChange = onFieldChange ?? (() => {});
   const handleBlur = onBlur ?? (() => {});
@@ -487,7 +494,7 @@ export default function EntityDrawerOverview({
     handleBlur();
   };
 
-  const renderOverviewField = (field: EntityDrawerFieldConfig, opts?: { row?: boolean }): ReactNode => {
+  const renderOverviewField = (field: EntityDrawerFieldConfig, opts?: { row?: boolean; scheduleFieldTier?: ScheduleFieldVisualTier }): ReactNode => {
     const key = field.key;
     let displayFallback: unknown = undefined;
     if (entityType === "schedules") {
@@ -502,48 +509,9 @@ export default function EntityDrawerOverview({
         displayFallback = oppExplicit === "" ? "—" : oppExplicit;
       }
     }
-    if (displayFallback === undefined && entityType === "schedules") {
-      if (key === "_contact_phone" && record._contact && typeof record._contact === "object") {
-        const p = (record._contact as { phone?: string | null }).phone;
-        if (p != null && String(p).trim() !== "") displayFallback = p;
-      }
-      if (key === "_contact_email" && record._contact && typeof record._contact === "object") {
-        const e = (record._contact as { email?: string | null }).email;
-        if (e != null && String(e).trim() !== "") displayFallback = e;
-      }
-      if (key === "_customer_name") {
-        const top = record._customer_name;
-        if (top != null && String(top).trim() !== "") displayFallback = String(top).trim();
-        else {
-          const c = record._customer as { name?: string | null } | null | undefined;
-          if (c?.name != null && String(c.name).trim() !== "") displayFallback = String(c.name).trim();
-        }
-      }
-      if (key === "service_type") {
-        const direct = record.service_type;
-        if (direct != null && String(direct).trim() !== "") {
-          displayFallback = String(direct).trim();
-        } else {
-          const j = record._job as { service_key?: string | null; job_type?: string | null } | null | undefined;
-          const sk = j?.service_key ?? j?.job_type;
-          if (sk != null && String(sk).trim() !== "") {
-            displayFallback = String(sk).trim().replace(/_/g, " ");
-          }
-        }
-      }
-      if (key === "_location_label") {
-        const top = record._location_label ?? record._location_name;
-        if (top != null && String(top).trim() !== "") displayFallback = String(top).trim();
-        else {
-          const loc = record._location as
-            | { address1?: string | null; city?: string | null; state?: string | null; postal_code?: string | null }
-            | null
-            | undefined;
-          if (loc && (loc.address1 || loc.city)) {
-            displayFallback = [loc.address1, loc.city, loc.state, loc.postal_code].filter(Boolean).join(", ");
-          }
-        }
-      }
+    if (displayFallback === undefined && entityType === "schedules" && scheduleSnapshot) {
+      const fromSnap = scheduleOverviewValueFromSnapshot(scheduleSnapshot, key);
+      if (fromSnap !== undefined) displayFallback = fromSnap;
     }
     if (displayFallback === undefined) {
       displayFallback =
@@ -632,17 +600,27 @@ export default function EntityDrawerOverview({
           entityType
         )
       : undefined;
-    return (
-      <EntityDrawerField
-        key={field.key}
-        label={field.label}
-        value={displayValue}
-        span={field.span ?? 1}
-        editNode={editNode}
-        isEditing={showFieldEdit}
-        density={opts?.row ? "compact" : "default"}
-      />
-    );
+    const scheduleSnapRow = !!(opts?.row && entityType === "schedules");
+    const density: "default" | "compact" = opts?.row ? "compact" : "default";
+    const tier = opts?.scheduleFieldTier;
+    const fieldProps = {
+      label: scheduleSnapRow ? "" : field.label,
+      value: displayValue,
+      span: field.span ?? 1,
+      editNode,
+      isEditing: showFieldEdit,
+      density,
+      showLabel: !scheduleSnapRow,
+      ...(scheduleSnapRow && tier ? { valueEmphasis: tier } : {}),
+    };
+    if (scheduleSnapRow) {
+      return (
+        <ScheduleSnapCell key={field.key} label={field.label} tier={tier ?? "secondary"}>
+          <EntityDrawerField {...fieldProps} />
+        </ScheduleSnapCell>
+      );
+    }
+    return <EntityDrawerField key={field.key} {...fieldProps} />;
   };
 
   const rowGridClass = (n: number) =>
@@ -664,14 +642,18 @@ export default function EntityDrawerOverview({
           <p className="px-0.5 pb-2 text-[9px] font-semibold uppercase tracking-[0.12em] text-alloy-forge/70">
             Visit details
           </p>
-          <div className="space-y-2.5">
+          <div className="space-y-4">
             {scheduleOverviewRows.map((row, ri) => (
               <div
                 key={`row-${ri}`}
-                className={`grid gap-x-3 gap-y-2 ${rowGridClass(Math.min(4, Math.max(1, row.length)))}`}
+                className={`grid gap-x-3 gap-y-3 ${rowGridClass(Math.min(4, Math.max(1, row.length)))}`}
               >
                 {row.map((token, ci) => {
                   const resolvedKey = resolveScheduleOverviewRowFieldKey(token);
+                  const prevResolvedKey = ci > 0 ? resolveScheduleOverviewRowFieldKey(row[ci - 1]!) : null;
+                  const tier = getScheduleOverviewFieldTier(resolvedKey);
+                  const prevTier = prevResolvedKey != null ? getScheduleOverviewFieldTier(prevResolvedKey) : null;
+                  const tierBreak = ci > 0 && prevTier != null && tier !== prevTier;
                   let field = fieldIndex.get(resolvedKey);
                   if (!field) {
                     field = {
@@ -682,9 +664,12 @@ export default function EntityDrawerOverview({
                       editable: false,
                     };
                   }
+                  const groupClass = tierBreak
+                    ? "min-w-0 mt-3 border-t border-alloy-stone/15 pt-3 sm:mt-0 sm:border-t-0 sm:border-l sm:border-alloy-stone/25 sm:pt-0 sm:pl-3"
+                    : "min-w-0";
                   return (
-                    <div key={`${ri}-${ci}-${resolvedKey}`} className="min-w-0">
-                      {renderOverviewField(field, { row: true })}
+                    <div key={`${ri}-${ci}-${resolvedKey}`} className={groupClass}>
+                      {renderOverviewField(field, { row: true, scheduleFieldTier: tier })}
                     </div>
                   );
                 })}
