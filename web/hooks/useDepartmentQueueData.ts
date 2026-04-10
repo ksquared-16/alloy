@@ -27,7 +27,8 @@ export type AdminScheduleListRow = {
     start_at: string;
     end_at?: string | null;
     timezone?: string | null;
-    schedule_number?: string | null;
+    /** API/DB may return numeric or string. */
+    schedule_number?: string | number | null;
     status_key?: string | null;
     canceled_at?: string | null;
     duration_minutes?: number | null;

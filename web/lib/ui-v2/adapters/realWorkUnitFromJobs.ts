@@ -60,7 +60,7 @@ function scheduleToQueueItem(s: AdminScheduleListRow): QueueItemVm {
     if (vendorLabel) {
         metaLines.push({ label: "Vendor", value: vendorLabel });
     }
-    const sn = (s.schedule_number ?? "").trim();
+    const sn = String(s.schedule_number ?? "").trim();
     if (sn) {
         metaLines.push({ label: "Schedule #", value: sn });
     }
