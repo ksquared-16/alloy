@@ -93,6 +93,9 @@ export async function getOrgIndustryKey(supabase: SupabaseClient, orgId: string)
 
 /**
  * Effective definitions for admin UI: org overrides first; if none, industry defaults (merged).
+ *
+ * **Schedules:** merge industry defaults with org rows by `status_key` (org wins). A lone org subset
+ * no longer hides keys like `canceled` that exist only on industry `status_definitions` rows.
  */
 export async function fetchEffectiveStatusDefinitions(
     supabase: SupabaseClient,
@@ -101,6 +104,26 @@ export async function fetchEffectiveStatusDefinitions(
     opts?: { activeOnly?: boolean }
 ): Promise<StatusDefinitionRow[]> {
     const orgRows = await fetchOrgStatusDefinitions(supabase, orgId, entityType, opts);
+
+    if (entityType === "schedules") {
+        const industryKey = await getOrgIndustryKey(supabase, orgId);
+        const defaultRows = await fetchIndustryDefaultStatusDefinitions(supabase, entityType, industryKey, opts);
+        const activeOnly = opts?.activeOnly !== false;
+        const byKey = new Map<string, StatusDefinitionRow>();
+        for (const r of sortDefs(defaultRows)) {
+            if (activeOnly && !r.is_active) continue;
+            byKey.set(r.status_key, r);
+        }
+        for (const r of orgRows) {
+            if (activeOnly && !r.is_active) {
+                byKey.delete(r.status_key);
+            } else {
+                byKey.set(r.status_key, r);
+            }
+        }
+        return sortDefs(Array.from(byKey.values()));
+    }
+
     if (orgRows.length > 0) return sortDefs(orgRows);
     const industryKey = await getOrgIndustryKey(supabase, orgId);
     return fetchIndustryDefaultStatusDefinitions(supabase, entityType, industryKey, opts);

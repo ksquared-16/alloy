@@ -61,6 +61,7 @@ import {
 } from "@/components/admin/drawer/JobDrawerV2";
 import JobRecordModalV2, { isCleaningJobRecord } from "@/components/admin/drawer/JobRecordModalV2";
 import ScheduleRecordModalV2 from "@/components/admin/drawer/ScheduleRecordModalV2";
+import { isScheduleCanceledStatusKey } from "@/lib/admin/scheduleCanceledStatus";
 import { AdminCollectPaymentModal, type AdminCollectPaymentModalContext } from "@/components/admin/AdminCollectPaymentModal";
 import { JobReceivableChargesPanel, jobTotalSummaryLabel } from "@/components/admin/JobReceivableChargesPanel";
 import { JobManualChargeForm } from "@/components/admin/JobManualChargeForm";
@@ -72,7 +73,6 @@ import {
     type JobPaymentsSummaryFromApi,
     type PaymentRowLike,
 } from "@/lib/admin/jobPaymentSummary";
-import { isScheduleCanceledStatusKey } from "@/lib/admin/scheduleCanceledStatus";
 import { useRecordChromeConfig } from "@/hooks/useRecordChromeConfig";
 import { applyOverviewSectionOrder } from "@/lib/recordChrome/types";
 
@@ -1941,13 +1941,13 @@ export default function AdminEntityDrawer() {
         /** Effective defs (org + industry merge) — matches resolveStatusLabel / list badges; avoids org-only legacy gaps. */
         fetch(`/api/admin/status-options?entity_type=${encodeURIComponent(drawer.type)}`)
             .then((r) => (r.ok ? r.json() : { options: [] }))
-            .then((json: { options?: { value: string; label: string }[] }) => {
+            .then((json: { options?: { value: string; label: string; sort_order?: number }[] }) => {
                 const opts = json.options ?? [];
                 setStatusDefsForDrawer(
-                    opts.map((o, i) => ({
+                    opts.map((o) => ({
                         status_key: o.value,
                         status_label: o.label,
-                        sort_order: i,
+                        sort_order: o.sort_order ?? 0,
                         is_active: true,
                         is_system: false,
                     }))
@@ -3620,7 +3620,10 @@ export default function AdminEntityDrawer() {
         (schedulePaymentQuickActionsNode != null ||
             scheduleAssignVendorHeaderButton != null ||
             hasScheduleChromeActions) ? (
-            <div className="flex flex-wrap gap-2 items-center">
+            <div
+                className={`flex flex-wrap gap-2 items-center ${isScheduleRecordModalTarget ? "rounded-lg border border-admin-border/45 bg-white/70 px-2.5 py-1.5 shadow-sm" : ""}`}
+                data-schedule-record-actions={isScheduleRecordModalTarget ? "true" : undefined}
+            >
                 {scheduleChromePrimary.map((a) => (
                     <button
                         key={a.id}
@@ -5379,6 +5382,69 @@ export default function AdminEntityDrawer() {
                     data-adminv2-schedule-drawer-body={showScheduleRecordModalV2 ? "true" : undefined}
                 >
                     {saveError && <p className="text-alloy-ember text-sm">{saveError}</p>}
+                    {drawer.type === "schedules" &&
+                        showScheduleRecordModalV2 &&
+                        scheduleCancelPrompt &&
+                        drawer.id &&
+                        drawer.id !== "new" &&
+                        !(data as { canceled_at?: string | null }).canceled_at && (
+                            <div
+                                className="rounded-lg border border-amber-200 bg-amber-50/95 px-4 py-3 text-sm text-amber-950"
+                                role="region"
+                                aria-label="Confirm cancel visit"
+                            >
+                                <p className="font-medium">Cancel this visit?</p>
+                                <p className="mt-1 text-xs text-amber-900/85 leading-snug">
+                                    This uses the cancel API — sets <code className="text-[11px] bg-amber-100/80 px-1 rounded">canceled_at</code>, workflow
+                                    status, and fee rules. It cannot be done from the status dropdown.
+                                </p>
+                                <div className="mt-3 flex flex-wrap items-center gap-2">
+                                    <input
+                                        value={scheduleCancelReason}
+                                        onChange={(e) => setScheduleCancelReason(e.target.value)}
+                                        placeholder="Reason (optional)"
+                                        className="min-w-[10rem] flex-1 rounded border border-amber-300/80 bg-white px-2 py-1.5 text-sm"
+                                    />
+                                    <button
+                                        type="button"
+                                        className="rounded bg-alloy-ember/90 px-3 py-1.5 text-sm font-medium text-white hover:opacity-95"
+                                        onClick={async () => {
+                                            if (!drawer.id) return;
+                                            try {
+                                                const res = await fetch(`/api/admin/schedules/${drawer.id}/cancel`, {
+                                                    method: "POST",
+                                                    headers: { "Content-Type": "application/json" },
+                                                    body: JSON.stringify({ cancel_reason: scheduleCancelReason || null }),
+                                                });
+                                                const j = await res.json().catch(() => ({}));
+                                                if (!res.ok) throw new Error((j as { error?: string }).error || "Failed");
+                                                setScheduleCancelReason("");
+                                                setScheduleCancelPrompt(false);
+                                                refetch();
+                                                router.refresh();
+                                                window.dispatchEvent(
+                                                    new CustomEvent("admin-entity-saved", { detail: { type: "schedules", id: drawer.id } })
+                                                );
+                                            } catch (err) {
+                                                setSaveError((err as Error).message);
+                                            }
+                                        }}
+                                    >
+                                        Confirm cancel
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className="text-sm text-amber-900/80 hover:underline"
+                                        onClick={() => {
+                                            setScheduleCancelPrompt(false);
+                                            setScheduleCancelReason("");
+                                        }}
+                                    >
+                                        Back
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     {((drawer.type === "contacts" || drawer.type === "customer_members") && (data as { _person_id?: string | null })?._person_id) && (
                         <div className="rounded-lg border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm text-amber-900">
                             <p className="font-medium">Legacy record.</p>
@@ -7233,6 +7299,7 @@ export default function AdminEntityDrawer() {
                                 data={entityDrawerOverviewData}
                                 customSectionContent={overviewCustomContent}
                                 overviewSectionsOverride={configDrivenOverviewSections.length > 0 ? configDrivenOverviewSections : undefined}
+                                scheduleOverviewRows={recordChromeSchedule.layout?.config_json?.overview_rows}
                                 selectOptionsByFieldKey={overviewSelectOptionsByFieldKey}
                                 isEditing={isEditing}
                                 formData={formData}

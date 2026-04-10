@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
         const options = defs.map((r) => ({
             value: r.status_key,
             label: (r.status_label && String(r.status_label).trim()) || r.status_key,
+            sort_order: r.sort_order ?? 0,
         }));
         return NextResponse.json({ options });
     } catch (e) {

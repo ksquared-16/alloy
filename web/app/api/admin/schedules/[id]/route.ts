@@ -16,9 +16,9 @@ import {
   fetchScheduleStatusKeyByFk,
   resolveScheduleStatusRowByKey,
 } from "@/lib/admin/scheduleEffectiveStatusKey";
-import { isScheduleCanceledStatusKey } from "@/lib/admin/scheduleCanceledStatus";
 import { attachDirectFkRelationshipDisplays } from "@/lib/admin/relationshipDisplayAttach";
 import { attachFieldDefinitionsAndValues } from "@/lib/admin/entityFieldRegistryAttach";
+import { isScheduleCanceledStatusKey } from "@/lib/admin/scheduleCanceledStatus";
 
 const ALLOWED_KEYS = ["start_at", "end_at", "timezone", "status", "status_key", "metadata"] as const;
 
@@ -146,7 +146,7 @@ export async function PATCH(
                 return NextResponse.json(
                     {
                         error:
-                            "To cancel a schedule use POST /api/admin/schedules/[id]/cancel (sets canceled_at, cancel_reason, and fee logic). PATCH cannot set canceled status.",
+                            "Canceled workflow must use POST /api/admin/schedules/[id]/cancel (Cancel visit action). PATCH cannot set canceled status.",
                     },
                     { status: 400 }
                 );

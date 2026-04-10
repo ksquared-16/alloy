@@ -15,6 +15,13 @@ import { isUuidLike, resolveOverviewRelationshipLabel } from "@/lib/admin/overvi
 import { scheduleOverviewRelationshipReadLabel } from "@/lib/admin/scheduleOverviewLabels";
 import { isScheduleCanceledStatusKey } from "@/lib/admin/scheduleCanceledStatus";
 import {
+  collectScheduleRowResolvedKeys,
+  flattenOverviewFieldIndex,
+  resolveScheduleOverviewRowFieldKey,
+  scheduleOverviewRowTokenLabel,
+  scheduleSectionsAfterRowExtraction,
+} from "@/lib/admin/scheduleOverviewRows";
+import {
   opportunityOverviewRelationshipReadLabel,
   opportunityOverviewStatusBadgeLabel,
 } from "@/lib/admin/opportunityOverviewLabels";
@@ -48,6 +55,8 @@ interface EntityDrawerOverviewProps {
   onOpenDrawer?: (entityType: string, id: string) => void;
   /** Reference selects (e.g. pipeline_stage_id, vertical_id) — labels in UI, values are real ids. */
   selectOptionsByFieldKey?: Record<string, { value: string; label: string }[]>;
+  /** Schedule record: optional row groups from `record_layouts.config_json.overview_rows`. */
+  scheduleOverviewRows?: string[][];
 }
 
 function formatFieldValue(
@@ -382,7 +391,9 @@ function renderFieldEditNode(
       options = options.filter((s) => !isScheduleCanceledStatusKey(s.status_key));
     }
     if (valStr && !options.some((s) => s.status_key === valStr)) {
-      options = [...options, { status_key: valStr, status_label: valStr, sort_order: 9999, is_active: true }];
+      if (!(presentationEntityType === "schedules" && isScheduleCanceledStatusKey(valStr))) {
+        options = [...options, { status_key: valStr, status_label: valStr, sort_order: 9999, is_active: true }];
+      }
     }
     return (
       <select
@@ -451,10 +462,20 @@ export default function EntityDrawerOverview({
   getStatusLabel,
   onOpenDrawer,
   selectOptionsByFieldKey,
+  scheduleOverviewRows,
 }: EntityDrawerOverviewProps) {
   const config = getEntityPresentation(entityType);
-  const sections = overviewSectionsOverride ?? config.drawer?.overviewSections ?? [];
-  if (!sections.length) return null;
+  const baseSections = overviewSectionsOverride ?? config.drawer?.overviewSections ?? [];
+  if (!baseSections.length) return null;
+
+  const fieldIndex = flattenOverviewFieldIndex(baseSections);
+  const rowKeySet =
+    scheduleOverviewRows && scheduleOverviewRows.length > 0 && entityType === "schedules"
+      ? collectScheduleRowResolvedKeys(scheduleOverviewRows)
+      : null;
+  const sections = rowKeySet
+    ? scheduleSectionsAfterRowExtraction(baseSections, rowKeySet, customSectionContent)
+    : baseSections;
 
   const record = data ?? {};
   const editFormData = formData ?? record;
@@ -466,7 +487,7 @@ export default function EntityDrawerOverview({
     handleBlur();
   };
 
-  const renderOverviewField = (field: EntityDrawerFieldConfig): ReactNode => {
+  const renderOverviewField = (field: EntityDrawerFieldConfig, opts?: { row?: boolean }): ReactNode => {
     const key = field.key;
     let displayFallback: unknown = undefined;
     if (entityType === "schedules") {
@@ -479,6 +500,49 @@ export default function EntityDrawerOverview({
       const oppExplicit = opportunityOverviewRelationshipReadLabel(record, key);
       if (oppExplicit !== undefined) {
         displayFallback = oppExplicit === "" ? "—" : oppExplicit;
+      }
+    }
+    if (displayFallback === undefined && entityType === "schedules") {
+      if (key === "_contact_phone" && record._contact && typeof record._contact === "object") {
+        const p = (record._contact as { phone?: string | null }).phone;
+        if (p != null && String(p).trim() !== "") displayFallback = p;
+      }
+      if (key === "_contact_email" && record._contact && typeof record._contact === "object") {
+        const e = (record._contact as { email?: string | null }).email;
+        if (e != null && String(e).trim() !== "") displayFallback = e;
+      }
+      if (key === "_customer_name") {
+        const top = record._customer_name;
+        if (top != null && String(top).trim() !== "") displayFallback = String(top).trim();
+        else {
+          const c = record._customer as { name?: string | null } | null | undefined;
+          if (c?.name != null && String(c.name).trim() !== "") displayFallback = String(c.name).trim();
+        }
+      }
+      if (key === "service_type") {
+        const direct = record.service_type;
+        if (direct != null && String(direct).trim() !== "") {
+          displayFallback = String(direct).trim();
+        } else {
+          const j = record._job as { service_key?: string | null; job_type?: string | null } | null | undefined;
+          const sk = j?.service_key ?? j?.job_type;
+          if (sk != null && String(sk).trim() !== "") {
+            displayFallback = String(sk).trim().replace(/_/g, " ");
+          }
+        }
+      }
+      if (key === "_location_label") {
+        const top = record._location_label ?? record._location_name;
+        if (top != null && String(top).trim() !== "") displayFallback = String(top).trim();
+        else {
+          const loc = record._location as
+            | { address1?: string | null; city?: string | null; state?: string | null; postal_code?: string | null }
+            | null
+            | undefined;
+          if (loc && (loc.address1 || loc.city)) {
+            displayFallback = [loc.address1, loc.city, loc.state, loc.postal_code].filter(Boolean).join(", ");
+          }
+        }
       }
     }
     if (displayFallback === undefined) {
@@ -576,12 +640,59 @@ export default function EntityDrawerOverview({
         span={field.span ?? 1}
         editNode={editNode}
         isEditing={showFieldEdit}
+        density={opts?.row ? "compact" : "default"}
       />
     );
   };
 
+  const rowGridClass = (n: number) =>
+    n <= 1
+      ? "grid-cols-1"
+      : n === 2
+        ? "grid-cols-1 sm:grid-cols-2"
+        : n === 3
+          ? "grid-cols-1 sm:grid-cols-3"
+          : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4";
+
   return (
     <div className="space-y-0 pt-5" data-entity-drawer-overview>
+      {scheduleOverviewRows && scheduleOverviewRows.length > 0 && entityType === "schedules" ? (
+        <div
+          className="mb-4 rounded-xl border border-admin-border/40 bg-white/80 px-2 py-2.5 shadow-sm sm:px-3"
+          data-schedule-overview-rows="true"
+        >
+          <p className="px-0.5 pb-2 text-[9px] font-semibold uppercase tracking-[0.12em] text-alloy-forge/70">
+            Visit details
+          </p>
+          <div className="space-y-2.5">
+            {scheduleOverviewRows.map((row, ri) => (
+              <div
+                key={`row-${ri}`}
+                className={`grid gap-x-3 gap-y-2 ${rowGridClass(Math.min(4, Math.max(1, row.length)))}`}
+              >
+                {row.map((token, ci) => {
+                  const resolvedKey = resolveScheduleOverviewRowFieldKey(token);
+                  let field = fieldIndex.get(resolvedKey);
+                  if (!field) {
+                    field = {
+                      key: resolvedKey,
+                      label: scheduleOverviewRowTokenLabel(token),
+                      span: 1,
+                      renderHint: "text",
+                      editable: false,
+                    };
+                  }
+                  return (
+                    <div key={`${ri}-${ci}-${resolvedKey}`} className="min-w-0">
+                      {renderOverviewField(field, { row: true })}
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
       {sections.map((section: EntityDrawerSectionConfig) => {
         const hasSubsections = (section.subsections?.length ?? 0) > 0;
         const hasTopFields = section.fields && section.fields.length > 0;

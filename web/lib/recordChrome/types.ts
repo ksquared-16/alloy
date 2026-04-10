@@ -15,6 +15,11 @@ export type RecordLayoutConfigJson = {
     version?: number;
     /** Order of `EntityDrawerSectionConfig.key` values for the record overview. */
     overview_section_order?: string[];
+    /**
+     * Schedule record modal: each inner array is one visual row (2–4 field tokens).
+     * Tokens map via `SCHEDULE_OVERVIEW_ROW_TOKEN_TO_FIELD_KEY` → field keys.
+     */
+    overview_rows?: string[][];
 };
 
 /** DB row shape for `record_actions` (admin API). */
