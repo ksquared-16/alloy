@@ -1,8 +1,9 @@
 "use client";
 
+import { useMemo } from "react";
 import type { CSSProperties } from "react";
-import { neutral, derived, brand } from "@/styles/tokens/colors";
 import type { WorkUnitWorkspaceModel } from "@/lib/ui-v2/workspace-types";
+import { operationalWorkspaceShellStyle } from "@/lib/visualContext";
 import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
 import { SignalBlock, KPIBlock, QueueBlock, WorkBlock, ActionsBlock } from "../blocks";
 import "../workspace.css";
@@ -12,41 +13,28 @@ type Props = {
   onAction: WorkspaceActionHandler;
 };
 
-/** Same token contract as Department / Company — ambient shell reads from AdminV2 wrapper. */
-const wuRootStyle: CSSProperties = {
-  backgroundColor: "transparent",
-  color: neutral.textPrimary,
-  ["--d-text-primary" as string]: neutral.textPrimary,
-  ["--d-page-bg" as string]: neutral.background,
-  ["--d-border" as string]: derived.border,
-  ["--d-muted" as string]: derived.textSecondary,
-  ["--d-surface" as string]: neutral.surface,
-  ["--d-brand" as string]: brand.primary,
-  ["--d-pine" as string]: brand.secondary,
-  ["--d-top-wash" as string]: derived.kpiRailWash,
-  ["--d-panel" as string]: derived.chromeDeckBg,
-  ["--d-panel-quiet" as string]: derived.inspectorCommandRailWash,
-  ["--d-rail" as string]: derived.inspectorCommandRail,
-  ["--d-field-veil" as string]: derived.canvasFieldWash,
-  ["--d-ambient-core" as string]: derived.ambientLifeBloomMid,
-  ["--d-kpi-tint" as string]: derived.kpiBandBusinessLight,
-  ["--d-kpi-ai-tint" as string]: derived.kpiBandAiLight,
-  ["--d-summary-wash" as string]: derived.maskOverlay,
-  ["--d-boundary-inset" as string]: derived.adminV2BoundaryAmberInset,
-  ["--d-kpi-band-shadow" as string]: derived.kpiBandShadow,
-  ["--d-admin-amber" as string]: derived.adminV2BoundaryAmber,
-  ["--d-rail-hairline" as string]: derived.inspectorCommandHairline,
-  ["--d-rail-sep" as string]: derived.inspectorChamberSeparation,
-  ["--d-ambient-edge" as string]: derived.ambientLifeBloomEdge,
-  ["--d-field-depth" as string]: derived.canvasFieldDepth,
-  ["--d-card-shadow" as string]: derived.cardShadow,
-};
-
 /**
  * Work unit — same shell grammar as Department (control deck, KPI strip, 75/25 split, workflows strip, command rail).
  * Main surface is a structured queue of drillable records (not department rollups). No inline AI form — shell bar only.
  */
 export default function WorkUnitWorkspace({ model, onAction }: Props) {
+  const wuShellStyle: CSSProperties = useMemo(
+    () =>
+      operationalWorkspaceShellStyle({
+        layer: "work_unit",
+        laneKey: model.laneKey,
+        workUnitVisualContextKey: model.visualContextKey,
+        departmentDefaultVisualContextKey: model.departmentDefaultVisualContextKey,
+        departmentKey: model.departmentKey,
+      }),
+    [
+      model.departmentDefaultVisualContextKey,
+      model.departmentKey,
+      model.laneKey,
+      model.visualContextKey,
+    ]
+  );
+
   const briefParagraphs =
     model.aiSummary?.bodyParagraphs?.filter((p) => p.trim()) ??
     (model.aiSummary?.body?.trim() ? [model.aiSummary.body.trim()] : []);
@@ -70,7 +58,7 @@ export default function WorkUnitWorkspace({ model, onAction }: Props) {
     <div
       data-ws-surface="work_unit"
       className="adminv2-ws-root adminv2-ws-work-unit adminv2-ws-wu-v2"
-      style={wuRootStyle}
+      style={wuShellStyle}
     >
       <div className="adminv2-ws-dept-v2-contain">
         <div className="adminv2-ws-dept-v2-page-split">

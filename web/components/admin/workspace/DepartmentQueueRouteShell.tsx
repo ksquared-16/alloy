@@ -15,6 +15,7 @@ export function DepartmentQueueRouteShell({
     const params = useParams();
     const departmentId = typeof params.departmentId === "string" ? params.departmentId : "";
     const [deptName, setDeptName] = useState("Department");
+    const [deptKey, setDeptKey] = useState<string | null>(null);
 
     useEffect(() => {
         if (!departmentId) return;
@@ -23,11 +24,12 @@ export function DepartmentQueueRouteShell({
             try {
                 const res = await fetch("/api/admin/departments");
                 const json = (await res.json().catch(() => ({}))) as {
-                    items?: { id: string; name: string | null }[];
+                    items?: { id: string; name: string | null; key?: string | null }[];
                 };
                 if (!res.ok) return;
                 const d = (json.items ?? []).find((x) => x.id === departmentId);
                 if (!cancelled && d?.name?.trim()) setDeptName(d.name.trim());
+                if (!cancelled && d?.key?.trim()) setDeptKey(d.key.trim());
             } catch {
                 /* keep default */
             }
@@ -42,6 +44,12 @@ export function DepartmentQueueRouteShell({
     }
 
     return (
-        <DepartmentJobsQueuePage workspaceBase={workspaceBase} departmentId={departmentId} mode={mode} deptName={deptName} />
+        <DepartmentJobsQueuePage
+            workspaceBase={workspaceBase}
+            departmentId={departmentId}
+            mode={mode}
+            deptName={deptName}
+            departmentKey={deptKey}
+        />
     );
 }

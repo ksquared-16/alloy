@@ -130,6 +130,8 @@ function jobToQueueItem(j: AdminJobListRow): QueueItemVm {
 export function buildRealWorkUnitWorkspaceModel(input: {
     departmentId: string;
     deptName: string;
+    /** When known, aligns lane shell with department visual identity (see `@/lib/visualContext`). */
+    departmentKey?: string | null;
     mode: DepartmentJobsQueueMode;
     jobs: AdminJobListRow[];
     schedules?: AdminScheduleListRow[];
@@ -191,6 +193,7 @@ export function buildRealWorkUnitWorkspaceModel(input: {
     return {
         workspaceLevel: "work_unit",
         workUnitId: `${departmentId}:${mode}`,
+        departmentKey: input.departmentKey ?? undefined,
         laneKey: mode,
         focusLabel: deptName.trim() || "Department",
         aiSummary: {

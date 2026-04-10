@@ -1,10 +1,17 @@
 "use client";
 
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
+import { useMemo } from "react";
 import "@/app/adminV2/components/workspace/workspace.css";
-import { departmentWorkspaceBridgeRootStyle } from "./deptBridgeTokens";
+import { operationalWorkspaceShellStyle } from "@/lib/visualContext";
 
 type Props = {
+    /** `departments.key` — resolver fallback when defaults not wired. */
+    departmentKey?: string | null;
+    /** When API provides department default operational context. */
+    departmentDefaultVisualContextKey?: string | null;
+    /** Optional explicit shell override (e.g. route). */
+    visualContextKey?: string | null;
     briefTitle: string;
     briefSubtitle?: string;
     signalsSlot: ReactNode;
@@ -21,6 +28,9 @@ type Props = {
  * `app/adminV2/.../DepartmentWorkspace.tsx`, fed by real block data.
  */
 export function DepartmentWorkspaceBridgeShell({
+    departmentKey,
+    departmentDefaultVisualContextKey,
+    visualContextKey,
     briefTitle,
     briefSubtitle,
     signalsSlot,
@@ -30,6 +40,17 @@ export function DepartmentWorkspaceBridgeShell({
     contextSlot,
     railSlot,
 }: Props) {
+    const bridgeShellStyle: CSSProperties = useMemo(
+        () =>
+            operationalWorkspaceShellStyle({
+                layer: "department",
+                visualContextKey: visualContextKey ?? undefined,
+                departmentDefaultVisualContextKey: departmentDefaultVisualContextKey ?? undefined,
+                departmentKey: departmentKey ?? undefined,
+            }),
+        [departmentDefaultVisualContextKey, departmentKey, visualContextKey]
+    );
+
     const hasBrief = Boolean(briefTitle.trim());
     const hasSignals = signalsSlot != null;
     const hasTopStack = hasBrief || hasSignals;
@@ -42,7 +63,7 @@ export function DepartmentWorkspaceBridgeShell({
             data-ws-surface="department"
             data-production-workspace-bridge="true"
             className="adminv2-ws-root adminv2-ws-department adminv2-ws-dept-v2"
-            style={departmentWorkspaceBridgeRootStyle}
+            style={bridgeShellStyle}
         >
             <div className="adminv2-ws-dept-v2-contain">
                 <div className="adminv2-ws-dept-v2-page-split">

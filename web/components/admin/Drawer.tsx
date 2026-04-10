@@ -37,6 +37,10 @@ interface DrawerProps {
      * Does not affect sidebar drawers or behavior.
      */
     recordModalTone?: "cleaning-v2";
+    /**
+     * CSS variables from `recordSurfaceContextStyle` — aligns modal chrome with workspace operational context.
+     */
+    recordModalContextStyle?: CSSProperties;
 }
 
 export default function Drawer({
@@ -56,6 +60,7 @@ export default function Drawer({
     presentation = "sidebar",
     panelClassName,
     recordModalTone,
+    recordModalContextStyle,
 }: DrawerProps) {
     useEffect(() => {
         if (isOpen) {
@@ -90,6 +95,13 @@ export default function Drawer({
               boxShadow: cleaningRecordModalTone
                   ? "0 12px 40px rgba(39, 63, 82, 0.1), 0 2px 8px rgba(39, 63, 82, 0.04)"
                   : derived.cardShadow,
+              ...(cleaningRecordModalTone && recordModalContextStyle
+                  ? {
+                        borderLeftWidth: 3,
+                        borderLeftStyle: "solid",
+                        borderLeftColor: "var(--vc-record-rim)",
+                    }
+                  : {}),
           }
         : {
               zIndex: zIndexPanel,
@@ -257,7 +269,11 @@ export default function Drawer({
                         data-adminv2-record-modal="true"
                         data-adminv2-record-modal-tone={cleaningRecordModalTone ? "cleaning-v2" : undefined}
                         className={`pointer-events-auto flex max-h-[min(920px,92vh)] w-full flex-col overflow-hidden rounded-2xl border border-solid shadow-2xl animate-in fade-in zoom-in-[0.99] duration-300 ${cleaningRecordModalTone ? "min-h-[min(520px,78vh)]" : ""} ${panelClassName ?? "max-w-5xl"}`}
-                        style={panelStyle}
+                        style={
+                            cleaningRecordModalTone && recordModalContextStyle
+                                ? { ...panelStyle, ...recordModalContextStyle }
+                                : panelStyle
+                        }
                         role="dialog"
                         aria-modal="true"
                         aria-labelledby="admin-drawer-title"

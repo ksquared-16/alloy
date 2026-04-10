@@ -26,11 +26,13 @@ export function DepartmentJobsQueuePage({
     departmentId,
     mode,
     deptName,
+    departmentKey,
 }: {
     workspaceBase: string;
     departmentId: string;
     mode: DepartmentJobsQueueMode;
     deptName: string;
+    departmentKey?: string | null;
 }) {
     const router = useRouter();
     const { openDrawer, drawer } = useAdminDrawer();
@@ -51,20 +53,31 @@ export function DepartmentJobsQueuePage({
             buildRealWorkUnitWorkspaceModel({
                 departmentId,
                 deptName,
+                departmentKey,
                 mode,
                 jobs,
                 schedules: mode === "scheduled_today" ? schedules : undefined,
             }),
-        [departmentId, deptName, mode, jobs, schedules]
+        [departmentId, deptName, departmentKey, mode, jobs, schedules]
     );
 
     const onWorkspaceAction = useCallback(
         (action: WorkspaceAction) => {
             if (action.type === "queue.item.action" && action.actionId === "open_record") {
+                const operationalVisualContext = {
+                    departmentKey: departmentKey ?? undefined,
+                    laneKey: mode,
+                    workUnitVisualContextKey: model.visualContextKey,
+                };
                 if (mode === "scheduled_today") {
-                    openDrawer({ type: "schedules", id: action.itemId });
+                    openDrawer({ type: "schedules", id: action.itemId, operationalVisualContext });
                 } else {
-                    openDrawer({ type: "jobs", id: action.itemId, jobRecordSurface: "drawer" });
+                    openDrawer({
+                        type: "jobs",
+                        id: action.itemId,
+                        jobRecordSurface: "drawer",
+                        operationalVisualContext,
+                    });
                 }
                 return;
             }
@@ -85,7 +98,7 @@ export function DepartmentJobsQueuePage({
                 else if (id === "open_work_units") router.push("/admin/system/work-units");
             }
         },
-        [departmentId, mode, openDrawer, router, workspaceBase]
+        [departmentId, departmentKey, mode, model.visualContextKey, openDrawer, router, workspaceBase]
     );
 
     return (

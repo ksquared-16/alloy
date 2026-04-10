@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useState, ReactNode } from "react";
+import type { OperationalVisualContext } from "@/lib/visualContext";
 
 /** Entity kinds that can open in the admin stack drawer (must match API + presentation registry usage). */
 export type AdminDrawerEntityType =
@@ -58,9 +59,21 @@ interface AdminDrawerState {
     defaultSchedulePrefill?: SchedulePrefill;
     /** When opening jobs with id "new", prefill opportunity_id, customer_id, primary_contact_id. */
     defaultJobPrefill?: JobPrefill;
+    /** Optional workspace / lane identity for shared record modal + shell visual context. */
+    operationalVisualContext?: OperationalVisualContext;
 }
 
-export type DrawerStackItem = { type: AdminDrawerEntityType; id: string };
+export type DrawerStackItem = {
+    type: AdminDrawerEntityType;
+    id: string;
+    defaultWorkflowEntityType?: string;
+    defaultCustomerId?: string;
+    defaultVendorId?: string;
+    defaultSchedulePrefill?: SchedulePrefill;
+    defaultJobPrefill?: JobPrefill;
+    jobRecordSurface?: JobRecordSurfaceParam;
+    operationalVisualContext?: OperationalVisualContext;
+};
 
 interface AdminDrawerContextValue {
     drawer: AdminDrawerState;
@@ -78,6 +91,7 @@ interface AdminDrawerContextValue {
         defaultSchedulePrefill?: SchedulePrefill;
         defaultJobPrefill?: JobPrefill;
         jobRecordSurface?: JobRecordSurfaceParam;
+        operationalVisualContext?: OperationalVisualContext;
     }) => void;
     goBack: () => void;
     closeDrawer: () => void;
@@ -105,12 +119,26 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
             defaultSchedulePrefill?: SchedulePrefill;
             defaultJobPrefill?: JobPrefill;
             jobRecordSurface?: JobRecordSurfaceParam;
+            operationalVisualContext?: OperationalVisualContext;
         }) => {
             setDrawer((prev) => {
                 const prevType = prev.type;
                 const prevId = prev.id;
                 if (prevType != null && prevId != null) {
-                    setStack((s) => [...s, { type: prevType, id: prevId }]);
+                    setStack((s) => [
+                        ...s,
+                        {
+                            type: prevType,
+                            id: prevId,
+                            defaultWorkflowEntityType: prev.defaultWorkflowEntityType,
+                            defaultCustomerId: prev.defaultCustomerId,
+                            defaultVendorId: prev.defaultVendorId,
+                            defaultSchedulePrefill: prev.defaultSchedulePrefill,
+                            defaultJobPrefill: prev.defaultJobPrefill,
+                            jobRecordSurface: prev.jobRecordSurface,
+                            operationalVisualContext: prev.operationalVisualContext,
+                        },
+                    ]);
                 }
                 return {
                     type: params.type,
@@ -121,6 +149,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                     defaultSchedulePrefill: params.defaultSchedulePrefill,
                     defaultJobPrefill: params.defaultJobPrefill,
                     jobRecordSurface: params.type === "jobs" ? params.jobRecordSurface : undefined,
+                    operationalVisualContext: params.operationalVisualContext,
                 };
             });
         },
@@ -131,7 +160,19 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
         setStack((s) => {
             const next = [...s];
             const item = next.pop();
-            if (item) setDrawer({ type: item.type, id: item.id });
+            if (item) {
+                setDrawer({
+                    type: item.type,
+                    id: item.id,
+                    defaultWorkflowEntityType: item.defaultWorkflowEntityType,
+                    defaultCustomerId: item.defaultCustomerId,
+                    defaultVendorId: item.defaultVendorId,
+                    defaultSchedulePrefill: item.defaultSchedulePrefill,
+                    defaultJobPrefill: item.defaultJobPrefill,
+                    jobRecordSurface: item.jobRecordSurface,
+                    operationalVisualContext: item.operationalVisualContext,
+                });
+            }
             return next;
         });
     }, []);

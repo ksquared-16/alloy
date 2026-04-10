@@ -2,7 +2,12 @@
 
 import type { CSSProperties } from "react";
 import Link from "next/link";
-import { neutral, derived, brand } from "@/styles/tokens/colors";
+import { neutral, derived } from "@/styles/tokens/colors";
+import {
+    alloyFamilyToWorkspaceTileTone,
+    operationalWorkspaceShellStyle,
+    resolveVisualContext,
+} from "@/lib/visualContext";
 import "@/app/adminV2/components/workspace/workspace.css";
 
 export type WorkspaceRootDepartmentRow = {
@@ -12,50 +17,14 @@ export type WorkspaceRootDepartmentRow = {
     description?: string | null;
     sort_order?: number | null;
     is_active?: boolean | null;
+    /** When API exposes `default_visual_context_key`, ties tile to registry before `key` fallback. */
+    default_visual_context_key?: string | null;
 };
 
-/** Matches company rollup tile tones — extended for seeded cleaning-org keys. */
-function deptToneForKey(departmentKey: string): "pine" | "amber" | "blue" | "neutral" {
-    const m: Record<string, "pine" | "amber" | "blue" | "neutral"> = {
-        operations: "pine",
-        finance: "neutral",
-        growth: "blue",
-        customer_experience: "amber",
-        system: "neutral",
-        revenue: "amber",
-        team: "neutral",
-    };
-    return m[departmentKey] ?? "neutral";
-}
-
-const companyRootStyle: CSSProperties = {
-    backgroundColor: "transparent",
-    color: neutral.textPrimary,
-    ["--d-text-primary" as string]: neutral.textPrimary,
-    ["--d-page-bg" as string]: neutral.background,
-    ["--d-border" as string]: derived.border,
-    ["--d-muted" as string]: derived.textSecondary,
-    ["--d-surface" as string]: neutral.surface,
-    ["--d-brand" as string]: brand.primary,
-    ["--d-pine" as string]: brand.secondary,
-    ["--d-top-wash" as string]: derived.kpiRailWash,
-    ["--d-panel" as string]: derived.chromeDeckBg,
-    ["--d-panel-quiet" as string]: derived.inspectorCommandRailWash,
-    ["--d-rail" as string]: derived.inspectorCommandRail,
-    ["--d-field-veil" as string]: derived.canvasFieldWash,
-    ["--d-ambient-core" as string]: derived.ambientLifeBloomMid,
-    ["--d-kpi-tint" as string]: derived.kpiBandBusinessLight,
-    ["--d-kpi-ai-tint" as string]: derived.kpiBandAiLight,
-    ["--d-summary-wash" as string]: derived.maskOverlay,
-    ["--d-boundary-inset" as string]: derived.adminV2BoundaryAmberInset,
-    ["--d-kpi-band-shadow" as string]: derived.kpiBandShadow,
-    ["--d-admin-amber" as string]: derived.adminV2BoundaryAmber,
-    ["--d-rail-hairline" as string]: derived.inspectorCommandHairline,
-    ["--d-rail-sep" as string]: derived.inspectorChamberSeparation,
-    ["--d-ambient-edge" as string]: derived.ambientLifeBloomEdge,
-    ["--d-field-depth" as string]: derived.canvasFieldDepth,
-    ["--d-card-shadow" as string]: derived.cardShadow,
-};
+/** Org-level company shell — weakest contextual intensity; tiles use `data-ws-company-dept-tone` per row. */
+const companyRootStyle: CSSProperties = operationalWorkspaceShellStyle({
+    layer: "workspace",
+});
 
 /** Per-department rollups for root tiles (from /api/admin/work-units, etc.). */
 export type WorkspaceRootDeptTileStats = Record<string, { workUnitCount: number }>;
@@ -93,7 +62,12 @@ export function WorkspaceRootDepartmentGrid({
             }
         >
             {departments.map((d) => {
-                            const tone = deptToneForKey(d.key);
+                            const tone = alloyFamilyToWorkspaceTileTone(
+                                resolveVisualContext({
+                                    departmentKey: d.key,
+                                    departmentDefaultVisualContextKey: d.default_visual_context_key ?? undefined,
+                                }).alloyFamily
+                            );
                             const desc =
                                 (d.description && String(d.description).trim()) ||
                                 `Signals, throughput lanes, and work units for ${d.name}.`;

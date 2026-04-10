@@ -244,6 +244,12 @@ export type DepartmentWorkspaceModel = {
   workspaceLevel: "department";
   departmentId: string;
   departmentLabel: string;
+  /** Stable key (`departments.key`) — fallback for default operational context in resolver. */
+  departmentKey?: string;
+  /** When API provides `departments.default_visual_context_key`, wire here (resolver priority 4). */
+  departmentDefaultVisualContextKey?: string;
+  /** Optional explicit shell override (resolver priority 1). */
+  visualContextKey?: string;
   aiSummary?: AISummaryBandVm;
   signals: SignalVm[];
   kpis: KPIVm[];
@@ -307,6 +313,12 @@ export type WorkUnitLaneInterpretationVm = {
 export type WorkUnitWorkspaceModel = {
   workspaceLevel: "work_unit";
   workUnitId: string;
+  /** Matches `departments.key` when known — resolver fallback chain. */
+  departmentKey?: string;
+  /** When API provides department default context key (resolver priority 4). */
+  departmentDefaultVisualContextKey?: string;
+  /** Work unit operational context (`work_units.visual_context_key`) — resolver priority 3 (after explicit + lane). */
+  visualContextKey?: string;
   /** Short breadcrumb / kicker above headline (e.g. department path into this lane) */
   focusLabel?: string;
   /** Stable lane key for analytics / routing */

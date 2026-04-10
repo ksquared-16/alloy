@@ -127,6 +127,7 @@ export function WorkspaceRenderer({
         return (
             <div data-workspace-renderer data-department-key={layout.department_key ?? "generic"} data-presentation="department_bridge">
                 <DepartmentWorkspaceBridgeShell
+                    departmentKey={layout.department_key}
                     briefTitle={(bridgeBriefTitle ?? "Department workspace").trim() || "Department workspace"}
                     briefSubtitle={bridgeBriefSubtitle}
                     signalsSlot={signalsSlot}

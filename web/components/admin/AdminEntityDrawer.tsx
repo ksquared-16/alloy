@@ -51,6 +51,7 @@ import { computeJobDiscountOptionPreviewCents, type JobDiscountOptionDto } from 
 import { opportunityOverviewStatusBadgeLabel } from "@/lib/admin/opportunityOverviewLabels";
 import { formatVendorOptionLabel, type AdminVendorSelectOption } from "@/lib/admin/vendorOptionLabel";
 import { mergeUnifiedStatusIntoConfigOverview } from "@/lib/admin/unifiedDrawerStatus";
+import { recordSurfaceContextStyle } from "@/lib/visualContext";
 import {
     JobDrawerV2TabBar,
     JobDrawerV2SignalsStrip,
@@ -5374,6 +5375,13 @@ export default function AdminEntityDrawer() {
             presentation={useAdminV2RecordModalPresentation ? "modal" : "sidebar"}
             panelClassName={useAdminV2RecordModalPresentation ? "max-w-7xl" : undefined}
             recordModalTone={showJobRecordModalV2 || showScheduleRecordModalV2 ? "cleaning-v2" : undefined}
+            recordModalContextStyle={
+                showJobRecordModalV2 || showScheduleRecordModalV2
+                    ? recordSurfaceContextStyle({
+                          ...(drawer.operationalVisualContext ?? {}),
+                      })
+                    : undefined
+            }
         >
             {showDrawerBodyLoading &&
                 (isJobRecordModalTarget || isScheduleRecordModalTarget ? (
