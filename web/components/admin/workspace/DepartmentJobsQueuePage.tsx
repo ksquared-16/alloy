@@ -14,8 +14,8 @@ const MODE_META: Record<
     { crumb: string; path: string }
 > = {
     unassigned: { crumb: "Unassigned jobs", path: "unassigned" },
-    scheduled_today: { crumb: "Scheduled today", path: "scheduled-today" },
-    needs_attention: { crumb: "Needs attention", path: "needs-attention" },
+    scheduled_today: { crumb: "Today’s Schedule", path: "scheduled-today" },
+    needs_attention: { crumb: "Needs Attention", path: "needs-attention" },
 };
 
 /**

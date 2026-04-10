@@ -58,13 +58,13 @@ const OPERATIONS: DepartmentWorkspaceLayout = {
                 {
                     kind: "department_workspace_route",
                     segment: "scheduled-today",
-                    label: "Scheduled today",
+                    label: "Today’s Schedule",
                     description: "Visit occurrences on the org’s local calendar day (one row per schedule; timezone from org settings).",
                 },
                 {
                     kind: "department_workspace_route",
                     segment: "needs-attention",
-                    label: "Needs attention",
+                    label: "Needs Attention",
                     description: "Overdue visits or outstanding receivables in the current sample.",
                 },
             ],
@@ -115,12 +115,12 @@ const OPERATIONS: DepartmentWorkspaceLayout = {
                 },
                 {
                     id: "scheduled_today_action",
-                    label: "Today’s schedule lens",
+                    label: "Today’s Schedule",
                     deptRoute: "scheduled-today",
                 },
                 {
                     id: "needs_attention_action",
-                    label: "Attention lens",
+                    label: "Needs Attention",
                     deptRoute: "needs-attention",
                 },
                 {

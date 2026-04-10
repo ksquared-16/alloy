@@ -15,7 +15,7 @@ import { formatDateTime, formatMoneyFromDollars } from "@/lib/adminFormatters";
 
 const MODE_HEADLINE: Record<DepartmentJobsQueueMode, string> = {
     unassigned: "Unassigned jobs",
-    scheduled_today: "Scheduled today",
+    scheduled_today: "Today’s Schedule",
     needs_attention: "Needs attention",
 };
 

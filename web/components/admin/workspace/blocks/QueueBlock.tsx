@@ -9,6 +9,25 @@ function isUnassignedWorkUnitRow(w: { name?: string | null; key?: string | null 
     return n.includes("unassign") || k === "unassigned" || k === "unassigned_jobs";
 }
 
+/**
+ * Work units seeded for routing (e.g. `todays_schedule`) are also listed as explicit
+ * `department_workspace_route` rows — without this, the same lane appears twice (link + stub).
+ */
+function workUnitKeysSupersededByDepartmentRoutes(block: WorkspaceQueueBlock): Set<string> {
+    const out = new Set<string>();
+    for (const e of block.entries) {
+        if (e.kind !== "department_workspace_route") continue;
+        if (e.segment === "scheduled-today") {
+            out.add("todays_schedule");
+            out.add("scheduled_today");
+        }
+        if (e.segment === "needs-attention") {
+            out.add("needs_attention");
+        }
+    }
+    return out;
+}
+
 export function QueueBlock({
     block,
     departmentId,
@@ -32,10 +51,12 @@ export function QueueBlock({
     }
 
     const hasUnassignedTriage = block.entries.some((e) => e.kind === "unassigned_jobs_triage");
+    const supersededByRoutes = workUnitKeysSupersededByDepartmentRoutes(block);
 
     const remaining = (runtime.workUnits ?? []).filter((wu) => {
         if (hasUnassignedTriage && isUnassignedWorkUnitRow(wu)) return false;
         const k = (wu.key ?? "").trim().toLowerCase();
+        if (k && supersededByRoutes.has(k)) return false;
         if (k && coveredKeys.has(k)) return false;
         return true;
     });

@@ -766,7 +766,9 @@ export default function AdminEntityDrawer() {
     const subscriptionSingular = labels.subscriptions?.singular ?? "Subscription";
     const router = useRouter();
     const pathname = usePathname();
-    const drawerShellVariant = pathname?.startsWith("/adminV2") ? "adminV2" : "legacy";
+    /** `/admin/workspace` uses the same V2 record surfaces as `/adminV2/workspace` (modal + schedule/job chrome). */
+    const drawerShellVariant =
+        pathname?.startsWith("/adminV2") || pathname?.startsWith("/admin/workspace") ? "adminV2" : "legacy";
     const [data, setData] = useState<Record<string, unknown> | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
