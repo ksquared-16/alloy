@@ -8,6 +8,7 @@
 | **Terminology** | [`architecture/glossary.md`](./architecture/glossary.md) |
 | **What we are not building yet** | [`architecture/deferred-decisions.md`](./architecture/deferred-decisions.md) |
 | **Track A foundation plan** | [`implementation/foundation-implementation-plan.md`](./implementation/foundation-implementation-plan.md) |
+| **AI agent slice v0** (`update_queue_definition` implementation bridge) | [`implementation/ai-agent-implementation-slice-v0.md`](./implementation/ai-agent-implementation-slice-v0.md) |
 | **Workspace V2 implementation** (visual context, Needs Attention, APIs) | [`implementation/workspace-v2/README.md`](./implementation/workspace-v2/README.md) |
 | **Track A execution plan** (concrete build order & slice) | [`implementation/track-a-execution-plan.md`](./implementation/track-a-execution-plan.md) |
 | **Track A Batch 1** (integrity, overview config, queue v1, resolver v0) | [`implementation/track-a-batch-1.md`](./implementation/track-a-batch-1.md) |
@@ -15,6 +16,7 @@
 | **GPT / project source pack file list** | [`architecture/source-pack-index.md`](./architecture/source-pack-index.md) |
 | **Configuration system (doctrine + model + surfaces + API)** | [`architecture/configuration-doctrine.md`](./architecture/configuration-doctrine.md) · [`config-model-spec.md`](./architecture/config-model-spec.md) · [`config-surfaces-spec.md`](./architecture/config-surfaces-spec.md) · [`config-api-contract.md`](./architecture/config-api-contract.md) |
 | **AI agent foundation** (config-only interaction; no AI build in this doc) | [`architecture/ai-agent-foundation.md`](./architecture/ai-agent-foundation.md) |
+| **AI agent system contract** (typed agent, intents, validation, events) | [`architecture/ai-agent-system-contract.md`](./architecture/ai-agent-system-contract.md) |
 | **Where schema truth lives** | [`audits/schema-reference-guide.md`](./audits/schema-reference-guide.md) |
 | **How the app is wired today** (Next.js, Supabase, major flows) | [`implementation/ARCHITECTURE.md`](./implementation/ARCHITECTURE.md) |
 | **Admin IA & hierarchy planning (V1 + V2 shells)** | [`implementation/SYSTEM_STRUCTURE_V1.md`](./implementation/SYSTEM_STRUCTURE_V1.md) |

@@ -180,6 +180,7 @@ Mirror of [configuration-doctrine.md](./configuration-doctrine.md) §3, emphasiz
 
 | Document | Relationship |
 |----------|----------------|
+| [ai-agent-system-contract.md](./ai-agent-system-contract.md) | **Typed system contract** — `AgentActor` / `AgentIdentity` / scope / capability profile, chat and intent objects, Phase 1 intent taxonomy, validation layers, governance events and audit objects. |
 | [configuration-doctrine.md](./configuration-doctrine.md) | Config vs system-controlled; AI guardrails summary. |
 | [config-api-contract.md](./config-api-contract.md) | Read/write tables; future unified PUTs; AI contract summary. |
 | [config-model-spec.md](./config-model-spec.md) | Entities, DB vs code, versioning. |

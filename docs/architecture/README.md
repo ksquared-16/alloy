@@ -22,9 +22,10 @@ This folder holds **current product and platform doctrine** for record rendering
 | [Config surfaces spec](./config-surfaces-spec.md) | Where settings live; how config affects workspace/records (no UI build) |
 | [Config API contract](./config-api-contract.md) | Read/write patterns; future AI + unified writes |
 | [AI agent foundation](./ai-agent-foundation.md) | **AI Agent Foundation phase** — agent doctrine, capability map, boundaries, API interaction model, safety/audit (no implementation) |
+| [AI agent system contract](./ai-agent-system-contract.md) | **Typed system object + contract** — identity model, Phase 1 permissions, chat/intent/proposal types, intent taxonomy, validation layers, events/audit, reversibility |
 | [Source pack index](./source-pack-index.md) | **Files to load** into GPT/project context |
 
-**Future AI:** Constrained, config-level assistance (layout suggestions, queue ordering, signals) is described under [Workspace doctrine — Future AI](./workspace-work-unit-scope-doctrine.md#future-ai-compatibility-not-implementation-now). The **AI Agent Foundation** contract (role, capabilities, boundaries, APIs, safety) lives in [ai-agent-foundation.md](./ai-agent-foundation.md).
+**Future AI:** Constrained, config-level assistance (layout suggestions, queue ordering, signals) is described under [Workspace doctrine — Future AI](./workspace-work-unit-scope-doctrine.md#future-ai-compatibility-not-implementation-now). Doctrine and capabilities: [ai-agent-foundation.md](./ai-agent-foundation.md). Typed objects, chat lifecycle, intent taxonomy, and audit/event contracts: [ai-agent-system-contract.md](./ai-agent-system-contract.md).
 
 ## Related material elsewhere in the repo
 

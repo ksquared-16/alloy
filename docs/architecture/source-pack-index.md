@@ -19,12 +19,14 @@
 | `architecture/config-surfaces-spec.md` | Settings IA target; how config affects layers. |
 | `architecture/config-api-contract.md` | Read/write/API patterns; future AI contract. |
 | `architecture/ai-agent-foundation.md` | **AI Agent Foundation** — agent doctrine, capability map, boundaries, API interaction, safety/audit (contracts only). |
+| `architecture/ai-agent-system-contract.md` | **AI agent system contract** — `AgentIdentity`, chat/intent/proposal types, Phase 1 intent taxonomy, validation layers, governance events vs business events. |
 
 ## Tier 2 — Implementation bridge (load for Track A)
 
 | File | Role |
 |------|------|
 | `implementation/foundation-implementation-plan.md` | **Track A** ordering, thin slice, risks. |
+| `implementation/ai-agent-implementation-slice-v0.md` | **AI agent v0 slice** — `update_queue_definition` only: envelopes, validation, audit, build order (implementation bridge). |
 | `README.md` | Top-level doc map (folders, canonical vs audits). |
 
 ## Tier 3 — Schema & domain reference (load when touching DB or entities)
