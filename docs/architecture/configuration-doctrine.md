@@ -44,6 +44,7 @@
 
 - **No AI in this phase** — but configuration is shaped so **future AI** only **proposes or applies** changes through **versioned, validated config APIs** (same as humans).
 - AI must **not**: execute raw SQL, bypass RLS, add unregistered handlers, or change fixed system behavior without a migration.
+- **Specification:** [AI agent foundation](./ai-agent-foundation.md) — agent role, capability map, boundaries, API interaction model, safety and audit (contracts only; no runtime).
 
 ---
 

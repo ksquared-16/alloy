@@ -21,9 +21,10 @@ This folder holds **current product and platform doctrine** for record rendering
 | [Config model spec](./config-model-spec.md) | Entities, relationships, DB vs code, **current inventory audit** |
 | [Config surfaces spec](./config-surfaces-spec.md) | Where settings live; how config affects workspace/records (no UI build) |
 | [Config API contract](./config-api-contract.md) | Read/write patterns; future AI + unified writes |
+| [AI agent foundation](./ai-agent-foundation.md) | **AI Agent Foundation phase** — agent doctrine, capability map, boundaries, API interaction model, safety/audit (no implementation) |
 | [Source pack index](./source-pack-index.md) | **Files to load** into GPT/project context |
 
-**Future AI:** Constrained, config-level assistance (layout suggestions, queue ordering, signals) is described under [Workspace doctrine — Future AI](./workspace-work-unit-scope-doctrine.md#future-ai-compatibility-not-implementation-now).
+**Future AI:** Constrained, config-level assistance (layout suggestions, queue ordering, signals) is described under [Workspace doctrine — Future AI](./workspace-work-unit-scope-doctrine.md#future-ai-compatibility-not-implementation-now). The **AI Agent Foundation** contract (role, capabilities, boundaries, APIs, safety) lives in [ai-agent-foundation.md](./ai-agent-foundation.md).
 
 ## Related material elsewhere in the repo
 

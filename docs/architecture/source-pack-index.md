@@ -18,6 +18,7 @@
 | `architecture/config-model-spec.md` | Config entities, DB vs code, inventory audit. |
 | `architecture/config-surfaces-spec.md` | Settings IA target; how config affects layers. |
 | `architecture/config-api-contract.md` | Read/write/API patterns; future AI contract. |
+| `architecture/ai-agent-foundation.md` | **AI Agent Foundation** — agent doctrine, capability map, boundaries, API interaction, safety/audit (contracts only). |
 
 ## Tier 2 — Implementation bridge (load for Track A)
 

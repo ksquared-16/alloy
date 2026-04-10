@@ -60,6 +60,8 @@ When settings UI and AI land, prefer **small, explicit** endpoints over mega-pay
 
 **Header convention (future):** `X-Config-Write-Source: user | ai` for analytics — optional.
 
+**See:** [ai-agent-foundation.md](./ai-agent-foundation.md) — full **AI Agent Foundation** doctrine (deliverables A–D: role, capabilities, boundaries, API model, rollback/audit).
+
 ---
 
 ## 5. Needs Attention & queues (reference)
