@@ -12,6 +12,8 @@ The **overview** is a **structured summary surface** for a record (or record-lik
 
 3. **Fixed renderer pattern** — A small number of **approved layout templates** interpret that metadata so the product stays coherent and accessible. **No drag-and-drop page builder** and no arbitrary freeform grids as the default model.
 
+4. **Visual identity vs entity type** — **Accent, density, and “where am I?” cues** for the overview (and adjacent shells) come from **operational context** (lane, work unit, exception focus, department semantics) — **not** from branding the UI by raw **entity type** alone (e.g. “job” vs “customer” as the sole driver of palette). Entity type still drives **field semantics** and **data shape**; **operational context** drives **visual system** alignment with the workspace stack. (Concrete mapping lives in implementation: visual context resolver + Alloy palette roles.)
+
 ## Default pattern (conceptual)
 
 A sensible default overview structure:

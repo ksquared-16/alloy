@@ -25,6 +25,7 @@ One **action definition** (same underlying capability) may appear in **queue**, 
 | **Location** | **Physical or geographic operating site** (service address, facility, etc.) — distinct from department. |
 | **Department** | **Functional lane of work** (e.g. scheduling, billing, customer success) — **not** the same as GL/cost-center “department codes.” |
 | **Work unit** | **Configurable execution surface** within a department **and** within a **scope** — not a hardcoded vertical screen. |
+| **Exception work unit** | A work unit whose **primary purpose** is **exception / attention** work (risk, follow-up, intervention) rather than steady-state throughput. Same abstraction as other work units; **queues** and optional **exception-type** lanes differ. **Needs Attention** is the canonical first-class example. |
 | **Scope** | Where a user or surface **may operate** (org-wide, location set, customer portfolio, etc.) — **role alone is insufficient** long term. |
 
 ## Access (directional)
@@ -41,6 +42,8 @@ Today the codebase may only implement a **subset** (e.g. org-scoped `user_roles`
 ## Multiplicity
 
 - **One record may appear in multiple work units** (e.g. handoff, cross-functional work) — routing is **config + resolver**, not a single permanent “screen owner.”
+- **Records in multiple contexts** — The same underlying **record** (e.g. a job) may legitimately appear in **different operational contexts** at once: a throughput lane, an **exception** lane, and a full-record workspace. Context changes **what the UI emphasizes** (queue vs truth); it does **not** fork entity identity. Schema may still use a **single primary** operational FK (e.g. `work_unit_id`) while **projections** include the record in exception queues by predicate.
+- **Needs Attention (first-class)** — Treat **Needs Attention** as a **first-class exception work unit** in product language: a dedicated place for **exception-driven** queues (not a generic “filter on the main list”). Implementation may align a stable **`needs_attention`** work-unit key with **exception-type** lanes inside that surface.
 - **Multi-location orgs** must be supported **without fake sub-orgs** — locations attach to customers, jobs, or other entities as appropriate; org stays the tenant.
 
 ## Relationship to schema today

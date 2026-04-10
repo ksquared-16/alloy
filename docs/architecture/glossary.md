@@ -28,5 +28,9 @@ Short definitions aligned with [workspace-work-unit-scope-doctrine](./workspace-
 | **Signal** | **Attention item**: exception, SLA risk, or “needs eyes now” — distinct from static fields; may feed overview or workspace blocks. |
 | **KPI** | **Quantitative rollup** for a scope (org/dept/work unit): measurement strip, not the detailed record. |
 | **Work block** | Reusable **workspace UI unit** (e.g. signals, KPIs, queues, work steps, context, actions) composed into a shell at a given level — industry-agnostic building block. |
+| **Operational context** | Where the user is working in the **workspace stack**: org vs department vs work unit vs record, plus **lane** (e.g. throughput vs exception) and optional **exception focus**. Drives **which queues and actions** apply; with the visual system, also drives **approved chrome** for surrounding shells. |
+| **Visual context** | Resolved **semantic** key (registered) that maps to **Alloy palette roles** (families, emphasis) for shells and record chrome — **not** department branding by display name. Derived from **operational visual context** hints via a **context resolver** (priority: explicit key → lane → work unit → department defaults → neutral). |
+| **Exception work unit** | Work unit specialized for **exception / attention** work (see workspace doctrine). **Needs Attention** is the canonical first-class example. |
+| **Exception type** | A **lane** or **filter key** within an exception work unit (e.g. overdue vs payment vs readiness) — orthogonal to entity type; used to **project** a subset of records into the queue without forking records. |
 
-**See also:** [deferred-decisions.md](./deferred-decisions.md) · [implementation-gap-audit.md](./implementation-gap-audit.md)
+**See also:** [deferred-decisions.md](./deferred-decisions.md) · [implementation-gap-audit.md](./implementation-gap-audit.md) · [Workspace V2 (implementation)](../implementation/workspace-v2/README.md)

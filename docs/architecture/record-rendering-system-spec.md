@@ -35,6 +35,8 @@ A resolved record payload **may** include, as first-class sections or typed slot
 
 4. **Financial context is contextual** — Surface financial blocks when decisions or inspection require them; avoid mandatory giant finance panels on every record type.
 
+5. **Operational visual context (inheritance)** — Record surfaces **inherit** the current **operational visual context** from how the user arrived (workspace lane, work unit, exception focus, explicit context key). The **same** entity type can render with **different** approved visual treatment when opened from an **exception** path vs a **throughput** path — without changing the underlying record payload’s **business fields**. Concretely: pass **operational visual context hints** (or a resolved **semantic visual key**) alongside the record payload so headers, section rails, and drawer chrome stay **consistent with the workspace**; the resolver remains authoritative for **data**, while **context** ties **presentation tokens** to **operational semantics** (see [overview-layout-doctrine](./overview-layout-doctrine.md) rule 4).
+
 ## Relationship to field registry
 
 Today the repo has **org-scoped field definitions**, **sections**, and **visibility flags** (admin drawer, table, public booking). That system is **compatible** with RRS: definitions govern *which* custom fields exist; the resolver governs *how* they merge with system columns, relationships, and computed data for a given **surface** (overview vs drawer vs full record).
@@ -47,4 +49,4 @@ RRS may introduce **additional layout or surface-specific config** (see [overvie
 - Mandating that every surface loads the full payload (progressive loading is allowed if semantics stay consistent).
 - Locking UI V1 or Admin V2 component names as the implementation of RRS.
 
-**Terms:** [glossary.md](./glossary.md) · **Deferrals:** [deferred-decisions.md](./deferred-decisions.md)
+**Terms:** [glossary.md](./glossary.md) · **Deferrals:** [deferred-decisions.md](./deferred-decisions.md) · **Implementation (visual context):** [VISUAL_CONTEXT_SYSTEM.md](../implementation/workspace-v2/VISUAL_CONTEXT_SYSTEM.md)

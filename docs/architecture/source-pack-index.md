@@ -35,6 +35,11 @@
 
 | File | When |
 |------|------|
+| `implementation/workspace-v2/README.md` | Hub for **Workspace V2** implementation (visual context, lanes, Needs Attention). |
+| `implementation/workspace-v2/VISUAL_CONTEXT_SYSTEM.md` | Resolver, semantic keys, Alloy palette, layers. |
+| `implementation/workspace-v2/WORKSPACE_SYSTEM.md` | Routes, hierarchy, queue modes. |
+| `implementation/workspace-v2/NEEDS_ATTENTION_WORK_UNIT.md` | Exception types, data flow, actions. |
+| `implementation/workspace-v2/API_CONTRACTS.md` | Job list/schedules query params, `?exception=`, job row shapes. |
 | `implementation/ARCHITECTURE.md` | Next.js / Supabase / major flows. |
 | `implementation/SYSTEM_STRUCTURE_V1.md` | Admin IA + hierarchy narrative. |
 | `implementation/UI_V2_Workspace_System_Spec.md` | Block/level UI companion — **subordinate** to architecture/*. |

@@ -31,6 +31,7 @@ This folder holds **current product and platform doctrine** for record rendering
 | [UI_V2_Workspace_System_Spec.md](../implementation/UI_V2_Workspace_System_Spec.md) | **Companion** — block/level ideas overlap doctrine; where they conflict (e.g. AI changing pixels vs configuring meaning), prefer this folder + [overview-layout-doctrine.md](./overview-layout-doctrine.md). |
 | [WORKSPACE_SYSTEM_V1.md](../implementation/WORKSPACE_SYSTEM_V1.md) | **UI V1 column contract** — implementation detail for a specific shell; not canonical for future RRS/workspace. |
 | [ARCHITECTURE.md](../implementation/ARCHITECTURE.md) | **System map** (Next.js, Supabase, flows). Top of file should stay consistent with persons-first and resolver direction. |
+| [workspace-v2/](../implementation/workspace-v2/README.md) | **Implementation only** — visual context resolver, Admin V2 workspace routes, Needs Attention lanes, job queue API usage. |
 
 ## Supersedes / deprecates (conceptually)
 
