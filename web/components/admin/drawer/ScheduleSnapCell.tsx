@@ -17,10 +17,10 @@ export default function ScheduleSnapCell(props: {
     const tier = props.tier ?? "secondary";
     const shell =
         tier === "primary"
-            ? "min-w-0 rounded-lg border border-admin-border/50 bg-white/95 px-2.5 py-2 shadow-[0_1px_0_rgba(15,23,42,0.04)]"
+            ? "min-w-0 rounded-lg border border-admin-border/50 bg-white/95 px-2.5 py-1.5 shadow-[0_1px_0_rgba(15,23,42,0.04)]"
             : tier === "supporting"
               ? "min-w-0 rounded-md border border-dashed border-admin-border/28 bg-alloy-stone/[0.03] px-1.5 py-1"
-              : "min-w-0 rounded-md border border-admin-border/35 bg-alloy-stone/[0.06] px-2 py-1.5";
+              : "min-w-0 rounded-md border border-admin-border/35 bg-alloy-stone/[0.06] px-2 py-1";
 
     const labelClass =
         tier === "primary"

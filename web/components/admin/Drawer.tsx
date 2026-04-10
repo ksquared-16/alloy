@@ -256,7 +256,7 @@ export default function Drawer({
                         data-adminv2-drawer="true"
                         data-adminv2-record-modal="true"
                         data-adminv2-record-modal-tone={cleaningRecordModalTone ? "cleaning-v2" : undefined}
-                        className={`pointer-events-auto flex max-h-[min(920px,92vh)] w-full flex-col overflow-hidden rounded-2xl border border-solid shadow-2xl animate-in fade-in zoom-in-[0.99] duration-300 ${panelClassName ?? "max-w-5xl"}`}
+                        className={`pointer-events-auto flex max-h-[min(920px,92vh)] w-full flex-col overflow-hidden rounded-2xl border border-solid shadow-2xl animate-in fade-in zoom-in-[0.99] duration-300 ${cleaningRecordModalTone ? "min-h-[min(520px,78vh)]" : ""} ${panelClassName ?? "max-w-5xl"}`}
                         style={panelStyle}
                         role="dialog"
                         aria-modal="true"

@@ -22,7 +22,11 @@ import {
   scheduleSectionsAfterRowExtraction,
 } from "@/lib/admin/scheduleOverviewRows";
 import { getScheduleOverviewFieldTier, type ScheduleFieldVisualTier } from "@/lib/admin/scheduleFieldPresentation";
-import { getScheduleSnapshot, scheduleOverviewValueFromSnapshot } from "@/lib/admin/scheduleRecordSnapshot";
+import {
+  getScheduleSnapshot,
+  scheduleOverviewValueFromSnapshot,
+  shouldShowScheduleContactEmailRow,
+} from "@/lib/admin/scheduleRecordSnapshot";
 import ScheduleSnapCell from "@/components/admin/drawer/ScheduleSnapCell";
 import {
   opportunityOverviewRelationshipReadLabel,
@@ -112,6 +116,12 @@ function formatFieldValue(
     case "datetime":
       return formatDateTime(value as string);
     case "money": {
+      if (presentationEntityType === "schedules" && key === "price_cents") {
+        const raw = value as number | string | null | undefined;
+        const cents = typeof raw === "number" ? raw : typeof raw === "string" ? parseInt(String(raw), 10) : NaN;
+        if (Number.isFinite(cents)) return formatMoneyFromCents(cents);
+        return "—";
+      }
       const n = typeof value === "number" ? value : typeof value === "string" ? parseFloat(value) : NaN;
       if (key === "_discount_amount_cents" && Number.isFinite(n) && n > 0) {
         return `-${formatMoneyFromCents(n)}`;
@@ -119,6 +129,18 @@ function formatFieldValue(
       return formatMoney(value as number | string | null | undefined, key);
     }
     case "link":
+      if (
+        presentationEntityType === "schedules" &&
+        field.key === "assigned_vendor_id" &&
+        field.linkTarget?.entityType === "vendors" &&
+        record
+      ) {
+        const idField = field.linkTarget.idField;
+        const id = record[idField];
+        if (id == null || String(id).trim() === "") {
+          return <span className="text-sm font-medium text-alloy-forge/85">Unassigned</span>;
+        }
+      }
       if (field.linkTarget && record && onOpenDrawer) {
         const idField = field.linkTarget.idField;
         const id = record[idField];
@@ -279,6 +301,19 @@ function renderFieldEditNode(
   const value = formHasMeaningful ? formVal : record[key];
   const hint = field.renderHint ?? "text";
   const onKeyDown = makeKeydownHandlers(key, onBlur, onEscape);
+
+  if (presentationEntityType === "schedules" && key === "assigned_vendor_id") {
+    const fk = record.assigned_vendor_id;
+    const hasFk = fk != null && String(fk).trim() !== "";
+    const nameRaw = record._assigned_vendor_name ?? record._vendor_name;
+    const name = nameRaw != null && String(nameRaw).trim() !== "" ? String(nameRaw).trim() : "";
+    const display = !hasFk ? "Unassigned" : name || "—";
+    return (
+      <span className="inline-flex w-full min-h-[2.25rem] items-center text-sm font-medium text-alloy-midnight/90">
+        {display}
+      </span>
+    );
+  }
 
   if (hint === "datetime" || hint === "date") {
     const str = value != null ? String(value) : "";
@@ -636,17 +671,17 @@ export default function EntityDrawerOverview({
     <div className="space-y-0 pt-5" data-entity-drawer-overview>
       {scheduleOverviewRows && scheduleOverviewRows.length > 0 && entityType === "schedules" ? (
         <div
-          className="mb-4 rounded-xl border border-admin-border/40 bg-white/80 px-2 py-2.5 shadow-sm sm:px-3"
+          className="mb-3 rounded-lg border border-admin-border/40 bg-white/90 px-2 py-2 shadow-sm sm:px-2.5"
           data-schedule-overview-rows="true"
         >
-          <p className="px-0.5 pb-2 text-[9px] font-semibold uppercase tracking-[0.12em] text-alloy-forge/70">
+          <p className="px-0.5 pb-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-alloy-forge/70">
             Visit details
           </p>
-          <div className="space-y-4">
+          <div className="space-y-3">
             {scheduleOverviewRows.map((row, ri) => (
               <div
                 key={`row-${ri}`}
-                className={`grid gap-x-3 gap-y-3 ${rowGridClass(Math.min(4, Math.max(1, row.length)))}`}
+                className={`grid gap-x-2.5 gap-y-2 ${rowGridClass(Math.min(4, Math.max(1, row.length)))}`}
               >
                 {row.map((token, ci) => {
                   const resolvedKey = resolveScheduleOverviewRowFieldKey(token);
@@ -654,6 +689,9 @@ export default function EntityDrawerOverview({
                   const tier = getScheduleOverviewFieldTier(resolvedKey);
                   const prevTier = prevResolvedKey != null ? getScheduleOverviewFieldTier(prevResolvedKey) : null;
                   const tierBreak = ci > 0 && prevTier != null && tier !== prevTier;
+                  if (resolvedKey === "_contact_email" && !shouldShowScheduleContactEmailRow(record)) {
+                    return null;
+                  }
                   let field = fieldIndex.get(resolvedKey);
                   if (!field) {
                     field = {

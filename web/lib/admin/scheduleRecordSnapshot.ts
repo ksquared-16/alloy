@@ -56,6 +56,8 @@ export type ScheduleSnapshotInput = {
     } | null;
     /** Combined person name from hydration (persons row), when present. */
     primaryPersonName: string | null;
+    /** Contact display name when distinct from person row (contacts hydration). */
+    primaryContactDisplayName: string | null;
 };
 
 function resolveCustomerNameLine(input: ScheduleSnapshotInput): string {
@@ -64,6 +66,9 @@ function resolveCustomerNameLine(input: ScheduleSnapshotInput): string {
 
     const pn = trimStr(input.primaryPersonName);
     if (pn) return pn;
+
+    const pc = trimStr(input.primaryContactDisplayName);
+    if (pc) return pc;
 
     const ct = input.contact;
     if (ct) {
@@ -188,7 +193,17 @@ export function computeScheduleSnapshotFromHydratedRecord(record: Record<string,
         vendor: vendorName ? { name: vendorName } : null,
         contact: (record._contact as ScheduleSnapshotInput["contact"]) ?? null,
         primaryPersonName: trimStr(record._primary_person_name) || null,
+        primaryContactDisplayName:
+            trimStr(record._primary_contact_name ?? record._contact_name) || null,
     });
+}
+
+/** Omit email cell in overview rows when there is nothing useful to show (empty or duplicate of account line). */
+export function shouldShowScheduleContactEmailRow(record: Record<string, unknown>): boolean {
+    const s = getScheduleSnapshot(record);
+    if (s.customer.emailSuppressedAsDuplicate) return false;
+    const em = trimStr(s.customer.email);
+    return em.length > 0;
 }
 
 /** Prefer server-attached `_schedule_snapshot`; otherwise compute (offline / older payloads). */

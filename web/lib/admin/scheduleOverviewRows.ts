@@ -19,7 +19,7 @@ const SCHEDULE_ROW_TOKEN_LABELS: Record<string, string> = {
     start_at: "Start time",
     assigned_vendor: "Assigned vendor",
     status: "Status",
-    customer_name: "Customer",
+    customer_name: "Account",
     phone: "Phone",
     email: "Email",
     address: "Address",
