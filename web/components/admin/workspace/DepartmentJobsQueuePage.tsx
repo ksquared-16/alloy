@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import WorkUnitWorkspace from "@/app/adminV2/components/workspace/shells/WorkUnitWorkspace";
 import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { buildRealWorkUnitWorkspaceModel } from "@/lib/ui-v2/adapters/realWorkUnitFromJobs";
 import type { WorkspaceAction } from "@/lib/ui-v2/workspace-actions";
 import { useDepartmentQueueData, type DepartmentJobsQueueMode } from "@/hooks/useDepartmentQueueData";
+import { parseNeedsAttentionExceptionParam } from "@/lib/workspace/exceptionTypes";
 
 const MODE_META: Record<
     DepartmentJobsQueueMode,
@@ -35,8 +36,13 @@ export function DepartmentJobsQueuePage({
     departmentKey?: string | null;
 }) {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const exceptionFocus =
+        mode === "needs_attention" ? parseNeedsAttentionExceptionParam(searchParams.get("exception")) : null;
     const { openDrawer, drawer } = useAdminDrawer();
-    const { jobs, schedules, loading, error, refetch } = useDepartmentQueueData(departmentId, mode);
+    const { jobs, schedules, loading, error, refetch } = useDepartmentQueueData(departmentId, mode, {
+        exceptionFilter: exceptionFocus,
+    });
     const drawerWasOpen = useRef(false);
 
     useEffect(() => {
@@ -55,10 +61,11 @@ export function DepartmentJobsQueuePage({
                 deptName,
                 departmentKey,
                 mode,
+                exceptionFocus,
                 jobs,
                 schedules: mode === "scheduled_today" ? schedules : undefined,
             }),
-        [departmentId, deptName, departmentKey, mode, jobs, schedules]
+        [departmentId, deptName, departmentKey, mode, exceptionFocus, jobs, schedules]
     );
 
     const onWorkspaceAction = useCallback(

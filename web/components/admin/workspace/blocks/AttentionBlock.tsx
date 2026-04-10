@@ -4,10 +4,25 @@ import Link from "next/link";
 import { useCallback, useState } from "react";
 import type {
     WorkspaceAttentionBlock,
+    WorkspaceAttentionCategory,
     WorkspaceAttentionCategoryKey,
     WorkspaceRuntimeData,
 } from "@/lib/workspace/types";
+import { NEEDS_ATTENTION_EXCEPTIONS } from "@/lib/workspace/exceptionTypes";
 import { workspaceDeptQueueHref } from "@/lib/workspace/resolveWorkspaceActionHref";
+
+function attentionCategoryHref(
+    workspaceBasePath: string,
+    departmentId: string,
+    target: WorkspaceAttentionCategory["target"]
+): string {
+    if (target.deptRoute === "needs-attention") {
+        return workspaceDeptQueueHref(workspaceBasePath, departmentId, "needs-attention", {
+            exception: target.exception,
+        });
+    }
+    return workspaceDeptQueueHref(workspaceBasePath, departmentId, target.deptRoute);
+}
 
 export function AttentionBlock({
     block,
@@ -37,7 +52,8 @@ export function AttentionBlock({
                 const count = data?.count ?? 0;
                 const previews = data?.previews ?? [];
                 const isOpen = expanded[cat.id] === true;
-                const href = workspaceDeptQueueHref(workspaceBasePath, departmentId, cat.target.deptRoute);
+                const href = attentionCategoryHref(workspaceBasePath, departmentId, cat.target);
+                const quickActions = NEEDS_ATTENTION_EXCEPTIONS[cat.id]?.quickActions ?? [];
 
                 return (
                     <div
@@ -78,6 +94,19 @@ export function AttentionBlock({
                                 </Link>
                             </div>
                         </div>
+                        {quickActions.length > 0 ? (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 10px", marginTop: 2 }}>
+                                {quickActions.map((qa) => (
+                                    <Link
+                                        key={qa.id}
+                                        href={qa.href}
+                                        className="text-[11px] font-medium text-alloy-blue hover:underline"
+                                    >
+                                        {qa.label}
+                                    </Link>
+                                ))}
+                            </div>
+                        ) : null}
                         {isOpen && previews.length > 0 ? (
                             <ul
                                 className="space-y-1 border-l pl-2"
@@ -124,17 +153,33 @@ export function AttentionBlock({
                     {block.categories.map((cat) => {
                         const data = attention[cat.id];
                         const count = data?.count ?? 0;
-                        const href = workspaceDeptQueueHref(workspaceBasePath, departmentId, cat.target.deptRoute);
+                        const href = attentionCategoryHref(workspaceBasePath, departmentId, cat.target);
+                        const flatQuick = NEEDS_ATTENTION_EXCEPTIONS[cat.id]?.quickActions ?? [];
                         return (
                             <div
                                 key={cat.id}
-                                className="flex items-center justify-between gap-2 text-sm border border-admin-border rounded-lg px-3 py-2"
+                                className="text-sm border border-admin-border rounded-lg px-3 py-2 space-y-1.5"
                             >
-                                <span className="text-alloy-forge">{cat.label}</span>
-                                <span className="tabular-nums font-medium">{count}</span>
-                                <Link href={href} className="text-alloy-blue text-xs font-medium hover:underline shrink-0">
-                                    Open
-                                </Link>
+                                <div className="flex items-center justify-between gap-2">
+                                    <span className="text-alloy-forge">{cat.label}</span>
+                                    <span className="tabular-nums font-medium">{count}</span>
+                                    <Link href={href} className="text-alloy-blue text-xs font-medium hover:underline shrink-0">
+                                        Open queue
+                                    </Link>
+                                </div>
+                                {flatQuick.length > 0 ? (
+                                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 pl-0.5">
+                                        {flatQuick.map((qa) => (
+                                            <Link
+                                                key={qa.id}
+                                                href={qa.href}
+                                                className="text-[11px] text-alloy-blue/90 hover:underline"
+                                            >
+                                                {qa.label}
+                                            </Link>
+                                        ))}
+                                    </div>
+                                ) : null}
                             </div>
                         );
                     })}

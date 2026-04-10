@@ -6,11 +6,19 @@ export type WorkspaceDeptQueueRoute = "unassigned" | "scheduled-today" | "needs-
 export function workspaceDeptQueueHref(
     workspaceBasePath: string,
     departmentId: string,
-    deptRoute: WorkspaceDeptQueueRoute
+    deptRoute: WorkspaceDeptQueueRoute,
+    query?: Record<string, string | undefined>
 ): string {
     const base = workspaceBasePath.replace(/\/$/, "");
     const tail = deptRoute === "unassigned" ? "unassigned" : deptRoute;
-    return `${base}/dept/${encodeURIComponent(departmentId)}/${tail}`;
+    const path = `${base}/dept/${encodeURIComponent(departmentId)}/${tail}`;
+    if (!query || Object.keys(query).length === 0) return path;
+    const params = new URLSearchParams();
+    for (const [k, v] of Object.entries(query)) {
+        if (v != null && v !== "") params.set(k, v);
+    }
+    const q = params.toString();
+    return q ? `${path}?${q}` : path;
 }
 
 export function resolveWorkspaceActionHref(

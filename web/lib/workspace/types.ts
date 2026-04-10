@@ -5,15 +5,13 @@
  * Future: mirror shape in DB (e.g. `department_workspace_layouts` JSONB) and hydrate the same types.
  */
 
+import type { NeedsAttentionExceptionType } from "./exceptionTypes";
+
 /** Canonical block kinds rendered by WorkspaceRenderer. */
 export type WorkspaceBlockType = "signals" | "queue" | "attention" | "kpi" | "actions" | "context";
 
 /** Keys for attention lane category rows — registry ids must match `WorkspaceRuntimeData.attention`. */
-export type WorkspaceAttentionCategoryKey =
-    | "overdue_next_visit"
-    | "outstanding_receivable"
-    | "high_value_unassigned"
-    | "ready_for_assignment";
+export type WorkspaceAttentionCategoryKey = NeedsAttentionExceptionType;
 
 /** Metric keys the client can resolve today; extend as new signal providers ship. */
 export type WorkspaceSignalMetricKey =
@@ -119,10 +117,13 @@ export type WorkspaceAttentionCategory = {
     id: WorkspaceAttentionCategoryKey;
     label: string;
     description?: string;
-    /** Existing department queue route (sample-limited lists). */
-    target: {
-        deptRoute: "unassigned" | "scheduled-today" | "needs-attention";
-    };
+    /**
+     * Needs Attention routes through the `needs_attention` exception work unit.
+     * Use `needs-attention?exception=<id>` so the queue can filter without new surfaces.
+     */
+    target:
+        | { deptRoute: "needs-attention"; exception: WorkspaceAttentionCategoryKey }
+        | { deptRoute: "unassigned" | "scheduled-today" };
 };
 
 export type WorkspaceAttentionBlock = {

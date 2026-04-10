@@ -12,6 +12,7 @@ import type {
     DepartmentJobsQueueMode,
 } from "@/hooks/useDepartmentQueueData";
 import { formatDateTime, formatMoneyFromDollars } from "@/lib/adminFormatters";
+import { NEEDS_ATTENTION_EXCEPTIONS, type NeedsAttentionExceptionType } from "@/lib/workspace/exceptionTypes";
 
 const MODE_HEADLINE: Record<DepartmentJobsQueueMode, string> = {
     unassigned: "Unassigned jobs",
@@ -133,14 +134,20 @@ export function buildRealWorkUnitWorkspaceModel(input: {
     /** When known, aligns lane shell with department visual identity (see `@/lib/visualContext`). */
     departmentKey?: string | null;
     mode: DepartmentJobsQueueMode;
+    /** Needs Attention: when set, queue is filtered to this exception lane (`?exception=`). */
+    exceptionFocus?: NeedsAttentionExceptionType | null;
     jobs: AdminJobListRow[];
     schedules?: AdminScheduleListRow[];
 }): WorkUnitWorkspaceModel {
     const { departmentId, deptName, mode, jobs } = input;
+    const exceptionFocus = input.exceptionFocus ?? null;
     const schedules = input.schedules ?? [];
     const useSchedules = mode === "scheduled_today";
     const rowCount = useSchedules ? schedules.length : jobs.length;
-    const headline = MODE_HEADLINE[mode];
+    const headline =
+        mode === "needs_attention" && exceptionFocus
+            ? NEEDS_ATTENTION_EXCEPTIONS[exceptionFocus].label
+            : MODE_HEADLINE[mode];
 
     const laneNoun = useSchedules ? (rowCount === 1 ? "visit" : "visits") : rowCount === 1 ? "job" : "jobs";
 
@@ -167,20 +174,24 @@ export function buildRealWorkUnitWorkspaceModel(input: {
     ];
 
     const primaryQueue: QueueVm = {
-        id: `lane-${mode}-${departmentId}`,
+        id: `lane-${mode}-${departmentId}${exceptionFocus ? `-${exceptionFocus}` : ""}`,
         title: headline,
         countBadge: rowCount,
         items: useSchedules ? schedules.map(scheduleToQueueItem) : jobs.map(jobToQueueItem),
         sortCaption:
             mode === "scheduled_today"
                 ? "Ordered by visit start time on the org’s local calendar day."
-                : "Ordered by API default (typically newest activity first).",
+                : mode === "needs_attention" && exceptionFocus
+                  ? "Filtered to this exception type in the merged job sample (≤200 rows per source)."
+                  : "Ordered by API default (typically newest activity first).",
         rollupSummary:
             mode === "unassigned"
                 ? "Jobs with no vendor assigned yet — assign a vendor to clear this lane."
                 : mode === "scheduled_today"
                   ? "Non-canceled visits starting on the org’s local “today” (timezone from org settings) — one row per schedule."
-                  : "Overdue visit or outstanding receivable in the merged sample.",
+                  : mode === "needs_attention" && exceptionFocus
+                    ? NEEDS_ATTENTION_EXCEPTIONS[exceptionFocus].description
+                    : "Exception work unit — overdue visit, payment issue, high-value unassigned, or ready for assignment (union in merged sample).",
     };
 
     const emptyContextRail: ContextBlockVm = { groups: [] };
@@ -192,7 +203,7 @@ export function buildRealWorkUnitWorkspaceModel(input: {
 
     return {
         workspaceLevel: "work_unit",
-        workUnitId: `${departmentId}:${mode}`,
+        workUnitId: `${departmentId}:${mode}${exceptionFocus ? `:${exceptionFocus}` : ""}`,
         departmentKey: input.departmentKey ?? undefined,
         laneKey: mode,
         focusLabel: deptName.trim() || "Department",
@@ -213,7 +224,9 @@ export function buildRealWorkUnitWorkspaceModel(input: {
                     ? "Open a job, assign a vendor in the snapshot — the job leaves this lane when saved; work unit is optional routing elsewhere."
                     : mode === "scheduled_today"
                       ? "Select a row to open the schedule in the drawer, or jump to All jobs from the rail."
-                      : "Select a row to triage in the drawer, or jump to All jobs from the rail.",
+                      : mode === "needs_attention" && exceptionFocus
+                        ? "Triage each row in the job drawer — exception cards on the department surface include shortcuts when you need Schedules or work-unit setup."
+                        : "Select a row to triage in the drawer, or jump to All jobs from the rail.",
         },
         signals,
         kpis,

@@ -4,22 +4,11 @@
  * Counts are based on the fetched sample (max 200 per request) — pragmatic, not a full analytics roll-up.
  */
 
+import { NEEDS_ATTENTION_EXCEPTION_ORDER, NEEDS_ATTENTION_EXCEPTIONS } from "./exceptionTypes";
+import type { JobRowForWorkspaceMetrics } from "./jobMetricsRow";
 import type { WorkspaceAttentionCategoryKey, WorkspaceAttentionCategoryRuntime } from "./types";
 
-export type JobRowForWorkspaceMetrics = {
-    id: string;
-    work_unit_id?: string | null;
-    gross_price_cents?: number | null;
-    /** Next future schedule start from jobs list enrichment. */
-    _next_schedule?: string | null;
-    receivable_outstanding_cents?: number | null;
-    status_key?: string | null;
-    title?: string | null;
-    _job_label?: string | null;
-    _location_label?: string | null;
-    _vendor_name?: string | null;
-    _assigned_vendor_name?: string | null;
-};
+export type { JobRowForWorkspaceMetrics } from "./jobMetricsRow";
 
 function localDayKey(d: Date): string {
     return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
@@ -88,24 +77,6 @@ function previewLabel(j: JobRowForWorkspaceMetrics): string {
     return t || j.id.slice(-8);
 }
 
-function jobOverdueNextVisit(j: JobRowForWorkspaceMetrics, nowMs: number): boolean {
-    if (!j._next_schedule) return false;
-    return new Date(j._next_schedule).getTime() < nowMs;
-}
-
-function jobOutstandingReceivable(j: JobRowForWorkspaceMetrics): boolean {
-    return (j.receivable_outstanding_cents ?? 0) > 0;
-}
-
-function jobHighValueUnassigned(j: JobRowForWorkspaceMetrics): boolean {
-    const g = j.gross_price_cents ?? 0;
-    return g >= HIGH_VALUE_MIN_CENTS && (j.work_unit_id == null || j.work_unit_id === "");
-}
-
-function jobReadyForAssignment(j: JobRowForWorkspaceMetrics): boolean {
-    return (j.status_key ?? "").trim().toLowerCase() === "ready_for_assignment";
-}
-
 const PREVIEW_CAP = 4;
 
 /** Derive attention lane buckets from merged job rows (same sample cap as signals). */
@@ -114,27 +85,14 @@ export function computeAttentionCategoryRuntime(
     now: Date
 ): Record<WorkspaceAttentionCategoryKey, WorkspaceAttentionCategoryRuntime> {
     const nowMs = now.getTime();
-    const buckets: Record<WorkspaceAttentionCategoryKey, JobRowForWorkspaceMetrics[]> = {
-        overdue_next_visit: [],
-        outstanding_receivable: [],
-        high_value_unassigned: [],
-        ready_for_assignment: [],
-    };
-
-    for (const j of merged) {
-        if (jobOverdueNextVisit(j, nowMs)) buckets.overdue_next_visit.push(j);
-        if (jobOutstandingReceivable(j)) buckets.outstanding_receivable.push(j);
-        if (jobHighValueUnassigned(j)) buckets.high_value_unassigned.push(j);
-        if (jobReadyForAssignment(j)) buckets.ready_for_assignment.push(j);
-    }
-
     const out = {} as Record<WorkspaceAttentionCategoryKey, WorkspaceAttentionCategoryRuntime>;
-    (Object.keys(buckets) as WorkspaceAttentionCategoryKey[]).forEach((key) => {
-        const rows = buckets[key];
+
+    for (const key of NEEDS_ATTENTION_EXCEPTION_ORDER) {
+        const rows = merged.filter((j) => NEEDS_ATTENTION_EXCEPTIONS[key].matches(j, nowMs));
         out[key] = {
             count: rows.length,
             previews: rows.slice(0, PREVIEW_CAP).map((r) => ({ id: r.id, label: previewLabel(r) })),
         };
-    });
+    }
     return out;
 }

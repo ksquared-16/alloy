@@ -1,7 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { filterJobsNeedsAttention, mergeJobListsById, type JobRowForWorkspaceMetrics } from "@/lib/workspace/deriveDepartmentJobMetrics";
+import {
+    mergeJobListsById,
+    type JobRowForWorkspaceMetrics,
+} from "@/lib/workspace/deriveDepartmentJobMetrics";
+import {
+    filterJobsForNeedsAttentionWorkUnit,
+    jobMatchesExceptionType,
+    type NeedsAttentionExceptionType,
+} from "@/lib/workspace/exceptionTypes";
 
 export type DepartmentJobsQueueMode = "unassigned" | "scheduled_today" | "needs_attention";
 
@@ -40,7 +48,11 @@ export type AdminScheduleListRow = {
     _assigned_vendor_name?: string | null;
 };
 
-export function useDepartmentQueueData(departmentId: string, mode: DepartmentJobsQueueMode) {
+export function useDepartmentQueueData(
+    departmentId: string,
+    mode: DepartmentJobsQueueMode,
+    options?: { exceptionFilter?: NeedsAttentionExceptionType | null }
+) {
     const [jobs, setJobs] = useState<AdminJobListRow[]>([]);
     const [schedules, setSchedules] = useState<AdminScheduleListRow[]>([]);
     const [loading, setLoading] = useState(true);
@@ -92,7 +104,11 @@ export function useDepartmentQueueData(departmentId: string, mode: DepartmentJob
                     if (!deptJobsRes.ok) throw new Error(dj.error ?? "Department jobs request failed");
                     if (!unassignedJobsRes.ok) throw new Error(uj.error ?? "Unassigned jobs request failed");
                     const merged = mergeJobListsById(dj.jobs ?? [], uj.jobs ?? []);
-                    const filtered = filterJobsNeedsAttention(merged);
+                    const nowMs = Date.now();
+                    const ex = options?.exceptionFilter ?? null;
+                    const filtered = ex
+                        ? merged.filter((j) => jobMatchesExceptionType(j, ex, nowMs))
+                        : filterJobsForNeedsAttentionWorkUnit(merged, nowMs);
                     if (!cancelled) {
                         setJobs(filtered);
                         setSchedules([]);
@@ -107,7 +123,7 @@ export function useDepartmentQueueData(departmentId: string, mode: DepartmentJob
         return () => {
             cancelled = true;
         };
-    }, [departmentId, mode, reloadToken]);
+    }, [departmentId, mode, reloadToken, options?.exceptionFilter]);
 
     return { jobs, schedules, loading, error, refetch };
 }

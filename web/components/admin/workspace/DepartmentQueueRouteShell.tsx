@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { DepartmentJobsQueuePage } from "@/components/admin/workspace/DepartmentJobsQueuePage";
 import type { DepartmentJobsQueueMode } from "@/hooks/useDepartmentQueueData";
@@ -44,12 +44,14 @@ export function DepartmentQueueRouteShell({
     }
 
     return (
-        <DepartmentJobsQueuePage
-            workspaceBase={workspaceBase}
-            departmentId={departmentId}
-            mode={mode}
-            deptName={deptName}
-            departmentKey={deptKey}
-        />
+        <Suspense fallback={<p className="text-sm text-alloy-midnight/60 px-1 py-4">Loading lane…</p>}>
+            <DepartmentJobsQueuePage
+                workspaceBase={workspaceBase}
+                departmentId={departmentId}
+                mode={mode}
+                deptName={deptName}
+                departmentKey={deptKey}
+            />
+        </Suspense>
     );
 }
