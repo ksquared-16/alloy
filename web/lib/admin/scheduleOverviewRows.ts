@@ -4,9 +4,12 @@ import type { ReactNode } from "react";
 /** Tokens in `record_layouts.config_json.overview_rows` → canonical `EntityDrawerFieldConfig.key` values. */
 export const SCHEDULE_OVERVIEW_ROW_TOKEN_TO_FIELD_KEY: Record<string, string> = {
     start_at: "start_at",
+    end_at: "end_at",
     assigned_vendor: "assigned_vendor_id",
     status: "status_key",
     customer_name: "_customer_name",
+    /** Alias for config / AI — same as customer_name */
+    account_name: "_customer_name",
     phone: "_contact_phone",
     email: "_contact_email",
     address: "_location_label",
@@ -17,9 +20,11 @@ export const SCHEDULE_OVERVIEW_ROW_TOKEN_TO_FIELD_KEY: Record<string, string> = 
 /** Human-readable labels for layout tokens (config-driven; stable for owners + future tooling). */
 const SCHEDULE_ROW_TOKEN_LABELS: Record<string, string> = {
     start_at: "Start time",
+    end_at: "End",
     assigned_vendor: "Assigned vendor",
     status: "Status",
     customer_name: "Account",
+    account_name: "Account",
     phone: "Phone",
     email: "Email",
     address: "Address",

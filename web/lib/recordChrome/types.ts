@@ -1,4 +1,5 @@
 import type { EntityDrawerSectionConfig } from "@/lib/entityPresentation";
+import type { ScheduleLayoutBlock } from "@/lib/recordChrome/scheduleLayoutConfig";
 
 /** DB row shape for `record_layouts` (admin API). */
 export type RecordLayoutRow = {
@@ -10,16 +11,25 @@ export type RecordLayoutRow = {
     created_at: string;
 };
 
-/** v1 layout payload stored in `config_json`. */
+/**
+ * `record_layouts.config_json` — versioned; v2 adds `layout_blocks` for schedules.
+ * Legacy clients may still read `overview_rows` alone.
+ */
 export type RecordLayoutConfigJson = {
     version?: number;
     /** Order of `EntityDrawerSectionConfig.key` values for the record overview. */
     overview_section_order?: string[];
     /**
-     * Schedule record modal: each inner array is one visual row (2–4 field tokens).
+     * Schedule v1: each inner array is one visual row (2–4 field tokens).
      * Tokens map via `SCHEDULE_OVERVIEW_ROW_TOKEN_TO_FIELD_KEY` → field keys.
      */
     overview_rows?: string[][];
+
+    /**
+     * Schedule v2+: structured blocks (snapshot, secondary summary, section order).
+     * When `version === 2` and `layout_blocks` is non-empty, UI prefers blocks; `overview_rows` remains for backward compatibility.
+     */
+    layout_blocks?: ScheduleLayoutBlock[];
 };
 
 /** DB row shape for `record_actions` (admin API). */

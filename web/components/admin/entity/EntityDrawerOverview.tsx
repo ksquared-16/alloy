@@ -27,6 +27,8 @@ import {
   scheduleOverviewValueFromSnapshot,
   shouldShowScheduleContactEmailRow,
 } from "@/lib/admin/scheduleRecordSnapshot";
+import type { RecordLayoutConfigJson } from "@/lib/recordChrome/types";
+import { collectResolvedKeysFromScheduleLayoutBlocks, isScheduleLayoutV2 } from "@/lib/recordChrome/scheduleLayoutConfig";
 import ScheduleSnapCell from "@/components/admin/drawer/ScheduleSnapCell";
 import {
   opportunityOverviewRelationshipReadLabel,
@@ -62,8 +64,10 @@ interface EntityDrawerOverviewProps {
   onOpenDrawer?: (entityType: string, id: string) => void;
   /** Reference selects (e.g. pipeline_stage_id, vertical_id) — labels in UI, values are real ids. */
   selectOptionsByFieldKey?: Record<string, { value: string; label: string }[]>;
-  /** Schedule record: optional row groups from `record_layouts.config_json.overview_rows`. */
+  /** Schedule record: optional row groups from `record_layouts.config_json.overview_rows` (v1). */
   scheduleOverviewRows?: string[][];
+  /** Schedule record: full layout config; when `version === 2` and `layout_blocks` set, drives structured chrome. */
+  scheduleRecordLayout?: RecordLayoutConfigJson | null;
 }
 
 function formatFieldValue(
@@ -501,16 +505,22 @@ export default function EntityDrawerOverview({
   onOpenDrawer,
   selectOptionsByFieldKey,
   scheduleOverviewRows,
+  scheduleRecordLayout,
 }: EntityDrawerOverviewProps) {
   const config = getEntityPresentation(entityType);
   const baseSections = overviewSectionsOverride ?? config.drawer?.overviewSections ?? [];
   if (!baseSections.length) return null;
 
   const fieldIndex = flattenOverviewFieldIndex(baseSections);
+  const useScheduleLayoutV2 =
+    entityType === "schedules" && isScheduleLayoutV2(scheduleRecordLayout ?? undefined);
+  const layoutBlocks = scheduleRecordLayout?.layout_blocks;
   const rowKeySet =
-    scheduleOverviewRows && scheduleOverviewRows.length > 0 && entityType === "schedules"
-      ? collectScheduleRowResolvedKeys(scheduleOverviewRows)
-      : null;
+    entityType === "schedules" && useScheduleLayoutV2 && layoutBlocks?.length
+      ? collectResolvedKeysFromScheduleLayoutBlocks(layoutBlocks)
+      : scheduleOverviewRows && scheduleOverviewRows.length > 0 && entityType === "schedules"
+        ? collectScheduleRowResolvedKeys(scheduleOverviewRows)
+        : null;
   const sections = rowKeySet
     ? scheduleSectionsAfterRowExtraction(baseSections, rowKeySet, customSectionContent)
     : baseSections;
@@ -667,12 +677,105 @@ export default function EntityDrawerOverview({
           ? "grid-cols-1 sm:grid-cols-3"
           : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4";
 
+  const renderScheduleChromeField = (token: string, cellKey: string, tierBreak: boolean) => {
+    const resolvedKey = resolveScheduleOverviewRowFieldKey(token);
+    const tier = getScheduleOverviewFieldTier(resolvedKey);
+    if (resolvedKey === "_contact_email" && !shouldShowScheduleContactEmailRow(record)) {
+      return null;
+    }
+    let field = fieldIndex.get(resolvedKey);
+    if (!field) {
+      field = {
+        key: resolvedKey,
+        label: scheduleOverviewRowTokenLabel(token),
+        span: 1,
+        renderHint: "text",
+        editable: false,
+      };
+    }
+    const groupClass = tierBreak
+      ? "min-w-0 mt-3 border-t border-alloy-stone/15 pt-3 sm:mt-0 sm:border-t-0 sm:border-l sm:border-alloy-stone/25 sm:pt-0 sm:pl-3"
+      : "min-w-0";
+    return (
+      <div key={cellKey} className={groupClass}>
+        {renderOverviewField(field, { row: true, scheduleFieldTier: tier })}
+      </div>
+    );
+  };
+
   return (
-    <div className="space-y-0 pt-5" data-entity-drawer-overview>
-      {scheduleOverviewRows && scheduleOverviewRows.length > 0 && entityType === "schedules" ? (
+    <div className="space-y-0 pt-4" data-entity-drawer-overview>
+      {useScheduleLayoutV2 && layoutBlocks?.length && entityType === "schedules" ? (
+        <div className="mb-3 space-y-2.5" data-schedule-layout-version="2">
+          {layoutBlocks.map((block) => {
+            if (block.type === "section_group") return null;
+            if (block.type === "snapshot") {
+              return (
+                <div
+                  key={block.key}
+                  data-schedule-layout-block="snapshot"
+                  data-block-key={block.key}
+                  className="rounded-xl border border-admin-border/45 bg-white/95 px-2.5 py-2.5 shadow-sm sm:px-3"
+                >
+                  {block.title ? (
+                    <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-alloy-forge/65">
+                      {block.title}
+                    </p>
+                  ) : null}
+                  <div className="space-y-2.5">
+                    {block.groups.map((group, gi) => (
+                      <div
+                        key={`${block.key}-g-${gi}`}
+                        className="rounded-lg border border-admin-border/30 bg-alloy-stone/[0.04] p-2 sm:p-2.5"
+                      >
+                        <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-alloy-forge/55">
+                          {group.label}
+                        </p>
+                        <div
+                          className={`grid gap-x-2.5 gap-y-2 ${rowGridClass(
+                            Math.min(4, Math.max(1, group.fields.length))
+                          )}`}
+                        >
+                          {group.fields.map((token, ci) => {
+                            const prevResolvedKey = ci > 0 ? resolveScheduleOverviewRowFieldKey(group.fields[ci - 1]!) : null;
+                            const resolvedKey = resolveScheduleOverviewRowFieldKey(token);
+                            const prevTier =
+                              prevResolvedKey != null ? getScheduleOverviewFieldTier(prevResolvedKey) : null;
+                            const tier = getScheduleOverviewFieldTier(resolvedKey);
+                            const tierBreak = ci > 0 && prevTier != null && tier !== prevTier;
+                            return renderScheduleChromeField(token, `${block.key}-${gi}-${ci}-${resolvedKey}`, tierBreak);
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <div
+                key={block.key}
+                data-schedule-layout-block="secondary_summary"
+                data-block-key={block.key}
+                className="flex flex-wrap gap-2 rounded-lg border border-dashed border-admin-border/35 bg-alloy-stone/[0.03] px-2 py-1.5 sm:px-2.5"
+              >
+                {block.fields.map((token, ci) => {
+                  const prevResolvedKey = ci > 0 ? resolveScheduleOverviewRowFieldKey(block.fields[ci - 1]!) : null;
+                  const resolvedKey = resolveScheduleOverviewRowFieldKey(token);
+                  const prevTier = prevResolvedKey != null ? getScheduleOverviewFieldTier(prevResolvedKey) : null;
+                  const tier = getScheduleOverviewFieldTier(resolvedKey);
+                  const tierBreak = ci > 0 && prevTier != null && tier !== prevTier;
+                  return renderScheduleChromeField(token, `${block.key}-ss-${ci}-${resolvedKey}`, tierBreak);
+                })}
+              </div>
+            );
+          })}
+        </div>
+      ) : scheduleOverviewRows && scheduleOverviewRows.length > 0 && entityType === "schedules" ? (
         <div
           className="mb-3 rounded-lg border border-admin-border/40 bg-white/90 px-2 py-2 shadow-sm sm:px-2.5"
           data-schedule-overview-rows="true"
+          data-schedule-layout-version="1"
         >
           <p className="px-0.5 pb-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-alloy-forge/70">
             Visit details
@@ -689,27 +792,7 @@ export default function EntityDrawerOverview({
                   const tier = getScheduleOverviewFieldTier(resolvedKey);
                   const prevTier = prevResolvedKey != null ? getScheduleOverviewFieldTier(prevResolvedKey) : null;
                   const tierBreak = ci > 0 && prevTier != null && tier !== prevTier;
-                  if (resolvedKey === "_contact_email" && !shouldShowScheduleContactEmailRow(record)) {
-                    return null;
-                  }
-                  let field = fieldIndex.get(resolvedKey);
-                  if (!field) {
-                    field = {
-                      key: resolvedKey,
-                      label: scheduleOverviewRowTokenLabel(token),
-                      span: 1,
-                      renderHint: "text",
-                      editable: false,
-                    };
-                  }
-                  const groupClass = tierBreak
-                    ? "min-w-0 mt-3 border-t border-alloy-stone/15 pt-3 sm:mt-0 sm:border-t-0 sm:border-l sm:border-alloy-stone/25 sm:pt-0 sm:pl-3"
-                    : "min-w-0";
-                  return (
-                    <div key={`${ri}-${ci}-${resolvedKey}`} className={groupClass}>
-                      {renderOverviewField(field, { row: true, scheduleFieldTier: tier })}
-                    </div>
-                  );
+                  return renderScheduleChromeField(token, `${ri}-${ci}-${resolvedKey}`, tierBreak);
                 })}
               </div>
             ))}

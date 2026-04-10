@@ -74,6 +74,7 @@ import {
     type PaymentRowLike,
 } from "@/lib/admin/jobPaymentSummary";
 import { useRecordChromeConfig } from "@/hooks/useRecordChromeConfig";
+import { getSectionOrderFromScheduleLayoutBlocks } from "@/lib/recordChrome/scheduleLayoutConfig";
 import { applyOverviewSectionOrder } from "@/lib/recordChrome/types";
 
 function dispatchAfterPaymentRun(jobId: string, scheduleId: string | null) {
@@ -4938,7 +4939,15 @@ export default function AdminEntityDrawer() {
                 (a, b) => schedRank(a.key) - schedRank(b.key) || a.key.localeCompare(b.key)
             );
         }
-        const scheduleOrder = recordChromeSchedule.layout?.config_json?.overview_section_order;
+        const layoutJson = recordChromeSchedule.layout?.config_json;
+        const fromBlocks =
+            drawer.type === "schedules" ? getSectionOrderFromScheduleLayoutBlocks(layoutJson?.layout_blocks) : null;
+        const scheduleOrder =
+            drawer.type === "schedules"
+                ? fromBlocks?.length
+                    ? fromBlocks
+                    : layoutJson?.overview_section_order
+                : undefined;
         if (drawer.type === "schedules" && scheduleOrder?.length) {
             overviewSections = applyOverviewSectionOrder(overviewSections, scheduleOrder);
         }
@@ -7301,6 +7310,7 @@ export default function AdminEntityDrawer() {
                                 customSectionContent={overviewCustomContent}
                                 overviewSectionsOverride={configDrivenOverviewSections.length > 0 ? configDrivenOverviewSections : undefined}
                                 scheduleOverviewRows={recordChromeSchedule.layout?.config_json?.overview_rows}
+                                scheduleRecordLayout={recordChromeSchedule.layout?.config_json ?? null}
                                 selectOptionsByFieldKey={overviewSelectOptionsByFieldKey}
                                 isEditing={isEditing}
                                 formData={formData}
@@ -7319,6 +7329,14 @@ export default function AdminEntityDrawer() {
                                 data={entityDrawerOverviewData}
                                 customSectionContent={overviewCustomContent}
                                 overviewSectionsOverride={configDrivenOverviewSections.length > 0 ? configDrivenOverviewSections : undefined}
+                                scheduleOverviewRows={
+                                    drawer.type === "schedules"
+                                        ? recordChromeSchedule.layout?.config_json?.overview_rows
+                                        : undefined
+                                }
+                                scheduleRecordLayout={
+                                    drawer.type === "schedules" ? (recordChromeSchedule.layout?.config_json ?? null) : undefined
+                                }
                                 selectOptionsByFieldKey={overviewSelectOptionsByFieldKey}
                                 isEditing={isEditing}
                                 formData={formData}

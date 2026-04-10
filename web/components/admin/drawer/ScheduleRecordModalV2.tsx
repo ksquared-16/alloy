@@ -4,6 +4,7 @@ import type { CSSProperties, ReactNode } from "react";
 import EntityDrawerOverview from "@/components/admin/entity/EntityDrawerOverview";
 import type { StatusDefOption } from "@/components/admin/entity/EntityDrawerOverview";
 import type { EntityDrawerSectionConfig, EntityPresentationType } from "@/lib/entityPresentation";
+import type { RecordLayoutConfigJson } from "@/lib/recordChrome/types";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
 
 /** Aligns token shell with JobRecordModalV2 so job + schedule records feel like one system. */
@@ -21,8 +22,10 @@ export default function ScheduleRecordModalV2(props: {
     data: Record<string, unknown> | null;
     customSectionContent?: Record<string, ReactNode>;
     overviewSectionsOverride?: EntityDrawerSectionConfig[];
-    /** From `record_layouts.config_json.overview_rows` (schedule entity). */
+    /** From `record_layouts.config_json.overview_rows` (schedule entity, v1). */
     scheduleOverviewRows?: string[][];
+    /** Full `record_layouts.config_json` — v2 `layout_blocks` when present. */
+    scheduleRecordLayout?: RecordLayoutConfigJson | null;
     selectOptionsByFieldKey?: Record<string, { value: string; label: string }[]>;
     isEditing?: boolean;
     formData?: Record<string, unknown>;
