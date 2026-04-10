@@ -1,5 +1,20 @@
 import type { CSSProperties } from "react";
-import { neutral, derived, brand } from "@/styles/tokens/colors";
+import { neutral, derived, brand, palette } from "@/styles/tokens/colors";
+
+/**
+ * Context-agnostic controls: primary actions use Midnight Forge (“Midnight Blue” in brand docs).
+ * Exception / attention-only actions use Juniper Ember (Amber). Do not bind these to `--d-brand`.
+ */
+export const adminWorkspaceActionStyle: CSSProperties = {
+    ["--admin-action-primary-bg" as string]: palette.midnightForge,
+    ["--admin-action-primary-fg" as string]: "#ffffff",
+    ["--admin-action-secondary-border" as string]: derived.border,
+    ["--admin-action-secondary-bg" as string]: neutral.surface,
+    ["--admin-action-secondary-fg" as string]: neutral.textPrimary,
+    ["--admin-action-tertiary-fg" as string]: derived.textSecondary,
+    ["--admin-action-exception-bg" as string]: brand.accent,
+    ["--admin-action-exception-fg" as string]: "#ffffff",
+};
 
 /**
  * Single source for the Admin V2 workspace shell CSS variable contract (`--d-*`).
@@ -7,6 +22,7 @@ import { neutral, derived, brand } from "@/styles/tokens/colors";
  * overrides on top of this base (see `contextStyle.mergeOperationalVisualTokens`).
  */
 export const departmentWorkspaceShellBaseStyle: CSSProperties = {
+    ...adminWorkspaceActionStyle,
     backgroundColor: "transparent",
     color: neutral.textPrimary,
     ["--d-text-primary" as string]: neutral.textPrimary,

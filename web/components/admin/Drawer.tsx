@@ -80,17 +80,17 @@ export default function Drawer({
     const isV2 = variant === "adminV2";
     const isModal = isV2 && presentation === "modal";
     const cleaningRecordModalTone = isModal && recordModalTone === "cleaning-v2";
-    const leftAccent = accentColor ?? (isV2 ? brand.primary : undefined);
+    const leftAccent = accentColor ?? (isV2 ? palette.midnightForge : undefined);
 
     const panelStyle: CSSProperties = isModal
         ? {
               zIndex: zIndexPanel,
               backgroundColor: cleaningRecordModalTone
-                  ? "color-mix(in srgb, #ffffff 96%, rgba(0, 69, 140, 0.028))"
+                  ? "color-mix(in srgb, #ffffff 94%, var(--vc-drawer-body-veil, #f6f8fc))"
                   : neutral.surface,
               color: neutral.textPrimary,
               borderColor: cleaningRecordModalTone
-                  ? "color-mix(in srgb, rgba(39, 63, 82, 0.09) 70%, rgba(0, 69, 140, 0.08))"
+                  ? "color-mix(in srgb, rgba(39, 63, 82, 0.1) 82%, var(--vc-label-accent, rgba(39, 63, 82, 0.08)) 18%)"
                   : derived.border,
               boxShadow: cleaningRecordModalTone
                   ? "0 12px 40px rgba(39, 63, 82, 0.1), 0 2px 8px rgba(39, 63, 82, 0.04)"
@@ -112,7 +112,7 @@ export default function Drawer({
                         borderColor: derived.border,
                         borderLeftWidth: 4,
                         borderLeftStyle: "solid",
-                        borderLeftColor: leftAccent ?? brand.primary,
+                        borderLeftColor: leftAccent ?? palette.midnightForge,
                     }
                   : accentColor
                     ? { borderLeftWidth: 4, borderLeftStyle: "solid", borderLeftColor: accentColor }
@@ -123,7 +123,7 @@ export default function Drawer({
         isModal && isV2
             ? cleaningRecordModalTone
                 ? {
-                      background: `radial-gradient(ellipse 120% 80% at 50% -10%, color-mix(in srgb, ${palette.riverStone} 92%, rgba(0, 69, 140, 0.04)) 0%, transparent 55%), linear-gradient(180deg, color-mix(in srgb, ${palette.riverStone} 97%, rgba(0, 162, 131, 0.025)) 0%, color-mix(in srgb, ${palette.riverStone} 91%, ${derived.canvasFieldDepth}) 48%, color-mix(in srgb, ${palette.riverStone} 94%, rgba(0, 69, 140, 0.03)) 100%)`,
+                      background: `radial-gradient(ellipse 120% 80% at 50% -10%, color-mix(in srgb, var(--vc-drawer-body-veil) 96%, transparent) 0%, transparent 55%), linear-gradient(180deg, var(--vc-drawer-body-veil) 0%, color-mix(in srgb, var(--vc-drawer-body-veil) 88%, ${derived.canvasFieldDepth}) 52%, color-mix(in srgb, var(--vc-drawer-body-veil) 94%, ${palette.midnightForge}) 100%)`,
                       color: neutral.textPrimary,
                   }
                 : {
@@ -141,12 +141,16 @@ export default function Drawer({
                 style={
                     isV2
                         ? {
-                              backgroundColor: cleaningRecordModalTone
-                                  ? "color-mix(in srgb, #ffffff 97%, rgba(0, 69, 140, 0.03))"
-                                  : neutral.surface,
-                              borderBottomColor: cleaningRecordModalTone
-                                  ? "color-mix(in srgb, rgba(39, 63, 82, 0.08) 85%, rgba(0, 162, 131, 0.06))"
-                                  : derived.border,
+                              ...(cleaningRecordModalTone
+                                  ? {
+                                        background: "var(--vc-drawer-header-bg)",
+                                        borderBottomColor:
+                                            "color-mix(in srgb, rgba(39, 63, 82, 0.1) 78%, var(--vc-label-accent, rgba(39, 63, 82, 0.12)) 22%)",
+                                    }
+                                  : {
+                                        backgroundColor: neutral.surface,
+                                        borderBottomColor: derived.border,
+                                    }),
                           }
                         : undefined
                 }

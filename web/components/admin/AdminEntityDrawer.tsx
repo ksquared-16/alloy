@@ -5330,7 +5330,7 @@ export default function AdminEntityDrawer() {
                         key={tab}
                         type="button"
                         onClick={() => setDrawerTab(tab)}
-                        className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${drawerTab === tab ? "bg-alloy-blue text-white shadow-sm" : "text-alloy-forge/80 hover:bg-alloy-stone/50"}`}
+                        className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors adminv2-record-modal-tab ${drawerTab === tab ? "adminv2-record-modal-tab--active" : "text-alloy-forge/80 hover:bg-alloy-stone/50"}`}
                     >
                         {tabLabels[tab] ?? tab}
                     </button>

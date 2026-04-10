@@ -49,6 +49,41 @@ function chromaForAlloyFamily(family: AlloyVisualFamily): { primary: string; sec
     }
 }
 
+/** Section / header presentation — contextual only; never used for primary CTAs. */
+function buildContextualPresentationTokens(resolved: ResolvedVisualContext, strength: number): CSSProperties {
+    const { primary, secondary } = chromaForAlloyFamily(resolved.alloyFamily);
+    const fam = resolved.alloyFamily;
+    const t = Math.min(1, strength);
+
+    let labelAccent = primary;
+    if (fam === "bend_pine") labelAccent = secondary;
+    if (fam === "neutral" || fam === "midnight_blue") labelAccent = palette.midnightForge;
+
+    const washStrong = `color-mix(in srgb, #ffffff ${Math.max(0, 100 - Math.round(5 + 11 * t))}%, ${primary})`;
+    const washMid = `color-mix(in srgb, #ffffff ${Math.max(0, 100 - Math.round(2.5 + 6 * t))}%, ${primary})`;
+    const washSoft = `color-mix(in srgb, #ffffff ${Math.max(0, 100 - Math.round(1 + 3 * t))}%, ${primary})`;
+
+    const rail =
+        fam === "amber"
+            ? `color-mix(in srgb, ${primary} 48%, var(--d-border))`
+            : fam === "bend_pine"
+              ? `color-mix(in srgb, ${secondary} 52%, var(--d-border))`
+              : `color-mix(in srgb, ${primary} 45%, var(--d-border))`;
+
+    const sectionWash = `color-mix(in srgb, #ffffff 91%, ${fam === "bend_pine" ? secondary : primary} 9%)`;
+
+    return {
+        ["--vc-label-accent" as string]: labelAccent,
+        ["--vc-context-header-start" as string]: washStrong,
+        ["--vc-context-header-mid" as string]: washMid,
+        ["--vc-context-header-end" as string]: washSoft,
+        ["--vc-section-rail" as string]: rail,
+        ["--vc-section-panel-wash" as string]: sectionWash,
+        ["--vc-drawer-header-bg" as string]: `linear-gradient(102deg, ${washStrong} 0%, ${washMid} 48%, ${washSoft} 100%)`,
+        ["--vc-drawer-body-veil" as string]: `color-mix(in srgb, ${palette.riverStone} 93%, ${primary} 7%)`,
+    };
+}
+
 function mergeTokensForResolved(
     resolved: ResolvedVisualContext,
     layer: VisualContextLayer,
@@ -100,7 +135,10 @@ function mergeTokensForResolved(
     const fieldVeil = mixTowardPrimary(derived.canvasFieldWash, 0.5);
     const kpiBusiness = mixTowardSecondary(derived.kpiBandBusinessLight, 0.9);
 
+    const presentation = buildContextualPresentationTokens(resolved, strength);
+
     return {
+        ...presentation,
         ["--d-pine" as string]: pineSlot,
         ["--d-brand" as string]: brandSlot,
         ["--d-ambient-core" as string]: ambientCore,
@@ -175,6 +213,7 @@ export function recordSurfaceContextStyle(hints: VisualContextResolveHints): CSS
                   : `color-mix(in srgb, ${palette.midnightForge} ${Math.round(18 + 12 * strength)}%, ${neutral.surface})`;
 
     return {
+        ...departmentWorkspaceShellBaseStyle,
         ...merged,
         ["--vc-record-rim" as string]: rim,
     };

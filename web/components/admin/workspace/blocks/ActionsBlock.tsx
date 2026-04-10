@@ -73,8 +73,8 @@ export function ActionsBlock({
                         href={hrefFor(a, ctx)}
                         className={
                             a.variant === "primary"
-                                ? "inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md bg-alloy-blue text-white hover:opacity-90"
-                                : "inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-admin-border text-alloy-midnight hover:bg-alloy-stone/30"
+                                ? "inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md hover:opacity-92 adminv2-ws-btn-primary-solid"
+                                : "inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md border border-admin-border text-alloy-midnight hover:bg-alloy-stone/30 adminv2-ws-btn-secondary-outline"
                         }
                     >
                         {a.label}

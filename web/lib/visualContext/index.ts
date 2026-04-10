@@ -29,5 +29,5 @@ export {
     recordSurfaceContextStyle,
     alloyFamilyToWorkspaceTileTone,
 } from "./contextStyle";
-export { departmentWorkspaceShellBaseStyle } from "./shellBaseTokens";
+export { adminWorkspaceActionStyle, departmentWorkspaceShellBaseStyle } from "./shellBaseTokens";
 export { laneKeyToVisualBias } from "./accentFamily";

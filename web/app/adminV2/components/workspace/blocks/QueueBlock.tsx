@@ -320,10 +320,12 @@ export default function QueueBlock({ queue, onAction, variant = "primary", surfa
             style={{
               fontSize: 11,
               fontWeight: 600,
-              color: brand.primary,
+              color: derived.textSecondary,
               background: "none",
               border: "none",
               cursor: "pointer",
+              textDecoration: "underline",
+              textUnderlineOffset: "2px",
             }}
           >
             {queue.viewAllLabel ?? "View all"}
@@ -369,8 +371,8 @@ export default function QueueBlock({ queue, onAction, variant = "primary", surfa
                     padding: "3px 8px",
                     borderRadius: 6,
                     border: `1px solid ${derived.border}`,
-                    background: "transparent",
-                    color: brand.primary,
+                    background: neutral.surface,
+                    color: neutral.textPrimary,
                     cursor: "pointer",
                   }}
                 >

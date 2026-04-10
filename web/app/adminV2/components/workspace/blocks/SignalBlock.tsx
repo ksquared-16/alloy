@@ -102,15 +102,13 @@ export default function SignalBlock({ signals, onAction, maxVisible = 5, surface
                 <button
                   key={a.id}
                   type="button"
+                  className="adminv2-ws-btn-primary-solid"
                   onClick={() => onAction({ type: "signal.action", signalId: s.id, actionId: a.id })}
                   style={{
                     fontSize: 12,
                     fontWeight: 600,
                     padding: "4px 10px",
                     borderRadius: 6,
-                    border: `1px solid ${derived.border}`,
-                    background: brand.primary,
-                    color: neutral.surface,
                     cursor: "pointer",
                   }}
                 >

@@ -152,11 +152,19 @@
   flex-shrink: 0;
   border: 1px solid color-mix(in srgb, var(--d-border) 88%, transparent);
   border-radius: 10px;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, #ffffff 96%, var(--d-surface)) 0%,
-    var(--ws-dept-surface-solid) 100%
-  );
+  /* Full-width contextual band: left→right gradient so the header reads as one surface */
+  background:
+    linear-gradient(
+      108deg,
+      var(--vc-context-header-start) 0%,
+      var(--vc-context-header-mid) 50%,
+      var(--vc-context-header-end) 100%
+    ),
+    linear-gradient(
+      180deg,
+      color-mix(in srgb, #ffffff 96%, var(--d-surface)) 0%,
+      var(--ws-dept-surface-solid) 100%
+    );
   box-shadow:
     var(--d-kpi-band-shadow),
     0 1px 3px rgba(39, 63, 82, 0.06),
@@ -226,7 +234,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--d-pine);
+  color: var(--vc-label-accent, var(--d-pine));
   margin: 0 0 1px;
 }
 
@@ -238,7 +246,7 @@
   font-weight: 800;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: color-mix(in srgb, var(--d-muted) 88%, var(--d-pine));
+  color: color-mix(in srgb, var(--d-muted) 82%, var(--vc-label-accent, var(--d-pine)));
   margin: 0 0 3px;
   line-height: 1.2;
 }
@@ -501,9 +509,9 @@
   height: auto;
   padding: 4px 8px;
   border-radius: 5px;
-  border: 1px solid color-mix(in srgb, var(--d-brand) 35%, var(--d-border));
-  background: var(--d-brand);
-  color: var(--d-surface);
+  border: 1px solid color-mix(in srgb, var(--admin-action-primary-bg) 35%, var(--d-border));
+  background: var(--admin-action-primary-bg);
+  color: var(--admin-action-primary-fg);
   cursor: pointer;
   line-height: 1.15;
   white-space: nowrap;
@@ -1798,13 +1806,14 @@
   padding: 12px 14px 14px;
   margin: 8px 10px 10px 8px;
   border-radius: 9px;
-  border: 1px solid color-mix(in srgb, var(--d-pine) 20%, var(--d-border));
-  border-left: 3px solid var(--d-pine);
+  border: 1px solid color-mix(in srgb, var(--vc-section-rail, var(--d-pine)) 28%, var(--d-border));
+  border-left: 3px solid var(--vc-section-rail, var(--d-pine));
+  border-top: 1px solid color-mix(in srgb, var(--vc-label-accent, var(--d-pine)) 12%, transparent);
   background: linear-gradient(
     165deg,
     color-mix(in srgb, #ffffff 93%, var(--d-surface)) 0%,
     color-mix(in srgb, #ffffff 86%, var(--d-panel)) 46%,
-    color-mix(in srgb, var(--d-pine) 7%, var(--d-surface)) 100%
+    var(--vc-section-panel-wash, color-mix(in srgb, var(--d-pine) 7%, var(--d-surface))) 100%
   );
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.82),
@@ -1851,7 +1860,7 @@
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 button.adminv2-ws-dept-rollup-card-hit:focus-visible,
 [data-ws-surface="record"].adminv2-ws-record-v2 button.adminv2-ws-dept-rollup-card-hit:focus-visible,
 [data-ws-surface="company"].adminv2-ws-company-v2 button.adminv2-ws-dept-rollup-card-hit:focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--d-brand) 55%, var(--d-border));
+  outline: 2px solid color-mix(in srgb, var(--admin-action-primary-bg) 50%, var(--d-border));
   outline-offset: 2px;
 }
 
@@ -4001,18 +4010,18 @@
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-actions-rail-primary,
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-actions-rail-primary,
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-actions-rail-primary {
-  border: 1px solid color-mix(in srgb, var(--d-brand) 40%, var(--d-border));
-  background: var(--d-brand);
-  color: var(--d-surface);
+  border: 1px solid color-mix(in srgb, var(--admin-action-primary-bg) 35%, var(--d-border));
+  background: var(--admin-action-primary-bg);
+  color: var(--admin-action-primary-fg);
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-actions-rail-secondary,
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-actions-rail-secondary,
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-actions-rail-secondary,
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-actions-rail-secondary {
-  border: 1px solid var(--d-border);
-  background: color-mix(in srgb, #ffffff 94%, var(--d-surface));
-  color: var(--d-brand);
+  border: 1px solid var(--admin-action-secondary-border);
+  background: var(--admin-action-secondary-bg);
+  color: var(--admin-action-secondary-fg);
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-actions-rail-overflow,
@@ -5100,16 +5109,16 @@
   letter-spacing: 0.02em;
   padding: 4px 7px;
   border-radius: 4px;
-  border: 1px solid color-mix(in srgb, var(--d-brand) 35%, var(--d-border));
-  background: var(--d-brand);
-  color: var(--d-surface);
+  border: 1px solid color-mix(in srgb, var(--admin-action-primary-bg) 35%, var(--d-border));
+  background: var(--admin-action-primary-bg);
+  color: var(--admin-action-primary-fg);
   overflow: visible;
   text-overflow: clip;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-signal-card .adminv2-ws-signal-actions button:hover {
-  border-color: var(--d-brand);
-  background: color-mix(in srgb, var(--d-brand) 90%, #000);
+  border-color: var(--admin-action-primary-bg);
+  background: color-mix(in srgb, var(--admin-action-primary-bg) 90%, #000);
   filter: brightness(1.02);
 }
 
@@ -5145,16 +5154,16 @@
   letter-spacing: 0.02em;
   padding: 4px 7px;
   border-radius: 4px;
-  border: 1px solid color-mix(in srgb, var(--d-brand) 35%, var(--d-border));
-  background: var(--d-brand);
-  color: var(--d-surface);
+  border: 1px solid color-mix(in srgb, var(--admin-action-primary-bg) 35%, var(--d-border));
+  background: var(--admin-action-primary-bg);
+  color: var(--admin-action-primary-fg);
   overflow: visible;
   text-overflow: clip;
 }
 
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-signal-card .adminv2-ws-signal-actions button:hover {
-  border-color: var(--d-brand);
-  background: color-mix(in srgb, var(--d-brand) 90%, #000);
+  border-color: var(--admin-action-primary-bg);
+  background: color-mix(in srgb, var(--admin-action-primary-bg) 90%, #000);
   filter: brightness(1.02);
 }
 
@@ -5690,11 +5699,12 @@
   section[data-entity-section]:has(.entity-drawer-section-toggle[aria-expanded="true"]) {
   background: linear-gradient(
     90deg,
-    color-mix(in srgb, rgba(0, 69, 140, 0.11) 55%, rgba(255, 255, 255, 0.08)) 0%,
-    color-mix(in srgb, rgba(255, 255, 255, 0.55) 90%, rgba(0, 69, 140, 0.04)) 28%,
-    color-mix(in srgb, rgba(255, 255, 255, 0.42) 88%, rgba(0, 162, 131, 0.035)) 100%
+    color-mix(in srgb, var(--vc-label-accent, rgba(39, 63, 82, 0.85)) 9%, rgba(255, 255, 255, 0.08)) 0%,
+    color-mix(in srgb, rgba(255, 255, 255, 0.55) 90%, var(--vc-label-accent, rgba(39, 63, 82, 0.85)) 4%) 28%,
+    color-mix(in srgb, rgba(255, 255, 255, 0.42) 88%, var(--vc-label-accent, rgba(39, 63, 82, 0.85)) 3%) 100%
   );
-  box-shadow: inset 3px 0 0 rgba(0, 69, 140, 0.38), inset 0 0 0 1px color-mix(in srgb, rgba(0, 69, 140, 0.16) 40%, rgba(39, 63, 82, 0.07)),
+  box-shadow: inset 3px 0 0 var(--vc-record-rim, rgba(39, 63, 82, 0.35)),
+    inset 0 0 0 1px color-mix(in srgb, var(--vc-label-accent, rgba(39, 63, 82, 0.85)) 14%, rgba(39, 63, 82, 0.07)),
     0 3px 14px rgba(39, 63, 82, 0.06);
 }
 
@@ -5772,14 +5782,43 @@
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
   background: linear-gradient(
       180deg,
-      color-mix(in srgb, #f1f5f8 94%, rgba(0, 69, 140, 0.055)) 0%,
-      color-mix(in srgb, #e8ecf1 92%, rgba(0, 162, 131, 0.05)) 55%,
-      color-mix(in srgb, #e2e8ee 93%, rgba(0, 69, 140, 0.04)) 100%
+      color-mix(in srgb, var(--vc-drawer-body-veil, #f6f8fc) 96%, transparent) 0%,
+      color-mix(in srgb, var(--vc-drawer-body-veil, #f6f8fc) 88%, rgba(39, 63, 82, 0.06)) 52%,
+      color-mix(in srgb, var(--vc-drawer-body-veil, #f6f8fc) 90%, rgba(39, 63, 82, 0.05)) 100%
     )
     !important;
 }
 
 [data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2-top] > p:first-of-type {
-  color: color-mix(in srgb, rgba(39, 63, 82, 0.58) 65%, rgba(0, 69, 140, 0.28)) !important;
+  color: color-mix(in srgb, rgba(39, 63, 82, 0.58) 72%, var(--vc-label-accent, rgba(39, 63, 82, 0.2)) 28%) !important;
   letter-spacing: 0.13em !important;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Global workspace CTAs — primary = Midnight Forge; Amber = exception only   */
+/* -------------------------------------------------------------------------- */
+.adminv2-ws-btn-primary-solid {
+  background: var(--admin-action-primary-bg, #273f52);
+  color: var(--admin-action-primary-fg, #ffffff);
+  border: 1px solid color-mix(in srgb, var(--admin-action-primary-bg, #273f52) 38%, var(--admin-action-secondary-border, rgba(39, 63, 82, 0.18)));
+  box-shadow: 0 1px 2px rgba(39, 63, 82, 0.08);
+}
+
+.adminv2-ws-btn-secondary-outline {
+  border-color: var(--admin-action-secondary-border, rgba(39, 63, 82, 0.18));
+  background: var(--admin-action-secondary-bg, #ffffff);
+  color: var(--admin-action-secondary-fg, #273f52);
+}
+
+.adminv2-ws-btn-exception-solid {
+  background: var(--admin-action-exception-bg);
+  color: var(--admin-action-exception-fg);
+  border: 1px solid color-mix(in srgb, var(--admin-action-exception-bg) 45%, var(--admin-action-secondary-border));
+}
+
+/* Record modal tabs — primary selection uses global action color, not Alloy Blue */
+[data-adminv2-record-modal] .adminv2-record-modal-tab--active {
+  background: var(--admin-action-primary-bg, #273f52);
+  color: var(--admin-action-primary-fg, #ffffff);
+  box-shadow: 0 1px 3px rgba(39, 63, 82, 0.12);
 }
