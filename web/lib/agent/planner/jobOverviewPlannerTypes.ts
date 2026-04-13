@@ -5,6 +5,9 @@
 
 export const JOB_OVERVIEW_PLANNER_VERSION = 1 as const;
 
+/** How person/contact language should be read (see ai-agent-person-contact-overview-doctrine-v1.md). */
+export type ContactSemantics = "none" | "identity" | "channels" | "mixed";
+
 export type CatalogBandKey =
     | "summary"
     | "people"
@@ -57,6 +60,8 @@ export type ParsedJobOverviewIntent = {
     show_service_details: boolean;
     /** Request mentions phone/email (or similar) which have no canonical overview keys. */
     referenced_unreachable_contact_channels: boolean;
+    /** Disambiguation for “contact” / “contact details” utterances. */
+    contact_semantics: ContactSemantics;
 };
 
 export type ResolvedFieldRef = {

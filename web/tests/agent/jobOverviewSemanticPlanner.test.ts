@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+    classifyContactSemantics,
     detectJobOverviewIntentFlags,
     normalizeJobOverviewRequestText,
     planJobOverviewLayoutRequest,
@@ -11,6 +12,7 @@ import {
     getOverviewLayoutConfigStoredVersion,
     parseOverviewLayoutConfigStrict,
 } from "@/lib/rrs/overview/overviewLayoutConfigStrict";
+import { parseOverviewLayoutConfig } from "@/lib/rrs/overview/overviewLayoutConfigModel";
 import { getDefaultOverviewLayoutConfig } from "@/lib/rrs/overview/overviewLayoutV0";
 
 function storedConfig(version: number, layout = getDefaultOverviewLayoutConfig()) {
@@ -27,6 +29,20 @@ function storedConfig(version: number, layout = getDefaultOverviewLayoutConfig()
             : {}),
     };
 }
+
+describe("job overview semantic planner — contact semantics", () => {
+    it("classifies identity, channels, mixed, none", () => {
+        const n = normalizeJobOverviewRequestText;
+        expect(classifyContactSemantics(n("please show phone and email"))).toBe("channels");
+        expect(classifyContactSemantics(n("show the main contact"))).toBe("identity");
+        expect(
+            classifyContactSemantics(
+                n("show the main contact, their phone, email, address, and next service date")
+            )
+        ).toBe("mixed");
+        expect(classifyContactSemantics(n("hide the financial band"))).toBe("none");
+    });
+});
 
 describe("job overview semantic planner — intent flags", () => {
     it("detects hide financial and service-higher phrasing", () => {
@@ -170,6 +186,25 @@ describe("job overview semantic planner — proposal assembly", () => {
         expect(bands.find((b) => b.band_key === "people")?.enabled).toBe(true);
     });
 
+    it("customer-focused second pass is a no-op when layout already matches template", () => {
+        const first = planJobOverviewLayoutRequest(
+            "Make the overview more customer-focused",
+            storedConfig(1)
+        );
+        expect(first.ok).toBe(true);
+        if (!first.ok) return;
+        const layout = parseOverviewLayoutConfig(first.config);
+        const second = planJobOverviewLayoutRequest(
+            "Make the overview more customer-focused",
+            storedConfig(first.expected_config_version, layout)
+        );
+        expect(second.ok).toBe(true);
+        if (!second.ok) return;
+        expect(second.effective_layout_change).toBe(false);
+        expect(second.resolution.relationship_groups_touched).toBe(false);
+        expect(second.rationale.some((l) => /already matches|no layout churn/i.test(l))).toBe(true);
+    });
+
     it("composite: contact, phone/email gaps, address, service line, next service", () => {
         const utterance =
             "Show the main contact, their phone, email, address, what service they got, and next service date";
@@ -208,9 +243,11 @@ describe("job overview semantic planner — proposal assembly", () => {
         const r = planJobOverviewLayoutRequest("Please show phone and email", storedConfig(3));
         expect(r.ok).toBe(true);
         if (!r.ok) return;
+        expect(r.parsed_intent.contact_semantics).toBe("channels");
+        expect(r.parsed_intent.show_main_contact).toBe(false);
         expect(r.effective_layout_change).toBe(false);
         expect(r.resolution.unresolved_targets.length).toBeGreaterThanOrEqual(1);
-        expect(r.rationale.some((line) => /No layout keys changed|Unresolved/i.test(line))).toBe(true);
+        expect(r.rationale.some((line) => /No layout keys changed|Unresolved|channels/i.test(line))).toBe(true);
     });
 
     it("unsupported phrase alone does not invent fields", () => {
@@ -344,6 +381,8 @@ describe("job overview semantic planner — editorial policy (target requests)",
         expect(r.ok).toBe(true);
         if (!r.ok) return;
         strictOk(r.config);
+        expect(r.parsed_intent.contact_semantics).toBe("mixed");
+        expect(r.rationale.some((l) => /mixed \(identity \+ channels\)/i.test(l))).toBe(true);
         expect(r.resolution.unresolved_targets.map((u) => u.concept_id).sort()).toEqual(["email", "phone"]);
         const hk = r.config.header_keys as string[];
         expect(hk.includes("_location_label")).toBe(false);
@@ -370,10 +409,16 @@ describe("job overview semantic planner — editorial policy (target requests)",
         strictOk(r.config);
         expect(r.parsed_intent.customer_focused).toBe(true);
         const hk = r.config.header_keys as string[];
+        expect(hk.slice(0, 3)).toEqual(["title", "_customer_name", "_primary_person_name"]);
         expect(hk.indexOf("title")).toBe(0);
         expect(hk.includes("_customer_name")).toBe(true);
         expect(hk.includes("_primary_person_name")).toBe(true);
         expect(r.config.relationship_group_keys).toEqual(["primary_customer_person", "customer_account"]);
+        expect(
+            r.rationale.some((l) =>
+                /relationship_group_keys|people \+ relationships|identity strip/i.test(l)
+            )
+        ).toBe(true);
     });
 
     it("show contact details higher", () => {
@@ -381,10 +426,12 @@ describe("job overview semantic planner — editorial policy (target requests)",
         expect(r.ok).toBe(true);
         if (!r.ok) return;
         strictOk(r.config);
+        expect(r.parsed_intent.contact_semantics).toBe("identity");
         expect(r.parsed_intent.contact_details_higher).toBe(true);
         const order = (r.config.bands as { band_key: string }[]).map((b) => b.band_key);
         expect(order.indexOf("people")).toBe(order.indexOf("summary") + 1);
         expect((r.config.header_keys as string[]).includes("_primary_person_name")).toBe(false);
+        expect(r.rationale.some((l) => /band order per doctrine|not the header ribbon/i.test(l))).toBe(true);
     });
 
     it("put service details higher", () => {
@@ -396,6 +443,18 @@ describe("job overview semantic planner — editorial policy (target requests)",
         const order = (r.config.bands as { band_key: string }[]).map((b) => b.band_key);
         expect(order.indexOf("service_property")).toBe(order.indexOf("summary") + 1);
         expect((r.config.header_keys as string[]).includes("service_key")).toBe(false);
+    });
+
+    it("please show phone and email (channels only, unresolved)", () => {
+        const r = planJobOverviewLayoutRequest("please show phone and email", storedConfig(3));
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        strictOk(r.config);
+        expect(r.parsed_intent.contact_semantics).toBe("channels");
+        expect(r.parsed_intent.show_main_contact).toBe(false);
+        expect(r.resolution.unresolved_targets.map((u) => u.concept_id).sort()).toEqual(["email", "phone"]);
+        expect(r.effective_layout_change).toBe(false);
+        expect(r.rationale.some((l) => /channels \(phone\/email\)/i.test(l))).toBe(true);
     });
 });
 

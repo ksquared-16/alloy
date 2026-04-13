@@ -6,6 +6,7 @@
 import type {
     AmbiguityMarker,
     CatalogBandKey,
+    ContactSemantics,
     DiffSummary,
     JobOverviewPlannerResult,
     JobOverviewResolutionCatalog,
@@ -81,6 +82,28 @@ export function resolveCatalogFieldsInText(
         byKey.set(h.field_key, h);
     }
     return [...byKey.values()];
+}
+
+/**
+ * Person/contact/channel disambiguation (doctrine v1).
+ * - identity: main/primary contact, contact details/info, “their contact”, or show+contact without channel words
+ * - channels: phone/email etc. without identity phrasing
+ * - mixed: both
+ */
+export function classifyContactSemantics(normalizedText: string): ContactSemantics {
+    const ch = /\b(phone|phones|telephone|mobile|cell|email|e-mail|e mail)\b/.test(normalizedText);
+    const id =
+        /\b(main\s+contact|primary\s+contact|primary\s+person)\b/.test(normalizedText) ||
+        /\bcontact\s+details\b/.test(normalizedText) ||
+        /\bcontact\s+info\b/.test(normalizedText) ||
+        /\btheir\s+contact\b/.test(normalizedText) ||
+        (/\bshow\b/.test(normalizedText) &&
+            /\bcontact\b/.test(normalizedText) &&
+            !/\b(phone|phones|telephone|mobile|cell|email|e-mail|e mail)\b/.test(normalizedText));
+    if (id && ch) return "mixed";
+    if (id) return "identity";
+    if (ch) return "channels";
+    return "none";
 }
 
 /** Phrases that match capability gaps (no config keys to emit). */
@@ -161,13 +184,26 @@ export function detectJobOverviewIntentFlags(normalizedText: string): ParsedJobO
             normalizedText
         );
 
-    const show_main_contact =
+    const contact_semantics = classifyContactSemantics(normalizedText);
+
+    let show_main_contact =
         /\bmain\s+contact\b/.test(normalizedText) ||
         /\bprimary\s+contact\b/.test(normalizedText) ||
         /\bprimary\s+person\b/.test(normalizedText) ||
         /\bcontact\s+details\b/.test(normalizedText) ||
         /\bcontact\s+info\b/.test(normalizedText) ||
+        /\btheir\s+contact\b/.test(normalizedText) ||
         (/\bshow\b/.test(normalizedText) && /\bcontact\b/.test(normalizedText));
+
+    /** Channel-only utterances (“show phone”) are not identity; keep person flags off unless named above. */
+    if (
+        contact_semantics === "channels" &&
+        !/\b(main\s+contact|primary\s+contact|primary\s+person|contact\s+details|contact\s+info|their\s+contact)\b/.test(
+            normalizedText
+        )
+    ) {
+        show_main_contact = false;
+    }
 
     const show_address =
         /\b(address|service address|location)\b/.test(normalizedText) &&
@@ -215,6 +251,7 @@ export function detectJobOverviewIntentFlags(normalizedText: string): ParsedJobO
         show_next_service,
         show_service_details,
         referenced_unreachable_contact_channels,
+        contact_semantics,
     };
 }
 
@@ -279,6 +316,78 @@ function addHeaderIfMissing(layout: OverviewLayoutConfigV0, key: string): boolea
     if (layout.header_keys.includes(key)) return false;
     layout.header_keys.push(key);
     return true;
+}
+
+/** Identity strip ordering for customer-focused template (title → account → primary → remainder). */
+export function computeCustomerFocusedHeaderKeys(headerKeys: string[]): string[] {
+    const nextHeader: string[] = [];
+    const rest = [...headerKeys];
+    const take = (k: string) => {
+        const i = rest.indexOf(k);
+        if (i >= 0) {
+            rest.splice(i, 1);
+            nextHeader.push(k);
+        }
+    };
+    take("title");
+    take("_customer_name");
+    take("_primary_person_name");
+    for (const k of [...rest]) {
+        if (!nextHeader.includes(k)) nextHeader.push(k);
+    }
+    return nextHeader;
+}
+
+function sortedRelationshipKeysSig(keys: string[] | undefined): string {
+    return [...(keys ?? [])].sort().join("\0");
+}
+
+/** True when layout already matches what the customer-focused block would apply (no meaningful diff). */
+function layoutMatchesCustomerFocusedTemplate(
+    layout: OverviewLayoutConfigV0,
+    catalog: JobOverviewResolutionCatalog
+): boolean {
+    const want = sortedRelationshipKeysSig([...catalog.relationship_group_keys]);
+    const have = sortedRelationshipKeysSig(layout.relationship_group_keys);
+    if (!want.length || want !== have) return false;
+
+    const people = getBand(layout, "people");
+    if (!people?.enabled) return false;
+    if (!people.items.some((it) => it.key === "_primary_person_name")) return false;
+
+    const rel = getBand(layout, "relationships");
+    if (!rel?.enabled) return false;
+
+    const summary = getBand(layout, "summary");
+    if (!summary?.enabled) return false;
+    if (!summary.items.some((it) => it.key === "_customer_name")) return false;
+
+    const expectedHeader = computeCustomerFocusedHeaderKeys(layout.header_keys);
+    if (JSON.stringify(layout.header_keys) !== JSON.stringify(expectedHeader)) return false;
+
+    return true;
+}
+
+function appendContactSemanticsDoctrineNotes(parsed: ParsedJobOverviewIntent, rationale: string[]): void {
+    switch (parsed.contact_semantics) {
+        case "identity":
+            rationale.push(
+                "Contact semantics: identity — primary person uses the people band; header stays off identity unless customer-focused template applies."
+            );
+            break;
+        case "channels":
+            rationale.push(
+                "Contact semantics: channels (phone/email) — no canonical overview system_field keys; targets stay unresolved (relationship UI / custom fields elsewhere)."
+            );
+            break;
+        case "mixed":
+            rationale.push(
+                "Contact semantics: mixed (identity + channels) — resolved person/summary fields in layout; phone/email remain unresolved until the catalog gains keys."
+            );
+            break;
+        default:
+            break;
+    }
 }
 
 function reorderBandAfterSummary(layout: OverviewLayoutConfigV0, bandKey: CatalogBandKey): void {
@@ -404,7 +513,7 @@ function applyEditorialContactHeaderPolicy(
     layout.header_keys = layout.header_keys.filter((k) => k !== "_primary_person_name");
     if (had) {
         rationale.push(
-            "Removed _primary_person_name from the header ribbon — contact stays in the people band so it is not duplicated above and in the band."
+            "Removed _primary_person_name from the header ribbon — doctrine keeps primary identity in the people band for contact-only / contact-higher requests (avoids duplicating the identity strip and the people band)."
         );
     }
 }
@@ -527,6 +636,11 @@ export function planJobOverviewLayoutRequest(
         };
     }
 
+    const rationale: string[] = [];
+    if (parsed_intent.contact_semantics !== "none") {
+        appendContactSemanticsDoctrineNotes(parsed_intent, rationale);
+    }
+
     const expected_config_version = getOverviewLayoutConfigStoredVersion(currentOverviewConfig);
     const base = parseOverviewLayoutConfig(currentOverviewConfig);
     base.bands = dedupeBands(base.bands);
@@ -535,7 +649,6 @@ export function planJobOverviewLayoutRequest(
     const beforeSnap = takeSnapshot(layout);
 
     const defaultLayout = getDefaultOverviewLayoutConfig();
-    const rationale: string[] = [];
     const bandsTouched = new Set<CatalogBandKey>();
     let relationship_groups_touched = false;
     const resolvedOutcomes: ResolvedTargetOutcome[] = [];
@@ -584,7 +697,9 @@ export function planJobOverviewLayoutRequest(
         people.enabled = true;
         reorderBandAfterSummary(layout, "people");
         bandsTouched.add("people");
-        rationale.push("Moved people (contact) band up after summary per request.");
+        rationale.push(
+            "Moved the people band immediately after summary (“contact higher” adjusts band order per doctrine, not the header ribbon)."
+        );
     }
 
     const summaryBand = ensureBand(
@@ -680,56 +795,52 @@ export function planJobOverviewLayoutRequest(
     }
 
     if (parsed_intent.customer_focused) {
-        layout.relationship_group_keys = [...catalog.relationship_group_keys];
-        relationship_groups_touched = true;
+        if (layoutMatchesCustomerFocusedTemplate(layout, catalog)) {
+            rationale.push(
+                "Customer-focused template already matches this layout (relationship_group_keys, people and relationships on, summary account name, header identity order); no layout churn."
+            );
+        } else {
+            layout.relationship_group_keys = [...catalog.relationship_group_keys];
+            relationship_groups_touched = true;
 
-        const people = ensureBand(
-            layout,
-            "people",
-            defaultLayout.bands.find((b) => b.band_key === "people")!
-        );
-        const rel = ensureBand(
-            layout,
-            "relationships",
-            defaultLayout.bands.find((b) => b.band_key === "relationships") ?? {
-                band_key: "relationships",
-                enabled: true,
-                items: [],
-            }
-        );
-        people.enabled = true;
-        rel.enabled = true;
-        addSystemItemIfMissing(people, "_primary_person_name");
-        addSystemItemIfMissing(summaryBand, "_customer_name");
+            const people = ensureBand(
+                layout,
+                "people",
+                defaultLayout.bands.find((b) => b.band_key === "people")!
+            );
+            const rel = ensureBand(
+                layout,
+                "relationships",
+                defaultLayout.bands.find((b) => b.band_key === "relationships") ?? {
+                    band_key: "relationships",
+                    enabled: true,
+                    items: [],
+                }
+            );
+            people.enabled = true;
+            rel.enabled = true;
+            addSystemItemIfMissing(people, "_primary_person_name");
+            addSystemItemIfMissing(summaryBand, "_customer_name");
 
-        const nextHeader: string[] = [];
-        const rest = [...layout.header_keys];
-        const take = (k: string) => {
-            const i = rest.indexOf(k);
-            if (i >= 0) {
-                rest.splice(i, 1);
-                nextHeader.push(k);
+            layout.header_keys = computeCustomerFocusedHeaderKeys(layout.header_keys);
+
+            bandsTouched.add("people");
+            bandsTouched.add("relationships");
+            bandsTouched.add("summary");
+            rationale.push(
+                "Customer-focused template: relationship_group_keys set to both registry groups; people + relationships bands on; header orders title → account → primary person (identity strip)."
+            );
+            if (rel.items.length === 0) {
+                rationale.push(
+                    "Relationships band has no item rows in config; relationship_group_keys still scope which relationship slices the resolver may show on the overview."
+                );
             }
-        };
-        take("title");
-        take("_customer_name");
-        take("_primary_person_name");
-        for (const k of [...rest]) {
-            if (!nextHeader.includes(k)) nextHeader.push(k);
+            resolutionFields.push({
+                phrase_matched: "customer-focused",
+                field_key: "_customer_name",
+                confidence: "medium",
+            });
         }
-        layout.header_keys = nextHeader;
-
-        bandsTouched.add("people");
-        bandsTouched.add("relationships");
-        bandsTouched.add("summary");
-        rationale.push(
-            "Customer-focused template: enabled people + relationships, both relationship groups, prioritized customer/person header keys."
-        );
-        resolutionFields.push({
-            phrase_matched: "customer-focused",
-            field_key: "_customer_name",
-            confidence: "medium",
-        });
     }
 
     applyEditorialContactHeaderPolicy(layout, parsed_intent, rationale);

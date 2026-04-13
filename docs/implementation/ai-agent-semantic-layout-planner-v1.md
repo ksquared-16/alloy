@@ -4,7 +4,7 @@
 
 **North star:** A user describes how they want a **record overview** configured in natural language; Alloy produces a **safe, reviewable proposal** that applies only through **`update_record_layout` → `record_overview_layouts`** (job, overview), with strict validation and audit as today.
 
-**Source of truth:** [overview-layout-doctrine.md](../architecture/overview-layout-doctrine.md) · [record-rendering-system-spec.md](../architecture/record-rendering-system-spec.md) · [ai-agent-record-layout-slice-v1.md](./ai-agent-record-layout-slice-v1.md) · [ai-agent-system-contract.md](../architecture/ai-agent-system-contract.md) · [configuration-doctrine.md](../architecture/configuration-doctrine.md) · [ai-agent-foundation-checkpoint.md](./ai-agent-foundation-checkpoint.md)
+**Source of truth:** [overview-layout-doctrine.md](../architecture/overview-layout-doctrine.md) · [record-rendering-system-spec.md](../architecture/record-rendering-system-spec.md) · [ai-agent-person-contact-overview-doctrine-v1.md](./ai-agent-person-contact-overview-doctrine-v1.md) (person/contact semantics, header vs people band, unresolved channels) · [ai-agent-record-layout-slice-v1.md](./ai-agent-record-layout-slice-v1.md) · [ai-agent-system-contract.md](../architecture/ai-agent-system-contract.md) · [configuration-doctrine.md](../architecture/configuration-doctrine.md) · [ai-agent-foundation-checkpoint.md](./ai-agent-foundation-checkpoint.md)
 
 ---
 
