@@ -24,6 +24,37 @@ const ALLOWED_PATCH_KEYS = [
 
 const FORBIDDEN_FOR_SYSTEM = ["org_id", "entity_type", "field_key", "field_type", "is_system"] as const;
 
+/** GET: single field_definition for current org (admin/ops). */
+export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+    const ctx = await getAdminContext();
+    if (!ctx.ok) {
+        return NextResponse.json(
+            { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
+            { status: ctx.status }
+        );
+    }
+
+    const { id } = await context.params;
+    if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+
+    const supabase = createAdminClient();
+    const { data: row, error } = await supabase
+        .from("field_definitions")
+        .select("*")
+        .eq("id", id)
+        .eq("org_id", ctx.orgId)
+        .maybeSingle();
+
+    if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    if (!row) {
+        return NextResponse.json({ error: "Field definition not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(row);
+}
+
 /** PATCH: update field_definition. For is_system=true, org_id, entity_type, field_key, field_type, is_system are immutable. Admin only. */
 export async function PATCH(
     request: NextRequest,

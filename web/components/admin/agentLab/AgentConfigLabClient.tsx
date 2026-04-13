@@ -5,8 +5,9 @@ import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import { getQueueDefinitionStoredVersion } from "@/lib/rrs/queue/queueDefinitionV1";
 import { getOverviewLayoutConfigStoredVersion } from "@/lib/rrs/overview/overviewLayoutConfigStrict";
+import { getFieldDefinitionLockTimestamp } from "@/lib/agent/v2/fieldVisibilityConfigV0";
 
-type Tab = "queue" | "layout";
+type Tab = "queue" | "layout" | "field";
 
 type WorkUnitRow = {
     id: string;
@@ -70,6 +71,20 @@ function buildLayoutStructuredOverride(config: unknown, expectedVersion: number)
     };
 }
 
+function buildFieldVisibilityStructuredOverride(fieldId: string, expectedUpdatedAt: string): Record<string, unknown> {
+    return {
+        intent_id: crypto.randomUUID(),
+        intent_version: 1,
+        intent_type: "update_field_visibility",
+        slots: {
+            target_kind: "field_definition_visibility",
+            field_definition_id: fieldId,
+            expected_updated_at: expectedUpdatedAt,
+            visibility_patch: { version: 1, is_visible_in_table: true },
+        },
+    };
+}
+
 function safeStringify(v: unknown): string {
     try {
         return JSON.stringify(v, null, 2);
@@ -106,6 +121,22 @@ export default function AgentConfigLabClient() {
     const [layoutLoadStatus, setLayoutLoadStatus] = useState<number | null>(null);
     const [layoutLoadError, setLayoutLoadError] = useState<string | null>(null);
 
+    const [fieldEntityType, setFieldEntityType] = useState("job");
+    const [fieldDefs, setFieldDefs] = useState<{ id: string; field_key?: string; label?: string | null }[]>([]);
+    const [fieldDefsLoading, setFieldDefsLoading] = useState(false);
+    const [fieldDefsError, setFieldDefsError] = useState<string | null>(null);
+    const [selectedFieldId, setSelectedFieldId] = useState("");
+    const [loadedField, setLoadedField] = useState<Record<string, unknown> | null>(null);
+    const [fieldLoadError, setFieldLoadError] = useState<string | null>(null);
+    const [fieldOverrideJson, setFieldOverrideJson] = useState(() =>
+        safeStringify(
+            buildFieldVisibilityStructuredOverride(
+                "00000000-0000-4000-8000-000000000001",
+                new Date().toISOString()
+            )
+        )
+    );
+
     const [submitting, setSubmitting] = useState(false);
     const [httpStatus, setHttpStatus] = useState<number | null>(null);
     const [responseBody, setResponseBody] = useState<unknown>(null);
@@ -121,6 +152,34 @@ export default function AgentConfigLabClient() {
         const cfg = loadedLayout.config;
         return getOverviewLayoutConfigStoredVersion(cfg);
     }, [loadedLayout]);
+
+    const fieldLockTimestamp = useMemo(() => {
+        if (!loadedField) return null;
+        return getFieldDefinitionLockTimestamp(loadedField);
+    }, [loadedField]);
+
+    const fetchFieldDefinitions = useCallback(async () => {
+        setFieldDefsLoading(true);
+        setFieldDefsError(null);
+        try {
+            const res = await fetch(
+                `/api/admin/field-definitions?entity_type=${encodeURIComponent(fieldEntityType)}`,
+                { credentials: "include" }
+            );
+            const data = (await res.json()) as { field_definitions?: { id: string; field_key?: string; label?: string | null }[]; error?: string };
+            if (!res.ok) {
+                setFieldDefsError(data.error ?? `HTTP ${res.status}`);
+                setFieldDefs([]);
+                return;
+            }
+            setFieldDefs(Array.isArray(data.field_definitions) ? data.field_definitions : []);
+        } catch (e) {
+            setFieldDefsError(e instanceof Error ? e.message : "Failed to load field definitions");
+            setFieldDefs([]);
+        } finally {
+            setFieldDefsLoading(false);
+        }
+    }, [fieldEntityType]);
 
     const fetchWorkUnits = useCallback(async () => {
         setWuLoading(true);
@@ -217,6 +276,49 @@ export default function AgentConfigLabClient() {
         void loadRecordOverviewLayout();
     }, [loadRecordOverviewLayout]);
 
+    useEffect(() => {
+        if (tab === "field") {
+            void fetchFieldDefinitions();
+        }
+    }, [tab, fetchFieldDefinitions]);
+
+    const loadFieldDetail = useCallback(async () => {
+        if (!selectedFieldId) {
+            setLoadedField(null);
+            setFieldLoadError("Select a field");
+            return;
+        }
+        setFieldLoadError(null);
+        try {
+            const res = await fetch(`/api/admin/field-definitions/${selectedFieldId}`, { credentials: "include" });
+            const data = (await res.json()) as Record<string, unknown> & { error?: string };
+            if (!res.ok) {
+                setLoadedField(null);
+                setFieldLoadError(data.error ?? `HTTP ${res.status}`);
+                return;
+            }
+            setLoadedField(data);
+        } catch (e) {
+            setLoadedField(null);
+            setFieldLoadError(e instanceof Error ? e.message : "Load failed");
+        }
+    }, [selectedFieldId]);
+
+    const fillFieldTemplateFromLoaded = useCallback(() => {
+        if (!selectedFieldId) {
+            setFieldLoadError("Select a field first");
+            return;
+        }
+        const lock =
+            loadedField != null ? getFieldDefinitionLockTimestamp(loadedField) : null;
+        if (!lock) {
+            setFieldLoadError("Load the field first — need updated_at (or created_at) for lock");
+            return;
+        }
+        setFieldOverrideJson(safeStringify(buildFieldVisibilityStructuredOverride(selectedFieldId, lock)));
+        setIds(newRequestIds());
+    }, [selectedFieldId, loadedField]);
+
     const submitQueue = async () => {
         let structured_override: unknown;
         try {
@@ -289,6 +391,42 @@ export default function AgentConfigLabClient() {
         }
     };
 
+    const submitFieldVisibility = async () => {
+        let structured_override: unknown;
+        try {
+            structured_override = JSON.parse(fieldOverrideJson) as unknown;
+        } catch (e) {
+            setResponseError(`structured_override JSON: ${e instanceof Error ? e.message : "parse error"}`);
+            setHttpStatus(null);
+            setResponseBody(null);
+            return;
+        }
+        setSubmitting(true);
+        setResponseError(null);
+        setHttpStatus(null);
+        setResponseBody(null);
+        try {
+            const res = await fetch("/api/admin/agent/v2/field-visibility", {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    request_id: ids.request_id,
+                    correlation_id: ids.correlation_id,
+                    message,
+                    structured_override,
+                }),
+            });
+            setHttpStatus(res.status);
+            const json = (await res.json()) as unknown;
+            setResponseBody(json);
+        } catch (e) {
+            setResponseError(e instanceof Error ? e.message : "Request failed");
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
     const summary = useMemo(() => {
         if (!responseBody || typeof responseBody !== "object" || responseBody === null) return null;
         const r = responseBody as Record<string, unknown>;
@@ -302,6 +440,7 @@ export default function AgentConfigLabClient() {
             result_id: exec?.result_id,
             applied_queue_definition_version: step0?.applied_queue_definition_version,
             applied_config_version: step0?.applied_config_version,
+            applied_updated_at: step0?.applied_updated_at,
             terminal_status: exec?.terminal_status,
             error_code: err?.error_code,
             error_message: err?.message,
@@ -318,9 +457,10 @@ export default function AgentConfigLabClient() {
             <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50/90 px-4 py-3 text-sm text-amber-950">
                 <strong className="font-semibold">Guardrails:</strong> Admin-only page. Server must enable{" "}
                 <code className="rounded bg-amber-100 px-1">AGENT_V0_ENABLED</code> /{" "}
-                <code className="rounded bg-amber-100 px-1">AGENT_V1_RECORD_LAYOUT_ENABLED</code> for each POST to
-                succeed. This UI does not mutate global <code className="rounded bg-amber-100 px-1">record_layouts</code>
-                .
+                <code className="rounded bg-amber-100 px-1">AGENT_V1_RECORD_LAYOUT_ENABLED</code> /{" "}
+                <code className="rounded bg-amber-100 px-1">AGENT_V2_FIELD_VISIBILITY_ENABLED</code> for the matching
+                POST. This UI does not mutate global <code className="rounded bg-amber-100 px-1">record_layouts</code> or
+                entity record data.
             </div>
 
             <div className="flex gap-2 border-b border-admin-border mb-6">
@@ -355,6 +495,22 @@ export default function AgentConfigLabClient() {
                     }`}
                 >
                     B. Record overview layout (v1)
+                </button>
+                <button
+                    type="button"
+                    onClick={() => {
+                        setTab("field");
+                        setResponseBody(null);
+                        setHttpStatus(null);
+                        setResponseError(null);
+                    }}
+                    className={`px-4 py-2 text-sm font-medium rounded-t-md border-b-2 -mb-px ${
+                        tab === "field"
+                            ? "border-alloy-blue text-alloy-forge bg-admin-surface-card"
+                            : "border-transparent text-alloy-muted hover:text-alloy-forge"
+                    }`}
+                >
+                    C. Field visibility (v2)
                 </button>
             </div>
 
@@ -541,6 +697,110 @@ export default function AgentConfigLabClient() {
                 </div>
             )}
 
+            {tab === "field" && (
+                <div className="mt-6 space-y-6">
+                    <SectionCard title="Load current state (GET)">
+                        <p className="mb-3 text-sm text-alloy-muted">
+                            <code className="rounded bg-admin-page px-1">GET /api/admin/field-definitions?entity_type=…</code>{" "}
+                            and <code className="rounded bg-admin-page px-1">GET /api/admin/field-definitions/[id]</code>
+                        </p>
+                        <div className="flex flex-wrap items-end gap-3">
+                            <label className="text-xs font-medium text-alloy-muted">
+                                entity_type
+                                <select
+                                    className="mt-1 block min-w-[140px] rounded border border-admin-border px-2 py-1.5 text-sm"
+                                    value={fieldEntityType}
+                                    onChange={(e) => {
+                                        setFieldEntityType(e.target.value);
+                                        setSelectedFieldId("");
+                                        setLoadedField(null);
+                                    }}
+                                >
+                                    {["person", "customer", "job", "opportunity", "vendor", "schedule", "location"].map(
+                                        (et) => (
+                                            <option key={et} value={et}>
+                                                {et}
+                                            </option>
+                                        )
+                                    )}
+                                </select>
+                            </label>
+                            <label className="text-xs font-medium text-alloy-muted">
+                                Field
+                                <select
+                                    className="mt-1 block min-w-[260px] rounded border border-admin-border px-2 py-1.5 text-sm"
+                                    value={selectedFieldId}
+                                    onChange={(e) => setSelectedFieldId(e.target.value)}
+                                >
+                                    <option value="">— select —</option>
+                                    {fieldDefs.map((f) => (
+                                        <option key={f.id} value={f.id}>
+                                            {(f.field_key || f.label || f.id).slice(0, 48)} ({f.id.slice(0, 8)}…)
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                            <button
+                                type="button"
+                                onClick={() => void fetchFieldDefinitions()}
+                                disabled={fieldDefsLoading}
+                                className="rounded-md border border-admin-border bg-white px-3 py-1.5 text-sm"
+                            >
+                                {fieldDefsLoading ? "Refreshing…" : "Refresh list"}
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => void loadFieldDetail()}
+                                className="rounded-md bg-alloy-blue px-3 py-1.5 text-sm font-medium text-white"
+                            >
+                                Load selected
+                            </button>
+                        </div>
+                        {fieldDefsError && <p className="mt-2 text-sm text-red-600">{fieldDefsError}</p>}
+                        {fieldLoadError && <p className="mt-2 text-sm text-amber-800">{fieldLoadError}</p>}
+                        {loadedField && (
+                            <div className="mt-4 rounded border border-admin-border/80 bg-admin-page p-3 text-sm space-y-1">
+                                <p>
+                                    <span className="text-alloy-muted">Lock timestamp (expected_updated_at):</span>{" "}
+                                    <strong className="break-all">{fieldLockTimestamp ?? "—"}</strong>
+                                </p>
+                                <p className="text-xs text-alloy-muted break-all">id: {String(loadedField.id)}</p>
+                            </div>
+                        )}
+                    </SectionCard>
+
+                    <SectionCard title="structured_override → POST /api/admin/agent/v2/field-visibility">
+                        <p className="mb-2 text-xs text-alloy-muted">
+                            Prefill loads <code className="rounded bg-admin-page px-1">expected_updated_at</code> from the
+                            row. After a successful apply, reload the field to get a new lock timestamp.
+                        </p>
+                        <div className="mb-2 flex flex-wrap gap-2">
+                            <button
+                                type="button"
+                                onClick={fillFieldTemplateFromLoaded}
+                                className="rounded-md border border-admin-border bg-white px-3 py-1.5 text-xs font-medium"
+                            >
+                                Prefill template from loaded field
+                            </button>
+                        </div>
+                        <textarea
+                            className="w-full min-h-[300px] rounded border border-admin-border p-3 font-mono text-xs leading-relaxed"
+                            spellCheck={false}
+                            value={fieldOverrideJson}
+                            onChange={(e) => setFieldOverrideJson(e.target.value)}
+                        />
+                        <button
+                            type="button"
+                            disabled={submitting}
+                            onClick={() => void submitFieldVisibility()}
+                            className="mt-3 rounded-md bg-alloy-midnight px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                        >
+                            {submitting ? "Submitting…" : "Submit field visibility"}
+                        </button>
+                    </SectionCard>
+                </div>
+            )}
+
             <SectionCard title="Last response">
                 {responseError && <p className="mb-2 text-sm text-red-600">{responseError}</p>}
                 {httpStatus != null && (
@@ -568,6 +828,11 @@ export default function AgentConfigLabClient() {
                         )}
                         {summary.applied_config_version != null && (
                             <p>applied_config_version: {String(summary.applied_config_version)}</p>
+                        )}
+                        {summary.applied_updated_at != null && (
+                            <p className="break-all">
+                                applied_updated_at: {String(summary.applied_updated_at)}
+                            </p>
                         )}
                         {summary.terminal_status != null && <p>terminal_status: {String(summary.terminal_status)}</p>}
                         {!summary.ok && summary.error_code && (
