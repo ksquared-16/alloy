@@ -10,4 +10,6 @@ Active engineering reference: **[foundation implementation plan](./foundation-im
 
 **AI agent field visibility (v2 slice):** [`ai-agent-field-visibility-slice-v2.md`](./ai-agent-field-visibility-slice-v2.md) — `update_field_visibility` on `field_definitions` visibility flags only; sections/ordering deferred.
 
+**AI agent foundation checkpoint:** [`ai-agent-foundation-checkpoint.md`](./ai-agent-foundation-checkpoint.md) — v0/v1/v2 rails, routes, flags, lab, scope.
+
 See [`../README.md`](../README.md) for how this folder relates to **audits/** and **archive/**.

@@ -6,6 +6,8 @@ import SectionCard from "@/components/admin/SectionCard";
 import { getQueueDefinitionStoredVersion } from "@/lib/rrs/queue/queueDefinitionV1";
 import { getOverviewLayoutConfigStoredVersion } from "@/lib/rrs/overview/overviewLayoutConfigStrict";
 import { getFieldDefinitionLockTimestamp } from "@/lib/agent/v2/fieldVisibilityConfigV0";
+import { buildFieldVisibilityStructuredOverrideParts } from "@/lib/admin/agentLab/buildAssistantStructuredOverride";
+import AgentLabAssistantPanel from "@/components/admin/agentLab/AgentLabAssistantPanel";
 
 type Tab = "queue" | "layout" | "field";
 
@@ -71,20 +73,6 @@ function buildLayoutStructuredOverride(config: unknown, expectedVersion: number)
     };
 }
 
-function buildFieldVisibilityStructuredOverride(fieldId: string, expectedUpdatedAt: string): Record<string, unknown> {
-    return {
-        intent_id: crypto.randomUUID(),
-        intent_version: 1,
-        intent_type: "update_field_visibility",
-        slots: {
-            target_kind: "field_definition_visibility",
-            field_definition_id: fieldId,
-            expected_updated_at: expectedUpdatedAt,
-            visibility_patch: { version: 1, is_visible_in_table: true },
-        },
-    };
-}
-
 function safeStringify(v: unknown): string {
     try {
         return JSON.stringify(v, null, 2);
@@ -107,11 +95,7 @@ export default function AgentConfigLabClient() {
     const [loadedWu, setLoadedWu] = useState<WorkUnitRow | null>(null);
     const [wuLoadError, setWuLoadError] = useState<string | null>(null);
 
-    const [queueOverrideJson, setQueueOverrideJson] = useState(() =>
-        safeStringify(
-            buildQueueStructuredOverride("00000000-0000-4000-8000-000000000001", DEFAULT_QUEUE_DEFINITION, 0)
-        )
-    );
+    const [queueOverrideJson, setQueueOverrideJson] = useState("");
 
     const [layoutOverrideJson, setLayoutOverrideJson] = useState(() =>
         safeStringify(buildLayoutStructuredOverride(DEFAULT_OVERVIEW_CONFIG, 0))
@@ -128,14 +112,7 @@ export default function AgentConfigLabClient() {
     const [selectedFieldId, setSelectedFieldId] = useState("");
     const [loadedField, setLoadedField] = useState<Record<string, unknown> | null>(null);
     const [fieldLoadError, setFieldLoadError] = useState<string | null>(null);
-    const [fieldOverrideJson, setFieldOverrideJson] = useState(() =>
-        safeStringify(
-            buildFieldVisibilityStructuredOverride(
-                "00000000-0000-4000-8000-000000000001",
-                new Date().toISOString()
-            )
-        )
-    );
+    const [fieldOverrideJson, setFieldOverrideJson] = useState("");
 
     const [submitting, setSubmitting] = useState(false);
     const [httpStatus, setHttpStatus] = useState<number | null>(null);
@@ -228,16 +205,21 @@ export default function AgentConfigLabClient() {
     }, [selectedWuId]);
 
     const fillQueueTemplateFromLoaded = useCallback(() => {
-        if (!selectedWuId) {
+        if (!selectedWuId.trim()) {
             setWuLoadError("Select a work unit first");
             return;
         }
-        const qd = loadedWu?.queue_definition;
-        const v = loadedWu != null ? getQueueDefinitionStoredVersion(qd) : 0;
+        if (!loadedWu || loadedWu.id !== selectedWuId) {
+            setWuLoadError("Click “Load selected” after choosing the work unit so the template uses that row.");
+            return;
+        }
+        const qd = loadedWu.queue_definition;
+        const v = getQueueDefinitionStoredVersion(qd);
         setQueueOverrideJson(
-            safeStringify(buildQueueStructuredOverride(selectedWuId, qd ?? DEFAULT_QUEUE_DEFINITION, v))
+            safeStringify(buildQueueStructuredOverride(loadedWu.id, qd ?? DEFAULT_QUEUE_DEFINITION, v))
         );
         setIds(newRequestIds());
+        setWuLoadError(null);
     }, [selectedWuId, loadedWu]);
 
     const loadRecordOverviewLayout = useCallback(async () => {
@@ -305,21 +287,37 @@ export default function AgentConfigLabClient() {
     }, [selectedFieldId]);
 
     const fillFieldTemplateFromLoaded = useCallback(() => {
-        if (!selectedFieldId) {
+        if (!selectedFieldId.trim()) {
             setFieldLoadError("Select a field first");
             return;
         }
-        const lock =
-            loadedField != null ? getFieldDefinitionLockTimestamp(loadedField) : null;
+        if (!loadedField || String(loadedField.id) !== selectedFieldId) {
+            setFieldLoadError("Click “Load selected” after choosing the field so the template uses that row’s id and lock timestamp.");
+            return;
+        }
+        const lock = getFieldDefinitionLockTimestamp(loadedField);
         if (!lock) {
             setFieldLoadError("Load the field first — need updated_at (or created_at) for lock");
             return;
         }
-        setFieldOverrideJson(safeStringify(buildFieldVisibilityStructuredOverride(selectedFieldId, lock)));
+        setFieldOverrideJson(
+            safeStringify(
+                buildFieldVisibilityStructuredOverrideParts(String(loadedField.id), lock, {
+                    is_visible_in_table: true,
+                })
+            )
+        );
         setIds(newRequestIds());
+        setFieldLoadError(null);
     }, [selectedFieldId, loadedField]);
 
     const submitQueue = async () => {
+        if (!queueOverrideJson.trim()) {
+            setResponseError("Paste JSON or click Prefill template first.");
+            setHttpStatus(null);
+            setResponseBody(null);
+            return;
+        }
         let structured_override: unknown;
         try {
             structured_override = JSON.parse(queueOverrideJson) as unknown;
@@ -356,6 +354,12 @@ export default function AgentConfigLabClient() {
     };
 
     const submitLayout = async () => {
+        if (!layoutOverrideJson.trim()) {
+            setResponseError("Paste JSON or click Prefill template first.");
+            setHttpStatus(null);
+            setResponseBody(null);
+            return;
+        }
         let structured_override: unknown;
         try {
             structured_override = JSON.parse(layoutOverrideJson) as unknown;
@@ -392,6 +396,12 @@ export default function AgentConfigLabClient() {
     };
 
     const submitFieldVisibility = async () => {
+        if (!fieldOverrideJson.trim()) {
+            setResponseError("Paste JSON or click Prefill template first.");
+            setHttpStatus(null);
+            setResponseBody(null);
+            return;
+        }
         let structured_override: unknown;
         try {
             structured_override = JSON.parse(fieldOverrideJson) as unknown;
@@ -460,10 +470,24 @@ export default function AgentConfigLabClient() {
                 <code className="rounded bg-amber-100 px-1">AGENT_V1_RECORD_LAYOUT_ENABLED</code> /{" "}
                 <code className="rounded bg-amber-100 px-1">AGENT_V2_FIELD_VISIBILITY_ENABLED</code> for the matching
                 POST. This UI does not mutate global <code className="rounded bg-amber-100 px-1">record_layouts</code> or
-                entity record data.
+                entity record data. Checkpoint:{" "}
+                <code className="rounded bg-amber-100 px-1">docs/implementation/ai-agent-foundation-checkpoint.md</code>
             </div>
 
-            <div className="flex gap-2 border-b border-admin-border mb-6">
+            <div className="mb-6">
+                <AgentLabAssistantPanel
+                    message={message}
+                    ids={ids}
+                    setIds={setIds}
+                    newRequestIds={newRequestIds}
+                    setResponseBody={setResponseBody}
+                    setHttpStatus={setHttpStatus}
+                    setResponseError={setResponseError}
+                    setSubmitting={setSubmitting}
+                />
+            </div>
+
+            <div className="flex gap-2 border-b border-admin-border mb-4">
                 <button
                     type="button"
                     onClick={() => {
@@ -512,6 +536,48 @@ export default function AgentConfigLabClient() {
                 >
                     C. Field visibility (v2)
                 </button>
+            </div>
+
+            <div className="mb-6 rounded-lg border border-admin-border bg-admin-page/80 px-4 py-3 text-sm text-alloy-forge">
+                <span className="font-semibold text-alloy-muted">Current tab — </span>
+                {tab === "queue" && (
+                    <>
+                        Work unit selected: <code className="text-xs">{selectedWuId || "—"}</code>
+                        {loadedWu && (
+                            <>
+                                {" "}
+                                · Loaded id matches:{" "}
+                                <strong>{loadedWu.id === selectedWuId ? "yes" : "no — click Load selected"}</strong> ·
+                                queue_definition version: <strong>{storedQueueVersion ?? "—"}</strong>
+                            </>
+                        )}
+                    </>
+                )}
+                {tab === "layout" && (
+                    <>
+                        Overview layout HTTP: <strong>{layoutLoadStatus ?? "—"}</strong>
+                        {loadedLayout && (
+                            <>
+                                {" "}
+                                · config version: <strong>{storedLayoutVersion ?? "—"}</strong>
+                            </>
+                        )}
+                    </>
+                )}
+                {tab === "field" && (
+                    <>
+                        entity_type <code className="text-xs">{fieldEntityType}</code> · field selected:{" "}
+                        <code className="text-xs">{selectedFieldId || "—"}</code>
+                        {loadedField && (
+                            <>
+                                {" "}
+                                · Loaded id matches:{" "}
+                                <strong>{String(loadedField.id) === selectedFieldId ? "yes" : "no — click Load selected"}</strong>{" "}
+                                · lock: <code className="text-xs break-all">{fieldLockTimestamp ?? "—"}</code>
+                            </>
+                        )}
+                    </>
+                )}
             </div>
 
             <SectionCard title="Request envelope (shared)">
@@ -617,6 +683,7 @@ export default function AgentConfigLabClient() {
                         <textarea
                             className="w-full min-h-[280px] rounded border border-admin-border p-3 font-mono text-xs leading-relaxed"
                             spellCheck={false}
+                            placeholder='Click "Prefill template from loaded work unit" or paste JSON.'
                             value={queueOverrideJson}
                             onChange={(e) => setQueueOverrideJson(e.target.value)}
                         />
@@ -682,6 +749,7 @@ export default function AgentConfigLabClient() {
                         <textarea
                             className="w-full min-h-[320px] rounded border border-admin-border p-3 font-mono text-xs leading-relaxed"
                             spellCheck={false}
+                            placeholder="Prefill from loaded layout or paste structured_override JSON."
                             value={layoutOverrideJson}
                             onChange={(e) => setLayoutOverrideJson(e.target.value)}
                         />
@@ -786,6 +854,7 @@ export default function AgentConfigLabClient() {
                         <textarea
                             className="w-full min-h-[300px] rounded border border-admin-border p-3 font-mono text-xs leading-relaxed"
                             spellCheck={false}
+                            placeholder="Prefill from loaded field or paste structured_override JSON."
                             value={fieldOverrideJson}
                             onChange={(e) => setFieldOverrideJson(e.target.value)}
                         />
@@ -805,11 +874,28 @@ export default function AgentConfigLabClient() {
                 {responseError && <p className="mb-2 text-sm text-red-600">{responseError}</p>}
                 {httpStatus != null && (
                     <p className="mb-2 text-sm">
-                        HTTP status: <strong>{httpStatus}</strong>
+                        HTTP status:{" "}
+                        <strong
+                            className={
+                                httpStatus >= 200 && httpStatus < 300
+                                    ? "text-green-800"
+                                    : httpStatus === 409
+                                      ? "text-amber-800"
+                                      : "text-red-800"
+                            }
+                        >
+                            {httpStatus}
+                        </strong>
                     </p>
                 )}
                 {summary && (
-                    <div className="mb-3 rounded border border-admin-border/80 bg-admin-page p-3 text-sm space-y-1">
+                    <div
+                        className={`mb-3 rounded border p-3 text-sm space-y-1 ${
+                            summary.ok
+                                ? "border-green-300 bg-green-50/90 border-l-4 border-l-green-600"
+                                : "border-red-200 bg-red-50/80 border-l-4 border-l-red-500"
+                        }`}
+                    >
                         <p>
                             ok: <strong>{String(summary.ok)}</strong>
                         </p>
