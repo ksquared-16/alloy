@@ -12,4 +12,6 @@ Active engineering reference: **[foundation implementation plan](./foundation-im
 
 **AI agent foundation checkpoint:** [`ai-agent-foundation-checkpoint.md`](./ai-agent-foundation-checkpoint.md) — v0/v1/v2 rails, routes, flags, lab, scope.
 
+**Semantic layout planner (design):** [`ai-agent-semantic-layout-planner-v1.md`](./ai-agent-semantic-layout-planner-v1.md) — NL → job overview proposals; deterministic v1 path; future LLM bridge (no implementation in that doc).
+
 See [`../README.md`](../README.md) for how this folder relates to **audits/** and **archive/**.

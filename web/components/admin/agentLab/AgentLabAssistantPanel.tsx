@@ -6,6 +6,7 @@ import { parseAssistantCommand } from "@/lib/admin/agentLab/parseAssistantComman
 import { resolveFieldDefinitionByQuery, type FieldDefListItem } from "@/lib/admin/agentLab/resolveFieldDefinitionByQuery";
 import { buildAssistantPayload } from "@/lib/admin/agentLab/buildAssistantStructuredOverride";
 import { getFieldDefinitionLockTimestamp } from "@/lib/agent/v2/fieldVisibilityConfigV0";
+import type { JobOverviewPlannerFailure, JobOverviewPlannerSuccess } from "@/lib/agent/planner/jobOverviewPlannerTypes";
 
 function assistantPanelEnabled(): boolean {
     const v = process.env.NEXT_PUBLIC_AGENT_LAB_ASSISTANT_ENABLED?.trim().toLowerCase();
@@ -34,12 +35,16 @@ export default function AgentLabAssistantPanel(props: Props) {
     const [previewLabel, setPreviewLabel] = useState<string | null>(null);
     const [parseNote, setParseNote] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
+    const [semanticPlannerOk, setSemanticPlannerOk] = useState<JobOverviewPlannerSuccess | null>(null);
+    const [semanticPlannerErr, setSemanticPlannerErr] = useState<JobOverviewPlannerFailure | null>(null);
 
     const runPreview = useCallback(async () => {
         setParseNote(null);
         setPreviewRoute(null);
         setPreviewLabel(null);
         setPreviewJson("");
+        setSemanticPlannerOk(null);
+        setSemanticPlannerErr(null);
 
         const parsed = parseAssistantCommand(command);
         if (!parsed.ok) {
@@ -47,7 +52,10 @@ export default function AgentLabAssistantPanel(props: Props) {
             return;
         }
 
-        if (parsed.parsed.kind === "overview_financial") {
+        if (
+            parsed.parsed.kind === "overview_financial" ||
+            parsed.parsed.kind === "overview_layout_semantic"
+        ) {
             setBusy(true);
             try {
                 const res = await fetch(
@@ -66,13 +74,20 @@ export default function AgentLabAssistantPanel(props: Props) {
                     overviewConfigRaw: cfg ?? {},
                 });
                 if (!built.ok) {
+                    setSemanticPlannerErr(built.semanticPlannerFailure ?? null);
                     setParseNote(built.error);
                     return;
                 }
                 setPreviewRoute("v1");
                 setPreviewLabel(built.payload.label);
                 setPreviewJson(JSON.stringify(built.payload.structured_override, null, 2));
-                setParseNote("Preview ready — review JSON, then Apply.");
+                setSemanticPlannerOk(built.payload.semanticPlanner ?? null);
+                setSemanticPlannerErr(null);
+                setParseNote(
+                    built.payload.semanticPlanner
+                        ? "Semantic planner preview ready — review rationale and JSON, then Apply."
+                        : "Preview ready — review JSON, then Apply."
+                );
             } catch (e) {
                 setParseNote(e instanceof Error ? e.message : "Request failed");
             } finally {
@@ -121,6 +136,8 @@ export default function AgentLabAssistantPanel(props: Props) {
             setPreviewRoute("v2");
             setPreviewLabel(built.payload.label);
             setPreviewJson(JSON.stringify(built.payload.structured_override, null, 2));
+            setSemanticPlannerOk(null);
+            setSemanticPlannerErr(null);
             setParseNote(`Matched field: ${resolved.match.field_key ?? resolved.match.id} — review JSON, then Apply.`);
         } catch (e) {
             setParseNote(e instanceof Error ? e.message : "Request failed");
@@ -180,8 +197,11 @@ export default function AgentLabAssistantPanel(props: Props) {
     return (
         <SectionCard title="Deterministic assistant (internal)">
             <p className="mb-3 text-xs text-alloy-muted leading-relaxed">
-                Regex-only commands — no LLM. Preview fills <code className="rounded bg-admin-page px-1">structured_override</code>{" "}
-                for the existing v1/v2 agent routes. Edit the JSON if needed before Apply.
+                No LLM. Field commands use regex; job overview also supports a{" "}
+                <strong className="font-medium text-alloy-forge">semantic layout planner</strong> (deterministic catalog +
+                rules) for richer overview phrases. Preview fills{" "}
+                <code className="rounded bg-admin-page px-1">structured_override</code> for the existing v1/v2 agent routes.
+                Edit the JSON if needed before Apply.
             </p>
             <div className="grid gap-3 sm:grid-cols-2 mb-3">
                 <label className="block text-xs font-medium text-alloy-muted">
@@ -204,7 +224,9 @@ export default function AgentLabAssistantPanel(props: Props) {
                 <textarea
                     className="mt-1 w-full min-h-[72px] rounded border border-admin-border p-2 text-sm font-mono"
                     spellCheck={false}
-                    placeholder={'e.g. hide field Display name from table'}
+                    placeholder={
+                        "e.g. hide field Display name from table — customer-focused layout — show address and next service"
+                    }
                     value={command}
                     onChange={(e) => setCommand(e.target.value)}
                 />
@@ -231,9 +253,95 @@ export default function AgentLabAssistantPanel(props: Props) {
             </div>
             {previewLabel && <p className="text-sm text-alloy-forge mb-1">{previewLabel}</p>}
             {parseNote && (
-                <p className={`text-sm mb-2 ${parseNote.startsWith("Preview") || parseNote.startsWith("Matched") ? "text-green-800" : "text-amber-900"}`}>
+                <p
+                    className={`text-sm mb-2 ${
+                        parseNote.startsWith("Preview") ||
+                        parseNote.startsWith("Matched") ||
+                        parseNote.startsWith("Semantic")
+                            ? "text-green-800"
+                            : "text-amber-900"
+                    }`}
+                >
                     {parseNote}
                 </p>
+            )}
+            {semanticPlannerErr && (
+                <div className="mb-3 rounded-md border border-red-200 bg-red-50/90 p-3 text-xs text-red-950 space-y-2">
+                    <p className="font-semibold">Semantic planner did not produce a proposal</p>
+                    <p>{semanticPlannerErr.error}</p>
+                    {semanticPlannerErr.ambiguity && semanticPlannerErr.ambiguity.length > 0 && (
+                        <div>
+                            <p className="font-medium">Ambiguity / conflict</p>
+                            <ul className="list-disc pl-4 mt-1">
+                                {semanticPlannerErr.ambiguity.map((a) => (
+                                    <li key={a.code}>
+                                        <code className="rounded bg-red-100/80 px-1">{a.code}</code> — {a.detail}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+                    {semanticPlannerErr.rationale && semanticPlannerErr.rationale.length > 0 && (
+                        <div>
+                            <p className="font-medium">Rationale</p>
+                            <ul className="list-disc pl-4 mt-1">
+                                {semanticPlannerErr.rationale.map((line, i) => (
+                                    <li key={i}>{line}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+                </div>
+            )}
+            {semanticPlannerOk && (
+                <div className="mb-3 rounded-md border border-emerald-200 bg-emerald-50/80 p-3 text-xs text-emerald-950 space-y-2">
+                    <p className="font-semibold text-emerald-900">Semantic planner succeeded</p>
+                    <div>
+                        <p className="font-medium text-emerald-900">Parsed intent</p>
+                        <pre className="mt-1 max-h-32 overflow-auto rounded bg-white/80 p-2 border border-emerald-100">
+                            {JSON.stringify(semanticPlannerOk.parsed_intent, null, 2)}
+                        </pre>
+                    </div>
+                    <div>
+                        <p className="font-medium text-emerald-900">Resolution</p>
+                        <pre className="mt-1 max-h-40 overflow-auto rounded bg-white/80 p-2 border border-emerald-100">
+                            {JSON.stringify(semanticPlannerOk.resolution, null, 2)}
+                        </pre>
+                    </div>
+                    {semanticPlannerOk.rationale.length > 0 && (
+                        <div>
+                            <p className="font-medium text-emerald-900">Rationale</p>
+                            <ul className="list-disc pl-4 mt-1">
+                                {semanticPlannerOk.rationale.map((line, i) => (
+                                    <li key={i}>{line}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+                    {semanticPlannerOk.ambiguity.length > 0 && (
+                        <div>
+                            <p className="font-medium text-amber-900">Ambiguity markers</p>
+                            <ul className="list-disc pl-4 mt-1">
+                                {semanticPlannerOk.ambiguity.map((a) => (
+                                    <li key={a.code}>
+                                        <code className="rounded bg-amber-100 px-1">{a.code}</code> — {a.detail}
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+                    )}
+                    <div>
+                        <p className="font-medium text-emerald-900">Diff summary</p>
+                        <pre className="mt-1 max-h-40 overflow-auto rounded bg-white/80 p-2 border border-emerald-100">
+                            {JSON.stringify(semanticPlannerOk.diff_summary, null, 2)}
+                        </pre>
+                    </div>
+                    <p className="text-emerald-800">
+                        Full v1 <code className="rounded bg-emerald-100/80 px-1">structured_override</code> (intent +
+                        slots) is in the textarea below — same shape as{" "}
+                        <code className="rounded bg-emerald-100/80 px-1">POST /api/admin/agent/v1/record-overview-layout</code>.
+                    </p>
+                </div>
             )}
             <label className="block text-xs font-medium text-alloy-muted mb-1">
                 Editable preview (structured_override)

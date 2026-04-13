@@ -3,6 +3,8 @@
  * Grammar is intentionally small and regex-based.
  */
 
+import { jobOverviewRequestHasSupportedIntent } from "@/lib/agent/planner/planJobOverviewLayoutRequest";
+
 export type AssistantParsedFieldTable = {
     kind: "field_table";
     action: "hide" | "show";
@@ -21,10 +23,17 @@ export type AssistantParsedOverviewFinancial = {
     action: "hide" | "show";
 };
 
+/** Richer job overview layout utterances handled by `planJobOverviewLayoutRequest`. */
+export type AssistantParsedOverviewLayoutSemantic = {
+    kind: "overview_layout_semantic";
+    text: string;
+};
+
 export type AssistantParsed =
     | AssistantParsedFieldTable
     | AssistantParsedFieldDrawer
-    | AssistantParsedOverviewFinancial;
+    | AssistantParsedOverviewFinancial
+    | AssistantParsedOverviewLayoutSemantic;
 
 export type AssistantParseResult =
     | { ok: true; parsed: AssistantParsed }
@@ -66,9 +75,13 @@ export function parseAssistantCommand(raw: string): AssistantParseResult {
         return { ok: true, parsed: { kind: "field_drawer", action, labelQuery } };
     }
 
+    if (jobOverviewRequestHasSupportedIntent(s)) {
+        return { ok: true, parsed: { kind: "overview_layout_semantic", text: s } };
+    }
+
     return {
         ok: false,
         error:
-            'Unknown command. Try: hide field <label> from table — show field <label> in drawer — hide financial band on job overview',
+            "Unknown command. Try: hide field <label> from table — show field <label> in drawer — hide financial band on job overview — or a semantic overview phrase (e.g. customer-focused layout, show address and next service).",
     };
 }

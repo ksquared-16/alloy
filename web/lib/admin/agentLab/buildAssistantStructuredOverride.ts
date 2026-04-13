@@ -1,5 +1,7 @@
 import type { AssistantParsed } from "@/lib/admin/agentLab/parseAssistantCommand";
 import { mergeFinancialBandEnabled } from "@/lib/admin/agentLab/mergeFinancialBandOverview";
+import { runOverviewLayoutSemanticPreview } from "@/lib/admin/agentLab/overviewLayoutSemanticAssistant";
+import type { JobOverviewPlannerFailure, JobOverviewPlannerSuccess } from "@/lib/agent/planner/jobOverviewPlannerTypes";
 
 export type BuiltAssistantPayload =
     | {
@@ -11,6 +13,8 @@ export type BuiltAssistantPayload =
           route: "v1";
           label: string;
           structured_override: Record<string, unknown>;
+          /** Present when preview came from `planJobOverviewLayoutRequest`. */
+          semanticPlanner?: JobOverviewPlannerSuccess;
       };
 
 function newIntent() {
@@ -60,6 +64,13 @@ export function buildRecordLayoutStructuredOverrideParts(
     };
 }
 
+export type BuildAssistantPayloadFailure = {
+    ok: false;
+    error: string;
+    /** Set when `overview_layout_semantic` did not produce a proposal. */
+    semanticPlannerFailure?: JobOverviewPlannerFailure;
+};
+
 export function buildAssistantPayload(
     parsed: AssistantParsed,
     ctx: {
@@ -67,7 +78,7 @@ export function buildAssistantPayload(
         expectedUpdatedAt: string;
         overviewConfigRaw: unknown;
     }
-): { ok: true; payload: BuiltAssistantPayload } | { ok: false; error: string } {
+): { ok: true; payload: BuiltAssistantPayload } | BuildAssistantPayloadFailure {
     if (parsed.kind === "field_table") {
         const hide = parsed.action === "hide";
         const vis = { is_visible_in_table: !hide };
@@ -107,6 +118,25 @@ export function buildAssistantPayload(
                     merged.config as Record<string, unknown>,
                     merged.expected_config_version
                 ),
+            },
+        };
+    }
+    if (parsed.kind === "overview_layout_semantic") {
+        const prev = runOverviewLayoutSemanticPreview(parsed.text, ctx.overviewConfigRaw);
+        if (!prev.ok) {
+            return {
+                ok: false,
+                error: prev.error,
+                semanticPlannerFailure: prev.planner,
+            };
+        }
+        return {
+            ok: true,
+            payload: {
+                route: "v1",
+                label: "Semantic job overview layout (preview)",
+                structured_override: prev.structured_override,
+                semanticPlanner: prev.planner,
             },
         };
     }

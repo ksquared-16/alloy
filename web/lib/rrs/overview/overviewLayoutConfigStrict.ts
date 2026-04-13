@@ -1,9 +1,9 @@
 /**
  * Strict validation for `record_overview_layouts.config` (writes + agent v1).
- * Lenient read path remains `parseOverviewLayoutConfig` in overviewLayoutV0.ts.
+ * Lenient read path remains `parseOverviewLayoutConfig` in overviewLayoutConfigModel.ts.
  */
 
-import type { OverviewLayoutBandV0, OverviewLayoutConfigV0 } from "./overviewLayoutV0";
+import type { OverviewLayoutBandV0, OverviewLayoutConfigV0 } from "./overviewLayoutConfigModel";
 
 const TOP_LEVEL = new Set(["version", "bands", "header_keys", "relationship_group_keys"]);
 

@@ -84,6 +84,7 @@ All RPCs: **`service_role` only**; app routes use admin Supabase client.
 
 ## 7. Recommended next build sequence
 
+0. **Semantic layout planner (design → build)** — see [ai-agent-semantic-layout-planner-v1.md](./ai-agent-semantic-layout-planner-v1.md): job overview NL → reviewable proposal → existing v1 rail.
 1. **Harden assistant** — richer deterministic grammar, validation messages, telemetry hooks (still no LLM).
 2. **Intent registry** — single envelope router when multiple intents share one route (optional).
 3. **LLM last** — slot-fill only after deterministic fallbacks and policy gates are stable.
