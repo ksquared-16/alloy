@@ -11,6 +11,8 @@ import type {
     JobOverviewResolutionCatalog,
     ParsedJobOverviewIntent,
     ResolvedFieldRef,
+    ResolvedTargetOutcome,
+    UnresolvedTargetRef,
 } from "@/lib/agent/planner/jobOverviewPlannerTypes";
 import { JOB_OVERVIEW_PLANNER_VERSION } from "@/lib/agent/planner/jobOverviewPlannerTypes";
 import { JOB_OVERVIEW_RESOLUTION_CATALOG } from "@/lib/agent/planner/jobOverviewResolutionCatalog";
@@ -33,34 +35,42 @@ export function normalizeJobOverviewRequestText(text: string): string {
         .replace(/[’']/g, "'");
 }
 
+function longestSynonymHit(
+    normalizedText: string,
+    synonyms: readonly string[]
+): { phrase: string; len: number } | null {
+    let bestLen = 0;
+    let bestPhrase = "";
+    for (const syn of synonyms) {
+        const s = syn.toLowerCase();
+        if (!s.length) continue;
+        let idx = normalizedText.indexOf(s);
+        while (idx !== -1) {
+            const before = idx === 0 ? " " : normalizedText[idx - 1]!;
+            const after =
+                idx + s.length >= normalizedText.length ? " " : normalizedText[idx + s.length]!;
+            const boundaryOk = !/\w/.test(before) && !/\w/.test(after);
+            if (boundaryOk && s.length >= bestLen) {
+                bestLen = s.length;
+                bestPhrase = syn;
+            }
+            idx = normalizedText.indexOf(s, idx + 1);
+        }
+    }
+    return bestLen > 0 ? { phrase: bestPhrase, len: bestLen } : null;
+}
+
 /** Exported for phrase → field tests; longest synonym wins per field key. */
 export function resolveCatalogFieldsInText(
     normalizedText: string,
-    catalog: JobOverviewResolutionCatalog): ResolvedFieldRef[] {
+    catalog: JobOverviewResolutionCatalog
+): ResolvedFieldRef[] {
     const hits: ResolvedFieldRef[] = [];
     for (const f of catalog.system_fields) {
-        let bestLen = 0;
-        let bestPhrase = "";
-        for (const syn of f.synonyms) {
-            const s = syn.toLowerCase();
-            if (!s.length) continue;
-            let idx = normalizedText.indexOf(s);
-            while (idx !== -1) {
-                const before = idx === 0 ? " " : normalizedText[idx - 1]!;
-                const after =
-                    idx + s.length >= normalizedText.length ? " " : normalizedText[idx + s.length]!;
-                const boundaryOk =
-                    !/\w/.test(before) && !/\w/.test(after);
-                if (boundaryOk && s.length >= bestLen) {
-                    bestLen = s.length;
-                    bestPhrase = syn;
-                }
-                idx = normalizedText.indexOf(s, idx + 1);
-            }
-        }
-        if (bestLen > 0) {
+        const hit = longestSynonymHit(normalizedText, f.synonyms);
+        if (hit) {
             hits.push({
-                phrase_matched: bestPhrase,
+                phrase_matched: hit.phrase,
                 field_key: f.key,
                 confidence: "high",
             });
@@ -73,25 +83,42 @@ export function resolveCatalogFieldsInText(
     return [...byKey.values()];
 }
 
+/** Phrases that match capability gaps (no config keys to emit). */
+export function resolveCatalogCapabilityGapsInText(
+    normalizedText: string,
+    catalog: JobOverviewResolutionCatalog
+): UnresolvedTargetRef[] {
+    const out: UnresolvedTargetRef[] = [];
+    const seen = new Set<string>();
+    for (const g of catalog.capability_gaps) {
+        const hit = longestSynonymHit(normalizedText, g.synonyms);
+        if (hit && !seen.has(g.id)) {
+            seen.add(g.id);
+            out.push({
+                concept_id: g.id,
+                phrase_matched: hit.phrase,
+                reason: g.reason,
+            });
+        }
+    }
+    return out;
+}
+
 /**
  * Rule-based intent flags for the narrow v1 utterance set.
  * Exported for unit tests.
  */
 export function detectJobOverviewIntentFlags(normalizedText: string): ParsedJobOverviewIntent {
     const hideVerb = /\b(hide|remove|collapse|turn off|get rid of)\b/.test(normalizedText);
-    const showVerb = /\b(show|display|reveal|turn on|include|add|see|want)\b/.test(normalizedText);
+    const showVerb = /\b(show|display|reveal|turn on|include|add|see|want|give)\b/.test(normalizedText);
     const finWord =
- /\b(financial|finance|money|pricing|billing|invoice|payment|cost)\b/.test(normalizedText);
+        /\b(financial|finance|money|pricing|billing|invoice|payment|cost)\b/.test(normalizedText);
 
     const hide_financial =
         (hideVerb && finWord) ||
         /\bno\b\s+\b(financial|money|pricing)\b/.test(normalizedText) ||
         /\b(financial|money)\s+\b(off|gone)\b/.test(normalizedText);
 
-    /**
-     * Must tie “show” to money words in the same clause (not “hide financial … show contact”).
-     * Independent of `hide_financial`; both true ⇒ ambiguous (handled in planner).
-     */
     const show_financial =
         /\b(show|display|reveal|include|add)\b[^.]{0,48}\b(financial|finance|money|pricing|billing|invoice|payment|cost)\b/.test(
             normalizedText
@@ -106,7 +133,11 @@ export function detectJobOverviewIntentFlags(normalizedText: string): ParsedJobO
         /\bmore\s+customer\b/.test(normalizedText) ||
         /\bcustomer\s+first\b/.test(normalizedText) ||
         /\bcustomer[- ]?focus\b/.test(normalizedText) ||
-        /\bemphasize\s+(the\s+)?customer\b/.test(normalizedText);
+        /\bemphasize\s+(the\s+)?customer\b/.test(normalizedText) ||
+        /\b(make|got)\b[^.]{0,24}\b(the\s+)?(job|work|overview)\b[^.]{0,48}\b(customer|customer-focused|customer\s+centric)\b/.test(
+            normalizedText
+        ) ||
+        /\b(job|overview)\b[^.]{0,36}\bmore\s+customer\b/.test(normalizedText);
 
     const service_details_higher =
         /\b(service|property)\s+details?\b[^.]{0,40}\b(higher|above|up|first|top|sooner)\b/.test(
@@ -119,16 +150,31 @@ export function detectJobOverviewIntentFlags(normalizedText: string): ParsedJobO
             normalizedText
         );
 
+    const contact_details_higher =
+        /\b(contact\s+details|contact\s+info|people)\b[^.]{0,48}\b(higher|above|up|first|top)\b/.test(
+            normalizedText
+        ) ||
+        /\b(higher|above|up|first|top)\b[^.]{0,48}\b(contact\s+details|contact\s+info)\b/.test(
+            normalizedText
+        ) ||
+        /\b(put|move|make)\b[^.]{0,56}\b(contact|people)\b[^.]{0,36}\b(higher|above|up|first)\b/.test(
+            normalizedText
+        );
+
     const show_main_contact =
         /\bmain\s+contact\b/.test(normalizedText) ||
+        /\bprimary\s+contact\b/.test(normalizedText) ||
         /\bprimary\s+person\b/.test(normalizedText) ||
+        /\bcontact\s+details\b/.test(normalizedText) ||
+        /\bcontact\s+info\b/.test(normalizedText) ||
         (/\bshow\b/.test(normalizedText) && /\bcontact\b/.test(normalizedText));
 
     const show_address =
         /\b(address|service address|location)\b/.test(normalizedText) &&
         (showVerb ||
             /\band\b/.test(normalizedText) ||
-            /\bnext\s+service\b/.test(normalizedText));
+            /\bnext\s+service\b/.test(normalizedText) ||
+            /\btheir\b/.test(normalizedText));
 
     const show_next_service =
         /\bnext\s+service\b/.test(normalizedText) ||
@@ -137,14 +183,38 @@ export function detectJobOverviewIntentFlags(normalizedText: string): ParsedJobO
         /\bnext\s+appointment\b/.test(normalizedText) ||
         /\bnext\s+service\s+date\b/.test(normalizedText);
 
+    const mentionsNextServiceContext =
+        /\bnext\s+service\b/.test(normalizedText) ||
+        /\bnext\s+visit\b/.test(normalizedText) ||
+        /\bnext\s+schedule\b/.test(normalizedText) ||
+        /\bnext\s+appointment\b/.test(normalizedText) ||
+        /\bnext\s+service\s+date\b/.test(normalizedText);
+
+    const show_service_details =
+        /\b(service\s+details|service\s+detail)\b/.test(normalizedText) ||
+        /\bwhat\s+service\b/.test(normalizedText) ||
+        /\bservice\s+they\b/.test(normalizedText) ||
+        /\bservice\s+type\b/.test(normalizedText) ||
+        /\bservice\s+got\b/.test(normalizedText) ||
+        (showVerb &&
+            /\bservice\b/.test(normalizedText) &&
+            !mentionsNextServiceContext &&
+            !/\bfinancial\b/.test(normalizedText));
+
+    const referenced_unreachable_contact_channels =
+        /\b(phone|phones|telephone|mobile|cell|email|e-mail|e mail)\b/.test(normalizedText);
+
     return {
         hide_financial,
         show_financial,
         customer_focused,
         service_details_higher,
+        contact_details_higher,
         show_main_contact,
         show_address,
         show_next_service,
+        show_service_details,
+        referenced_unreachable_contact_channels,
     };
 }
 
@@ -154,9 +224,12 @@ function hasAnyIntent(i: ParsedJobOverviewIntent): boolean {
         i.show_financial ||
         i.customer_focused ||
         i.service_details_higher ||
+        i.contact_details_higher ||
         i.show_main_contact ||
         i.show_address ||
-        i.show_next_service
+        i.show_next_service ||
+        i.show_service_details ||
+        i.referenced_unreachable_contact_channels
     );
 }
 
@@ -196,14 +269,16 @@ function ensureBand(
     return b;
 }
 
-function addSystemItemIfMissing(band: OverviewLayoutBandV0, key: string): void {
-    if (band.items.some((it) => it.key === key)) return;
+function addSystemItemIfMissing(band: OverviewLayoutBandV0, key: string): boolean {
+    if (band.items.some((it) => it.key === key)) return false;
     band.items.push({ kind: "system_field", key });
+    return true;
 }
 
-function addHeaderIfMissing(layout: OverviewLayoutConfigV0, key: string): void {
-    if (layout.header_keys.includes(key)) return;
+function addHeaderIfMissing(layout: OverviewLayoutConfigV0, key: string): boolean {
+    if (layout.header_keys.includes(key)) return false;
     layout.header_keys.push(key);
+    return true;
 }
 
 function reorderBandAfterSummary(layout: OverviewLayoutConfigV0, bandKey: CatalogBandKey): void {
@@ -234,15 +309,86 @@ function defaultServicePropertyBand(
     };
 }
 
+function layoutBodyFingerprint(layout: OverviewLayoutConfigV0): string {
+    return JSON.stringify({
+        hk: layout.header_keys,
+        rg: layout.relationship_group_keys ?? null,
+        bands: layout.bands.map((b) => ({
+            k: b.band_key,
+            e: b.enabled,
+            items: b.items.map((i) => i.key),
+        })),
+    });
+}
+
+function catalogFieldEntry(
+    catalog: JobOverviewResolutionCatalog,
+    fieldKey: string
+): JobOverviewResolutionCatalog["system_fields"][number] | undefined {
+    return catalog.system_fields.find((f) => f.key === fieldKey);
+}
+
+function applyCatalogSystemField(
+    layout: OverviewLayoutConfigV0,
+    catalog: JobOverviewResolutionCatalog,
+    defaultLayout: OverviewLayoutConfigV0,
+    fieldKey: string,
+    phraseMatched: string,
+    confidence: "high" | "medium",
+    outcomes: ResolvedTargetOutcome[],
+    rationale: string[],
+    bandsTouched: Set<CatalogBandKey>
+): void {
+    const entry = catalogFieldEntry(catalog, fieldKey);
+    if (!entry) return;
+    const tmpl =
+        defaultLayout.bands.find((b) => b.band_key === entry.preferred_band) ??
+        ({ band_key: entry.preferred_band, enabled: true, items: [] } as OverviewLayoutBandV0);
+    const band = ensureBand(layout, entry.preferred_band, tmpl);
+    const hadItem = band.items.some((it) => it.key === fieldKey);
+    const addedItem = addSystemItemIfMissing(band, fieldKey);
+    if (addedItem) {
+        outcomes.push({
+            kind: "system_field",
+            field_key: fieldKey,
+            phrase_matched: phraseMatched,
+            outcome: "added",
+            confidence,
+        });
+        rationale.push(`Added ${fieldKey} to ${entry.preferred_band} (matched “${phraseMatched}”).`);
+    } else {
+        outcomes.push({
+            kind: "system_field",
+            field_key: fieldKey,
+            phrase_matched: phraseMatched,
+            outcome: "already_present",
+            confidence,
+        });
+        rationale.push(`Field ${fieldKey} already listed in ${entry.preferred_band}; left unchanged.`);
+    }
+    bandsTouched.add(entry.preferred_band);
+    if (entry.allow_header) {
+        const addedHeader = addHeaderIfMissing(layout, fieldKey);
+        if (addedHeader) {
+            rationale.push(`Added ${fieldKey} to header for prominence.`);
+        }
+    }
+}
+
 type Snapshot = {
     header_keys: string[];
     band_order: string[];
     financial_enabled: boolean | null;
     relationship_group_keys: string[] | undefined;
+    bands_items: Record<string, string[]>;
 };
 
 function takeSnapshot(layout: OverviewLayoutConfigV0): Snapshot {
     const fin = getBand(layout, "financial");
+    const bands_items: Record<string, string[]> = {};
+    for (const b of layout.bands) {
+        bands_items[b.band_key] = b.items.map((i) => i.key);
+    }
     return {
         header_keys: [...layout.header_keys],
         band_order: layout.bands.map((b) => b.band_key),
@@ -250,7 +396,19 @@ function takeSnapshot(layout: OverviewLayoutConfigV0): Snapshot {
         relationship_group_keys: layout.relationship_group_keys
             ? [...layout.relationship_group_keys]
             : undefined,
+        bands_items,
     };
+}
+
+function bandsContentChangedKeys(before: Snapshot, after: Snapshot): string[] {
+    const keys = new Set([...Object.keys(before.bands_items), ...Object.keys(after.bands_items)]);
+    const changed: string[] = [];
+    for (const k of keys) {
+        const a = (before.bands_items[k] ?? []).join("\0");
+        const b = (after.bands_items[k] ?? []).join("\0");
+        if (a !== b) changed.push(k);
+    }
+    return changed;
 }
 
 function diffSnapshots(before: Snapshot, after: Snapshot): DiffSummary {
@@ -279,7 +437,25 @@ function diffSnapshots(before: Snapshot, after: Snapshot): DiffSummary {
             after: after.relationship_group_keys,
         };
     }
+    const bic = bandsContentChangedKeys(before, after);
+    if (bic.length) d.bands_content_changed = bic;
     return d;
+}
+
+function mergeUnresolved(fromText: UnresolvedTargetRef[], extraRationale: string[]): UnresolvedTargetRef[] {
+    const byId = new Map<string, UnresolvedTargetRef>();
+    for (const u of fromText) {
+        byId.set(u.concept_id, u);
+        extraRationale.push(`Unresolved: “${u.phrase_matched}” (${u.concept_id}) — ${u.reason}`);
+    }
+    return [...byId.values()];
+}
+
+type FieldWant = { phrase: string; confidence: "high" | "medium" };
+
+function mergeFieldWant(m: Map<string, FieldWant>, key: string, w: FieldWant): void {
+    const cur = m.get(key);
+    if (!cur || w.phrase.length >= cur.phrase.length) m.set(key, w);
 }
 
 export function planJobOverviewLayoutRequest(
@@ -321,14 +497,17 @@ export function planJobOverviewLayoutRequest(
     const base = parseOverviewLayoutConfig(currentOverviewConfig);
     base.bands = dedupeBands(base.bands);
     const layout = structuredClone(base);
+    const fingerprintBefore = layoutBodyFingerprint(layout);
     const beforeSnap = takeSnapshot(layout);
 
     const defaultLayout = getDefaultOverviewLayoutConfig();
     const rationale: string[] = [];
     const bandsTouched = new Set<CatalogBandKey>();
     let relationship_groups_touched = false;
+    const resolvedOutcomes: ResolvedTargetOutcome[] = [];
 
     const catalogHits = resolveCatalogFieldsInText(norm, catalog);
+    const gapRefs = resolveCatalogCapabilityGapsInText(norm, catalog);
     const resolutionFields: ResolvedFieldRef[] = [...catalogHits];
 
     if (parsed_intent.hide_financial) {
@@ -360,33 +539,23 @@ export function planJobOverviewLayoutRequest(
         rationale.push("Moved service_property immediately after summary per 'higher' directive.");
     }
 
+    if (parsed_intent.contact_details_higher) {
+        const people = ensureBand(
+            layout,
+            "people",
+            defaultLayout.bands.find((b) => b.band_key === "people")!
+        );
+        people.enabled = true;
+        reorderBandAfterSummary(layout, "people");
+        bandsTouched.add("people");
+        rationale.push("Moved people (contact) band up after summary per request.");
+    }
+
     const summaryBand = ensureBand(
         layout,
         "summary",
         defaultLayout.bands.find((b) => b.band_key === "summary")!
     );
-
-    if (parsed_intent.show_address) {
-        addSystemItemIfMissing(summaryBand, "_location_label");
-        bandsTouched.add("summary");
-        resolutionFields.push({
-            phrase_matched: "address",
-            field_key: "_location_label",
-            confidence: "high",
-        });
-        rationale.push("Ensured address/location (_location_label) appears in the summary band.");
-    }
-
-    if (parsed_intent.show_next_service) {
-        addSystemItemIfMissing(summaryBand, "_next_schedule");
-        bandsTouched.add("summary");
-        resolutionFields.push({
-            phrase_matched: "next service",
-            field_key: "_next_schedule",
-            confidence: "high",
-        });
-        rationale.push("Ensured next service (_next_schedule) in the summary band.");
-    }
 
     if (parsed_intent.show_main_contact) {
         const people = ensureBand(
@@ -395,15 +564,79 @@ export function planJobOverviewLayoutRequest(
             defaultLayout.bands.find((b) => b.band_key === "people")!
         );
         people.enabled = true;
-        addSystemItemIfMissing(people, "_primary_person_name");
-        addHeaderIfMissing(layout, "_primary_person_name");
-        bandsTouched.add("people");
-        resolutionFields.push({
-            phrase_matched: "main contact",
-            field_key: "_primary_person_name",
-            confidence: "high",
+    }
+
+    if (parsed_intent.show_service_details) {
+        const sp = ensureBand(layout, "service_property", defaultServicePropertyBand(catalog));
+        sp.enabled = true;
+        if (sp.items.length === 0) {
+            sp.items = defaultServicePropertyBand(catalog).items.map((x) => ({ ...x }));
+        }
+        bandsTouched.add("service_property");
+        rationale.push("Enabled service_property band for on-site service attributes.");
+    }
+
+    const fieldWants = new Map<string, FieldWant>();
+    if (parsed_intent.show_address) {
+        mergeFieldWant(fieldWants, "_location_label", { phrase: "address", confidence: "high" });
+    }
+    if (parsed_intent.show_next_service) {
+        mergeFieldWant(fieldWants, "_next_schedule", { phrase: "next service", confidence: "high" });
+    }
+    if (parsed_intent.show_main_contact) {
+        mergeFieldWant(fieldWants, "_primary_person_name", { phrase: "main contact", confidence: "high" });
+    }
+    if (parsed_intent.contact_details_higher) {
+        mergeFieldWant(fieldWants, "_primary_person_name", { phrase: "contact details higher", confidence: "high" });
+    }
+    if (parsed_intent.show_service_details) {
+        mergeFieldWant(fieldWants, "service_key", { phrase: "service details", confidence: "high" });
+    }
+    for (const hit of catalogHits) {
+        mergeFieldWant(fieldWants, hit.field_key, {
+            phrase: hit.phrase_matched,
+            confidence: hit.confidence,
         });
-        rationale.push("Surfaced main contact via people band and header (_primary_person_name).");
+    }
+
+    const fieldApplyOrder = [
+        "_location_label",
+        "_next_schedule",
+        "scheduled_at",
+        "service_key",
+        "title",
+        "_customer_name",
+        "_primary_person_name",
+        "display_total_cents",
+    ];
+    for (const fk of fieldApplyOrder) {
+        const w = fieldWants.get(fk);
+        if (!w) continue;
+        applyCatalogSystemField(
+            layout,
+            catalog,
+            defaultLayout,
+            fk,
+            w.phrase,
+            w.confidence,
+            resolvedOutcomes,
+            rationale,
+            bandsTouched
+        );
+    }
+    for (const [fk, w] of fieldWants) {
+        if (fieldApplyOrder.includes(fk)) continue;
+        applyCatalogSystemField(
+            layout,
+            catalog,
+            defaultLayout,
+            fk,
+            w.phrase,
+            w.confidence,
+            resolvedOutcomes,
+            rationale,
+            bandsTouched
+        );
     }
 
     if (parsed_intent.customer_focused) {
@@ -459,6 +692,17 @@ export function planJobOverviewLayoutRequest(
         });
     }
 
+    const dedupeOutcomes = (() => {
+        const m = new Map<string, ResolvedTargetOutcome>();
+        for (const o of resolvedOutcomes) {
+            const prev = m.get(o.field_key);
+            if (!prev || o.outcome === "added") m.set(o.field_key, o);
+        }
+        return [...m.values()];
+    })();
+
+    const unresolved = mergeUnresolved(gapRefs, rationale);
+
     const dedupResolution = (() => {
         const m = new Map<string, ResolvedFieldRef>();
         for (const r of resolutionFields) {
@@ -496,6 +740,17 @@ export function planJobOverviewLayoutRequest(
     afterSemantic.bands = dedupeBands(afterSemantic.bands);
     const afterSnap = takeSnapshot(afterSemantic);
     const diff_summary = diffSnapshots(beforeSnap, afterSnap);
+    const fingerprintAfter = layoutBodyFingerprint(afterSemantic);
+    const effective_layout_change = fingerprintBefore !== fingerprintAfter;
+
+    if (!effective_layout_change && unresolved.length > 0) {
+        rationale.push(
+            "No layout keys changed; request referenced fields that are not available as canonical overview items (see unresolved_targets)."
+        );
+    }
+    if (!effective_layout_change && unresolved.length === 0 && dedupeOutcomes.every((o) => o.outcome === "already_present")) {
+        rationale.push("Layout already matched the request; version will still increment on apply if you submit.");
+    }
 
     return {
         ok: true,
@@ -509,12 +764,15 @@ export function planJobOverviewLayoutRequest(
         parsed_intent,
         resolution: {
             fields: dedupResolution,
+            resolved_outcomes: dedupeOutcomes,
+            unresolved_targets: unresolved,
             relationship_groups_touched,
             bands_touched: [...bandsTouched],
         },
         rationale,
         ambiguity,
         diff_summary,
+        effective_layout_change,
         config: strict.value,
         expected_config_version,
     };

@@ -341,6 +341,12 @@ export default function AgentLabAssistantPanel(props: Props) {
                             {JSON.stringify(semanticPlannerOk.diff_summary, null, 2)}
                         </pre>
                     </div>
+                    {!semanticPlannerOk.effective_layout_change && (
+                        <p className="text-amber-900 font-medium">
+                            No effective layout change vs current snapshot (see unresolved_targets / rationale if
+                            phrases could not be mapped).
+                        </p>
+                    )}
                     <p className="text-emerald-800">
                         Full v1 <code className="rounded bg-emerald-100/80 px-1">structured_override</code> (intent +
                         slots) is in the textarea below — same shape as{" "}

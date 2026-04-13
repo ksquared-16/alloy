@@ -3,6 +3,7 @@ import {
     detectJobOverviewIntentFlags,
     normalizeJobOverviewRequestText,
     planJobOverviewLayoutRequest,
+    resolveCatalogCapabilityGapsInText,
     resolveCatalogFieldsInText,
 } from "@/lib/agent/planner/planJobOverviewLayoutRequest";
 import { JOB_OVERVIEW_RESOLUTION_CATALOG } from "@/lib/agent/planner/jobOverviewResolutionCatalog";
@@ -39,6 +40,18 @@ describe("job overview semantic planner — intent flags", () => {
             ).service_details_higher
         ).toBe(true);
     });
+
+    it("detects job-scoped customer focus and contact-higher phrasing", () => {
+        const i = detectJobOverviewIntentFlags(
+            normalizeJobOverviewRequestText("make the job more customer-focused")
+        );
+        expect(i.customer_focused).toBe(true);
+        expect(
+            detectJobOverviewIntentFlags(
+                normalizeJobOverviewRequestText("show contact details higher")
+            ).contact_details_higher
+        ).toBe(true);
+    });
 });
 
 describe("job overview semantic planner — phrase resolution", () => {
@@ -63,6 +76,12 @@ describe("job overview semantic planner — phrase resolution", () => {
         const t = normalizeJobOverviewRequestText("financialization is unrelated");
         const r = resolveCatalogFieldsInText(t, JOB_OVERVIEW_RESOLUTION_CATALOG);
         expect(r.some((x) => x.field_key === "display_total_cents")).toBe(false);
+    });
+
+    it("resolves capability gaps for phone and email (no field keys)", () => {
+        const t = normalizeJobOverviewRequestText("show phone and email on overview");
+        const g = resolveCatalogCapabilityGapsInText(t, JOB_OVERVIEW_RESOLUTION_CATALOG);
+        expect(g.map((x) => x.concept_id).sort()).toEqual(["email", "phone"].sort());
     });
 });
 
@@ -149,6 +168,56 @@ describe("job overview semantic planner — proposal assembly", () => {
         const bands = r.config.bands as { band_key: string; enabled: boolean }[];
         expect(bands.find((b) => b.band_key === "relationships")?.enabled).toBe(true);
         expect(bands.find((b) => b.band_key === "people")?.enabled).toBe(true);
+    });
+
+    it("composite: contact, phone/email gaps, address, service line, next service", () => {
+        const utterance =
+            "Show the main contact, their phone, email, address, what service they got, and next service date";
+        const r = planJobOverviewLayoutRequest(utterance, storedConfig(1));
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        const ids = r.resolution.unresolved_targets.map((u) => u.concept_id).sort();
+        expect(ids).toEqual(["email", "phone"]);
+        const summary = (r.config.bands as { band_key: string; items: { key: string }[] }[]).find(
+            (b) => b.band_key === "summary"
+        );
+        const keys = summary?.items.map((i) => i.key) ?? [];
+        expect(keys).toContain("_location_label");
+        expect(keys).toContain("_next_schedule");
+        expect(keys).toContain("service_key");
+        expect(r.resolution.resolved_outcomes.some((o) => o.field_key === "service_key")).toBe(true);
+        expect(r.effective_layout_change).toBe(true);
+    });
+
+    it("show contact details and next service date", () => {
+        const r = planJobOverviewLayoutRequest(
+            "Show contact details and next service date",
+            storedConfig(2)
+        );
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        expect(r.parsed_intent.show_next_service).toBe(true);
+        expect(r.parsed_intent.show_main_contact).toBe(true);
+        const summary = (r.config.bands as { band_key: string; items: { key: string }[] }[]).find(
+            (b) => b.band_key === "summary"
+        );
+        expect(summary?.items.map((i) => i.key)).toContain("_next_schedule");
+    });
+
+    it("no effective layout change when only unsupported channels are requested", () => {
+        const r = planJobOverviewLayoutRequest("Please show phone and email", storedConfig(3));
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        expect(r.effective_layout_change).toBe(false);
+        expect(r.resolution.unresolved_targets.length).toBeGreaterThanOrEqual(1);
+        expect(r.rationale.some((line) => /No layout keys changed|Unresolved/i.test(line))).toBe(true);
+    });
+
+    it("unsupported phrase alone does not invent fields", () => {
+        const r = planJobOverviewLayoutRequest("enable fax and pager on overview", storedConfig(1));
+        expect(r.ok).toBe(false);
+        if (r.ok) return;
+        expect(r.error).toMatch(/No supported/);
     });
 });
 
