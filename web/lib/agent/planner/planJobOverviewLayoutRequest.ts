@@ -328,6 +328,19 @@ function catalogFieldEntry(
     return catalog.system_fields.find((f) => f.key === fieldKey);
 }
 
+/**
+ * Header ribbon: identity/status (title, customer, primary) for customer-focused template only.
+ * Schedule, location, and service line stay in summary band unless catalog explicitly allows header.
+ */
+function shouldPromoteFieldToHeader(
+    fieldKey: string,
+    entry: NonNullable<ReturnType<typeof catalogFieldEntry>>,
+    promotePrimaryToHeader: boolean
+): boolean {
+    if (fieldKey === "_primary_person_name") return promotePrimaryToHeader;
+    return entry.allow_header;
+}
+
 function applyCatalogSystemField(
     layout: OverviewLayoutConfigV0,
     catalog: JobOverviewResolutionCatalog,
@@ -337,7 +350,8 @@ function applyCatalogSystemField(
     confidence: "high" | "medium",
     outcomes: ResolvedTargetOutcome[],
     rationale: string[],
-    bandsTouched: Set<CatalogBandKey>
+    bandsTouched: Set<CatalogBandKey>,
+    promotePrimaryToHeader: boolean
 ): void {
     const entry = catalogFieldEntry(catalog, fieldKey);
     if (!entry) return;
@@ -345,7 +359,6 @@ function applyCatalogSystemField(
         defaultLayout.bands.find((b) => b.band_key === entry.preferred_band) ??
         ({ band_key: entry.preferred_band, enabled: true, items: [] } as OverviewLayoutBandV0);
     const band = ensureBand(layout, entry.preferred_band, tmpl);
-    const hadItem = band.items.some((it) => it.key === fieldKey);
     const addedItem = addSystemItemIfMissing(band, fieldKey);
     if (addedItem) {
         outcomes.push({
@@ -364,14 +377,35 @@ function applyCatalogSystemField(
             outcome: "already_present",
             confidence,
         });
-        rationale.push(`Field ${fieldKey} already listed in ${entry.preferred_band}; left unchanged.`);
     }
     bandsTouched.add(entry.preferred_band);
-    if (entry.allow_header) {
+    if (shouldPromoteFieldToHeader(fieldKey, entry, promotePrimaryToHeader)) {
         const addedHeader = addHeaderIfMissing(layout, fieldKey);
         if (addedHeader) {
-            rationale.push(`Added ${fieldKey} to header for prominence.`);
+            rationale.push(`Added ${fieldKey} to header (identity strip).`);
         }
+    }
+}
+
+/**
+ * Prefer people band for contact narrative; avoid the same identity field in header + people
+ * when the request is contact-focused but not the full customer header template.
+ */
+function applyEditorialContactHeaderPolicy(
+    layout: OverviewLayoutConfigV0,
+    parsed: ParsedJobOverviewIntent,
+    rationale: string[]
+): void {
+    if (parsed.customer_focused) return;
+    const people = getBand(layout, "people");
+    if (!people?.enabled || !people.items.some((it) => it.key === "_primary_person_name")) return;
+    if (!(parsed.show_main_contact || parsed.contact_details_higher)) return;
+    const had = layout.header_keys.includes("_primary_person_name");
+    layout.header_keys = layout.header_keys.filter((k) => k !== "_primary_person_name");
+    if (had) {
+        rationale.push(
+            "Removed _primary_person_name from the header ribbon — contact stays in the people band so it is not duplicated above and in the band."
+        );
     }
 }
 
@@ -536,7 +570,9 @@ export function planJobOverviewLayoutRequest(
         }
         reorderBandAfterSummary(layout, "service_property");
         bandsTouched.add("service_property");
-        rationale.push("Moved service_property immediately after summary per 'higher' directive.");
+        rationale.push(
+            "Moved service_property up after summary; service line (service_key) stays in summary unless you ask for it separately — avoids duplicating the same idea in header and band."
+        );
     }
 
     if (parsed_intent.contact_details_higher) {
@@ -573,7 +609,9 @@ export function planJobOverviewLayoutRequest(
             sp.items = defaultServicePropertyBand(catalog).items.map((x) => ({ ...x }));
         }
         bandsTouched.add("service_property");
-        rationale.push("Enabled service_property band for on-site service attributes.");
+        rationale.push(
+            "Enabled service_property for on-site attributes (home type, size, beds/baths); the booked service line uses service_key in summary, not duplicated in header."
+        );
     }
 
     const fieldWants = new Map<string, FieldWant>();
@@ -621,7 +659,8 @@ export function planJobOverviewLayoutRequest(
             w.confidence,
             resolvedOutcomes,
             rationale,
-            bandsTouched
+            bandsTouched,
+            false
         );
     }
     for (const [fk, w] of fieldWants) {
@@ -635,7 +674,8 @@ export function planJobOverviewLayoutRequest(
             w.confidence,
             resolvedOutcomes,
             rationale,
-            bandsTouched
+            bandsTouched,
+            false
         );
     }
 
@@ -692,6 +732,8 @@ export function planJobOverviewLayoutRequest(
         });
     }
 
+    applyEditorialContactHeaderPolicy(layout, parsed_intent, rationale);
+
     const dedupeOutcomes = (() => {
         const m = new Map<string, ResolvedTargetOutcome>();
         for (const o of resolvedOutcomes) {
@@ -700,6 +742,15 @@ export function planJobOverviewLayoutRequest(
         }
         return [...m.values()];
     })();
+
+    const alreadyIds = dedupeOutcomes
+        .filter((o) => o.outcome === "already_present")
+        .map((o) => o.field_key);
+    if (alreadyIds.length > 0) {
+        rationale.push(
+            `Already satisfied (layout already exposed these): ${alreadyIds.join(", ")} — no duplicate items added.`
+        );
+    }
 
     const unresolved = mergeUnresolved(gapRefs, rationale);
 

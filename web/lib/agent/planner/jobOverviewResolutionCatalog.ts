@@ -6,10 +6,10 @@
 import type { JobOverviewResolutionCatalog } from "@/lib/agent/planner/jobOverviewPlannerTypes";
 
 /**
- * v2: contact/service phrasing, `service_key`, explicit capability gaps (phone/email — no overview keys).
+ * v3: editorial defaults — location, schedule, service line not header-promoted; gaps unchanged.
  */
 export const JOB_OVERVIEW_RESOLUTION_CATALOG: JobOverviewResolutionCatalog = {
-    catalog_version: 2,
+    catalog_version: 3,
     band_keys: [
         "summary",
         "people",
@@ -31,6 +31,7 @@ export const JOB_OVERVIEW_RESOLUTION_CATALOG: JobOverviewResolutionCatalog = {
                 "their contact",
             ],
             preferred_band: "people",
+            /** Planner promotes to header only for customer-focused template (identity strip). */
             allow_header: true,
         },
         {
@@ -43,13 +44,14 @@ export const JOB_OVERVIEW_RESOLUTION_CATALOG: JobOverviewResolutionCatalog = {
             key: "_location_label",
             synonyms: ["address", "service address", "location"],
             preferred_band: "summary",
-            allow_header: true,
+            /** Narrative fields stay in the summary band; header ribbon is for identity/status. */
+            allow_header: false,
         },
         {
             key: "_next_schedule",
             synonyms: ["next service date", "next service", "next visit", "next schedule", "next appointment"],
             preferred_band: "summary",
-            allow_header: true,
+            allow_header: false,
         },
         {
             key: "scheduled_at",
@@ -68,7 +70,8 @@ export const JOB_OVERVIEW_RESOLUTION_CATALOG: JobOverviewResolutionCatalog = {
                 "type of service",
             ],
             preferred_band: "summary",
-            allow_header: true,
+            /** Service line reads best in summary; property specifics use service_property band. */
+            allow_header: false,
         },
         {
             key: "title",

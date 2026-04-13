@@ -319,7 +319,11 @@ describe("job overview semantic planner — golden utterances", () => {
                 assert: (r) => {
                     expect(r.ok).toBe(true);
                     if (!r.ok) return;
-                    expect((r.config.header_keys as string[]).includes("_primary_person_name")).toBe(true);
+                    const people = (r.config.bands as { band_key: string; items: { key: string }[] }[]).find(
+                        (b) => b.band_key === "people"
+                    );
+                    expect(people?.items.map((i) => i.key)).toContain("_primary_person_name");
+                    expect((r.config.header_keys as string[]).includes("_primary_person_name")).toBe(false);
                 },
             },
         ];
@@ -327,6 +331,71 @@ describe("job overview semantic planner — golden utterances", () => {
     it.each(cases)("golden: $utterance", ({ utterance, assert }) => {
         const r = planJobOverviewLayoutRequest(utterance, storedConfig(2));
         assert(r);
+    });
+});
+
+describe("job overview semantic planner — editorial policy (target requests)", () => {
+    const strictOk = (config: unknown) => expect(parseOverviewLayoutConfigStrict(config).ok).toBe(true);
+
+    it("show the main contact, their phone, email, address, what service they got, and next service date", () => {
+        const utterance =
+            "Show the main contact, their phone, email, address, what service they got, and next service date";
+        const r = planJobOverviewLayoutRequest(utterance, storedConfig(1));
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        strictOk(r.config);
+        expect(r.resolution.unresolved_targets.map((u) => u.concept_id).sort()).toEqual(["email", "phone"]);
+        const hk = r.config.header_keys as string[];
+        expect(hk.includes("_location_label")).toBe(false);
+        expect(hk.includes("_next_schedule")).toBe(false);
+        expect(hk.includes("service_key")).toBe(false);
+        expect(hk.includes("_primary_person_name")).toBe(false);
+        const summary = (r.config.bands as { band_key: string; items: { key: string }[] }[]).find(
+            (b) => b.band_key === "summary"
+        );
+        expect(summary?.items.map((i) => i.key)).toEqual(
+            expect.arrayContaining(["_location_label", "_next_schedule", "service_key"])
+        );
+        const people = (r.config.bands as { band_key: string; items: { key: string }[] }[]).find(
+            (b) => b.band_key === "people"
+        );
+        expect(people?.items.map((i) => i.key)).toContain("_primary_person_name");
+        expect(r.diff_summary.header_keys?.after.map((k) => k).includes("_primary_person_name")).toBe(false);
+    });
+
+    it("make the overview more customer-focused", () => {
+        const r = planJobOverviewLayoutRequest("make the overview more customer-focused", storedConfig(1));
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        strictOk(r.config);
+        expect(r.parsed_intent.customer_focused).toBe(true);
+        const hk = r.config.header_keys as string[];
+        expect(hk.indexOf("title")).toBe(0);
+        expect(hk.includes("_customer_name")).toBe(true);
+        expect(hk.includes("_primary_person_name")).toBe(true);
+        expect(r.config.relationship_group_keys).toEqual(["primary_customer_person", "customer_account"]);
+    });
+
+    it("show contact details higher", () => {
+        const r = planJobOverviewLayoutRequest("show contact details higher", storedConfig(2));
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        strictOk(r.config);
+        expect(r.parsed_intent.contact_details_higher).toBe(true);
+        const order = (r.config.bands as { band_key: string }[]).map((b) => b.band_key);
+        expect(order.indexOf("people")).toBe(order.indexOf("summary") + 1);
+        expect((r.config.header_keys as string[]).includes("_primary_person_name")).toBe(false);
+    });
+
+    it("put service details higher", () => {
+        const r = planJobOverviewLayoutRequest("put service details higher", storedConfig(1));
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        strictOk(r.config);
+        expect(r.parsed_intent.service_details_higher).toBe(true);
+        const order = (r.config.bands as { band_key: string }[]).map((b) => b.band_key);
+        expect(order.indexOf("service_property")).toBe(order.indexOf("summary") + 1);
+        expect((r.config.header_keys as string[]).includes("service_key")).toBe(false);
     });
 });
 
