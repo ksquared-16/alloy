@@ -2,7 +2,7 @@
  * Agent Config Lab — semantic overview layout preview/apply bridge (job, overview only).
  */
 
-import type { JobOverviewPlannerResult } from "@/lib/agent/planner/jobOverviewPlannerTypes";
+import type { JobOverviewPlannerFailure, JobOverviewPlannerResult } from "@/lib/agent/planner/jobOverviewPlannerTypes";
 import { planJobOverviewLayoutRequest } from "@/lib/agent/planner/planJobOverviewLayoutRequest";
 import type { JobOverviewResolutionCatalog } from "@/lib/agent/planner/jobOverviewPlannerTypes";
 import { JOB_OVERVIEW_RESOLUTION_CATALOG } from "@/lib/agent/planner/jobOverviewResolutionCatalog";
@@ -17,7 +17,7 @@ export type OverviewLayoutSemanticPreviewOk = {
 export type OverviewLayoutSemanticPreviewErr = {
     ok: false;
     error: string;
-    planner: JobOverviewPlannerResult;
+    planner: JobOverviewPlannerFailure;
 };
 
 export type OverviewLayoutSemanticPreviewResult = OverviewLayoutSemanticPreviewOk | OverviewLayoutSemanticPreviewErr;

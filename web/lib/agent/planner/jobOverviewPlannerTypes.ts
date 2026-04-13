@@ -33,8 +33,8 @@ export type JobOverviewResolutionCatalog = {
 };
 
 export type ParsedJobOverviewIntent = {
-    hide_financial_band: boolean;
-    show_financial_band: boolean;
+    hide_financial: boolean;
+    show_financial: boolean;
     customer_focused: boolean;
     service_details_higher: boolean;
     show_main_contact: boolean;

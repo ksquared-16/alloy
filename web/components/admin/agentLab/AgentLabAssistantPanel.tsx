@@ -74,17 +74,22 @@ export default function AgentLabAssistantPanel(props: Props) {
                     overviewConfigRaw: cfg ?? {},
                 });
                 if (!built.ok) {
-                    setSemanticPlannerErr(built.semanticPlannerFailure ?? null);
+                    const plannerFailure =
+                        "semanticPlannerFailure" in built ? built.semanticPlannerFailure ?? null : null;
+                    setSemanticPlannerErr(plannerFailure);
                     setParseNote(built.error);
                     return;
                 }
+                const payload = built.payload;
+                const semanticPlanner =
+                    "semanticPlanner" in payload ? payload.semanticPlanner ?? null : null;
                 setPreviewRoute("v1");
-                setPreviewLabel(built.payload.label);
-                setPreviewJson(JSON.stringify(built.payload.structured_override, null, 2));
-                setSemanticPlannerOk(built.payload.semanticPlanner ?? null);
+                setPreviewLabel(payload.label);
+                setPreviewJson(JSON.stringify(payload.structured_override, null, 2));
+                setSemanticPlannerOk(semanticPlanner);
                 setSemanticPlannerErr(null);
                 setParseNote(
-                    built.payload.semanticPlanner
+                    semanticPlanner
                         ? "Semantic planner preview ready — review rationale and JSON, then Apply."
                         : "Preview ready — review JSON, then Apply."
                 );

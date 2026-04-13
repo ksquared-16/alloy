@@ -68,7 +68,9 @@ describe("Agent Lab — semantic overview assistant", () => {
         expect(built.ok).toBe(true);
         if (!built.ok) return;
         expect(built.payload.route).toBe("v1");
-        expect(built.payload.semanticPlanner?.ok).toBe(true);
+        const semanticPlanner =
+            "semanticPlanner" in built.payload ? built.payload.semanticPlanner ?? null : null;
+        expect(semanticPlanner?.ok).toBe(true);
         const o = built.payload.structured_override;
         expect(o.intent_type).toBe("update_record_layout");
     });
