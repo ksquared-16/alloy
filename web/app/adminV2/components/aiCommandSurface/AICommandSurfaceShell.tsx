@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import { neutral, derived, brand, semantic } from "@/styles/tokens/colors";
 import type { JobOverviewPlannerSuccess, JobOverviewPlannerFailure } from "@/lib/agent/planner/jobOverviewPlannerTypes";
 import { runOverviewLayoutSemanticPreview } from "@/lib/admin/agentLab/overviewLayoutSemanticAssistant";
@@ -14,6 +15,7 @@ import {
   type AIStatusBadge,
   type ResponseKind,
 } from "@/lib/adminV2/aiCommandSurface/aiCommandSurfaceModel";
+import { dispatchAiActivityRefresh } from "@/app/adminV2/components/aiActivity/RecentAiActionsStrip";
 
 const CMD = {
   textBody: neutral.textPrimary,
@@ -38,6 +40,10 @@ type ResponseModel = {
 const BAR_MAX_WIDTH = 840;
 const COLLAPSED_MIN_H = 36;
 const EXPANDED_MAX_H = 320;
+/** Delay before auto-collapsing the panel after a successful Apply. */
+const POST_APPLY_COLLAPSE_MS = 1800;
+/** How long to show the compact “saved” strip after auto-collapse. */
+const SUCCESS_STRIP_MS = 5200;
 
 function safeJson(x: unknown): string {
   return JSON.stringify(x, null, 2);
@@ -296,18 +302,20 @@ function AIActionsRow(props: {
           onClick={onDismiss}
           className="text-[11px] font-medium underline-offset-2 hover:underline ml-auto sm:ml-0"
           style={{ color: CMD.textSupporting }}
+          title="Collapse panel (Esc)"
         >
-          Dismiss
+          Collapse
         </button>
       ) : null}
 
-      <a
-        href="/admin/agent-lab"
-        className="text-[10px] underline-offset-2 hover:underline opacity-80"
-        style={{ color: CMD.textSupporting }}
-      >
-        AI Activity
-      </a>
+        <a
+          href="/admin/v2/ai-activity"
+          className="text-[10px] underline-offset-2 hover:underline opacity-70"
+          style={{ color: CMD.textSupporting }}
+          title="Full audit log (recent actions are above the command bar)"
+        >
+          Full log
+        </a>
     </div>
   );
 }
@@ -408,9 +416,15 @@ function AdvancedDrawer(props: {
 }
 
 export default function AICommandSurfaceShell() {
+  const pathname = usePathname();
+  const routePathRef = useRef(pathname);
+  const postApplyCollapseRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const successStripRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const [commandText, setCommandText] = useState("");
   const [expanded, setExpanded] = useState(false);
+  const [showSuccessStrip, setShowSuccessStrip] = useState(false);
   const [busy, setBusy] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -419,6 +433,27 @@ export default function AICommandSurfaceShell() {
 
   const [response, setResponse] = useState<ResponseModel | null>(null);
   const [structuredOverrideJson, setStructuredOverrideJson] = useState<string>("");
+
+  const clearPostApplyTimer = useCallback(() => {
+    if (postApplyCollapseRef.current) {
+      clearTimeout(postApplyCollapseRef.current);
+      postApplyCollapseRef.current = null;
+    }
+  }, []);
+
+  const clearSuccessStripTimer = useCallback(() => {
+    if (successStripRef.current) {
+      clearTimeout(successStripRef.current);
+      successStripRef.current = null;
+    }
+  }, []);
+
+  const collapsePanel = useCallback(() => {
+    clearPostApplyTimer();
+    setExpanded(false);
+    setAdvancedOpen(false);
+    setDetailsOpen(false);
+  }, [clearPostApplyTimer]);
 
   const activePlanner = response?.plannerOk ?? null;
   const applyBlockedByNoop = shouldBlockSemanticNoopApply({
@@ -447,6 +482,35 @@ export default function AICommandSurfaceShell() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
+  useEffect(() => {
+    return () => {
+      clearPostApplyTimer();
+      clearSuccessStripTimer();
+    };
+  }, [clearPostApplyTimer, clearSuccessStripTimer]);
+
+  useEffect(() => {
+    if (routePathRef.current !== pathname) {
+      routePathRef.current = pathname;
+      setShowSuccessStrip(false);
+      clearSuccessStripTimer();
+      collapsePanel();
+    }
+  }, [pathname, collapsePanel, clearSuccessStripTimer]);
+
+  useEffect(() => {
+    const panelOpen = expanded && response != null;
+    if (!panelOpen || busy) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        collapsePanel();
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [expanded, response, busy, collapsePanel]);
+
   const runPreview = useCallback(async () => {
     const submitted = commandText.trim();
     if (!submitted) return;
@@ -456,6 +520,9 @@ export default function AICommandSurfaceShell() {
       inputRef.current?.focus();
     });
 
+    setShowSuccessStrip(false);
+    clearSuccessStripTimer();
+    clearPostApplyTimer();
     setExpanded(true);
     setBusy(true);
     setAdvancedOpen(false);
@@ -514,12 +581,15 @@ export default function AICommandSurfaceShell() {
         inputRef.current?.focus();
       });
     }
-  }, [commandText]);
+  }, [commandText, clearPostApplyTimer, clearSuccessStripTimer]);
 
   const apply = useCallback(async () => {
     if (!structuredOverrideJson) return;
     if (applyBlockedByNoop) return;
 
+    const auditMessage = response?.submittedCommand?.trim() || "AdminV2 AI command surface";
+
+    clearPostApplyTimer();
     setBusy(true);
     setAdvancedOpen(false);
     setDetailsOpen(false);
@@ -550,12 +620,13 @@ export default function AICommandSurfaceShell() {
         body: JSON.stringify({
           request_id: ids.request_id,
           correlation_id: ids.correlation_id,
-          message: "AdminV2 AI command surface",
+          message: auditMessage,
           structured_override,
         }),
       });
       const data = (await res.json()) as unknown;
       if (!res.ok) {
+        clearPostApplyTimer();
         setResponse((r) =>
           r
             ? {
@@ -586,7 +657,22 @@ export default function AICommandSurfaceShell() {
             }
           : r
       );
+      dispatchAiActivityRefresh();
+      clearPostApplyTimer();
+      postApplyCollapseRef.current = setTimeout(() => {
+        postApplyCollapseRef.current = null;
+        setExpanded(false);
+        setAdvancedOpen(false);
+        setDetailsOpen(false);
+        setShowSuccessStrip(true);
+        clearSuccessStripTimer();
+        successStripRef.current = setTimeout(() => {
+          successStripRef.current = null;
+          setShowSuccessStrip(false);
+        }, SUCCESS_STRIP_MS);
+      }, POST_APPLY_COLLAPSE_MS);
     } catch (e) {
+      clearPostApplyTimer();
       setResponse((r) =>
         r
           ? {
@@ -607,13 +693,7 @@ export default function AICommandSurfaceShell() {
         inputRef.current?.focus();
       });
     }
-  }, [structuredOverrideJson, applyBlockedByNoop, activePlanner]);
-
-  const dismiss = useCallback(() => {
-    setExpanded(false);
-    setAdvancedOpen(false);
-    setDetailsOpen(false);
-  }, []);
+  }, [structuredOverrideJson, applyBlockedByNoop, activePlanner, response?.submittedCommand, clearPostApplyTimer, clearSuccessStripTimer]);
 
   const refine = useCallback(() => {
     setExpanded(true);
@@ -627,7 +707,29 @@ export default function AICommandSurfaceShell() {
   const showPanel = expanded && response != null;
 
   return (
-    <SurfaceCard expanded={showPanel}>
+    <SurfaceCard expanded={showPanel || showSuccessStrip}>
+      {showSuccessStrip && !expanded && response?.kind === "applied_success" ? (
+        <div
+          className="mb-0 flex items-center justify-between gap-2 rounded-t-lg px-3 py-1.5"
+          style={{
+            backgroundColor: derived.kpiBandBusinessWash,
+            borderBottom: `1px solid ${derived.border}`,
+          }}
+        >
+          <span className="min-w-0 text-[11px] leading-snug" style={{ color: CMD.textBody }}>
+            Job overview layout saved.
+          </span>
+          <button
+            type="button"
+            className="shrink-0 text-[11px] font-semibold"
+            style={{ color: brand.secondary }}
+            onClick={() => setExpanded(true)}
+          >
+            Show
+          </button>
+        </div>
+      ) : null}
+
       {showPanel && response ? (
         <div
           className="rounded-t-xl overflow-hidden border-b"
@@ -654,7 +756,7 @@ export default function AICommandSurfaceShell() {
               applyAnyway={applyAnyway}
               onToggleApplyAnyway={setApplyAnyway}
               onApply={() => void apply()}
-              onDismiss={dismiss}
+              onDismiss={collapsePanel}
               onRefine={refine}
             />
 
@@ -677,19 +779,36 @@ export default function AICommandSurfaceShell() {
         </div>
       ) : null}
 
-      <div className={`flex items-end gap-2 ${showPanel ? "mt-0" : "mt-2"}`}>
+      <div className={`flex items-end gap-2 ${showPanel || showSuccessStrip ? "mt-0" : "mt-2"}`}>
         <div
-          className={`flex-1 min-w-0 border-2 bg-white px-3 py-2 ${showPanel ? "rounded-b-xl rounded-t-none border-t border-t-[rgba(0,0,0,0.06)]" : "rounded-2xl px-3.5 py-2.5"}`}
+          className={`flex-1 min-w-0 border-2 bg-white px-3 py-2 ${
+            showPanel || showSuccessStrip
+              ? "rounded-b-xl rounded-t-none border-t border-t-[rgba(0,0,0,0.06)]"
+              : "rounded-2xl px-3.5 py-2.5"
+          }`}
           style={{
             borderColor: derived.adminV2AiInputPineRing,
-            boxShadow: showPanel ? `inset 0 1px 0 rgba(255,255,255,0.95)` : `0 1px 0 rgba(0, 162, 131, 0.06), inset 0 1px 0 rgba(255,255,255,0.9)`,
+            boxShadow:
+              showPanel || showSuccessStrip
+                ? `inset 0 1px 0 rgba(255,255,255,0.95)`
+                : `0 1px 0 rgba(0, 162, 131, 0.06), inset 0 1px 0 rgba(255,255,255,0.9)`,
           }}
         >
           <textarea
             ref={inputRef}
             value={commandText}
-            onChange={(e) => setCommandText(e.target.value)}
-            onFocus={() => setExpanded((e) => e || Boolean(response))}
+            onChange={(e) => {
+              const v = e.target.value;
+              setCommandText(v);
+              if (response && v.trim().length > 0) {
+                setExpanded(true);
+              }
+            }}
+            onFocus={() => {
+              if (commandText.trim().length > 0) {
+                setExpanded(true);
+              }
+            }}
             placeholder="Command: configure job overview… (e.g. “make the overview more customer-focused”)"
             className="w-full resize-none bg-transparent outline-none text-sm leading-snug"
             rows={1}

@@ -167,6 +167,8 @@ export async function POST(request: NextRequest) {
         intent_version: override.intent_version,
         intent_type: override.intent_type,
         slots,
+        /** Human command / context for audit & AI Activity (same JSON blob as structured intent). */
+        message: message.trim(),
     };
 
     if (!isUuid(requestId) || !isUuid(correlationId)) {

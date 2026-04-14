@@ -10,6 +10,7 @@ import Sidebar from "./Sidebar";
 import InspectorPanel from "./InspectorPanel";
 import AICommandBar from "./AICommandBar";
 import AICommandSurfaceShell from "./aiCommandSurface/AICommandSurfaceShell";
+import RecentAiActionsStrip from "./aiActivity/RecentAiActionsStrip";
 import BreadcrumbBar from "./navigation/BreadcrumbBar";
 import KPIBand from "./dashboard/KPIBand";
 import SystemCanvas from "./canvas/SystemCanvas";
@@ -25,6 +26,9 @@ import WorkspaceAmbientLayer from "./WorkspaceAmbientLayer";
 function adminV2AiCommandSurfaceEnabled(): boolean {
   return true;
 }
+
+/** Matches `AICommandSurfaceShell` inner max width so the activity strip aligns with the bar. */
+const COMMAND_SURFACE_MAX_W_PX = 840;
 
 function getDepartmentName(key: DepartmentKey): string {
   const dept = MOCK_DEPARTMENTS.find((d) => d.key === key);
@@ -71,7 +75,13 @@ export default function AdminV2Shell({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
-  const isWorkspaceV2Route = pathname === "/adminV2/workspace" || pathname.startsWith("/adminV2/workspace/");
+  const isWorkspaceV2Route =
+    pathname === "/adminV2/workspace" ||
+    pathname.startsWith("/adminV2/workspace/") ||
+    pathname === "/admin/v2" ||
+    pathname === "/admin/v2/workspace" ||
+    pathname.startsWith("/admin/v2/workspace/");
+  const isAiActivityRoute = pathname === "/adminV2/ai-activity" || pathname === "/admin/v2/ai-activity";
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [zoomLevel, setZoomLevel] = useState<"company" | "department">("company");
@@ -96,7 +106,7 @@ export default function AdminV2Shell({
 
   const showRecordsExpandable = zoomLevel === "department" && selectedDepartmentKey != null;
 
-  if (isWorkspaceV2Route) {
+  if (isWorkspaceV2Route || isAiActivityRoute) {
     return (
       <div
         className="flex h-screen w-full overflow-hidden"
@@ -113,11 +123,20 @@ export default function AdminV2Shell({
             className="relative flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden"
             style={workspaceContentAmbientStyle}
           >
-            <WorkspaceAmbientLayer />
-            <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden isolate pb-[88px]">
-              {children}
+            {isWorkspaceV2Route ? <WorkspaceAmbientLayer /> : null}
+            <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden isolate pb-[200px]">
+              {isAiActivityRoute ? (
+                <main className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</main>
+              ) : (
+                children
+              )}
             </div>
-            <div className="absolute bottom-0 left-0 right-0 z-20">
+            <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-col">
+              <div className="flex w-full justify-center px-4">
+                <div className="w-full" style={{ maxWidth: COMMAND_SURFACE_MAX_W_PX }}>
+                  <RecentAiActionsStrip />
+                </div>
+              </div>
               {adminV2AiCommandSurfaceEnabled() ? <AICommandSurfaceShell /> : <AICommandBar />}
             </div>
           </div>
@@ -185,7 +204,12 @@ export default function AdminV2Shell({
             zoomLevel={zoomLevel}
           />
         </div>
-        <div className="relative">
+        <div className="relative flex flex-col">
+          <div className="flex w-full justify-center px-4">
+            <div className="w-full" style={{ maxWidth: COMMAND_SURFACE_MAX_W_PX }}>
+              <RecentAiActionsStrip />
+            </div>
+          </div>
           {adminV2AiCommandSurfaceEnabled() ? <AICommandSurfaceShell /> : <AICommandBar />}
         </div>
       </div>
