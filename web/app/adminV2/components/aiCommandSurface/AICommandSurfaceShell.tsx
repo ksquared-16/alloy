@@ -26,6 +26,8 @@ type ResponseModel = {
   headline: string;
   subline?: string;
   confidence: AIStatusBadge;
+  /** Command text submitted for this response (preview); unchanged by apply. */
+  submittedCommand?: string;
   plannerOk?: JobOverviewPlannerSuccess | null;
   plannerErr?: JobOverviewPlannerFailure | null;
   structuredOverrideJson?: string;
@@ -169,8 +171,8 @@ function SurfaceCard(props: { children: ReactNode; expanded: boolean }) {
   );
 }
 
-function OutcomeZone(props: { headline: string; subline?: string; confidence: AIStatusBadge }) {
-  const { headline, subline, confidence } = props;
+function OutcomeZone(props: { headline: string; subline?: string; confidence: AIStatusBadge; submittedCommand?: string }) {
+  const { headline, subline, confidence, submittedCommand } = props;
   const { bg, isEmber } = outcomeWash(confidence);
   const badge = outcomeBadgeStyles(confidence, isEmber);
   const oneLine = subline?.split("\n")[0]?.trim();
@@ -200,6 +202,19 @@ function OutcomeZone(props: { headline: string; subline?: string; confidence: AI
           {badgeLabel(confidence)}
         </div>
       </div>
+      {submittedCommand ? (
+        <div
+          className="mt-2 border-t pt-2 text-[12px] leading-snug"
+          style={{ borderColor: isEmber ? "rgba(188, 67, 0, 0.15)" : "rgba(0, 162, 131, 0.15)" }}
+        >
+          <span className="font-semibold uppercase tracking-wide text-[10px]" style={{ color: CMD.textLabel }}>
+            Your request
+          </span>
+          <p className="mt-0.5 line-clamp-3" style={{ color: CMD.textBody }} title={submittedCommand}>
+            {submittedCommand}
+          </p>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -421,10 +436,10 @@ export default function AICommandSurfaceShell() {
     return buildDetailsBullets({
       kind: response.kind,
       planner: response.plannerOk ?? null,
-      commandText: commandText.trim(),
+      commandText: response.submittedCommand ?? "",
       errorSubline: response.kind === "error" ? response.subline : undefined,
     });
-  }, [response, commandText]);
+  }, [response]);
 
   useEffect(() => {
     const onResize = () => setViewportH(window.innerHeight);
@@ -433,8 +448,13 @@ export default function AICommandSurfaceShell() {
   }, []);
 
   const runPreview = useCallback(async () => {
-    const t = commandText.trim();
-    if (!t) return;
+    const submitted = commandText.trim();
+    if (!submitted) return;
+
+    setCommandText("");
+    queueMicrotask(() => {
+      inputRef.current?.focus();
+    });
 
     setExpanded(true);
     setBusy(true);
@@ -447,17 +467,19 @@ export default function AICommandSurfaceShell() {
       headline: "Working on your request…",
       confidence: "in_progress",
       subline: "Building preview…",
+      submittedCommand: submitted,
     });
 
     try {
       const cfg = await loadCurrentJobOverviewConfig();
-      const prev = runOverviewLayoutSemanticPreview(t, cfg);
+      const prev = runOverviewLayoutSemanticPreview(submitted, cfg);
       if (!prev.ok) {
         setResponse({
           kind: "error",
           headline: "Couldn’t build a preview",
           subline: prev.error,
           confidence: "error",
+          submittedCommand: submitted,
           plannerErr: prev.planner,
           errorDetailJson: safeJson(prev.planner),
         });
@@ -473,6 +495,7 @@ export default function AICommandSurfaceShell() {
         headline,
         subline,
         confidence: statusFromPlanner(planner),
+        submittedCommand: submitted,
         plannerOk: planner,
         structuredOverrideJson: structuredJson,
       });
@@ -482,10 +505,14 @@ export default function AICommandSurfaceShell() {
         headline: "Preview failed",
         subline: e instanceof Error ? e.message : "Request failed",
         confidence: "error",
+        submittedCommand: submitted,
         errorDetailJson: safeJson({ message: e instanceof Error ? e.message : String(e) }),
       });
     } finally {
       setBusy(false);
+      queueMicrotask(() => {
+        inputRef.current?.focus();
+      });
     }
   }, [commandText]);
 
@@ -529,38 +556,56 @@ export default function AICommandSurfaceShell() {
       });
       const data = (await res.json()) as unknown;
       if (!res.ok) {
-        setResponse({
-          kind: "error",
-          headline: "Apply failed",
-          subline: `HTTP ${res.status}`,
-          confidence: "error",
-          plannerOk: activePlanner,
-          structuredOverrideJson,
-          errorDetailJson: safeJson(data),
-        });
+        setResponse((r) =>
+          r
+            ? {
+                ...r,
+                kind: "error",
+                headline: "Apply failed",
+                subline: `HTTP ${res.status}`,
+                confidence: "error",
+                plannerOk: activePlanner,
+                structuredOverrideJson,
+                errorDetailJson: safeJson(data),
+              }
+            : r
+        );
         return;
       }
-      setResponse({
-        kind: "applied_success",
-        headline: "Changes applied",
-        subline: "Saved.",
-        confidence: "applied",
-        applyResultJson: safeJson(data),
-        plannerOk: activePlanner,
-        structuredOverrideJson,
-      });
+      setResponse((r) =>
+        r
+          ? {
+              ...r,
+              kind: "applied_success",
+              headline: "Changes applied",
+              subline: "Saved.",
+              confidence: "applied",
+              applyResultJson: safeJson(data),
+              plannerOk: activePlanner,
+              structuredOverrideJson,
+            }
+          : r
+      );
     } catch (e) {
-      setResponse({
-        kind: "error",
-        headline: "Apply failed",
-        subline: e instanceof Error ? e.message : "Request failed",
-        confidence: "error",
-        plannerOk: activePlanner,
-        structuredOverrideJson,
-        errorDetailJson: safeJson({ message: e instanceof Error ? e.message : String(e) }),
-      });
+      setResponse((r) =>
+        r
+          ? {
+              ...r,
+              kind: "error",
+              headline: "Apply failed",
+              subline: e instanceof Error ? e.message : "Request failed",
+              confidence: "error",
+              plannerOk: activePlanner,
+              structuredOverrideJson,
+              errorDetailJson: safeJson({ message: e instanceof Error ? e.message : String(e) }),
+            }
+          : r
+      );
     } finally {
       setBusy(false);
+      queueMicrotask(() => {
+        inputRef.current?.focus();
+      });
     }
   }, [structuredOverrideJson, applyBlockedByNoop, activePlanner]);
 
@@ -573,7 +618,10 @@ export default function AICommandSurfaceShell() {
   const refine = useCallback(() => {
     setExpanded(true);
     inputRef.current?.focus();
-    inputRef.current?.setSelectionRange(commandText.length, commandText.length);
+    const len = commandText.length;
+    queueMicrotask(() => {
+      inputRef.current?.setSelectionRange(len, len);
+    });
   }, [commandText]);
 
   const showPanel = expanded && response != null;
@@ -590,7 +638,12 @@ export default function AICommandSurfaceShell() {
             backgroundColor: neutral.surface,
           }}
         >
-          <OutcomeZone headline={response.headline} subline={response.subline} confidence={response.confidence} />
+          <OutcomeZone
+            headline={response.headline}
+            subline={response.subline}
+            confidence={response.confidence}
+            submittedCommand={response.submittedCommand}
+          />
 
           <div className="space-y-0 px-3 py-2" style={{ backgroundColor: neutral.background }}>
             <AIActionsRow
