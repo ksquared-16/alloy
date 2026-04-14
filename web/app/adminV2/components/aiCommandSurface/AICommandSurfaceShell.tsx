@@ -2,6 +2,23 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { neutral, derived, brand, semantic, palette } from "@/styles/tokens/colors";
+
+/** Section accents + tints — AdminV2 command surface (tokens + semantic mixes only). */
+const CMD = {
+  border: 2,
+  padL: 10,
+  accentPine: brand.secondary,
+  accentGreen: semantic.success,
+  accentAmber: semantic.warning,
+  bgFound: derived.kpiBandBusinessWash,
+  bgChanges: derived.kpiBandBusinessLight,
+  bgUnresolved: `color-mix(in srgb, ${semantic.warning} 5%, ${neutral.surface})`,
+  bgNoop: derived.inspectorCommandRailWash,
+  /** Primary body — Midnight Forge forward (slate-700/800 feel vs gray-500) */
+  textBody: neutral.textPrimary,
+  textSupporting: "rgba(39, 63, 82, 0.78)",
+  textLabel: "rgba(39, 63, 82, 0.52)",
+} as const;
 import type { JobOverviewPlannerSuccess, JobOverviewPlannerFailure } from "@/lib/agent/planner/jobOverviewPlannerTypes";
 import { runOverviewLayoutSemanticPreview } from "@/lib/admin/agentLab/overviewLayoutSemanticAssistant";
 import { shouldBlockSemanticNoopApply } from "@/lib/admin/agentLab/semanticOverviewNoopSummary";
@@ -120,7 +137,7 @@ function AIResponseHeader(props: { headline: string; subline?: string; confidenc
           {headline}
         </div>
         {subline ? (
-          <div className="mt-0.5 text-[11px] leading-snug" style={{ color: derived.textSecondary }}>
+          <div className="mt-0.5 text-[11px] leading-snug" style={{ color: CMD.textSupporting }}>
             {subline}
           </div>
         ) : null}
@@ -144,26 +161,44 @@ function AISummarySection(props: { planner: JobOverviewPlannerSuccess; commandTe
   const { planner, commandText } = props;
   const found = formatIntentSummary(planner.parsed_intent);
   return (
-    <div className="mt-0 space-y-3">
+    <div className="mt-0 space-y-2.5">
       <div>
-        <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: derived.inspectorSectionMuted }}>
+        <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: CMD.textLabel }}>
           Your request
         </div>
-        <p className="mt-1 text-[13px] leading-snug pl-2.5 border-l-2" style={{ borderColor: brand.secondary, color: neutral.textPrimary }}>
-          {commandText || "—"}
-        </p>
+        <div
+          className="mt-1 rounded-r-md py-1.5 pr-2"
+          style={{
+            paddingLeft: CMD.padL,
+            borderLeft: `${CMD.border}px solid ${CMD.accentPine}`,
+            backgroundColor: derived.kpiBandBusinessLight,
+          }}
+        >
+          <p className="text-[13px] leading-snug font-medium" style={{ color: CMD.textBody }}>
+            {commandText || "—"}
+          </p>
+        </div>
       </div>
       <div>
-        <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: derived.inspectorSectionMuted }}>
+        <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: CMD.textLabel }}>
           What we found
         </div>
-        <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[13px] leading-snug" style={{ color: derived.textSecondary }}>
-          {found.map((line, i) => (
-            <li key={i} style={{ color: neutral.textPrimary }}>
-              {line}
-            </li>
-          ))}
-        </ul>
+        <div
+          className="mt-1 rounded-r-md py-1.5 pr-2"
+          style={{
+            paddingLeft: CMD.padL,
+            borderLeft: `${CMD.border}px solid ${CMD.accentPine}`,
+            backgroundColor: CMD.bgFound,
+          }}
+        >
+          <ul className="list-disc space-y-0.5 pl-3.5 text-[13px] leading-snug" style={{ color: CMD.textBody }}>
+            {found.map((line, i) => (
+              <li key={i} className="pl-0.5">
+                {line}
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
     </div>
   );
@@ -183,7 +218,7 @@ function AIOutcomeSection(props: { planner?: JobOverviewPlannerSuccess | null; k
   let body: ReactNode;
   if (kind === "applied_success") {
     body = (
-      <p className="text-[13px] leading-snug" style={{ color: neutral.textPrimary }}>
+      <p className="text-[13px] leading-snug" style={{ color: CMD.textBody }}>
         Saved. Raw response under <span className="font-medium">Technical details</span>.
       </p>
     );
@@ -191,9 +226,9 @@ function AIOutcomeSection(props: { planner?: JobOverviewPlannerSuccess | null; k
     if (planner.effective_layout_change) {
       const lines = formatDiffSummaryHuman(planner.diff_summary);
       body = (
-        <ul className="list-disc space-y-0.5 pl-4 text-[13px] leading-snug">
+        <ul className="list-disc space-y-0.5 pl-3.5 text-[13px] leading-snug">
           {lines.map((line, i) => (
-            <li key={i} style={{ color: neutral.textPrimary }}>
+            <li key={i} className="pl-0.5" style={{ color: CMD.textBody }}>
               {line}
             </li>
           ))}
@@ -201,7 +236,7 @@ function AIOutcomeSection(props: { planner?: JobOverviewPlannerSuccess | null; k
       );
     } else {
       body = (
-        <p className="text-[13px] leading-snug" style={{ color: derived.textSecondary }}>
+        <p className="text-[13px] leading-snug" style={{ color: CMD.textSupporting }}>
           No changes needed — layout already matches. Apply anyway only bumps version / audit.
         </p>
       );
@@ -210,12 +245,24 @@ function AIOutcomeSection(props: { planner?: JobOverviewPlannerSuccess | null; k
     body = null;
   }
 
+  const isDiff = Boolean(planner?.effective_layout_change && kind !== "applied_success");
+  const isNoopOutcome = Boolean(
+    planner && !planner.effective_layout_change && (kind === "no_op" || kind === "unresolved_only")
+  );
+
   return (
     <div className="mt-3">
-      <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: derived.inspectorSectionMuted }}>
+      <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: CMD.textLabel }}>
         {title}
       </div>
-      <div className="mt-1 rounded-lg px-2.5 py-2" style={{ backgroundColor: derived.inspectorRailWash }}>
+      <div
+        className="mt-1 rounded-r-md py-1.5 pr-2"
+        style={{
+          paddingLeft: isDiff ? CMD.padL : 10,
+          borderLeft: isDiff ? `${CMD.border}px solid ${CMD.accentGreen}` : "none",
+          backgroundColor: isDiff ? CMD.bgChanges : isNoopOutcome ? CMD.bgNoop : derived.inspectorRailWash,
+        }}
+      >
         {body}
       </div>
     </div>
@@ -228,15 +275,24 @@ function AIUnresolvedSection(props: { planner: JobOverviewPlannerSuccess }) {
   if (unresolved.length === 0) return null;
   return (
     <div className="mt-3">
-      <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: derived.inspectorSectionMuted }}>
+      <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: CMD.textLabel }}>
         Not on the overview
       </div>
-      <div className="mt-1 rounded-lg px-2.5 py-2 text-[13px]" style={{ backgroundColor: derived.inspectorRailWash }}>
-        <ul className="list-disc space-y-0.5 pl-4 leading-snug">
+      <div
+        className="mt-1 rounded-r-md py-1.5 pr-2 text-[13px]"
+        style={{
+          paddingLeft: CMD.padL,
+          borderLeft: `${CMD.border}px solid ${CMD.accentAmber}`,
+          backgroundColor: CMD.bgUnresolved,
+        }}
+      >
+        <ul className="list-disc space-y-0.5 pl-3.5 leading-snug">
           {unresolved.map((u) => (
-            <li key={`${u.concept_id}:${u.phrase_matched}`} style={{ color: neutral.textPrimary }}>
-              <span className="font-medium capitalize">{u.concept_id}</span>
-              <span style={{ color: derived.textSecondary }}> — {u.reason}</span>
+            <li key={`${u.concept_id}:${u.phrase_matched}`} className="pl-0.5">
+              <span className="font-medium capitalize" style={{ color: CMD.textBody }}>
+                {u.concept_id}
+              </span>
+              <span style={{ color: CMD.textSupporting }}> — {u.reason}</span>
             </li>
           ))}
         </ul>
@@ -263,7 +319,7 @@ function AIAdvancedDetailsDrawer(props: {
         style={{
           borderColor: derived.border,
           backgroundColor: "transparent",
-          color: derived.textSecondary,
+          color: CMD.textSupporting,
         }}
       >
         <span>Technical details</span>
@@ -356,11 +412,11 @@ function AIWhatsNextSection(props: { kind: ResponseKind }) {
     line = "Refine, or apply for audit-only version bump.";
   }
   return (
-    <div className="mt-3">
-      <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: derived.inspectorSectionMuted }}>
+    <div className="mt-3 border-t pt-2.5" style={{ borderColor: derived.border }}>
+      <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: CMD.textLabel }}>
         Next
       </div>
-      <p className="mt-1 text-[12px] leading-snug" style={{ color: derived.textSecondary }}>
+      <p className="mt-1 text-[12px] leading-snug font-medium" style={{ color: CMD.textBody }}>
         {line}
       </p>
     </div>
@@ -380,8 +436,9 @@ function AISuggestedActionsRow(props: {
   return (
     <div className="mt-2">
       {showNoopNote ? (
-        <p className="text-[11px] leading-snug" style={{ color: derived.textSecondary }}>
-          No layout diff — check <span className="font-medium">Apply anyway</span> below only for an audit-only save.
+        <p className="text-[11px] leading-snug" style={{ color: CMD.textSupporting }}>
+          No layout diff — check <span className="font-medium" style={{ color: CMD.textBody }}>Apply anyway</span> below
+          only for an audit-only save.
         </p>
       ) : null}
       <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
@@ -394,7 +451,7 @@ function AISuggestedActionsRow(props: {
           Refine
         </button>
         {showApplyAnyway ? (
-          <label className="inline-flex cursor-pointer items-center gap-1.5 text-[10px]" style={{ color: derived.textSecondary }}>
+          <label className="inline-flex cursor-pointer items-center gap-1.5 text-[10px]" style={{ color: CMD.textSupporting }}>
             <input
               type="checkbox"
               className="h-3 w-3 shrink-0 rounded border opacity-80"
@@ -413,8 +470,8 @@ function AISuggestedActionsRow(props: {
         ) : null}
         <a
           href="/admin/agent-lab"
-          className="text-[10px] underline-offset-2 hover:underline ml-auto opacity-80"
-          style={{ color: derived.textSecondary }}
+          className="text-[10px] underline-offset-2 hover:underline ml-auto opacity-90"
+          style={{ color: CMD.textSupporting }}
           title="Agent Lab"
         >
           AI Activity
@@ -440,8 +497,9 @@ function AIPrimaryActionsRow(props: {
       className={`mt-3 flex flex-col gap-1.5 sm:flex-row sm:items-center ${canApply || !showApplyHint ? "sm:justify-end" : "sm:justify-between"}`}
     >
       {showApplyHint ? (
-        <p className="order-2 sm:order-1 min-w-0 flex-1 text-[10px] leading-snug sm:max-w-[min(100%,26rem)]" style={{ color: derived.textSecondary }}>
-          Need a diff to apply, or <span className="font-medium">Apply anyway</span> for audit-only.
+        <p className="order-2 sm:order-1 min-w-0 flex-1 text-[10px] leading-snug sm:max-w-[min(100%,26rem)]" style={{ color: CMD.textSupporting }}>
+          Need a diff to apply, or <span className="font-medium" style={{ color: CMD.textBody }}>Apply anyway</span> for
+          audit-only.
         </p>
       ) : null}
       <div className="order-1 sm:order-2 flex shrink-0 items-center justify-end gap-1.5">
@@ -655,7 +713,7 @@ export default function AICommandSurfaceShell() {
           style={{
             maxHeight: panelMaxHeight,
             borderTop: `2px solid ${derived.adminV2AiBarPineBorder}`,
-            backgroundColor: "#fff",
+            backgroundColor: neutral.surface,
             boxShadow: `inset 0 1px 0 rgba(255,255,255,0.85)`,
           }}
         >
@@ -663,7 +721,7 @@ export default function AICommandSurfaceShell() {
             className="px-3 pt-2 pb-2"
             style={{
               borderBottom: `1px solid ${derived.border}`,
-              background: `linear-gradient(180deg, ${neutral.surface} 0%, #fff 100%)`,
+              background: `linear-gradient(180deg, ${derived.kpiBandBusinessLight} 0%, ${derived.inspectorCommandRailWash} 55%, ${neutral.surface} 100%)`,
             }}
           >
             <AIResponseHeader
@@ -673,7 +731,10 @@ export default function AICommandSurfaceShell() {
             />
           </div>
 
-          <div className="px-3 py-2 overflow-auto" style={{ maxHeight: panelMaxHeight - COLLAPSED_MIN_H }}>
+          <div
+            className="px-3 py-2 overflow-auto"
+            style={{ maxHeight: panelMaxHeight - COLLAPSED_MIN_H, backgroundColor: neutral.background }}
+          >
             {response.plannerOk ? (
               <AISummarySection planner={response.plannerOk} commandText={commandText.trim()} />
             ) : null}
@@ -683,9 +744,9 @@ export default function AICommandSurfaceShell() {
             {response.plannerOk ? <AIUnresolvedSection planner={response.plannerOk} /> : null}
 
             {response.kind === "error" ? (
-              <div className="mt-3 rounded-lg px-2.5 py-2 text-[13px]" style={{ backgroundColor: derived.inspectorRailWash }}>
-                <p style={{ color: neutral.textPrimary }}>{response.subline ?? "Something went wrong."}</p>
-                <p className="mt-0.5 text-[11px]" style={{ color: derived.textSecondary }}>
+              <div className="mt-3 rounded-r-md py-1.5 pr-2 text-[13px]" style={{ paddingLeft: CMD.padL, backgroundColor: CMD.bgNoop }}>
+                <p style={{ color: CMD.textBody }}>{response.subline ?? "Something went wrong."}</p>
+                <p className="mt-0.5 text-[11px]" style={{ color: CMD.textSupporting }}>
                   Details under Technical details.
                 </p>
               </div>
@@ -749,7 +810,7 @@ export default function AICommandSurfaceShell() {
               }
             }}
           />
-          <div className="mt-0.5 text-[10px] leading-tight" style={{ color: derived.textSecondary }}>
+          <div className="mt-0.5 text-[10px] leading-tight" style={{ color: CMD.textSupporting }}>
             Job overview only · Enter to preview
           </div>
         </div>
