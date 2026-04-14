@@ -33,8 +33,8 @@ type ResponseModel = {
 };
 
 const BAR_MAX_WIDTH = 840;
-const COLLAPSED_MIN_H = 56;
-const EXPANDED_MAX_H = 520;
+const COLLAPSED_MIN_H = 42;
+const EXPANDED_MAX_H = 400;
 
 function safeJson(x: unknown): string {
   return JSON.stringify(x, null, 2);
@@ -42,7 +42,7 @@ function safeJson(x: unknown): string {
 
 function clampExpandedHeightPx(viewportH: number): number {
   // v1: keep the workspace visible behind; internal scroll inside the response body.
-  return Math.max(320, Math.min(EXPANDED_MAX_H, Math.round(viewportH * 0.55)));
+  return Math.max(280, Math.min(EXPANDED_MAX_H, Math.round(viewportH * 0.48)));
 }
 
 function newIds(): { request_id: string; correlation_id: string } {
@@ -69,11 +69,11 @@ function SurfaceCard(props: { children: ReactNode; expanded: boolean }) {
       aria-label="AI command surface"
       className="w-full flex justify-center px-4"
       style={{
-        paddingTop: expanded ? 12 : 10,
-        paddingBottom: 10,
+        paddingTop: expanded ? 8 : 10,
+        paddingBottom: 8,
         background: `linear-gradient(180deg, ${derived.adminV2AiBarPineWash} 0%, ${neutral.surface} 38%, ${neutral.surface} 100%)`,
         borderTop: `2px solid ${derived.adminV2AiBarPineBorder}`,
-        boxShadow: `0 -4px 18px rgba(0, 162, 131, 0.07), ${derived.panelShadow}`,
+        boxShadow: `0 -2px 10px rgba(0, 162, 131, 0.05)`,
       }}
     >
       <div className="w-full" style={{ maxWidth: BAR_MAX_WIDTH }}>
@@ -114,19 +114,19 @@ function AIResponseHeader(props: { headline: string; subline?: string; confidenc
                 ? palette.juniperEmber
                 : derived.textSecondary;
   return (
-    <div className="flex items-start justify-between gap-3">
+    <div className="flex items-start justify-between gap-2">
       <div className="min-w-0">
-        <div className="text-[15px] font-semibold leading-snug" style={{ color: neutral.textPrimary }}>
+        <div className="text-sm font-semibold leading-snug" style={{ color: neutral.textPrimary }}>
           {headline}
         </div>
         {subline ? (
-          <div className="mt-1 text-xs leading-snug" style={{ color: derived.textSecondary }}>
+          <div className="mt-0.5 text-[11px] leading-snug" style={{ color: derived.textSecondary }}>
             {subline}
           </div>
         ) : null}
       </div>
       <div
-        className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold"
+        className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
         style={{
           backgroundColor: badgeBg,
           color: badgeText,
@@ -144,20 +144,20 @@ function AISummarySection(props: { planner: JobOverviewPlannerSuccess; commandTe
   const { planner, commandText } = props;
   const found = formatIntentSummary(planner.parsed_intent);
   return (
-    <div className="mt-1 space-y-4">
+    <div className="mt-0 space-y-3">
       <div>
-        <div className="text-[11px] font-bold uppercase tracking-widest" style={{ color: derived.inspectorSectionMuted }}>
+        <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: derived.inspectorSectionMuted }}>
           Your request
         </div>
-        <p className="mt-2 text-sm leading-relaxed pl-3 border-l-2" style={{ borderColor: brand.secondary, color: neutral.textPrimary }}>
+        <p className="mt-1 text-[13px] leading-snug pl-2.5 border-l-2" style={{ borderColor: brand.secondary, color: neutral.textPrimary }}>
           {commandText || "—"}
         </p>
       </div>
       <div>
-        <div className="text-[11px] font-bold uppercase tracking-widest" style={{ color: derived.inspectorSectionMuted }}>
+        <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: derived.inspectorSectionMuted }}>
           What we found
         </div>
-        <ul className="mt-2 list-disc space-y-1.5 pl-5 text-sm leading-snug" style={{ color: derived.textSecondary }}>
+        <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[13px] leading-snug" style={{ color: derived.textSecondary }}>
           {found.map((line, i) => (
             <li key={i} style={{ color: neutral.textPrimary }}>
               {line}
@@ -175,24 +175,23 @@ function AIOutcomeSection(props: { planner?: JobOverviewPlannerSuccess | null; k
 
   const title =
     kind === "applied_success"
-      ? "What happened"
+      ? "Result"
       : kind === "no_op" || kind === "unresolved_only"
-        ? "Why nothing will change"
-        : "What will change";
+        ? "No layout change"
+        : "Changes:";
 
   let body: ReactNode;
   if (kind === "applied_success") {
     body = (
-      <p className="text-sm leading-relaxed" style={{ color: neutral.textPrimary }}>
-        Your job overview layout update was saved. Full response details stay under{" "}
-        <span className="font-medium">Technical details</span> if you need to inspect them.
+      <p className="text-[13px] leading-snug" style={{ color: neutral.textPrimary }}>
+        Saved. Raw response under <span className="font-medium">Technical details</span>.
       </p>
     );
   } else if (planner) {
     if (planner.effective_layout_change) {
       const lines = formatDiffSummaryHuman(planner.diff_summary);
       body = (
-        <ul className="list-disc space-y-1.5 pl-5 text-sm leading-snug">
+        <ul className="list-disc space-y-0.5 pl-4 text-[13px] leading-snug">
           {lines.map((line, i) => (
             <li key={i} style={{ color: neutral.textPrimary }}>
               {line}
@@ -202,9 +201,8 @@ function AIOutcomeSection(props: { planner?: JobOverviewPlannerSuccess | null; k
       );
     } else {
       body = (
-        <p className="text-sm leading-relaxed" style={{ color: derived.textSecondary }}>
-          The preview matches your current layout, so there is nothing new to write. Applying anyway would only create a
-          new version/audit entry with the same shape.
+        <p className="text-[13px] leading-snug" style={{ color: derived.textSecondary }}>
+          No changes needed — layout already matches. Apply anyway only bumps version / audit.
         </p>
       );
     }
@@ -213,11 +211,11 @@ function AIOutcomeSection(props: { planner?: JobOverviewPlannerSuccess | null; k
   }
 
   return (
-    <div className="mt-4">
-      <div className="text-[11px] font-bold uppercase tracking-widest" style={{ color: derived.inspectorSectionMuted }}>
+    <div className="mt-3">
+      <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: derived.inspectorSectionMuted }}>
         {title}
       </div>
-      <div className="mt-2 rounded-xl border px-3 py-2.5" style={{ borderColor: derived.border, backgroundColor: neutral.surface }}>
+      <div className="mt-1 rounded-lg px-2.5 py-2" style={{ backgroundColor: derived.inspectorRailWash }}>
         {body}
       </div>
     </div>
@@ -229,12 +227,12 @@ function AIUnresolvedSection(props: { planner: JobOverviewPlannerSuccess }) {
   const unresolved = planner.resolution.unresolved_targets ?? [];
   if (unresolved.length === 0) return null;
   return (
-    <div className="mt-4">
-      <div className="text-[11px] font-bold uppercase tracking-widest" style={{ color: derived.inspectorSectionMuted }}>
-        What we couldn’t place on the overview
+    <div className="mt-3">
+      <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: derived.inspectorSectionMuted }}>
+        Not on the overview
       </div>
-      <div className="mt-2 rounded-xl border px-3 py-2.5 text-sm" style={{ borderColor: derived.border, backgroundColor: derived.inspectorRailWash }}>
-        <ul className="list-disc space-y-1.5 pl-5 leading-snug">
+      <div className="mt-1 rounded-lg px-2.5 py-2 text-[13px]" style={{ backgroundColor: derived.inspectorRailWash }}>
+        <ul className="list-disc space-y-0.5 pl-4 leading-snug">
           {unresolved.map((u) => (
             <li key={`${u.concept_id}:${u.phrase_matched}`} style={{ color: neutral.textPrimary }}>
               <span className="font-medium capitalize">{u.concept_id}</span>
@@ -257,18 +255,18 @@ function AIAdvancedDetailsDrawer(props: {
 }) {
   const { open, onToggle, planner, structuredOverrideJson, applyResultJson, errorDetailJson } = props;
   return (
-    <div className="mt-5 pt-4" style={{ borderTop: `1px solid ${derived.border}` }}>
+    <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${derived.border}` }}>
       <button
         type="button"
         onClick={onToggle}
-        className="w-full flex items-center justify-between rounded-lg border border-dashed px-3 py-2 text-[11px] font-medium"
+        className="w-full flex items-center justify-between rounded-md border border-dashed px-2.5 py-1.5 text-[10px] font-medium"
         style={{
           borderColor: derived.border,
           backgroundColor: "transparent",
           color: derived.textSecondary,
         }}
       >
-        <span>Technical details (for inspection)</span>
+        <span>Technical details</span>
         <span aria-hidden className="text-[10px] uppercase tracking-wider">
           {open ? "Hide" : "Show"}
         </span>
@@ -347,22 +345,22 @@ function AIWhatsNextSection(props: { kind: ResponseKind }) {
   const { kind } = props;
   let line: string;
   if (kind === "loading") {
-    line = "Wait for the preview or apply to finish.";
+    line = "Hang tight — finishing preview or apply.";
   } else if (kind === "error") {
-    line = "Fix the issue or adjust your request, then preview again.";
+    line = "Adjust and preview again.";
   } else if (kind === "applied_success") {
-    line = "You’re done here, or run another preview to keep iterating.";
+    line = "Done — or preview another change.";
   } else if (kind === "action_preview") {
-    line = "Review the summary, then apply or refine your wording.";
+    line = "Apply, or refine the command.";
   } else {
-    line = "Refine your request, or apply only if you want a new version for audit.";
+    line = "Refine, or apply for audit-only version bump.";
   }
   return (
-    <div className="mt-4">
-      <div className="text-[11px] font-bold uppercase tracking-widest" style={{ color: derived.inspectorSectionMuted }}>
-        What you can do next
+    <div className="mt-3">
+      <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: derived.inspectorSectionMuted }}>
+        Next
       </div>
-      <p className="mt-2 text-sm leading-relaxed" style={{ color: derived.textSecondary }}>
+      <p className="mt-1 text-[12px] leading-snug" style={{ color: derived.textSecondary }}>
         {line}
       </p>
     </div>
@@ -380,60 +378,44 @@ function AISuggestedActionsRow(props: {
   const showApplyAnyway = kind === "no_op" || kind === "unresolved_only";
   const showNoopNote = showApplyAnyway;
   return (
-    <div className="mt-3">
+    <div className="mt-2">
       {showNoopNote ? (
-        <div
-          className="rounded-lg border border-dashed px-3 py-2 text-[11px] leading-snug"
-          style={{
-            borderColor: derived.border,
-            backgroundColor: "transparent",
-            color: derived.textSecondary,
-          }}
-        >
-          This preview does not change layout shape. Use{" "}
-          <span className="font-semibold" style={{ color: palette.juniperEmber }}>
-            Apply anyway
-          </span>{" "}
-          only if you intentionally want a new saved version / audit entry.
-        </div>
+        <p className="text-[11px] leading-snug" style={{ color: derived.textSecondary }}>
+          No layout diff — check <span className="font-medium">Apply anyway</span> below only for an audit-only save.
+        </p>
       ) : null}
-      <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
         <button
           type="button"
           onClick={onRefine}
-          className="text-sm font-semibold underline-offset-2 hover:underline"
+          className="text-[12px] font-semibold underline-offset-2 hover:underline"
           style={{ color: palette.alloyBlue }}
         >
-          Refine request
+          Refine
         </button>
         {showApplyAnyway ? (
-          <label
-            className="flex cursor-pointer items-center gap-2 rounded-md border-2 px-3 py-2 text-xs font-semibold"
-            style={{
-              borderColor: palette.juniperEmber,
-              backgroundColor: "rgba(188, 67, 0, 0.06)",
-              color: neutral.textPrimary,
-            }}
-          >
+          <label className="inline-flex cursor-pointer items-center gap-1.5 text-[10px]" style={{ color: derived.textSecondary }}>
             <input
               type="checkbox"
+              className="h-3 w-3 shrink-0 rounded border opacity-80"
+              style={{ borderColor: derived.border }}
               checked={applyAnyway}
               onChange={(e) => onToggleApplyAnyway(e.target.checked)}
-              aria-label="Apply anyway"
+              aria-label="Apply anyway (no layout diff)"
             />
-            <span>Apply anyway (exceptional)</span>
-            {applyBlockedByNoop && !applyAnyway ? (
-              <span className="text-[10px] font-normal" style={{ color: derived.textSecondary }}>
-                Required to enable Apply
-              </span>
-            ) : null}
+            <span>
+              Apply anyway
+              {applyBlockedByNoop && !applyAnyway ? (
+                <span className="text-[9px] opacity-80"> — enables Apply</span>
+              ) : null}
+            </span>
           </label>
         ) : null}
         <a
           href="/admin/agent-lab"
-          className="text-[11px] underline-offset-2 hover:underline ml-auto"
+          className="text-[10px] underline-offset-2 hover:underline ml-auto opacity-80"
           style={{ color: derived.textSecondary }}
-          title="Opens Agent Lab (AI Activity scaffolding)"
+          title="Agent Lab"
         >
           AI Activity
         </a>
@@ -455,18 +437,18 @@ function AIPrimaryActionsRow(props: {
     (kind === "action_preview" || kind === "no_op" || kind === "unresolved_only");
   return (
     <div
-      className={`mt-5 flex flex-col gap-2 sm:flex-row sm:items-center ${canApply || !showApplyHint ? "sm:justify-end" : "sm:justify-between"}`}
+      className={`mt-3 flex flex-col gap-1.5 sm:flex-row sm:items-center ${canApply || !showApplyHint ? "sm:justify-end" : "sm:justify-between"}`}
     >
       {showApplyHint ? (
-        <p className="order-2 sm:order-1 min-w-0 flex-1 text-[11px] leading-snug sm:max-w-[min(100%,28rem)]" style={{ color: derived.textSecondary }}>
-          Apply needs a layout diff, or enable <span className="font-medium">Apply anyway</span> for a no-op version bump.
+        <p className="order-2 sm:order-1 min-w-0 flex-1 text-[10px] leading-snug sm:max-w-[min(100%,26rem)]" style={{ color: derived.textSecondary }}>
+          Need a diff to apply, or <span className="font-medium">Apply anyway</span> for audit-only.
         </p>
       ) : null}
-      <div className="order-1 sm:order-2 flex shrink-0 items-center justify-end gap-2">
+      <div className="order-1 sm:order-2 flex shrink-0 items-center justify-end gap-1.5">
         <button
           type="button"
           onClick={onDismiss}
-          className="rounded-lg border px-4 py-2 text-sm font-semibold"
+          className="rounded-md border px-3 py-1.5 text-[12px] font-semibold"
           style={{ borderColor: derived.border, backgroundColor: neutral.surface, color: neutral.textPrimary }}
         >
           Dismiss
@@ -475,12 +457,12 @@ function AIPrimaryActionsRow(props: {
           type="button"
           disabled={!canApply || applying}
           onClick={onApply}
-          className="rounded-lg px-5 py-2.5 text-sm font-bold uppercase tracking-wide disabled:opacity-50 disabled:cursor-not-allowed"
+          className="rounded-md px-4 py-2 text-[12px] font-bold uppercase tracking-wide disabled:opacity-50 disabled:cursor-not-allowed"
           style={{
             backgroundColor: brand.secondary,
             color: neutral.surface,
-            letterSpacing: "0.08em",
-            boxShadow: `0 2px 10px rgba(0, 162, 131, 0.28)`,
+            letterSpacing: "0.06em",
+            boxShadow: `0 1px 6px rgba(0, 162, 131, 0.22)`,
           }}
         >
           {applying ? "Applying…" : "Apply"}
@@ -535,7 +517,7 @@ export default function AICommandSurfaceShell() {
       kind: "loading",
       headline: "Working on your request…",
       confidence: "in_progress",
-      subline: "Preparing a job overview preview.",
+      subline: "Building preview…",
     });
 
     try {
@@ -590,13 +572,13 @@ export default function AICommandSurfaceShell() {
             ...r,
             kind: "loading",
             headline: "Working on your request…",
-            subline: "Applying the job overview update.",
+            subline: "Applying…",
             confidence: "in_progress",
           }
         : {
             kind: "loading",
             headline: "Working on your request…",
-            subline: "Applying the job overview update.",
+            subline: "Applying…",
             confidence: "in_progress",
           }
     );
@@ -631,7 +613,7 @@ export default function AICommandSurfaceShell() {
       setResponse({
         kind: "applied_success",
         headline: "Changes applied",
-        subline: "Saved to the job overview layout.",
+        subline: "Saved.",
         confidence: "applied",
         applyResultJson: safeJson(data),
         plannerOk: activePlanner,
@@ -669,20 +651,19 @@ export default function AICommandSurfaceShell() {
     <SurfaceCard expanded={showPanel}>
       {showPanel ? (
         <div
-          className="rounded-2xl border bg-white/80 backdrop-blur-sm"
+          className="rounded-t-xl overflow-hidden"
           style={{
-            borderColor: derived.border,
-            boxShadow: derived.cardShadow,
             maxHeight: panelMaxHeight,
+            borderTop: `2px solid ${derived.adminV2AiBarPineBorder}`,
+            backgroundColor: "#fff",
+            boxShadow: `inset 0 1px 0 rgba(255,255,255,0.85)`,
           }}
         >
           <div
-            className="px-4 pt-3 pb-3"
+            className="px-3 pt-2 pb-2"
             style={{
               borderBottom: `1px solid ${derived.border}`,
-              background: `linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.78) 100%)`,
-              borderTopLeftRadius: 16,
-              borderTopRightRadius: 16,
+              background: `linear-gradient(180deg, ${neutral.surface} 0%, #fff 100%)`,
             }}
           >
             <AIResponseHeader
@@ -692,7 +673,7 @@ export default function AICommandSurfaceShell() {
             />
           </div>
 
-          <div className="px-4 py-3 overflow-auto" style={{ maxHeight: panelMaxHeight - COLLAPSED_MIN_H }}>
+          <div className="px-3 py-2 overflow-auto" style={{ maxHeight: panelMaxHeight - COLLAPSED_MIN_H }}>
             {response.plannerOk ? (
               <AISummarySection planner={response.plannerOk} commandText={commandText.trim()} />
             ) : null}
@@ -702,10 +683,10 @@ export default function AICommandSurfaceShell() {
             {response.plannerOk ? <AIUnresolvedSection planner={response.plannerOk} /> : null}
 
             {response.kind === "error" ? (
-              <div className="mt-4 rounded-xl border px-3 py-2.5 text-sm" style={{ borderColor: derived.border, backgroundColor: derived.inspectorRailWash }}>
+              <div className="mt-3 rounded-lg px-2.5 py-2 text-[13px]" style={{ backgroundColor: derived.inspectorRailWash }}>
                 <p style={{ color: neutral.textPrimary }}>{response.subline ?? "Something went wrong."}</p>
-                <p className="mt-1 text-xs" style={{ color: derived.textSecondary }}>
-                  Open technical details below if you need the raw response for support or debugging.
+                <p className="mt-0.5 text-[11px]" style={{ color: derived.textSecondary }}>
+                  Details under Technical details.
                 </p>
               </div>
             ) : null}
@@ -743,12 +724,12 @@ export default function AICommandSurfaceShell() {
         </div>
       ) : null}
 
-      <div className="mt-2 flex items-end gap-2">
+      <div className={`flex items-end gap-2 ${showPanel ? "mt-0" : "mt-2"}`}>
         <div
-          className="flex-1 min-w-0 rounded-2xl px-3.5 py-2.5 border-2 bg-white"
+          className={`flex-1 min-w-0 border-2 bg-white px-3 py-2 ${showPanel ? "rounded-b-xl rounded-t-none border-t border-t-[rgba(0,0,0,0.06)]" : "rounded-2xl px-3.5 py-2.5"}`}
           style={{
             borderColor: derived.adminV2AiInputPineRing,
-            boxShadow: `0 1px 0 rgba(0, 162, 131, 0.06), inset 0 1px 0 rgba(255,255,255,0.9)`,
+            boxShadow: showPanel ? `inset 0 1px 0 rgba(255,255,255,0.95)` : `0 1px 0 rgba(0, 162, 131, 0.06), inset 0 1px 0 rgba(255,255,255,0.9)`,
           }}
         >
           <textarea
@@ -768,8 +749,8 @@ export default function AICommandSurfaceShell() {
               }
             }}
           />
-          <div className="mt-1 text-[11px]" style={{ color: derived.textSecondary }}>
-            Overview configuration assistant (job overview only). Press Enter to preview. No transcript.
+          <div className="mt-0.5 text-[10px] leading-tight" style={{ color: derived.textSecondary }}>
+            Job overview only · Enter to preview
           </div>
         </div>
         <button

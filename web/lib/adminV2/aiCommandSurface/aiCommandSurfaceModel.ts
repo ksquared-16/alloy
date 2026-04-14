@@ -66,41 +66,41 @@ export function headlineForPreview(
             headline: h,
             subline:
                 k === "noop_unresolved_only"
-                    ? "Some requests could not be placed on the job overview with the current catalog."
-                    : "Your current job overview layout already matches this request.",
+                    ? "Some asks aren’t supported on the overview yet."
+                    : "Layout already matches.",
             kind: k === "noop_unresolved_only" ? "unresolved_only" : "no_op",
         };
     }
     return {
         headline: "Review changes before applying",
-        subline: "Preview is ready for the job overview layout.",
+        subline: "Preview ready — job overview only.",
         kind: "action_preview",
     };
 }
 
-/** Plain-language bullets from rule-based intent (deterministic). */
+/** Plain-language bullets from rule-based intent — phrased as overview UI outcomes (deterministic). */
 export function formatIntentSummary(p: ParsedJobOverviewIntent): string[] {
     const lines: string[] = [];
-    if (p.hide_financial) lines.push("Hide or turn off the financial band.");
-    if (p.show_financial) lines.push("Show or turn on the financial band.");
-    if (p.customer_focused) lines.push("Use a more customer-focused layout (relationship context + people).");
-    if (p.service_details_higher) lines.push("Move service/property details higher on the overview.");
-    if (p.contact_details_higher) lines.push("Move contact/people content higher on the overview.");
-    if (p.show_main_contact) lines.push("Show the primary contact person on the overview.");
-    if (p.show_address) lines.push("Show address or location.");
-    if (p.show_next_service) lines.push("Show next service or schedule.");
-    if (p.show_service_details) lines.push("Show booked service line / service details.");
+    if (p.hide_financial) lines.push("Financial band off on the overview.");
+    if (p.show_financial) lines.push("Financial band on the overview.");
+    if (p.customer_focused) lines.push("Customer-focused bands: relationship context and people up front.");
+    if (p.service_details_higher) lines.push("Service / property details higher on the page.");
+    if (p.contact_details_higher) lines.push("Contact / people block higher on the page.");
+    if (p.show_main_contact) lines.push("Primary contact visible in the header or bands.");
+    if (p.show_address) lines.push("Address / location surfaced on the overview.");
+    if (p.show_next_service) lines.push("Next service / schedule on the overview.");
+    if (p.show_service_details) lines.push("Booked service line / service details visible.");
     if (p.referenced_unreachable_contact_channels) {
-        lines.push("Mentions phone or email — those are not overview fields in the catalog yet.");
+        lines.push("Phone/email called out — not mappable to overview fields yet.");
     }
     if (p.contact_semantics === "mixed") {
-        lines.push("Reads as both identity and channels; channels stay unresolved until catalog adds keys.");
+        lines.push("Mix of contact identity and channels; channel rows stay unresolved for now.");
     } else if (p.contact_semantics === "channels") {
-        lines.push("Reads primarily as channels (phone/email), not as layout identity.");
+        lines.push("Reads as phone/email channels, not a placeable overview block.");
     } else if (p.contact_semantics === "identity") {
-        lines.push("Reads as person/contact identity for the overview.");
+        lines.push("Reads as a person/contact to show on the overview.");
     }
-    if (lines.length === 0) lines.push("Adjust the job overview layout.");
+    if (lines.length === 0) lines.push("Adjust overview layout.");
     return lines;
 }
 
@@ -116,28 +116,28 @@ export function formatDiffSummaryHuman(d: DiffSummary): string[] {
     if (d.financial_band_enabled) {
         const { before, after } = d.financial_band_enabled;
         if (before !== after) {
-            out.push(`Financial band: ${boolPhrase(before)} → ${boolPhrase(after)}.`);
+            out.push(`Financial band ${boolPhrase(before)} → ${boolPhrase(after)}.`);
         }
     }
     if (d.band_order) {
         const a = JSON.stringify(d.band_order.before);
         const b = JSON.stringify(d.band_order.after);
-        if (a !== b) out.push("Section order (bands) changed — affects what appears higher on the page.");
+        if (a !== b) out.push("Band order changes — what sits higher on the overview shifts.");
     }
     if (d.header_keys) {
         const a = JSON.stringify(d.header_keys.before);
         const b = JSON.stringify(d.header_keys.after);
-        if (a !== b) out.push("Top header strip (chips) was updated or reordered.");
+        if (a !== b) out.push("Header chips updated or reordered.");
     }
     if (d.relationship_group_keys) {
         const a = JSON.stringify(d.relationship_group_keys.before ?? []);
         const b = JSON.stringify(d.relationship_group_keys.after ?? []);
-        if (a !== b) out.push("Relationship groups (customer-facing summaries) were updated.");
+        if (a !== b) out.push("Relationship summary groups updated.");
     }
     if (d.bands_content_changed && d.bands_content_changed.length > 0) {
-        out.push(`Updated fields in: ${d.bands_content_changed.join(", ")}.`);
+        out.push(`Fields touched: ${d.bands_content_changed.join(", ")}.`);
     }
-    if (out.length === 0) out.push("Layout differences are summarized in technical details.");
+    if (out.length === 0) out.push("See technical details for raw diff.");
     return out;
 }
 
