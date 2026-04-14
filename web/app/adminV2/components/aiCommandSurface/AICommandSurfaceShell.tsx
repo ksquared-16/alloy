@@ -1,24 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { neutral, derived, brand, semantic, palette } from "@/styles/tokens/colors";
-
-/** Section accents + tints — AdminV2 command surface (tokens + semantic mixes only). */
-const CMD = {
-  border: 2,
-  padL: 10,
-  accentPine: brand.secondary,
-  accentGreen: semantic.success,
-  accentAmber: semantic.warning,
-  bgFound: derived.kpiBandBusinessWash,
-  bgChanges: derived.kpiBandBusinessLight,
-  bgUnresolved: `color-mix(in srgb, ${semantic.warning} 5%, ${neutral.surface})`,
-  bgNoop: derived.inspectorCommandRailWash,
-  /** Primary body — Midnight Forge forward (slate-700/800 feel vs gray-500) */
-  textBody: neutral.textPrimary,
-  textSupporting: "rgba(39, 63, 82, 0.78)",
-  textLabel: "rgba(39, 63, 82, 0.52)",
-} as const;
+import { neutral, derived, brand, semantic } from "@/styles/tokens/colors";
 import type { JobOverviewPlannerSuccess, JobOverviewPlannerFailure } from "@/lib/agent/planner/jobOverviewPlannerTypes";
 import { runOverviewLayoutSemanticPreview } from "@/lib/admin/agentLab/overviewLayoutSemanticAssistant";
 import { shouldBlockSemanticNoopApply } from "@/lib/admin/agentLab/semanticOverviewNoopSummary";
@@ -32,38 +15,124 @@ import {
   type ResponseKind,
 } from "@/lib/adminV2/aiCommandSurface/aiCommandSurfaceModel";
 
+const CMD = {
+  textBody: neutral.textPrimary,
+  textSupporting: "rgba(39, 63, 82, 0.78)",
+  textLabel: "rgba(39, 63, 82, 0.52)",
+} as const;
+
 type ResponseModel = {
   kind: ResponseKind;
   headline: string;
   subline?: string;
   confidence: AIStatusBadge;
-  /** Present for preview success. */
   plannerOk?: JobOverviewPlannerSuccess | null;
-  /** Present for preview failure. */
   plannerErr?: JobOverviewPlannerFailure | null;
-  /** Present for preview success (apply payload). */
   structuredOverrideJson?: string;
-  /** Present for apply result JSON. */
   applyResultJson?: string;
-  /** Friendly error line for the main panel (JSON stays in advanced). */
   errorDetailJson?: string;
 };
 
 const BAR_MAX_WIDTH = 840;
-const COLLAPSED_MIN_H = 42;
-const EXPANDED_MAX_H = 400;
+const COLLAPSED_MIN_H = 36;
+const EXPANDED_MAX_H = 320;
 
 function safeJson(x: unknown): string {
   return JSON.stringify(x, null, 2);
 }
 
 function clampExpandedHeightPx(viewportH: number): number {
-  // v1: keep the workspace visible behind; internal scroll inside the response body.
-  return Math.max(280, Math.min(EXPANDED_MAX_H, Math.round(viewportH * 0.48)));
+  return Math.max(220, Math.min(EXPANDED_MAX_H, Math.round(viewportH * 0.42)));
 }
 
 function newIds(): { request_id: string; correlation_id: string } {
   return { request_id: crypto.randomUUID(), correlation_id: crypto.randomUUID() };
+}
+
+/** Pine wash = positive path; Ember wash = gaps / unsupported / error. */
+function outcomeWash(confidence: AIStatusBadge): { bg: string; isEmber: boolean } {
+  const pine = derived.adminV2AiBarPineWash;
+  const ember = `color-mix(in srgb, ${semantic.warning} 10%, ${neutral.surface})`;
+  switch (confidence) {
+    case "ready":
+    case "applied":
+    case "up_to_date":
+    case "in_progress":
+      return { bg: pine, isEmber: false };
+    case "partial":
+    case "gaps_only":
+    case "error":
+      return { bg: ember, isEmber: true };
+    default:
+      return { bg: neutral.background, isEmber: false };
+  }
+}
+
+function outcomeBadgeStyles(confidence: AIStatusBadge, isEmberWash: boolean) {
+  if (isEmberWash) {
+    return {
+      bg: "rgba(188, 67, 0, 0.12)",
+      color: semantic.warning,
+    };
+  }
+  return {
+    bg: "rgba(0, 162, 131, 0.14)",
+    color: semantic.success,
+  };
+}
+
+/** Max 3 bullets for Details toggle — no paragraphs. */
+function buildDetailsBullets(params: {
+  kind: ResponseKind;
+  planner: JobOverviewPlannerSuccess | null;
+  commandText: string;
+  errorSubline?: string;
+}): string[] {
+  const { kind, planner, commandText, errorSubline } = params;
+  const out: string[] = [];
+
+  const q = commandText.trim();
+  if (q) {
+    out.push(q.length > 88 ? `${q.slice(0, 85)}…` : q);
+  }
+
+  if (kind === "applied_success") {
+    out.push("Layout saved to the job overview.");
+    return out.slice(0, 3);
+  }
+
+  if (kind === "error" && errorSubline) {
+    out.push(errorSubline);
+    return out.slice(0, 3);
+  }
+
+  if (!planner) {
+    return out.slice(0, 3);
+  }
+
+  if (!q) {
+    const intents = formatIntentSummary(planner.parsed_intent);
+    if (intents[0]) out.push(intents[0]);
+  }
+
+  if (planner.effective_layout_change) {
+    const diffLines = formatDiffSummaryHuman(planner.diff_summary);
+    if (diffLines[0]) out.push(diffLines[0]);
+    const u = planner.resolution.unresolved_targets?.[0];
+    if (u && out.length < 3) {
+      out.push(`Not placed: ${u.concept_id} — ${u.reason}`);
+    }
+  } else {
+    const un = planner.resolution.unresolved_targets ?? [];
+    if (un.length) {
+      out.push("No layout diff — unsupported asks.");
+      if (un[0] && out.length < 3) out.push(`${un[0].concept_id}: ${un[0].reason}`);
+    } else {
+      out.push("No layout diff — already matches.");
+    }
+  }
+
+  return out.filter(Boolean).slice(0, 3);
 }
 
 async function loadCurrentJobOverviewConfig(): Promise<unknown> {
@@ -100,208 +169,167 @@ function SurfaceCard(props: { children: ReactNode; expanded: boolean }) {
   );
 }
 
-function AIResponseHeader(props: { headline: string; subline?: string; confidence: AIStatusBadge }) {
+function OutcomeZone(props: { headline: string; subline?: string; confidence: AIStatusBadge }) {
   const { headline, subline, confidence } = props;
-  const badgeBg =
-    confidence === "ready" || confidence === "applied"
-      ? "rgba(0, 162, 131, 0.14)"
-      : confidence === "partial"
-        ? "rgba(188, 67, 0, 0.12)"
-        : confidence === "up_to_date"
-          ? "rgba(39, 63, 82, 0.08)"
-          : confidence === "gaps_only"
-            ? "rgba(188, 67, 0, 0.1)"
-            : confidence === "in_progress"
-              ? "rgba(0, 69, 140, 0.08)"
-              : confidence === "error"
-                ? "rgba(188, 67, 0, 0.12)"
-                : "rgba(39, 63, 82, 0.08)";
-  const badgeText =
-    confidence === "ready" || confidence === "applied"
-      ? semantic.success
-      : confidence === "partial"
-        ? semantic.warning
-        : confidence === "up_to_date"
-          ? derived.textSecondary
-          : confidence === "gaps_only"
-            ? semantic.warning
-            : confidence === "in_progress"
-              ? palette.alloyBlue
-              : confidence === "error"
-                ? palette.juniperEmber
-                : derived.textSecondary;
+  const { bg, isEmber } = outcomeWash(confidence);
+  const badge = outcomeBadgeStyles(confidence, isEmber);
+  const oneLine = subline?.split("\n")[0]?.trim();
+
   return (
-    <div className="flex items-start justify-between gap-2">
-      <div className="min-w-0">
-        <div className="text-sm font-semibold leading-snug" style={{ color: neutral.textPrimary }}>
-          {headline}
-        </div>
-        {subline ? (
-          <div className="mt-0.5 text-[11px] leading-snug" style={{ color: CMD.textSupporting }}>
-            {subline}
+    <div className="px-3 py-3" style={{ backgroundColor: bg }}>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="text-base font-semibold leading-tight tracking-tight" style={{ color: CMD.textBody }}>
+            {headline}
           </div>
-        ) : null}
-      </div>
-      <div
-        className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
-        style={{
-          backgroundColor: badgeBg,
-          color: badgeText,
-          border: `1px solid ${derived.border}`,
-        }}
-        aria-label={`Status: ${badgeLabel(confidence)}`}
-      >
-        {badgeLabel(confidence)}
-      </div>
-    </div>
-  );
-}
-
-function AISummarySection(props: { planner: JobOverviewPlannerSuccess; commandText: string }) {
-  const { planner, commandText } = props;
-  const found = formatIntentSummary(planner.parsed_intent);
-  return (
-    <div className="mt-0 space-y-2.5">
-      <div>
-        <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: CMD.textLabel }}>
-          Your request
+          {oneLine ? (
+            <div className="mt-1 text-[12px] leading-snug line-clamp-2" style={{ color: CMD.textSupporting }}>
+              {oneLine}
+            </div>
+          ) : null}
         </div>
         <div
-          className="mt-1 rounded-r-md py-1.5 pr-2"
+          className="shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold"
           style={{
-            paddingLeft: CMD.padL,
-            borderLeft: `${CMD.border}px solid ${CMD.accentPine}`,
-            backgroundColor: derived.kpiBandBusinessLight,
+            backgroundColor: badge.bg,
+            color: badge.color,
+            border: `1px solid ${derived.border}`,
           }}
+          aria-label={`Status: ${badgeLabel(confidence)}`}
         >
-          <p className="text-[13px] leading-snug font-medium" style={{ color: CMD.textBody }}>
-            {commandText || "—"}
-          </p>
-        </div>
-      </div>
-      <div>
-        <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: CMD.textLabel }}>
-          What we found
-        </div>
-        <div
-          className="mt-1 rounded-r-md py-1.5 pr-2"
-          style={{
-            paddingLeft: CMD.padL,
-            borderLeft: `${CMD.border}px solid ${CMD.accentPine}`,
-            backgroundColor: CMD.bgFound,
-          }}
-        >
-          <ul className="list-disc space-y-0.5 pl-3.5 text-[13px] leading-snug" style={{ color: CMD.textBody }}>
-            {found.map((line, i) => (
-              <li key={i} className="pl-0.5">
-                {line}
-              </li>
-            ))}
-          </ul>
+          {badgeLabel(confidence)}
         </div>
       </div>
     </div>
   );
 }
 
-function AIOutcomeSection(props: { planner?: JobOverviewPlannerSuccess | null; kind: ResponseKind }) {
-  const { planner, kind } = props;
-  if (!planner && kind !== "applied_success") return null;
-
-  const title =
-    kind === "applied_success"
-      ? "Result"
-      : kind === "no_op" || kind === "unresolved_only"
-        ? "No layout change"
-        : "Changes:";
-
-  let body: ReactNode;
-  if (kind === "applied_success") {
-    body = (
-      <p className="text-[13px] leading-snug" style={{ color: CMD.textBody }}>
-        Saved. Raw response under <span className="font-medium">Technical details</span>.
-      </p>
-    );
-  } else if (planner) {
-    if (planner.effective_layout_change) {
-      const lines = formatDiffSummaryHuman(planner.diff_summary);
-      body = (
-        <ul className="list-disc space-y-0.5 pl-3.5 text-[13px] leading-snug">
-          {lines.map((line, i) => (
-            <li key={i} className="pl-0.5" style={{ color: CMD.textBody }}>
-              {line}
-            </li>
-          ))}
-        </ul>
-      );
-    } else {
-      body = (
-        <p className="text-[13px] leading-snug" style={{ color: CMD.textSupporting }}>
-          No changes needed — layout already matches. Apply anyway only bumps version / audit.
-        </p>
-      );
-    }
-  } else {
-    body = null;
-  }
-
-  const isDiff = Boolean(planner?.effective_layout_change && kind !== "applied_success");
-  const isNoopOutcome = Boolean(
-    planner && !planner.effective_layout_change && (kind === "no_op" || kind === "unresolved_only")
-  );
+function AIActionsRow(props: {
+  kind: ResponseKind;
+  canApply: boolean;
+  applying: boolean;
+  applyBlockedByNoop: boolean;
+  applyAnyway: boolean;
+  onToggleApplyAnyway: (v: boolean) => void;
+  onApply: () => void;
+  onDismiss: () => void;
+  onRefine: () => void;
+}) {
+  const {
+    kind,
+    canApply,
+    applying,
+    applyBlockedByNoop,
+    applyAnyway,
+    onToggleApplyAnyway,
+    onApply,
+    onDismiss,
+    onRefine,
+  } = props;
+  const showApplyAnyway = kind === "no_op" || kind === "unresolved_only";
+  const showApply = kind !== "loading" && kind !== "applied_success" && kind !== "error";
 
   return (
-    <div className="mt-3">
-      <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: CMD.textLabel }}>
-        {title}
-      </div>
-      <div
-        className="mt-1 rounded-r-md py-1.5 pr-2"
-        style={{
-          paddingLeft: isDiff ? CMD.padL : 10,
-          borderLeft: isDiff ? `${CMD.border}px solid ${CMD.accentGreen}` : "none",
-          backgroundColor: isDiff ? CMD.bgChanges : isNoopOutcome ? CMD.bgNoop : derived.inspectorRailWash,
-        }}
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+      {showApply ? (
+        <button
+          type="button"
+          disabled={!canApply || applying}
+          onClick={onApply}
+          className="rounded-md px-3.5 py-2 text-[12px] font-bold uppercase tracking-wide disabled:opacity-45 disabled:cursor-not-allowed"
+          style={{
+            backgroundColor: brand.secondary,
+            color: neutral.surface,
+            letterSpacing: "0.05em",
+          }}
+        >
+          {applying ? "Applying…" : "Apply"}
+        </button>
+      ) : null}
+
+      {kind !== "loading" ? (
+        <button
+          type="button"
+          onClick={onRefine}
+          className="rounded-md border px-3 py-2 text-[12px] font-semibold"
+          style={{ borderColor: derived.border, backgroundColor: neutral.surface, color: CMD.textBody }}
+        >
+          Refine
+        </button>
+      ) : null}
+
+      {showApplyAnyway ? (
+        <label className="inline-flex cursor-pointer items-center gap-1 text-[10px]" style={{ color: CMD.textSupporting }}>
+          <input
+            type="checkbox"
+            className="h-3 w-3 shrink-0 rounded border"
+            style={{ borderColor: derived.border }}
+            checked={applyAnyway}
+            onChange={(e) => onToggleApplyAnyway(e.target.checked)}
+            aria-label="Apply without layout diff"
+          />
+          <span>
+            Apply anyway
+            {applyBlockedByNoop && !applyAnyway ? <span className="opacity-80"> · unlocks Apply</span> : null}
+          </span>
+        </label>
+      ) : null}
+
+      {kind !== "loading" ? (
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="text-[11px] font-medium underline-offset-2 hover:underline ml-auto sm:ml-0"
+          style={{ color: CMD.textSupporting }}
+        >
+          Dismiss
+        </button>
+      ) : null}
+
+      <a
+        href="/admin/agent-lab"
+        className="text-[10px] underline-offset-2 hover:underline opacity-80"
+        style={{ color: CMD.textSupporting }}
       >
-        {body}
-      </div>
+        AI Activity
+      </a>
     </div>
   );
 }
 
-function AIUnresolvedSection(props: { planner: JobOverviewPlannerSuccess }) {
-  const { planner } = props;
-  const unresolved = planner.resolution.unresolved_targets ?? [];
-  if (unresolved.length === 0) return null;
+function DetailsToggle(props: {
+  open: boolean;
+  onToggle: () => void;
+  bullets: string[];
+}) {
+  const { open, onToggle, bullets } = props;
+  if (bullets.length === 0) return null;
+
   return (
-    <div className="mt-3">
-      <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: CMD.textLabel }}>
-        Not on the overview
-      </div>
-      <div
-        className="mt-1 rounded-r-md py-1.5 pr-2 text-[13px]"
-        style={{
-          paddingLeft: CMD.padL,
-          borderLeft: `${CMD.border}px solid ${CMD.accentAmber}`,
-          backgroundColor: CMD.bgUnresolved,
-        }}
+    <div className="mt-2 border-t pt-2" style={{ borderColor: derived.border }}>
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center justify-between text-left text-[11px] font-semibold"
+        style={{ color: CMD.textLabel }}
       >
-        <ul className="list-disc space-y-0.5 pl-3.5 leading-snug">
-          {unresolved.map((u) => (
-            <li key={`${u.concept_id}:${u.phrase_matched}`} className="pl-0.5">
-              <span className="font-medium capitalize" style={{ color: CMD.textBody }}>
-                {u.concept_id}
-              </span>
-              <span style={{ color: CMD.textSupporting }}> — {u.reason}</span>
-            </li>
+        <span>Details</span>
+        <span aria-hidden className="text-[10px]">
+          {open ? "−" : "+"}
+        </span>
+      </button>
+      {open ? (
+        <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-[12px] leading-snug" style={{ color: CMD.textBody }}>
+          {bullets.map((b, i) => (
+            <li key={i}>{b}</li>
           ))}
         </ul>
-      </div>
+      ) : null}
     </div>
   );
 }
 
-function AIAdvancedDetailsDrawer(props: {
+function AdvancedDrawer(props: {
   open: boolean;
   onToggle: () => void;
   planner?: JobOverviewPlannerSuccess | null;
@@ -310,222 +338,56 @@ function AIAdvancedDetailsDrawer(props: {
   errorDetailJson?: string;
 }) {
   const { open, onToggle, planner, structuredOverrideJson, applyResultJson, errorDetailJson } = props;
+  const hasJson =
+    planner || structuredOverrideJson || applyResultJson || errorDetailJson;
+  if (!hasJson) return null;
+
   return (
-    <div className="mt-3 pt-3" style={{ borderTop: `1px solid ${derived.border}` }}>
+    <div className="mt-2 border-t pt-2" style={{ borderColor: derived.border }}>
       <button
         type="button"
         onClick={onToggle}
-        className="w-full flex items-center justify-between rounded-md border border-dashed px-2.5 py-1.5 text-[10px] font-medium"
+        className="flex w-full items-center justify-between rounded-md border border-dashed px-2 py-1.5 text-[10px] font-medium"
         style={{
           borderColor: derived.border,
-          backgroundColor: "transparent",
+          backgroundColor: neutral.surface,
           color: CMD.textSupporting,
         }}
       >
-        <span>Technical details</span>
-        <span aria-hidden className="text-[10px] uppercase tracking-wider">
+        <span>Advanced (JSON)</span>
+        <span aria-hidden className="uppercase">
           {open ? "Hide" : "Show"}
         </span>
       </button>
       {open ? (
-        <div className="mt-2 grid gap-2 max-h-[min(240px,40vh)] overflow-y-auto pr-1">
+        <div className="mt-2 grid max-h-[min(200px,35vh)] gap-2 overflow-y-auto pr-1">
           {planner ? (
-            <div className="rounded-md border p-2 text-[11px]" style={{ borderColor: derived.border, backgroundColor: neutral.surface }}>
-              <div className="font-semibold mb-1 opacity-70" style={{ color: derived.textSecondary }}>
-                Parsed intent (JSON)
-              </div>
-              <pre className="overflow-auto font-mono leading-relaxed opacity-90" style={{ color: derived.textSecondary }}>
-                {safeJson(planner.parsed_intent)}
-              </pre>
-            </div>
-          ) : null}
-          {planner?.rationale?.length ? (
-            <div className="rounded-md border p-2 text-[11px]" style={{ borderColor: derived.border, backgroundColor: neutral.surface }}>
-              <div className="font-semibold mb-1 opacity-70" style={{ color: derived.textSecondary }}>
-                Planner rationale
-              </div>
-              <ul className="list-disc pl-4 space-y-0.5" style={{ color: derived.textSecondary }}>
-                {planner.rationale.map((line, i) => (
-                  <li key={i}>{line}</li>
-                ))}
-              </ul>
-            </div>
+            <pre className="rounded border p-2 font-mono text-[10px] leading-relaxed" style={{ borderColor: derived.border, backgroundColor: neutral.background, color: CMD.textSupporting }}>
+              {safeJson(planner.parsed_intent)}
+            </pre>
           ) : null}
           {planner ? (
-            <div className="rounded-md border p-2 text-[11px]" style={{ borderColor: derived.border, backgroundColor: neutral.surface }}>
-              <div className="font-semibold mb-1 opacity-70" style={{ color: derived.textSecondary }}>
-                Diff summary (JSON)
-              </div>
-              <pre className="overflow-auto font-mono leading-relaxed opacity-90" style={{ color: derived.textSecondary }}>
-                {safeJson(planner.diff_summary)}
-              </pre>
-            </div>
+            <pre className="rounded border p-2 font-mono text-[10px] leading-relaxed" style={{ borderColor: derived.border, backgroundColor: neutral.background, color: CMD.textSupporting }}>
+              {safeJson(planner.diff_summary)}
+            </pre>
           ) : null}
           {structuredOverrideJson ? (
-            <div className="rounded-md border p-2 text-[11px]" style={{ borderColor: derived.border, backgroundColor: neutral.surface }}>
-              <div className="font-semibold mb-1 opacity-70" style={{ color: derived.textSecondary }}>
-                structured_override (apply payload)
-              </div>
-              <pre className="overflow-auto font-mono leading-relaxed opacity-90" style={{ color: derived.textSecondary }}>
-                {structuredOverrideJson}
-              </pre>
-            </div>
+            <pre className="rounded border p-2 font-mono text-[10px] leading-relaxed" style={{ borderColor: derived.border, backgroundColor: neutral.background, color: CMD.textSupporting }}>
+              {structuredOverrideJson}
+            </pre>
           ) : null}
           {applyResultJson ? (
-            <div className="rounded-md border p-2 text-[11px]" style={{ borderColor: derived.border, backgroundColor: neutral.surface }}>
-              <div className="font-semibold mb-1 opacity-70" style={{ color: derived.textSecondary }}>
-                Apply response (JSON)
-              </div>
-              <pre className="overflow-auto font-mono leading-relaxed opacity-90" style={{ color: derived.textSecondary }}>
-                {applyResultJson}
-              </pre>
-            </div>
+            <pre className="rounded border p-2 font-mono text-[10px] leading-relaxed" style={{ borderColor: derived.border, backgroundColor: neutral.background, color: CMD.textSupporting }}>
+              {applyResultJson}
+            </pre>
           ) : null}
           {errorDetailJson ? (
-            <div className="rounded-md border p-2 text-[11px]" style={{ borderColor: derived.border, backgroundColor: neutral.surface }}>
-              <div className="font-semibold mb-1 opacity-70" style={{ color: derived.textSecondary }}>
-                Error detail (JSON)
-              </div>
-              <pre className="overflow-auto font-mono leading-relaxed opacity-90" style={{ color: derived.textSecondary }}>
-                {errorDetailJson}
-              </pre>
-            </div>
+            <pre className="rounded border p-2 font-mono text-[10px] leading-relaxed" style={{ borderColor: derived.border, backgroundColor: neutral.background, color: CMD.textSupporting }}>
+              {errorDetailJson}
+            </pre>
           ) : null}
         </div>
       ) : null}
-    </div>
-  );
-}
-
-function AIWhatsNextSection(props: { kind: ResponseKind }) {
-  const { kind } = props;
-  let line: string;
-  if (kind === "loading") {
-    line = "Hang tight — finishing preview or apply.";
-  } else if (kind === "error") {
-    line = "Adjust and preview again.";
-  } else if (kind === "applied_success") {
-    line = "Done — or preview another change.";
-  } else if (kind === "action_preview") {
-    line = "Apply, or refine the command.";
-  } else {
-    line = "Refine, or apply for audit-only version bump.";
-  }
-  return (
-    <div className="mt-3 border-t pt-2.5" style={{ borderColor: derived.border }}>
-      <div className="text-[10px] font-bold uppercase tracking-wider" style={{ color: CMD.textLabel }}>
-        Next
-      </div>
-      <p className="mt-1 text-[12px] leading-snug font-medium" style={{ color: CMD.textBody }}>
-        {line}
-      </p>
-    </div>
-  );
-}
-
-function AISuggestedActionsRow(props: {
-  kind: ResponseKind;
-  applyBlockedByNoop: boolean;
-  applyAnyway: boolean;
-  onToggleApplyAnyway: (v: boolean) => void;
-  onRefine: () => void;
-}) {
-  const { kind, applyBlockedByNoop, applyAnyway, onToggleApplyAnyway, onRefine } = props;
-  const showApplyAnyway = kind === "no_op" || kind === "unresolved_only";
-  const showNoopNote = showApplyAnyway;
-  return (
-    <div className="mt-2">
-      {showNoopNote ? (
-        <p className="text-[11px] leading-snug" style={{ color: CMD.textSupporting }}>
-          No layout diff — check <span className="font-medium" style={{ color: CMD.textBody }}>Apply anyway</span> below
-          only for an audit-only save.
-        </p>
-      ) : null}
-      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <button
-          type="button"
-          onClick={onRefine}
-          className="text-[12px] font-semibold underline-offset-2 hover:underline"
-          style={{ color: palette.alloyBlue }}
-        >
-          Refine
-        </button>
-        {showApplyAnyway ? (
-          <label className="inline-flex cursor-pointer items-center gap-1.5 text-[10px]" style={{ color: CMD.textSupporting }}>
-            <input
-              type="checkbox"
-              className="h-3 w-3 shrink-0 rounded border opacity-80"
-              style={{ borderColor: derived.border }}
-              checked={applyAnyway}
-              onChange={(e) => onToggleApplyAnyway(e.target.checked)}
-              aria-label="Apply anyway (no layout diff)"
-            />
-            <span>
-              Apply anyway
-              {applyBlockedByNoop && !applyAnyway ? (
-                <span className="text-[9px] opacity-80"> — enables Apply</span>
-              ) : null}
-            </span>
-          </label>
-        ) : null}
-        <a
-          href="/admin/agent-lab"
-          className="text-[10px] underline-offset-2 hover:underline ml-auto opacity-90"
-          style={{ color: CMD.textSupporting }}
-          title="Agent Lab"
-        >
-          AI Activity
-        </a>
-      </div>
-    </div>
-  );
-}
-
-function AIPrimaryActionsRow(props: {
-  kind: ResponseKind;
-  canApply: boolean;
-  onApply: () => void;
-  onDismiss: () => void;
-  applying: boolean;
-}) {
-  const { kind, canApply, onApply, onDismiss, applying } = props;
-  const showApplyHint =
-    !canApply &&
-    (kind === "action_preview" || kind === "no_op" || kind === "unresolved_only");
-  return (
-    <div
-      className={`mt-3 flex flex-col gap-1.5 sm:flex-row sm:items-center ${canApply || !showApplyHint ? "sm:justify-end" : "sm:justify-between"}`}
-    >
-      {showApplyHint ? (
-        <p className="order-2 sm:order-1 min-w-0 flex-1 text-[10px] leading-snug sm:max-w-[min(100%,26rem)]" style={{ color: CMD.textSupporting }}>
-          Need a diff to apply, or <span className="font-medium" style={{ color: CMD.textBody }}>Apply anyway</span> for
-          audit-only.
-        </p>
-      ) : null}
-      <div className="order-1 sm:order-2 flex shrink-0 items-center justify-end gap-1.5">
-        <button
-          type="button"
-          onClick={onDismiss}
-          className="rounded-md border px-3 py-1.5 text-[12px] font-semibold"
-          style={{ borderColor: derived.border, backgroundColor: neutral.surface, color: neutral.textPrimary }}
-        >
-          Dismiss
-        </button>
-        <button
-          type="button"
-          disabled={!canApply || applying}
-          onClick={onApply}
-          className="rounded-md px-4 py-2 text-[12px] font-bold uppercase tracking-wide disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{
-            backgroundColor: brand.secondary,
-            color: neutral.surface,
-            letterSpacing: "0.06em",
-            boxShadow: `0 1px 6px rgba(0, 162, 131, 0.22)`,
-          }}
-        >
-          {applying ? "Applying…" : "Apply"}
-        </button>
-      </div>
     </div>
   );
 }
@@ -536,6 +398,7 @@ export default function AICommandSurfaceShell() {
   const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [applyAnyway, setApplyAnyway] = useState(false);
   const [viewportH, setViewportH] = useState<number>(typeof window !== "undefined" ? window.innerHeight : 900);
 
@@ -551,9 +414,17 @@ export default function AICommandSurfaceShell() {
 
   const canApply = Boolean(structuredOverrideJson) && !applyBlockedByNoop && (response?.kind === "action_preview" || response?.kind === "no_op" || response?.kind === "unresolved_only");
 
-  const panelMaxHeight = useMemo(() => {
-    return clampExpandedHeightPx(viewportH);
-  }, [viewportH]);
+  const panelMaxHeight = useMemo(() => clampExpandedHeightPx(viewportH), [viewportH]);
+
+  const detailsBullets = useMemo(() => {
+    if (!response) return [];
+    return buildDetailsBullets({
+      kind: response.kind,
+      planner: response.plannerOk ?? null,
+      commandText: commandText.trim(),
+      errorSubline: response.kind === "error" ? response.subline : undefined,
+    });
+  }, [response, commandText]);
 
   useEffect(() => {
     const onResize = () => setViewportH(window.innerHeight);
@@ -565,10 +436,10 @@ export default function AICommandSurfaceShell() {
     const t = commandText.trim();
     if (!t) return;
 
-    // replace-not-stack: wipe prior content and show loading
     setExpanded(true);
     setBusy(true);
     setAdvancedOpen(false);
+    setDetailsOpen(false);
     setApplyAnyway(false);
     setStructuredOverrideJson("");
     setResponse({
@@ -624,6 +495,7 @@ export default function AICommandSurfaceShell() {
 
     setBusy(true);
     setAdvancedOpen(false);
+    setDetailsOpen(false);
     setResponse((r) =>
       r
         ? {
@@ -695,6 +567,7 @@ export default function AICommandSurfaceShell() {
   const dismiss = useCallback(() => {
     setExpanded(false);
     setAdvancedOpen(false);
+    setDetailsOpen(false);
   }, []);
 
   const refine = useCallback(() => {
@@ -707,72 +580,38 @@ export default function AICommandSurfaceShell() {
 
   return (
     <SurfaceCard expanded={showPanel}>
-      {showPanel ? (
+      {showPanel && response ? (
         <div
-          className="rounded-t-xl overflow-hidden"
+          className="rounded-t-xl overflow-hidden border-b"
           style={{
             maxHeight: panelMaxHeight,
             borderTop: `2px solid ${derived.adminV2AiBarPineBorder}`,
+            borderColor: derived.border,
             backgroundColor: neutral.surface,
-            boxShadow: `inset 0 1px 0 rgba(255,255,255,0.85)`,
           }}
         >
-          <div
-            className="px-3 pt-2 pb-2"
-            style={{
-              borderBottom: `1px solid ${derived.border}`,
-              background: `linear-gradient(180deg, ${derived.kpiBandBusinessLight} 0%, ${derived.inspectorCommandRailWash} 55%, ${neutral.surface} 100%)`,
-            }}
-          >
-            <AIResponseHeader
-              headline={response.headline}
-              subline={response.subline}
-              confidence={response.confidence}
-            />
-          </div>
+          <OutcomeZone headline={response.headline} subline={response.subline} confidence={response.confidence} />
 
-          <div
-            className="px-3 py-2 overflow-auto"
-            style={{ maxHeight: panelMaxHeight - COLLAPSED_MIN_H, backgroundColor: neutral.background }}
-          >
-            {response.plannerOk ? (
-              <AISummarySection planner={response.plannerOk} commandText={commandText.trim()} />
-            ) : null}
-
-            <AIOutcomeSection planner={response.plannerOk ?? null} kind={response.kind} />
-
-            {response.plannerOk ? <AIUnresolvedSection planner={response.plannerOk} /> : null}
-
-            {response.kind === "error" ? (
-              <div className="mt-3 rounded-r-md py-1.5 pr-2 text-[13px]" style={{ paddingLeft: CMD.padL, backgroundColor: CMD.bgNoop }}>
-                <p style={{ color: CMD.textBody }}>{response.subline ?? "Something went wrong."}</p>
-                <p className="mt-0.5 text-[11px]" style={{ color: CMD.textSupporting }}>
-                  Details under Technical details.
-                </p>
-              </div>
-            ) : null}
-
-            <AIWhatsNextSection kind={response.kind} />
-
-            <AISuggestedActionsRow
-              kind={response.kind}
-              applyBlockedByNoop={applyBlockedByNoop}
-              applyAnyway={applyAnyway}
-              onToggleApplyAnyway={setApplyAnyway}
-              onRefine={refine}
-            />
-
-            <AIPrimaryActionsRow
+          <div className="space-y-0 px-3 py-2" style={{ backgroundColor: neutral.background }}>
+            <AIActionsRow
               kind={response.kind}
               canApply={canApply}
               applying={busy && response.kind === "loading" && Boolean(structuredOverrideJson)}
+              applyBlockedByNoop={applyBlockedByNoop}
+              applyAnyway={applyAnyway}
+              onToggleApplyAnyway={setApplyAnyway}
               onApply={() => void apply()}
               onDismiss={dismiss}
+              onRefine={refine}
             />
+
+            {response.kind !== "loading" ? (
+              <DetailsToggle open={detailsOpen} onToggle={() => setDetailsOpen((o) => !o)} bullets={detailsBullets} />
+            ) : null}
 
             {response.kind !== "loading" &&
             (response.plannerOk || structuredOverrideJson || response.errorDetailJson || response.applyResultJson) ? (
-              <AIAdvancedDetailsDrawer
+              <AdvancedDrawer
                 open={advancedOpen}
                 onToggle={() => setAdvancedOpen((o) => !o)}
                 planner={response.plannerOk ?? null}
@@ -832,4 +671,3 @@ export default function AICommandSurfaceShell() {
     </SurfaceCard>
   );
 }
-
