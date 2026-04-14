@@ -9,6 +9,7 @@ import TopNavBar from "./TopNavBar";
 import Sidebar from "./Sidebar";
 import InspectorPanel from "./InspectorPanel";
 import AICommandBar from "./AICommandBar";
+import AICommandSurfaceShell from "./aiCommandSurface/AICommandSurfaceShell";
 import BreadcrumbBar from "./navigation/BreadcrumbBar";
 import KPIBand from "./dashboard/KPIBand";
 import SystemCanvas from "./canvas/SystemCanvas";
@@ -16,6 +17,14 @@ import RecordsExpandable from "./records/RecordsExpandable";
 import { MOCK_DEPARTMENTS } from "./canvas/mockDepartments";
 import type { DepartmentKey } from "@/lib/departmentColors";
 import WorkspaceAmbientLayer from "./WorkspaceAmbientLayer";
+
+/**
+ * AdminV2 AI command surface is internal/admin-only and should be interactive whenever visible.
+ * This avoids NEXT_PUBLIC env misconfiguration causing a non-interactive placeholder bar in production.
+ */
+function adminV2AiCommandSurfaceEnabled(): boolean {
+  return true;
+}
 
 function getDepartmentName(key: DepartmentKey): string {
   const dept = MOCK_DEPARTMENTS.find((d) => d.key === key);
@@ -105,12 +114,13 @@ export default function AdminV2Shell({
             style={workspaceContentAmbientStyle}
           >
             <WorkspaceAmbientLayer />
-            <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden isolate">
+            <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden isolate pb-[88px]">
               {children}
             </div>
+            <div className="absolute bottom-0 left-0 right-0 z-20">
+              {adminV2AiCommandSurfaceEnabled() ? <AICommandSurfaceShell /> : <AICommandBar />}
+            </div>
           </div>
-          {/* Same system grammar as main /adminV2: persistent bottom AI command surface */}
-          <AICommandBar />
         </div>
       </div>
     );
@@ -175,7 +185,9 @@ export default function AdminV2Shell({
             zoomLevel={zoomLevel}
           />
         </div>
-        <AICommandBar />
+        <div className="relative">
+          {adminV2AiCommandSurfaceEnabled() ? <AICommandSurfaceShell /> : <AICommandBar />}
+        </div>
       </div>
     </div>
   );
