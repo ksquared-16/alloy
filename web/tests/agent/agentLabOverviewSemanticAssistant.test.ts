@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { buildAssistantPayload } from "@/lib/admin/agentLab/buildAssistantStructuredOverride";
 import { parseAssistantCommand } from "@/lib/admin/agentLab/parseAssistantCommand";
 import { runOverviewLayoutSemanticPreview } from "@/lib/admin/agentLab/overviewLayoutSemanticAssistant";
+import {
+    classifySemanticOverviewNoop,
+    shouldBlockSemanticNoopApply,
+} from "@/lib/admin/agentLab/semanticOverviewNoopSummary";
 import { getDefaultOverviewLayoutConfig } from "@/lib/rrs/overview/overviewLayoutV0";
 
 function storedOverview(version: number) {
@@ -102,5 +106,53 @@ describe("Agent Lab — semantic overview assistant", () => {
         if (r.ok) return;
         expect(r.planner.ok).toBe(false);
         expect(r.error).toMatch(/No supported/i);
+    });
+
+    it("semantic preview can be a no-op with unresolved-only targets; Apply guard would block", () => {
+        const raw = storedOverview(3);
+        const parsed = parseAssistantCommand("please show phone and email");
+        expect(parsed.ok).toBe(true);
+        if (!parsed.ok) return;
+        const built = buildAssistantPayload(parsed.parsed, {
+            fieldDefinitionId: "",
+            expectedUpdatedAt: "",
+            overviewConfigRaw: raw,
+        });
+        expect(built.ok).toBe(true);
+        if (!built.ok) return;
+        const sp = "semanticPlanner" in built.payload ? built.payload.semanticPlanner : null;
+        expect(sp?.effective_layout_change).toBe(false);
+        expect(sp?.resolution.unresolved_targets.length).toBeGreaterThan(0);
+        expect(classifySemanticOverviewNoop(sp!)).toBe("noop_unresolved_only");
+        expect(
+            shouldBlockSemanticNoopApply({
+                previewRoute: "v1",
+                semanticPlanner: sp!,
+                applySemanticNoopAnyway: false,
+            })
+        ).toBe(true);
+    });
+
+    it("semantic preview with real layout diff is not a no-op for Apply guard", () => {
+        const raw = storedOverview(1);
+        const parsed = parseAssistantCommand("Hide the financial band");
+        expect(parsed.ok).toBe(true);
+        if (!parsed.ok) return;
+        const built = buildAssistantPayload(parsed.parsed, {
+            fieldDefinitionId: "",
+            expectedUpdatedAt: "",
+            overviewConfigRaw: raw,
+        });
+        expect(built.ok).toBe(true);
+        if (!built.ok) return;
+        const sp = "semanticPlanner" in built.payload ? built.payload.semanticPlanner : null;
+        expect(sp?.effective_layout_change).toBe(true);
+        expect(
+            shouldBlockSemanticNoopApply({
+                previewRoute: "v1",
+                semanticPlanner: sp!,
+                applySemanticNoopAnyway: false,
+            })
+        ).toBe(false);
     });
 });

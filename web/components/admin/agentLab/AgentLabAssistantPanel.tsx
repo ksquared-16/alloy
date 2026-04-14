@@ -5,6 +5,11 @@ import SectionCard from "@/components/admin/SectionCard";
 import { parseAssistantCommand } from "@/lib/admin/agentLab/parseAssistantCommand";
 import { resolveFieldDefinitionByQuery, type FieldDefListItem } from "@/lib/admin/agentLab/resolveFieldDefinitionByQuery";
 import { buildAssistantPayload } from "@/lib/admin/agentLab/buildAssistantStructuredOverride";
+import {
+    classifySemanticOverviewNoop,
+    semanticOverviewNoopHeadline,
+    shouldBlockSemanticNoopApply,
+} from "@/lib/admin/agentLab/semanticOverviewNoopSummary";
 import { getFieldDefinitionLockTimestamp } from "@/lib/agent/v2/fieldVisibilityConfigV0";
 import type { JobOverviewPlannerFailure, JobOverviewPlannerSuccess } from "@/lib/agent/planner/jobOverviewPlannerTypes";
 
@@ -37,6 +42,7 @@ export default function AgentLabAssistantPanel(props: Props) {
     const [busy, setBusy] = useState(false);
     const [semanticPlannerOk, setSemanticPlannerOk] = useState<JobOverviewPlannerSuccess | null>(null);
     const [semanticPlannerErr, setSemanticPlannerErr] = useState<JobOverviewPlannerFailure | null>(null);
+    const [applySemanticNoopAnyway, setApplySemanticNoopAnyway] = useState(false);
 
     const runPreview = useCallback(async () => {
         setParseNote(null);
@@ -45,6 +51,7 @@ export default function AgentLabAssistantPanel(props: Props) {
         setPreviewJson("");
         setSemanticPlannerOk(null);
         setSemanticPlannerErr(null);
+        setApplySemanticNoopAnyway(false);
 
         const parsed = parseAssistantCommand(command);
         if (!parsed.ok) {
@@ -88,11 +95,17 @@ export default function AgentLabAssistantPanel(props: Props) {
                 setPreviewJson(JSON.stringify(payload.structured_override, null, 2));
                 setSemanticPlannerOk(semanticPlanner);
                 setSemanticPlannerErr(null);
-                setParseNote(
-                    semanticPlanner
-                        ? "Semantic planner preview ready — review rationale and JSON, then Apply."
-                        : "Preview ready — review JSON, then Apply."
-                );
+                if (semanticPlanner && !semanticPlanner.effective_layout_change) {
+                    setParseNote(
+                        "Semantic planner preview ready — no effective layout change (see banner above JSON). Apply is opt-in."
+                    );
+                } else {
+                    setParseNote(
+                        semanticPlanner
+                            ? "Semantic planner preview ready — review rationale and JSON, then Apply."
+                            : "Preview ready — review JSON, then Apply."
+                    );
+                }
             } catch (e) {
                 setParseNote(e instanceof Error ? e.message : "Request failed");
             } finally {
@@ -152,6 +165,18 @@ export default function AgentLabAssistantPanel(props: Props) {
     }, [command, entityType]);
 
     const applyPreview = async () => {
+        if (
+            shouldBlockSemanticNoopApply({
+                previewRoute,
+                semanticPlanner: semanticPlannerOk,
+                applySemanticNoopAnyway,
+            })
+        ) {
+            setParseNote(
+                "Apply is blocked: the semantic planner reported no layout diff. Enable “Apply anyway” below if you intentionally need a version bump (e.g. after editing JSON)."
+            );
+            return;
+        }
         let structured_override: unknown;
         try {
             structured_override = JSON.parse(previewJson) as unknown;
@@ -198,6 +223,17 @@ export default function AgentLabAssistantPanel(props: Props) {
     if (!assistantPanelEnabled()) {
         return null;
     }
+
+    const semanticNoopKind = semanticPlannerOk
+        ? classifySemanticOverviewNoop(semanticPlannerOk)
+        : "change";
+    const semanticNoopHeadline =
+        semanticNoopKind !== "change" ? semanticOverviewNoopHeadline(semanticNoopKind) : null;
+    const applyBlockedByNoop = shouldBlockSemanticNoopApply({
+        previewRoute,
+        semanticPlanner: semanticPlannerOk,
+        applySemanticNoopAnyway,
+    });
 
     return (
         <SectionCard title="Deterministic assistant (internal)">
@@ -343,14 +379,32 @@ export default function AgentLabAssistantPanel(props: Props) {
                     </div>
                     {!semanticPlannerOk.effective_layout_change && (
                         <p className="text-amber-900 font-medium">
-                            No effective layout change vs current snapshot (see unresolved_targets / rationale if
-                            phrases could not be mapped).
+                            No effective layout change vs current snapshot — proposal is a <strong>no-op</strong> for
+                            layout diff (see banner above JSON). Unresolved targets and rationale still explain what
+                            could not be mapped.
                         </p>
                     )}
                     <p className="text-emerald-800">
                         Full v1 <code className="rounded bg-emerald-100/80 px-1">structured_override</code> (intent +
-                        slots) is in the textarea below — same shape as{" "}
+                        slots) follows the preview area below (after any no-op banner) — same shape as{" "}
                         <code className="rounded bg-emerald-100/80 px-1">POST /api/admin/agent/v1/record-overview-layout</code>.
+                        {semanticNoopKind !== "change" && (
+                            <>
+                                {" "}
+                                JSON is still shown for transparency; submitting without a real diff mainly bumps{" "}
+                                <code className="rounded bg-emerald-100/80 px-1">version</code>.
+                            </>
+                        )}
+                    </p>
+                </div>
+            )}
+            {semanticNoopHeadline && (
+                <div className="mb-3 rounded-md border border-amber-300 bg-amber-50/95 p-3 text-sm text-amber-950 space-y-2">
+                    <p className="font-semibold leading-snug">{semanticNoopHeadline}</p>
+                    <p className="text-xs leading-relaxed text-amber-900/95">
+                        {semanticNoopKind === "noop_unresolved_only"
+                            ? "Unresolved targets list what the catalog cannot place on the overview yet. Apply is off by default so you do not create audit noise from a no-diff write."
+                            : "Apply is off by default — submitting would still increment config version with an identical layout shape."}
                     </p>
                 </div>
             )}
@@ -363,13 +417,33 @@ export default function AgentLabAssistantPanel(props: Props) {
                     onChange={(e) => setPreviewJson(e.target.value)}
                 />
             </label>
+            {semanticNoopKind !== "change" && (
+                <label className="mt-2 flex cursor-pointer items-start gap-2 text-xs text-alloy-muted">
+                    <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={applySemanticNoopAnyway}
+                        onChange={(e) => setApplySemanticNoopAnyway(e.target.checked)}
+                    />
+                    <span>
+                        Apply anyway (allow POST when the planner found no layout diff — use for a deliberate version /
+                        audit bump, or after editing JSON)
+                    </span>
+                </label>
+            )}
             <button
                 type="button"
+                disabled={applyBlockedByNoop}
                 onClick={() => void applyPreview()}
-                className="mt-2 rounded-md bg-alloy-midnight px-4 py-2 text-sm font-medium text-white"
+                className="mt-2 rounded-md bg-alloy-midnight px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
             >
                 Apply via agent route (v1 or v2)
             </button>
+            {applyBlockedByNoop && (
+                <p className="mt-1 text-xs text-alloy-muted">
+                    Apply disabled — semantic overview preview is a no-op unless you check “Apply anyway”.
+                </p>
+            )}
         </SectionCard>
     );
 }
