@@ -77,6 +77,7 @@ import {
 import { useRecordChromeConfig } from "@/hooks/useRecordChromeConfig";
 import { getSectionOrderFromScheduleLayoutBlocks } from "@/lib/recordChrome/scheduleLayoutConfig";
 import { applyOverviewSectionOrder } from "@/lib/recordChrome/types";
+import { executeOpportunityRecordAction } from "@/lib/recordChrome/executeOpportunityRecordAction";
 
 function dispatchAfterPaymentRun(jobId: string, scheduleId: string | null) {
     window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "jobs", id: jobId } }));
@@ -811,6 +812,7 @@ export default function AdminEntityDrawer() {
     const [createError, setCreateError] = useState<string | null>(null);
     const [workflowActionAdvanced, setWorkflowActionAdvanced] = useState<Record<number, boolean>>({});
     const [jobActionLoading, setJobActionLoading] = useState<string | null>(null);
+    const [opportunityActionLoading, setOpportunityActionLoading] = useState<string | null>(null);
     const [fieldCatalogByEntity, setFieldCatalogByEntity] = useState<Record<string, FieldCatalogEntry[]>>({});
     const [vendorStatuses, setVendorStatuses] = useState<{ id: string; key: string; label: string }[]>([]);
     const [setLocationOpen, setSetLocationOpen] = useState(false);
@@ -1702,6 +1704,31 @@ export default function AdminEntityDrawer() {
             }
         },
         [openCollectPayment]
+    );
+
+    const handleOpportunityRecordChromeAction = useCallback(
+        async (eventKey: string) => {
+            if (!drawer.id || drawer.id === "new" || drawer.type !== "opportunities") return;
+            setOpportunityActionLoading(eventKey);
+            setSaveError(null);
+            try {
+                const result = await executeOpportunityRecordAction({ opportunityId: drawer.id, eventKey });
+                if (!result.ok) {
+                    setSaveError(result.error);
+                    return;
+                }
+                setData((prev) =>
+                    prev && typeof prev === "object" ? { ...prev, ...(result.data as Record<string, unknown>) } : prev
+                );
+                refetch();
+                router.refresh();
+            } catch (e) {
+                setSaveError(e instanceof Error ? e.message : "Action failed");
+            } finally {
+                setOpportunityActionLoading(null);
+            }
+        },
+        [drawer.id, drawer.type, refetch, router]
     );
 
     useEffect(() => {
@@ -3461,6 +3488,9 @@ export default function AdminEntityDrawer() {
     const isJobDrawerV2 = drawerShellVariant === "adminV2" && isJobExistingView;
     const recordChromeJob = useRecordChromeConfig(isJobDrawerV2 ? "job" : null);
     const recordChromeSchedule = useRecordChromeConfig(drawer.type === "schedules" ? "schedule" : null);
+    const recordChromeOpportunity = useRecordChromeConfig(
+        drawer.type === "opportunities" && drawer.id && drawer.id !== "new" ? "opportunity" : null
+    );
     /** Modal shell for /adminV2 jobs — use before data loads so geometry never flashes sidebar-first. */
     const isJobRecordModalTarget =
         drawerShellVariant === "adminV2" &&
@@ -3545,6 +3575,7 @@ export default function AdminEntityDrawer() {
     ) : null;
 
     const isScheduleExistingView = drawer.type === "schedules" && data && !(data as Record<string, unknown>)._create;
+    const isOpportunityExistingView = drawer.type === "opportunities" && data && !(data as Record<string, unknown>)._create;
     const schedulePaidInFullKnown =
         hasServerJobPaymentSummary &&
         jobPaymentSummaryFromApi.payment_status_key === "paid" &&
@@ -3648,6 +3679,43 @@ export default function AdminEntityDrawer() {
                         className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30"
                     >
                         {a.label}
+                    </button>
+                ))}
+            </div>
+        ) : null;
+
+    const opportunityChromePrimary = (recordChromeOpportunity.actions ?? []).filter((a) => a.placement === "primary");
+    const opportunityChromeSecondary = (recordChromeOpportunity.actions ?? []).filter((a) => a.placement === "secondary");
+    const hasOpportunityChromeActions = opportunityChromePrimary.length + opportunityChromeSecondary.length > 0;
+
+    const opportunityHeaderQuickActionsNode =
+        isOpportunityExistingView && drawer.id && hasOpportunityChromeActions ? (
+            <div
+                className={`flex flex-wrap gap-2 items-center ${
+                    drawerShellVariant === "adminV2" ? "rounded-lg border border-admin-border/45 bg-white/70 px-2.5 py-1.5 shadow-sm" : ""
+                }`}
+                data-opportunity-record-actions={drawerShellVariant === "adminV2" ? "true" : undefined}
+            >
+                {opportunityChromePrimary.map((a) => (
+                    <button
+                        key={a.id}
+                        type="button"
+                        disabled={!canMutate || !!opportunityActionLoading}
+                        onClick={() => void handleOpportunityRecordChromeAction(a.event_key)}
+                        className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
+                    >
+                        {opportunityActionLoading === a.event_key ? "…" : a.label}
+                    </button>
+                ))}
+                {opportunityChromeSecondary.map((a) => (
+                    <button
+                        key={a.id}
+                        type="button"
+                        disabled={!canMutate || !!opportunityActionLoading}
+                        onClick={() => void handleOpportunityRecordChromeAction(a.event_key)}
+                        className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30 disabled:opacity-50"
+                    >
+                        {opportunityActionLoading === a.event_key ? "…" : a.label}
                     </button>
                 ))}
             </div>
@@ -5252,6 +5320,7 @@ export default function AdminEntityDrawer() {
                     jobQuickActionsNode
                 ))}
             {drawer.type === "schedules" && isScheduleExistingView && scheduleHeaderQuickActionsNode}
+            {drawer.type === "opportunities" && isOpportunityExistingView && opportunityHeaderQuickActionsNode}
                         {drawer.type === "jobs" && !(data as { _create?: boolean })?._create && canMutate && jobFormDirty && (
                             <>
                                 <button type="button" onClick={saveEdit} disabled={saving} className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50">{saving ? "Saving…" : "Save"}</button>

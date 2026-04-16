@@ -1,7 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import type { WorkspaceQueueBlock, WorkspaceRuntimeData } from "@/lib/workspace/types";
+import { useRouter } from "next/navigation";
+import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { executeOpportunityRecordAction } from "@/lib/recordChrome/executeOpportunityRecordAction";
+import type { WorkspaceOpportunityQueueRuntime, WorkspaceQueueBlock, WorkspaceRuntimeData } from "@/lib/workspace/types";
 
 function isUnassignedWorkUnitRow(w: { name?: string | null; key?: string | null }): boolean {
     const n = (w.name ?? "").toLowerCase();
@@ -13,6 +17,95 @@ function isUnassignedWorkUnitRow(w: { name?: string | null; key?: string | null 
  * Work units seeded for routing (e.g. `todays_schedule`) are also listed as explicit
  * `department_workspace_route` rows — without this, the same lane appears twice (link + stub).
  */
+function opportunityQueueLookup(
+    runtime: WorkspaceRuntimeData,
+    workUnitKey: string
+): WorkspaceOpportunityQueueRuntime | undefined {
+    const k = workUnitKey.trim();
+    const lower = k.toLowerCase();
+    const oq = runtime.opportunityQueues;
+    if (!oq) return undefined;
+    return oq[lower] ?? oq[k] ?? oq[workUnitKey];
+}
+
+const OPP_QUEUE_QUICK: { eventKey: string; label: string }[] = [
+    { eventKey: "qualify_opportunity", label: "Qualify" },
+    { eventKey: "start_quote", label: "Quote" },
+    { eventKey: "mark_lost", label: "Lost" },
+];
+
+function OpportunityQueueInlinePreview({ oq, runtime }: { oq: WorkspaceOpportunityQueueRuntime; runtime: WorkspaceRuntimeData }) {
+    const { openDrawer } = useAdminDrawer();
+    const router = useRouter();
+    const [busyId, setBusyId] = useState<string | null>(null);
+    if (oq.error) {
+        return <p className="text-xs mt-2 text-amber-800">{oq.error}</p>;
+    }
+    if (!oq.items.length) {
+        return <p className="text-xs mt-2" style={{ color: "var(--d-muted)" }}>No opportunities in this projection.</p>;
+    }
+    return (
+        <ul className="mt-2 space-y-1 pl-0 list-none" role="list">
+            {oq.items.slice(0, 8).map((row) => {
+                const title = (row.name ?? "").trim() || "Opportunity";
+                const price =
+                    row.quote_total != null && !Number.isNaN(Number(row.quote_total))
+                        ? `$${Number(row.quote_total).toFixed(2)}`
+                        : null;
+                const sub = [row._customer_name?.trim(), row.status_key?.trim(), price]
+                    .filter(Boolean)
+                    .join(" · ");
+                return (
+                    <li key={row.id} className="rounded-lg border border-[var(--d-border,rgba(39,63,82,0.14))] overflow-hidden bg-[var(--d-surface,#fff)]">
+                        <button
+                            type="button"
+                            className="w-full text-left px-2 py-1.5 text-xs transition-colors hover:opacity-95"
+                            style={{
+                                color: "var(--d-text-primary)",
+                            }}
+                            onClick={() => openDrawer({ type: "opportunities", id: row.id })}
+                        >
+                            <span className="font-medium block">{title}</span>
+                            {sub ? (
+                                <span className="block opacity-75 tabular-nums" style={{ fontSize: 11 }}>
+                                    {sub}
+                                </span>
+                            ) : null}
+                        </button>
+                        {runtime.opportunityQueueQuickActions ? (
+                            <div className="flex flex-wrap gap-1 px-2 pb-1.5 pt-0 border-t border-[var(--d-border,rgba(39,63,82,0.1))]">
+                                {OPP_QUEUE_QUICK.map(({ eventKey, label }) => (
+                                    <button
+                                        key={eventKey}
+                                        type="button"
+                                        disabled={busyId === `${row.id}:${eventKey}`}
+                                        className="text-[10px] px-1.5 py-0.5 rounded border border-alloy-stone/40 text-alloy-midnight/85 hover:bg-alloy-stone/20 disabled:opacity-50"
+                                        onClick={async (e) => {
+                                            e.stopPropagation();
+                                            setBusyId(`${row.id}:${eventKey}`);
+                                            try {
+                                                const r = await executeOpportunityRecordAction({
+                                                    opportunityId: row.id,
+                                                    eventKey,
+                                                });
+                                                if (r.ok) router.refresh();
+                                            } finally {
+                                                setBusyId(null);
+                                            }
+                                        }}
+                                    >
+                                        {busyId === `${row.id}:${eventKey}` ? "…" : label}
+                                    </button>
+                                ))}
+                            </div>
+                        ) : null}
+                    </li>
+                );
+            })}
+        </ul>
+    );
+}
+
 function workUnitKeysSupersededByDepartmentRoutes(block: WorkspaceQueueBlock): Set<string> {
     const out = new Set<string>();
     for (const e of block.entries) {
@@ -133,6 +226,7 @@ export function QueueBlock({
                             (wu
                                 ? "Work unit is configured; dedicated queue route ships with the interpreter."
                                 : "Work unit row not found for this key in the current department.");
+                        const oq = opportunityQueueLookup(runtime, entry.work_unit_key);
                         return (
                             <li key={`wk-${entry.work_unit_key}-${i}`} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
                                 <div className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-standard opacity-90">
@@ -143,6 +237,7 @@ export function QueueBlock({
                                         <div className="adminv2-ws-wu-queue-card-sub adminv2-ws-wu-queue-card-sub--compact">
                                             {desc}
                                         </div>
+                                        {oq ? <OpportunityQueueInlinePreview oq={oq} runtime={runtime} /> : null}
                                     </div>
                                 </div>
                             </li>
@@ -243,10 +338,12 @@ export function QueueBlock({
                             (wu
                                 ? "Work unit is configured; dedicated queue route ships with the interpreter."
                                 : "Work unit row not found for this key in the current department.");
+                        const oq = opportunityQueueLookup(runtime, entry.work_unit_key);
                         return (
                             <li key={`wk-${entry.work_unit_key}-${i}`} className="px-4 py-3 bg-alloy-stone/10">
                                 <span className="text-sm text-alloy-midnight/80">{title}</span>
                                 <p className="text-xs text-alloy-midnight/45 mt-0.5">{desc}</p>
+                                {oq ? <OpportunityQueueInlinePreview oq={oq} runtime={runtime} /> : null}
                             </li>
                         );
                     })}

@@ -18,7 +18,9 @@ export type WorkspaceSignalMetricKey =
     | "jobs.unassigned_count"
     | "schedules.scheduled_today_count"
     | "jobs.needs_attention_count"
-    | "jobs.high_value_attention_count";
+    | "jobs.high_value_attention_count"
+    | "growth.new_leads_count"
+    | "growth.unbooked_quotes_count";
 
 export type WorkspaceSignalItem = {
     /** Stable id for React keys / future analytics. */
@@ -173,10 +175,27 @@ export type WorkspaceAttentionCategoryRuntime = {
     previews: { id: string; label: string }[];
 };
 
+/** Server-built opportunity queue preview for Growth (keyed by `work_units.key`). */
+export type WorkspaceOpportunityQueueRuntime = {
+    total: number;
+    error: string | null;
+    items: Array<{
+        id: string;
+        name: string | null;
+        status_key: string | null;
+        quote_total: number | null;
+        _customer_name?: string | null;
+    }>;
+};
+
 /** Runtime values fetched by the page and passed into blocks (keeps blocks mostly presentational). */
 export type WorkspaceRuntimeData = {
     metrics: Partial<Record<WorkspaceSignalMetricKey, number | null>>;
     workUnits: Array<{ id: string; name: string | null; key?: string | null; department_id: string }>;
     /** Populated when layout includes an `attention` block — keyed by `WorkspaceAttentionCategoryKey`. */
     attention?: Partial<Record<WorkspaceAttentionCategoryKey, WorkspaceAttentionCategoryRuntime>>;
+    /** Growth: opportunity rows from GET `/api/admin/work-units/:id/opportunity-queue` (projections, not truth). */
+    opportunityQueues?: Partial<Record<string, WorkspaceOpportunityQueueRuntime>>;
+    /** When true, queue rows may show minimal opportunity system actions (same execution path as record chrome). */
+    opportunityQueueQuickActions?: boolean;
 };

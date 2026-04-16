@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { RecordActionRow, RecordLayoutRow } from "@/lib/recordChrome/types";
 
-export type RecordChromeEntityKind = "job" | "schedule";
+export type RecordChromeEntityKind = "job" | "schedule" | "opportunity";
 
 /**
  * Fetches record layout + actions for a logical entity (above RRS).

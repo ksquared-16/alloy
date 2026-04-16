@@ -7,10 +7,30 @@ import {
     mergeJobListsById,
     type JobRowForWorkspaceMetrics,
 } from "@/lib/workspace/deriveDepartmentJobMetrics";
-import type { WorkspaceAttentionCategoryKey, WorkspaceRuntimeData } from "@/lib/workspace/types";
+import type { WorkspaceAttentionCategoryKey, WorkspaceOpportunityQueueRuntime, WorkspaceRuntimeData } from "@/lib/workspace/types";
 
 type Dept = { id: string; name: string | null; key?: string | null };
 type WU = { id: string; name: string | null; department_id: string; key?: string | null };
+
+async function fetchOpportunityQueueRuntime(wu: WU | undefined): Promise<WorkspaceOpportunityQueueRuntime> {
+    if (!wu?.id) {
+        return { total: 0, error: "Work unit not found", items: [] };
+    }
+    const res = await fetch(`/api/admin/work-units/${encodeURIComponent(wu.id)}/opportunity-queue`);
+    const j = (await res.json().catch(() => ({}))) as {
+        total?: number;
+        items?: WorkspaceOpportunityQueueRuntime["items"];
+        error?: string;
+    };
+    if (!res.ok) {
+        return { total: 0, error: j.error ?? "Failed to load queue", items: [] };
+    }
+    return {
+        total: typeof j.total === "number" ? j.total : 0,
+        error: null,
+        items: j.items ?? [],
+    };
+}
 
 export function useOperationsWorkspaceData(departmentId: string) {
     const [loading, setLoading] = useState(true);
@@ -25,21 +45,38 @@ export function useOperationsWorkspaceData(departmentId: string) {
     const [attention, setAttention] = useState<
         Partial<Record<WorkspaceAttentionCategoryKey, { count: number; previews: { id: string; label: string }[] }>>
     >({});
+    const [opportunityQueues, setOpportunityQueues] = useState<WorkspaceRuntimeData["opportunityQueues"]>(undefined);
 
     const title = useMemo(() => dept?.name?.trim() || "Department", [dept]);
 
     const runtime: WorkspaceRuntimeData = useMemo(
         () => ({
+            opportunityQueueQuickActions: opportunityQueues != null,
             metrics: {
                 "jobs.unassigned_count": unassignedTotal,
                 "schedules.scheduled_today_count": scheduledTodayCount,
                 "jobs.needs_attention_count": needsAttentionCount,
                 "jobs.high_value_attention_count": highTouchCount,
+                ...(opportunityQueues?.new_leads != null
+                    ? { "growth.new_leads_count": opportunityQueues.new_leads.total }
+                    : {}),
+                ...(opportunityQueues?.unbooked_quotes != null
+                    ? { "growth.unbooked_quotes_count": opportunityQueues.unbooked_quotes.total }
+                    : {}),
             },
             workUnits,
             attention,
+            opportunityQueues,
         }),
-        [unassignedTotal, scheduledTodayCount, needsAttentionCount, highTouchCount, workUnits, attention]
+        [
+            unassignedTotal,
+            scheduledTodayCount,
+            needsAttentionCount,
+            highTouchCount,
+            workUnits,
+            attention,
+            opportunityQueues,
+        ]
     );
 
     useEffect(() => {
@@ -49,16 +86,49 @@ export function useOperationsWorkspaceData(departmentId: string) {
             try {
                 setLoading(true);
                 setDerivedError(null);
-                const [dRes, wRes, uRes, stRes, deptJobsRes, unassignedJobsRes] = await Promise.all([
-                    fetch("/api/admin/departments"),
-                    fetch(`/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`),
+                const dRes = await fetch("/api/admin/departments");
+                const wRes = await fetch(`/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`);
+                const dj = (await dRes.json().catch(() => ({}))) as { items?: Dept[]; error?: string };
+                const wj = (await wRes.json().catch(() => ({}))) as { items?: WU[]; error?: string };
+
+                if (!dRes.ok) throw new Error(dj.error ?? "Departments request failed");
+                if (!wRes.ok) throw new Error(wj.error ?? "Work units request failed");
+
+                const depts = dj.items ?? [];
+                const wus = wj.items ?? [];
+                const d = depts.find((x) => x.id === departmentId) ?? null;
+                const deptKey = (d?.key ?? "").trim().toLowerCase();
+
+                if (deptKey === "growth") {
+                    setUnassignedTotal(null);
+                    setScheduledTodayCount(null);
+                    setNeedsAttentionCount(null);
+                    setHighTouchCount(null);
+                    setAttention({});
+                    setDerivedError(null);
+
+                    const nlWu = wus.find((w) => (w.key ?? "").trim().toLowerCase() === "new_leads");
+                    const uqWu = wus.find((w) => (w.key ?? "").trim().toLowerCase() === "unbooked_quotes");
+                    const [nl, uq] = await Promise.all([
+                        fetchOpportunityQueueRuntime(nlWu),
+                        fetchOpportunityQueueRuntime(uqWu),
+                    ]);
+                    if (!cancelled) {
+                        setOpportunityQueues({ new_leads: nl, unbooked_quotes: uq });
+                        setDept(d);
+                        setWorkUnits(wus);
+                    }
+                    return;
+                }
+
+                setOpportunityQueues(undefined);
+
+                const [uRes, stRes, deptJobsRes, unassignedJobsRes] = await Promise.all([
                     fetch("/api/admin/jobs?assigned_vendor_unassigned=true&limit=1"),
                     fetch("/api/admin/schedules?scheduled_on=today&limit=1"),
                     fetch(`/api/admin/jobs?department_id=${encodeURIComponent(departmentId)}&limit=200`),
                     fetch("/api/admin/jobs?assigned_vendor_unassigned=true&limit=200"),
                 ]);
-                const dj = (await dRes.json().catch(() => ({}))) as { items?: Dept[]; error?: string };
-                const wj = (await wRes.json().catch(() => ({}))) as { items?: WU[]; error?: string };
                 const uj = (await uRes.json().catch(() => ({}))) as { total?: number; error?: string };
                 const stj = (await stRes.json().catch(() => ({}))) as { total?: number; schedules?: unknown[]; error?: string };
                 const djJobs = (await deptJobsRes.json().catch(() => ({}))) as {
@@ -70,8 +140,6 @@ export function useOperationsWorkspaceData(departmentId: string) {
                     error?: string;
                 };
 
-                if (!dRes.ok) throw new Error(dj.error ?? "Departments request failed");
-                if (!wRes.ok) throw new Error(wj.error ?? "Work units request failed");
                 if (uRes.ok && typeof uj.total === "number" && !cancelled) setUnassignedTotal(uj.total);
                 else if (!uRes.ok) setUnassignedTotal(null);
                 if (stRes.ok && typeof stj.total === "number" && !cancelled) setScheduledTodayCount(stj.total);
@@ -94,9 +162,6 @@ export function useOperationsWorkspaceData(departmentId: string) {
                     setAttention(att);
                 }
 
-                const depts = dj.items ?? [];
-                const wus = wj.items ?? [];
-                const d = depts.find((x) => x.id === departmentId) ?? null;
                 if (!cancelled) {
                     setDept(d);
                     setWorkUnits(wus);

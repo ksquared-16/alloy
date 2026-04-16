@@ -186,8 +186,66 @@ const GENERIC: DepartmentWorkspaceLayout = {
     ],
 };
 
+/** Growth — opportunity-backed queues (server interpreter + `work_units.queue_definition`). */
+const GROWTH: DepartmentWorkspaceLayout = {
+    department_key: "growth",
+    blocks: [
+        {
+            id: "signals_growth",
+            type: "signals",
+            title: "Pipeline signals",
+            subtitle: "Counts from opportunity queue projections (same org scope as admin APIs).",
+            signals: [
+                {
+                    id: "g_new_leads",
+                    eyebrow: "Intake",
+                    label: "New leads (queue)",
+                    metric: "growth.new_leads_count",
+                },
+                {
+                    id: "g_unbooked",
+                    eyebrow: "Quotes",
+                    label: "Unbooked quotes (queue)",
+                    metric: "growth.unbooked_quotes_count",
+                },
+            ],
+        },
+        {
+            id: "queues_growth",
+            type: "queue",
+            title: "Growth queues",
+            subtitle: "Opportunities projected from each work unit’s queue_definition — open a row for the record drawer.",
+            entries: [
+                {
+                    kind: "work_unit_key",
+                    work_unit_key: "new_leads",
+                    label: "New leads",
+                    description: "Early demand — status new / needs_a_quote with no positive quote total.",
+                },
+                {
+                    kind: "work_unit_key",
+                    work_unit_key: "unbooked_quotes",
+                    label: "Unbooked quotes",
+                    description: "Quoted opportunities not yet booked (excludes booked / scheduled status; excludes booked stage).",
+                },
+            ],
+            list_remaining_work_units: false,
+        },
+        {
+            id: "context_growth",
+            type: "context",
+            title: "About Growth",
+            paragraphs: [
+                "Queues are read-only projections over opportunities — the opportunity row remains the lifecycle record.",
+                "Filters are defined in each work unit’s queue_definition and executed on the server.",
+            ],
+        },
+    ],
+};
+
 const BY_KEY: Record<string, DepartmentWorkspaceLayout> = {
     operations: OPERATIONS,
+    growth: GROWTH,
 };
 
 export function getDepartmentWorkspaceLayout(departmentKey: string | null | undefined): DepartmentWorkspaceLayout {

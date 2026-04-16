@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
 
-const ALLOWED = new Set(["job", "schedule"]);
+const ALLOWED = new Set(["job", "schedule", "opportunity"]);
 
 /** GET: list active record actions for a logical entity type (admin). */
 export async function GET(request: NextRequest) {
@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
 
     const entityType = (request.nextUrl.searchParams.get("entity_type") ?? "").trim().toLowerCase();
     if (!entityType || !ALLOWED.has(entityType)) {
-        return NextResponse.json({ error: "entity_type must be job or schedule" }, { status: 400 });
+        return NextResponse.json({ error: "entity_type must be job, schedule, or opportunity" }, { status: 400 });
     }
 
     const supabase = createAdminClient();
