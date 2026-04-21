@@ -3503,10 +3503,19 @@ export default function AdminEntityDrawer() {
         drawer.type === "schedules" &&
         !!drawer.id &&
         drawer.id !== "new";
+    /** Centered record modal for opportunities (parity with schedules/jobs on workspace routes). */
+    const isOpportunityRecordModalTarget =
+        drawerShellVariant === "adminV2" &&
+        drawer.type === "opportunities" &&
+        !!drawer.id &&
+        drawer.id !== "new";
     /** Centered record modal for jobs and for linked entities opened from a job (same Admin V2 stack). */
     const useAdminV2RecordModalPresentation =
         drawerShellVariant === "adminV2" &&
-        (isJobRecordModalTarget || isScheduleRecordModalTarget || stack.length > 0);
+        (isJobRecordModalTarget ||
+            isScheduleRecordModalTarget ||
+            isOpportunityRecordModalTarget ||
+            stack.length > 0);
     const hasServerJobPaymentSummary = !!jobPaymentSummaryFromApi;
     const paymentStatusLabel = hasServerJobPaymentSummary
         ? jobPaymentStatusKeyLabel(jobPaymentSummaryFromApi.payment_status_key)
@@ -3736,6 +3745,10 @@ export default function AdminEntityDrawer() {
         isCleaningJobRecord(overviewData as Record<string, unknown>);
     const showScheduleRecordModalV2 =
         isScheduleRecordModalTarget &&
+        !!overviewData &&
+        !(overviewData as { _create?: boolean })._create;
+    const showOpportunityRecordModalV2 =
+        isOpportunityRecordModalTarget &&
         !!overviewData &&
         !(overviewData as { _create?: boolean })._create;
     const showDrawerBodyLoading =
@@ -5443,9 +5456,9 @@ export default function AdminEntityDrawer() {
             variant={drawerShellVariant}
             presentation={useAdminV2RecordModalPresentation ? "modal" : "sidebar"}
             panelClassName={useAdminV2RecordModalPresentation ? "max-w-7xl" : undefined}
-            recordModalTone={showJobRecordModalV2 || showScheduleRecordModalV2 ? "cleaning-v2" : undefined}
+            recordModalTone={showJobRecordModalV2 || showScheduleRecordModalV2 || showOpportunityRecordModalV2 ? "cleaning-v2" : undefined}
             recordModalContextStyle={
-                showJobRecordModalV2 || showScheduleRecordModalV2
+                showJobRecordModalV2 || showScheduleRecordModalV2 || showOpportunityRecordModalV2
                     ? recordSurfaceContextStyle({
                           ...(drawer.operationalVisualContext ?? {}),
                       })
@@ -5453,11 +5466,17 @@ export default function AdminEntityDrawer() {
             }
         >
             {showDrawerBodyLoading &&
-                (isJobRecordModalTarget || isScheduleRecordModalTarget ? (
+                (isJobRecordModalTarget || isScheduleRecordModalTarget || isOpportunityRecordModalTarget ? (
                     <div
                         className="space-y-4 px-1 py-2"
                         aria-busy="true"
-                        aria-label={isJobRecordModalTarget ? "Loading job" : "Loading schedule"}
+                        aria-label={
+                            isJobRecordModalTarget
+                                ? "Loading job"
+                                : isScheduleRecordModalTarget
+                                  ? "Loading schedule"
+                                  : "Loading opportunity"
+                        }
                     >
                         <div className="h-4 max-w-md w-full animate-pulse rounded-md bg-alloy-stone/25" />
                         <div className="h-28 animate-pulse rounded-xl bg-alloy-stone/15" />
@@ -5469,9 +5488,10 @@ export default function AdminEntityDrawer() {
             {error && <p className="text-alloy-ember">Error: {error}</p>}
             {data && !loading && dataMatchesDrawer && (
                 <div
-                    className={`${isJobDrawerV2 && drawer.type === "jobs" ? "space-y-3 max-w-none" : showScheduleRecordModalV2 ? "space-y-3 max-w-none" : "space-y-6"}`}
+                    className={`${isJobDrawerV2 && drawer.type === "jobs" ? "space-y-3 max-w-none" : showScheduleRecordModalV2 || showOpportunityRecordModalV2 ? "space-y-3 max-w-none" : "space-y-6"}`}
                     data-adminv2-job-drawer-body={isJobDrawerV2 && drawer.type === "jobs" ? "true" : undefined}
                     data-adminv2-schedule-drawer-body={showScheduleRecordModalV2 ? "true" : undefined}
+                    data-adminv2-opportunity-drawer-body={showOpportunityRecordModalV2 ? "true" : undefined}
                 >
                     {saveError && <p className="text-alloy-ember text-sm">{saveError}</p>}
                     {drawer.type === "schedules" &&
