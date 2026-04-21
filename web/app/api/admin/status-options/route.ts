@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContext } from "@/lib/admin/getAdminContext";
-import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
+import {
+    fetchEffectiveStatusDefinitions,
+    parseLifecycleStageFromMetadata,
+} from "@/lib/admin/statusDefinitionsResolve";
 
 /**
  * GET: dropdown options for admin status controls — effective status_definitions (org or industry defaults).
@@ -24,6 +27,7 @@ export async function GET(request: NextRequest) {
             value: r.status_key,
             label: (r.status_label && String(r.status_label).trim()) || r.status_key,
             sort_order: r.sort_order ?? 0,
+            lifecycle_stage: parseLifecycleStageFromMetadata(r.metadata),
         }));
         return NextResponse.json({ options });
     } catch (e) {

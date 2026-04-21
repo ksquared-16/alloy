@@ -1,5 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+export {
+    OPPORTUNITY_LIFECYCLE_STAGES,
+    parseLifecycleStageFromMetadata,
+    type OpportunityLifecycleStage,
+} from "@/lib/admin/statusDefinitionLifecycle";
+
 const STATUS_DEF_COLUMNS =
     "id, org_id, industry_key, entity_type, status_key, status_label, sort_order, is_active, is_system, metadata";
 
@@ -13,6 +19,7 @@ export type StatusDefinitionRow = {
     sort_order: number;
     is_active: boolean;
     is_system: boolean;
+    /** JSON; may include `lifecycle_stage` (canonical pipeline stage for this status_key). */
     metadata: Record<string, unknown> | null;
 };
 
