@@ -62,9 +62,10 @@ export function parseTenantBootstrapPayload(raw: unknown): ParseTenantBootstrapR
     const rawGrowth = root.growth_department_keys as unknown[];
     const growthKeySet = new Set<string>();
     for (let i = 0; i < rawGrowth.length; i++) {
-        const k = typeof rawGrowth[i] === "string" ? rawGrowth[i].trim() : "";
+        const item = rawGrowth[i];
+        const k = typeof item === "string" ? item.trim() : "";
         if (!k || !deptKeys.has(k)) {
-            errors.push(`growth_department_keys[${i}]: unknown or empty department key "${String(rawGrowth[i])}"`);
+            errors.push(`growth_department_keys[${i}]: unknown or empty department key "${String(item)}"`);
         } else {
             growthKeySet.add(k);
         }

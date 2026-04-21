@@ -212,7 +212,7 @@ export async function previewVerticalBootstrap(
                 name: d.name,
                 description: d.description ?? null,
                 sort_order: d.sort_order ?? 0,
-                is_active: d.is_active,
+                is_active: d.is_active !== false,
             },
         };
     });
@@ -229,8 +229,8 @@ export async function previewVerticalBootstrap(
             after: {
                 status_label: s.status_label,
                 sort_order: s.sort_order ?? 100,
-                is_active: s.is_active,
-                metadata: s.metadata,
+                is_active: s.is_active !== false,
+                metadata: s.metadata ?? {},
             },
         };
     });
@@ -317,7 +317,7 @@ export async function previewVerticalBootstrap(
                 name: w.name,
                 description: w.description ?? null,
                 sort_order: w.sort_order ?? 0,
-                is_active: w.is_active,
+                is_active: w.is_active !== false,
                 queue_definition: (w.queue_definition ?? {}) as Record<string, unknown>,
             },
         };

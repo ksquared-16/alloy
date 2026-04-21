@@ -4,7 +4,12 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
-import { growthLaneHelperText, growthLaneLabel, parseGrowthLaneParam } from "@/lib/workspace/growthWorkUnitActionManifest";
+import {
+    growthLaneHelperText,
+    growthLaneLabel,
+    parseGrowthLaneParam,
+    type GrowthWorkUnitLaneKey,
+} from "@/lib/workspace/growthWorkUnitActionManifest";
 import type { WorkspaceGrowthWorkspaceActionsBlock } from "@/lib/workspace/types";
 
 function laneHref(baseDeptUrl: string, lane: GrowthWorkUnitLaneKey | "clear"): string {
