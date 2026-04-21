@@ -399,10 +399,11 @@ export async function POST(request: NextRequest) {
 
     if (shouldReuse && existingOppRow) {
       opportunityId = existingOppRow.id;
+      /** CRM status: execution / quoting — same key as admin `start_quote` (not `quote_started`; workflows still emit `quote_started`). */
       const updatePayload: Record<string, unknown> = {
         location_id: locationId,
         pipeline_stage_id: quoteStartedStageId,
-        status_key: "quote_started",
+        status_key: "needs_a_quote",
         status: "open",
         vertical_id: verticalId,
         metadata: {
@@ -430,7 +431,7 @@ export async function POST(request: NextRequest) {
         customer_id: null,
         location_id: locationId,
         pipeline_stage_id: quoteStartedStageId,
-        status_key: "quote_started",
+        status_key: "needs_a_quote",
         name: opportunityName,
         status: "open",
         source: "website",

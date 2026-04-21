@@ -198,14 +198,14 @@ const GROWTH: DepartmentWorkspaceLayout = {
             signals: [
                 {
                     id: "g_new_leads",
-                    eyebrow: "Intake",
-                    label: "New leads (queue)",
+                    eyebrow: "Intake · execution",
+                    label: "Front of funnel (queue)",
                     metric: "growth.new_leads_count",
                 },
                 {
                     id: "g_unbooked",
-                    eyebrow: "Quotes",
-                    label: "Unbooked quotes (queue)",
+                    eyebrow: "Decision",
+                    label: "Priced · open (queue)",
                     metric: "growth.unbooked_quotes_count",
                 },
             ],
@@ -214,22 +214,29 @@ const GROWTH: DepartmentWorkspaceLayout = {
             id: "queues_growth",
             type: "queue",
             title: "Growth queues",
-            subtitle: "Opportunities projected from each work unit’s queue_definition — open a row for the record drawer.",
+            subtitle: "Each list is a lifecycle slice (intake → execution, or decision while priced and still open). Open a row for the full record.",
             entries: [
                 {
                     kind: "work_unit_key",
                     work_unit_key: "new_leads",
-                    label: "New leads",
-                    description: "Early demand — status new / needs_a_quote with no positive quote total.",
+                    label: "Front of funnel",
+                    description:
+                        "Intake / qualification / execution without a positive quote yet — early pipeline work before a priced decision.",
                 },
                 {
                     kind: "work_unit_key",
                     work_unit_key: "unbooked_quotes",
-                    label: "Unbooked quotes",
-                    description: "Quoted opportunities not yet booked (excludes booked / scheduled status; excludes booked stage).",
+                    label: "Priced · not closed",
+                    description:
+                        "Decision stage: quote_total is positive and the opportunity is not in a terminal success/failure status (and not on a booked stage).",
                 },
             ],
             list_remaining_work_units: false,
+        },
+        {
+            id: "growth_actions_rail",
+            type: "growth_workspace_actions",
+            title: "Growth actions",
         },
         {
             id: "context_growth",
@@ -237,7 +244,7 @@ const GROWTH: DepartmentWorkspaceLayout = {
             title: "About Growth",
             paragraphs: [
                 "Queues are read-only projections over opportunities — the opportunity row remains the lifecycle record.",
-                "Filters are defined in each work unit’s queue_definition and executed on the server.",
+                "Lifecycle stage (intake through success/failure) is resolved from status definitions plus a derived “decision” stage when a price exists.",
             ],
         },
     ],

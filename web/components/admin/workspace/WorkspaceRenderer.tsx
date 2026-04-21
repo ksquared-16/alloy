@@ -4,6 +4,7 @@ import type { DepartmentWorkspaceLayout, WorkspaceRuntimeData } from "@/lib/work
 import { partitionDepartmentBlocks } from "@/lib/workspace/partitionBlocks";
 import { DepartmentWorkspaceBridgeShell } from "./DepartmentWorkspaceBridgeShell";
 import { ActionsBlock } from "./blocks/ActionsBlock";
+import { GrowthWorkspaceActions } from "./blocks/GrowthWorkspaceActions";
 import { AttentionBlock } from "./blocks/AttentionBlock";
 import { ContextBlock } from "./blocks/ContextBlock";
 import { KpiBlock } from "./blocks/KpiBlock";
@@ -106,7 +107,7 @@ export function WorkspaceRenderer({
             ) : null;
 
         const railSlot =
-            parts.actions.length > 0 ? (
+            parts.actions.length > 0 || parts.growthWorkspaceActions.length > 0 ? (
                 <>
                     {parts.actions.map((b) => (
                         <ActionsBlock
@@ -115,6 +116,15 @@ export function WorkspaceRenderer({
                             presentation="bridge"
                             departmentId={departmentId}
                             workspaceBasePath={workspaceBasePath}
+                        />
+                    ))}
+                    {parts.growthWorkspaceActions.map((b) => (
+                        <GrowthWorkspaceActions
+                            key={b.id}
+                            block={b}
+                            departmentId={departmentId}
+                            workspaceBasePath={workspaceBasePath}
+                            presentation="bridge"
                         />
                     ))}
                 </>
@@ -177,6 +187,16 @@ export function WorkspaceRenderer({
                                 block={block}
                                 departmentId={departmentId}
                                 workspaceBasePath={workspaceBasePath}
+                            />
+                        );
+                    case "growth_workspace_actions":
+                        return (
+                            <GrowthWorkspaceActions
+                                key={block.id}
+                                block={block}
+                                departmentId={departmentId}
+                                workspaceBasePath={workspaceBasePath}
+                                presentation="flat"
                             />
                         );
                     case "context":

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { buildOpportunityLifecycleFields } from "@/lib/admin/opportunityLifecyclePresentation";
+import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import { getQueueDefinitionStoredVersion } from "@/lib/rrs/queue/queueDefinitionV1";
 import { resolveOpportunityQueueFromDefinition } from "@/lib/rrs/queue/resolveOpportunityQueue";
 
@@ -53,10 +55,23 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         }
     }
 
-    const items = resolved.items.map((row) => ({
-        ...row,
-        _customer_name: row.customer_id ? (customerNameById.get(row.customer_id) ?? null) : null,
-    }));
+    const oppDefs = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "opportunities", { activeOnly: true });
+    const items = resolved.items.map((row) => {
+        const quoteNum =
+            row.quote_total != null && !Number.isNaN(Number(row.quote_total)) && Number(row.quote_total) > 0
+                ? Number(row.quote_total)
+                : null;
+        const lifecycle = buildOpportunityLifecycleFields({
+            statusKey: row.status_key,
+            quoteTotalDollars: quoteNum,
+            defs: oppDefs,
+        });
+        return {
+            ...row,
+            _customer_name: row.customer_id ? (customerNameById.get(row.customer_id) ?? null) : null,
+            ...lifecycle,
+        };
+    });
 
     return NextResponse.json({
         work_unit_id: workUnitId,

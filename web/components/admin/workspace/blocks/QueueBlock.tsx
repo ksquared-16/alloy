@@ -28,13 +28,32 @@ function opportunityQueueLookup(
     return oq[lower] ?? oq[k] ?? oq[workUnitKey];
 }
 
-const OPP_QUEUE_QUICK: { eventKey: string; label: string }[] = [
-    { eventKey: "qualify_opportunity", label: "Qualify" },
-    { eventKey: "start_quote", label: "Quote" },
-    { eventKey: "mark_lost", label: "Lost" },
-];
+/** Record-scoped actions per Growth queue — align with lifecycle (front of funnel vs decision). */
+function opportunityQueueRowQuickActions(workUnitKey: string): { eventKey: string; label: string }[] {
+    const k = workUnitKey.trim().toLowerCase();
+    if (k === "unbooked_quotes") {
+        return [
+            { eventKey: "open_quote", label: "Open quote" },
+            { eventKey: "mark_won", label: "Won" },
+            { eventKey: "mark_lost", label: "Lost" },
+        ];
+    }
+    return [
+        { eventKey: "qualify_opportunity", label: "Qualify" },
+        { eventKey: "start_quote", label: "Start quote" },
+        { eventKey: "mark_lost", label: "Lost" },
+    ];
+}
 
-function OpportunityQueueInlinePreview({ oq, runtime }: { oq: WorkspaceOpportunityQueueRuntime; runtime: WorkspaceRuntimeData }) {
+function OpportunityQueueInlinePreview({
+    oq,
+    runtime,
+    workUnitKey,
+}: {
+    oq: WorkspaceOpportunityQueueRuntime;
+    runtime: WorkspaceRuntimeData;
+    workUnitKey: string;
+}) {
     const { openDrawer } = useAdminDrawer();
     const router = useRouter();
     const [busyId, setBusyId] = useState<string | null>(null);
@@ -52,7 +71,8 @@ function OpportunityQueueInlinePreview({ oq, runtime }: { oq: WorkspaceOpportuni
                     row.quote_total != null && !Number.isNaN(Number(row.quote_total))
                         ? `$${Number(row.quote_total).toFixed(2)}`
                         : null;
-                const sub = [row._customer_name?.trim(), row.status_key?.trim(), price]
+                const stageTitle = (row as { _lifecycle_stage_title?: string | null })._lifecycle_stage_title?.trim();
+                const sub = [row._customer_name?.trim(), stageTitle ?? row.status_key?.trim(), price]
                     .filter(Boolean)
                     .join(" · ");
                 return (
@@ -74,7 +94,7 @@ function OpportunityQueueInlinePreview({ oq, runtime }: { oq: WorkspaceOpportuni
                         </button>
                         {runtime.opportunityQueueQuickActions ? (
                             <div className="flex flex-wrap gap-1 px-2 pb-1.5 pt-0 border-t border-[var(--d-border,rgba(39,63,82,0.1))]">
-                                {OPP_QUEUE_QUICK.map(({ eventKey, label }) => (
+                                {opportunityQueueRowQuickActions(workUnitKey).map(({ eventKey, label }) => (
                                     <button
                                         key={eventKey}
                                         type="button"
@@ -82,7 +102,7 @@ function OpportunityQueueInlinePreview({ oq, runtime }: { oq: WorkspaceOpportuni
                                         className="text-[10px] px-1.5 py-0.5 rounded border border-alloy-stone/40 text-alloy-midnight/85 hover:bg-alloy-stone/20 disabled:opacity-50"
                                         onClick={async (e) => {
                                             e.stopPropagation();
-                                            if (eventKey === "start_quote") {
+                                            if (eventKey === "start_quote" || eventKey === "open_quote") {
                                                 openDrawer({ type: "opportunities", id: row.id, defaultOpportunitySurface: "quote_intake" });
                                                 return;
                                             }
@@ -241,7 +261,9 @@ export function QueueBlock({
                                         <div className="adminv2-ws-wu-queue-card-sub adminv2-ws-wu-queue-card-sub--compact">
                                             {desc}
                                         </div>
-                                        {oq ? <OpportunityQueueInlinePreview oq={oq} runtime={runtime} /> : null}
+                                        {oq ? (
+                                            <OpportunityQueueInlinePreview oq={oq} runtime={runtime} workUnitKey={entry.work_unit_key} />
+                                        ) : null}
                                     </div>
                                 </div>
                             </li>
@@ -347,7 +369,9 @@ export function QueueBlock({
                             <li key={`wk-${entry.work_unit_key}-${i}`} className="px-4 py-3 bg-alloy-stone/10">
                                 <span className="text-sm text-alloy-midnight/80">{title}</span>
                                 <p className="text-xs text-alloy-midnight/45 mt-0.5">{desc}</p>
-                                {oq ? <OpportunityQueueInlinePreview oq={oq} runtime={runtime} /> : null}
+                                {oq ? (
+                                    <OpportunityQueueInlinePreview oq={oq} runtime={runtime} workUnitKey={entry.work_unit_key} />
+                                ) : null}
                             </li>
                         );
                     })}

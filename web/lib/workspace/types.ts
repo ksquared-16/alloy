@@ -107,6 +107,16 @@ export type WorkspaceActionsBlock = {
     actions: WorkspaceActionItem[];
 };
 
+/**
+ * Growth department: lane-aware command rail (registry + `growthWorkUnitActionManifest`).
+ * Renders native shell actions (e.g. create opportunity) and links; row-scoped actions stay on queue rows.
+ */
+export type WorkspaceGrowthWorkspaceActionsBlock = {
+    id: string;
+    type: "growth_workspace_actions";
+    title?: string;
+};
+
 export type WorkspaceContextBlock = {
     id: string;
     type: "context";
@@ -142,6 +152,7 @@ export type WorkspaceBlock =
     | WorkspaceAttentionBlock
     | WorkspaceKpiBlock
     | WorkspaceActionsBlock
+    | WorkspaceGrowthWorkspaceActionsBlock
     | WorkspaceContextBlock;
 
 export type DepartmentWorkspaceLayout = {
@@ -185,6 +196,10 @@ export type WorkspaceOpportunityQueueRuntime = {
         status_key: string | null;
         quote_total: number | null;
         _customer_name?: string | null;
+        _effective_lifecycle_stage?: string | null;
+        _lifecycle_stage_title?: string | null;
+        _lifecycle_stage_meaning?: string | null;
+        _lifecycle_next_step?: { title: string; lines: string[] };
     }>;
 };
 

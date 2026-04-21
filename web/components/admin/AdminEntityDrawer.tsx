@@ -42,6 +42,7 @@ import {
     type EntityDrawerFieldConfig,
 } from "@/lib/entityPresentation";
 import EntityDrawerOverview from "@/components/admin/entity/EntityDrawerOverview";
+import OpportunityLifecyclePanel from "@/components/admin/opportunity/OpportunityLifecyclePanel";
 import EntityDrawerSection from "@/components/admin/entity/EntityDrawerSection";
 import JobPricingBreakdown from "@/components/admin/JobPricingBreakdown";
 import JobRrsOverviewTab from "@/components/admin/JobRrsOverviewTab";
@@ -7771,6 +7772,9 @@ export default function AdminEntityDrawer() {
                             />
                         ) : (
                             <>
+                                {drawer.type === "opportunities" && overviewData && !(overviewData as { _create?: boolean })._create ? (
+                                    <OpportunityLifecyclePanel record={overviewData as Record<string, unknown>} />
+                                ) : null}
                                 {drawer.type === "opportunities" ? opportunityQuoteSummaryNode : null}
                                 {drawer.type === "opportunities" ? opportunityQuoteIntakeNode : null}
                                 <EntityDrawerOverview

@@ -12,6 +12,7 @@ export type OpportunityActionPatchBody = {
 export const OPPORTUNITY_RECORD_ACTION_EVENT_KEYS = [
     "qualify_opportunity",
     "start_quote",
+    "mark_won",
     "mark_lost",
 ] as const;
 
@@ -23,6 +24,8 @@ export function mapOpportunityRecordActionToPatch(eventKey: string): Opportunity
             return { status_key: "qualified" };
         case "start_quote":
             return { status_key: "needs_a_quote" };
+        case "mark_won":
+            return { status_key: "won" };
         case "mark_lost":
             return { status_key: "lost", lost_reason: "Marked lost (workspace)" };
         default:

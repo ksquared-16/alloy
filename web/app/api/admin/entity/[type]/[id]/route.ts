@@ -8,6 +8,10 @@ import { computeScheduleHydratedDisplay } from "@/lib/admin/scheduleRecordSnapsh
 import { attachFieldDefinitionsAndValues } from "@/lib/admin/entityFieldRegistryAttach";
 import { computeJobDisplayTotalCents, type JobPriceInput } from "@/lib/admin/jobDisplayPrice";
 import {
+    buildOpportunityLifecycleFields,
+    opportunityQuoteTotalForLifecycle,
+} from "@/lib/admin/opportunityLifecyclePresentation";
+import {
     fetchEffectiveStatusDefinitions,
     inferDocumentStatusFromStored,
     resolveStatusLabel,
@@ -187,6 +191,9 @@ export async function GET(
                 out._location_id = null;
             }
             const oppOrgId = (opp as { org_id?: string }).org_id;
+            const opportunityDefs = oppOrgId
+                ? await fetchEffectiveStatusDefinitions(supabase, oppOrgId, "opportunities", { activeOnly: true })
+                : [];
             const oppLegacyStatus = (opp as { status?: string | null }).status;
             const oppSkRaw =
                 opp.status_key != null && String(opp.status_key).trim() !== ""
@@ -200,8 +207,7 @@ export async function GET(
                     : null;
             let oppStatusDisplay: string | null = null;
             if (oppOrgId && oppSkRaw) {
-                const defs = await fetchEffectiveStatusDefinitions(supabase, oppOrgId, "opportunities", { activeOnly: true });
-                const ci = defs.find((d) => d.status_key.toLowerCase() === oppSkRaw.toLowerCase());
+                const ci = opportunityDefs.find((d) => d.status_key.toLowerCase() === oppSkRaw.toLowerCase());
                 if (ci?.status_label != null && String(ci.status_label).trim() !== "") {
                     oppStatusDisplay = String(ci.status_label).trim();
                 } else {
@@ -239,6 +245,14 @@ export async function GET(
                 : opp.monetary_value_cents != null && !Number.isNaN(Number(opp.monetary_value_cents)) ? Number(opp.monetary_value_cents) / 100
                 : null;
             out._quote_total_display = qt;
+            Object.assign(
+                out,
+                buildOpportunityLifecycleFields({
+                    statusKey: oppSkRaw,
+                    quoteTotalDollars: opportunityQuoteTotalForLifecycle(opp),
+                    defs: opportunityDefs,
+                })
+            );
             await attachFieldDefinitionsAndValues(supabase, out, "opportunities", id);
             await attachDirectFkRelationshipDisplays(supabase, orgId, "opportunities", out);
             return NextResponse.json(out);
