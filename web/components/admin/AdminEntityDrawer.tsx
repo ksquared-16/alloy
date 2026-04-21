@@ -813,6 +813,24 @@ export default function AdminEntityDrawer() {
     const [workflowActionAdvanced, setWorkflowActionAdvanced] = useState<Record<number, boolean>>({});
     const [jobActionLoading, setJobActionLoading] = useState<string | null>(null);
     const [opportunityActionLoading, setOpportunityActionLoading] = useState<string | null>(null);
+    const [oppQuoteIntakeOpen, setOppQuoteIntakeOpen] = useState(false);
+    const [oppQuoteSaving, setOppQuoteSaving] = useState(false);
+    const [oppQuoteError, setOppQuoteError] = useState<string | null>(null);
+    const [oppQuoteForm, setOppQuoteForm] = useState<{
+        square_footage: string;
+        bedrooms: string;
+        bathrooms: string;
+        frequency: string;
+        cleaning_type: string;
+        add_ons: string;
+    }>({
+        square_footage: "",
+        bedrooms: "",
+        bathrooms: "",
+        frequency: "one_time",
+        cleaning_type: "standard",
+        add_ons: "",
+    });
     const [fieldCatalogByEntity, setFieldCatalogByEntity] = useState<Record<string, FieldCatalogEntry[]>>({});
     const [vendorStatuses, setVendorStatuses] = useState<{ id: string; key: string; label: string }[]>([]);
     const [setLocationOpen, setSetLocationOpen] = useState(false);
@@ -1709,6 +1727,12 @@ export default function AdminEntityDrawer() {
     const handleOpportunityRecordChromeAction = useCallback(
         async (eventKey: string) => {
             if (!drawer.id || drawer.id === "new" || drawer.type !== "opportunities") return;
+            if (eventKey === "start_quote") {
+                setOppQuoteError(null);
+                setSaveError(null);
+                setOppQuoteIntakeOpen(true);
+                return;
+            }
             setOpportunityActionLoading(eventKey);
             setSaveError(null);
             try {
@@ -1730,6 +1754,23 @@ export default function AdminEntityDrawer() {
         },
         [drawer.id, drawer.type, refetch, router]
     );
+
+    // If a caller opened the drawer with a surface hint, respect it once.
+    useEffect(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+        if (drawer.defaultOpportunitySurface !== "quote_intake") return;
+        setOppQuoteError(null);
+        setOppQuoteIntakeOpen(true);
+        // clear hint by re-opening same drawer without it (keeps stack semantics identical)
+        openDrawer({ type: "opportunities", id: drawer.id });
+    }, [drawer.type, drawer.id, drawer.defaultOpportunitySurface, openDrawer]);
+
+    useEffect(() => {
+        if (drawer.type !== "opportunities") {
+            setOppQuoteIntakeOpen(false);
+            setOppQuoteError(null);
+        }
+    }, [drawer.type]);
 
     useEffect(() => {
         if (!paymentToast) return;
@@ -3728,6 +3769,154 @@ export default function AdminEntityDrawer() {
                     </button>
                 ))}
             </div>
+        ) : null;
+
+    const opportunityQuoteIntakeNode =
+        drawer.type === "opportunities" && drawer.id && drawer.id !== "new" && oppQuoteIntakeOpen ? (
+            <section className="rounded-lg border border-admin-border bg-white/80 p-3">
+                <div className="flex items-start justify-between gap-3">
+                    <div>
+                        <h3 className="text-sm font-medium text-alloy-midnight/90">Quote intake</h3>
+                        <p className="mt-0.5 text-xs text-alloy-midnight/60">
+                            Saves inputs to this opportunity and computes quote pricing.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setOppQuoteIntakeOpen(false)}
+                        className="text-xs px-2 py-1 rounded border border-alloy-stone/50 hover:bg-alloy-stone/20"
+                    >
+                        Close
+                    </button>
+                </div>
+
+                {oppQuoteError ? <p className="mt-2 text-xs text-alloy-ember">{oppQuoteError}</p> : null}
+
+                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <div>
+                        <label className="block text-xs text-alloy-midnight/70 mb-0.5">Square footage</label>
+                        <input
+                            value={oppQuoteForm.square_footage}
+                            onChange={(e) => setOppQuoteForm((f) => ({ ...f, square_footage: e.target.value }))}
+                            inputMode="numeric"
+                            placeholder="e.g. 1800"
+                            className="w-full rounded border border-alloy-stone/50 px-2 py-1.5 text-sm"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs text-alloy-midnight/70 mb-0.5">Frequency</label>
+                        <select
+                            value={oppQuoteForm.frequency}
+                            onChange={(e) => setOppQuoteForm((f) => ({ ...f, frequency: e.target.value }))}
+                            className="w-full rounded border border-alloy-stone/50 px-2 py-1.5 text-sm bg-white"
+                        >
+                            <option value="one_time">One-time</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="biweekly">Bi-weekly</option>
+                            <option value="monthly">Monthly</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label className="block text-xs text-alloy-midnight/70 mb-0.5">Bedrooms</label>
+                        <input
+                            value={oppQuoteForm.bedrooms}
+                            onChange={(e) => setOppQuoteForm((f) => ({ ...f, bedrooms: e.target.value }))}
+                            inputMode="numeric"
+                            placeholder="optional"
+                            className="w-full rounded border border-alloy-stone/50 px-2 py-1.5 text-sm"
+                        />
+                    </div>
+                    <div>
+                        <label className="block text-xs text-alloy-midnight/70 mb-0.5">Bathrooms</label>
+                        <input
+                            value={oppQuoteForm.bathrooms}
+                            onChange={(e) => setOppQuoteForm((f) => ({ ...f, bathrooms: e.target.value }))}
+                            inputMode="numeric"
+                            placeholder="optional"
+                            className="w-full rounded border border-alloy-stone/50 px-2 py-1.5 text-sm"
+                        />
+                    </div>
+                    <div className="sm:col-span-2">
+                        <label className="block text-xs text-alloy-midnight/70 mb-0.5">Cleaning type</label>
+                        <select
+                            value={oppQuoteForm.cleaning_type}
+                            onChange={(e) => setOppQuoteForm((f) => ({ ...f, cleaning_type: e.target.value }))}
+                            className="w-full rounded border border-alloy-stone/50 px-2 py-1.5 text-sm bg-white"
+                        >
+                            <option value="standard">Standard</option>
+                            <option value="move_out">Move-out / heavy</option>
+                        </select>
+                    </div>
+                    <div className="sm:col-span-2">
+                        <label className="block text-xs text-alloy-midnight/70 mb-0.5">Add-ons (comma-separated keys)</label>
+                        <input
+                            value={oppQuoteForm.add_ons}
+                            onChange={(e) => setOppQuoteForm((f) => ({ ...f, add_ons: e.target.value }))}
+                            placeholder="e.g. fridge, oven"
+                            className="w-full rounded border border-alloy-stone/50 px-2 py-1.5 text-sm"
+                        />
+                    </div>
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <button
+                        type="button"
+                        disabled={oppQuoteSaving || !canMutate}
+                        onClick={async () => {
+                            if (!drawer.id) return;
+                            setOppQuoteSaving(true);
+                            setOppQuoteError(null);
+                            try {
+                                const sqftNum = parseInt(String(oppQuoteForm.square_footage ?? "").replace(/,/g, ""), 10);
+                                if (Number.isNaN(sqftNum) || sqftNum <= 0) {
+                                    throw new Error("Square footage is required");
+                                }
+                                const addOnKeys = String(oppQuoteForm.add_ons ?? "")
+                                    .split(",")
+                                    .map((s) => s.trim())
+                                    .filter(Boolean);
+                                const payload = {
+                                    status_key: "needs_a_quote",
+                                    quote_inputs: {
+                                        square_footage: sqftNum,
+                                        bedrooms: oppQuoteForm.bedrooms ? parseInt(oppQuoteForm.bedrooms, 10) : null,
+                                        bathrooms: oppQuoteForm.bathrooms ? parseInt(oppQuoteForm.bathrooms, 10) : null,
+                                        frequency: oppQuoteForm.frequency,
+                                        cleaning_type: oppQuoteForm.cleaning_type,
+                                        add_ons: addOnKeys,
+                                    },
+                                };
+                                const res = await fetch(`/api/admin/opportunities/${drawer.id}`, {
+                                    method: "PATCH",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify(payload),
+                                });
+                                const json = await res.json().catch(() => ({}));
+                                if (!res.ok) throw new Error((json as { error?: string }).error ?? "Quote save failed");
+                                setData((prev) => (prev ? { ...prev, ...(json as Record<string, unknown>) } : prev));
+                                refetch();
+                                router.refresh();
+                                setOppQuoteIntakeOpen(false);
+                            } catch (e) {
+                                setOppQuoteError(e instanceof Error ? e.message : "Quote save failed");
+                            } finally {
+                                setOppQuoteSaving(false);
+                            }
+                        }}
+                        className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
+                    >
+                        {oppQuoteSaving ? "Saving…" : "Save + compute quote"}
+                    </button>
+                    <button
+                        type="button"
+                        disabled={oppQuoteSaving}
+                        onClick={() => setOppQuoteIntakeOpen(false)}
+                        className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30"
+                    >
+                        Cancel
+                    </button>
+                </div>
+            </section>
         ) : null;
 
     const dataMatchesDrawer =
@@ -7426,31 +7615,34 @@ export default function AdminEntityDrawer() {
                                 onOpenDrawer={(type, id) => openDrawer({ type: type as AdminDrawerEntityType, id })}
                             />
                         ) : (
-                            <EntityDrawerOverview
-                                entityType={presentationType}
-                                data={entityDrawerOverviewData}
-                                customSectionContent={overviewCustomContent}
-                                overviewSectionsOverride={configDrivenOverviewSections.length > 0 ? configDrivenOverviewSections : undefined}
-                                scheduleOverviewRows={
-                                    drawer.type === "schedules"
-                                        ? recordChromeSchedule.layout?.config_json?.overview_rows
-                                        : undefined
-                                }
-                                scheduleRecordLayout={
-                                    drawer.type === "schedules" ? (recordChromeSchedule.layout?.config_json ?? null) : undefined
-                                }
-                                selectOptionsByFieldKey={overviewSelectOptionsByFieldKey}
-                                isEditing={isEditing}
-                                formData={formData}
-                                onFieldChange={(key, value) => {
-                                    setFormData((prev) => ({ ...prev, [key]: value }));
-                                }}
-                                onBlur={() => { if (drawer.type === "jobs" && jobFormDirty) saveEdit(); else if (nonJobFormDirty) saveEdit(); }}
-                                canEdit={!!canMutate}
-                                statusDefs={statusDefsForDrawer}
-                                getStatusLabel={getStatusLabel}
-                                onOpenDrawer={(type, id) => openDrawer({ type: type as AdminDrawerEntityType, id })}
-                            />
+                            <>
+                                {drawer.type === "opportunities" ? opportunityQuoteIntakeNode : null}
+                                <EntityDrawerOverview
+                                    entityType={presentationType}
+                                    data={entityDrawerOverviewData}
+                                    customSectionContent={overviewCustomContent}
+                                    overviewSectionsOverride={configDrivenOverviewSections.length > 0 ? configDrivenOverviewSections : undefined}
+                                    scheduleOverviewRows={
+                                        drawer.type === "schedules"
+                                            ? recordChromeSchedule.layout?.config_json?.overview_rows
+                                            : undefined
+                                    }
+                                    scheduleRecordLayout={
+                                        drawer.type === "schedules" ? (recordChromeSchedule.layout?.config_json ?? null) : undefined
+                                    }
+                                    selectOptionsByFieldKey={overviewSelectOptionsByFieldKey}
+                                    isEditing={isEditing}
+                                    formData={formData}
+                                    onFieldChange={(key, value) => {
+                                        setFormData((prev) => ({ ...prev, [key]: value }));
+                                    }}
+                                    onBlur={() => { if (drawer.type === "jobs" && jobFormDirty) saveEdit(); else if (nonJobFormDirty) saveEdit(); }}
+                                    canEdit={!!canMutate}
+                                    statusDefs={statusDefsForDrawer}
+                                    getStatusLabel={getStatusLabel}
+                                    onOpenDrawer={(type, id) => openDrawer({ type: type as AdminDrawerEntityType, id })}
+                                />
+                            </>
                         )
                     )}
                     {drawerTab === "overview" && !useConfigDrivenOverview && (

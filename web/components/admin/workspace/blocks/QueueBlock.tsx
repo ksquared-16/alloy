@@ -82,6 +82,10 @@ function OpportunityQueueInlinePreview({ oq, runtime }: { oq: WorkspaceOpportuni
                                         className="text-[10px] px-1.5 py-0.5 rounded border border-alloy-stone/40 text-alloy-midnight/85 hover:bg-alloy-stone/20 disabled:opacity-50"
                                         onClick={async (e) => {
                                             e.stopPropagation();
+                                            if (eventKey === "start_quote") {
+                                                openDrawer({ type: "opportunities", id: row.id, defaultOpportunitySurface: "quote_intake" });
+                                                return;
+                                            }
                                             setBusyId(`${row.id}:${eventKey}`);
                                             try {
                                                 const r = await executeOpportunityRecordAction({

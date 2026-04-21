@@ -61,6 +61,8 @@ interface AdminDrawerState {
     defaultJobPrefill?: JobPrefill;
     /** Optional workspace / lane identity for shared record modal + shell visual context. */
     operationalVisualContext?: OperationalVisualContext;
+    /** Optional opportunity workflow surface hint (e.g. open quote intake). */
+    defaultOpportunitySurface?: "quote_intake";
 }
 
 export type DrawerStackItem = {
@@ -73,6 +75,7 @@ export type DrawerStackItem = {
     defaultJobPrefill?: JobPrefill;
     jobRecordSurface?: JobRecordSurfaceParam;
     operationalVisualContext?: OperationalVisualContext;
+    defaultOpportunitySurface?: "quote_intake";
 };
 
 interface AdminDrawerContextValue {
@@ -92,6 +95,7 @@ interface AdminDrawerContextValue {
         defaultJobPrefill?: JobPrefill;
         jobRecordSurface?: JobRecordSurfaceParam;
         operationalVisualContext?: OperationalVisualContext;
+        defaultOpportunitySurface?: "quote_intake";
     }) => void;
     goBack: () => void;
     closeDrawer: () => void;
@@ -120,6 +124,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
             defaultJobPrefill?: JobPrefill;
             jobRecordSurface?: JobRecordSurfaceParam;
             operationalVisualContext?: OperationalVisualContext;
+            defaultOpportunitySurface?: "quote_intake";
         }) => {
             setDrawer((prev) => {
                 const prevType = prev.type;
@@ -137,6 +142,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                             defaultJobPrefill: prev.defaultJobPrefill,
                             jobRecordSurface: prev.jobRecordSurface,
                             operationalVisualContext: prev.operationalVisualContext,
+                            defaultOpportunitySurface: prev.defaultOpportunitySurface,
                         },
                     ]);
                 }
@@ -150,6 +156,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                     defaultJobPrefill: params.defaultJobPrefill,
                     jobRecordSurface: params.type === "jobs" ? params.jobRecordSurface : undefined,
                     operationalVisualContext: params.operationalVisualContext,
+                    defaultOpportunitySurface: params.defaultOpportunitySurface,
                 };
             });
         },
@@ -171,6 +178,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                     defaultJobPrefill: item.defaultJobPrefill,
                     jobRecordSurface: item.jobRecordSurface,
                     operationalVisualContext: item.operationalVisualContext,
+                    defaultOpportunitySurface: item.defaultOpportunitySurface,
                 });
             }
             return next;
