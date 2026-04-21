@@ -3755,6 +3755,14 @@ export default function AdminEntityDrawer() {
             </div>
         ) : null;
 
+    const dataMatchesDrawer =
+        !data ||
+        !drawer.id ||
+        drawer.id === "new" ||
+        (data as { id?: string }).id == null ||
+        String((data as { id: string }).id) === String(drawer.id);
+    const overviewData = dataMatchesDrawer ? data : null;
+
     const opportunityQuoteIntakeNode =
         drawer.type === "opportunities" && drawer.id && drawer.id !== "new" && oppQuoteIntakeOpen ? (
             <OpportunityQuoteIntakeSection
@@ -3860,13 +3868,6 @@ export default function AdminEntityDrawer() {
         );
     }, [drawer.type, overviewData, oppDiscountLoading, oppDiscountOptions, oppDiscountSelection]);
 
-    const dataMatchesDrawer =
-        !data ||
-        !drawer.id ||
-        drawer.id === "new" ||
-        (data as { id?: string }).id == null ||
-        String((data as { id: string }).id) === String(drawer.id);
-    const overviewData = dataMatchesDrawer ? data : null;
     const showJobRecordModalV2 =
         isJobDrawerV2 &&
         drawer.type === "jobs" &&
