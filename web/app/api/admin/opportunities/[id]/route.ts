@@ -127,7 +127,6 @@ export async function PATCH(
             const cleaningTypeRaw = quote_inputs.cleaning_type;
             const addonsRaw = quote_inputs.add_ons;
 
-            const cleaning_type = typeof cleaningTypeRaw === "string" ? cleaningTypeRaw.trim().toLowerCase() : "";
             const hasInputsToCompute = sqftRaw != null && (typeof sqftRaw === "string" || typeof sqftRaw === "number");
             if (hasInputsToCompute) {
                 const { data: vertRow } = await supabase
@@ -155,10 +154,10 @@ export async function PATCH(
                         ? (addonsRaw as unknown[]).map((x) => String(x ?? "").trim()).filter(Boolean)
                         : [];
 
-                    const service_key =
-                        cleaning_type === "move_out" || cleaning_type === "moveout" || cleaning_type === "move_out_heavy"
-                            ? "move_out_heavy"
-                            : "standard_cleaning";
+                    const { mapCleaningTypeOptionToServiceKey } = await import("@/lib/quoteIntake/resolveCleaningQuoteIntakeFields");
+                    const service_key = mapCleaningTypeOptionToServiceKey(
+                        typeof cleaningTypeRaw === "string" ? cleaningTypeRaw : cleaningTypeRaw == null ? "" : String(cleaningTypeRaw)
+                    );
 
                     const { data: rpcData, error: rpcError } = await supabase.rpc("get_quote_pricing", {
                         p_vertical_slug: "cleaning",
