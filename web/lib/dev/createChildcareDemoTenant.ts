@@ -1,13 +1,10 @@
 /**
- * Full internal flow: new org → tenant bootstrap → childcare demo seed.
- * Caller supplies a service-role Supabase client (e.g. createAdminClient()).
+ * Thin alias around `spinChildcareTenantFlow` (same behavior) for callers that only need org params.
  */
-
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { applyTenantBootstrap } from "@/lib/admin/tenantBootstrap/applyTenantBootstrap";
-import { CHILDCARE_TENANT_BOOTSTRAP_V1 } from "@/lib/admin/tenantBootstrap/childcareTenantBootstrapV1";
-import { createOrgAndAssignAdmin, type CreateOrgParams } from "@/lib/dev/createOrgAndAssignAdmin";
-import { seedChildcareDemo, type SeedChildcareDemoResult } from "@/lib/dev/seedChildcareDemo";
+import { spinChildcareTenantFlow } from "@/lib/dev/spinChildcareTenantFlow";
+import type { CreateOrgParams } from "@/lib/dev/createOrgAndAssignAdmin";
+import type { SeedChildcareDemoResult } from "@/lib/dev/seedChildcareDemo";
 
 export type CreateChildcareDemoTenantResult =
     | {
@@ -23,28 +20,15 @@ export async function createChildcareDemoTenant(
     supabase: SupabaseClient,
     orgParams: CreateOrgParams
 ): Promise<CreateChildcareDemoTenantResult> {
-    const orgRes = await createOrgAndAssignAdmin(supabase, orgParams);
-    if (!orgRes.ok) {
-        return { ok: false, error: orgRes.error };
+    const r = await spinChildcareTenantFlow(supabase, orgParams);
+    if (!r.ok) {
+        return r;
     }
-
-    const { org_id: orgId, slug } = orgRes;
-
-    const boot = await applyTenantBootstrap(supabase, orgId, CHILDCARE_TENANT_BOOTSTRAP_V1);
-    if (!boot.ok) {
-        return { ok: false, error: `tenant_bootstrap: ${boot.error}`, org_id: orgId };
-    }
-
-    const seed = await seedChildcareDemo(supabase, orgId);
-    if (!seed.ok) {
-        return { ok: false, error: `seed: ${seed.error}`, org_id: orgId };
-    }
-
     return {
         ok: true,
-        org_id: orgId,
-        slug,
-        bootstrap: { summary: boot.summary },
-        seed,
+        org_id: r.org_id,
+        slug: r.slug,
+        bootstrap: r.bootstrap,
+        seed: r.seed,
     };
 }
