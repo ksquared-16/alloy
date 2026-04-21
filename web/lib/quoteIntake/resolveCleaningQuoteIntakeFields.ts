@@ -54,9 +54,16 @@ export function resolveCleaningQuoteIntakeFields(
             }
         } else if (f.option_source.kind === "option_set") {
             const k = f.option_source.set_key;
-            const bucket = catalog.option_sets[k as keyof typeof catalog.option_sets];
+            const bucket =
+                catalog.option_sets[k as keyof typeof catalog.option_sets] ??
+                // Back-compat bridge: previously only specialty_cleaning_type existed.
+                (k === "cleaning_type" ? catalog.option_sets.specialty_cleaning_type : undefined);
             if (bucket?.length) {
-                options = bucket.map((o) => ({ value: o.value, label: o.label }));
+                options = bucket.map((o) => ({
+                    value: o.value,
+                    label: o.label,
+                    meta: (o as { metadata?: Record<string, unknown> }).metadata ? { ...(o as { metadata: Record<string, unknown> }).metadata } : undefined,
+                }));
             }
         }
 
@@ -72,16 +79,11 @@ export function resolveCleaningQuoteIntakeFields(
 /** Map specialty_cleaning_type option value to RPC service_key inputs used by PATCH. */
 export function mapCleaningTypeOptionToServiceKey(raw: string): "standard_cleaning" | "move_out_heavy" {
     const s = String(raw ?? "").trim().toLowerCase();
+    if (s === "move_out" || s === "heavy_clean") return "move_out_heavy";
+    if (s === "standard") return "standard_cleaning";
+    // Bridge: legacy specialty_cleaning_type item_keys or custom org keys.
     if (!s) return "standard_cleaning";
-    if (
-        s === "move_out" ||
-        s === "moveout" ||
-        s.includes("move") ||
-        s.includes("heavy") ||
-        s.includes("move_out")
-    ) {
-        return "move_out_heavy";
-    }
+    if (s.includes("move") || s.includes("heavy")) return "move_out_heavy";
     return "standard_cleaning";
 }
 

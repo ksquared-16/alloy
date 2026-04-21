@@ -7,7 +7,7 @@ import {
     resolveSqftTierDisplayLabels,
 } from "@/lib/book-v2/loadCleaningPricingCatalog";
 import { filterExcludedCustomerAddonKeys } from "@/lib/book-v2/customerAddonPolicy";
-import { resolveOptionSetOptions } from "@/lib/fields/resolveOptionSetOptions";
+import { resolveOptionSetOptions, resolveOptionSetOptionsWithMetadata } from "@/lib/fields/resolveOptionSetOptions";
 import type { PricingFrequencyRow } from "@/lib/book-v2/loadCleaningPricingCatalog";
 
 export type CleaningQuoteCatalogBlob = {
@@ -19,7 +19,9 @@ export type CleaningQuoteCatalogBlob = {
     option_sets: {
         bedrooms_booking: { value: string; label: string }[];
         bathrooms_booking: { value: string; label: string }[];
-        specialty_cleaning_type: { value: string; label: string }[];
+        cleaning_type: { value: string; label: string; metadata?: Record<string, unknown> }[];
+        /** Back-compat: older orgs may still only have specialty_cleaning_type. */
+        specialty_cleaning_type: { value: string; label: string; metadata?: Record<string, unknown> }[];
     };
 };
 
@@ -41,8 +43,9 @@ export async function loadCleaningQuoteCatalogForOrg(
             loadCleaningAddonsFromDb(supabase, verticalId),
             resolveOptionSetOptions(supabase, orgId, "bedrooms_booking"),
             resolveOptionSetOptions(supabase, orgId, "bathrooms_booking"),
-            resolveOptionSetOptions(supabase, orgId, "specialty_cleaning_type"),
+            resolveOptionSetOptionsWithMetadata(supabase, orgId, "specialty_cleaning_type"),
         ]);
+    const cleaningTypeOptions = await resolveOptionSetOptionsWithMetadata(supabase, orgId, "cleaning_type");
 
     const tierRows = tiersRaw.length > 0 ? await resolveSqftTierDisplayLabels(supabase, orgId, tiersRaw) : [];
 
@@ -74,7 +77,8 @@ export async function loadCleaningQuoteCatalogForOrg(
         option_sets: {
             bedrooms_booking: bedroomOptions.map((o) => ({ value: o.value, label: o.label })),
             bathrooms_booking: bathroomOptions.map((o) => ({ value: o.value, label: o.label })),
-            specialty_cleaning_type: specialtyCleaningTypeOptions.map((o) => ({ value: o.value, label: o.label })),
+            cleaning_type: cleaningTypeOptions.map((o) => ({ value: o.value, label: o.label, metadata: o.metadata })),
+            specialty_cleaning_type: specialtyCleaningTypeOptions.map((o) => ({ value: o.value, label: o.label, metadata: o.metadata })),
         },
     };
 }

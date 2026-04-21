@@ -10,7 +10,7 @@ import {
 } from "@/lib/book-v2/loadCleaningPricingCatalog";
 import { filterExcludedCustomerAddonKeys } from "@/lib/book-v2/customerAddonPolicy";
 import { BOOK_V2_ACCESS_METHOD_STABLE_TO_UI } from "@/lib/book-v2/bookingCanonicalMaps";
-import { resolveOptionSetOptions } from "@/lib/fields/resolveOptionSetOptions";
+import { resolveOptionSetOptions, resolveOptionSetOptionsWithMetadata } from "@/lib/fields/resolveOptionSetOptions";
 
 /**
  * GET /api/public/booking-config
@@ -36,6 +36,7 @@ export async function GET() {
             addonBundle,
             bedroomOptions,
             bathroomOptions,
+            cleaningTypeOptions,
             specialtyCleaningTypeOptions,
             accessMethodStableOptions,
         ] = await Promise.all([
@@ -46,7 +47,8 @@ export async function GET() {
             loadCleaningAddonsFromDb(supabase, verticalId),
             orgId ? resolveOptionSetOptions(supabase, orgId, "bedrooms_booking") : Promise.resolve([]),
             orgId ? resolveOptionSetOptions(supabase, orgId, "bathrooms_booking") : Promise.resolve([]),
-            orgId ? resolveOptionSetOptions(supabase, orgId, "specialty_cleaning_type") : Promise.resolve([]),
+            orgId ? resolveOptionSetOptionsWithMetadata(supabase, orgId, "cleaning_type") : Promise.resolve([]),
+            orgId ? resolveOptionSetOptionsWithMetadata(supabase, orgId, "specialty_cleaning_type") : Promise.resolve([]),
             orgId ? resolveOptionSetOptions(supabase, orgId, "access_method") : Promise.resolve([]),
         ]);
 
@@ -103,6 +105,9 @@ export async function GET() {
             home_types,
             bedroom_options: bedroomOptions,
             bathroom_options: bathroomOptions,
+            /** Canonical: unified cleaning type options (standard + specialty), with metadata (e.g. is_specialty). */
+            cleaning_type_options: cleaningTypeOptions,
+            /** Deprecated legacy key (kept for older clients; will be removed after migration). */
             specialty_cleaning_type_options: specialtyCleaningTypeOptions,
             access_method_booking_ui,
             beds_input: { min: 0, max: 20, step: 1 },

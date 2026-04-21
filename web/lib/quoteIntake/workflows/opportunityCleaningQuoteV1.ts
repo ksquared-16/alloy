@@ -37,7 +37,7 @@ export const OPPORTUNITY_CLEANING_QUOTE_INTAKE_V1: QuoteIntakeWorkflowSpec = {
             input: "select",
             required: true,
             sort_order: 30,
-            option_source: { kind: "option_set", set_key: "specialty_cleaning_type" },
+            option_source: { kind: "option_set", set_key: "cleaning_type" },
             pricing_role: "cleaning_service",
             full_width: true,
         },

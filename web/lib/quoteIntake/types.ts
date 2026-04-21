@@ -48,7 +48,7 @@ export type QuoteIntakeWorkflowSpec = {
 
 /** Resolved field for rendering (options filled by GET /api/admin/quote-intake/catalog). */
 export type QuoteIntakeResolvedField = QuoteIntakeFieldSpec & {
-    options: { value: string; label: string; meta?: { price?: number } }[];
+    options: { value: string; label: string; meta?: Record<string, unknown> }[];
 };
 
 export type QuoteIntakeCatalogResponse = {

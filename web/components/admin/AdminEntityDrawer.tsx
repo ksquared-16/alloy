@@ -815,6 +815,9 @@ export default function AdminEntityDrawer() {
     const [jobActionLoading, setJobActionLoading] = useState<string | null>(null);
     const [opportunityActionLoading, setOpportunityActionLoading] = useState<string | null>(null);
     const [oppQuoteIntakeOpen, setOppQuoteIntakeOpen] = useState(false);
+    const [oppDiscountOptions, setOppDiscountOptions] = useState<{ value: string; label: string }[] | null>(null);
+    const [oppDiscountLoading, setOppDiscountLoading] = useState(false);
+    const [oppDiscountSelection, setOppDiscountSelection] = useState<string>("");
     const [fieldCatalogByEntity, setFieldCatalogByEntity] = useState<Record<string, FieldCatalogEntry[]>>({});
     const [vendorStatuses, setVendorStatuses] = useState<{ id: string; key: string; label: string }[]>([]);
     const [setLocationOpen, setSetLocationOpen] = useState(false);
@@ -3768,6 +3771,94 @@ export default function AdminEntityDrawer() {
                 }}
             />
         ) : null;
+
+    const opportunityQuoteSummaryNode = useMemo(() => {
+        if (drawer.type !== "opportunities" || !overviewData || (overviewData as { _create?: boolean })._create) return null;
+        const total = (overviewData as { quote_total?: number | string | null }).quote_total ?? null;
+        const breakdown = (overviewData as { price_breakdown?: string | null }).price_breakdown ?? null;
+        if (total == null && !breakdown) return null;
+        const totalNum = total == null ? null : typeof total === "number" ? total : Number(total);
+        const totalLabel = totalNum != null && !Number.isNaN(totalNum) ? formatMoneyFromDollars(totalNum) : null;
+        return (
+            <section className="rounded-lg border border-admin-border bg-white/80 p-3">
+                <div className="flex items-start justify-between gap-3">
+                    <div>
+                        <h3 className="text-sm font-medium text-alloy-midnight/90">Quote result</h3>
+                        {totalLabel ? (
+                            <p className="mt-1 text-base font-semibold text-alloy-midnight/95">{totalLabel}</p>
+                        ) : (
+                            <p className="mt-1 text-sm text-alloy-midnight/70">Quote computed.</p>
+                        )}
+                    </div>
+                    <div className="flex flex-wrap gap-2 items-center justify-end">
+                        <button
+                            type="button"
+                            disabled
+                            title="Override hook (coming soon)"
+                            className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md disabled:opacity-50"
+                        >
+                            Override
+                        </button>
+                        <button
+                            type="button"
+                            disabled={oppDiscountLoading}
+                            onClick={async () => {
+                                if (oppDiscountOptions) return;
+                                setOppDiscountLoading(true);
+                                try {
+                                    const res = await fetch(`/api/admin/discount-code-options?vertical_slug=cleaning`);
+                                    const json = await res.json().catch(() => ({}));
+                                    const opts = (json as { discount_options?: { value: string; label: string }[] }).discount_options ?? [];
+                                    setOppDiscountOptions(opts);
+                                } finally {
+                                    setOppDiscountLoading(false);
+                                }
+                            }}
+                            className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30 disabled:opacity-50"
+                        >
+                            {oppDiscountLoading ? "Loading…" : "Apply discount"}
+                        </button>
+                    </div>
+                </div>
+                {breakdown ? (
+                    <pre className="mt-3 whitespace-pre-wrap rounded-md border border-alloy-stone/20 bg-white px-3 py-2 text-xs text-alloy-midnight/80">
+                        {breakdown}
+                    </pre>
+                ) : null}
+
+                {oppDiscountOptions ? (
+                    <div className="mt-3 rounded-md border border-alloy-stone/30 bg-white/70 p-2.5">
+                        <div className="text-xs font-medium text-alloy-midnight/70">Discount</div>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <select
+                                value={oppDiscountSelection}
+                                onChange={(e) => setOppDiscountSelection(e.target.value)}
+                                className="min-w-[16rem] rounded border border-alloy-stone/50 px-2 py-1.5 text-sm bg-white"
+                            >
+                                <option value="">Select a discount…</option>
+                                {oppDiscountOptions.map((o) => (
+                                    <option key={o.value} value={o.value}>
+                                        {o.label}
+                                    </option>
+                                ))}
+                            </select>
+                            <button
+                                type="button"
+                                disabled
+                                title="Next: apply selected discount deterministically via discount program/codes logic (no fake math)."
+                                className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md disabled:opacity-50"
+                            >
+                                Apply (coming soon)
+                            </button>
+                        </div>
+                        <p className="mt-2 text-xs text-alloy-midnight/60">
+                            Discounts are loaded from the shared discount options API. Applying is intentionally not implemented yet (no fake pricing math).
+                        </p>
+                    </div>
+                ) : null}
+            </section>
+        );
+    }, [drawer.type, overviewData, oppDiscountLoading, oppDiscountOptions, oppDiscountSelection]);
 
     const dataMatchesDrawer =
         !data ||
@@ -7466,6 +7557,7 @@ export default function AdminEntityDrawer() {
                             />
                         ) : (
                             <>
+                                {drawer.type === "opportunities" ? opportunityQuoteSummaryNode : null}
                                 {drawer.type === "opportunities" ? opportunityQuoteIntakeNode : null}
                                 <EntityDrawerOverview
                                     entityType={presentationType}
