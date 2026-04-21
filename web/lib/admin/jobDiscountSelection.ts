@@ -214,6 +214,18 @@ export async function resolveJobDiscountSelection(
 /**
  * Infer dropdown token from persisted job row (program id wins; legacy code maps to program when migrated).
  */
+/** Infer dropdown token from persisted opportunity discount columns (same token shape as jobs). */
+export function inferOpportunityDiscountSelectionToken(opp: {
+    discount_program_id?: string | null;
+    discount_code_id?: string | null;
+}): string {
+    const pid = opp.discount_program_id ?? null;
+    if (pid) return `program:${pid}`;
+    const cid = opp.discount_code_id ?? null;
+    if (cid) return `code:${cid}`;
+    return "";
+}
+
 export async function inferJobDiscountSelectionToken(
     supabase: SupabaseClient,
     job: { discount_program_id?: string | null; discount_code_id?: string | null }

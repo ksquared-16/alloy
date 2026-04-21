@@ -47,7 +47,11 @@ import JobPricingBreakdown from "@/components/admin/JobPricingBreakdown";
 import JobRrsOverviewTab from "@/components/admin/JobRrsOverviewTab";
 import { AdminDeleteConfirmModal } from "@/components/admin/AdminDeleteConfirmModal";
 import { getDeleteApiPath, canHardDeleteEntityType } from "@/lib/admin/deleteConfig";
-import { computeJobDiscountOptionPreviewCents, type JobDiscountOptionDto } from "@/lib/admin/jobDiscountSelection";
+import {
+    computeJobDiscountOptionPreviewCents,
+    inferOpportunityDiscountSelectionToken,
+    type JobDiscountOptionDto,
+} from "@/lib/admin/jobDiscountSelection";
 import { opportunityOverviewStatusBadgeLabel } from "@/lib/admin/opportunityOverviewLabels";
 import { formatVendorOptionLabel, type AdminVendorSelectOption } from "@/lib/admin/vendorOptionLabel";
 import { mergeUnifiedStatusIntoConfigOverview } from "@/lib/admin/unifiedDrawerStatus";
@@ -818,6 +822,12 @@ export default function AdminEntityDrawer() {
     const [oppDiscountOptions, setOppDiscountOptions] = useState<{ value: string; label: string }[] | null>(null);
     const [oppDiscountLoading, setOppDiscountLoading] = useState(false);
     const [oppDiscountSelection, setOppDiscountSelection] = useState<string>("");
+    const [oppPromoCode, setOppPromoCode] = useState("");
+    const [oppOverrideOpen, setOppOverrideOpen] = useState(false);
+    const [oppOverrideAmount, setOppOverrideAmount] = useState("");
+    const [oppOverrideReason, setOppOverrideReason] = useState("");
+    const [oppQuoteActionError, setOppQuoteActionError] = useState<string | null>(null);
+    const [oppQuoteActionLoading, setOppQuoteActionLoading] = useState(false);
     const [fieldCatalogByEntity, setFieldCatalogByEntity] = useState<Record<string, FieldCatalogEntry[]>>({});
     const [vendorStatuses, setVendorStatuses] = useState<{ id: string; key: string; label: string }[]>([]);
     const [setLocationOpen, setSetLocationOpen] = useState(false);
@@ -1133,6 +1143,51 @@ export default function AdminEntityDrawer() {
             .catch((e) => setError(e.message))
             .finally(() => setLoading(false));
     }, [drawer.type, drawer.id, drawer.jobRecordSurface]);
+
+    const patchOpportunityQuote = useCallback(
+        async (payload: Record<string, unknown>) => {
+            if (!drawer.id || drawer.id === "new") return;
+            setOppQuoteActionError(null);
+            setOppQuoteActionLoading(true);
+            try {
+                const res = await fetch(`/api/admin/opportunities/${drawer.id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                });
+                const json = (await res.json().catch(() => ({}))) as { error?: string };
+                if (!res.ok) throw new Error(json.error ?? "Update failed");
+                setData((prev) => (prev ? { ...prev, ...json } : prev));
+                refetch();
+                router.refresh();
+            } catch (e) {
+                setOppQuoteActionError(e instanceof Error ? e.message : "Update failed");
+            } finally {
+                setOppQuoteActionLoading(false);
+            }
+        },
+        [drawer.id, setData, refetch, router]
+    );
+
+    useEffect(() => {
+        if (drawer.type !== "opportunities") return;
+        setOppPromoCode("");
+        setOppQuoteActionError(null);
+        setOppOverrideOpen(false);
+        setOppOverrideAmount("");
+        setOppOverrideReason("");
+        if (!data || (data as { _create?: boolean })._create) {
+            setOppDiscountSelection("");
+            return;
+        }
+        const opp = data as { discount_program_id?: string | null; discount_code_id?: string | null };
+        setOppDiscountSelection(inferOpportunityDiscountSelectionToken(opp));
+    }, [
+        drawer.type,
+        (data as { id?: string } | null)?.id,
+        (data as { discount_program_id?: string | null } | null)?.discount_program_id,
+        (data as { discount_code_id?: string | null } | null)?.discount_code_id,
+    ]);
 
     useEffect(() => {
         if (!drawer.type || !drawer.id) {
@@ -3780,93 +3835,251 @@ export default function AdminEntityDrawer() {
             />
         ) : null;
 
-    const opportunityQuoteSummaryNode = useMemo(() => {
-        if (drawer.type !== "opportunities" || !overviewData || (overviewData as { _create?: boolean })._create) return null;
-        const total = (overviewData as { quote_total?: number | string | null }).quote_total ?? null;
-        const breakdown = (overviewData as { price_breakdown?: string | null }).price_breakdown ?? null;
-        if (total == null && !breakdown) return null;
-        const totalNum = total == null ? null : typeof total === "number" ? total : Number(total);
-        const totalLabel = totalNum != null && !Number.isNaN(totalNum) ? formatMoneyFromDollars(totalNum) : null;
-        return (
-            <section className="rounded-lg border border-admin-border bg-white/80 p-3">
-                <div className="flex items-start justify-between gap-3">
-                    <div>
-                        <h3 className="text-sm font-medium text-alloy-midnight/90">Quote result</h3>
-                        {totalLabel ? (
-                            <p className="mt-1 text-base font-semibold text-alloy-midnight/95">{totalLabel}</p>
-                        ) : (
-                            <p className="mt-1 text-sm text-alloy-midnight/70">Quote computed.</p>
-                        )}
-                    </div>
-                    <div className="flex flex-wrap gap-2 items-center justify-end">
-                        <button
-                            type="button"
-                            disabled
-                            title="Override hook (coming soon)"
-                            className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md disabled:opacity-50"
-                        >
-                            Override
-                        </button>
-                        <button
-                            type="button"
-                            disabled={oppDiscountLoading}
-                            onClick={async () => {
-                                if (oppDiscountOptions) return;
-                                setOppDiscountLoading(true);
-                                try {
-                                    const res = await fetch(`/api/admin/discount-code-options?vertical_slug=cleaning`);
-                                    const json = await res.json().catch(() => ({}));
-                                    const opts = (json as { discount_options?: { value: string; label: string }[] }).discount_options ?? [];
-                                    setOppDiscountOptions(opts);
-                                } finally {
-                                    setOppDiscountLoading(false);
-                                }
-                            }}
-                            className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30 disabled:opacity-50"
-                        >
-                            {oppDiscountLoading ? "Loading…" : "Apply discount"}
-                        </button>
-                    </div>
-                </div>
-                {breakdown ? (
-                    <pre className="mt-3 whitespace-pre-wrap rounded-md border border-alloy-stone/20 bg-white px-3 py-2 text-xs text-alloy-midnight/80">
-                        {breakdown}
-                    </pre>
-                ) : null}
+    const opportunityQuoteSummaryNode =
+        drawer.type !== "opportunities" || !overviewData || (overviewData as { _create?: boolean })._create
+            ? null
+            : (() => {
+                  const opp = overviewData as {
+                      quote_total?: number | string | null;
+                      quote_subtotal?: number | string | null;
+                      discount_amount?: number | string | null;
+                      price_breakdown?: string | null;
+                      quote_is_overridden?: boolean | null;
+                      quote_override_total?: number | string | null;
+                  };
+                  const total = opp.quote_total ?? null;
+                  const sub = opp.quote_subtotal ?? null;
+                  const disc = opp.discount_amount ?? null;
+                  const breakdown = opp.price_breakdown ?? null;
+                  const isOver = opp.quote_is_overridden === true;
+                  const hasNumbers =
+                      (total != null && !Number.isNaN(Number(total))) ||
+                      (sub != null && !Number.isNaN(Number(sub))) ||
+                      (disc != null && !Number.isNaN(Number(disc)));
+                  if (!hasNumbers && !breakdown && !isOver) return null;
 
-                {oppDiscountOptions ? (
-                    <div className="mt-3 rounded-md border border-alloy-stone/30 bg-white/70 p-2.5">
-                        <div className="text-xs font-medium text-alloy-midnight/70">Discount</div>
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                            <select
-                                value={oppDiscountSelection}
-                                onChange={(e) => setOppDiscountSelection(e.target.value)}
-                                className="min-w-[16rem] rounded border border-alloy-stone/50 px-2 py-1.5 text-sm bg-white"
-                            >
-                                <option value="">Select a discount…</option>
-                                {oppDiscountOptions.map((o) => (
-                                    <option key={o.value} value={o.value}>
-                                        {o.label}
-                                    </option>
-                                ))}
-                            </select>
-                            <button
-                                type="button"
-                                disabled
-                                title="Next: apply selected discount deterministically via discount program/codes logic (no fake math)."
-                                className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md disabled:opacity-50"
-                            >
-                                Apply (coming soon)
-                            </button>
-                        </div>
-                        <p className="mt-2 text-xs text-alloy-midnight/60">
-                            Discounts are loaded from the shared discount options API. Applying is intentionally not implemented yet (no fake pricing math).
-                        </p>
-                    </div>
-                ) : null}
-            </section>
-        );
-    }, [drawer.type, overviewData, oppDiscountLoading, oppDiscountOptions, oppDiscountSelection]);
+                  const n = (v: unknown) => {
+                      if (v == null || v === "") return null;
+                      const x = typeof v === "number" ? v : Number(v);
+                      return Number.isFinite(x) ? x : null;
+                  };
+                  const subNum = n(sub);
+                  const discNum = n(disc);
+                  const totalNum = n(total);
+                  const verticalSlug = String((overviewData as { _vertical_slug?: string | null })._vertical_slug ?? "").trim() || "cleaning";
+
+                  return (
+                      <section className="rounded-lg border border-admin-border bg-white/80 p-3">
+                          <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                  <h3 className="text-sm font-medium text-alloy-midnight/90">Quote result</h3>
+                                  {isOver ? (
+                                      <p className="mt-1 text-xs font-medium text-amber-900 bg-amber-50 border border-amber-200 rounded px-2 py-1 inline-block">
+                                          Manual price override active
+                                      </p>
+                                  ) : null}
+                                  <dl className="mt-2 space-y-1 text-sm text-alloy-midnight/85">
+                                      <div className="flex justify-between gap-4">
+                                          <dt className="text-alloy-midnight/60">Base</dt>
+                                          <dd className="font-medium tabular-nums">
+                                              {subNum != null ? formatMoneyFromDollars(subNum) : "—"}
+                                          </dd>
+                                      </div>
+                                      <div className="flex justify-between gap-4">
+                                          <dt className="text-alloy-midnight/60">Discount</dt>
+                                          <dd className="font-medium tabular-nums">
+                                              {discNum != null && discNum > 0 ? `−${formatMoneyFromDollars(discNum)}` : "—"}
+                                          </dd>
+                                      </div>
+                                      <div className="flex justify-between gap-4 border-t border-alloy-stone/20 pt-1">
+                                          <dt className="text-alloy-midnight/80">Final</dt>
+                                          <dd className="font-semibold tabular-nums text-alloy-midnight/95">
+                                              {totalNum != null ? formatMoneyFromDollars(totalNum) : "—"}
+                                          </dd>
+                                      </div>
+                                  </dl>
+                              </div>
+                              <div className="flex flex-wrap gap-2 items-center justify-end shrink-0">
+                                  <button
+                                      type="button"
+                                      disabled={!canMutate || oppQuoteActionLoading}
+                                      onClick={() => {
+                                          setOppQuoteActionError(null);
+                                          setOppOverrideOpen((o) => !o);
+                                          const seed =
+                                              n(opp.quote_override_total) ??
+                                              totalNum ??
+                                              subNum ??
+                                              null;
+                                          setOppOverrideAmount(seed != null ? String(seed) : "");
+                                      }}
+                                      className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30 disabled:opacity-50"
+                                  >
+                                      {oppOverrideOpen ? "Close override" : "Override"}
+                                  </button>
+                                  {isOver ? (
+                                      <button
+                                          type="button"
+                                          disabled={!canMutate || oppQuoteActionLoading}
+                                          onClick={() =>
+                                              void patchOpportunityQuote({
+                                                  clear_quote_override: true,
+                                              })
+                                          }
+                                          className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30 disabled:opacity-50"
+                                      >
+                                          Clear override
+                                      </button>
+                                  ) : null}
+                                  <button
+                                      type="button"
+                                      disabled={oppDiscountLoading}
+                                      onClick={async () => {
+                                          if (oppDiscountOptions) return;
+                                          setOppDiscountLoading(true);
+                                          try {
+                                              const params = new URLSearchParams();
+                                              if (verticalSlug) params.set("vertical_slug", verticalSlug);
+                                              const res = await fetch(`/api/admin/discount-code-options?${params.toString()}`);
+                                              const json = await res.json().catch(() => ({}));
+                                              const opts =
+                                                  (json as { discount_options?: { value: string; label: string }[] }).discount_options ?? [];
+                                              setOppDiscountOptions(opts);
+                                          } finally {
+                                              setOppDiscountLoading(false);
+                                          }
+                                      }}
+                                      className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30 disabled:opacity-50"
+                                  >
+                                      {oppDiscountLoading ? "Loading…" : "Load discounts"}
+                                  </button>
+                              </div>
+                          </div>
+
+                          {oppQuoteActionError ? (
+                              <p className="mt-2 text-xs text-red-700">{oppQuoteActionError}</p>
+                          ) : null}
+
+                          {oppOverrideOpen ? (
+                              <div className="mt-3 rounded-md border border-alloy-stone/30 bg-white/90 p-2.5 space-y-2">
+                                  <div className="text-xs font-medium text-alloy-midnight/70">Set manual total</div>
+                                  <div className="flex flex-wrap items-end gap-2">
+                                      <label className="flex flex-col gap-0.5 text-xs">
+                                          <span className="text-alloy-midnight/60">Total ($)</span>
+                                          <input
+                                              type="number"
+                                              min={0}
+                                              step="0.01"
+                                              value={oppOverrideAmount}
+                                              onChange={(e) => setOppOverrideAmount(e.target.value)}
+                                              className="min-w-[8rem] rounded border border-alloy-stone/50 px-2 py-1.5 text-sm bg-white"
+                                          />
+                                      </label>
+                                      <label className="flex flex-col gap-0.5 text-xs flex-1 min-w-[12rem]">
+                                          <span className="text-alloy-midnight/60">Reason (optional)</span>
+                                          <input
+                                              type="text"
+                                              value={oppOverrideReason}
+                                              onChange={(e) => setOppOverrideReason(e.target.value)}
+                                              className="rounded border border-alloy-stone/50 px-2 py-1.5 text-sm bg-white"
+                                          />
+                                      </label>
+                                      <button
+                                          type="button"
+                                          disabled={!canMutate || oppQuoteActionLoading}
+                                          onClick={() => {
+                                              const raw = parseFloat(oppOverrideAmount);
+                                              if (!Number.isFinite(raw) || raw < 0) {
+                                                  setOppQuoteActionError("Enter a valid total (0 or more).");
+                                                  return;
+                                              }
+                                              void patchOpportunityQuote({
+                                                  quote_is_overridden: true,
+                                                  quote_override_total: raw,
+                                                  quote_override_reason: oppOverrideReason.trim() || null,
+                                              }).then(() => {
+                                                  setOppOverrideOpen(false);
+                                              });
+                                          }}
+                                          className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
+                                      >
+                                          Save override
+                                      </button>
+                                  </div>
+                              </div>
+                          ) : null}
+
+                          {breakdown ? (
+                              <pre className="mt-3 whitespace-pre-wrap rounded-md border border-alloy-stone/20 bg-white px-3 py-2 text-xs text-alloy-midnight/80">
+                                  {breakdown}
+                              </pre>
+                          ) : null}
+
+                          {oppDiscountOptions ? (
+                              <div className="mt-3 rounded-md border border-alloy-stone/30 bg-white/70 p-2.5">
+                                  <div className="text-xs font-medium text-alloy-midnight/70">Apply discount</div>
+                                  <p className="mt-1 text-xs text-alloy-midnight/55">
+                                      Pricing is computed on the server; pick a program/code or enter a promo code.
+                                  </p>
+                                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                                      <select
+                                          value={oppDiscountSelection}
+                                          onChange={(e) => setOppDiscountSelection(e.target.value)}
+                                          className="min-w-[16rem] rounded border border-alloy-stone/50 px-2 py-1.5 text-sm bg-white"
+                                      >
+                                          <option value="">Select a discount…</option>
+                                          {oppDiscountOptions.map((o) => (
+                                              <option key={o.value} value={o.value}>
+                                                  {o.label}
+                                              </option>
+                                          ))}
+                                      </select>
+                                      <input
+                                          type="text"
+                                          placeholder="Or promo code (e.g. TEST25)"
+                                          value={oppPromoCode}
+                                          onChange={(e) => setOppPromoCode(e.target.value)}
+                                          className="min-w-[12rem] rounded border border-alloy-stone/50 px-2 py-1.5 text-sm bg-white"
+                                      />
+                                      <button
+                                          type="button"
+                                          disabled={!canMutate || oppQuoteActionLoading}
+                                          onClick={() => {
+                                              if (oppDiscountSelection.trim()) {
+                                                  void patchOpportunityQuote({
+                                                      apply_quote_discount: true,
+                                                      quote_discount_selection: oppDiscountSelection.trim(),
+                                                  });
+                                                  return;
+                                              }
+                                              const code = oppPromoCode.trim();
+                                              if (code) {
+                                                  void patchOpportunityQuote({
+                                                      apply_quote_discount: true,
+                                                      discount_code: code,
+                                                  });
+                                                  return;
+                                              }
+                                              setOppQuoteActionError("Select a discount or enter a promo code.");
+                                          }}
+                                          className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
+                                      >
+                                          Apply
+                                      </button>
+                                  </div>
+                                  <button
+                                      type="button"
+                                      disabled={!canMutate || oppQuoteActionLoading}
+                                      onClick={() => void patchOpportunityQuote({ clear_quote_discount: true })}
+                                      className="mt-2 text-xs text-alloy-midnight/70 hover:text-alloy-midnight underline disabled:opacity-50"
+                                  >
+                                      Clear discount
+                                  </button>
+                              </div>
+                          ) : null}
+                      </section>
+                  );
+              })();
 
     const showJobRecordModalV2 =
         isJobDrawerV2 &&
