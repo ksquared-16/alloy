@@ -1,7 +1,36 @@
-import type { ActionsVm, QueueItemQuickActionVm, QueueItemVm } from "@/lib/ui-v2/workspace-types";
+import type {
+    ActionsVm,
+    EnrollmentCrmRowSemanticSlots,
+    QueueItemQuickActionVm,
+    QueueItemVm,
+} from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
 
 type OppRow = WorkspaceOpportunityQueueRuntime["items"][number];
+
+/**
+ * Desired CRM fields that are **not** currently supplied by the workspace queue API / enrichment
+ * (no persons.children join, no messaging routes). Used for docs + future payload work.
+ */
+export const ENROLLMENT_CRM_QUEUE_PAYLOAD_GAPS = [
+    "child_name (no `opportunities` → child person join in queue payload; optional `metadata.demo_child_name` only if seeded)",
+    "dedicated_sms_action (no SMS/comms API route wired from workspace queue)",
+    "in_app_message_action (no threaded message UI route from workspace row)",
+] as const;
+
+export type EnrollmentCrmContactCapability = {
+    /** `mailto:` when `persons.email` is present for `primary_person_id`. */
+    emailMailto: boolean;
+    /** `tel:` when a dialable phone exists on the primary person row. */
+    phoneTel: boolean;
+};
+
+export function enrollmentCrmContactCapabilityForRow(row: OppRow): EnrollmentCrmContactCapability {
+    const email = Boolean((row as { _primary_email?: string | null })._primary_email?.trim());
+    const phoneRaw = (row as { _primary_phone?: string | null })._primary_phone?.trim() ?? "";
+    const phoneTel = phoneRaw.replace(/\D/g, "").length >= 10;
+    return { emailMailto: email, phoneTel };
+}
 
 function formatUsd(n: number): string {
     return new Intl.NumberFormat(undefined, {
@@ -54,7 +83,7 @@ function opportunityQuickActionsForLane(workUnitKey: string): QueueItemQuickActi
     ];
 }
 
-function quickActionsForRow(row: OppRow, workUnitKey: string): QueueItemQuickActionVm[] {
+function laneQuickActionsForAttentionRow(row: OppRow, workUnitKey: string): QueueItemQuickActionVm[] {
     const wk = workUnitKey.trim().toLowerCase();
     const reason = (row as { _attention_reason?: string | null })._attention_reason?.trim() || null;
     if (wk === "needs_attention" && reason) {
@@ -81,52 +110,103 @@ function quickActionsForRow(row: OppRow, workUnitKey: string): QueueItemQuickAct
     return opportunityQuickActionsForLane(workUnitKey);
 }
 
-/**
- * Enrollment work-unit queue row — titles, subtitles, and meta lines derived from queue/runtime fields
- * (`_status_display`, lifecycle presentation, attention labels), not from page JSX.
- */
-export function buildEnrollmentOpportunityQueueItemVm(row: OppRow, ctx: { workUnitKey: string }): QueueItemVm {
+function crmContactQuickActions(row: OppRow): QueueItemQuickActionVm[] {
+    const cap = enrollmentCrmContactCapabilityForRow(row);
+    const email = (row as { _primary_email?: string | null })._primary_email?.trim();
+    const phone = (row as { _primary_phone?: string | null })._primary_phone?.trim();
+    const out: QueueItemQuickActionVm[] = [];
+    if (cap.emailMailto && email) {
+        out.push({ id: "crm_mailto", label: "Email", payload: { href: `mailto:${email}` } });
+    }
+    if (cap.phoneTel && phone) {
+        const digits = phone.replace(/\D/g, "");
+        out.push({ id: "crm_tel", label: "Call", payload: { href: `tel:${digits}` } });
+    }
+    return out;
+}
+
+export function buildEnrollmentCrmRowSemanticSlots(row: OppRow): EnrollmentCrmRowSemanticSlots {
     const customer = (row._customer_name ?? "").trim();
     const titleBase = (row.name ?? "").trim();
-    const title = customer || titleBase || row.id.slice(-8);
-    const stage = row._lifecycle_stage_title?.trim() || "";
-    const status = (row.status_key ?? "").trim();
-    const statusLabel = (row._status_display ?? "").trim() || status;
-    const value =
-        row.quote_total != null && Number.isFinite(Number(row.quote_total)) && Number(row.quote_total) > 0
-            ? formatUsd(Number(row.quote_total))
-            : undefined;
+    const primaryIdentity = customer || titleBase || row.id.slice(-8);
 
-    const reasonLabel = (row as { _attention_reason_label?: string | null })._attention_reason_label?.trim() || null;
+    const childName = (row as { _child_display_name?: string | null })._child_display_name?.trim() || null;
 
-    const nextStep = row._lifecycle_next_step?.title?.trim() || "";
+    const stageLabel = row._lifecycle_stage_title?.trim() || null;
+    const statusLabel = (row._status_display ?? "").trim() || (row.status_key ?? "").trim() || null;
+
+    const nextStep = row._lifecycle_next_step?.title?.trim() || null;
     const lastTouchedMs =
         parseIsoMs((row as { updated_at?: string | null }).updated_at) ??
         parseIsoMs((row as { created_at?: string | null }).created_at);
-    const lastActivityLabel =
-        lastTouchedMs != null ? `${formatAgeCompact(Date.now() - lastTouchedMs)} ago` : "";
+    const lastActivity =
+        lastTouchedMs != null ? `${formatAgeCompact(Date.now() - lastTouchedMs)} ago` : null;
 
-    const subtitle =
-        stage && statusLabel && stage !== statusLabel
-            ? `${stage} · ${statusLabel}`
-            : stage || statusLabel || undefined;
+    const commercialValue =
+        row.quote_total != null && Number.isFinite(Number(row.quote_total)) && Number(row.quote_total) > 0
+            ? formatUsd(Number(row.quote_total))
+            : null;
 
-    const metaLines: NonNullable<QueueItemVm["metaLines"]> = [];
-    if (stage) metaLines.push({ label: "Lifecycle", value: stage });
-    if (statusLabel) metaLines.push({ label: "Status", value: statusLabel });
-    if (nextStep) metaLines.push({ label: "Next step", value: nextStep });
-    if (reasonLabel) metaLines.push({ label: "Attention", value: reasonLabel });
-    if (lastActivityLabel) metaLines.push({ label: "Last activity", value: lastActivityLabel });
+    const contactSnippet =
+        (row as { _primary_contact_line?: string | null })._primary_contact_line?.trim() ||
+        [((row as { _primary_email?: string | null })._primary_email ?? "").trim(), ((row as { _primary_phone?: string | null })._primary_phone ?? "").trim()]
+            .filter(Boolean)
+            .join(" · ") ||
+        null;
 
-    const quickActions = quickActionsForRow(row, ctx.workUnitKey);
+    const programContext = (row as { _requested_program?: string | null })._requested_program?.trim() || null;
+    const roomContext = (row as { _room_label?: string | null })._room_label?.trim() || null;
+    const ageContext = (row as { _age_band?: string | null })._age_band?.trim() || null;
+    const tourContext = (row as { _tour_timing?: string | null })._tour_timing?.trim() || null;
+
+    const attentionReason = (row as { _attention_reason_label?: string | null })._attention_reason_label?.trim() || null;
+    const familyNote = (row as { _notes_preview?: string | null })._notes_preview?.trim() || null;
+
+    return {
+        primaryIdentity,
+        childName,
+        stageLabel,
+        statusLabel,
+        nextStep,
+        lastActivity,
+        commercialValue,
+        contactSnippet,
+        programContext,
+        roomContext,
+        ageContext,
+        tourContext,
+        attentionReason,
+        familyNote,
+    };
+}
+
+/**
+ * Enrollment work-unit queue row — binds `semanticEnrollmentCrm` for config/AI-driven layout,
+ * plus legacy `QueueItemVm` fields for grouping and fallbacks.
+ */
+export function buildEnrollmentOpportunityQueueItemVm(row: OppRow, ctx: { workUnitKey: string }): QueueItemVm {
+    const slots = buildEnrollmentCrmRowSemanticSlots(row);
+    const titleBase = (row.name ?? "").trim();
+    const title = (row._customer_name ?? "").trim() || titleBase || row.id.slice(-8);
+    const status = (row.status_key ?? "").trim();
+    const statusLabel = (row._status_display ?? "").trim() || status;
+
+    const laneActions =
+        ctx.workUnitKey.trim().toLowerCase() === "needs_attention"
+            ? laneQuickActionsForAttentionRow(row, ctx.workUnitKey)
+            : opportunityQuickActionsForLane(ctx.workUnitKey);
+    const quickActions = [...crmContactQuickActions(row), ...laneActions];
 
     const item: QueueItemVm = {
         id: row.id,
         title,
-        subtitle,
-        valueLabel: value,
-        metaLines,
+        subtitle:
+            slots.stageLabel && slots.statusLabel && slots.stageLabel !== slots.statusLabel
+                ? `${slots.stageLabel} · ${slots.statusLabel}`
+                : slots.stageLabel || slots.statusLabel || undefined,
+        valueLabel: slots.commercialValue ?? undefined,
         quickActions,
+        semanticEnrollmentCrm: slots,
         urgencyTier: ctx.workUnitKey.trim().toLowerCase() === "priced_followup" ? "warning" : "standard",
     };
     if (statusLabel) {

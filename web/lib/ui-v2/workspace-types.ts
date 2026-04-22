@@ -38,10 +38,35 @@ export type KPIVm = {
 export type QueueItemQuickActionVm = {
   id: string;
   label: string;
+  /** Host may open mailto:/tel: or pass through to record actions. */
+  payload?: Record<string, unknown>;
 };
 
 /** Work-unit queue: wait row coloring (dot + text). */
 export type QueueItemWaitStatusVm = "safe" | "approaching" | "breached";
+
+/**
+ * Stable semantic slots for Enrollment CRM queue rows — future AI/config can target these keys
+ * without reshaping the whole `QueueItemVm`.
+ */
+export type EnrollmentCrmRowSemanticSlots = {
+  primaryIdentity: string;
+  /** Child / learner name when present on the payload (e.g. seed `metadata.demo_child_name`); else null. */
+  childName: string | null;
+  stageLabel: string | null;
+  statusLabel: string | null;
+  nextStep: string | null;
+  lastActivity: string | null;
+  /** Quote / offer total when present. */
+  commercialValue: string | null;
+  contactSnippet: string | null;
+  programContext: string | null;
+  roomContext: string | null;
+  ageContext: string | null;
+  tourContext: string | null;
+  attentionReason: string | null;
+  familyNote: string | null;
+};
 
 export type QueueItemVm = {
   id: string;
@@ -73,8 +98,15 @@ export type QueueItemVm = {
   waitCompact?: string;
   /** Compact label chips / key-value rows for structured queue cards */
   metaLines?: { label: string; value: string }[];
+  /** `inline`: wrap meta as dense CRM strip (work unit compact rows). */
+  metaDensity?: "stack" | "inline";
   /** Visual emphasis for SLA / risk (queue card rail + badge tone) */
   urgencyTier?: "critical" | "warning" | "standard";
+  /**
+   * When set, `QueueBlock` renders the Enrollment CRM preview from these slots (config/AI-ready),
+   * instead of inferring layout from title/subtitle/meta alone.
+   */
+  semanticEnrollmentCrm?: EnrollmentCrmRowSemanticSlots;
 };
 
 /** Department throughput / attention lanes — grouped counts (not work-unit rows). */

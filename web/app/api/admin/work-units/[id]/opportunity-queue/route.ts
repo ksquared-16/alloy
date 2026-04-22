@@ -7,6 +7,7 @@ import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsRe
 import { getQueueDefinitionStoredVersion } from "@/lib/rrs/queue/queueDefinitionV1";
 import { resolveOpportunityQueueFromDefinition } from "@/lib/rrs/queue/resolveOpportunityQueue";
 import { isOpportunityActiveForExecution, terminalOpportunityStatusKeysFromDefs } from "@/lib/workspace/opportunityExecutionEligibility";
+import { enrichOpportunityRowsWithCrmProjection } from "@/lib/workspace/enrichOpportunityQueueProjection";
 
 /**
  * GET — Execute `work_units.queue_definition` for opportunity queues (Growth).
@@ -71,6 +72,9 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         const label = String(d.status_label ?? "").trim();
         statusLabelByKey.set(k, label || k);
     }
+
+    const enrichById = await enrichOpportunityRowsWithCrmProjection(supabase, ctx.orgId, filtered);
+
     const items = filtered.map((row) => {
         const quoteNum =
             row.quote_total != null && !Number.isNaN(Number(row.quote_total)) && Number(row.quote_total) > 0
@@ -85,6 +89,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         const _status_display = sk ? (statusLabelByKey.get(sk) ?? sk) : null;
         return {
             ...row,
+            ...(enrichById.get(row.id) ?? {}),
             _customer_name: row.customer_id ? (customerNameById.get(row.customer_id) ?? null) : null,
             _status_display,
             ...lifecycle,

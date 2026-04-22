@@ -19,6 +19,12 @@ export type OpportunityQueueRow = {
     quote_total: number | null;
     pipeline_stage_id: string | null;
     customer_id: string | null;
+    primary_person_id: string | null;
+    location_id: string | null;
+    job_date: string | null;
+    job_time_window: string | null;
+    customer_notes: string | null;
+    metadata: unknown;
     created_at: string | null;
     updated_at: string | null;
 };
@@ -33,7 +39,7 @@ export type ResolveOpportunityQueueResult =
     | { ok: false; error: string; code: "INVALID_DEFINITION" | "QUERY_FAILED" };
 
 const SELECT_COLS =
-    "id, name, status_key, source, assigned_to, quote_total, pipeline_stage_id, customer_id, created_at, updated_at";
+    "id, name, status_key, source, assigned_to, quote_total, pipeline_stage_id, customer_id, primary_person_id, location_id, job_date, job_time_window, customer_notes, metadata, created_at, updated_at";
 
 /** Terminal opportunity statuses after a successful book-v2 handoff (see workflow_events in seed data). */
 const TERMINAL_BOOKED_STATUSES = ["booked", "scheduled"] as const;

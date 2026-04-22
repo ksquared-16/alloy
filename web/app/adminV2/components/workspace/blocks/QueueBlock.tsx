@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
-import type { QueueItemVm, QueueVm } from "@/lib/ui-v2/workspace-types";
+import type { EnrollmentCrmRowSemanticSlots, QueueItemVm, QueueVm } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
 
 type Props = {
@@ -127,6 +127,67 @@ function workUnitSectionKey(item: QueueItemVm): string | undefined {
   return item.groupKey?.trim() || item.groupLabel?.trim() || undefined;
 }
 
+/** Enrollment CRM preview — renders only from `EnrollmentCrmRowSemanticSlots` (config/AI-ready). */
+function EnrollmentCrmCompactPreview({ slots }: { slots: EnrollmentCrmRowSemanticSlots }) {
+  const careParts = [slots.programContext, slots.roomContext, slots.ageContext].filter(Boolean) as string[];
+  const stageStatus =
+    slots.stageLabel && slots.statusLabel && slots.stageLabel !== slots.statusLabel
+      ? `${slots.stageLabel} · ${slots.statusLabel}`
+      : slots.stageLabel || slots.statusLabel || "—";
+
+  return (
+    <div className="adminv2-ws-wu-queue-card-compact-text adminv2-ws-enrollment-crm-preview">
+      <div className="adminv2-ws-enrollment-crm-preview__identity" data-enrollment-crm-slot="primaryIdentity">
+        {slots.primaryIdentity}
+      </div>
+      {slots.childName ? (
+        <div className="adminv2-ws-enrollment-crm-preview__child" data-enrollment-crm-slot="childName">
+          Child: {slots.childName}
+        </div>
+      ) : null}
+      <div className="adminv2-ws-enrollment-crm-preview__stage" data-enrollment-crm-slot="stageStatus">
+        {stageStatus}
+      </div>
+      <div className="adminv2-ws-enrollment-crm-preview__ops" data-enrollment-crm-slot="nextLast">
+        <span data-enrollment-crm-slot="nextStep">
+          <span className="adminv2-ws-enrollment-crm-preview__k">Next</span> {slots.nextStep ?? "—"}
+        </span>
+        <span className="adminv2-ws-enrollment-crm-preview__sep" aria-hidden>
+          ·
+        </span>
+        <span data-enrollment-crm-slot="lastActivity">
+          <span className="adminv2-ws-enrollment-crm-preview__k">Last</span> {slots.lastActivity ?? "—"}
+        </span>
+      </div>
+      {careParts.length ? (
+        <div className="adminv2-ws-enrollment-crm-preview__care" data-enrollment-crm-slot="careContext">
+          {careParts.join(" · ")}
+        </div>
+      ) : null}
+      {slots.tourContext ? (
+        <div className="adminv2-ws-enrollment-crm-preview__tour" data-enrollment-crm-slot="tourContext">
+          {slots.tourContext}
+        </div>
+      ) : null}
+      {slots.contactSnippet ? (
+        <div className="adminv2-ws-enrollment-crm-preview__contact" data-enrollment-crm-slot="contactSnippet">
+          {slots.contactSnippet}
+        </div>
+      ) : null}
+      {slots.attentionReason ? (
+        <div className="adminv2-ws-enrollment-crm-preview__attention" data-enrollment-crm-slot="attentionReason">
+          {slots.attentionReason}
+        </div>
+      ) : null}
+      {slots.familyNote ? (
+        <div className="adminv2-ws-enrollment-crm-preview__note" data-enrollment-crm-slot="familyNote">
+          {slots.familyNote}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: WorkspaceActionHandler }) {
   const groupCounts = useMemo(() => {
     const m = new Map<string, number>();
@@ -169,7 +230,8 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
           if (sectionKey) lastSectionKey = sectionKey;
 
           const tier = item.urgencyTier ?? "standard";
-          const valueShown = item.valueLabel?.trim() ?? "";
+          const crm = item.semanticEnrollmentCrm;
+          const valueShown = (crm?.commercialValue ?? item.valueLabel)?.trim() ?? "";
           const hasValue = Boolean(valueShown);
 
           const headerCfg = sectionKey ? queue.workUnitGroupHeaders?.[sectionKey] : undefined;
@@ -216,34 +278,93 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
                   }
                 }}
               >
-                <div className="adminv2-ws-wu-queue-card-compact-text">
-                  <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">{item.title}</div>
-                  {item.subtitle?.trim() ? (
-                    <div className="adminv2-ws-wu-queue-card-sub adminv2-ws-wu-queue-card-sub--compact">{item.subtitle.trim()}</div>
-                  ) : null}
-                  {item.metaLines && item.metaLines.length > 0 ? (
-                    <ul
-                      className="adminv2-ws-wu-queue-card-meta mt-1 space-y-0.5 list-none pl-0 m-0"
-                      aria-label="Job details"
-                    >
-                      {item.metaLines.map((line) => (
-                        <li
-                          key={`${item.id}-${line.label}`}
-                          className="flex flex-wrap gap-x-1.5 gap-y-0 text-[11px] leading-snug"
-                          style={{ color: "var(--d-muted, rgba(55,65,81,0.85))" }}
-                        >
-                          <span className="font-medium shrink-0">{line.label}</span>
-                          <span className="min-w-0 break-words">{line.value}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </div>
+                {crm ? (
+                  <EnrollmentCrmCompactPreview slots={crm} />
+                ) : (
+                  <div className="adminv2-ws-wu-queue-card-compact-text">
+                    <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">{item.title}</div>
+                    {item.subtitle?.trim() ? (
+                      <div className="adminv2-ws-wu-queue-card-sub adminv2-ws-wu-queue-card-sub--compact">{item.subtitle.trim()}</div>
+                    ) : null}
+                    {item.tags && item.tags.length > 0 ? (
+                      <div className="adminv2-ws-wu-queue-card-tags" aria-label="Context">
+                        {item.tags.map((t) => (
+                          <span key={`${item.id}-tag-${t}`} className="adminv2-ws-wu-queue-card-tag">
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                    ) : null}
+                    {item.routeLabel?.trim() ? (
+                      <div className="adminv2-ws-wu-queue-card-route adminv2-ws-wu-queue-card-route--compact">{item.routeLabel.trim()}</div>
+                    ) : null}
+                    {item.windowLabel?.trim() ? (
+                      <div className="adminv2-ws-wu-queue-card-window adminv2-ws-wu-queue-card-window--compact">{item.windowLabel.trim()}</div>
+                    ) : null}
+                    {item.metaLines && item.metaLines.length > 0 ? (
+                      <ul
+                        className={
+                          item.metaDensity === "inline"
+                            ? "adminv2-ws-wu-queue-card-meta adminv2-ws-wu-queue-card-meta--inline mt-1 list-none pl-0 m-0"
+                            : "adminv2-ws-wu-queue-card-meta mt-1 space-y-0.5 list-none pl-0 m-0"
+                        }
+                        aria-label="Inquiry details"
+                      >
+                        {item.metaLines.map((line) => (
+                          <li
+                            key={`${item.id}-${line.label}`}
+                            className={
+                              item.metaDensity === "inline"
+                                ? "adminv2-ws-wu-queue-meta-inline-item text-[10px] leading-snug"
+                                : "flex flex-wrap gap-x-1.5 gap-y-0 text-[11px] leading-snug"
+                            }
+                            style={{ color: "var(--d-muted, rgba(55,65,81,0.85))" }}
+                          >
+                            {item.metaDensity === "inline" ? (
+                              <>
+                                <span className="adminv2-ws-wu-queue-meta-inline-k">{line.label}</span>
+                                <span className="min-w-0 break-words">{line.value}</span>
+                              </>
+                            ) : (
+                              <>
+                                <span className="font-medium shrink-0">{line.label}</span>
+                                <span className="min-w-0 break-words">{line.value}</span>
+                              </>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                )}
                 <div className="adminv2-ws-wu-queue-card-compact-aside">
                   {hasValue ? (
                     <span className="adminv2-ws-wu-queue-value adminv2-ws-wu-queue-value--compact" aria-label="Value">
                       {valueShown}
                     </span>
+                  ) : null}
+                  {item.quickActions?.length ? (
+                    <div className="adminv2-ws-wu-queue-card-quick-actions" role="group" aria-label="Quick actions">
+                      {item.quickActions.map((qa) => (
+                        <button
+                          key={`${item.id}-qa-${qa.id}`}
+                          type="button"
+                          className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--quiet"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onAction({
+                              type: "queue.item.action",
+                              queueId: queue.id,
+                              itemId: item.id,
+                              actionId: qa.id,
+                              payload: qa.payload,
+                            });
+                          }}
+                        >
+                          {qa.label}
+                        </button>
+                      ))}
+                    </div>
                   ) : null}
                   <button
                     type="button"

@@ -153,7 +153,41 @@ export function useOperationsWorkspaceData(departmentId: string) {
                         "unbooked_quotes",
                     ];
 
-                    const queuePromises = queueKeys.map(async (k) => [k, await fetchOpportunityQueueRuntime(keyToWu.get(k))] as const);
+                    const queuePromises = queueKeys.map(async (k) => {
+                        if (k === "needs_attention") {
+                            const naWu = keyToWu.get(k);
+                            if (naWu?.id) {
+                                return [k, await fetchOpportunityQueueRuntime(naWu)] as const;
+                            }
+                            const res = await fetch(
+                                `/api/admin/departments/${encodeURIComponent(departmentId)}/opportunity-attention-preview`
+                            );
+                            const j = (await res.json().catch(() => ({}))) as {
+                                total?: number;
+                                items?: WorkspaceOpportunityQueueRuntime["items"];
+                                error?: string;
+                            };
+                            if (!res.ok) {
+                                return [
+                                    k,
+                                    {
+                                        total: 0,
+                                        error: j.error ?? "Failed to load attention preview",
+                                        items: [] as WorkspaceOpportunityQueueRuntime["items"],
+                                    },
+                                ] as const;
+                            }
+                            return [
+                                k,
+                                {
+                                    total: typeof j.total === "number" ? j.total : 0,
+                                    error: null,
+                                    items: j.items ?? [],
+                                },
+                            ] as const;
+                        }
+                        return [k, await fetchOpportunityQueueRuntime(keyToWu.get(k))] as const;
+                    });
 
                     const [queuePairs, kpRes] = await Promise.all([
                         Promise.all(queuePromises),

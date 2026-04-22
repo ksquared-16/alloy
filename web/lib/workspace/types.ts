@@ -241,13 +241,35 @@ export type WorkspaceOpportunityQueueRuntime = {
         id: string;
         name: string | null;
         status_key: string | null;
+        source?: string | null;
         _status_display?: string | null;
         quote_total: number | null;
+        customer_id?: string | null;
+        primary_person_id?: string | null;
+        location_id?: string | null;
+        job_date?: string | null;
+        job_time_window?: string | null;
+        customer_notes?: string | null;
+        metadata?: unknown;
+        created_at?: string | null;
+        updated_at?: string | null;
         _customer_name?: string | null;
         _effective_lifecycle_stage?: string | null;
         _lifecycle_stage_title?: string | null;
         _lifecycle_stage_meaning?: string | null;
         _lifecycle_next_step?: { title: string; lines: string[] };
+        _attention_reason?: string | null;
+        _attention_reason_label?: string | null;
+        _primary_email?: string | null;
+        _primary_phone?: string | null;
+        _primary_contact_line?: string | null;
+        _room_label?: string | null;
+        _tour_timing?: string | null;
+        _notes_preview?: string | null;
+        _requested_program?: string | null;
+        _age_band?: string | null;
+        /** Optional seed / extension: child display name for CRM row (not a DB join). */
+        _child_display_name?: string | null;
     }>;
 };
 

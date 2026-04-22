@@ -11,7 +11,8 @@ import {
     buildEnrollmentDepartmentActionLinks,
     buildEnrollmentDepartmentKpis,
     buildEnrollmentNeedsAttentionGroupsVm,
-    buildEnrollmentPipelineLanesVm,
+    buildEnrollmentNeedsAttentionPreviewVm,
+    buildEnrollmentPipelineCardsVm,
 } from "@/lib/workspace/viewModels/enrollmentDepartmentViewModel";
 
 const WORKSPACE_BASE = "/adminV2/workspace";
@@ -27,13 +28,18 @@ export default function AdminV2WorkspaceDepartmentPage() {
 
     const enrollmentKpis = useMemo(() => buildEnrollmentDepartmentKpis(runtime), [runtime]);
 
-    const enrollmentLanes = useMemo(
-        () => (isEnrollment ? buildEnrollmentPipelineLanesVm(runtime, WORKSPACE_BASE, departmentId) : []),
+    const enrollmentPipelineCards = useMemo(
+        () => (isEnrollment ? buildEnrollmentPipelineCardsVm(runtime, WORKSPACE_BASE, departmentId) : []),
         [runtime, isEnrollment, departmentId]
     );
 
     const needsAttentionGroups = useMemo(
         () => (isEnrollment ? buildEnrollmentNeedsAttentionGroupsVm(runtime, WORKSPACE_BASE, departmentId) : []),
+        [runtime, isEnrollment, departmentId]
+    );
+
+    const needsAttentionPreview = useMemo(
+        () => (isEnrollment ? buildEnrollmentNeedsAttentionPreviewVm(runtime, WORKSPACE_BASE, departmentId, 3) : []),
         [runtime, isEnrollment, departmentId]
     );
 
@@ -65,7 +71,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     signalsSlot={null}
                     kpiSlot={
                         enrollmentKpis.length ? (
-                            <KPIBlock kpis={enrollmentKpis} surface="default" maxVisible={8} />
+                            <KPIBlock kpis={enrollmentKpis} surface="default" maxVisible={6} />
                         ) : null
                     }
                     throughputSlot={
@@ -80,33 +86,47 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             </header>
                             <div className="adminv2-ws-wu-v2" data-ws-surface="work_unit">
                                 <ul className="adminv2-ws-queue-list" role="list">
-                                    {enrollmentLanes.map((lane) => (
-                                        <li key={lane.key} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
+                                    {enrollmentPipelineCards.map((card) => (
+                                        <li key={card.segmentKey} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
                                             <Link
-                                                href={lane.openQueueHref}
+                                                href={card.openQueueAction.href}
                                                 className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-standard flex flex-col items-stretch no-underline text-inherit hover:opacity-[0.98]"
                                                 data-ws-wu-urgency="standard"
+                                                data-enrollment-funnel-segment={card.segmentKey}
                                             >
                                                 <div className="adminv2-ws-wu-queue-card-compact-text">
-                                                    <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">
-                                                        {lane.label}
+                                                    <div
+                                                        className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact"
+                                                        data-enrollment-funnel-slot="stageLabel"
+                                                    >
+                                                        {card.stageLabel}
                                                     </div>
-                                                    <div className="adminv2-ws-wu-queue-card-sub adminv2-ws-wu-queue-card-sub--compact">
-                                                        {lane.description}
+                                                    <div
+                                                        className="adminv2-ws-wu-queue-card-sub adminv2-ws-wu-queue-card-sub--compact"
+                                                        data-enrollment-funnel-slot="supportingCopy"
+                                                    >
+                                                        {card.supportingCopy}
                                                     </div>
-                                                    {typeof lane.count === "number" ? (
-                                                        <div
-                                                            className="mt-2 text-[11px] tabular-nums"
-                                                            style={{ color: "var(--d-muted)" }}
-                                                        >
-                                                            <span className="font-medium text-alloy-midnight/75">Count:</span>{" "}
-                                                            {lane.count}
+                                                    <div
+                                                        className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] tabular-nums"
+                                                        style={{ color: "var(--d-muted)" }}
+                                                    >
+                                                        <div data-enrollment-funnel-slot="count">
+                                                            <span className="font-medium text-alloy-midnight/75">Count</span>{" "}
+                                                            <span className="text-alloy-midnight/85">{card.countDisplay}</span>
                                                         </div>
-                                                    ) : null}
+                                                        <div className="text-right" data-enrollment-funnel-slot="value">
+                                                            <span className="font-medium text-alloy-midnight/75">Value</span>{" "}
+                                                            <span className="text-alloy-midnight/85">{card.valueDisplay}</span>
+                                                        </div>
+                                                    </div>
                                                 </div>
                                                 <div className="adminv2-ws-wu-queue-card-compact-aside">
-                                                    <span className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open">
-                                                        Open queue
+                                                    <span
+                                                        className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open"
+                                                        data-enrollment-funnel-slot="openQueue"
+                                                    >
+                                                        {card.openQueueAction.label}
                                                     </span>
                                                 </div>
                                             </Link>
@@ -132,6 +152,30 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             </header>
                             <div className="adminv2-ws-attention-stack">
                                 <div className="adminv2-ws-attention-card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                                    {needsAttentionPreview.length ? (
+                                        <div className="mb-2">
+                                            <div className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/55 mb-1.5">
+                                                Next up
+                                            </div>
+                                            <ul className="space-y-1.5 pl-0 list-none" role="list">
+                                                {needsAttentionPreview.map((p) => (
+                                                    <li key={p.id}>
+                                                        <Link
+                                                            href={p.openQueueHref}
+                                                            className="block rounded-md border border-[var(--d-border,rgba(39,63,82,0.12))] bg-[var(--d-surface,#fff)] px-2 py-1.5 no-underline hover:opacity-[0.97]"
+                                                        >
+                                                            <div className="text-[11px] font-semibold text-alloy-midnight/90 leading-snug">
+                                                                {p.headline}
+                                                            </div>
+                                                            <div className="text-[10px] text-alloy-midnight/60 leading-snug mt-0.5">
+                                                                {p.detail}
+                                                            </div>
+                                                        </Link>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </div>
+                                    ) : null}
                                     {needsAttentionGroups.length ? (
                                         <ul className="space-y-2 pl-0 list-none" role="list">
                                             {needsAttentionGroups.map((g) => (
@@ -164,7 +208,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                                 </li>
                                             ))}
                                         </ul>
-                                    ) : (
+                                    ) : needsAttentionPreview.length ? null : (
                                         <p className="text-[11px]" style={{ color: "var(--d-muted)" }}>
                                             Nothing needs intervention right now.
                                         </p>

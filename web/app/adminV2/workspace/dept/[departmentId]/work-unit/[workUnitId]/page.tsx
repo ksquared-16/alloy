@@ -153,6 +153,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 return;
             }
             if (action.type === "queue.item.action" && action.actionId && action.itemId) {
+                if (action.actionId === "crm_mailto" || action.actionId === "crm_tel") {
+                    const href = action.payload && typeof action.payload.href === "string" ? action.payload.href : "";
+                    if (href) window.location.href = href;
+                    return;
+                }
                 // Map queue quick actions → opportunity record actions (event keys).
                 const eventKey = action.actionId;
                 if (eventKey === "start_quote" || eventKey === "open_quote") {

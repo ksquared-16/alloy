@@ -204,6 +204,11 @@ export async function seedChildcareDemo(supabase: SupabaseClient, orgId: string)
         quote_total: number | null;
         familyIndex: number;
         updated_at?: string | null;
+        locationClassroomIndex?: number;
+        customer_notes?: string | null;
+        job_date?: string | null;
+        job_time_window?: string | null;
+        demo_meta?: Record<string, string>;
     }> = [
         // Small but intentional distribution across lifecycle statuses.
         // A few rows are intentionally stale to populate Needs Attention via existing attention rules.
@@ -220,6 +225,52 @@ export async function seedChildcareDemo(supabase: SupabaseClient, orgId: string)
         // Closed outcomes (must exist in dept KPIs, must not appear in active execution queues)
         { seed_key: "opp_demo_11", status_key: "enrolled", quote_total: 2200.5, familyIndex: 1 },
         { seed_key: "opp_demo_12", status_key: "lost", quote_total: null, familyIndex: 2 },
+        // Additional outliers for Needs Attention (distinct reasons; CRM-rich for workspace rows).
+        {
+            seed_key: "opp_attn_demo_1",
+            status_key: "new_inquiry",
+            quote_total: null,
+            familyIndex: 5,
+            updated_at: new Date(Date.now() - 1000 * 60 * 60 * 110).toISOString(),
+            locationClassroomIndex: 0,
+            customer_notes: "Asked about summer start.",
+            demo_meta: {
+                demo_requested_program: "Toddler program",
+                demo_age_band: "18–24 mo",
+                demo_tour_starts_at: new Date(Date.now() + 86400000 * 5).toISOString(),
+                demo_child_name: "Jordan",
+            },
+        },
+        {
+            seed_key: "opp_attn_demo_2",
+            status_key: "contacted",
+            quote_total: null,
+            familyIndex: 6,
+            updated_at: new Date(Date.now() - 1000 * 60 * 60 * 90).toISOString(),
+            locationClassroomIndex: 1,
+            customer_notes: "Prefers afternoon tours.",
+            demo_meta: {
+                demo_requested_program: "Preschool",
+                demo_age_band: "3–4 yrs",
+                demo_child_name: "Sam",
+            },
+        },
+        {
+            seed_key: "opp_attn_demo_3",
+            status_key: "tour_scheduled",
+            quote_total: null,
+            familyIndex: 7,
+            updated_at: new Date(Date.now() - 1000 * 60 * 60 * 100).toISOString(),
+            locationClassroomIndex: 2,
+            customer_notes: "Sibling already enrolled.",
+            job_date: new Date(Date.now() + 86400000 * 2).toISOString().slice(0, 10),
+            job_time_window: "2:30 PM",
+            demo_meta: {
+                demo_requested_program: "Infant care",
+                demo_age_band: "4–8 mo",
+                demo_child_name: "Riley",
+            },
+        },
     ];
 
     for (const spec of oppSpecs) {
@@ -234,21 +285,29 @@ export async function seedChildcareDemo(supabase: SupabaseClient, orgId: string)
         const fam = families[spec.familyIndex];
         if (!fam) continue;
 
+        const locationId =
+            spec.locationClassroomIndex != null ? classroomIds[spec.locationClassroomIndex % classroomIds.length] : null;
+
         const { error: oErr } = await supabase.from("opportunities").insert({
             org_id: orgId,
             vertical_id: verticalId,
             customer_id: fam.customerId,
             primary_person_id: fam.parentA,
             primary_contact_id: null,
+            ...(locationId ? { location_id: locationId } : {}),
             name: `Inquiry — Family ${spec.familyIndex + 1}`,
             status: "open",
             source: "demo_seed",
             status_key: spec.status_key,
             quote_total: spec.quote_total,
             ...(spec.updated_at ? { updated_at: spec.updated_at } : {}),
+            ...(spec.customer_notes ? { customer_notes: spec.customer_notes } : {}),
+            ...(spec.job_date ? { job_date: spec.job_date } : {}),
+            ...(spec.job_time_window ? { job_time_window: spec.job_time_window } : {}),
             metadata: {
                 seed_key: spec.seed_key,
                 demo_seed_package: CHILDCARE_DEMO_SEED_PACKAGE,
+                ...(spec.demo_meta ?? {}),
             },
         });
         if (oErr) {
