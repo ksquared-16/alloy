@@ -56,6 +56,13 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     }
 
     const oppDefs = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "opportunities", { activeOnly: true });
+    const statusLabelByKey = new Map<string, string>();
+    for (const d of oppDefs) {
+        const k = String(d.status_key ?? "").trim();
+        if (!k) continue;
+        const label = String(d.status_label ?? "").trim();
+        statusLabelByKey.set(k, label || k);
+    }
     const items = resolved.items.map((row) => {
         const quoteNum =
             row.quote_total != null && !Number.isNaN(Number(row.quote_total)) && Number(row.quote_total) > 0
@@ -66,9 +73,12 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
             quoteTotalDollars: quoteNum,
             defs: oppDefs,
         });
+        const sk = row.status_key ? String(row.status_key).trim() : "";
+        const _status_display = sk ? (statusLabelByKey.get(sk) ?? sk) : null;
         return {
             ...row,
             _customer_name: row.customer_id ? (customerNameById.get(row.customer_id) ?? null) : null,
+            _status_display,
             ...lifecycle,
         };
     });

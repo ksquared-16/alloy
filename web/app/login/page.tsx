@@ -46,7 +46,7 @@ function LoginForm() {
         return;
       }
 
-      router.push("/admin");
+      router.push("/adminV2/workspace");
       router.refresh();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);

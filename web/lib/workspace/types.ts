@@ -9,7 +9,7 @@ import type { NeedsAttentionExceptionType } from "./exceptionTypes";
 import type { OpportunityLifecycleKpiSnapshot } from "./computeOpportunityLifecycleKpis";
 
 /** Canonical block kinds rendered by WorkspaceRenderer. */
-export type WorkspaceBlockType = "signals" | "queue" | "attention" | "kpi" | "actions" | "context";
+export type WorkspaceBlockType = "signals" | "queue" | "attention" | "kpi" | "actions" | "context" | "config_snapshot";
 
 /** Keys for attention lane category rows — registry ids must match `WorkspaceRuntimeData.attention`. */
 export type WorkspaceAttentionCategoryKey = NeedsAttentionExceptionType;
@@ -141,6 +141,13 @@ export type WorkspaceContextBlock = {
     paragraphs: string[];
 };
 
+export type WorkspaceConfigSnapshotBlock = {
+    id: string;
+    type: "config_snapshot";
+    title?: string;
+    subtitle?: string;
+};
+
 export type WorkspaceAttentionCategory = {
     /** Must match `WorkspaceAttentionCategoryKey` for runtime lookup. */
     id: WorkspaceAttentionCategoryKey;
@@ -170,7 +177,8 @@ export type WorkspaceBlock =
     | WorkspaceKpiBlock
     | WorkspaceActionsBlock
     | WorkspaceGrowthWorkspaceActionsBlock
-    | WorkspaceContextBlock;
+    | WorkspaceContextBlock
+    | WorkspaceConfigSnapshotBlock;
 
 export type DepartmentWorkspaceLayout = {
     /** Matches `departments.key`; null layout id = generic fallback. */
@@ -217,6 +225,7 @@ export type WorkspaceOpportunityQueueRuntime = {
         id: string;
         name: string | null;
         status_key: string | null;
+        _status_display?: string | null;
         quote_total: number | null;
         _customer_name?: string | null;
         _effective_lifecycle_stage?: string | null;

@@ -69,8 +69,9 @@ function OpportunityQueueInlinePreview({
                         ? `$${Number(row.quote_total).toFixed(2)}`
                         : null;
                 const stageTitle = (row as { _lifecycle_stage_title?: string | null })._lifecycle_stage_title?.trim();
+                const statusLabel = (row as { _status_display?: string | null })._status_display?.trim();
                 const reason = (row as { _attention_reason_label?: string | null })._attention_reason_label?.trim();
-                const sub = [row._customer_name?.trim(), stageTitle ?? row.status_key?.trim(), price, reason]
+                const sub = [row._customer_name?.trim(), stageTitle ?? statusLabel ?? row.status_key?.trim(), price, reason]
                     .filter(Boolean)
                     .join(" · ");
                 return (
@@ -225,7 +226,9 @@ export function QueueBlock({
                                     <Link
                                         href={opportunityWorkUnitHref}
                                         className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-standard flex flex-col items-stretch no-underline text-inherit hover:opacity-[0.98]"
-                                        data-ws-wu-urgency="standard"
+                                        data-ws-wu-urgency={
+                                            entry.work_unit_key.trim().toLowerCase() === "needs_attention" ? "warning" : "standard"
+                                        }
                                     >
                                         <div className="adminv2-ws-wu-queue-card-compact-text">
                                             <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">

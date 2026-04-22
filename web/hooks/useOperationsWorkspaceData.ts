@@ -163,13 +163,19 @@ export function useOperationsWorkspaceData(departmentId: string) {
                         error?: string;
                         counts?: OpportunityLifecycleKpiSnapshot["counts"];
                         values?: OpportunityLifecycleKpiSnapshot["values"];
+                        statusBreakdown?: OpportunityLifecycleKpiSnapshot["statusBreakdown"];
                     };
                     if (!cancelled) {
                         const oqMap: NonNullable<WorkspaceRuntimeData["opportunityQueues"]> = {};
                         for (const [k, v] of queuePairs) oqMap[k] = v;
                         setOpportunityQueues(oqMap);
                         if (kpRes.ok && kpj.counts && kpj.values) {
-                            setLifecycleKpis({ status: "ready", counts: kpj.counts, values: kpj.values });
+                            setLifecycleKpis({
+                                status: "ready",
+                                counts: kpj.counts,
+                                values: kpj.values,
+                                statusBreakdown: kpj.statusBreakdown,
+                            });
                         } else {
                             setLifecycleKpis({
                                 status: "error",

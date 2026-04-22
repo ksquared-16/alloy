@@ -54,6 +54,13 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1;
 
     const oppDefs = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "opportunities", { activeOnly: true });
+    const statusLabelByKey = new Map<string, string>();
+    for (const d of oppDefs) {
+        const k = String(d.status_key ?? "").trim();
+        if (!k) continue;
+        const label = String(d.status_label ?? "").trim();
+        statusLabelByKey.set(k, label || k);
+    }
 
     const { data: rows, error: oppErr } = await supabase
         .from("opportunities")
@@ -100,6 +107,8 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
             quoteTotalDollars: quoteNum,
             defs: oppDefs,
         });
+        const sk = row.status_key ? String(row.status_key).trim() : "";
+        const _status_display = sk ? (statusLabelByKey.get(sk) ?? sk) : null;
         return {
             id: row.id,
             name: row.name,
@@ -112,6 +121,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
             created_at: row.created_at,
             updated_at: row.updated_at,
             _customer_name: row.customer_id ? (customerNameById.get(row.customer_id) ?? null) : null,
+            _status_display,
             _attention_reason: reason,
             _attention_reason_label: attentionReasonLabel(reason),
             ...lifecycle,

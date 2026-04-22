@@ -50,8 +50,9 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
         const title = (row.name ?? "").trim() || "Family inquiry";
         const stage = row._lifecycle_stage_title?.trim() || "Pipeline";
         const status = (row.status_key ?? "").trim();
+        const statusLabel = (row._status_display ?? "").trim() || status;
         const customer = (row._customer_name ?? "").trim();
-        const subtitle = [customer || null, status || null].filter(Boolean).join(" · ") || undefined;
+        const subtitle = [customer || null, statusLabel || null].filter(Boolean).join(" · ") || undefined;
         const value =
             row.quote_total != null && Number.isFinite(Number(row.quote_total)) && Number(row.quote_total) > 0
                 ? formatUsd(Number(row.quote_total))
@@ -93,7 +94,7 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
             valueLabel: value,
             metaLines: [
                 { label: "Lifecycle", value: stage },
-                ...(status ? [{ label: "Status", value: status }] : []),
+                ...(statusLabel ? [{ label: "Status", value: statusLabel }] : []),
                 ...(reasonLabel ? [{ label: "Reason", value: reasonLabel }] : []),
             ],
             quickActions,

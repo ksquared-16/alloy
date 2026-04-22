@@ -27,6 +27,13 @@ export type OpportunityLifecycleKpiValues = {
 export type OpportunityLifecycleKpiSnapshot = {
     counts: OpportunityLifecycleKpiCounts;
     values: OpportunityLifecycleKpiValues;
+    /** Ordered by configured status definition order; counts computed from rows. */
+    statusBreakdown?: Array<{
+        status_key: string;
+        status_label: string;
+        lifecycle_stage: string | null;
+        count: number;
+    }>;
 };
 
 type OppRow = {

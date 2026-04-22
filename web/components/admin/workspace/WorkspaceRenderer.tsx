@@ -7,6 +7,7 @@ import { ActionsBlock } from "./blocks/ActionsBlock";
 import { GrowthWorkspaceActions } from "./blocks/GrowthWorkspaceActions";
 import { AttentionBlock } from "./blocks/AttentionBlock";
 import { ContextBlock } from "./blocks/ContextBlock";
+import { ConfigSnapshotBlock } from "./blocks/ConfigSnapshotBlock";
 import { KpiBlock } from "./blocks/KpiBlock";
 import { QueueBlock } from "./blocks/QueueBlock";
 import { SignalsBlock } from "./blocks/SignalsBlock";
@@ -98,10 +99,15 @@ export function WorkspaceRenderer({
             ) : null;
 
         const contextSlot =
-            parts.contexts.length > 0 ? (
+            parts.contexts.length > 0 || parts.configSnapshots.length > 0 ? (
                 <>
                     {parts.contexts.map((b) => (
                         <ContextBlock key={b.id} block={b} presentation="bridge" />
+                    ))}
+                    {parts.configSnapshots.map((b) => (
+                        <div key={b.id} style={{ marginTop: 12 }}>
+                            <ConfigSnapshotBlock block={b} />
+                        </div>
                     ))}
                 </>
             ) : null;
@@ -201,6 +207,8 @@ export function WorkspaceRenderer({
                         );
                     case "context":
                         return <ContextBlock key={block.id} block={block} />;
+                    case "config_snapshot":
+                        return <ConfigSnapshotBlock key={block.id} block={block} />;
                     default:
                         return null;
                 }

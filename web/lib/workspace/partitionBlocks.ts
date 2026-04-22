@@ -2,6 +2,7 @@ import type {
     WorkspaceBlock,
     WorkspaceActionsBlock,
     WorkspaceAttentionBlock,
+    WorkspaceConfigSnapshotBlock,
     WorkspaceContextBlock,
     WorkspaceGrowthWorkspaceActionsBlock,
     WorkspaceKpiBlock,
@@ -18,6 +19,7 @@ export function partitionDepartmentBlocks(blocks: WorkspaceBlock[]) {
     const actions: WorkspaceActionsBlock[] = [];
     const growthWorkspaceActions: WorkspaceGrowthWorkspaceActionsBlock[] = [];
     const contexts: WorkspaceContextBlock[] = [];
+    const configSnapshots: WorkspaceConfigSnapshotBlock[] = [];
 
     for (const b of blocks) {
         switch (b.type) {
@@ -42,10 +44,13 @@ export function partitionDepartmentBlocks(blocks: WorkspaceBlock[]) {
             case "context":
                 contexts.push(b);
                 break;
+            case "config_snapshot":
+                configSnapshots.push(b);
+                break;
             default:
                 break;
         }
     }
 
-    return { signals, queues, attentions, kpis, actions, growthWorkspaceActions, contexts };
+    return { signals, queues, attentions, kpis, actions, growthWorkspaceActions, contexts, configSnapshots };
 }

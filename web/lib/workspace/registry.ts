@@ -287,19 +287,19 @@ const ENROLLMENT: DepartmentWorkspaceLayout = {
                 {
                     id: "en_newq",
                     eyebrow: "Intake · qualification",
-                    label: "New & qualifying",
+                    label: "New inquiry + contacted",
                     metric: "enrollment.early_inquiries_count",
                 },
                 {
                     id: "en_quoting",
                     eyebrow: "Execution",
-                    label: "Quoting",
+                    label: "Tours in progress",
                     metric: "enrollment.quoting_count",
                 },
                 {
                     id: "en_priced",
                     eyebrow: "Decision",
-                    label: "Priced follow-up",
+                    label: "Ready / waitlist follow-up",
                     metric: "enrollment.priced_followup_count",
                 },
                 {
@@ -331,19 +331,19 @@ const ENROLLMENT: DepartmentWorkspaceLayout = {
                 {
                     kind: "work_unit_key",
                     work_unit_key: "early_inquiries",
-                    label: "New & qualifying",
+                    label: "New inquiry + contacted",
                     description: "Intake and fit — before quoting work.",
                 },
                 {
                     kind: "work_unit_key",
                     work_unit_key: "quoting",
-                    label: "Quoting",
+                    label: "Tours in progress",
                     description: "Active pricing and enrollment offers in progress.",
                 },
                 {
                     kind: "work_unit_key",
                     work_unit_key: "priced_followup",
-                    label: "Priced — follow up",
+                    label: "Ready / waitlist follow-up",
                     description: "Offers sent; awaiting family decision.",
                 },
             ],
@@ -374,6 +374,26 @@ const BY_KEY: Record<string, DepartmentWorkspaceLayout> = {
     operations: OPERATIONS,
     growth: GROWTH,
     enrollment: ENROLLMENT,
+    system: {
+        department_key: "system",
+        blocks: [
+            {
+                id: "context_system",
+                type: "context",
+                title: "About System",
+                paragraphs: [
+                    "This surface is a read-only visibility layer for the configured tenant model. It’s meant to stop AdminV2 from drifting from reality.",
+                    "Editing still lives under /admin/system for now; AdminV2/System is for faithful visibility and debugging.",
+                ],
+            },
+            {
+                id: "config_snapshot",
+                type: "config_snapshot",
+                title: "Configuration snapshot",
+                subtitle: "Statuses + lifecycle, departments, work units, and queue definitions (read-only).",
+            },
+        ],
+    },
 };
 
 export function getDepartmentWorkspaceLayout(departmentKey: string | null | undefined): DepartmentWorkspaceLayout {
