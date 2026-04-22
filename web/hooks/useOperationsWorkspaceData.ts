@@ -23,7 +23,12 @@ async function fetchOpportunityQueueRuntime(wu: WU | undefined): Promise<Workspa
     if (!wu?.id) {
         return { total: 0, error: "Work unit not found", items: [] };
     }
-    const res = await fetch(`/api/admin/work-units/${encodeURIComponent(wu.id)}/opportunity-queue`);
+    const workUnitKey = (wu.key ?? "").trim().toLowerCase();
+    const endpoint =
+        workUnitKey === "needs_attention"
+            ? `/api/admin/work-units/${encodeURIComponent(wu.id)}/opportunity-attention-queue`
+            : `/api/admin/work-units/${encodeURIComponent(wu.id)}/opportunity-queue`;
+    const res = await fetch(endpoint);
     const j = (await res.json().catch(() => ({}))) as {
         total?: number;
         items?: WorkspaceOpportunityQueueRuntime["items"];
@@ -70,6 +75,19 @@ export function useOperationsWorkspaceData(departmentId: string) {
                     : {}),
                 ...(opportunityQueues?.unbooked_quotes != null
                     ? { "growth.unbooked_quotes_count": opportunityQueues.unbooked_quotes.total }
+                    : {}),
+                ...(opportunityQueues?.pipeline_overview != null
+                    ? { "enrollment.pipeline_overview_count": opportunityQueues.pipeline_overview.total }
+                    : {}),
+                ...(opportunityQueues?.early_inquiries != null
+                    ? { "enrollment.early_inquiries_count": opportunityQueues.early_inquiries.total }
+                    : {}),
+                ...(opportunityQueues?.quoting != null ? { "enrollment.quoting_count": opportunityQueues.quoting.total } : {}),
+                ...(opportunityQueues?.priced_followup != null
+                    ? { "enrollment.priced_followup_count": opportunityQueues.priced_followup.total }
+                    : {}),
+                ...(opportunityQueues?.needs_attention != null
+                    ? { "enrollment.needs_attention_count": opportunityQueues.needs_attention.total }
                     : {}),
             },
             workUnits,
@@ -118,11 +136,27 @@ export function useOperationsWorkspaceData(departmentId: string) {
                     setDerivedError(null);
                     if (!cancelled) setLifecycleKpis({ status: "loading" });
 
-                    const nlWu = wus.find((w) => (w.key ?? "").trim().toLowerCase() === "new_leads");
-                    const uqWu = wus.find((w) => (w.key ?? "").trim().toLowerCase() === "unbooked_quotes");
-                    const [nl, uq, kpRes] = await Promise.all([
-                        fetchOpportunityQueueRuntime(nlWu),
-                        fetchOpportunityQueueRuntime(uqWu),
+                    const keyToWu = new Map<string, WU>();
+                    for (const wu of wus) {
+                        const k = (wu.key ?? "").trim().toLowerCase();
+                        if (k) keyToWu.set(k, wu);
+                    }
+
+                    // Canonical pipeline work units (childcare Enrollment + generic Growth).
+                    const queueKeys = [
+                        "pipeline_overview",
+                        "early_inquiries",
+                        "quoting",
+                        "priced_followup",
+                        "needs_attention",
+                        "new_leads",
+                        "unbooked_quotes",
+                    ];
+
+                    const queuePromises = queueKeys.map(async (k) => [k, await fetchOpportunityQueueRuntime(keyToWu.get(k))] as const);
+
+                    const [queuePairs, kpRes] = await Promise.all([
+                        Promise.all(queuePromises),
                         fetch(`/api/admin/departments/${encodeURIComponent(departmentId)}/opportunity-lifecycle-kpis`),
                     ]);
                     const kpj = (await kpRes.json().catch(() => ({}))) as {
@@ -131,7 +165,9 @@ export function useOperationsWorkspaceData(departmentId: string) {
                         values?: OpportunityLifecycleKpiSnapshot["values"];
                     };
                     if (!cancelled) {
-                        setOpportunityQueues({ new_leads: nl, unbooked_quotes: uq });
+                        const oqMap: NonNullable<WorkspaceRuntimeData["opportunityQueues"]> = {};
+                        for (const [k, v] of queuePairs) oqMap[k] = v;
+                        setOpportunityQueues(oqMap);
                         if (kpRes.ok && kpj.counts && kpj.values) {
                             setLifecycleKpis({ status: "ready", counts: kpj.counts, values: kpj.values });
                         } else {

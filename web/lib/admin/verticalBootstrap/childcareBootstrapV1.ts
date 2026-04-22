@@ -199,5 +199,31 @@ export const CHILDCARE_VERTICAL_BOOTSTRAP_V1: VerticalBootstrapPayloadV1 = {
                 limit: 60,
             },
         },
+        {
+            department_key: "enrollment",
+            key: "needs_attention",
+            name: "Needs attention",
+            description: "Inquiries that are stale or blocked and need an intervention.",
+            sort_order: 40,
+            is_active: true,
+            queue_definition: {
+                version: 1,
+                entity_type: "opportunity",
+                sort: { by: "updated_at", direction: "asc" },
+                limit: 200,
+            },
+            metadata: {
+                role: "needs_attention",
+                opportunity_attention_rules: {
+                    version: 1,
+                    thresholdsHours: {
+                        stale_new_inquiry: 48,
+                        stale_qualified: 72,
+                        stale_quote_followup: 72,
+                        missing_quote_after_execution: 72,
+                    },
+                },
+            },
+        },
     ],
 };

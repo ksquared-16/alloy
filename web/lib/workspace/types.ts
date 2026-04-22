@@ -21,7 +21,12 @@ export type WorkspaceSignalMetricKey =
     | "jobs.needs_attention_count"
     | "jobs.high_value_attention_count"
     | "growth.new_leads_count"
-    | "growth.unbooked_quotes_count";
+    | "growth.unbooked_quotes_count"
+    | "enrollment.pipeline_overview_count"
+    | "enrollment.early_inquiries_count"
+    | "enrollment.quoting_count"
+    | "enrollment.priced_followup_count"
+    | "enrollment.needs_attention_count";
 
 export type WorkspaceSignalItem = {
     /** Stable id for React keys / future analytics. */

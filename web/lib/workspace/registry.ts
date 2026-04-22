@@ -279,16 +279,34 @@ const ENROLLMENT: DepartmentWorkspaceLayout = {
             subtitle: "Work-unit slices — open a queue to work rows; KPIs above are org-wide pipeline totals.",
             signals: [
                 {
-                    id: "g_new_leads",
-                    eyebrow: "Intake · execution",
-                    label: "Front of funnel (queue)",
-                    metric: "growth.new_leads_count",
+                    id: "en_all",
+                    eyebrow: "Volume",
+                    label: "All inquiries",
+                    metric: "enrollment.pipeline_overview_count",
                 },
                 {
-                    id: "g_unbooked",
+                    id: "en_newq",
+                    eyebrow: "Intake · qualification",
+                    label: "New & qualifying",
+                    metric: "enrollment.early_inquiries_count",
+                },
+                {
+                    id: "en_quoting",
+                    eyebrow: "Execution",
+                    label: "Quoting",
+                    metric: "enrollment.quoting_count",
+                },
+                {
+                    id: "en_priced",
                     eyebrow: "Decision",
-                    label: "Priced · open (queue)",
-                    metric: "growth.unbooked_quotes_count",
+                    label: "Priced follow-up",
+                    metric: "enrollment.priced_followup_count",
+                },
+                {
+                    id: "en_attention",
+                    eyebrow: "Needs attention",
+                    label: "Intervention needed",
+                    metric: "enrollment.needs_attention_count",
                 },
             ],
         },
@@ -300,25 +318,45 @@ const ENROLLMENT: DepartmentWorkspaceLayout = {
             entries: [
                 {
                     kind: "work_unit_key",
-                    work_unit_key: "new_leads",
-                    label: "Front of funnel",
-                    description:
-                        "Intake / qualification / execution before a positive enrollment offer — early pipeline work.",
+                    work_unit_key: "pipeline_overview",
+                    label: "All inquiries",
+                    description: "Full enrollment pipeline for this department.",
                 },
                 {
                     kind: "work_unit_key",
-                    work_unit_key: "unbooked_quotes",
-                    label: "Offer out · not enrolled",
-                    description:
-                        "Decision stage: a price exists and the opportunity is not yet in a terminal enrolled/lost outcome.",
+                    work_unit_key: "early_inquiries",
+                    label: "New & qualifying",
+                    description: "Intake and fit — before quoting work.",
+                },
+                {
+                    kind: "work_unit_key",
+                    work_unit_key: "quoting",
+                    label: "Quoting",
+                    description: "Active pricing and enrollment offers in progress.",
+                },
+                {
+                    kind: "work_unit_key",
+                    work_unit_key: "priced_followup",
+                    label: "Priced — follow up",
+                    description: "Offers sent; awaiting family decision.",
+                },
+                {
+                    kind: "work_unit_key",
+                    work_unit_key: "needs_attention",
+                    label: "Needs attention",
+                    description: "Stale or blocked inquiries that need an intervention now.",
                 },
             ],
             list_remaining_work_units: false,
         },
         {
-            id: "enrollment_actions_rail",
-            type: "growth_workspace_actions",
-            title: "Enrollment actions",
+            id: "actions_enrollment",
+            type: "actions",
+            title: "What’s next",
+            actions: [
+                { id: "open_pipeline", label: "Open all inquiries queue", variant: "primary", href: "/admin/opportunities" },
+                { id: "manage_work_units", label: "Manage work units", variant: "secondary", href: "/admin/system/work-units" },
+            ],
         },
         {
             id: "context_enrollment",

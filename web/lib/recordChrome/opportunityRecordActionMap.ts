@@ -25,7 +25,7 @@ export function mapOpportunityRecordActionToPatch(eventKey: string): Opportunity
         case "start_quote":
             return { status_key: "needs_a_quote" };
         case "mark_won":
-            return { status_key: "won" };
+            return { status_key: "booked" };
         case "mark_lost":
             return { status_key: "lost", lost_reason: "Marked lost (workspace)" };
         default:

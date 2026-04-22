@@ -72,7 +72,8 @@ function OpportunityQueueInlinePreview({
                         ? `$${Number(row.quote_total).toFixed(2)}`
                         : null;
                 const stageTitle = (row as { _lifecycle_stage_title?: string | null })._lifecycle_stage_title?.trim();
-                const sub = [row._customer_name?.trim(), stageTitle ?? row.status_key?.trim(), price]
+                const reason = (row as { _attention_reason_label?: string | null })._attention_reason_label?.trim();
+                const sub = [row._customer_name?.trim(), stageTitle ?? row.status_key?.trim(), price, reason]
                     .filter(Boolean)
                     .join(" · ");
                 return (
@@ -251,21 +252,49 @@ export function QueueBlock({
                                 ? "Work unit is configured; dedicated queue route ships with the interpreter."
                                 : "Work unit row not found for this key in the current department.");
                         const oq = opportunityQueueLookup(runtime, entry.work_unit_key);
+                        const opportunityWorkUnitHref = wu && oq ? `${base}/work-unit/${encodeURIComponent(wu.id)}` : null;
                         return (
                             <li key={`wk-${entry.work_unit_key}-${i}`} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
-                                <div className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-standard opacity-90">
-                                    <div className="adminv2-ws-wu-queue-card-compact-text">
-                                        <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">
-                                            {title}
+                                {opportunityWorkUnitHref ? (
+                                    <Link
+                                        href={opportunityWorkUnitHref}
+                                        className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-standard flex flex-col items-stretch no-underline text-inherit hover:opacity-[0.98]"
+                                        data-ws-wu-urgency="standard"
+                                    >
+                                        <div className="adminv2-ws-wu-queue-card-compact-text">
+                                            <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">
+                                                {title}
+                                            </div>
+                                            <div className="adminv2-ws-wu-queue-card-sub adminv2-ws-wu-queue-card-sub--compact">
+                                                {desc}
+                                            </div>
+                                            <OpportunityQueueInlinePreview oq={oq!} runtime={runtime} workUnitKey={entry.work_unit_key} />
                                         </div>
-                                        <div className="adminv2-ws-wu-queue-card-sub adminv2-ws-wu-queue-card-sub--compact">
-                                            {desc}
+                                        <div className="adminv2-ws-wu-queue-card-compact-aside">
+                                            <span className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open">
+                                                Open queue
+                                            </span>
                                         </div>
-                                        {oq ? (
-                                            <OpportunityQueueInlinePreview oq={oq} runtime={runtime} workUnitKey={entry.work_unit_key} />
-                                        ) : null}
+                                    </Link>
+                                ) : (
+                                    <div className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-standard opacity-90">
+                                        <div className="adminv2-ws-wu-queue-card-compact-text">
+                                            <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">
+                                                {title}
+                                            </div>
+                                            <div className="adminv2-ws-wu-queue-card-sub adminv2-ws-wu-queue-card-sub--compact">
+                                                {desc}
+                                            </div>
+                                            {oq ? (
+                                                <OpportunityQueueInlinePreview
+                                                    oq={oq!}
+                                                    runtime={runtime}
+                                                    workUnitKey={entry.work_unit_key}
+                                                />
+                                            ) : null}
+                                        </div>
                                     </div>
-                                </div>
+                                )}
                             </li>
                         );
                     })}
