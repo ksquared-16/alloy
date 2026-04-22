@@ -9,6 +9,23 @@ function formatUsd(n: number): string {
     }).format(n);
 }
 
+function parseIsoMs(ts: string | null | undefined): number | null {
+    if (!ts) return null;
+    const ms = Date.parse(ts);
+    return Number.isFinite(ms) ? ms : null;
+}
+
+function formatAgeCompact(ms: number): string {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    const m = Math.floor(s / 60);
+    const h = Math.floor(m / 60);
+    const d = Math.floor(h / 24);
+    if (d > 0) return `${d}d`;
+    if (h > 0) return `${h}h`;
+    if (m > 0) return `${m}m`;
+    return `${s}s`;
+}
+
 function opportunityQuickActionsForLane(workUnitKey: string): QueueItemVm["quickActions"] {
     const k = workUnitKey.trim().toLowerCase();
     if (k === "needs_attention") {
@@ -52,11 +69,10 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
     const rawItems: QueueItemVm[] = input.oq.items.map((row) => {
         const customer = (row._customer_name ?? "").trim();
         const titleBase = (row.name ?? "").trim();
-        const title = titleBase || (customer ? customer : "Inquiry");
-        const stage = row._lifecycle_stage_title?.trim() || "Pipeline";
+        const title = customer || titleBase || row.id.slice(-8);
+        const stage = row._lifecycle_stage_title?.trim() || "";
         const status = (row.status_key ?? "").trim();
         const statusLabel = (row._status_display ?? "").trim() || status;
-        const subtitle = [statusLabel || null, stage || null].filter(Boolean).join(" · ") || undefined;
         const value =
             row.quote_total != null && Number.isFinite(Number(row.quote_total)) && Number(row.quote_total) > 0
                 ? formatUsd(Number(row.quote_total))
@@ -64,6 +80,13 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
 
         const reasonLabel = (row as { _attention_reason_label?: string | null })._attention_reason_label?.trim() || null;
         const reason = (row as { _attention_reason?: string | null })._attention_reason?.trim() || null;
+
+        const nextStep = row._lifecycle_next_step?.title?.trim() || "";
+        const lastTouchedMs =
+            parseIsoMs((row as { updated_at?: string | null }).updated_at) ??
+            parseIsoMs((row as { created_at?: string | null }).created_at);
+        const lastActivityLabel =
+            lastTouchedMs != null ? `${formatAgeCompact(Date.now() - lastTouchedMs)} ago` : "";
 
         const quickActions =
             input.workUnitKey.trim().toLowerCase() === "needs_attention" && reason
@@ -94,53 +117,69 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
         const item: QueueItemVm = {
             id: row.id,
             title,
-            subtitle,
             valueLabel: value,
             metaLines: [
                 ...(statusLabel ? [{ label: "Status", value: statusLabel }] : []),
-                ...(stage ? [{ label: "Lifecycle", value: stage }] : []),
+                ...(nextStep ? [{ label: "Next step", value: nextStep }] : []),
                 ...(reasonLabel ? [{ label: "Reason", value: reasonLabel }] : []),
+                ...(lastActivityLabel ? [{ label: "Last activity", value: lastActivityLabel }] : []),
             ],
             quickActions,
             urgencyTier: input.workUnitKey.trim().toLowerCase() === "priced_followup" ? "warning" : "standard",
         };
-        if (isAllInquiries && statusLabel) {
+        if (statusLabel) {
             item.groupKey = status;
             item.groupLabel = statusLabel;
         }
         return item;
     });
 
-    const items = isAllInquiries
-        ? rawItems
-              .slice()
-              .sort((a, b) => {
-                  const ak = (a.groupLabel ?? "").toLowerCase();
-                  const bk = (b.groupLabel ?? "").toLowerCase();
-                  if (ak !== bk) return ak.localeCompare(bk);
-                  return a.title.toLowerCase().localeCompare(b.title.toLowerCase());
-              })
-        : rawItems;
+    // Locked contract: group execution rows by configured business status with readable labels.
+    const items = rawItems
+        .slice()
+        .sort((a, b) => {
+            const ak = (a.groupLabel ?? "").toLowerCase();
+            const bk = (b.groupLabel ?? "").toLowerCase();
+            if (ak !== bk) return ak.localeCompare(bk);
+            return a.title.toLowerCase().localeCompare(b.title.toLowerCase());
+        });
 
     const queue: QueueVm = {
         id: `oq:${input.workUnitId}`,
         title: input.workUnitName,
         countBadge: input.oq.total,
         items,
-        sortCaption: isAllInquiries ? "Grouped by status" : "Newest updates first",
-        workUnitMidlineKeys: { left: "Lifecycle", right: "Status" },
-        workUnitGroupHeaders: isAllInquiries
-            ? Object.fromEntries(
-                  [...new Set(items.map((i) => i.groupKey || i.groupLabel).filter(Boolean) as string[])].map((k) => [
-                      k,
-                      { label: items.find((i) => (i.groupKey || i.groupLabel) === k)?.groupLabel ?? k },
-                  ])
-              )
-            : undefined,
+        sortCaption: "Grouped by status",
+        workUnitMidlineKeys: { left: "Next step", right: "Status" },
+        workUnitGroupHeaders: Object.fromEntries(
+            [...new Set(items.map((i) => i.groupKey || i.groupLabel).filter(Boolean) as string[])].map((k) => [
+                k,
+                { label: items.find((i) => (i.groupKey || i.groupLabel) === k)?.groupLabel ?? k },
+            ])
+        ),
     };
 
     const laneKey = input.workUnitKey;
     const focusLabel = `${input.deptName} · ${input.workUnitName}`;
+
+    // Work-unit KPI strip (contract): count, value, oldest/age, needs action.
+    let valueTotal = 0;
+    let oldestMs: number | null = null;
+    let needsActionCount = 0;
+    for (const row of input.oq.items) {
+        const q = row.quote_total != null && Number.isFinite(Number(row.quote_total)) ? Number(row.quote_total) : 0;
+        if (q > 0) valueTotal += q;
+        const touched =
+            parseIsoMs((row as { updated_at?: string | null }).updated_at) ??
+            parseIsoMs((row as { created_at?: string | null }).created_at);
+        if (touched != null) oldestMs = oldestMs == null ? touched : Math.min(oldestMs, touched);
+        const hasNext = Boolean(row._lifecycle_next_step?.title?.trim());
+        if (!hasNext) needsActionCount += 1;
+    }
+    if (workUnitKeyLower === "needs_attention") {
+        needsActionCount = input.oq.total;
+    }
+    const oldestAgeLabel = oldestMs != null ? `${formatAgeCompact(Date.now() - oldestMs)} ago` : "—";
 
     return {
         workspaceLevel: "work_unit",
@@ -150,10 +189,25 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
         laneKey,
         aiSummary: {
             headline: input.workUnitName.trim() || "Queue",
-            aiAwarenessLine: isAllInquiries ? "Grouped by configured status labels." : "Queue rows reflect configured statuses + lifecycle.",
+            aiAwarenessLine: "Grouped by configured status labels.",
         },
         signals: [],
-        kpis: [],
+        kpis: [
+            { id: "wu_count", label: "In queue", value: String(Math.max(0, input.oq.total ?? 0)), lane: "business" },
+            {
+                id: "wu_value",
+                label: "Queue value",
+                value: valueTotal > 0 ? formatUsd(valueTotal) : "—",
+                lane: "business",
+            },
+            { id: "wu_oldest", label: "Oldest in queue", value: oldestAgeLabel, lane: "business" },
+            {
+                id: "wu_needs_action",
+                label: "Needs action (queue)",
+                value: String(Math.max(0, needsActionCount)),
+                lane: "business",
+            },
+        ],
         laneInterpretation: {
             laneStatusLine: `${input.oq.total} in this queue`,
             recommendedActionLine:

@@ -6,6 +6,7 @@ import { buildOpportunityLifecycleFields } from "@/lib/admin/opportunityLifecycl
 import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import { getQueueDefinitionStoredVersion } from "@/lib/rrs/queue/queueDefinitionV1";
 import { resolveOpportunityQueueFromDefinition } from "@/lib/rrs/queue/resolveOpportunityQueue";
+import { isOpportunityActiveForExecution, terminalOpportunityStatusKeysFromDefs } from "@/lib/workspace/opportunityExecutionEligibility";
 
 /**
  * GET — Execute `work_units.queue_definition` for opportunity queues (Growth).
@@ -41,7 +42,15 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         return NextResponse.json({ error: resolved.error, code: resolved.code }, { status });
     }
 
-    const customerIds = [...new Set(resolved.items.map((r) => r.customer_id).filter(Boolean))] as string[];
+    const oppDefs = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "opportunities", { activeOnly: true });
+    const terminalStatusKeys = terminalOpportunityStatusKeysFromDefs(oppDefs);
+
+    // Locked UI contract: active pipeline execution queues exclude terminal records (success/failure).
+    const filtered = resolved.items.filter((r) =>
+        isOpportunityActiveForExecution({ statusKey: r.status_key, terminalStatusKeys })
+    );
+
+    const customerIds = [...new Set(filtered.map((r) => r.customer_id).filter(Boolean))] as string[];
     const customerNameById = new Map<string, string | null>();
     if (customerIds.length) {
         const { data: custs } = await supabase
@@ -55,7 +64,6 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         }
     }
 
-    const oppDefs = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "opportunities", { activeOnly: true });
     const statusLabelByKey = new Map<string, string>();
     for (const d of oppDefs) {
         const k = String(d.status_key ?? "").trim();
@@ -63,7 +71,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         const label = String(d.status_label ?? "").trim();
         statusLabelByKey.set(k, label || k);
     }
-    const items = resolved.items.map((row) => {
+    const items = filtered.map((row) => {
         const quoteNum =
             row.quote_total != null && !Number.isNaN(Number(row.quote_total)) && Number(row.quote_total) > 0
                 ? Number(row.quote_total)
@@ -87,7 +95,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         work_unit_id: workUnitId,
         work_unit_key: (wu as { key?: string }).key ?? null,
         queue_definition_version: getQueueDefinitionStoredVersion(qd),
-        total: resolved.total,
+        total: items.length,
         items,
     });
 }

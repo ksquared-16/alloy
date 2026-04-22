@@ -8,51 +8,12 @@ import {
     type WorkspaceRootDeptTileStats,
 } from "@/components/admin/workspace/WorkspaceRootDepartmentGrid";
 
-async function loadWorkspaceRollup(params: { hasOperations: boolean }): Promise<{
+async function loadWorkspaceRollup(): Promise<{
     metrics: WorkspaceRootMetrics;
     deptTileStats: WorkspaceRootDeptTileStats;
 }> {
-    // Workspace root should not assume Operations/jobs exist for every tenant.
-    // Only fetch job/schedule metrics when the org has an Operations department.
     const workUnitsRes = await fetch("/api/admin/work-units");
     const wuJson = (await workUnitsRes.json().catch(() => ({}))) as { items?: { department_id?: string }[]; error?: string };
-
-    let unassignedJobs: number | null = null;
-    let activeJobs: number | null = null;
-    let visitsToday: number | null = null;
-    let unpaidJobsSample: WorkspaceRootMetrics["unpaidJobsSample"] = null;
-
-    if (params.hasOperations) {
-        const [unassignedRes, activeJobsRes, jobsScheduledTodayRes, jobsSampleRes] = await Promise.all([
-            fetch("/api/admin/jobs?assigned_vendor_unassigned=true&limit=1"),
-            fetch("/api/admin/jobs?limit=1"),
-            fetch("/api/admin/schedules?scheduled_on=today&limit=1"),
-            fetch("/api/admin/jobs?limit=200"),
-        ]);
-
-        const unassignedJson = (await unassignedRes.json().catch(() => ({}))) as { total?: number };
-        const activeJson = (await activeJobsRes.json().catch(() => ({}))) as { total?: number };
-        const schedJson = (await jobsScheduledTodayRes.json().catch(() => ({}))) as { total?: number };
-        const jobsSampleJson = (await jobsSampleRes.json().catch(() => ({}))) as {
-            jobs?: { receivable_outstanding_cents?: number | null }[];
-            total?: number;
-        };
-
-        unassignedJobs = unassignedRes.ok ? (typeof unassignedJson.total === "number" ? unassignedJson.total : null) : null;
-        activeJobs = activeJobsRes.ok ? (typeof activeJson.total === "number" ? activeJson.total : null) : null;
-        visitsToday = jobsScheduledTodayRes.ok ? (typeof schedJson.total === "number" ? schedJson.total : null) : null;
-
-        if (jobsSampleRes.ok && Array.isArray(jobsSampleJson.jobs)) {
-            const jobs = jobsSampleJson.jobs;
-            let c = 0;
-            for (const j of jobs) {
-                const o = j.receivable_outstanding_cents;
-                if (typeof o === "number" && o > 0) c += 1;
-            }
-            const capped = jobs.length >= 200;
-            unpaidJobsSample = { count: c, capped };
-        }
-    }
 
     const deptTileStats: WorkspaceRootDeptTileStats = {};
     if (workUnitsRes.ok && Array.isArray(wuJson.items)) {
@@ -65,12 +26,8 @@ async function loadWorkspaceRollup(params: { hasOperations: boolean }): Promise<
     }
 
     const metrics: WorkspaceRootMetrics = {
-        unassignedJobs,
-        activeJobs,
-        visitsToday,
         departments: null,
         workUnits: workUnitsRes.ok && Array.isArray(wuJson.items) ? wuJson.items.length : null,
-        unpaidJobsSample,
     };
 
     return { metrics, deptTileStats };
@@ -120,8 +77,7 @@ export default function AdminV2WorkspaceIndexPage() {
         (async () => {
             setMetricsLoading(true);
             try {
-                const hasOperations = departments.some((d) => (d.key ?? "").trim().toLowerCase() === "operations");
-                const { metrics: m, deptTileStats: stats } = await loadWorkspaceRollup({ hasOperations });
+                const { metrics: m, deptTileStats: stats } = await loadWorkspaceRollup();
                 if (!cancelled) {
                     setMetrics(m);
                     setDeptTileStats(stats);

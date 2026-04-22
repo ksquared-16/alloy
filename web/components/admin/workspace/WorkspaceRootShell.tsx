@@ -1,15 +1,12 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { useCallback, useMemo } from "react";
-import Link from "next/link";
+import { useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
 import "@/app/adminV2/components/workspace/workspace.css";
 import KPIBlock from "@/app/adminV2/components/workspace/blocks/KPIBlock";
-import ActionsBlock from "@/app/adminV2/components/workspace/blocks/ActionsBlock";
 import type { ActionsVm, KPIVm } from "@/lib/ui-v2/workspace-types";
-import type { WorkspaceAction } from "@/lib/ui-v2/workspace-actions";
 import {
   WorkspaceRootDepartmentGrid,
   type WorkspaceRootDepartmentRow,
@@ -48,12 +45,8 @@ const companyRootStyle: CSSProperties = {
 };
 
 export type WorkspaceRootMetrics = {
-  unassignedJobs: number | null;
-  activeJobs: number | null;
-  visitsToday: number | null;
   departments: number | null;
   workUnits: number | null;
-  unpaidJobsSample: { count: number; capped: boolean } | null;
 };
 
 type Props = {
@@ -74,8 +67,6 @@ function buildKpis(params: {
   metricsLoading: boolean;
 }): KPIVm[] {
   const { metrics } = params;
-  // Workspace root is tenant-agnostic; do not surface job/ops KPIs here.
-  // Department pages own their operational KPIs/queues.
   return [
     { id: "depts", label: "Departments", value: formatInt(metrics?.departments), lane: "business" },
     { id: "wu", label: "Work units", value: formatInt(metrics?.workUnits), lane: "business" },
@@ -88,45 +79,6 @@ function buildKpis(params: {
 export function WorkspaceRootShell({ orgName, departments, deptTileStats, metrics, metricsLoading }: Props) {
   const router = useRouter();
   const displayName = (orgName && orgName.trim()) || "Your organization";
-
-  const operationsDeptId = useMemo(() => departments.find((d) => d.key === "operations")?.id ?? "", [departments]);
-  const hasOperations = Boolean(operationsDeptId);
-
-  const actionsModel: ActionsVm = useMemo(() => {
-    const ops: ActionsVm["systemActions"] = [];
-    return {
-      primaries: [],
-      systemActions: ops,
-      quickOperations: [
-        { id: "work-units", label: "Work units (system)" },
-        { id: "departments-admin", label: "Departments (system)" },
-      ],
-      systemStatusLines: [
-        "Open a department to work real queues and records.",
-      ],
-    };
-  }, [operationsDeptId]);
-
-  const onAction = useCallback(
-    (a: WorkspaceAction) => {
-      if (a.type === "navigate" && a.href) {
-        router.push(a.href);
-        return;
-      }
-      if (a.type !== "actions.block") return;
-      switch (a.actionId) {
-        case "work-units":
-          router.push("/admin/system/work-units");
-          break;
-        case "departments-admin":
-          router.push("/admin/system/departments");
-          break;
-        default:
-          break;
-      }
-    },
-    [operationsDeptId, router]
-  );
 
   const kpis = useMemo(
     () => buildKpis({ metrics, metricsLoading }),
@@ -155,8 +107,7 @@ export function WorkspaceRootShell({ orgName, departments, deptTileStats, metric
                     <h2 className="adminv2-ws-dept-v2-brief-headline">{displayName}</h2>
                   </div>
                   <p className="text-sm mt-2 max-w-3xl" style={{ color: derived.textSecondary, lineHeight: 1.45 }}>
-                    Pick a department to work real queues and records. This home view stays tenant-agnostic and avoids
-                    legacy operations language when your org doesn’t use field-ops workflows.
+                    Pick a department to drill into work units. This root surface stays structure-only.
                   </p>
                 </div>
               </div>
@@ -165,7 +116,7 @@ export function WorkspaceRootShell({ orgName, departments, deptTileStats, metric
                 surface="company"
                 dualRailHeadings={{
                   business: "Workspace structure",
-                  secondary: "System",
+                  secondary: "",
                 }}
               />
             </div>
@@ -191,29 +142,7 @@ export function WorkspaceRootShell({ orgName, departments, deptTileStats, metric
             </section>
           </div>
 
-          <div className="adminv2-ws-dept-v2-command-column" data-adminv2-workspace-command-column>
-            <aside
-              className="adminv2-ws-dept-v2-rail adminv2-ws-dept-v2-rail--command-shell"
-              data-adminv2-workspace-command-rail
-              aria-label="Workspace shortcuts"
-            >
-              <ActionsBlock model={actionsModel} onAction={onAction} title="Quick links" surface="company" />
-              <div className="adminv2-ws-actions-rail-subdivider" aria-hidden />
-              <section className="adminv2-ws-actions-rail adminv2-ws-actions-rail--dept-panel px-3 pb-3 pt-0">
-                <h3 className="adminv2-ws-actions-rail-title">Context</h3>
-                <p className="text-xs leading-relaxed" style={{ color: derived.textSecondary }}>
-                  This surface is scoped to your signed-in org. Department pages hold the operational lanes; system lists
-                  remain available in classic admin as needed.
-                </p>
-                <p className="text-xs mt-3">
-                  <Link href="/adminV2/workspace/drawer-probe" className="font-medium hover:underline" style={{ color: brand.primary }}>
-                    Drawer probe
-                  </Link>
-                  <span style={{ color: derived.textSecondary }}> — smoke-test entity drawer from workspace.</span>
-                </p>
-              </section>
-            </aside>
-          </div>
+          <div className="adminv2-ws-dept-v2-command-column" data-adminv2-workspace-command-column aria-hidden />
         </div>
       </div>
     </div>

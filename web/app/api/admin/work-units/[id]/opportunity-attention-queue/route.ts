@@ -11,6 +11,10 @@ import {
     parseOpportunityAttentionRuleConfigV1FromMetadata,
     type OpportunityAttentionInputRow,
 } from "@/lib/workspace/opportunityAttentionRules";
+import {
+    isOpportunityActiveForExecution,
+    terminalOpportunityStatusKeysFromDefs,
+} from "@/lib/workspace/opportunityExecutionEligibility";
 
 const MAX_ROWS = 500;
 
@@ -54,6 +58,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1;
 
     const oppDefs = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "opportunities", { activeOnly: true });
+    const terminalStatusKeys = terminalOpportunityStatusKeysFromDefs(oppDefs);
     const statusLabelByKey = new Map<string, string>();
     for (const d of oppDefs) {
         const k = String(d.status_key ?? "").trim();
@@ -78,6 +83,9 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
 
     const withReason = candidates
         .map((row) => {
+            if (!isOpportunityActiveForExecution({ statusKey: row.status_key, terminalStatusKeys })) {
+                return { row, reason: null as const };
+            }
             const reason = computeOpportunityAttentionReason({ row, defs: oppDefs, rules, nowMs });
             return { row, reason };
         })

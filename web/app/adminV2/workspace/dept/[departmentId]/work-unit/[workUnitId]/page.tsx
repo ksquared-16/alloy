@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import WorkUnitWorkspace from "@/app/adminV2/components/workspace/shells/WorkUnitWorkspace";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
@@ -25,6 +26,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const params = useParams();
     const departmentId = typeof params.departmentId === "string" ? params.departmentId : "";
     const workUnitId = typeof params.workUnitId === "string" ? params.workUnitId : "";
+    const searchParams = useSearchParams();
     const { openDrawer, drawer } = useAdminDrawer();
 
     const [loading, setLoading] = useState(true);
@@ -91,6 +93,33 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
     const model = useMemo(() => {
         if (!workUnit || !dept || !oq) return null;
+        const rawItems = oq.items ?? [];
+        const statusKeysRaw = (searchParams?.get("status_keys") ?? "").trim();
+        const statusKeys = statusKeysRaw
+            ? statusKeysRaw
+                  .split(",")
+                  .map((s) => s.trim().toLowerCase())
+                  .filter(Boolean)
+            : [];
+        const attentionReason = (searchParams?.get("attention_reason") ?? "").trim();
+
+        const filteredItems = rawItems.filter((it) => {
+            if (statusKeys.length) {
+                const sk = String(it.status_key ?? "").trim().toLowerCase();
+                if (!statusKeys.includes(sk)) return false;
+            }
+            if (attentionReason) {
+                const rl = String((it as { _attention_reason_label?: string | null })._attention_reason_label ?? "").trim();
+                if (rl !== attentionReason) return false;
+            }
+            return true;
+        });
+
+        const oqFiltered: WorkspaceOpportunityQueueRuntime = {
+            total: filteredItems.length,
+            error: oq.error,
+            items: filteredItems,
+        };
         return buildRealOpportunityWorkUnitWorkspaceModel({
             workUnitId: workUnit.id,
             workUnitKey: workUnit.key ?? "work_unit",
@@ -98,9 +127,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
             departmentId,
             deptName: dept.name ?? "Department",
             departmentKey: dept.key,
-            oq,
+            oq: oqFiltered,
         });
-    }, [departmentId, dept, oq, workUnit]);
+    }, [departmentId, dept, oq, searchParams, workUnit]);
 
     const onAction = useCallback(
         async (action: WorkspaceAction) => {

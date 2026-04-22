@@ -70,7 +70,7 @@ export function WorkspaceRootDepartmentGrid({
                             );
                             const desc =
                                 (d.description && String(d.description).trim()) ||
-                                `Signals, throughput lanes, and work units for ${d.name}.`;
+                        `Departments and work units for ${d.name}.`;
                             const wu = deptTileStats?.[d.id]?.workUnitCount;
                             const statsLine =
                                 wu != null && wu >= 0 ? `${wu} work unit${wu === 1 ? "" : "s"}` : null;
@@ -99,7 +99,7 @@ export function WorkspaceRootDepartmentGrid({
                                             </p>
                                         ) : null}
                                         <p className="text-[11px] font-medium leading-snug" style={{ color: derived.textSecondary }}>
-                                            Queues · attention · command rail
+                                            Open department
                                         </p>
                                     </div>
                                 </Link>
