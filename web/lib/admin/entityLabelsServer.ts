@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { resolveEntityLabelsForOrg } from "@/lib/admin/entityLabelsResolve";
+import { fetchPrimaryAdminOpsMembershipForUser } from "@/lib/admin/primaryAdminOpsOrg";
 
 /** Same shape as EntityLabelsContext labels map (kept here so server code never imports the client context file). */
 export type EntityLabelsBootstrapMap = Record<string, { singular: string | null; plural: string | null }>;
@@ -16,14 +17,8 @@ export function entityLabelsMapFromEffective(
 
 export async function getAdminOrgIdForUser(userId: string): Promise<string | null> {
     const supabase = createAdminClient();
-    const { data: ur } = await supabase
-        .from("user_roles")
-        .select("org_id")
-        .eq("user_id", userId)
-        .limit(1)
-        .maybeSingle();
-    const fromRoles = (ur as { org_id?: string | null } | null)?.org_id ?? null;
-    if (fromRoles) return fromRoles;
+    const membership = await fetchPrimaryAdminOpsMembershipForUser(supabase, userId);
+    if (membership) return membership.orgId;
 
     const { data: au } = await supabase.from("app_users").select("org_id").eq("id", userId).maybeSingle();
     const fromAppUser = (au as { org_id?: string | null } | null)?.org_id ?? null;

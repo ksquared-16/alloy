@@ -162,14 +162,6 @@ export default function AdminV2WorkspaceIndexPage() {
         };
     }, []);
 
-    // DEBUG: remove — temporarily force loading off ~1s after mount.
-    useEffect(() => {
-        const t = window.setTimeout(() => {
-            setLoading(false);
-        }, 1000);
-        return () => window.clearTimeout(t);
-    }, []);
-
     useEffect(() => {
         let cancelled = false;
         if (departments.length === 0) {
