@@ -37,7 +37,8 @@ async function main() {
     });
 
     if (!result.ok) {
-        console.error("Failed:", result.error);
+        const phase = "phase" in result && result.phase ? ` [${result.phase}]` : "";
+        console.error(`Failed${phase}:`, result.error);
         process.exit(1);
     }
 

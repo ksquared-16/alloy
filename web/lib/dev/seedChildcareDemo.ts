@@ -48,10 +48,17 @@ async function findLocationBySeedKey(supabase: SupabaseClient, orgId: string, se
     return data ? (data as { id: string }).id : null;
 }
 
+const MISSING_CHILDCARE_VERTICAL_MSG =
+    "Missing platform vertical: no active row in public.verticals with slug 'childcare' " +
+    "(required for customers.vertical_id and opportunities.vertical_id in this seed). " +
+    "Apply latest Supabase migrations from the repo (e.g. `supabase db push` or `supabase migration up` " +
+    "against your dev database) so the platform childcare vertical is created. " +
+    "If tenant bootstrap already completed for this run, the org exists — only the demo seed step failed.";
+
 export async function seedChildcareDemo(supabase: SupabaseClient, orgId: string): Promise<SeedChildcareDemoResult> {
     const verticalId = await getChildcareVerticalId(supabase);
     if (!verticalId) {
-        return { ok: false, error: "No active vertical with slug 'childcare'. Seed verticals first." };
+        return { ok: false, error: MISSING_CHILDCARE_VERTICAL_MSG };
     }
 
     const classroomKeys = ["classroom_infants", "classroom_toddlers", "classroom_preschool"] as const;

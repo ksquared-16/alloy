@@ -25,7 +25,7 @@ export type SpinChildcareTenantFlowResult =
           bootstrap: { summary: import("@/lib/admin/verticalBootstrap/types").VerticalBootstrapApplySummary };
           seed: Extract<SeedChildcareDemoResult, { ok: true }>;
       }
-    | { ok: false; error: string; org_id?: string };
+    | { ok: false; error: string; org_id?: string; phase?: "org" | "bootstrap" | "seed" };
 
 const DEFAULT_PROMPT = "We run a childcare center";
 
@@ -35,7 +35,7 @@ export async function spinChildcareTenantFlow(
 ): Promise<SpinChildcareTenantFlowResult> {
     const orgRes = await createOrgAndAssignAdmin(supabase, params);
     if (!orgRes.ok) {
-        return { ok: false, error: orgRes.error };
+        return { ok: false, phase: "org", error: orgRes.error };
     }
 
     const { org_id: orgId, slug } = orgRes;
@@ -46,12 +46,18 @@ export async function spinChildcareTenantFlow(
 
     const boot = await applyTenantBootstrap(supabase, orgId, tenant_payload);
     if (!boot.ok) {
-        return { ok: false, error: `tenant_bootstrap: ${boot.error}`, org_id: orgId };
+        return { ok: false, phase: "bootstrap", error: `tenant_bootstrap: ${boot.error}`, org_id: orgId };
     }
 
     const seed = await seedChildcareDemo(supabase, orgId);
     if (!seed.ok) {
-        return { ok: false, error: `seed: ${seed.error}`, org_id: orgId };
+        return {
+            ok: false,
+            phase: "seed",
+            org_id: orgId,
+            error:
+                `seed failed (tenant bootstrap already succeeded for org ${orgId}): ${seed.error}`,
+        };
     }
 
     return {
