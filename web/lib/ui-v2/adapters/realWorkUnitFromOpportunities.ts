@@ -46,13 +46,17 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
     departmentKey?: string | null;
     oq: WorkspaceOpportunityQueueRuntime;
 }): WorkUnitWorkspaceModel {
-    const items: QueueItemVm[] = input.oq.items.map((row) => {
-        const title = (row.name ?? "").trim() || "Family inquiry";
+    const workUnitKeyLower = input.workUnitKey.trim().toLowerCase();
+    const isAllInquiries = workUnitKeyLower === "pipeline_overview";
+
+    const rawItems: QueueItemVm[] = input.oq.items.map((row) => {
+        const customer = (row._customer_name ?? "").trim();
+        const titleBase = (row.name ?? "").trim();
+        const title = titleBase || (customer ? customer : "Inquiry");
         const stage = row._lifecycle_stage_title?.trim() || "Pipeline";
         const status = (row.status_key ?? "").trim();
         const statusLabel = (row._status_display ?? "").trim() || status;
-        const customer = (row._customer_name ?? "").trim();
-        const subtitle = [customer || null, statusLabel || null].filter(Boolean).join(" · ") || undefined;
+        const subtitle = [statusLabel || null, stage || null].filter(Boolean).join(" · ") || undefined;
         const value =
             row.quote_total != null && Number.isFinite(Number(row.quote_total)) && Number(row.quote_total) > 0
                 ? formatUsd(Number(row.quote_total))
@@ -87,28 +91,52 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
                   })()
                 : opportunityQuickActionsForLane(input.workUnitKey);
 
-        return {
+        const item: QueueItemVm = {
             id: row.id,
             title,
             subtitle,
             valueLabel: value,
             metaLines: [
-                { label: "Lifecycle", value: stage },
                 ...(statusLabel ? [{ label: "Status", value: statusLabel }] : []),
+                ...(stage ? [{ label: "Lifecycle", value: stage }] : []),
                 ...(reasonLabel ? [{ label: "Reason", value: reasonLabel }] : []),
             ],
             quickActions,
             urgencyTier: input.workUnitKey.trim().toLowerCase() === "priced_followup" ? "warning" : "standard",
         };
+        if (isAllInquiries && statusLabel) {
+            item.groupKey = status;
+            item.groupLabel = statusLabel;
+        }
+        return item;
     });
+
+    const items = isAllInquiries
+        ? rawItems
+              .slice()
+              .sort((a, b) => {
+                  const ak = (a.groupLabel ?? "").toLowerCase();
+                  const bk = (b.groupLabel ?? "").toLowerCase();
+                  if (ak !== bk) return ak.localeCompare(bk);
+                  return a.title.toLowerCase().localeCompare(b.title.toLowerCase());
+              })
+        : rawItems;
 
     const queue: QueueVm = {
         id: `oq:${input.workUnitId}`,
         title: input.workUnitName,
         countBadge: input.oq.total,
         items,
-        sortCaption: "Newest updates first",
+        sortCaption: isAllInquiries ? "Grouped by status" : "Newest updates first",
         workUnitMidlineKeys: { left: "Lifecycle", right: "Status" },
+        workUnitGroupHeaders: isAllInquiries
+            ? Object.fromEntries(
+                  [...new Set(items.map((i) => i.groupKey || i.groupLabel).filter(Boolean) as string[])].map((k) => [
+                      k,
+                      { label: items.find((i) => (i.groupKey || i.groupLabel) === k)?.groupLabel ?? k },
+                  ])
+              )
+            : undefined,
     };
 
     const laneKey = input.workUnitKey;
@@ -120,6 +148,10 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
         departmentKey: input.departmentKey ?? undefined,
         focusLabel,
         laneKey,
+        aiSummary: {
+            headline: input.workUnitName.trim() || "Queue",
+            aiAwarenessLine: isAllInquiries ? "Grouped by configured status labels." : "Queue rows reflect configured statuses + lifecycle.",
+        },
         signals: [],
         kpis: [],
         laneInterpretation: {
@@ -127,7 +159,9 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
             recommendedActionLine:
                 laneKey.toLowerCase() === "priced_followup"
                     ? "Follow up on offers that have a price and are awaiting a decision."
-                    : "Work the oldest blockers first; use quick actions to move the inquiry forward.",
+                    : isAllInquiries
+                      ? "Work by status group — move families forward with the next clear step."
+                      : "Work the oldest blockers first; use quick actions to move the inquiry forward.",
         },
         primaryQueue: queue,
         actionsRail: {

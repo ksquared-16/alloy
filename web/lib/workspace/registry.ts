@@ -273,44 +273,6 @@ const ENROLLMENT: DepartmentWorkspaceLayout = {
             recordLabel: "Family inquiry",
         },
         {
-            id: "signals_enrollment",
-            type: "signals",
-            title: "Queue snapshot",
-            subtitle: "Work-unit slices — open a queue to work rows; KPIs above are org-wide pipeline totals.",
-            signals: [
-                {
-                    id: "en_all",
-                    eyebrow: "Volume",
-                    label: "All inquiries",
-                    metric: "enrollment.pipeline_overview_count",
-                },
-                {
-                    id: "en_newq",
-                    eyebrow: "Intake · qualification",
-                    label: "New inquiry + contacted",
-                    metric: "enrollment.early_inquiries_count",
-                },
-                {
-                    id: "en_quoting",
-                    eyebrow: "Execution",
-                    label: "Tours in progress",
-                    metric: "enrollment.quoting_count",
-                },
-                {
-                    id: "en_priced",
-                    eyebrow: "Decision",
-                    label: "Ready / waitlist follow-up",
-                    metric: "enrollment.priced_followup_count",
-                },
-                {
-                    id: "en_attention",
-                    eyebrow: "Needs attention",
-                    label: "Intervention needed",
-                    metric: "enrollment.needs_attention_count",
-                },
-            ],
-        },
-        {
             id: "queues_enrollment",
             type: "queue",
             title: "Enrollment queues",

@@ -51,48 +51,44 @@ function LifecyclePipelineKpiBridge({
 
     const isEnrollment = (block.title ?? "").trim().toLowerCase().includes("enrollment");
 
-    const enrollmentStatusOrder = [
-        "new_inquiry",
-        "contacted",
-        "tour_scheduled",
-        "tour_completed",
-        "ready_to_enroll",
-        "waitlisted",
-        "enrolled",
-        "lost",
-    ];
-
     const breakdownByKey = new Map((statusBreakdown ?? []).map((s) => [s.status_key, s] as const));
 
-    const statusCells: { label: string; value: number }[] = isEnrollment
-        ? enrollmentStatusOrder
-              .map((k) => breakdownByKey.get(k))
-              .filter(Boolean)
-              .map((s) => ({ label: (s!.status_label || s!.status_key).trim(), value: s!.count }))
+    const enrollmentBuckets: { id: string; label: string; keys: string[] }[] = [
+        { id: "new_contacted", label: "New / contacted", keys: ["new_inquiry", "contacted"] },
+        { id: "tours", label: "Tours in progress", keys: ["tour_scheduled", "tour_completed"] },
+        { id: "ready_waitlist", label: "Ready / waitlist", keys: ["ready_to_enroll", "waitlisted"] },
+        { id: "enrolled_lost", label: "Enrolled / lost", keys: ["enrolled", "lost"] },
+    ];
+
+    const enrollmentCells: { label: string; value: number }[] = isEnrollment
+        ? enrollmentBuckets.map((b) => {
+              let v = 0;
+              for (const k of b.keys) v += breakdownByKey.get(k)?.count ?? 0;
+              return { label: b.label, value: v };
+          })
         : [];
 
-    const cells: { label: string; value: number; emphasize?: boolean }[] =
-        statusCells.length > 0
-            ? [
-                  {
-                      label: block.recordLabel ? `Total (${block.recordLabel.trim()})` : "Total opportunities",
-                      value: counts.total,
-                      emphasize: true,
-                  },
-                  ...statusCells,
-              ]
-            : [
-                  {
-                      label: block.recordLabel ? `Total (${block.recordLabel.trim()})` : "Total opportunities",
-                      value: counts.total,
-                      emphasize: true,
-                  },
-                  { label: "Intake", value: counts.intake },
-                  { label: "Qualification", value: counts.qualification },
-                  { label: "Execution", value: counts.execution },
-                  { label: "Decision", value: counts.decision },
-                  { label: "Closed", value: counts.success + counts.failure },
-              ];
+    const cells: { label: string; value: number; emphasize?: boolean }[] = isEnrollment
+        ? [
+              {
+                  label: block.recordLabel ? `Total (${block.recordLabel.trim()})` : "Total inquiries",
+                  value: counts.total,
+                  emphasize: true,
+              },
+              ...enrollmentCells,
+          ]
+        : [
+              {
+                  label: block.recordLabel ? `Total (${block.recordLabel.trim()})` : "Total opportunities",
+                  value: counts.total,
+                  emphasize: true,
+              },
+              { label: "Intake", value: counts.intake },
+              { label: "Qualification", value: counts.qualification },
+              { label: "Execution", value: counts.execution },
+              { label: "Decision", value: counts.decision },
+              { label: "Closed", value: counts.success + counts.failure },
+          ];
 
     return (
         <div data-workspace-block="kpi" className="adminv2-ws-dept-v2-kpi-measurement-strip" role="group" aria-label="Pipeline metrics">
@@ -123,16 +119,20 @@ function LifecyclePipelineKpiBridge({
                             <span className="font-medium text-alloy-midnight/80">Open pipeline value: </span>
                             {formatUsd(values.openPipeline)}
                         </span>
-                        <span>
-                            <span className="font-medium text-alloy-midnight/80">Priced in motion: </span>
-                            {formatUsd(values.pricedInMotion)}
-                        </span>
+                        {!isEnrollment ? (
+                            <span>
+                                <span className="font-medium text-alloy-midnight/80">Priced in motion: </span>
+                                {formatUsd(values.pricedInMotion)}
+                            </span>
+                        ) : null}
                     </div>
-                    <div className="mt-1 text-[11px]" style={{ color: "var(--d-muted)" }}>
-                        Intake {counts.intake} · Qualification {counts.qualification} · Execution {counts.execution} · Decision {counts.decision} · Success{" "}
-                        {counts.success} · Failure {counts.failure}
-                        {counts.unclassified > 0 ? ` · Unclassified ${counts.unclassified}` : ""}
-                    </div>
+                    {!isEnrollment ? (
+                        <div className="mt-1 text-[11px]" style={{ color: "var(--d-muted)" }}>
+                            Intake {counts.intake} · Qualification {counts.qualification} · Execution {counts.execution} · Decision {counts.decision} · Success{" "}
+                            {counts.success} · Failure {counts.failure}
+                            {counts.unclassified > 0 ? ` · Unclassified ${counts.unclassified}` : ""}
+                        </div>
+                    ) : null}
                 </div>
             </div>
         </div>
