@@ -36,7 +36,11 @@ export function OpportunityAttentionLaneBlock({
     const groups = oq?.items ? groupAttentionReasons(oq.items as Array<{ _attention_reason_label?: string | null }>) : [];
 
     return (
-        <section data-workspace-block="opportunity_attention_lane" aria-label={title}>
+        <section
+            data-workspace-block="opportunity_attention_lane"
+            aria-label={title}
+            className="adminv2-ws-dept-qsec adminv2-ws-dept-qsec--secondary adminv2-ws-dept-attention-panel"
+        >
             <header className="adminv2-ws-attention-panel-header">
                 <div>
                     <div className="adminv2-ws-attention-panel-kicker">Exception lane</div>

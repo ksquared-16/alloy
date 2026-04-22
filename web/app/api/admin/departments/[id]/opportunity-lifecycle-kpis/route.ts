@@ -33,12 +33,47 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         }
 
         if (scopeWu?.queue_definition) {
-            const resolved = await resolveOpportunityQueueFromDefinition(supabase, ctx.orgId, (scopeWu as { queue_definition?: unknown }).queue_definition);
+            const resolved = await resolveOpportunityQueueFromDefinition(
+                supabase,
+                ctx.orgId,
+                (scopeWu as { queue_definition?: unknown }).queue_definition
+            );
             if (!resolved.ok) {
                 const status = resolved.code === "INVALID_DEFINITION" ? 400 : 500;
                 return NextResponse.json({ error: resolved.error, code: resolved.code }, { status });
             }
-            rows = resolved.items.map((r) => ({ status_key: r.status_key ?? null, quote_total: r.quote_total ?? null }));
+
+            // IMPORTANT: queue interpreter applies a `limit` for list rendering.
+            // KPI counts must reflect the full filtered dataset, not the preview slice.
+            const def = resolved.definition;
+            let q = supabase.from("opportunities").select("status_key, quote_total").eq("org_id", ctx.orgId);
+            const f = def.filters ?? {};
+            if (f.status_keys?.length) q = q.in("status_key", f.status_keys);
+            if (f.pipeline_stage_ids?.length) q = q.in("pipeline_stage_id", f.pipeline_stage_ids);
+            if (f.source_keys?.length) q = q.in("source", f.source_keys);
+            if (f.assigned_to?.length) q = q.in("assigned_to", f.assigned_to);
+            if (f.quote_state === "no_positive_quote") q = q.or("quote_total.is.null,quote_total.lte.0");
+            else if (f.quote_state === "has_positive_quote") q = q.gt("quote_total", 0);
+            else if (f.quote_state === "quoted_not_booked") {
+                q = q.gt("quote_total", 0);
+                q = q.not("status_key", "in", "(\"booked\",\"scheduled\")");
+                // Mirror interpreter behavior: also exclude booked pipeline stage when present.
+                const { data: bookedStages } = await supabase
+                    .from("pipeline_stages")
+                    .select("id")
+                    .eq("org_id", ctx.orgId)
+                    .eq("key", "booked");
+                const bookedIds = (bookedStages ?? []).map((r) => (r as { id: string }).id).filter(Boolean);
+                if (bookedIds.length) {
+                    q = q.or(`pipeline_stage_id.is.null,pipeline_stage_id.not.in.("${bookedIds.join('","')}")`);
+                }
+            }
+
+            const { data: allRows, error: allErr } = await q.limit(5000);
+            if (allErr) {
+                return NextResponse.json({ error: allErr.message || "Failed to load KPI scoped opportunities" }, { status: 500 });
+            }
+            rows = (allRows ?? []) as Array<{ status_key: string | null; quote_total: number | string | null }>;
         } else {
             // Fallback: org-wide opportunities (still useful as a visibility layer).
             const { data, error } = await supabase

@@ -239,7 +239,7 @@ export function WorkspaceRootShell({ orgName, departments, deptTileStats, metric
                   </div>
                   <p className="text-sm mt-2 max-w-3xl" style={{ color: derived.textSecondary, lineHeight: 1.45 }}>
                     Pick a department to work real queues and records. This home view stays tenant-agnostic and avoids
-                    legacy operations language when your org doesn’t use jobs.
+                    legacy operations language when your org doesn’t use field-ops workflows.
                   </p>
                 </div>
               </div>

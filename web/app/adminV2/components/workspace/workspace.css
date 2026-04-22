@@ -704,7 +704,8 @@
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-kpi-strip--dept-embedded,
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-kpi-strip--dept-embedded {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* Responsive: wrap KPI cells instead of overflowing/cutting off */
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 12px;
   align-items: stretch;
   padding: 0;
