@@ -6,6 +6,7 @@ import type {
     WorkspaceContextBlock,
     WorkspaceGrowthWorkspaceActionsBlock,
     WorkspaceKpiBlock,
+    WorkspaceOpportunityAttentionLaneBlock,
     WorkspaceQueueBlock,
     WorkspaceSignalsBlock,
 } from "./types";
@@ -20,6 +21,7 @@ export function partitionDepartmentBlocks(blocks: WorkspaceBlock[]) {
     const growthWorkspaceActions: WorkspaceGrowthWorkspaceActionsBlock[] = [];
     const contexts: WorkspaceContextBlock[] = [];
     const configSnapshots: WorkspaceConfigSnapshotBlock[] = [];
+    const opportunityAttentionLanes: WorkspaceOpportunityAttentionLaneBlock[] = [];
 
     for (const b of blocks) {
         switch (b.type) {
@@ -47,10 +49,23 @@ export function partitionDepartmentBlocks(blocks: WorkspaceBlock[]) {
             case "config_snapshot":
                 configSnapshots.push(b);
                 break;
+            case "opportunity_attention_lane":
+                opportunityAttentionLanes.push(b);
+                break;
             default:
                 break;
         }
     }
 
-    return { signals, queues, attentions, kpis, actions, growthWorkspaceActions, contexts, configSnapshots };
+    return {
+        signals,
+        queues,
+        attentions,
+        opportunityAttentionLanes,
+        kpis,
+        actions,
+        growthWorkspaceActions,
+        contexts,
+        configSnapshots,
+    };
 }

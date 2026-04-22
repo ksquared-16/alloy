@@ -98,6 +98,20 @@ function OpportunityQueueInlinePreview({
     );
 }
 
+function opportunityQueueRollup(oq: WorkspaceOpportunityQueueRuntime): { count: number; pricedCount: number; pricedTotal: number } {
+    const count = oq.total ?? oq.items.length;
+    let pricedCount = 0;
+    let pricedTotal = 0;
+    for (const row of oq.items ?? []) {
+        const q = row.quote_total != null && !Number.isNaN(Number(row.quote_total)) ? Number(row.quote_total) : 0;
+        if (q > 0) {
+            pricedCount++;
+            pricedTotal += q;
+        }
+    }
+    return { count, pricedCount, pricedTotal };
+}
+
 function workUnitKeysSupersededByDepartmentRoutes(block: WorkspaceQueueBlock): Set<string> {
     const out = new Set<string>();
     for (const e of block.entries) {
@@ -237,7 +251,16 @@ export function QueueBlock({
                                             <div className="adminv2-ws-wu-queue-card-sub adminv2-ws-wu-queue-card-sub--compact">
                                                 {desc}
                                             </div>
-                                            <OpportunityQueueInlinePreview oq={oq!} runtime={runtime} workUnitKey={entry.work_unit_key} />
+                                            {oq ? (
+                                                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] tabular-nums" style={{ color: "var(--d-muted)" }}>
+                                                    <span>
+                                                        <span className="font-medium text-alloy-midnight/75">Count:</span> {opportunityQueueRollup(oq).count}
+                                                    </span>
+                                                    <span>
+                                                        <span className="font-medium text-alloy-midnight/75">Priced:</span> {opportunityQueueRollup(oq).pricedCount}
+                                                    </span>
+                                                </div>
+                                            ) : null}
                                         </div>
                                         <div className="adminv2-ws-wu-queue-card-compact-aside">
                                             <span className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open">
@@ -255,11 +278,14 @@ export function QueueBlock({
                                                 {desc}
                                             </div>
                                             {oq ? (
-                                                <OpportunityQueueInlinePreview
-                                                    oq={oq!}
-                                                    runtime={runtime}
-                                                    workUnitKey={entry.work_unit_key}
-                                                />
+                                                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] tabular-nums" style={{ color: "var(--d-muted)" }}>
+                                                    <span>
+                                                        <span className="font-medium text-alloy-midnight/75">Count:</span> {opportunityQueueRollup(oq).count}
+                                                    </span>
+                                                    <span>
+                                                        <span className="font-medium text-alloy-midnight/75">Priced:</span> {opportunityQueueRollup(oq).pricedCount}
+                                                    </span>
+                                                </div>
                                             ) : null}
                                         </div>
                                     </div>

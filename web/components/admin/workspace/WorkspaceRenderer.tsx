@@ -8,6 +8,7 @@ import { GrowthWorkspaceActions } from "./blocks/GrowthWorkspaceActions";
 import { AttentionBlock } from "./blocks/AttentionBlock";
 import { ContextBlock } from "./blocks/ContextBlock";
 import { ConfigSnapshotBlock } from "./blocks/ConfigSnapshotBlock";
+import { OpportunityAttentionLaneBlock } from "./blocks/OpportunityAttentionLaneBlock";
 import { KpiBlock } from "./blocks/KpiBlock";
 import { QueueBlock } from "./blocks/QueueBlock";
 import { SignalsBlock } from "./blocks/SignalsBlock";
@@ -83,7 +84,7 @@ export function WorkspaceRenderer({
             );
 
         const attentionSlot =
-            parts.attentions.length > 0 ? (
+            parts.attentions.length > 0 || parts.opportunityAttentionLanes.length > 0 ? (
                 <>
                     {parts.attentions.map((b) => (
                         <AttentionBlock
@@ -93,6 +94,16 @@ export function WorkspaceRenderer({
                             departmentId={departmentId}
                             workspaceBasePath={workspaceBasePath}
                             presentation="bridge"
+                        />
+                    ))}
+                    {parts.opportunityAttentionLanes.map((b) => (
+                        <OpportunityAttentionLaneBlock
+                            key={b.id}
+                            departmentId={departmentId}
+                            runtime={runtime}
+                            workspaceBasePath={workspaceBasePath}
+                            title={b.title}
+                            subtitle={b.subtitle}
                         />
                     ))}
                 </>
@@ -209,6 +220,17 @@ export function WorkspaceRenderer({
                         return <ContextBlock key={block.id} block={block} />;
                     case "config_snapshot":
                         return <ConfigSnapshotBlock key={block.id} block={block} />;
+                    case "opportunity_attention_lane":
+                        return (
+                            <OpportunityAttentionLaneBlock
+                                key={block.id}
+                                departmentId={departmentId}
+                                runtime={runtime}
+                                workspaceBasePath={workspaceBasePath}
+                                title={block.title}
+                                subtitle={block.subtitle}
+                            />
+                        );
                     default:
                         return null;
                 }

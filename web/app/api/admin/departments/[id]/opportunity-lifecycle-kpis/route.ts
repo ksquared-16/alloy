@@ -3,6 +3,7 @@ import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdm
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import { computeOpportunityLifecycleKpis } from "@/lib/workspace/computeOpportunityLifecycleKpis";
+import { resolveOpportunityQueueFromDefinition } from "@/lib/rrs/queue/resolveOpportunityQueue";
 
 export const dynamic = "force-dynamic";
 
@@ -16,15 +17,39 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     try {
         const supabase = createAdminClient();
 
-        const { data: rows, error } = await supabase
-            .from("opportunities")
-            .select("status_key, quote_total")
+        // Department scoping for opportunities is defined by the configured work units, not a fixed column.
+        // Use the department's `pipeline_overview` queue as the canonical scope when present.
+        const { data: scopeWu, error: wuErr } = await supabase
+            .from("work_units")
+            .select("id, queue_definition")
             .eq("org_id", ctx.orgId)
             .eq("department_id", id)
-            .limit(5000);
+            .eq("key", "pipeline_overview")
+            .maybeSingle();
 
-        if (error) {
-            return NextResponse.json({ error: error.message || "Failed to load opportunities" }, { status: 500 });
+        let rows: Array<{ status_key: string | null; quote_total: number | string | null }> = [];
+        if (wuErr) {
+            return NextResponse.json({ error: wuErr.message || "Failed to load KPI scope work unit" }, { status: 500 });
+        }
+
+        if (scopeWu?.queue_definition) {
+            const resolved = await resolveOpportunityQueueFromDefinition(supabase, ctx.orgId, (scopeWu as { queue_definition?: unknown }).queue_definition);
+            if (!resolved.ok) {
+                const status = resolved.code === "INVALID_DEFINITION" ? 400 : 500;
+                return NextResponse.json({ error: resolved.error, code: resolved.code }, { status });
+            }
+            rows = resolved.items.map((r) => ({ status_key: r.status_key ?? null, quote_total: r.quote_total ?? null }));
+        } else {
+            // Fallback: org-wide opportunities (still useful as a visibility layer).
+            const { data, error } = await supabase
+                .from("opportunities")
+                .select("status_key, quote_total")
+                .eq("org_id", ctx.orgId)
+                .limit(5000);
+            if (error) {
+                return NextResponse.json({ error: error.message || "Failed to load opportunities" }, { status: 500 });
+            }
+            rows = data ?? [];
         }
 
         const defs = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "opportunities", { activeOnly: true });

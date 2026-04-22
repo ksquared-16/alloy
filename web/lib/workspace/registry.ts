@@ -318,12 +318,6 @@ const ENROLLMENT: DepartmentWorkspaceLayout = {
             entries: [
                 {
                     kind: "work_unit_key",
-                    work_unit_key: "needs_attention",
-                    label: "Needs attention",
-                    description: "Stale or blocked inquiries that need an intervention now.",
-                },
-                {
-                    kind: "work_unit_key",
                     work_unit_key: "pipeline_overview",
                     label: "All inquiries",
                     description: "Full enrollment pipeline for this department.",
@@ -350,12 +344,20 @@ const ENROLLMENT: DepartmentWorkspaceLayout = {
             list_remaining_work_units: false,
         },
         {
+            id: "enrollment_attention_lane",
+            type: "opportunity_attention_lane",
+            title: "Needs attention",
+            subtitle: "Interventions needed now — grouped by reason from the same rules as the work unit queue.",
+        },
+        {
             id: "actions_enrollment",
             type: "actions",
             title: "What’s next",
             actions: [
-                { id: "open_pipeline", label: "Open all inquiries queue", variant: "primary", href: "/admin/opportunities" },
+                { id: "new_inquiry", label: "New inquiry", variant: "primary", href: "/admin/opportunities" },
+                { id: "open_all", label: "Open all inquiries", href: "/admin/opportunities" },
                 { id: "manage_work_units", label: "Manage work units", variant: "secondary", href: "/admin/system/work-units" },
+                { id: "open_system", label: "System config snapshot", href: "/adminV2/workspace" },
             ],
         },
         {
