@@ -51,11 +51,12 @@ export function DepartmentWorkspaceBridgeShell({
         [departmentDefaultVisualContextKey, departmentKey, visualContextKey]
     );
 
-    const hasBrief = Boolean(briefTitle.trim());
-    const hasSignals = signalsSlot != null;
-    const hasTopStack = hasBrief || hasSignals;
-    const hasKpis = kpiSlot != null;
-    const hasControlDeck = hasTopStack || hasKpis;
+  const hasBrief = Boolean(briefTitle.trim());
+  const hasSignals = signalsSlot != null;
+  const hasKpis = kpiSlot != null;
+  /** KPI strip sits directly under the brief so pipeline volume reads before lane signals. */
+  const hasTopStack = hasBrief || hasKpis || hasSignals;
+  const hasControlDeck = hasTopStack;
     const hasAttentionLane = attentionSlot != null;
 
     return (
@@ -71,31 +72,31 @@ export function DepartmentWorkspaceBridgeShell({
                         {hasControlDeck ? (
                             <div className="adminv2-ws-dept-v2-control-deck">
                                 {hasTopStack ? (
-                                    <div className="adminv2-ws-dept-v2-top-stack">
-                                        {hasBrief ? (
-                                            <div className="adminv2-ws-dept-v2-brief">
-                                                <div className="adminv2-ws-dept-v2-brief-focus-label">Today&apos;s focus</div>
-                                                <div className="adminv2-ws-dept-v2-brief-head-row">
-                                                    <h2 className="adminv2-ws-dept-v2-brief-headline">{briefTitle}</h2>
-                                                </div>
-                                                {briefSubtitle ? (
-                                                    <p
-                                                        style={{
-                                                            margin: "6px 0 0",
-                                                            fontSize: 12,
-                                                            lineHeight: 1.45,
-                                                            color: "var(--d-muted)",
-                                                        }}
-                                                    >
-                                                        {briefSubtitle}
-                                                    </p>
-                                                ) : null}
-                                            </div>
+                                  <div className="adminv2-ws-dept-v2-top-stack">
+                                    {hasBrief ? (
+                                      <div className="adminv2-ws-dept-v2-brief">
+                                        <div className="adminv2-ws-dept-v2-brief-focus-label">Today&apos;s focus</div>
+                                        <div className="adminv2-ws-dept-v2-brief-head-row">
+                                          <h2 className="adminv2-ws-dept-v2-brief-headline">{briefTitle}</h2>
+                                        </div>
+                                        {briefSubtitle ? (
+                                          <p
+                                            style={{
+                                              margin: "6px 0 0",
+                                              fontSize: 12,
+                                              lineHeight: 1.45,
+                                              color: "var(--d-muted)",
+                                            }}
+                                          >
+                                            {briefSubtitle}
+                                          </p>
                                         ) : null}
-                                        {hasSignals ? <div className="adminv2-ws-dept-v2-signals">{signalsSlot}</div> : null}
-                                    </div>
+                                      </div>
+                                    ) : null}
+                                    {hasKpis ? <div data-workspace-zone="kpi-banner">{kpiSlot}</div> : null}
+                                    {hasSignals ? <div className="adminv2-ws-dept-v2-signals">{signalsSlot}</div> : null}
+                                  </div>
                                 ) : null}
-                                {hasKpis ? kpiSlot : null}
                             </div>
                         ) : null}
 

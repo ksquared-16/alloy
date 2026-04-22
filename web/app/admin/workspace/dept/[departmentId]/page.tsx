@@ -15,6 +15,12 @@ export default function WorkspaceDepartmentPage() {
 
     const layout = useMemo(() => getDepartmentWorkspaceLayout(dept?.key ?? null), [dept?.key]);
 
+    const deptKey = (dept?.key ?? "").trim().toLowerCase();
+    const subtitle =
+        deptKey === "enrollment"
+            ? "Enrollment owns the inquiry-to-enrollment path — pipeline KPIs and queues use opportunities and your configured lifecycle, not jobs."
+            : "Live queues and attention for this department — layout comes from the workspace registry.";
+
     return (
         <WorkspaceChrome
             variant="bridge"
@@ -23,7 +29,7 @@ export default function WorkspaceDepartmentPage() {
                 { href: `/admin/workspace/dept/${departmentId}`, label: loading ? "…" : title },
             ]}
             title={loading ? "Loading…" : title}
-            subtitle="Live queues and attention for this department — layout comes from the workspace registry."
+            subtitle={subtitle}
         >
             {error && <p className="text-sm text-amber-800 px-1">{error}</p>}
             {loading || !dept ? (

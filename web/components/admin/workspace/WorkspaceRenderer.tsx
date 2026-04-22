@@ -54,7 +54,7 @@ export function WorkspaceRenderer({
                 <>
                     {parts.kpis.map((b, i) => (
                         <div key={b.id} style={i > 0 ? { marginTop: 8 } : undefined}>
-                            <KpiBlock block={b} presentation="bridge" />
+                            <KpiBlock block={b} runtime={runtime} presentation="bridge" />
                         </div>
                     ))}
                 </>
@@ -179,7 +179,7 @@ export function WorkspaceRenderer({
                             />
                         );
                     case "kpi":
-                        return <KpiBlock key={block.id} block={block} />;
+                        return <KpiBlock key={block.id} block={block} runtime={runtime} />;
                     case "actions":
                         return (
                             <ActionsBlock

@@ -191,6 +191,15 @@ const GROWTH: DepartmentWorkspaceLayout = {
     department_key: "growth",
     blocks: [
         {
+            id: "kpi_growth_pipeline",
+            type: "kpi",
+            state: "opportunity_lifecycle_pipeline",
+            title: "Growth pipeline",
+            subtitle:
+                "Volume and value derive from opportunities, your configured statuses, and lifecycle stages — not jobs or vendor assignment.",
+            recordLabel: "Opportunity",
+        },
+        {
             id: "signals_growth",
             type: "signals",
             title: "Pipeline signals",
@@ -250,9 +259,83 @@ const GROWTH: DepartmentWorkspaceLayout = {
     ],
 };
 
+/** Enrollment (childcare and other verticals) — same pipeline mechanics as Growth, department-local copy. */
+const ENROLLMENT: DepartmentWorkspaceLayout = {
+    department_key: "enrollment",
+    blocks: [
+        {
+            id: "kpi_enrollment_pipeline",
+            type: "kpi",
+            state: "opportunity_lifecycle_pipeline",
+            title: "Enrollment pipeline",
+            subtitle:
+                "Counts and dollars follow your opportunity statuses and lifecycle stages (same logic as queues below). This department owns family inquiries through enrollment decisions — not classroom operations or jobs.",
+            recordLabel: "Family inquiry",
+        },
+        {
+            id: "signals_enrollment",
+            type: "signals",
+            title: "Queue snapshot",
+            subtitle: "Work-unit slices — open a queue to work rows; KPIs above are org-wide pipeline totals.",
+            signals: [
+                {
+                    id: "g_new_leads",
+                    eyebrow: "Intake · execution",
+                    label: "Front of funnel (queue)",
+                    metric: "growth.new_leads_count",
+                },
+                {
+                    id: "g_unbooked",
+                    eyebrow: "Decision",
+                    label: "Priced · open (queue)",
+                    metric: "growth.unbooked_quotes_count",
+                },
+            ],
+        },
+        {
+            id: "queues_enrollment",
+            type: "queue",
+            title: "Enrollment queues",
+            subtitle: "Lifecycle slices from your work units — each list uses the server queue interpreter on opportunities.",
+            entries: [
+                {
+                    kind: "work_unit_key",
+                    work_unit_key: "new_leads",
+                    label: "Front of funnel",
+                    description:
+                        "Intake / qualification / execution before a positive enrollment offer — early pipeline work.",
+                },
+                {
+                    kind: "work_unit_key",
+                    work_unit_key: "unbooked_quotes",
+                    label: "Offer out · not enrolled",
+                    description:
+                        "Decision stage: a price exists and the opportunity is not yet in a terminal enrolled/lost outcome.",
+                },
+            ],
+            list_remaining_work_units: false,
+        },
+        {
+            id: "enrollment_actions_rail",
+            type: "growth_workspace_actions",
+            title: "Enrollment actions",
+        },
+        {
+            id: "context_enrollment",
+            type: "context",
+            title: "About Enrollment",
+            paragraphs: [
+                "This is your primary surface for family demand: inquiries, tours, offers, and enrollment decisions.",
+                "Statuses and lifecycle stages are configurable per org — the KPI strip uses the same effective rules as opportunity records and queues.",
+            ],
+        },
+    ],
+};
+
 const BY_KEY: Record<string, DepartmentWorkspaceLayout> = {
     operations: OPERATIONS,
     growth: GROWTH,
+    enrollment: ENROLLMENT,
 };
 
 export function getDepartmentWorkspaceLayout(departmentKey: string | null | undefined): DepartmentWorkspaceLayout {

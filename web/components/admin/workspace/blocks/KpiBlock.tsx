@@ -1,8 +1,131 @@
 "use client";
 
-import type { WorkspaceKpiBlock } from "@/lib/workspace/types";
+import type { WorkspaceKpiBlock, WorkspaceRuntimeData } from "@/lib/workspace/types";
 
-export function KpiBlock({ block, presentation = "flat" }: { block: WorkspaceKpiBlock; presentation?: "flat" | "bridge" }) {
+function formatUsd(n: number): string {
+    return new Intl.NumberFormat(undefined, {
+        style: "currency",
+        currency: "USD",
+        maximumFractionDigits: n >= 100 ? 0 : 2,
+    }).format(n);
+}
+
+function LifecyclePipelineKpiBridge({
+    block,
+    data,
+}: {
+    block: Extract<WorkspaceKpiBlock, { state: "opportunity_lifecycle_pipeline" }>;
+    data: NonNullable<WorkspaceRuntimeData["opportunityLifecycleKpis"]>;
+}) {
+    const title = block.title ?? "Pipeline";
+
+    if (data.status === "loading") {
+        return (
+            <div data-workspace-block="kpi" className="adminv2-ws-dept-v2-kpi-measurement-strip" role="status" aria-label="Loading pipeline metrics">
+                <div className="adminv2-ws-dept-v2-kpi-dual">
+                    <div className="adminv2-ws-dept-v2-kpi-rail adminv2-ws-dept-v2-kpi-rail--business w-full max-w-full">
+                        <div className="adminv2-ws-dept-v2-kpi-rail-heading">{title}</div>
+                        <p className="text-xs mt-1" style={{ color: "var(--d-muted)" }}>
+                            Loading lifecycle metrics…
+                        </p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (data.status === "error") {
+        return (
+            <div data-workspace-block="kpi" className="adminv2-ws-dept-v2-kpi-measurement-strip" role="alert">
+                <div className="adminv2-ws-dept-v2-kpi-dual">
+                    <div className="adminv2-ws-dept-v2-kpi-rail adminv2-ws-dept-v2-kpi-rail--business w-full max-w-full">
+                        <div className="adminv2-ws-dept-v2-kpi-rail-heading">{title}</div>
+                        <p className="text-xs mt-1 text-amber-800">{data.message}</p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    const { counts, values } = data;
+    const cells: { label: string; value: number; emphasize?: boolean }[] = [
+        {
+            label: block.recordLabel ? `Total (${block.recordLabel.trim()})` : "Total opportunities",
+            value: counts.total,
+            emphasize: true,
+        },
+        { label: "Intake", value: counts.intake },
+        { label: "Qualification", value: counts.qualification },
+        { label: "Execution / quoting", value: counts.execution },
+        { label: "Decision / priced follow-up", value: counts.decision },
+        { label: "Success", value: counts.success },
+        { label: "Closed without win", value: counts.failure },
+    ];
+    if (counts.unclassified > 0) {
+        cells.push({ label: "Unclassified", value: counts.unclassified });
+    }
+
+    return (
+        <div data-workspace-block="kpi" className="adminv2-ws-dept-v2-kpi-measurement-strip" role="group" aria-label="Pipeline metrics">
+            <div className="adminv2-ws-dept-v2-kpi-dual">
+                <div className="adminv2-ws-dept-v2-kpi-rail adminv2-ws-dept-v2-kpi-rail--business w-full max-w-full">
+                    <div className="adminv2-ws-dept-v2-kpi-rail-heading">{title}</div>
+                    {block.subtitle ? (
+                        <p className="text-xs mt-0.5 mb-2" style={{ color: "var(--d-muted)", lineHeight: 1.45 }}>
+                            {block.subtitle}
+                        </p>
+                    ) : null}
+                    <div className="adminv2-ws-kpi-strip adminv2-ws-kpi-strip--dept-embedded flex flex-wrap gap-2">
+                        {cells.map((c) => (
+                            <div
+                                key={c.label}
+                                className="adminv2-ws-kpi-cell min-w-[100px] flex-1"
+                                data-emphasis={c.emphasize ? "true" : undefined}
+                            >
+                                <span className="adminv2-ws-kpi-label">{c.label}</span>
+                                <span className="adminv2-ws-kpi-value tabular-nums font-semibold" style={{ fontSize: c.emphasize ? 18 : 15 }}>
+                                    {c.value}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-3 text-xs" style={{ color: "var(--d-muted)" }}>
+                        <span>
+                            <span className="font-medium text-alloy-midnight/80">Open pipeline value: </span>
+                            {formatUsd(values.openPipeline)}
+                        </span>
+                        <span>
+                            <span className="font-medium text-alloy-midnight/80">Priced in motion: </span>
+                            {formatUsd(values.pricedInMotion)}
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+export function KpiBlock({
+    block,
+    runtime,
+    presentation = "flat",
+}: {
+    block: WorkspaceKpiBlock;
+    runtime?: WorkspaceRuntimeData;
+    presentation?: "flat" | "bridge";
+}) {
+    if (block.state === "opportunity_lifecycle_pipeline") {
+        const data = runtime?.opportunityLifecycleKpis ?? { status: "loading" as const };
+        if (presentation === "bridge") {
+            return <LifecyclePipelineKpiBridge block={block} data={data} />;
+        }
+        return (
+            <section className="rounded-xl border border-admin-border bg-white p-4 shadow-sm" data-workspace-block="kpi">
+                <LifecyclePipelineKpiBridge block={block} data={data} />
+            </section>
+        );
+    }
+
     if (presentation === "bridge") {
         return (
             <div data-workspace-block="kpi" className="adminv2-ws-dept-v2-kpi-measurement-strip" role="group" aria-label="Key metrics">

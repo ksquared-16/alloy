@@ -6,6 +6,7 @@
  */
 
 import type { NeedsAttentionExceptionType } from "./exceptionTypes";
+import type { OpportunityLifecycleKpiSnapshot } from "./computeOpportunityLifecycleKpis";
 
 /** Canonical block kinds rendered by WorkspaceRenderer. */
 export type WorkspaceBlockType = "signals" | "queue" | "attention" | "kpi" | "actions" | "context";
@@ -77,13 +78,24 @@ export type WorkspaceQueueBlock = {
     list_remaining_work_units?: boolean;
 };
 
-export type WorkspaceKpiBlock = {
-    id: string;
-    type: "kpi";
-    title?: string;
-    state: "placeholder";
-    message: string;
-};
+export type WorkspaceKpiBlock =
+    | {
+          id: string;
+          type: "kpi";
+          title?: string;
+          state: "placeholder";
+          message: string;
+      }
+    | {
+          id: string;
+          type: "kpi";
+          state: "opportunity_lifecycle_pipeline";
+          title?: string;
+          /** Explains what the strip measures (department responsibility). */
+          subtitle?: string;
+          /** Primary countable noun, e.g. "Family inquiry" — not a platform internal name. */
+          recordLabel?: string;
+      };
 
 /** Static admin link, or a department-scoped workspace path resolved at render time. */
 export type WorkspaceActionItem =
@@ -186,6 +198,12 @@ export type WorkspaceAttentionCategoryRuntime = {
     previews: { id: string; label: string }[];
 };
 
+/** Lifecycle KPI banner for Growth-slice departments (Enrollment, Growth). */
+export type OpportunityLifecycleKpisRuntime =
+    | { status: "loading" }
+    | { status: "error"; message: string }
+    | ({ status: "ready" } & OpportunityLifecycleKpiSnapshot);
+
 /** Server-built opportunity queue preview for Growth (keyed by `work_units.key`). */
 export type WorkspaceOpportunityQueueRuntime = {
     total: number;
@@ -213,4 +231,6 @@ export type WorkspaceRuntimeData = {
     opportunityQueues?: Partial<Record<string, WorkspaceOpportunityQueueRuntime>>;
     /** When true, queue rows may show minimal opportunity system actions (same execution path as record chrome). */
     opportunityQueueQuickActions?: boolean;
+    /** When layout includes lifecycle KPI block — GET `/api/admin/departments/:id/opportunity-lifecycle-kpis`. */
+    opportunityLifecycleKpis?: OpportunityLifecycleKpisRuntime;
 };

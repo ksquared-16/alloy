@@ -9,11 +9,11 @@ import { useOperationsWorkspaceData } from "@/hooks/useOperationsWorkspaceData";
 
 const WORKSPACE_BASE = "/adminV2/workspace";
 
-/** Generic fallback still carries a KPI placeholder — hide it in the V2 shell. */
+/** Hide generic placeholder KPI strips in V2 — keep real pipeline KPI blocks (Growth / Enrollment). */
 function layoutForAdminV2Slice(base: DepartmentWorkspaceLayout): DepartmentWorkspaceLayout {
     return {
         ...base,
-        blocks: base.blocks.filter((b) => b.type !== "kpi"),
+        blocks: base.blocks.filter((b) => !(b.type === "kpi" && b.state === "placeholder")),
     };
 }
 

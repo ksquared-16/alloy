@@ -7,7 +7,14 @@ import {
     mergeJobListsById,
     type JobRowForWorkspaceMetrics,
 } from "@/lib/workspace/deriveDepartmentJobMetrics";
-import type { WorkspaceAttentionCategoryKey, WorkspaceOpportunityQueueRuntime, WorkspaceRuntimeData } from "@/lib/workspace/types";
+import type {
+    OpportunityLifecycleKpisRuntime,
+    WorkspaceAttentionCategoryKey,
+    WorkspaceOpportunityQueueRuntime,
+    WorkspaceRuntimeData,
+} from "@/lib/workspace/types";
+import { isGrowthSliceDepartmentKey } from "@/lib/workspace/growthSliceDepartments";
+import type { OpportunityLifecycleKpiSnapshot } from "@/lib/workspace/computeOpportunityLifecycleKpis";
 
 type Dept = { id: string; name: string | null; key?: string | null };
 type WU = { id: string; name: string | null; department_id: string; key?: string | null };
@@ -46,6 +53,7 @@ export function useOperationsWorkspaceData(departmentId: string) {
         Partial<Record<WorkspaceAttentionCategoryKey, { count: number; previews: { id: string; label: string }[] }>>
     >({});
     const [opportunityQueues, setOpportunityQueues] = useState<WorkspaceRuntimeData["opportunityQueues"]>(undefined);
+    const [lifecycleKpis, setLifecycleKpis] = useState<OpportunityLifecycleKpisRuntime | undefined>(undefined);
 
     const title = useMemo(() => dept?.name?.trim() || "Department", [dept]);
 
@@ -67,6 +75,7 @@ export function useOperationsWorkspaceData(departmentId: string) {
             workUnits,
             attention,
             opportunityQueues,
+            opportunityLifecycleKpis: lifecycleKpis,
         }),
         [
             unassignedTotal,
@@ -76,6 +85,7 @@ export function useOperationsWorkspaceData(departmentId: string) {
             workUnits,
             attention,
             opportunityQueues,
+            lifecycleKpis,
         ]
     );
 
@@ -99,22 +109,37 @@ export function useOperationsWorkspaceData(departmentId: string) {
                 const d = depts.find((x) => x.id === departmentId) ?? null;
                 const deptKey = (d?.key ?? "").trim().toLowerCase();
 
-                if (deptKey === "growth") {
+                if (isGrowthSliceDepartmentKey(deptKey)) {
                     setUnassignedTotal(null);
                     setScheduledTodayCount(null);
                     setNeedsAttentionCount(null);
                     setHighTouchCount(null);
                     setAttention({});
                     setDerivedError(null);
+                    if (!cancelled) setLifecycleKpis({ status: "loading" });
 
                     const nlWu = wus.find((w) => (w.key ?? "").trim().toLowerCase() === "new_leads");
                     const uqWu = wus.find((w) => (w.key ?? "").trim().toLowerCase() === "unbooked_quotes");
-                    const [nl, uq] = await Promise.all([
+                    const [nl, uq, kpRes] = await Promise.all([
                         fetchOpportunityQueueRuntime(nlWu),
                         fetchOpportunityQueueRuntime(uqWu),
+                        fetch(`/api/admin/departments/${encodeURIComponent(departmentId)}/opportunity-lifecycle-kpis`),
                     ]);
+                    const kpj = (await kpRes.json().catch(() => ({}))) as {
+                        error?: string;
+                        counts?: OpportunityLifecycleKpiSnapshot["counts"];
+                        values?: OpportunityLifecycleKpiSnapshot["values"];
+                    };
                     if (!cancelled) {
                         setOpportunityQueues({ new_leads: nl, unbooked_quotes: uq });
+                        if (kpRes.ok && kpj.counts && kpj.values) {
+                            setLifecycleKpis({ status: "ready", counts: kpj.counts, values: kpj.values });
+                        } else {
+                            setLifecycleKpis({
+                                status: "error",
+                                message: (kpj as { error?: string })?.error ?? "Pipeline KPIs unavailable",
+                            });
+                        }
                         setDept(d);
                         setWorkUnits(wus);
                     }
@@ -122,6 +147,7 @@ export function useOperationsWorkspaceData(departmentId: string) {
                 }
 
                 setOpportunityQueues(undefined);
+                if (!cancelled) setLifecycleKpis(undefined);
 
                 const [uRes, stRes, deptJobsRes, unassignedJobsRes] = await Promise.all([
                     fetch("/api/admin/jobs?assigned_vendor_unassigned=true&limit=1"),

@@ -8,6 +8,11 @@ export type {
     WorkspaceQueueFilterIntent,
 } from "./types";
 export { getDepartmentWorkspaceLayout } from "./registry";
+export { isGrowthSliceDepartmentKey } from "./growthSliceDepartments";
+export {
+    computeOpportunityLifecycleKpis,
+    type OpportunityLifecycleKpiSnapshot,
+} from "./computeOpportunityLifecycleKpis";
 export { partitionDepartmentBlocks } from "./partitionBlocks";
 export {
     mergeJobListsById,
