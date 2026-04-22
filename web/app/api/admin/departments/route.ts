@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
 
+export const dynamic = "force-dynamic";
+
 const KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 
 function normalizeKey(raw: string): string {

@@ -29,14 +29,30 @@ export type AdminContextResult = AdminContextSuccess | AdminContextFailure;
 export async function getAdminContext(): Promise<AdminContextResult> {
     try {
         const supabaseAuth = await createClient();
-        const { data: authData } = await supabaseAuth.auth.getUser();
-        const user = authData?.user;
-        if (!user?.id) {
-            return { ok: false, status: 401 };
+
+        /** Prefer getClaims(): verifies JWT locally (JWKS) when asymmetric keys are used — avoids a blocking GET /user on every admin API call. */
+        const claimsRes = await supabaseAuth.auth.getClaims();
+        let userId: string | null = null;
+        if (!claimsRes.error && claimsRes.data?.claims) {
+            const sub = (claimsRes.data.claims as { sub?: unknown }).sub;
+            if (typeof sub === "string" && sub.length > 0) {
+                userId = sub;
+            }
+        }
+        if (!userId) {
+            const { data: authData, error: userErr } = await supabaseAuth.auth.getUser();
+            if (userErr) {
+                console.error("[getAdminContext] auth.getUser error:", userErr);
+            }
+            const uid = authData?.user?.id;
+            if (!uid) {
+                return { ok: false, status: 401 };
+            }
+            userId = uid;
         }
 
         const admin = createAdminClient();
-        const membership = await fetchPrimaryAdminOpsMembershipForUser(admin, user.id);
+        const membership = await fetchPrimaryAdminOpsMembershipForUser(admin, userId);
         if (!membership) {
             return { ok: false, status: 403 };
         }
@@ -45,7 +61,7 @@ export async function getAdminContext(): Promise<AdminContextResult> {
             ok: true,
             orgId: membership.orgId,
             role: membership.role,
-            userId: user.id,
+            userId,
         };
     } catch (e) {
         console.error("[getAdminContext] unexpected:", e);
