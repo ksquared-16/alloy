@@ -203,16 +203,23 @@ export async function seedChildcareDemo(supabase: SupabaseClient, orgId: string)
         status_key: string;
         quote_total: number | null;
         familyIndex: number;
+        updated_at?: string | null;
     }> = [
-        { seed_key: "opp_demo_1", status_key: "new_inquiry", quote_total: null, familyIndex: 0 },
+        // Small but intentional distribution across lifecycle statuses.
+        // A few rows are intentionally stale to populate Needs Attention via existing attention rules.
+        { seed_key: "opp_demo_1", status_key: "new_inquiry", quote_total: null, familyIndex: 0, updated_at: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString() }, // stale_new_inquiry
         { seed_key: "opp_demo_2", status_key: "new_inquiry", quote_total: null, familyIndex: 1 },
-        { seed_key: "opp_demo_3", status_key: "contacted", quote_total: null, familyIndex: 2 },
-        { seed_key: "opp_demo_4", status_key: "tour_scheduled", quote_total: null, familyIndex: 3 },
-        { seed_key: "opp_demo_5", status_key: "tour_completed", quote_total: null, familyIndex: 4 },
-        { seed_key: "opp_demo_6", status_key: "ready_to_enroll", quote_total: 1850.0, familyIndex: 5 },
-        { seed_key: "opp_demo_7", status_key: "waitlisted", quote_total: null, familyIndex: 6 },
-        { seed_key: "opp_demo_8", status_key: "enrolled", quote_total: 2200.5, familyIndex: 7 },
-        { seed_key: "opp_demo_9", status_key: "lost", quote_total: null, familyIndex: 8 },
+        { seed_key: "opp_demo_3", status_key: "contacted", quote_total: null, familyIndex: 2, updated_at: new Date(Date.now() - 1000 * 60 * 60 * 96).toISOString() }, // stale_qualified
+        { seed_key: "opp_demo_4", status_key: "contacted", quote_total: null, familyIndex: 3 },
+        { seed_key: "opp_demo_5", status_key: "tour_scheduled", quote_total: null, familyIndex: 4, updated_at: new Date(Date.now() - 1000 * 60 * 60 * 96).toISOString() }, // missing_quote_after_execution
+        { seed_key: "opp_demo_6", status_key: "tour_completed", quote_total: null, familyIndex: 5 },
+        { seed_key: "opp_demo_7", status_key: "ready_to_enroll", quote_total: 1850.0, familyIndex: 6, updated_at: new Date(Date.now() - 1000 * 60 * 60 * 120).toISOString() }, // stale_quote_followup
+        { seed_key: "opp_demo_8", status_key: "ready_to_enroll", quote_total: 2100.0, familyIndex: 7 },
+        { seed_key: "opp_demo_9", status_key: "waitlisted", quote_total: null, familyIndex: 8 },
+        { seed_key: "opp_demo_10", status_key: "waitlisted", quote_total: null, familyIndex: 0 },
+        // Closed outcomes (must exist in dept KPIs, must not appear in active execution queues)
+        { seed_key: "opp_demo_11", status_key: "enrolled", quote_total: 2200.5, familyIndex: 1 },
+        { seed_key: "opp_demo_12", status_key: "lost", quote_total: null, familyIndex: 2 },
     ];
 
     for (const spec of oppSpecs) {
@@ -238,6 +245,7 @@ export async function seedChildcareDemo(supabase: SupabaseClient, orgId: string)
             source: "demo_seed",
             status_key: spec.status_key,
             quote_total: spec.quote_total,
+            ...(spec.updated_at ? { updated_at: spec.updated_at } : {}),
             metadata: {
                 seed_key: spec.seed_key,
                 demo_seed_package: CHILDCARE_DEMO_SEED_PACKAGE,
@@ -256,7 +264,7 @@ export async function seedChildcareDemo(supabase: SupabaseClient, orgId: string)
             parents: 18,
             children: 27,
             customers: 9,
-            opportunities: 8,
+            opportunities: oppSpecs.length,
         },
     };
 }

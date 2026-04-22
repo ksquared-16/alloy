@@ -45,7 +45,7 @@ export async function fetchOrgStatusDefinitions(
         .from("status_definitions")
         .select(STATUS_DEF_COLUMNS)
         .eq("org_id", orgId)
-        .eq("entity_type", entityType);
+        .in("entity_type", entityType === "opportunities" ? ["opportunities", "opportunity"] : [entityType]);
     if (activeOnly) q = q.eq("is_active", true);
     const { data, error } = await q.order("sort_order", { ascending: true }).order("status_label", { ascending: true });
     if (error) throw new Error(error.message);
@@ -69,7 +69,7 @@ export async function fetchIndustryDefaultStatusDefinitions(
         .from("status_definitions")
         .select(STATUS_DEF_COLUMNS)
         .is("org_id", null)
-        .eq("entity_type", entityType);
+        .in("entity_type", entityType === "opportunities" ? ["opportunities", "opportunity"] : [entityType]);
     if (activeOnly) q = q.eq("is_active", true);
     const { data, error } = await q;
     if (error) throw new Error(error.message);

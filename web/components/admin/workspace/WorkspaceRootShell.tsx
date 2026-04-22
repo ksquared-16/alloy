@@ -2,7 +2,6 @@
 
 import type { CSSProperties } from "react";
 import { useMemo } from "react";
-import { useRouter } from "next/navigation";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
 import "@/app/adminV2/components/workspace/workspace.css";
 import KPIBlock from "@/app/adminV2/components/workspace/blocks/KPIBlock";
@@ -77,7 +76,6 @@ function buildKpis(params: {
  * Organization workspace root — company banner, KPI strip, department grid, command rail (Admin V2 mock grammar).
  */
 export function WorkspaceRootShell({ orgName, departments, deptTileStats, metrics, metricsLoading }: Props) {
-  const router = useRouter();
   const displayName = (orgName && orgName.trim()) || "Your organization";
 
   const kpis = useMemo(
@@ -113,11 +111,8 @@ export function WorkspaceRootShell({ orgName, departments, deptTileStats, metric
               </div>
               <KPIBlock
                 kpis={kpis}
-                surface="company"
-                dualRailHeadings={{
-                  business: "Workspace structure",
-                  secondary: "",
-                }}
+                surface="default"
+                maxVisible={2}
               />
             </div>
 

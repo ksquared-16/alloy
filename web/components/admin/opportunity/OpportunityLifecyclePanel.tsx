@@ -58,9 +58,6 @@ export default function OpportunityLifecyclePanel({ record }: Props) {
                             <span className="text-xs text-alloy-midnight/80">
                                 <span className="text-alloy-midnight/50">Status · </span>
                                 <span className="font-medium">{statusLabel ?? "—"}</span>
-                                {statusKey && statusLabel !== statusKey ? (
-                                    <span className="text-alloy-midnight/45"> ({statusKey})</span>
-                                ) : null}
                             </span>
                         ) : null}
                     </div>
