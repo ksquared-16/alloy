@@ -84,7 +84,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     const withReason = candidates
         .map((row) => {
             if (!isOpportunityActiveForExecution({ statusKey: row.status_key, terminalStatusKeys })) {
-                return { row, reason: null as const };
+                return { row, reason: null };
             }
             const reason = computeOpportunityAttentionReason({ row, defs: oppDefs, rules, nowMs });
             return { row, reason };
