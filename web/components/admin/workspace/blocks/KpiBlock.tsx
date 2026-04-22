@@ -48,22 +48,18 @@ function LifecyclePipelineKpiBridge({
     }
 
     const { counts, values } = data;
+    // Keep v1 concise: show the operational “now” buckets and a compact closed summary.
     const cells: { label: string; value: number; emphasize?: boolean }[] = [
         {
             label: block.recordLabel ? `Total (${block.recordLabel.trim()})` : "Total opportunities",
             value: counts.total,
             emphasize: true,
         },
-        { label: "Intake", value: counts.intake },
-        { label: "Qualification", value: counts.qualification },
-        { label: "Execution / quoting", value: counts.execution },
-        { label: "Decision / priced follow-up", value: counts.decision },
-        { label: "Success", value: counts.success },
-        { label: "Closed without win", value: counts.failure },
+        { label: "New + qualifying", value: counts.intake + counts.qualification },
+        { label: "Quoting", value: counts.execution },
+        { label: "Priced follow-up", value: counts.decision },
+        { label: "Closed", value: counts.success + counts.failure },
     ];
-    if (counts.unclassified > 0) {
-        cells.push({ label: "Unclassified", value: counts.unclassified });
-    }
 
     return (
         <div data-workspace-block="kpi" className="adminv2-ws-dept-v2-kpi-measurement-strip" role="group" aria-label="Pipeline metrics">
@@ -71,7 +67,7 @@ function LifecyclePipelineKpiBridge({
                 <div className="adminv2-ws-dept-v2-kpi-rail adminv2-ws-dept-v2-kpi-rail--business w-full max-w-full">
                     <div className="adminv2-ws-dept-v2-kpi-rail-heading">{title}</div>
                     {block.subtitle ? (
-                        <p className="text-xs mt-0.5 mb-2" style={{ color: "var(--d-muted)", lineHeight: 1.45 }}>
+                        <p className="text-xs mt-0.5 mb-2" style={{ color: "var(--d-muted)", lineHeight: 1.35 }}>
                             {block.subtitle}
                         </p>
                     ) : null}
@@ -89,7 +85,7 @@ function LifecyclePipelineKpiBridge({
                             </div>
                         ))}
                     </div>
-                    <div className="mt-3 flex flex-wrap gap-3 text-xs" style={{ color: "var(--d-muted)" }}>
+                    <div className="mt-2 flex flex-wrap gap-3 text-xs" style={{ color: "var(--d-muted)" }}>
                         <span>
                             <span className="font-medium text-alloy-midnight/80">Open pipeline value: </span>
                             {formatUsd(values.openPipeline)}
@@ -98,6 +94,10 @@ function LifecyclePipelineKpiBridge({
                             <span className="font-medium text-alloy-midnight/80">Priced in motion: </span>
                             {formatUsd(values.pricedInMotion)}
                         </span>
+                    </div>
+                    <div className="mt-1 text-[11px]" style={{ color: "var(--d-muted)" }}>
+                        Intake {counts.intake} · Qualification {counts.qualification} · Success {counts.success} · Not enrolled {counts.failure}
+                        {counts.unclassified > 0 ? ` · Unclassified ${counts.unclassified}` : ""}
                     </div>
                 </div>
             </div>

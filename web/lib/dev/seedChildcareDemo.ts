@@ -204,14 +204,15 @@ export async function seedChildcareDemo(supabase: SupabaseClient, orgId: string)
         quote_total: number | null;
         familyIndex: number;
     }> = [
-        { seed_key: "opp_demo_1", status_key: "new", quote_total: null, familyIndex: 0 },
-        { seed_key: "opp_demo_2", status_key: "qualified", quote_total: null, familyIndex: 1 },
-        { seed_key: "opp_demo_3", status_key: "needs_a_quote", quote_total: null, familyIndex: 2 },
-        { seed_key: "opp_demo_4", status_key: "quoted", quote_total: 1850.0, familyIndex: 3 },
-        { seed_key: "opp_demo_5", status_key: "quoted", quote_total: 2200.5, familyIndex: 4 },
-        { seed_key: "opp_demo_6", status_key: "needs_a_quote", quote_total: null, familyIndex: 5 },
-        { seed_key: "opp_demo_7", status_key: "booked", quote_total: 3100.0, familyIndex: 6 },
-        { seed_key: "opp_demo_8", status_key: "lost", quote_total: null, familyIndex: 7 },
+        { seed_key: "opp_demo_1", status_key: "new_inquiry", quote_total: null, familyIndex: 0 },
+        { seed_key: "opp_demo_2", status_key: "new_inquiry", quote_total: null, familyIndex: 1 },
+        { seed_key: "opp_demo_3", status_key: "contacted", quote_total: null, familyIndex: 2 },
+        { seed_key: "opp_demo_4", status_key: "tour_scheduled", quote_total: null, familyIndex: 3 },
+        { seed_key: "opp_demo_5", status_key: "tour_completed", quote_total: null, familyIndex: 4 },
+        { seed_key: "opp_demo_6", status_key: "ready_to_enroll", quote_total: 1850.0, familyIndex: 5 },
+        { seed_key: "opp_demo_7", status_key: "waitlisted", quote_total: null, familyIndex: 6 },
+        { seed_key: "opp_demo_8", status_key: "enrolled", quote_total: 2200.5, familyIndex: 7 },
+        { seed_key: "opp_demo_9", status_key: "lost", quote_total: null, familyIndex: 8 },
     ];
 
     for (const spec of oppSpecs) {

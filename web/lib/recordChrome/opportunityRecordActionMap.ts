@@ -21,11 +21,11 @@ export type OpportunityRecordActionEventKey = (typeof OPPORTUNITY_RECORD_ACTION_
 export function mapOpportunityRecordActionToPatch(eventKey: string): OpportunityActionPatchBody | null {
     switch (eventKey) {
         case "qualify_opportunity":
-            return { status_key: "qualified" };
+            return { status_key: "contacted" };
         case "start_quote":
-            return { status_key: "needs_a_quote" };
+            return { status_key: "tour_scheduled" };
         case "mark_won":
-            return { status_key: "booked" };
+            return { status_key: "enrolled" };
         case "mark_lost":
             return { status_key: "lost", lost_reason: "Marked lost (workspace)" };
         default:

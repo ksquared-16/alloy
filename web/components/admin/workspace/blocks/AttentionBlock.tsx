@@ -86,7 +86,7 @@ export function AttentionBlock({
                                 ) : null}
                             </div>
                             <div className="adminv2-ws-attention-panel-meta">
-                                <span className="adminv2-ws-attention-panel-count" aria-label={`${count} jobs`}>
+                                <span className="adminv2-ws-attention-panel-count" aria-label={`${count} records`}>
                                     {count}
                                 </span>
                                 <Link href={href} className="adminv2-ws-attention-panel-viewall">

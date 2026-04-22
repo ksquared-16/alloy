@@ -318,6 +318,12 @@ const ENROLLMENT: DepartmentWorkspaceLayout = {
             entries: [
                 {
                     kind: "work_unit_key",
+                    work_unit_key: "needs_attention",
+                    label: "Needs attention",
+                    description: "Stale or blocked inquiries that need an intervention now.",
+                },
+                {
+                    kind: "work_unit_key",
                     work_unit_key: "pipeline_overview",
                     label: "All inquiries",
                     description: "Full enrollment pipeline for this department.",
@@ -339,12 +345,6 @@ const ENROLLMENT: DepartmentWorkspaceLayout = {
                     work_unit_key: "priced_followup",
                     label: "Priced — follow up",
                     description: "Offers sent; awaiting family decision.",
-                },
-                {
-                    kind: "work_unit_key",
-                    work_unit_key: "needs_attention",
-                    label: "Needs attention",
-                    description: "Stale or blocked inquiries that need an intervention now.",
                 },
             ],
             list_remaining_work_units: false,

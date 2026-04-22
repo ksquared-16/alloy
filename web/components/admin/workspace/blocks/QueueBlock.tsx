@@ -2,9 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
-import { executeOpportunityRecordAction } from "@/lib/recordChrome/executeOpportunityRecordAction";
 import type { WorkspaceOpportunityQueueRuntime, WorkspaceQueueBlock, WorkspaceRuntimeData } from "@/lib/workspace/types";
 
 function isUnassignedWorkUnitRow(w: { name?: string | null; key?: string | null }): boolean {
@@ -55,8 +53,7 @@ function OpportunityQueueInlinePreview({
     workUnitKey: string;
 }) {
     const { openDrawer } = useAdminDrawer();
-    const router = useRouter();
-    const [busyId, setBusyId] = useState<string | null>(null);
+    const [_busyId, _setBusyId] = useState<string | null>(null);
     if (oq.error) {
         return <p className="text-xs mt-2 text-amber-800">{oq.error}</p>;
     }
@@ -65,7 +62,7 @@ function OpportunityQueueInlinePreview({
     }
     return (
         <ul className="mt-2 space-y-1 pl-0 list-none" role="list">
-            {oq.items.slice(0, 8).map((row) => {
+            {oq.items.slice(0, 3).map((row) => {
                 const title = (row.name ?? "").trim() || "Opportunity";
                 const price =
                     row.quote_total != null && !Number.isNaN(Number(row.quote_total))
@@ -93,37 +90,6 @@ function OpportunityQueueInlinePreview({
                                 </span>
                             ) : null}
                         </button>
-                        {runtime.opportunityQueueQuickActions ? (
-                            <div className="flex flex-wrap gap-1 px-2 pb-1.5 pt-0 border-t border-[var(--d-border,rgba(39,63,82,0.1))]">
-                                {opportunityQueueRowQuickActions(workUnitKey).map(({ eventKey, label }) => (
-                                    <button
-                                        key={eventKey}
-                                        type="button"
-                                        disabled={busyId === `${row.id}:${eventKey}`}
-                                        className="text-[10px] px-1.5 py-0.5 rounded border border-alloy-stone/40 text-alloy-midnight/85 hover:bg-alloy-stone/20 disabled:opacity-50"
-                                        onClick={async (e) => {
-                                            e.stopPropagation();
-                                            if (eventKey === "start_quote" || eventKey === "open_quote") {
-                                                openDrawer({ type: "opportunities", id: row.id, defaultOpportunitySurface: "quote_intake" });
-                                                return;
-                                            }
-                                            setBusyId(`${row.id}:${eventKey}`);
-                                            try {
-                                                const r = await executeOpportunityRecordAction({
-                                                    opportunityId: row.id,
-                                                    eventKey,
-                                                });
-                                                if (r.ok) router.refresh();
-                                            } finally {
-                                                setBusyId(null);
-                                            }
-                                        }}
-                                    >
-                                        {busyId === `${row.id}:${eventKey}` ? "…" : label}
-                                    </button>
-                                ))}
-                            </div>
-                        ) : null}
                     </li>
                 );
             })}

@@ -69,7 +69,20 @@ function formatInt(n: number | null | undefined): string {
   return String(Math.max(0, Math.floor(n)));
 }
 
-function buildKpis(metrics: WorkspaceRootMetrics | null, metricsLoading: boolean): KPIVm[] {
+function buildKpis(params: {
+  metrics: WorkspaceRootMetrics | null;
+  metricsLoading: boolean;
+  hasOperations: boolean;
+}): KPIVm[] {
+  const { metrics, metricsLoading, hasOperations } = params;
+
+  if (!hasOperations) {
+    return [
+      { id: "depts", label: "Departments", value: formatInt(metrics?.departments), lane: "business" },
+      { id: "wu", label: "Work units", value: formatInt(metrics?.workUnits), lane: "business" },
+    ];
+  }
+
   if (metricsLoading || !metrics) {
     return [
       { id: "u", label: "Unassigned jobs", value: "—", lane: "business" },
@@ -139,10 +152,8 @@ export function WorkspaceRootShell({ orgName, departments, deptTileStats, metric
   const router = useRouter();
   const displayName = (orgName && orgName.trim()) || "Your organization";
 
-  const operationsDeptId = useMemo(
-    () => departments.find((d) => d.key === "operations")?.id ?? departments[0]?.id ?? "",
-    [departments]
-  );
+  const operationsDeptId = useMemo(() => departments.find((d) => d.key === "operations")?.id ?? "", [departments]);
+  const hasOperations = Boolean(operationsDeptId);
 
   const actionsModel: ActionsVm = useMemo(() => {
     const ops: ActionsVm["systemActions"] = [];
@@ -153,17 +164,19 @@ export function WorkspaceRootShell({ orgName, departments, deptTileStats, metric
         variant: "primary",
       });
     }
-    ops.push({ id: "all-jobs", label: "All jobs", variant: operationsDeptId ? "secondary" : "primary" });
+    if (operationsDeptId) {
+      ops.push({ id: "all-jobs", label: "All jobs", variant: "secondary" });
+    }
     return {
       primaries: [],
       systemActions: ops,
       quickOperations: [
-        { id: "schedules", label: "Schedules" },
+        ...(operationsDeptId ? [{ id: "schedules", label: "Schedules" }] : []),
         { id: "work-units", label: "Work units (system)" },
         { id: "departments-admin", label: "Departments (system)" },
       ],
       systemStatusLines: [
-        "Legacy admin lists open in /admin while workspace navigation stays under /adminV2/workspace.",
+        "Open a department to work real queues and records.",
       ],
     };
   }, [operationsDeptId]);
@@ -198,7 +211,10 @@ export function WorkspaceRootShell({ orgName, departments, deptTileStats, metric
     [operationsDeptId, router]
   );
 
-  const kpis = useMemo(() => buildKpis(metrics, metricsLoading), [metrics, metricsLoading]);
+  const kpis = useMemo(
+    () => buildKpis({ metrics, metricsLoading, hasOperations }),
+    [metrics, metricsLoading, hasOperations]
+  );
 
   return (
     <div
@@ -222,15 +238,18 @@ export function WorkspaceRootShell({ orgName, departments, deptTileStats, metric
                     <h2 className="adminv2-ws-dept-v2-brief-headline">{displayName}</h2>
                   </div>
                   <p className="text-sm mt-2 max-w-3xl" style={{ color: derived.textSecondary, lineHeight: 1.45 }}>
-                    Top layer above departments: pick a function to open signals, queues, and work units. KPIs below are
-                    live org rollups where available; the unpaid column scans up to 200 recent jobs for open balances.
+                    Pick a department to work real queues and records. This home view stays tenant-agnostic and avoids
+                    legacy operations language when your org doesn’t use jobs.
                   </p>
                 </div>
               </div>
               <KPIBlock
                 kpis={kpis}
                 surface="company"
-                dualRailHeadings={{ business: "Operations signals", secondary: "Workspace structure" }}
+                dualRailHeadings={{
+                  business: hasOperations ? "Operations signals" : "Workspace structure",
+                  secondary: "System",
+                }}
               />
             </div>
 
@@ -267,7 +286,7 @@ export function WorkspaceRootShell({ orgName, departments, deptTileStats, metric
                 <h3 className="adminv2-ws-actions-rail-title">Context</h3>
                 <p className="text-xs leading-relaxed" style={{ color: derived.textSecondary }}>
                   This surface is scoped to your signed-in org. Department pages hold the operational lanes; system lists
-                  for jobs and schedules remain in classic admin until those flows fully land in V2.
+                  remain available in classic admin as needed.
                 </p>
                 <p className="text-xs mt-3">
                   <Link href="/adminV2/workspace/drawer-probe" className="font-medium hover:underline" style={{ color: brand.primary }}>

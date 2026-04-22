@@ -17,22 +17,22 @@ function opportunityQuickActionsForLane(workUnitKey: string): QueueItemVm["quick
     }
     if (k === "priced_followup") {
         return [
-            { id: "open_quote", label: "Open offer" },
+            { id: "open_quote", label: "Open inquiry" },
             { id: "mark_won", label: "Enrolled" },
             { id: "mark_lost", label: "Lost" },
         ];
     }
     if (k === "quoting") {
         return [
-            { id: "open_quote", label: "Open offer" },
-            { id: "start_quote", label: "Start offer" },
+            { id: "open_quote", label: "Open inquiry" },
+            { id: "start_quote", label: "Schedule tour" },
             { id: "mark_lost", label: "Lost" },
         ];
     }
     // Default: early pipeline.
     return [
-        { id: "qualify_opportunity", label: "Qualify" },
-        { id: "start_quote", label: "Start offer" },
+        { id: "qualify_opportunity", label: "Conversation had" },
+        { id: "start_quote", label: "Schedule tour" },
         { id: "mark_lost", label: "Lost" },
     ];
 }
@@ -65,22 +65,22 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
                 ? (() => {
                       if (reason === "stale_quote_followup") {
                           return [
-                              { id: "open_quote", label: "Open offer" },
+                              { id: "open_quote", label: "Open inquiry" },
                               { id: "mark_won", label: "Enrolled" },
                               { id: "mark_lost", label: "Lost" },
                           ];
                       }
                       if (reason === "missing_quote_after_execution") {
                           return [
-                              { id: "open_quote", label: "Open offer" },
-                              { id: "start_quote", label: "Start offer" },
+                              { id: "open_quote", label: "Open inquiry" },
+                              { id: "start_quote", label: "Schedule tour" },
                               { id: "mark_lost", label: "Lost" },
                           ];
                       }
                       // stale_new_inquiry / stale_qualified
                       return [
-                          { id: "qualify_opportunity", label: "Qualify" },
-                          { id: "start_quote", label: "Start offer" },
+                          { id: "qualify_opportunity", label: "Conversation had" },
+                          { id: "start_quote", label: "Schedule tour" },
                           { id: "mark_lost", label: "Lost" },
                       ];
                   })()
