@@ -2,7 +2,7 @@ import type { KPIVm } from "@/lib/ui-v2/workspace-types";
 import type { OpportunityLifecycleKpiCounts } from "@/lib/workspace/computeOpportunityLifecycleKpis";
 import { isGrowthSliceDepartmentKey } from "@/lib/workspace/growthSliceDepartments";
 
-/** JSON shape from GET `/api/admin/departments/:id/opportunity-lifecycle-kpis`. */
+/** JSON shape from GET `/api/admin/departments/:departmentId/opportunity-lifecycle-kpis`. */
 export type DepartmentLifecycleKpisPayload = {
     counts?: OpportunityLifecycleKpiCounts;
     values?: { openPipeline?: number; pricedInMotion?: number };

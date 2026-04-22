@@ -283,6 +283,6 @@ export type WorkspaceRuntimeData = {
     opportunityQueues?: Partial<Record<string, WorkspaceOpportunityQueueRuntime>>;
     /** When true, queue rows may show minimal opportunity system actions (same execution path as record chrome). */
     opportunityQueueQuickActions?: boolean;
-    /** When layout includes lifecycle KPI block — GET `/api/admin/departments/:id/opportunity-lifecycle-kpis`. */
+    /** When layout includes lifecycle KPI block — GET `/api/admin/departments/:departmentId/opportunity-lifecycle-kpis`. */
     opportunityLifecycleKpis?: OpportunityLifecycleKpisRuntime;
 };

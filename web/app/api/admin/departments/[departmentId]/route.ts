@@ -14,18 +14,18 @@ function normalizeKey(raw: string): string {
 }
 
 /** GET: single department in org. */
-export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+export async function GET(_request: NextRequest, context: { params: Promise<{ departmentId: string }> }) {
     const ctx = await getAdminContext();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
-    const { id } = await context.params;
-    if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+    const { departmentId } = await context.params;
+    if (!departmentId) return NextResponse.json({ error: "Missing department id" }, { status: 400 });
 
     const supabase = createAdminClient();
     const { data: row, error } = await supabase
         .from("departments")
         .select("id, org_id, key, name, description, sort_order, is_active, metadata, created_at, updated_at")
-        .eq("id", id)
+        .eq("id", departmentId)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
 
@@ -40,15 +40,15 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
 }
 
 /** PATCH: update department. Admin only. */
-export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
+export async function PATCH(request: NextRequest, context: { params: Promise<{ departmentId: string }> }) {
     const ctx = await getAdminContext();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     if (ctx.role !== "admin") {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const { id } = await context.params;
-    if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+    const { departmentId } = await context.params;
+    if (!departmentId) return NextResponse.json({ error: "Missing department id" }, { status: 400 });
 
     let body: Record<string, unknown> = {};
     try {
@@ -61,7 +61,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const { data: existing, error: fetchErr } = await supabase
         .from("departments")
         .select("id")
-        .eq("id", id)
+        .eq("id", departmentId)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
 
@@ -111,7 +111,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const { data: updated, error: updateErr } = await supabase
         .from("departments")
         .update(updates)
-        .eq("id", id)
+        .eq("id", departmentId)
         .eq("org_id", ctx.orgId)
         .select()
         .single();
@@ -128,21 +128,21 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 }
 
 /** DELETE: remove department if no work units reference it (RESTRICT). Admin only. */
-export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+export async function DELETE(_request: NextRequest, context: { params: Promise<{ departmentId: string }> }) {
     const ctx = await getAdminContext();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     if (ctx.role !== "admin") {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const { id } = await context.params;
-    if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+    const { departmentId } = await context.params;
+    if (!departmentId) return NextResponse.json({ error: "Missing department id" }, { status: 400 });
 
     const supabase = createAdminClient();
     const { count } = await supabase
         .from("work_units")
         .select("id", { count: "exact", head: true })
-        .eq("department_id", id)
+        .eq("department_id", departmentId)
         .eq("org_id", ctx.orgId);
 
     if ((count ?? 0) > 0) {
@@ -152,7 +152,7 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
         );
     }
 
-    const { error } = await supabase.from("departments").delete().eq("id", id).eq("org_id", ctx.orgId);
+    const { error } = await supabase.from("departments").delete().eq("id", departmentId).eq("org_id", ctx.orgId);
 
     if (error) {
         const code = (error as { code?: string }).code;

@@ -7,9 +7,9 @@ import { resolveOpportunityQueueFromDefinition } from "@/lib/rrs/queue/resolveOp
 
 export const dynamic = "force-dynamic";
 
-export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
-    const { id } = await context.params;
-    if (!id) return NextResponse.json({ error: "Missing department id" }, { status: 400 });
+export async function GET(_request: NextRequest, context: { params: Promise<{ departmentId: string }> }) {
+    const { departmentId } = await context.params;
+    if (!departmentId) return NextResponse.json({ error: "Missing department id" }, { status: 400 });
 
     const ctx = await getAdminContext();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
@@ -23,7 +23,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
             .from("work_units")
             .select("id, queue_definition")
             .eq("org_id", ctx.orgId)
-            .eq("department_id", id)
+            .eq("department_id", departmentId)
             .eq("key", "pipeline_overview")
             .maybeSingle();
 
@@ -125,4 +125,3 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         return NextResponse.json({ error: message || "Failed to compute KPIs" }, { status: 500 });
     }
 }
-
