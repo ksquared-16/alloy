@@ -115,12 +115,19 @@ export default function AdminV2WorkspaceIndexPage() {
     const [metricsLoading, setMetricsLoading] = useState(true);
 
     useEffect(() => {
-        let cancelled = false;
-        (async () => {
-            setLoading(true);
-            setError(null);
+        /** Synchronous: avoids a Strict Mode window where `loading` is still default `true` but the async body has not run yet (same class of bug as deferred `setLoading(true)`). */
+        setLoading(true);
+        setError(null);
+
+        const ac = new AbortController();
+        /** Hard cap so a hung `/api/admin/departments` cannot block the UI forever when `AbortSignal.timeout` is unavailable. */
+        const hardStopMs = 50_000;
+        const hardStop = setTimeout(() => ac.abort(), hardStopMs);
+        let applyResults = true;
+
+        void (async () => {
             try {
-                const res = await fetch("/api/admin/departments", workspaceDataFetchInit());
+                const res = await fetch("/api/admin/departments", { signal: ac.signal });
                 const json = (await res.json().catch(() => ({}))) as {
                     items?: WorkspaceRootDepartmentRow[];
                     error?: string;
@@ -128,23 +135,35 @@ export default function AdminV2WorkspaceIndexPage() {
                 if (!res.ok) throw new Error(json.error ?? "Failed to load departments");
                 const items = json.items ?? [];
                 const active = items.filter((d) => d.is_active !== false);
-                if (!cancelled) setDepartments(active);
+                if (applyResults) setDepartments(active);
             } catch (e) {
-                if (!cancelled) setError((e as Error).message);
+                const aborted =
+                    (e instanceof DOMException && e.name === "AbortError") ||
+                    (e instanceof Error && e.name === "AbortError");
+                if (aborted) {
+                    if (applyResults) {
+                        setError(
+                            "Loading departments timed out or was interrupted. Check your connection and try again."
+                        );
+                    }
+                } else if (applyResults) {
+                    setError((e as Error).message);
+                }
             } finally {
-                if (!cancelled) setLoading(false);
+                clearTimeout(hardStop);
+                if (applyResults) setLoading(false);
             }
         })();
+
         return () => {
-            cancelled = true;
+            applyResults = false;
+            clearTimeout(hardStop);
+            ac.abort();
         };
     }, []);
 
     useEffect(() => {
         let cancelled = false;
-        if (loading) return () => {
-            cancelled = true;
-        };
         if (departments.length === 0) {
             setMetricsLoading(false);
             setMetrics(null);
@@ -154,7 +173,7 @@ export default function AdminV2WorkspaceIndexPage() {
                 cancelled = true;
             };
         }
-        (async () => {
+        void (async () => {
             setMetricsLoading(true);
             try {
                 const { metrics: m, deptTileStats: stats, orgOpportunityKpis: roll } = await loadWorkspaceRollup(departments);
@@ -176,7 +195,7 @@ export default function AdminV2WorkspaceIndexPage() {
         return () => {
             cancelled = true;
         };
-    }, [departments, loading]);
+    }, [departments]);
 
     const metricsResolved = useMemo(() => {
         if (!metrics) return null;
