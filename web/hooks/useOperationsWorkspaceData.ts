@@ -19,6 +19,16 @@ import type { OpportunityLifecycleKpiSnapshot } from "@/lib/workspace/computeOpp
 type Dept = { id: string; name: string | null; key?: string | null };
 type WU = { id: string; name: string | null; department_id: string; key?: string | null };
 
+const WORKSPACE_DATA_FETCH_MS = 45_000;
+
+function workspaceDataFetchInit(): RequestInit | undefined {
+    const timeout = (AbortSignal as unknown as { timeout?: (ms: number) => AbortSignal }).timeout;
+    if (typeof timeout === "function") {
+        return { signal: timeout(WORKSPACE_DATA_FETCH_MS) };
+    }
+    return undefined;
+}
+
 async function fetchOpportunityQueueRuntime(wu: WU | undefined): Promise<WorkspaceOpportunityQueueRuntime> {
     if (!wu?.id) {
         return { total: 0, error: "Work unit not found", items: [] };
@@ -28,20 +38,64 @@ async function fetchOpportunityQueueRuntime(wu: WU | undefined): Promise<Workspa
         workUnitKey === "needs_attention"
             ? `/api/admin/work-units/${encodeURIComponent(wu.id)}/opportunity-attention-queue`
             : `/api/admin/work-units/${encodeURIComponent(wu.id)}/opportunity-queue`;
-    const res = await fetch(endpoint);
-    const j = (await res.json().catch(() => ({}))) as {
-        total?: number;
-        items?: WorkspaceOpportunityQueueRuntime["items"];
-        error?: string;
-    };
-    if (!res.ok) {
-        return { total: 0, error: j.error ?? "Failed to load queue", items: [] };
+    try {
+        const res = await fetch(endpoint, workspaceDataFetchInit());
+        const j = (await res.json().catch(() => ({}))) as {
+            total?: number;
+            items?: WorkspaceOpportunityQueueRuntime["items"];
+            error?: string;
+        };
+        if (!res.ok) {
+            return { total: 0, error: j.error ?? "Failed to load queue", items: [] };
+        }
+        return {
+            total: typeof j.total === "number" ? j.total : 0,
+            error: null,
+            items: j.items ?? [],
+        };
+    } catch (e) {
+        const msg = e instanceof Error ? e.message : "Queue request failed";
+        return { total: 0, error: msg, items: [] };
     }
-    return {
-        total: typeof j.total === "number" ? j.total : 0,
-        error: null,
-        items: j.items ?? [],
-    };
+}
+
+async function fetchNeedsAttentionPreviewRuntime(
+    departmentId: string
+): Promise<[string, WorkspaceOpportunityQueueRuntime]> {
+    const k = "needs_attention";
+    const emptyItems: WorkspaceOpportunityQueueRuntime["items"] = [];
+    try {
+        const res = await fetch(
+            `/api/admin/departments/${encodeURIComponent(departmentId)}/opportunity-attention-preview`,
+            workspaceDataFetchInit()
+        );
+        const j = (await res.json().catch(() => ({}))) as {
+            total?: number;
+            items?: WorkspaceOpportunityQueueRuntime["items"];
+            error?: string;
+        };
+        if (!res.ok) {
+            return [
+                k,
+                {
+                    total: 0,
+                    error: j.error ?? "Failed to load attention preview",
+                    items: emptyItems,
+                },
+            ];
+        }
+        return [
+            k,
+            {
+                total: typeof j.total === "number" ? j.total : 0,
+                error: null,
+                items: j.items ?? emptyItems,
+            },
+        ];
+    } catch (e) {
+        const msg = e instanceof Error ? e.message : "Attention preview request failed";
+        return [k, { total: 0, error: msg, items: emptyItems }];
+    }
 }
 
 export function useOperationsWorkspaceData(departmentId: string) {
@@ -108,14 +162,31 @@ export function useOperationsWorkspaceData(departmentId: string) {
     );
 
     useEffect(() => {
-        if (!departmentId) return;
+        const deptId = typeof departmentId === "string" ? departmentId.trim() : "";
+        if (!deptId) {
+            setLoading(false);
+            setDept(null);
+            setWorkUnits([]);
+            setOpportunityQueues(undefined);
+            setLifecycleKpis(undefined);
+            setUnassignedTotal(null);
+            setScheduledTodayCount(null);
+            setNeedsAttentionCount(null);
+            setHighTouchCount(null);
+            setAttention({});
+            setError(null);
+            setDerivedError(null);
+            return;
+        }
+
         let cancelled = false;
         (async () => {
             try {
                 setLoading(true);
                 setDerivedError(null);
-                const dRes = await fetch("/api/admin/departments");
-                const wRes = await fetch(`/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`);
+                const fetchInit = workspaceDataFetchInit();
+                const dRes = await fetch("/api/admin/departments", fetchInit);
+                const wRes = await fetch(`/api/admin/work-units?department_id=${encodeURIComponent(deptId)}`, fetchInit);
                 const dj = (await dRes.json().catch(() => ({}))) as { items?: Dept[]; error?: string };
                 const wj = (await wRes.json().catch(() => ({}))) as { items?: WU[]; error?: string };
 
@@ -124,7 +195,7 @@ export function useOperationsWorkspaceData(departmentId: string) {
 
                 const depts = dj.items ?? [];
                 const wus = wj.items ?? [];
-                const d = depts.find((x) => x.id === departmentId) ?? null;
+                const d = depts.find((x) => x.id === deptId) ?? null;
                 const deptKey = (d?.key ?? "").trim().toLowerCase();
 
                 if (isGrowthSliceDepartmentKey(deptKey)) {
@@ -159,41 +230,33 @@ export function useOperationsWorkspaceData(departmentId: string) {
                             if (naWu?.id) {
                                 return [k, await fetchOpportunityQueueRuntime(naWu)] as const;
                             }
-                            const res = await fetch(
-                                `/api/admin/departments/${encodeURIComponent(departmentId)}/opportunity-attention-preview`
-                            );
-                            const j = (await res.json().catch(() => ({}))) as {
-                                total?: number;
-                                items?: WorkspaceOpportunityQueueRuntime["items"];
-                                error?: string;
-                            };
-                            if (!res.ok) {
-                                return [
-                                    k,
-                                    {
-                                        total: 0,
-                                        error: j.error ?? "Failed to load attention preview",
-                                        items: [] as WorkspaceOpportunityQueueRuntime["items"],
-                                    },
-                                ] as const;
-                            }
-                            return [
-                                k,
-                                {
-                                    total: typeof j.total === "number" ? j.total : 0,
-                                    error: null,
-                                    items: j.items ?? [],
-                                },
-                            ] as const;
+                            return fetchNeedsAttentionPreviewRuntime(deptId);
                         }
                         return [k, await fetchOpportunityQueueRuntime(keyToWu.get(k))] as const;
                     });
 
-                    const [queuePairs, kpRes] = await Promise.all([
-                        Promise.all(queuePromises),
-                        fetch(`/api/admin/departments/${encodeURIComponent(departmentId)}/opportunity-lifecycle-kpis`),
-                    ]);
-                    const kpj = (await kpRes.json().catch(() => ({}))) as {
+                    const queueSettled = await Promise.allSettled(queuePromises);
+                    const queuePairs = queueSettled.map((result, i) => {
+                        const key = queueKeys[i]!;
+                        if (result.status === "fulfilled") {
+                            return result.value;
+                        }
+                        const msg =
+                            result.reason instanceof Error ? result.reason.message : "Queue request failed";
+                        const empty: WorkspaceOpportunityQueueRuntime["items"] = [];
+                        return [key, { total: 0, error: msg, items: empty }] as [string, WorkspaceOpportunityQueueRuntime];
+                    });
+
+                    let kpRes: Response | null = null;
+                    try {
+                        kpRes = await fetch(
+                            `/api/admin/departments/${encodeURIComponent(deptId)}/opportunity-lifecycle-kpis`,
+                            fetchInit
+                        );
+                    } catch {
+                        kpRes = null;
+                    }
+                    const kpj = (await (kpRes?.json().catch(() => ({})) ?? Promise.resolve({}))) as {
                         error?: string;
                         counts?: OpportunityLifecycleKpiSnapshot["counts"];
                         values?: OpportunityLifecycleKpiSnapshot["values"];
@@ -203,7 +266,7 @@ export function useOperationsWorkspaceData(departmentId: string) {
                         const oqMap: NonNullable<WorkspaceRuntimeData["opportunityQueues"]> = {};
                         for (const [k, v] of queuePairs) oqMap[k] = v;
                         setOpportunityQueues(oqMap);
-                        if (kpRes.ok && kpj.counts && kpj.values) {
+                        if (kpRes?.ok && kpj.counts && kpj.values) {
                             setLifecycleKpis({
                                 status: "ready",
                                 counts: kpj.counts,
@@ -225,11 +288,12 @@ export function useOperationsWorkspaceData(departmentId: string) {
                 setOpportunityQueues(undefined);
                 if (!cancelled) setLifecycleKpis(undefined);
 
+                const jobFetchInit = workspaceDataFetchInit();
                 const [uRes, stRes, deptJobsRes, unassignedJobsRes] = await Promise.all([
-                    fetch("/api/admin/jobs?assigned_vendor_unassigned=true&limit=1"),
-                    fetch("/api/admin/schedules?scheduled_on=today&limit=1"),
-                    fetch(`/api/admin/jobs?department_id=${encodeURIComponent(departmentId)}&limit=200`),
-                    fetch("/api/admin/jobs?assigned_vendor_unassigned=true&limit=200"),
+                    fetch("/api/admin/jobs?assigned_vendor_unassigned=true&limit=1", jobFetchInit),
+                    fetch("/api/admin/schedules?scheduled_on=today&limit=1", jobFetchInit),
+                    fetch(`/api/admin/jobs?department_id=${encodeURIComponent(deptId)}&limit=200`, jobFetchInit),
+                    fetch("/api/admin/jobs?assigned_vendor_unassigned=true&limit=200", jobFetchInit),
                 ]);
                 const uj = (await uRes.json().catch(() => ({}))) as { total?: number; error?: string };
                 const stj = (await stRes.json().catch(() => ({}))) as { total?: number; schedules?: unknown[]; error?: string };

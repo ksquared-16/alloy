@@ -15,16 +15,35 @@ import {
     type DepartmentLifecycleKpisPayload,
 } from "@/lib/workspace/viewModels/workspaceRootRollup";
 
+const WORKSPACE_ROLLUP_FETCH_MS = 45_000;
+
+function workspaceRollupFetchInit(): RequestInit | undefined {
+    const timeout = (AbortSignal as unknown as { timeout?: (ms: number) => AbortSignal }).timeout;
+    if (typeof timeout === "function") {
+        return { signal: timeout(WORKSPACE_ROLLUP_FETCH_MS) };
+    }
+    return undefined;
+}
+
 async function loadWorkspaceRollup(departments: WorkspaceRootDepartmentRow[]): Promise<{
     metrics: WorkspaceRootMetrics;
     deptTileStats: WorkspaceRootDeptTileStats;
     orgOpportunityKpis: KPIVm[];
 }> {
-    const workUnitsRes = await fetch("/api/admin/work-units");
-    const wuJson = (await workUnitsRes.json().catch(() => ({}))) as { items?: { department_id?: string }[]; error?: string };
+    const fetchInit = workspaceRollupFetchInit();
+    let workUnitsRes: Response | null = null;
+    try {
+        workUnitsRes = await fetch("/api/admin/work-units", fetchInit);
+    } catch {
+        workUnitsRes = null;
+    }
+    const wuJson = (await (workUnitsRes?.json().catch(() => ({})) ?? Promise.resolve({}))) as {
+        items?: { department_id?: string }[];
+        error?: string;
+    };
 
     const deptTileStats: WorkspaceRootDeptTileStats = {};
-    if (workUnitsRes.ok && Array.isArray(wuJson.items)) {
+    if (workUnitsRes?.ok && Array.isArray(wuJson.items)) {
         for (const row of wuJson.items) {
             const did = typeof row.department_id === "string" ? row.department_id : "";
             if (!did) continue;
@@ -40,13 +59,28 @@ async function loadWorkspaceRollup(departments: WorkspaceRootDepartmentRow[]): P
     }
 
     const growthDepts = departments.filter((d) => isGrowthSliceDepartmentKey(d.key));
-    const growthSnapshots = await Promise.all(
-        growthDepts.map(async (d) => {
-            const res = await fetch(`/api/admin/departments/${encodeURIComponent(d.id)}/opportunity-lifecycle-kpis`);
-            const json = (await res.json().catch(() => ({}))) as DepartmentLifecycleKpisPayload;
-            return { id: d.id, key: d.key, payload: res.ok && json.counts ? json : null };
-        })
+    const growthSettled = await Promise.allSettled(
+        growthDepts.map((d) =>
+            (async () => {
+                let res: Response | null = null;
+                try {
+                    res = await fetch(
+                        `/api/admin/departments/${encodeURIComponent(d.id)}/opportunity-lifecycle-kpis`,
+                        fetchInit
+                    );
+                } catch {
+                    return { id: d.id, key: d.key, payload: null as DepartmentLifecycleKpisPayload | null };
+                }
+                const json = (await (res?.json().catch(() => ({})) ?? Promise.resolve({}))) as DepartmentLifecycleKpisPayload;
+                return { id: d.id, key: d.key, payload: res.ok && json.counts ? json : null };
+            })()
+        )
     );
+    const growthSnapshots = growthDepts.map((d, i) => {
+        const s = growthSettled[i];
+        if (s?.status === "fulfilled") return s.value;
+        return { id: d.id, key: d.key, payload: null };
+    });
 
     const kpisByDeptId = new Map(growthSnapshots.map((s) => [s.id, s.payload]));
 
@@ -69,7 +103,7 @@ async function loadWorkspaceRollup(departments: WorkspaceRootDepartmentRow[]): P
 
     const metrics: WorkspaceRootMetrics = {
         departments: null,
-        workUnits: workUnitsRes.ok && Array.isArray(wuJson.items) ? wuJson.items.length : null,
+        workUnits: workUnitsRes?.ok && Array.isArray(wuJson.items) ? wuJson.items.length : null,
     };
 
     return { metrics, deptTileStats, orgOpportunityKpis };
