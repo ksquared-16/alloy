@@ -72,76 +72,13 @@ function formatInt(n: number | null | undefined): string {
 function buildKpis(params: {
   metrics: WorkspaceRootMetrics | null;
   metricsLoading: boolean;
-  hasOperations: boolean;
 }): KPIVm[] {
-  const { metrics, metricsLoading, hasOperations } = params;
-
-  if (!hasOperations) {
-    return [
-      { id: "depts", label: "Departments", value: formatInt(metrics?.departments), lane: "business" },
-      { id: "wu", label: "Work units", value: formatInt(metrics?.workUnits), lane: "business" },
-    ];
-  }
-
-  if (metricsLoading || !metrics) {
-    return [
-      { id: "u", label: "Unassigned jobs", value: "—", lane: "business" },
-      { id: "v", label: "Visits today", value: "—", lane: "business" },
-      { id: "a", label: "Active jobs", value: "—", lane: "business" },
-      { id: "d", label: "Departments", value: "—", lane: "ai" },
-      { id: "w", label: "Work units", value: "—", lane: "ai" },
-      { id: "p", label: "Unpaid (sample)", value: "—", lane: "ai", tone: "risk" },
-    ];
-  }
-
-  const unpaid =
-    metrics.unpaidJobsSample == null
-      ? "—"
-      : metrics.unpaidJobsSample.capped
-        ? `${metrics.unpaidJobsSample.count}+`
-        : String(metrics.unpaidJobsSample.count);
-
+  const { metrics } = params;
+  // Workspace root is tenant-agnostic; do not surface job/ops KPIs here.
+  // Department pages own their operational KPIs/queues.
   return [
-    {
-      id: "unassigned",
-      label: "Unassigned jobs",
-      value: formatInt(metrics.unassignedJobs),
-      lane: "business",
-      tone: metrics.unassignedJobs != null && metrics.unassignedJobs > 0 ? "risk" : "neutral",
-    },
-    {
-      id: "visits",
-      label: "Visits today",
-      value: formatInt(metrics.visitsToday),
-      lane: "business",
-    },
-    {
-      id: "active",
-      label: "Active jobs",
-      value: formatInt(metrics.activeJobs),
-      lane: "business",
-    },
-    {
-      id: "depts",
-      label: "Departments",
-      value: formatInt(metrics.departments),
-      lane: "ai",
-    },
-    {
-      id: "wu",
-      label: "Work units",
-      value: formatInt(metrics.workUnits),
-      lane: "ai",
-    },
-    {
-      id: "unpaid",
-      label: "Jobs w/ balance (sample)",
-      value: unpaid,
-      lane: "ai",
-      tone: "risk",
-      aiSummary:
-        metrics.unpaidJobsSample?.capped === true ? "First 200 jobs scanned" : undefined,
-    },
+    { id: "depts", label: "Departments", value: formatInt(metrics?.departments), lane: "business" },
+    { id: "wu", label: "Work units", value: formatInt(metrics?.workUnits), lane: "business" },
   ];
 }
 
@@ -157,21 +94,10 @@ export function WorkspaceRootShell({ orgName, departments, deptTileStats, metric
 
   const actionsModel: ActionsVm = useMemo(() => {
     const ops: ActionsVm["systemActions"] = [];
-    if (operationsDeptId) {
-      ops.push({
-        id: "open-operations",
-        label: "Open Operations",
-        variant: "primary",
-      });
-    }
-    if (operationsDeptId) {
-      ops.push({ id: "all-jobs", label: "All jobs", variant: "secondary" });
-    }
     return {
       primaries: [],
       systemActions: ops,
       quickOperations: [
-        ...(operationsDeptId ? [{ id: "schedules", label: "Schedules" }] : []),
         { id: "work-units", label: "Work units (system)" },
         { id: "departments-admin", label: "Departments (system)" },
       ],
@@ -189,15 +115,6 @@ export function WorkspaceRootShell({ orgName, departments, deptTileStats, metric
       }
       if (a.type !== "actions.block") return;
       switch (a.actionId) {
-        case "open-operations":
-          if (operationsDeptId) router.push(`${WORKSPACE_BASE}/dept/${encodeURIComponent(operationsDeptId)}`);
-          break;
-        case "all-jobs":
-          router.push("/admin/jobs");
-          break;
-        case "schedules":
-          router.push("/admin/schedules");
-          break;
         case "work-units":
           router.push("/admin/system/work-units");
           break;
@@ -212,8 +129,8 @@ export function WorkspaceRootShell({ orgName, departments, deptTileStats, metric
   );
 
   const kpis = useMemo(
-    () => buildKpis({ metrics, metricsLoading, hasOperations }),
-    [metrics, metricsLoading, hasOperations]
+    () => buildKpis({ metrics, metricsLoading }),
+    [metrics, metricsLoading]
   );
 
   return (
@@ -247,7 +164,7 @@ export function WorkspaceRootShell({ orgName, departments, deptTileStats, metric
                 kpis={kpis}
                 surface="company"
                 dualRailHeadings={{
-                  business: hasOperations ? "Operations signals" : "Workspace structure",
+                  business: "Workspace structure",
                   secondary: "System",
                 }}
               />

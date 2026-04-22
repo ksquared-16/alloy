@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabaseClient";
 import { palette, neutral, derived } from "@/styles/tokens/colors";
 
 export default function TopNavBar() {
   const pathname = usePathname();
+  const router = useRouter();
   const isWorkspace =
     pathname === "/adminV2/workspace" ||
     pathname.startsWith("/adminV2/workspace/") ||
@@ -23,6 +25,13 @@ export default function TopNavBar() {
     active
       ? { backgroundColor: "rgba(255,255,255,0.14)", color: neutral.surface, opacity: 1 }
       : { opacity: 0.55, color: neutral.surface };
+
+  const onSignOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  };
 
   return (
     <header
@@ -71,11 +80,14 @@ export default function TopNavBar() {
           Queue
         </span>
       </nav>
-      <div
-        className="shrink-0 w-8 h-8 rounded-full border"
-        style={{ borderColor: derived.topBarDivider, backgroundColor: "rgba(255,255,255,0.08)" }}
-        aria-hidden
-      />
+      <button
+        type="button"
+        onClick={onSignOut}
+        className="px-2 py-1 rounded text-[11px] font-medium"
+        style={{ opacity: 0.78, color: neutral.surface, border: `1px solid ${derived.topBarDivider}` }}
+      >
+        Sign out
+      </button>
     </header>
   );
 }
