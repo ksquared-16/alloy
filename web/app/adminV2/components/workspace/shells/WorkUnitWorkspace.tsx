@@ -53,6 +53,7 @@ export default function WorkUnitWorkspace({ model, onAction }: Props) {
   const statusLine = li?.laneStatusLine?.trim() ?? "";
   const recLine = li?.recommendedActionLine?.trim() ?? "";
   const hasLaneStrip = Boolean(statusLine || recLine);
+  const kpiSurface = model.kpis.some((k) => k.lane === "ai") ? "work_unit" : "default";
 
   return (
     <div
@@ -106,7 +107,7 @@ export default function WorkUnitWorkspace({ model, onAction }: Props) {
                     ) : null}
                   </div>
                 ) : null}
-                {hasKpis ? <KPIBlock kpis={model.kpis} surface="work_unit" /> : null}
+                {hasKpis ? <KPIBlock kpis={model.kpis} surface={kpiSurface} maxVisible={6} /> : null}
               </div>
             ) : null}
             <div

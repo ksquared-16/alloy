@@ -1,5 +1,9 @@
 import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
 import type { QueueItemVm, QueueVm, WorkUnitWorkspaceModel } from "@/lib/ui-v2/workspace-types";
+import {
+    buildEnrollmentOpportunityQueueItemVm,
+    buildEnrollmentWorkUnitActionsRail,
+} from "@/lib/workspace/viewModels/enrollmentWorkUnitViewModel";
 
 function formatUsd(n: number): string {
     return new Intl.NumberFormat(undefined, {
@@ -26,32 +30,92 @@ function formatAgeCompact(ms: number): string {
     return `${s}s`;
 }
 
-function opportunityQuickActionsForLane(workUnitKey: string): QueueItemVm["quickActions"] {
-    const k = workUnitKey.trim().toLowerCase();
-    if (k === "needs_attention") {
-        // Quick actions depend on attention reason; rows override when possible.
-        return [{ id: "open_quote", label: "Open" }];
+function defaultOpportunityQueueItemVm(row: WorkspaceOpportunityQueueRuntime["items"][number], workUnitKey: string): QueueItemVm {
+    const customer = (row._customer_name ?? "").trim();
+    const titleBase = (row.name ?? "").trim();
+    const title = customer || titleBase || row.id.slice(-8);
+    const status = (row.status_key ?? "").trim();
+    const statusLabel = (row._status_display ?? "").trim() || status;
+    const value =
+        row.quote_total != null && Number.isFinite(Number(row.quote_total)) && Number(row.quote_total) > 0
+            ? formatUsd(Number(row.quote_total))
+            : undefined;
+
+    const reasonLabel = (row as { _attention_reason_label?: string | null })._attention_reason_label?.trim() || null;
+    const reason = (row as { _attention_reason?: string | null })._attention_reason?.trim() || null;
+
+    const nextStep = row._lifecycle_next_step?.title?.trim() || "";
+    const lastTouchedMs =
+        parseIsoMs((row as { updated_at?: string | null }).updated_at) ??
+        parseIsoMs((row as { created_at?: string | null }).created_at);
+    const lastActivityLabel =
+        lastTouchedMs != null ? `${formatAgeCompact(Date.now() - lastTouchedMs)} ago` : "";
+
+    const quickActions =
+        workUnitKey.trim().toLowerCase() === "needs_attention" && reason
+            ? (() => {
+                  if (reason === "stale_quote_followup") {
+                      return [
+                          { id: "open_quote", label: "Open inquiry" },
+                          { id: "mark_won", label: "Enrolled" },
+                          { id: "mark_lost", label: "Lost" },
+                      ];
+                  }
+                  if (reason === "missing_quote_after_execution") {
+                      return [
+                          { id: "open_quote", label: "Open inquiry" },
+                          { id: "start_quote", label: "Schedule tour" },
+                          { id: "mark_lost", label: "Lost" },
+                      ];
+                  }
+                  return [
+                      { id: "qualify_opportunity", label: "Conversation had" },
+                      { id: "start_quote", label: "Schedule tour" },
+                      { id: "mark_lost", label: "Lost" },
+                  ];
+              })()
+            : (() => {
+                  const k = workUnitKey.trim().toLowerCase();
+                  if (k === "needs_attention") return [{ id: "open_quote", label: "Open" }];
+                  if (k === "priced_followup") {
+                      return [
+                          { id: "open_quote", label: "Open inquiry" },
+                          { id: "mark_won", label: "Enrolled" },
+                          { id: "mark_lost", label: "Lost" },
+                      ];
+                  }
+                  if (k === "quoting") {
+                      return [
+                          { id: "open_quote", label: "Open inquiry" },
+                          { id: "start_quote", label: "Schedule tour" },
+                          { id: "mark_lost", label: "Lost" },
+                      ];
+                  }
+                  return [
+                      { id: "qualify_opportunity", label: "Conversation had" },
+                      { id: "start_quote", label: "Schedule tour" },
+                      { id: "mark_lost", label: "Lost" },
+                  ];
+              })();
+
+    const item: QueueItemVm = {
+        id: row.id,
+        title,
+        valueLabel: value,
+        metaLines: [
+            ...(statusLabel ? [{ label: "Status", value: statusLabel }] : []),
+            ...(nextStep ? [{ label: "Next step", value: nextStep }] : []),
+            ...(reasonLabel ? [{ label: "Reason", value: reasonLabel }] : []),
+            ...(lastActivityLabel ? [{ label: "Last activity", value: lastActivityLabel }] : []),
+        ],
+        quickActions,
+        urgencyTier: workUnitKey.trim().toLowerCase() === "priced_followup" ? "warning" : "standard",
+    };
+    if (statusLabel) {
+        item.groupKey = status;
+        item.groupLabel = statusLabel;
     }
-    if (k === "priced_followup") {
-        return [
-            { id: "open_quote", label: "Open inquiry" },
-            { id: "mark_won", label: "Enrolled" },
-            { id: "mark_lost", label: "Lost" },
-        ];
-    }
-    if (k === "quoting") {
-        return [
-            { id: "open_quote", label: "Open inquiry" },
-            { id: "start_quote", label: "Schedule tour" },
-            { id: "mark_lost", label: "Lost" },
-        ];
-    }
-    // Default: early pipeline.
-    return [
-        { id: "qualify_opportunity", label: "Conversation had" },
-        { id: "start_quote", label: "Schedule tour" },
-        { id: "mark_lost", label: "Lost" },
-    ];
+    return item;
 }
 
 export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
@@ -65,84 +129,20 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
 }): WorkUnitWorkspaceModel {
     const workUnitKeyLower = input.workUnitKey.trim().toLowerCase();
     const isAllInquiries = workUnitKeyLower === "pipeline_overview";
+    const isEnrollmentDept = (input.departmentKey ?? "").trim().toLowerCase() === "enrollment";
 
-    const rawItems: QueueItemVm[] = input.oq.items.map((row) => {
-        const customer = (row._customer_name ?? "").trim();
-        const titleBase = (row.name ?? "").trim();
-        const title = customer || titleBase || row.id.slice(-8);
-        const stage = row._lifecycle_stage_title?.trim() || "";
-        const status = (row.status_key ?? "").trim();
-        const statusLabel = (row._status_display ?? "").trim() || status;
-        const value =
-            row.quote_total != null && Number.isFinite(Number(row.quote_total)) && Number(row.quote_total) > 0
-                ? formatUsd(Number(row.quote_total))
-                : undefined;
+    const rawItems: QueueItemVm[] = input.oq.items.map((row) =>
+        isEnrollmentDept
+            ? buildEnrollmentOpportunityQueueItemVm(row, { workUnitKey: input.workUnitKey })
+            : defaultOpportunityQueueItemVm(row, input.workUnitKey)
+    );
 
-        const reasonLabel = (row as { _attention_reason_label?: string | null })._attention_reason_label?.trim() || null;
-        const reason = (row as { _attention_reason?: string | null })._attention_reason?.trim() || null;
-
-        const nextStep = row._lifecycle_next_step?.title?.trim() || "";
-        const lastTouchedMs =
-            parseIsoMs((row as { updated_at?: string | null }).updated_at) ??
-            parseIsoMs((row as { created_at?: string | null }).created_at);
-        const lastActivityLabel =
-            lastTouchedMs != null ? `${formatAgeCompact(Date.now() - lastTouchedMs)} ago` : "";
-
-        const quickActions =
-            input.workUnitKey.trim().toLowerCase() === "needs_attention" && reason
-                ? (() => {
-                      if (reason === "stale_quote_followup") {
-                          return [
-                              { id: "open_quote", label: "Open inquiry" },
-                              { id: "mark_won", label: "Enrolled" },
-                              { id: "mark_lost", label: "Lost" },
-                          ];
-                      }
-                      if (reason === "missing_quote_after_execution") {
-                          return [
-                              { id: "open_quote", label: "Open inquiry" },
-                              { id: "start_quote", label: "Schedule tour" },
-                              { id: "mark_lost", label: "Lost" },
-                          ];
-                      }
-                      // stale_new_inquiry / stale_qualified
-                      return [
-                          { id: "qualify_opportunity", label: "Conversation had" },
-                          { id: "start_quote", label: "Schedule tour" },
-                          { id: "mark_lost", label: "Lost" },
-                      ];
-                  })()
-                : opportunityQuickActionsForLane(input.workUnitKey);
-
-        const item: QueueItemVm = {
-            id: row.id,
-            title,
-            valueLabel: value,
-            metaLines: [
-                ...(statusLabel ? [{ label: "Status", value: statusLabel }] : []),
-                ...(nextStep ? [{ label: "Next step", value: nextStep }] : []),
-                ...(reasonLabel ? [{ label: "Reason", value: reasonLabel }] : []),
-                ...(lastActivityLabel ? [{ label: "Last activity", value: lastActivityLabel }] : []),
-            ],
-            quickActions,
-            urgencyTier: input.workUnitKey.trim().toLowerCase() === "priced_followup" ? "warning" : "standard",
-        };
-        if (statusLabel) {
-            item.groupKey = status;
-            item.groupLabel = statusLabel;
-        }
-        return item;
+    const items = rawItems.slice().sort((a, b) => {
+        const ak = (a.groupLabel ?? "").toLowerCase();
+        const bk = (b.groupLabel ?? "").toLowerCase();
+        if (ak !== bk) return ak.localeCompare(bk);
+        return a.title.toLowerCase().localeCompare(b.title.toLowerCase());
     });
-
-    // Locked contract: group execution rows by configured business status with readable labels.
-    const items = rawItems
-        .slice()
-        .sort((a, b) => {
-            const ak = (a.groupLabel ?? "").toLowerCase();
-            const bk = (b.groupLabel ?? "").toLowerCase();
-            if (ak !== bk) return ak.localeCompare(bk);
-            return a.title.toLowerCase().localeCompare(b.title.toLowerCase());
-        });
 
     const queue: QueueVm = {
         id: `oq:${input.workUnitId}`,
@@ -150,7 +150,9 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
         countBadge: input.oq.total,
         items,
         sortCaption: "Grouped by status",
-        workUnitMidlineKeys: { left: "Next step", right: "Status" },
+        workUnitMidlineKeys: isEnrollmentDept
+            ? { left: "Lifecycle", right: "Next step" }
+            : { left: "Next step", right: "Status" },
         workUnitGroupHeaders: Object.fromEntries(
             [...new Set(items.map((i) => i.groupKey || i.groupLabel).filter(Boolean) as string[])].map((k) => [
                 k,
@@ -162,7 +164,6 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
     const laneKey = input.workUnitKey;
     const focusLabel = `${input.deptName} · ${input.workUnitName}`;
 
-    // Work-unit KPI strip (contract): count, value, oldest/age, needs action.
     let valueTotal = 0;
     let oldestMs: number | null = null;
     let needsActionCount = 0;
@@ -181,6 +182,13 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
     }
     const oldestAgeLabel = oldestMs != null ? `${formatAgeCompact(Date.now() - oldestMs)} ago` : "—";
 
+    const actionsRail: WorkUnitWorkspaceModel["actionsRail"] = isEnrollmentDept
+        ? buildEnrollmentWorkUnitActionsRail()
+        : {
+              primaries: [{ id: "back_department", label: "Back to department", variant: "secondary" as const }],
+              overflow: [{ id: "open_admin_opportunities", label: "All inquiries", variant: "secondary" as const }],
+          };
+
     return {
         workspaceLevel: "work_unit",
         workUnitId: input.workUnitId,
@@ -189,7 +197,7 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
         laneKey,
         aiSummary: {
             headline: input.workUnitName.trim() || "Queue",
-            aiAwarenessLine: "Grouped by configured status labels.",
+            aiAwarenessLine: "Grouped by configured status labels from definitions.",
         },
         signals: [],
         kpis: [
@@ -218,11 +226,7 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
                       : "Work the oldest blockers first; use quick actions to move the inquiry forward.",
         },
         primaryQueue: queue,
-        actionsRail: {
-            primaries: [{ id: "back_department", label: "Back to department", variant: "secondary" }],
-            overflow: [{ id: "open_admin_opportunities", label: "All inquiries", variant: "secondary" }],
-        },
+        actionsRail,
         contextRail: { title: "About this queue", groups: [] },
     };
 }
-

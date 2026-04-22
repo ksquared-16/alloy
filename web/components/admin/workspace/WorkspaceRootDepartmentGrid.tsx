@@ -8,6 +8,7 @@ import {
     operationalWorkspaceShellStyle,
     resolveVisualContext,
 } from "@/lib/visualContext";
+import { isGrowthSliceDepartmentKey } from "@/lib/workspace/growthSliceDepartments";
 import "@/app/adminV2/components/workspace/workspace.css";
 
 export type WorkspaceRootDepartmentRow = {
@@ -27,7 +28,10 @@ const companyRootStyle: CSSProperties = operationalWorkspaceShellStyle({
 });
 
 /** Per-department rollups for root tiles (from /api/admin/work-units, etc.). */
-export type WorkspaceRootDeptTileStats = Record<string, { workUnitCount: number }>;
+export type WorkspaceRootDeptTileStats = Record<
+    string,
+    { workUnitCount: number; opportunityRollupLine?: string | null }
+>;
 
 type Props = {
     workspaceBasePath: string;
@@ -71,9 +75,15 @@ export function WorkspaceRootDepartmentGrid({
                             const desc =
                                 (d.description && String(d.description).trim()) ||
                         `Departments and work units for ${d.name}.`;
-                            const wu = deptTileStats?.[d.id]?.workUnitCount;
+                            const stats = deptTileStats?.[d.id];
+                            const wu = stats?.workUnitCount;
+                            const rollup = stats?.opportunityRollupLine?.trim();
                             const statsLine =
-                                wu != null && wu >= 0 ? `${wu} work unit${wu === 1 ? "" : "s"}` : null;
+                                isGrowthSliceDepartmentKey(d.key) && rollup
+                                    ? rollup
+                                    : wu != null && wu >= 0
+                                      ? `${wu} work unit${wu === 1 ? "" : "s"}`
+                                      : null;
                             return (
                                 <Link
                                     key={d.id}

@@ -5,7 +5,7 @@ import { useMemo } from "react";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
 import "@/app/adminV2/components/workspace/workspace.css";
 import KPIBlock from "@/app/adminV2/components/workspace/blocks/KPIBlock";
-import type { ActionsVm, KPIVm } from "@/lib/ui-v2/workspace-types";
+import type { KPIVm } from "@/lib/ui-v2/workspace-types";
 import {
   WorkspaceRootDepartmentGrid,
   type WorkspaceRootDepartmentRow,
@@ -54,6 +54,8 @@ type Props = {
   deptTileStats: WorkspaceRootDeptTileStats;
   metrics: WorkspaceRootMetrics | null;
   metricsLoading: boolean;
+  /** Growth-slice departments: rolled up from per-dept `opportunity-lifecycle-kpis` (same semantics as /dept). */
+  orgOpportunityKpis?: KPIVm[] | null;
 };
 
 function formatInt(n: number | null | undefined): string {
@@ -61,7 +63,7 @@ function formatInt(n: number | null | undefined): string {
   return String(Math.max(0, Math.floor(n)));
 }
 
-function buildKpis(params: {
+function buildStructureKpis(params: {
   metrics: WorkspaceRootMetrics | null;
   metricsLoading: boolean;
 }): KPIVm[] {
@@ -75,13 +77,21 @@ function buildKpis(params: {
 /**
  * Organization workspace root — company banner, KPI strip, department grid, command rail (Admin V2 mock grammar).
  */
-export function WorkspaceRootShell({ orgName, departments, deptTileStats, metrics, metricsLoading }: Props) {
+export function WorkspaceRootShell({
+  orgName,
+  departments,
+  deptTileStats,
+  metrics,
+  metricsLoading,
+  orgOpportunityKpis,
+}: Props) {
   const displayName = (orgName && orgName.trim()) || "Your organization";
 
-  const kpis = useMemo(
-    () => buildKpis({ metrics, metricsLoading }),
-    [metrics, metricsLoading]
-  );
+  const kpis = useMemo(() => {
+    const structure = buildStructureKpis({ metrics, metricsLoading });
+    const roll = orgOpportunityKpis?.length ? orgOpportunityKpis : [];
+    return [...structure, ...roll];
+  }, [metrics, metricsLoading, orgOpportunityKpis]);
 
   return (
     <div
@@ -112,7 +122,7 @@ export function WorkspaceRootShell({ orgName, departments, deptTileStats, metric
               <KPIBlock
                 kpis={kpis}
                 surface="default"
-                maxVisible={2}
+                maxVisible={kpis.length ? Math.min(kpis.length, 6) : 2}
               />
             </div>
 

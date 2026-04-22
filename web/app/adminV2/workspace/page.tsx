@@ -7,10 +7,18 @@ import {
     type WorkspaceRootDepartmentRow,
     type WorkspaceRootDeptTileStats,
 } from "@/components/admin/workspace/WorkspaceRootDepartmentGrid";
+import { isGrowthSliceDepartmentKey } from "@/lib/workspace/growthSliceDepartments";
+import type { KPIVm } from "@/lib/ui-v2/workspace-types";
+import {
+    buildWorkspaceRootDepartmentTileRollupLine,
+    buildWorkspaceRootOrgOpportunityKpis,
+    type DepartmentLifecycleKpisPayload,
+} from "@/lib/workspace/viewModels/workspaceRootRollup";
 
-async function loadWorkspaceRollup(): Promise<{
+async function loadWorkspaceRollup(departments: WorkspaceRootDepartmentRow[]): Promise<{
     metrics: WorkspaceRootMetrics;
     deptTileStats: WorkspaceRootDeptTileStats;
+    orgOpportunityKpis: KPIVm[];
 }> {
     const workUnitsRes = await fetch("/api/admin/work-units");
     const wuJson = (await workUnitsRes.json().catch(() => ({}))) as { items?: { department_id?: string }[]; error?: string };
@@ -25,12 +33,46 @@ async function loadWorkspaceRollup(): Promise<{
         }
     }
 
+    for (const d of departments) {
+        const wu = deptTileStats[d.id]?.workUnitCount ?? 0;
+        if (!deptTileStats[d.id]) deptTileStats[d.id] = { workUnitCount: wu };
+        else deptTileStats[d.id] = { ...deptTileStats[d.id], workUnitCount: wu };
+    }
+
+    const growthDepts = departments.filter((d) => isGrowthSliceDepartmentKey(d.key));
+    const growthSnapshots = await Promise.all(
+        growthDepts.map(async (d) => {
+            const res = await fetch(`/api/admin/departments/${encodeURIComponent(d.id)}/opportunity-lifecycle-kpis`);
+            const json = (await res.json().catch(() => ({}))) as DepartmentLifecycleKpisPayload;
+            return { id: d.id, key: d.key, payload: res.ok && json.counts ? json : null };
+        })
+    );
+
+    const kpisByDeptId = new Map(growthSnapshots.map((s) => [s.id, s.payload]));
+
+    for (const d of departments) {
+        const wu = deptTileStats[d.id]?.workUnitCount ?? 0;
+        const payload = kpisByDeptId.get(d.id) ?? null;
+        deptTileStats[d.id] = {
+            workUnitCount: wu,
+            opportunityRollupLine: buildWorkspaceRootDepartmentTileRollupLine({
+                departmentKey: d.key,
+                workUnitCount: wu,
+                kpis: payload,
+            }),
+        };
+    }
+
+    const orgOpportunityKpis = buildWorkspaceRootOrgOpportunityKpis(
+        growthSnapshots.map((s) => ({ departmentKey: s.key, kpis: s.payload }))
+    );
+
     const metrics: WorkspaceRootMetrics = {
         departments: null,
         workUnits: workUnitsRes.ok && Array.isArray(wuJson.items) ? wuJson.items.length : null,
     };
 
-    return { metrics, deptTileStats };
+    return { metrics, deptTileStats, orgOpportunityKpis };
 }
 
 /**
@@ -44,6 +86,7 @@ export default function AdminV2WorkspaceIndexPage() {
     const [error, setError] = useState<string | null>(null);
     const [metrics, setMetrics] = useState<WorkspaceRootMetrics | null>(null);
     const [deptTileStats, setDeptTileStats] = useState<WorkspaceRootDeptTileStats>({});
+    const [orgOpportunityKpis, setOrgOpportunityKpis] = useState<KPIVm[] | null>(null);
     const [metricsLoading, setMetricsLoading] = useState(true);
 
     useEffect(() => {
@@ -74,18 +117,32 @@ export default function AdminV2WorkspaceIndexPage() {
 
     useEffect(() => {
         let cancelled = false;
+        if (loading) return () => {
+            cancelled = true;
+        };
+        if (departments.length === 0) {
+            setMetricsLoading(false);
+            setMetrics(null);
+            setDeptTileStats({});
+            setOrgOpportunityKpis(null);
+            return () => {
+                cancelled = true;
+            };
+        }
         (async () => {
             setMetricsLoading(true);
             try {
-                const { metrics: m, deptTileStats: stats } = await loadWorkspaceRollup();
+                const { metrics: m, deptTileStats: stats, orgOpportunityKpis: roll } = await loadWorkspaceRollup(departments);
                 if (!cancelled) {
                     setMetrics(m);
                     setDeptTileStats(stats);
+                    setOrgOpportunityKpis(roll.length ? roll : null);
                 }
             } catch {
                 if (!cancelled) {
                     setMetrics(null);
                     setDeptTileStats({});
+                    setOrgOpportunityKpis(null);
                 }
             } finally {
                 if (!cancelled) setMetricsLoading(false);
@@ -94,7 +151,7 @@ export default function AdminV2WorkspaceIndexPage() {
         return () => {
             cancelled = true;
         };
-    }, [departments]);
+    }, [departments, loading]);
 
     const metricsResolved = useMemo(() => {
         if (!metrics) return null;
@@ -134,6 +191,7 @@ export default function AdminV2WorkspaceIndexPage() {
             deptTileStats={deptTileStats}
             metrics={metricsResolved}
             metricsLoading={metricsLoading}
+            orgOpportunityKpis={orgOpportunityKpis}
         />
     );
 }

@@ -34,6 +34,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [workUnit, setWorkUnit] = useState<WorkUnitRow | null>(null);
     const [dept, setDept] = useState<DeptRow | null>(null);
     const [oq, setOq] = useState<WorkspaceOpportunityQueueRuntime | null>(null);
+    const [needsAttentionWorkUnitId, setNeedsAttentionWorkUnitId] = useState<string | null>(null);
 
     useEffect(() => {
         if (!departmentId || !workUnitId) return;
@@ -42,16 +43,22 @@ export default function AdminV2OpportunityWorkUnitPage() {
             setLoading(true);
             setError(null);
             try {
-                const [wuRes, deptRes] = await Promise.all([
+                const [wuRes, deptRes, deptWusRes] = await Promise.all([
                     fetch(`/api/admin/work-units/${encodeURIComponent(workUnitId)}`),
                     fetch(`/api/admin/departments/${encodeURIComponent(departmentId)}`),
+                    fetch(`/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`),
                 ]);
 
                 const wuJson = (await wuRes.json().catch(() => ({}))) as { error?: string } & Partial<WorkUnitRow>;
                 const deptJson = (await deptRes.json().catch(() => ({}))) as { error?: string } & Partial<DeptRow>;
+                const deptWusJson = (await deptWusRes.json().catch(() => ({}))) as {
+                    error?: string;
+                    items?: Array<{ id: string; key?: string | null }>;
+                };
 
                 if (!wuRes.ok) throw new Error(wuJson.error ?? "Failed to load work unit");
                 if (!deptRes.ok) throw new Error(deptJson.error ?? "Failed to load department");
+                if (!deptWusRes.ok) throw new Error(deptWusJson.error ?? "Failed to load department work units");
 
                 const wu = wuJson as WorkUnitRow;
                 if (wu.department_id !== departmentId) {
@@ -75,13 +82,21 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     items: oqJson.items ?? [],
                 };
 
+                const naWu = (deptWusJson.items ?? []).find(
+                    (r) => String(r.key ?? "").trim().toLowerCase() === "needs_attention"
+                );
+
                 if (!cancelled) {
                     setWorkUnit(wu);
                     setDept(deptJson as DeptRow);
                     setOq(oqRuntime);
+                    setNeedsAttentionWorkUnitId(naWu?.id ?? null);
                 }
             } catch (e) {
-                if (!cancelled) setError((e as Error).message);
+                if (!cancelled) {
+                    setError((e as Error).message);
+                    setNeedsAttentionWorkUnitId(null);
+                }
             } finally {
                 if (!cancelled) setLoading(false);
             }
@@ -152,15 +167,36 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 return;
             }
             if (action.type === "actions.block") {
-                if (action.actionId === "back_department") {
+                if (action.actionId === "back_department" || action.actionId === "wu_back_department") {
                     window.location.href = `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}`;
+                    return;
                 }
-                if (action.actionId === "open_admin_opportunities") {
+                if (action.actionId === "open_admin_opportunities" || action.actionId === "wu_open_all_inquiries") {
                     window.location.href = "/admin/opportunities";
+                    return;
+                }
+                if (action.actionId === "wu_new_inquiry") {
+                    window.location.href = "/admin/opportunities";
+                    return;
+                }
+                if (action.actionId === "wu_open_needs_attention") {
+                    if (needsAttentionWorkUnitId) {
+                        window.location.href = `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(needsAttentionWorkUnitId)}`;
+                    } else {
+                        window.location.href = `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}`;
+                    }
+                    return;
+                }
+                if (action.actionId === "wu_manage_work_units") {
+                    window.location.href = "/admin/system/work-units";
+                    return;
+                }
+                if (action.actionId === "wu_workspace_root") {
+                    window.location.href = WORKSPACE_BASE;
                 }
             }
         },
-        [departmentId, openDrawer]
+        [departmentId, needsAttentionWorkUnitId, openDrawer]
     );
 
     const deptName = dept?.name?.trim() || "Department";
