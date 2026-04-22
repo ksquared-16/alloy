@@ -15,19 +15,10 @@ import type {
 } from "@/lib/workspace/types";
 import { isGrowthSliceDepartmentKey } from "@/lib/workspace/growthSliceDepartments";
 import type { OpportunityLifecycleKpiSnapshot } from "@/lib/workspace/computeOpportunityLifecycleKpis";
+import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
 type Dept = { id: string; name: string | null; key?: string | null };
 type WU = { id: string; name: string | null; department_id: string; key?: string | null };
-
-const WORKSPACE_DATA_FETCH_MS = 45_000;
-
-function workspaceDataFetchInit(): RequestInit | undefined {
-    const timeout = (AbortSignal as unknown as { timeout?: (ms: number) => AbortSignal }).timeout;
-    if (typeof timeout === "function") {
-        return { signal: timeout(WORKSPACE_DATA_FETCH_MS) };
-    }
-    return undefined;
-}
 
 async function fetchOpportunityQueueRuntime(wu: WU | undefined): Promise<WorkspaceOpportunityQueueRuntime> {
     if (!wu?.id) {
@@ -56,6 +47,19 @@ async function fetchOpportunityQueueRuntime(wu: WU | undefined): Promise<Workspa
     } catch (e) {
         const msg = e instanceof Error ? e.message : "Queue request failed";
         return { total: 0, error: msg, items: [] };
+    }
+}
+
+async function fetchJsonSafe(
+    url: string,
+    init?: RequestInit
+): Promise<{ ok: boolean; json: Record<string, unknown> }> {
+    try {
+        const r = await fetch(url, init);
+        const json = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+        return { ok: r.ok, json };
+    } catch {
+        return { ok: false, json: {} };
     }
 }
 
@@ -191,12 +195,20 @@ export function useOperationsWorkspaceData(departmentId: string) {
                 const wj = (await wRes.json().catch(() => ({}))) as { items?: WU[]; error?: string };
 
                 if (!dRes.ok) throw new Error(dj.error ?? "Departments request failed");
-                if (!wRes.ok) throw new Error(wj.error ?? "Work units request failed");
 
                 const depts = dj.items ?? [];
-                const wus = wj.items ?? [];
                 const d = depts.find((x) => x.id === deptId) ?? null;
-                const deptKey = (d?.key ?? "").trim().toLowerCase();
+                if (!d) {
+                    throw new Error("Department not found for this organization");
+                }
+
+                let wus: WU[] = [];
+                if (wRes.ok) {
+                    wus = wj.items ?? [];
+                }
+
+                const deptKey = (d.key ?? "").trim().toLowerCase();
+                const workUnitsListError: string | null = wRes.ok ? null : (wj.error ?? "Work units unavailable");
 
                 if (isGrowthSliceDepartmentKey(deptKey)) {
                     setUnassignedTotal(null);
@@ -204,7 +216,7 @@ export function useOperationsWorkspaceData(departmentId: string) {
                     setNeedsAttentionCount(null);
                     setHighTouchCount(null);
                     setAttention({});
-                    setDerivedError(null);
+                    setDerivedError(workUnitsListError);
                     if (!cancelled) setLifecycleKpis({ status: "loading" });
 
                     const keyToWu = new Map<string, WU>();
@@ -289,33 +301,40 @@ export function useOperationsWorkspaceData(departmentId: string) {
                 if (!cancelled) setLifecycleKpis(undefined);
 
                 const jobFetchInit = workspaceDataFetchInit();
-                const [uRes, stRes, deptJobsRes, unassignedJobsRes] = await Promise.all([
-                    fetch("/api/admin/jobs?assigned_vendor_unassigned=true&limit=1", jobFetchInit),
-                    fetch("/api/admin/schedules?scheduled_on=today&limit=1", jobFetchInit),
-                    fetch(`/api/admin/jobs?department_id=${encodeURIComponent(deptId)}&limit=200`, jobFetchInit),
-                    fetch("/api/admin/jobs?assigned_vendor_unassigned=true&limit=200", jobFetchInit),
+                const [uMeta, stMeta, deptJobsMeta, unassignedJobsMeta] = await Promise.all([
+                    fetchJsonSafe("/api/admin/jobs?assigned_vendor_unassigned=true&limit=1", jobFetchInit),
+                    fetchJsonSafe("/api/admin/schedules?scheduled_on=today&limit=1", jobFetchInit),
+                    fetchJsonSafe(`/api/admin/jobs?department_id=${encodeURIComponent(deptId)}&limit=200`, jobFetchInit),
+                    fetchJsonSafe("/api/admin/jobs?assigned_vendor_unassigned=true&limit=200", jobFetchInit),
                 ]);
-                const uj = (await uRes.json().catch(() => ({}))) as { total?: number; error?: string };
-                const stj = (await stRes.json().catch(() => ({}))) as { total?: number; schedules?: unknown[]; error?: string };
-                const djJobs = (await deptJobsRes.json().catch(() => ({}))) as {
+                const uj = uMeta.json as { total?: number; error?: string };
+                const stj = stMeta.json as { total?: number; schedules?: unknown[]; error?: string };
+                const djJobs = deptJobsMeta.json as {
                     jobs?: JobRowForWorkspaceMetrics[];
                     error?: string;
                 };
-                const ujJobs = (await unassignedJobsRes.json().catch(() => ({}))) as {
+                const ujJobs = unassignedJobsMeta.json as {
                     jobs?: JobRowForWorkspaceMetrics[];
                     error?: string;
                 };
 
-                if (uRes.ok && typeof uj.total === "number" && !cancelled) setUnassignedTotal(uj.total);
-                else if (!uRes.ok) setUnassignedTotal(null);
-                if (stRes.ok && typeof stj.total === "number" && !cancelled) setScheduledTodayCount(stj.total);
-                else if (!stRes.ok) setScheduledTodayCount(null);
+                if (uMeta.ok && typeof uj.total === "number" && !cancelled) setUnassignedTotal(uj.total);
+                else if (!uMeta.ok) setUnassignedTotal(null);
+                if (stMeta.ok && typeof stj.total === "number" && !cancelled) setScheduledTodayCount(stj.total);
+                else if (!stMeta.ok) setScheduledTodayCount(null);
 
-                let mergeErr: string | null = null;
-                const deptRows = deptJobsRes.ok ? (djJobs.jobs ?? []) : [];
-                if (!deptJobsRes.ok) mergeErr = djJobs.error ?? "Department jobs unavailable";
-                const unRows = unassignedJobsRes.ok ? (ujJobs.jobs ?? []) : [];
-                if (!unassignedJobsRes.ok) mergeErr = mergeErr ?? (ujJobs.error ?? "Unassigned jobs unavailable");
+                let mergeErr: string | null = workUnitsListError;
+                const deptRows = deptJobsMeta.ok ? (djJobs.jobs ?? []) : [];
+                if (!deptJobsMeta.ok) {
+                    mergeErr = mergeErr
+                        ? `${mergeErr}; ${djJobs.error ?? "Department jobs unavailable"}`
+                        : djJobs.error ?? "Department jobs unavailable";
+                }
+                const unRows = unassignedJobsMeta.ok ? (ujJobs.jobs ?? []) : [];
+                if (!unassignedJobsMeta.ok) {
+                    const uem = ujJobs.error ?? "Unassigned jobs unavailable";
+                    mergeErr = mergeErr ? `${mergeErr}; ${uem}` : uem;
+                }
                 if (!cancelled) setDerivedError(mergeErr);
 
                 const mergedRows = mergeJobListsById(deptRows, unRows);

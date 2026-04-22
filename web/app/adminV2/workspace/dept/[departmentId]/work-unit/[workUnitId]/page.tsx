@@ -10,6 +10,8 @@ import { executeOpportunityRecordAction } from "@/lib/recordChrome/executeOpport
 import type { WorkspaceAction } from "@/lib/ui-v2/workspace-actions";
 import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
 import { buildRealOpportunityWorkUnitWorkspaceModel } from "@/lib/ui-v2/adapters/realWorkUnitFromOpportunities";
+import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import { workspaceRouteParam } from "@/lib/workspace/workspaceRouteParam";
 
 const WORKSPACE_BASE = "/adminV2/workspace";
 
@@ -24,8 +26,8 @@ type DeptRow = { id: string; name: string | null; key: string | null };
 
 export default function AdminV2OpportunityWorkUnitPage() {
     const params = useParams();
-    const departmentId = typeof params.departmentId === "string" ? params.departmentId : "";
-    const workUnitId = typeof params.workUnitId === "string" ? params.workUnitId : "";
+    const departmentId = workspaceRouteParam(params.departmentId);
+    const workUnitId = workspaceRouteParam(params.workUnitId);
     const searchParams = useSearchParams();
     const { openDrawer, drawer } = useAdminDrawer();
 
@@ -37,16 +39,33 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [needsAttentionWorkUnitId, setNeedsAttentionWorkUnitId] = useState<string | null>(null);
 
     useEffect(() => {
-        if (!departmentId || !workUnitId) return;
+        if (!departmentId || !workUnitId) {
+            setLoading(false);
+            setWorkUnit(null);
+            setDept(null);
+            setOq(null);
+            setNeedsAttentionWorkUnitId(null);
+            setError("Missing department or work unit in the URL.");
+            return;
+        }
+
         let cancelled = false;
         (async () => {
             setLoading(true);
             setError(null);
+            const init = workspaceDataFetchInit();
             try {
+                if (!cancelled) {
+                    setWorkUnit(null);
+                    setDept(null);
+                    setOq(null);
+                    setNeedsAttentionWorkUnitId(null);
+                }
+
                 const [wuRes, deptRes, deptWusRes] = await Promise.all([
-                    fetch(`/api/admin/work-units/${encodeURIComponent(workUnitId)}`),
-                    fetch(`/api/admin/departments/${encodeURIComponent(departmentId)}`),
-                    fetch(`/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`),
+                    fetch(`/api/admin/work-units/${encodeURIComponent(workUnitId)}`, init),
+                    fetch(`/api/admin/departments/${encodeURIComponent(departmentId)}`, init),
+                    fetch(`/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`, init),
                 ]);
 
                 const wuJson = (await wuRes.json().catch(() => ({}))) as { error?: string } & Partial<WorkUnitRow>;
@@ -58,7 +77,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
                 if (!wuRes.ok) throw new Error(wuJson.error ?? "Failed to load work unit");
                 if (!deptRes.ok) throw new Error(deptJson.error ?? "Failed to load department");
-                if (!deptWusRes.ok) throw new Error(deptWusJson.error ?? "Failed to load department work units");
 
                 const wu = wuJson as WorkUnitRow;
                 if (wu.department_id !== departmentId) {
@@ -66,25 +84,37 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 }
 
                 const isAttention = (wu.key ?? "").trim().toLowerCase() === "needs_attention";
-                const oqRes = await fetch(
-                    `/api/admin/work-units/${encodeURIComponent(workUnitId)}/${isAttention ? "opportunity-attention-queue" : "opportunity-queue"}`
-                );
-                const oqJson = (await oqRes.json().catch(() => ({}))) as {
-                    error?: string;
-                    total?: number;
-                    items?: WorkspaceOpportunityQueueRuntime["items"];
-                };
-                if (!oqRes.ok) throw new Error(oqJson.error ?? "Failed to load queue");
+                let oqRuntime: WorkspaceOpportunityQueueRuntime;
+                try {
+                    const oqRes = await fetch(
+                        `/api/admin/work-units/${encodeURIComponent(workUnitId)}/${isAttention ? "opportunity-attention-queue" : "opportunity-queue"}`,
+                        init
+                    );
+                    const oqJson = (await oqRes.json().catch(() => ({}))) as {
+                        error?: string;
+                        total?: number;
+                        items?: WorkspaceOpportunityQueueRuntime["items"];
+                    };
+                    if (!oqRes.ok) {
+                        oqRuntime = {
+                            total: 0,
+                            error: oqJson.error ?? "Failed to load queue",
+                            items: [],
+                        };
+                    } else {
+                        oqRuntime = {
+                            total: typeof oqJson.total === "number" ? oqJson.total : 0,
+                            error: null,
+                            items: oqJson.items ?? [],
+                        };
+                    }
+                } catch (e) {
+                    const msg = e instanceof Error ? e.message : "Queue request failed";
+                    oqRuntime = { total: 0, error: msg, items: [] };
+                }
 
-                const oqRuntime: WorkspaceOpportunityQueueRuntime = {
-                    total: typeof oqJson.total === "number" ? oqJson.total : 0,
-                    error: null,
-                    items: oqJson.items ?? [],
-                };
-
-                const naWu = (deptWusJson.items ?? []).find(
-                    (r) => String(r.key ?? "").trim().toLowerCase() === "needs_attention"
-                );
+                const naList = deptWusRes.ok ? (deptWusJson.items ?? []) : [];
+                const naWu = naList.find((r) => String(r.key ?? "").trim().toLowerCase() === "needs_attention");
 
                 if (!cancelled) {
                     setWorkUnit(wu);
@@ -95,6 +125,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
             } catch (e) {
                 if (!cancelled) {
                     setError((e as Error).message);
+                    setWorkUnit(null);
+                    setDept(null);
+                    setOq(null);
                     setNeedsAttentionWorkUnitId(null);
                 }
             } finally {
@@ -218,11 +251,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
             title={wuName}
             subtitle=""
         >
-            {error ? <p className="text-sm text-alloy-ember px-1">{error}</p> : null}
-            {loading || !model ? (
+            {loading ? (
                 <p className="text-sm text-alloy-midnight/60 py-4">Loading work unit…</p>
-            ) : (
+            ) : model ? (
                 <WorkUnitWorkspace model={model} onAction={onAction} />
+            ) : (
+                <p className="text-sm text-alloy-ember px-1 py-4">{error ?? "Unable to load this work unit."}</p>
             )}
         </WorkspaceChrome>
     );

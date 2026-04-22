@@ -14,12 +14,13 @@ import {
     buildEnrollmentNeedsAttentionPreviewVm,
     buildEnrollmentPipelineCardsVm,
 } from "@/lib/workspace/viewModels/enrollmentDepartmentViewModel";
+import { workspaceRouteParam } from "@/lib/workspace/workspaceRouteParam";
 
 const WORKSPACE_BASE = "/adminV2/workspace";
 
 export default function AdminV2WorkspaceDepartmentPage() {
     const params = useParams();
-    const departmentId = typeof params.departmentId === "string" ? params.departmentId : "";
+    const departmentId = workspaceRouteParam(params.departmentId);
 
     const { dept, title, runtime, error, loading } = useOperationsWorkspaceData(departmentId);
 
@@ -55,13 +56,21 @@ export default function AdminV2WorkspaceDepartmentPage() {
             title={loading ? "Loading…" : title}
             subtitle=""
         >
-            {error && <p className="text-sm text-amber-800 px-1">{error}</p>}
-            {loading || !dept ? (
+            {error && !loading && dept ? <p className="text-sm text-amber-800 px-1">{error}</p> : null}
+            {loading ? (
                 <div
                     className="rounded-xl border px-4 py-10 text-center text-sm text-alloy-midnight/55"
                     style={{ borderColor: "var(--d-border, rgba(39,63,82,0.14))" }}
                 >
                     Loading department workspace…
+                </div>
+            ) : !dept ? (
+                <div
+                    className="rounded-xl border px-4 py-10 text-center text-sm text-alloy-ember/90"
+                    style={{ borderColor: "var(--d-border, rgba(39,63,82,0.14))" }}
+                >
+                    {error ??
+                        "This department could not be loaded. Use the workspace link above to pick another department."}
                 </div>
             ) : isEnrollment ? (
                 <DepartmentWorkspaceBridgeShell

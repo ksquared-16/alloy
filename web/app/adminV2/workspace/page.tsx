@@ -14,23 +14,14 @@ import {
     buildWorkspaceRootOrgOpportunityKpis,
     type DepartmentLifecycleKpisPayload,
 } from "@/lib/workspace/viewModels/workspaceRootRollup";
-
-const WORKSPACE_ROLLUP_FETCH_MS = 45_000;
-
-function workspaceRollupFetchInit(): RequestInit | undefined {
-    const timeout = (AbortSignal as unknown as { timeout?: (ms: number) => AbortSignal }).timeout;
-    if (typeof timeout === "function") {
-        return { signal: timeout(WORKSPACE_ROLLUP_FETCH_MS) };
-    }
-    return undefined;
-}
+import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
 async function loadWorkspaceRollup(departments: WorkspaceRootDepartmentRow[]): Promise<{
     metrics: WorkspaceRootMetrics;
     deptTileStats: WorkspaceRootDeptTileStats;
     orgOpportunityKpis: KPIVm[];
 }> {
-    const fetchInit = workspaceRollupFetchInit();
+    const fetchInit = workspaceDataFetchInit();
     let workUnitsRes: Response | null = null;
     try {
         workUnitsRes = await fetch("/api/admin/work-units", fetchInit);
@@ -129,7 +120,7 @@ export default function AdminV2WorkspaceIndexPage() {
             setLoading(true);
             setError(null);
             try {
-                const res = await fetch("/api/admin/departments");
+                const res = await fetch("/api/admin/departments", workspaceDataFetchInit());
                 const json = (await res.json().catch(() => ({}))) as {
                     items?: WorkspaceRootDepartmentRow[];
                     error?: string;
