@@ -7785,6 +7785,16 @@ export default function AdminEntityDrawer() {
                                         >
                                             {(() => {
                                                 const d = overviewData as Record<string, unknown>;
+                                                const ident =
+                                                    ((d as { _identity?: unknown })._identity as
+                                                        | {
+                                                              household?: { id: string; label: string } | null;
+                                                              primary_person?: { id: string; label: string; email?: string | null; phone?: string | null; role_label?: string | null } | null;
+                                                              primary_contact?: { id: string; label: string; email?: string | null; phone?: string | null } | null;
+                                                              primary_child?: { id: string; display_name: string; relationship_label?: string | null } | null;
+                                                              inquiry?: { title?: string | null; lines?: { key: string; label: string; value: string }[] } | null;
+                                                          }
+                                                        | null) ?? null;
                                                 const pickFirst = (keys: string[]): string | null => {
                                                     for (const k of keys) {
                                                         const v = d[k];
@@ -7794,35 +7804,26 @@ export default function AdminEntityDrawer() {
                                                     }
                                                     return null;
                                                 };
-                                                const family =
-                                                    String(d._customer_name ?? "").trim() ||
-                                                    String(d.customer_name ?? "").trim() ||
-                                                    String(d._family_name ?? "").trim() ||
-                                                    "";
-                                                const parent =
-                                                    pickFirst(["_primary_person_name", "_parent_name", "parent_name", "primary_person_name"]) ?? "";
-                                                const parentEmail =
-                                                    pickFirst(["_primary_person_email", "_parent_email", "parent_email", "_customer_email", "customer_email"]) ?? "";
-                                                const parentPhone =
-                                                    pickFirst(["_primary_person_phone", "_parent_phone", "parent_phone", "_customer_phone", "customer_phone"]) ?? "";
-                                                const contactName =
-                                                    pickFirst(["_primary_contact_name", "_contact_name", "contact_name"]) ?? "";
+                                                const household = String(ident?.household?.label ?? "").trim();
+                                                const primaryPerson = String(ident?.primary_person?.label ?? "").trim();
+                                                const primaryPersonRole = String(ident?.primary_person?.role_label ?? "").trim();
+                                                const primaryContact = String(ident?.primary_contact?.label ?? "").trim();
                                                 const contactEmail =
-                                                    pickFirst(["_primary_contact_email", "_contact_email", "contact_email", parentEmail]) ?? "";
+                                                    String(ident?.primary_contact?.email ?? "").trim() ||
+                                                    String(ident?.primary_person?.email ?? "").trim() ||
+                                                    "";
                                                 const contactPhone =
-                                                    pickFirst(["_primary_contact_phone", "_contact_phone", "contact_phone", parentPhone]) ?? "";
-                                                const child =
-                                                    pickFirst(["_child_name", "child_name", "_member_name", "member_name", "child_full_name"]) ??
+                                                    String(ident?.primary_contact?.phone ?? "").trim() ||
+                                                    String(ident?.primary_person?.phone ?? "").trim() ||
                                                     "";
-                                                const inquiry =
-                                                    pickFirst(["name", "inquiry", "inquiry_type", "service_key", "program", "program_name"]) ??
+                                                const childName = String(ident?.primary_child?.display_name ?? "").trim();
+                                                const childRel = String(ident?.primary_child?.relationship_label ?? "").trim();
+                                                const inquiryTitle =
+                                                    String(ident?.inquiry?.title ?? "").trim() ||
+                                                    String(d.name ?? "").trim() ||
                                                     "";
-                                                const program =
-                                                    pickFirst(["program", "program_name", "_program_name"]) ?? "";
-                                                const room =
-                                                    pickFirst(["room", "room_name", "_room_name"]) ?? "";
-                                                const age =
-                                                    pickFirst(["age", "age_months", "child_age", "age_group", "age_group_name"]) ?? "";
+                                                const inquiryLines =
+                                                    (ident?.inquiry?.lines ?? []).filter((l) => String(l.value ?? "").trim()).slice(0, 3);
                                                 const stageLabel =
                                                     String(d._lifecycle_stage_title ?? "").trim() ||
                                                     String(d._effective_lifecycle_stage ?? "").trim() ||
@@ -7837,12 +7838,6 @@ export default function AdminEntityDrawer() {
                                                     if (n == null || n === "") return "—";
                                                     const dollars = typeof n === "number" ? n : Number(n);
                                                     return Number.isFinite(dollars) ? formatMoneyFromDollars(dollars) : "—";
-                                                })();
-
-                                                const jobDate = (() => {
-                                                    const v = d.job_date;
-                                                    const s = v != null ? String(v).trim() : "";
-                                                    return s ? formatDate(s) : "—";
                                                 })();
 
                                                 const currentStatus = String(formData.status_key ?? d.status_key ?? "").trim();
@@ -7873,26 +7868,23 @@ export default function AdminEntityDrawer() {
                                                                 </div>
                                                                 <div className="mt-0.5 min-w-0 space-y-0.5">
                                                                     <div className={`${strong} truncate`}>
-                                                                        {child ? `Child: ${child}` : inquiry || String(d.name ?? "").trim() || "—"}
+                                                                        {childName
+                                                                            ? `Child: ${childName}${childRel ? ` (${childRel})` : ""}`
+                                                                            : inquiryTitle || "—"}
                                                                     </div>
                                                                     <div className={`${soft} truncate`}>
                                                                         {[
-                                                                            family ? `Family: ${family}` : null,
-                                                                            parent ? `Parent: ${parent}` : null,
-                                                                            !parent && contactName ? `Contact: ${contactName}` : null,
+                                                                            household ? `Household: ${household}` : null,
+                                                                            primaryPerson ? `${primaryPersonRole || "Primary person"}: ${primaryPerson}` : null,
+                                                                            !primaryPerson && primaryContact ? `Primary contact: ${primaryContact}` : null,
                                                                         ]
                                                                             .filter(Boolean)
                                                                             .join(" · ") || "—"}
                                                                     </div>
                                                                     <div className="text-[11px] font-medium text-alloy-midnight/65 truncate">
-                                                                        {[
-                                                                            inquiry && child ? `Inquiry: ${inquiry}` : null,
-                                                                            program ? `Program: ${program}` : null,
-                                                                            room ? `Room: ${room}` : null,
-                                                                            age ? `Age: ${age}` : null,
-                                                                        ]
-                                                                            .filter(Boolean)
-                                                                            .join(" · ")}
+                                                                        {inquiryLines.length
+                                                                            ? inquiryLines.map((l) => `${l.label}: ${l.value}`).join(" · ")
+                                                                            : ""}
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -7932,7 +7924,7 @@ export default function AdminEntityDrawer() {
                                                                 <div className={tinyLabel}>Contact</div>
                                                                 <div className="rounded-lg border border-alloy-stone/25 bg-white px-2 py-1.5">
                                                                     <div className="text-[13px] font-semibold text-alloy-midnight/85 truncate">
-                                                                        {parent || contactName || family || "—"}
+                                                                        {primaryContact || primaryPerson || household || "—"}
                                                                     </div>
                                                                     <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[12px] font-medium text-alloy-midnight/65">
                                                                         {contactPhone ? (
@@ -7953,12 +7945,12 @@ export default function AdminEntityDrawer() {
                                                                 <div className={tinyLabel}>What they’re asking for</div>
                                                                 <div className="rounded-lg border border-alloy-stone/25 bg-white px-2 py-1.5">
                                                                     <div className="text-[13px] font-semibold text-alloy-midnight/85 truncate">
-                                                                        {inquiry || program || "—"}
+                                                                        {inquiryTitle || "—"}
                                                                     </div>
                                                                     <div className="mt-0.5 text-[12px] font-medium text-alloy-midnight/65 truncate">
-                                                                        {[program ? `Program: ${program}` : null, room ? `Room: ${room}` : null, age ? `Age: ${age}` : null]
-                                                                            .filter(Boolean)
-                                                                            .join(" · ") || "—"}
+                                                                        {inquiryLines.length
+                                                                            ? inquiryLines.map((l) => `${l.label}: ${l.value}`).join(" · ")
+                                                                            : "—"}
                                                                     </div>
                                                                 </div>
                                                             </div>

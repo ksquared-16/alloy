@@ -58,6 +58,12 @@ async function assertDiscountRedemptionInOrg(
 
 type ContactRow = { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null; person_id?: string | null };
 
+function trimOrNull(v: unknown): string | null {
+    if (v == null) return null;
+    const s = String(v).trim();
+    return s ? s : null;
+}
+
 export async function GET(
     request: NextRequest,
     { params }: { params: Promise<{ type: string; id: string }> }
@@ -255,6 +261,124 @@ export async function GET(
             );
             await attachFieldDefinitionsAndValues(supabase, out, "opportunities", id);
             await attachDirectFkRelationshipDisplays(supabase, orgId, "opportunities", out);
+
+            // -----------------------------------------------------------------
+            // Canonical identity block (relationship/FK-derived; avoids UI key-guessing)
+            // -----------------------------------------------------------------
+            const rel = (out._relationship_displays as Record<string, { id: string; label: string; entity_type: string } | null> | undefined) ?? {};
+            const householdLabel = trimOrNull(out._customer_name) ?? rel.customer_id?.label ?? null;
+            const householdId = typeof opp.customer_id === "string" && opp.customer_id.trim() ? opp.customer_id.trim() : null;
+
+            // Primary guardian/person role label (from customer_persons.role_type -> role_types.label) when possible.
+            let personRoleKey: string | null = null;
+            let personRoleLabel: string | null = null;
+            if (householdId && typeof opp.primary_person_id === "string" && opp.primary_person_id.trim()) {
+                const pid = opp.primary_person_id.trim();
+                const { data: cp } = await supabase
+                    .from("customer_persons")
+                    .select("role_type, is_primary")
+                    .eq("org_id", orgId)
+                    .eq("customer_id", householdId)
+                    .eq("person_id", pid)
+                    .maybeSingle();
+                const roleType = trimOrNull((cp as { role_type?: string | null } | null)?.role_type);
+                personRoleKey = roleType;
+                if (roleType) {
+                    const { data: rt } = await supabase
+                        .from("customer_person_role_types")
+                        .select("label")
+                        .eq("org_id", orgId)
+                        .eq("key", roleType)
+                        .maybeSingle();
+                    personRoleLabel = trimOrNull((rt as { label?: string | null } | null)?.label);
+                }
+            }
+
+            // Primary child (from customer_members; pick the first "child-like" relationship, else first member).
+            let child: { id: string; display_name: string; relationship?: string | null; relationship_label?: string | null; dob?: string | null } | null = null;
+            if (householdId) {
+                const { data: cms } = await supabase
+                    .from("customer_members")
+                    .select("id, display_name, relationship, dob")
+                    .eq("org_id", orgId)
+                    .eq("customer_id", householdId)
+                    .eq("is_active", true)
+                    .limit(25);
+                const rows = (cms ?? []) as { id: string; display_name: string; relationship?: string | null; dob?: string | null }[];
+                const pick =
+                    rows.find((r) => ["child", "dependent", "student"].includes(String(r.relationship ?? "").trim().toLowerCase())) ??
+                    rows[0] ??
+                    null;
+                if (pick) {
+                    const relKey = trimOrNull(pick.relationship);
+                    let relLabel: string | null = null;
+                    if (relKey) {
+                        const { data: rt } = await supabase
+                            .from("customer_member_relationship_types")
+                            .select("label")
+                            .eq("org_id", orgId)
+                            .eq("key", relKey)
+                            .maybeSingle();
+                        relLabel = trimOrNull((rt as { label?: string | null } | null)?.label);
+                    }
+                    child = {
+                        id: pick.id,
+                        display_name: pick.display_name,
+                        relationship: relKey,
+                        relationship_label: relLabel,
+                        dob: pick.dob ? String(pick.dob) : null,
+                    };
+                }
+            }
+
+            // Inquiry summary from configured field_definitions in the "quote" section when present.
+            const defs = (out._field_definitions as { field_key: string; label: string | null; section_key: string | null; is_visible_in_drawer?: boolean }[] | undefined) ?? [];
+            const quoteDefs = defs
+                .filter((d) => d.is_visible_in_drawer !== false)
+                .filter((d) => String(d.section_key ?? "").trim() === "quote");
+            const inquiryLines: { key: string; label: string; value: string }[] = [];
+            for (const d of quoteDefs) {
+                const key = d.field_key;
+                const v = out[key];
+                const s = trimOrNull(v);
+                if (!s) continue;
+                inquiryLines.push({ key, label: trimOrNull(d.label) ?? key, value: s });
+                if (inquiryLines.length >= 3) break;
+            }
+            const inquiryTitle =
+                trimOrNull(out.name) ??
+                trimOrNull(out.title) ??
+                (inquiryLines.length ? inquiryLines.map((l) => l.value).join(" · ") : null) ??
+                "—";
+
+            out._identity = {
+                household: householdId ? { id: householdId, label: householdLabel ?? "—" } : null,
+                primary_person: opp.primary_person_id
+                    ? {
+                          id: String(opp.primary_person_id),
+                          label: trimOrNull(out._primary_person_name) ?? rel.primary_person_id?.label ?? "—",
+                          email: trimOrNull(out._primary_person_email),
+                          phone: trimOrNull(out._primary_person_phone),
+                          role_key: personRoleKey,
+                          role_label: personRoleLabel,
+                      }
+                    : null,
+                primary_contact: opp.primary_contact_id
+                    ? {
+                          id: String(opp.primary_contact_id),
+                          label: trimOrNull(out._primary_contact_name) ?? rel.primary_contact_id?.label ?? "—",
+                          email: trimOrNull(out._primary_contact_email),
+                          phone: trimOrNull(out._primary_contact_phone),
+                      }
+                    : null,
+                primary_child: child,
+                inquiry: {
+                    title: inquiryTitle,
+                    lines: inquiryLines,
+                    section_key: "quote",
+                },
+            };
+
             return NextResponse.json(out);
         }
         if (type === "contacts") {
