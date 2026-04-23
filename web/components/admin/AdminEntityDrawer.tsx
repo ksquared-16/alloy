@@ -3363,6 +3363,9 @@ export default function AdminEntityDrawer() {
                 if (notes !== undefined) payload.notes = (typeof notes === "string" && notes.trim() === "") ? null : notes;
                 delete payload.pipeline_stage_id;
                 if (payload.status_key === "" || payload.status_key === undefined) payload.status_key = null;
+                // Normalize nullable date fields: HTML date inputs emit "" when cleared.
+                // Sending job_date: "" causes Postgres "invalid input syntax for type date".
+                if (typeof payload.job_date === "string" && payload.job_date.trim() === "") payload.job_date = null;
             }
             if (drawer.type === "jobs") {
                 if ("internal_notes" in payload) {
@@ -7777,106 +7780,167 @@ export default function AdminEntityDrawer() {
                                 {drawer.type === "opportunities" && overviewData && !(overviewData as { _create?: boolean })._create ? (
                                     <>
                                         <section
-                                            className="rounded-lg border border-admin-border bg-white/90 p-3 mb-2 shadow-sm"
+                                            className="rounded-xl border border-admin-border bg-white/80 px-2.5 py-2 mb-2 shadow-sm"
                                             data-opportunity-record-snapshot="true"
                                         >
-                                            <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/55">
-                                                Record snapshot
-                                            </p>
-                                            <div className="mt-2 grid grid-cols-1 gap-x-3 gap-y-2 sm:grid-cols-2">
-                                                <div className="min-w-0">
-                                                    <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/55">
-                                                        Status
+                                            {(() => {
+                                                const d = overviewData as Record<string, unknown>;
+                                                const pickFirst = (keys: string[]): string | null => {
+                                                    for (const k of keys) {
+                                                        const v = d[k];
+                                                        if (v == null) continue;
+                                                        const s = String(v).trim();
+                                                        if (s) return s;
+                                                    }
+                                                    return null;
+                                                };
+                                                const family =
+                                                    String(d._customer_name ?? "").trim() ||
+                                                    String(d.customer_name ?? "").trim() ||
+                                                    String(d._family_name ?? "").trim() ||
+                                                    "";
+                                                const parent =
+                                                    pickFirst(["_primary_person_name", "_parent_name", "parent_name", "primary_person_name"]) ?? "";
+                                                const child =
+                                                    pickFirst(["_child_name", "child_name", "_member_name", "member_name", "child_full_name"]) ??
+                                                    "";
+                                                const inquiry =
+                                                    pickFirst(["name", "inquiry", "inquiry_type", "service_key", "program", "program_name"]) ??
+                                                    "";
+                                                const program =
+                                                    pickFirst(["program", "program_name", "_program_name"]) ?? "";
+                                                const room =
+                                                    pickFirst(["room", "room_name", "_room_name"]) ?? "";
+                                                const age =
+                                                    pickFirst(["age", "age_months", "child_age", "age_group", "age_group_name"]) ?? "";
+                                                const stageLabel =
+                                                    String(d._lifecycle_stage_title ?? "").trim() ||
+                                                    String(d._effective_lifecycle_stage ?? "").trim() ||
+                                                    "—";
+                                                const meaning = String(d._lifecycle_stage_meaning ?? "").trim();
+                                                const nextStep = d._lifecycle_next_step as { title?: string; lines?: string[] } | undefined;
+
+                                                const quoteTotal = (() => {
+                                                    const disp = String(d._quote_total_display ?? "").trim();
+                                                    if (disp) return disp;
+                                                    const n = d.quote_total;
+                                                    if (n == null || n === "") return "—";
+                                                    const dollars = typeof n === "number" ? n : Number(n);
+                                                    return Number.isFinite(dollars) ? formatMoneyFromDollars(dollars) : "—";
+                                                })();
+
+                                                const jobDate = (() => {
+                                                    const v = d.job_date;
+                                                    const s = v != null ? String(v).trim() : "";
+                                                    return s ? formatDate(s) : "—";
+                                                })();
+
+                                                const currentStatus = String(formData.status_key ?? d.status_key ?? "").trim();
+                                                let statusOptions =
+                                                    statusDefsForDrawer
+                                                        ?.filter((s) => s.is_active !== false)
+                                                        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)) ?? [];
+                                                if (currentStatus && !statusOptions.some((s) => s.status_key === currentStatus)) {
+                                                    statusOptions = [
+                                                        ...statusOptions,
+                                                        { status_key: currentStatus, status_label: currentStatus, sort_order: 9999, is_active: true },
+                                                    ];
+                                                }
+
+                                                const tinyLabel = "mb-0.5 text-[8px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45";
+                                                const strong = "text-[13px] font-semibold leading-snug text-alloy-midnight/90";
+                                                const soft = "text-[12px] font-medium leading-snug text-alloy-midnight/80";
+                                                const pill =
+                                                    "inline-flex items-center rounded-md border border-alloy-stone/25 bg-white px-2 py-0.5 text-[11px] font-semibold text-alloy-midnight/80";
+
+                                                return (
+                                                    <div className="space-y-2">
+                                                        <div className="flex flex-wrap items-start justify-between gap-2">
+                                                            <div className="min-w-0">
+                                                                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45">
+                                                                    Opportunity
+                                                                </div>
+                                                                <div className="mt-0.5 min-w-0 space-y-0.5">
+                                                                    <div className={`${strong} truncate`}>
+                                                                        {child || inquiry || String(d.name ?? "").trim() || "—"}
+                                                                    </div>
+                                                                    <div className={`${soft} truncate`}>
+                                                                        {[family || null, parent ? `Parent: ${parent}` : null]
+                                                                            .filter(Boolean)
+                                                                            .join(" · ") || "—"}
+                                                                    </div>
+                                                                    <div className="text-[11px] font-medium text-alloy-midnight/65 truncate">
+                                                                        {[program ? `Program: ${program}` : null, room ? `Room: ${room}` : null, age ? `Age: ${age}` : null]
+                                                                            .filter(Boolean)
+                                                                            .join(" · ")}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="shrink-0 flex flex-wrap items-center gap-2 pt-0.5">
+                                                                <span className={pill}>{stageLabel}</span>
+                                                                <span className={`${pill} tabular-nums`}>{quoteTotal}</span>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,0.8fr)]">
+                                                            <div className="min-w-0">
+                                                                <div className={tinyLabel}>Status</div>
+                                                                <select
+                                                                    value={currentStatus}
+                                                                    onChange={(e) =>
+                                                                        setFormData((prev) => ({
+                                                                            ...prev,
+                                                                            status_key: e.target.value || null,
+                                                                        }))
+                                                                    }
+                                                                    onBlur={() => {
+                                                                        if (nonJobFormDirty) saveEdit();
+                                                                    }}
+                                                                    disabled={!canMutate}
+                                                                    className="w-full min-w-0 rounded-lg border border-admin-border bg-white px-2 py-1.5 text-[13px] font-semibold text-alloy-forge focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
+                                                                    aria-label="Opportunity status"
+                                                                >
+                                                                    <option value="">— None —</option>
+                                                                    {statusOptions.map((s) => (
+                                                                        <option key={s.status_key} value={s.status_key}>
+                                                                            {s.status_label ?? s.status_key}
+                                                                        </option>
+                                                                    ))}
+                                                                </select>
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <div className={tinyLabel}>Job date</div>
+                                                                <div className="rounded-lg border border-alloy-stone/25 bg-white px-2 py-1.5 text-[13px] font-semibold text-alloy-midnight/85">
+                                                                    {jobDate}
+                                                                </div>
+                                                            </div>
+                                                            <div className="min-w-0">
+                                                                <div className={tinyLabel}>Customer</div>
+                                                                <div className="rounded-lg border border-alloy-stone/25 bg-white px-2 py-1.5 text-[13px] font-semibold text-alloy-midnight/85 truncate">
+                                                                    {family || "—"}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        {meaning ? (
+                                                            <div className="text-[12px] font-medium text-alloy-midnight/65 leading-snug">
+                                                                {meaning}
+                                                            </div>
+                                                        ) : null}
+                                                        {nextStep?.lines?.length ? (
+                                                            <div className="rounded-lg border border-alloy-stone/20 bg-alloy-stone/10 px-2.5 py-2">
+                                                                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45">
+                                                                    {nextStep.title?.trim() || "Next step"}
+                                                                </div>
+                                                                <div className="mt-1 text-[12px] font-medium text-alloy-midnight/75 leading-snug">
+                                                                    {nextStep.lines.filter((l) => String(l).trim()).slice(0, 2).join(" · ")}
+                                                                </div>
+                                                            </div>
+                                                        ) : null}
                                                     </div>
-                                                    <select
-                                                        value={String(formData.status_key ?? (overviewData as Record<string, unknown>).status_key ?? "")}
-                                                        onChange={(e) =>
-                                                            setFormData((prev) => ({
-                                                                ...prev,
-                                                                status_key: e.target.value || null,
-                                                            }))
-                                                        }
-                                                        onBlur={() => {
-                                                            if (nonJobFormDirty) saveEdit();
-                                                        }}
-                                                        disabled={!canMutate}
-                                                        className="w-full rounded border border-admin-border bg-white px-2 py-1.5 text-sm text-alloy-forge focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
-                                                        aria-label="Opportunity status"
-                                                    >
-                                                        <option value="">— None —</option>
-                                                        {(() => {
-                                                            const current = String(
-                                                                formData.status_key ??
-                                                                    (overviewData as Record<string, unknown>).status_key ??
-                                                                    ""
-                                                            ).trim();
-                                                            let options =
-                                                                statusDefsForDrawer
-                                                                    ?.filter((s) => s.is_active !== false)
-                                                                    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)) ?? [];
-                                                            if (current && !options.some((s) => s.status_key === current)) {
-                                                                options = [
-                                                                    ...options,
-                                                                    { status_key: current, status_label: current, sort_order: 9999, is_active: true },
-                                                                ];
-                                                            }
-                                                            return options.map((s) => (
-                                                                <option key={s.status_key} value={s.status_key}>
-                                                                    {s.status_label ?? s.status_key}
-                                                                </option>
-                                                            ));
-                                                        })()}
-                                                    </select>
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/55">
-                                                        Lifecycle
-                                                    </div>
-                                                    <div className="text-sm font-medium text-alloy-midnight/85">
-                                                        {String((overviewData as Record<string, unknown>)._lifecycle_stage_title ?? "").trim() ||
-                                                            String((overviewData as Record<string, unknown>)._effective_lifecycle_stage ?? "").trim() ||
-                                                            "—"}
-                                                    </div>
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/55">
-                                                        Customer
-                                                    </div>
-                                                    <div className="text-sm font-medium text-alloy-midnight/85 truncate">
-                                                        {String((overviewData as Record<string, unknown>)._customer_name ?? "").trim() || "—"}
-                                                    </div>
-                                                </div>
-                                                <div className="min-w-0">
-                                                    <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/55">
-                                                        Quote total
-                                                    </div>
-                                                    <div className="text-sm font-medium text-alloy-midnight/85 tabular-nums">
-                                                        {(() => {
-                                                            const d = overviewData as Record<string, unknown>;
-                                                            const disp = String(d._quote_total_display ?? "").trim();
-                                                            if (disp) return disp;
-                                                            const n = d.quote_total;
-                                                            if (n == null || n === "") return "—";
-                                                            const dollars = typeof n === "number" ? n : Number(n);
-                                                            return Number.isFinite(dollars) ? formatMoneyFromDollars(dollars) : "—";
-                                                        })()}
-                                                    </div>
-                                                </div>
-                                                <div className="min-w-0 sm:col-span-2">
-                                                    <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/55">
-                                                        Job date
-                                                    </div>
-                                                    <div className="text-sm font-medium text-alloy-midnight/85">
-                                                        {(() => {
-                                                            const v = (overviewData as Record<string, unknown>).job_date;
-                                                            const s = v != null ? String(v).trim() : "";
-                                                            return s ? formatDate(s) : "—";
-                                                        })()}
-                                                    </div>
-                                                </div>
-                                            </div>
+                                                );
+                                            })()}
                                         </section>
-                                        <OpportunityLifecyclePanel record={overviewData as Record<string, unknown>} />
                                     </>
                                 ) : null}
                                 {drawer.type === "opportunities" ? opportunityQuoteSummaryNode : null}
