@@ -4099,8 +4099,14 @@ export default function AdminEntityDrawer() {
         isOpportunityRecordModalTarget &&
         !!overviewData &&
         !(overviewData as { _create?: boolean })._create;
+    /**
+     * Perceived-performance polish: ensure the drawer never renders an "empty body" flash
+     * on first open / record switch while the fetch effect hasn't flipped `loading` yet.
+     */
     const showDrawerBodyLoading =
-        !!drawer.id && drawer.id !== "new" && (loading || (data != null && !dataMatchesDrawer));
+        !!drawer.id &&
+        drawer.id !== "new" &&
+        (loading || data == null || (data != null && !dataMatchesDrawer));
 
     const jobDrawerV2SignalsNode = useMemo(() => {
         if (!isJobDrawerV2 || !overviewData) return null;
@@ -5819,6 +5825,7 @@ export default function AdminEntityDrawer() {
                     : undefined
             }
         >
+            <div className="adminv2-drawer-content-enter">
             {showDrawerBodyLoading &&
                 (isJobRecordModalTarget || isScheduleRecordModalTarget || isOpportunityRecordModalTarget ? (
                     <div
@@ -5832,9 +5839,9 @@ export default function AdminEntityDrawer() {
                                   : "Loading opportunity"
                         }
                     >
-                        <div className="h-4 max-w-md w-full animate-pulse rounded-md bg-alloy-stone/25" />
-                        <div className="h-28 animate-pulse rounded-xl bg-alloy-stone/15" />
-                        <div className="h-40 animate-pulse rounded-xl bg-alloy-stone/12" />
+                        <div className="h-4 max-w-md w-full skeleton-pulse rounded-md bg-alloy-stone/25" />
+                        <div className="h-28 skeleton-pulse rounded-xl bg-alloy-stone/15" style={{ animationDelay: "60ms" }} />
+                        <div className="h-40 skeleton-pulse rounded-xl bg-alloy-stone/12" style={{ animationDelay: "120ms" }} />
                     </div>
                 ) : (
                     <p className="text-alloy-midnight/60">Loading…</p>
@@ -9929,6 +9936,7 @@ export default function AdminEntityDrawer() {
                 entityTypeLabel={getEntityLabel(labels, drawer.type, "singular") ?? drawer.type}
                 isLoading={deleteSaving}
             />
+            </div>
         </Drawer>
     );
 }

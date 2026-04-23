@@ -1744,6 +1744,78 @@
   }
 }
 
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 0.92;
+  }
+}
+
+.skeleton-pulse {
+  animation: skeleton-pulse 1.25s ease-in-out infinite;
+  will-change: opacity;
+}
+
+/* Default placeholders (KPI cells, brief headlines) get the same pulse without extra markup. */
+.adminv2-ws-dept-v2-brief-headline--placeholder,
+.adminv2-ws-kpi-cell--placeholder,
+.adminv2-ws-kpi-value--placeholder {
+  animation: skeleton-pulse 1.25s ease-in-out infinite;
+}
+
+@keyframes adminv2-ws-page-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+[data-ws-surface="company"].adminv2-ws-company-v2,
+[data-ws-surface="department"].adminv2-ws-dept-v2,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 {
+  animation: adminv2-ws-page-fade-in 140ms ease-out both;
+}
+
+@keyframes adminv2-drawer-content-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.adminv2-drawer-content-enter {
+  animation: adminv2-drawer-content-in 120ms ease-out both;
+  transform-origin: top center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-pulse {
+    animation: none;
+    opacity: 0.78;
+  }
+
+  [data-ws-surface="company"].adminv2-ws-company-v2,
+  [data-ws-surface="department"].adminv2-ws-dept-v2,
+  [data-ws-surface="work_unit"].adminv2-ws-wu-v2 {
+    animation: none;
+  }
+
+  .adminv2-drawer-content-enter {
+    animation: none;
+    transform: none;
+    opacity: 1;
+  }
+}
+
 @media (max-width: 720px) {
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-workflows-list-head,
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-workflows-list-head,
