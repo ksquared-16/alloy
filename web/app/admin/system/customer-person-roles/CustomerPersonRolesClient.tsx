@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
+import SettingsPageHeader from "@/components/adminV2/settings/SettingsPageHeader";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useAdminVertical } from "@/contexts/AdminVerticalContext";
 import type { CustomerPersonRoleType } from "@/app/api/admin/customer-person-role-types/route";
@@ -11,7 +12,17 @@ const KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 
 type IndustryOption = { id: string; key: string; label: string };
 
-export default function CustomerPersonRolesClient() {
+const PERSON_ROLES_SUBTITLE =
+    "Role types when linking a person to a customer. Defaults are driven by your org industry (Entity Labels). Stored in customer_persons.role_type.";
+
+export default function CustomerPersonRolesClient({
+    adminV2Chrome = false,
+    omitOuterHeader = false,
+}: {
+    adminV2Chrome?: boolean;
+    /** When true with adminV2Chrome, skip page header (parent Settings page provides it). */
+    omitOuterHeader?: boolean;
+} = {}) {
     const { canMutate } = useAdminAuth();
     const { verticals } = useAdminVertical();
     const [industries, setIndustries] = useState<IndustryOption[]>([]);
@@ -149,25 +160,38 @@ export default function CustomerPersonRolesClient() {
 
     const isEdit = !!modalId;
 
+    const addRoleBtn = canMutate ? (
+        <button
+            type="button"
+            onClick={openCreate}
+            className="shrink-0 rounded-md bg-alloy-midnight px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
+        >
+            Add Role Type
+        </button>
+    ) : null;
+
+    const sectionSurface = adminV2Chrome ? ({ surfaceTone: "settingsPanel" as const, accentClassName: "border-l-alloy-pine/55" }) : {};
+
+    const pageHeader =
+        omitOuterHeader && adminV2Chrome ? (
+            <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+                <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-alloy-midnight/50">Family / person roles</h3>
+                {addRoleBtn}
+            </div>
+        ) : adminV2Chrome ? (
+            <SettingsPageHeader title="Person Roles" subtitle={PERSON_ROLES_SUBTITLE} actions={addRoleBtn} className="mb-4" />
+        ) : (
+            <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+                <AdminPageHeader title="Person Roles" subtitle={PERSON_ROLES_SUBTITLE} />
+                {addRoleBtn}
+            </div>
+        );
+
     return (
         <>
-            <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-                <AdminPageHeader
-                    title="Person Roles"
-                    subtitle="Role types when linking a person to a customer. Defaults are driven by your org industry (Entity Labels). Used for customer_persons.role_type."
-                />
-                {canMutate && (
-                    <button
-                        type="button"
-                        onClick={openCreate}
-                        className="shrink-0 px-3 py-1.5 text-sm font-medium bg-alloy-midnight text-white rounded-md hover:opacity-90"
-                    >
-                        Add Role Type
-                    </button>
-                )}
-            </div>
+            {pageHeader}
 
-            {loading && <p className="text-sm text-[#59678b]">Loading…</p>}
+            {loading && <p className="text-sm text-alloy-midnight/55">Loading…</p>}
             {error && (
                 <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">
                     {error}
@@ -175,7 +199,7 @@ export default function CustomerPersonRolesClient() {
             )}
 
             {!loading && !error && (
-                <SectionCard title="Role types">
+                <SectionCard title="Role types" {...sectionSurface}>
                     <div className="mb-3 flex items-center gap-2">
                         <label className="flex cursor-pointer items-center gap-2 text-sm text-[#59678b]">
                             <input
@@ -308,11 +332,11 @@ export default function CustomerPersonRolesClient() {
                                 <div className="flex items-center gap-2">
                                     <input
                                         type="checkbox"
-                                        id="modal-active"
+                                        id="cpr-modal-active"
                                         checked={modalActive}
                                         onChange={(e) => setModalActive(e.target.checked)}
                                     />
-                                    <label htmlFor="modal-active" className="text-sm text-[#31394d]">Active</label>
+                                    <label htmlFor="cpr-modal-active" className="text-sm text-[#31394d]">Active</label>
                                 </div>
                             )}
                         </div>

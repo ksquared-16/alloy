@@ -115,6 +115,9 @@ export default function AdminV2SettingsIndexPage() {
                         <SettingsCard href="/adminV2/settings/entity-labels" title="Entity labels" accent="records">
                             Display names (Family, Inquiry, etc.).
                         </SettingsCard>
+                        <SettingsCard href="/adminV2/settings/relationships" title="Relationships" accent="records">
+                            Customer ↔ person roles and person ↔ person relationship types.
+                        </SettingsCard>
                     </SettingsTileGrid>
                 </Group>
 
