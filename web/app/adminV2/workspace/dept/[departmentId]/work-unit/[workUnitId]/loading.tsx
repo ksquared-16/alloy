@@ -47,7 +47,7 @@ function QueueRowSkeleton() {
 
 export default function Loading() {
   return (
-    <div className="w-full max-w-none mx-0 px-0 pt-2 pb-0 space-y-4">
+    <div className="w-full max-w-none mx-0 px-0 pt-2 pb-0 space-y-4 relative">
       <nav className="text-sm text-alloy-midnight/60 flex flex-wrap items-center gap-1 px-1" aria-label="Breadcrumb">
         <span className="flex items-center gap-1">
           <span className="text-alloy-midnight/80 font-medium">Workspace</span>
@@ -128,6 +128,12 @@ export default function Loading() {
               </aside>
             </div>
           </div>
+        </div>
+      </div>
+      <div className="ws-loading-overlay" aria-hidden>
+        <div className="ws-loading-indicator">
+          <span className="ws-loading-spinner" />
+          Loading work unit
         </div>
       </div>
     </div>

@@ -6,6 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import WorkUnitWorkspace from "@/app/adminV2/components/workspace/shells/WorkUnitWorkspace";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import WorkUnitLoading from "./loading";
 import { executeOpportunityRecordAction } from "@/lib/recordChrome/executeOpportunityRecordAction";
 import type { WorkspaceAction } from "@/lib/ui-v2/workspace-actions";
 import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
@@ -252,7 +253,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
             subtitle=""
         >
             {loading ? (
-                <p className="text-sm text-alloy-midnight/60 py-4">Loading work unit…</p>
+                <div className="relative">
+                    <WorkUnitLoading />
+                    <div className="ws-loading-overlay" aria-hidden>
+                        <div className="ws-loading-indicator">
+                            <span className="ws-loading-spinner" />
+                            Loading work unit
+                        </div>
+                    </div>
+                </div>
             ) : model ? (
                 <WorkUnitWorkspace model={model} onAction={onAction} />
             ) : (

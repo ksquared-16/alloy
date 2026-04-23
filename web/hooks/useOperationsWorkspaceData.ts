@@ -192,6 +192,7 @@ export function useOperationsWorkspaceData(departmentId: string) {
                 const t0 = perfDebug ? performance.now() : 0;
                 setLoading(true);
                 setDerivedError(null);
+                setError(null);
                 const fetchInit = workspaceDataFetchInit();
                 const [dRes, wRes] = await Promise.all([
                     fetch("/api/admin/departments", fetchInit),
