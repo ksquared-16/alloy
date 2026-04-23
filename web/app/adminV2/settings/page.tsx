@@ -68,8 +68,8 @@ export default function AdminV2SettingsIndexPage() {
       </Section>
 
       <Section
-        title="Records & workflow"
-        description="How entities behave in the UI: statuses, field layout, and per-entity field registry."
+        title="Records & terminology"
+        description="How entities behave in the UI: statuses, field layout, per-entity field registry, and display names."
       >
         <SettingsCard href="/adminV2/settings/statuses" title="Statuses">
           Workflow and entity status keys (drawers and APIs resolve labels from here).
@@ -79,6 +79,9 @@ export default function AdminV2SettingsIndexPage() {
         </SettingsCard>
         <SettingsCard href="/adminV2/settings/fields" title="Fields">
           Field definitions by entity (person, customer, job, opportunity, vendor, schedule, location).
+        </SettingsCard>
+        <SettingsCard href="/adminV2/settings/entity-labels" title="Entity labels">
+          Industry defaults and per-org overrides for Family, Inquiry, Location, and other display names.
         </SettingsCard>
       </Section>
 
@@ -97,13 +100,6 @@ export default function AdminV2SettingsIndexPage() {
         </SettingsCard>
       </Section>
 
-      <section className="rounded-lg border border-dashed border-admin-border bg-white/40 px-4 py-3">
-        <h3 className="text-xs font-semibold uppercase tracking-[0.1em] text-alloy-midnight/50">Labels & terminology</h3>
-        <p className="mt-1 text-xs text-alloy-midnight/55">
-          Entity display names and plural labels will live here as Settings matures. Today they are configured under
-          classic Admin workspace tooling (entity labels); no migration in this batch.
-        </p>
-      </section>
     </div>
   );
 }

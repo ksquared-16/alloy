@@ -85,6 +85,11 @@ function crumbsForPath(path: string): Crumb[] {
         return base;
     }
 
+    if (tail === "/entity-labels" || tail.startsWith("/entity-labels")) {
+        base.push({ label: "Entity labels", href: null });
+        return base;
+    }
+
     const remainder = tail.replace(/^\//, "").replace(/\/$/, "") || "Page";
     return [{ label: "Settings", href: SETTINGS_ROOT }, { label: remainder, href: null }];
 }
