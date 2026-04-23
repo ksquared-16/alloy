@@ -1,6 +1,5 @@
 "use client";
 
-import { neutral, derived, brand } from "@/styles/tokens/colors";
 import type { KPIVm } from "@/lib/ui-v2/workspace-types";
 
 type Props = {
@@ -27,7 +26,7 @@ function KpiCells({ items, minCells = KPI_DEPT_PER_RAIL }: { items: KPIVm[]; min
   }
 
   return (
-    <div className="adminv2-ws-kpi-strip adminv2-ws-kpi-strip--dept-embedded">
+    <div className="adminv2-ws-kpi-strip adminv2-ws-kpi-strip--dept-embedded" role="list">
       {shown.map((k) => (
         <div
           key={k.id}
@@ -37,6 +36,7 @@ function KpiCells({ items, minCells = KPI_DEPT_PER_RAIL }: { items: KPIVm[]; min
           ]
             .filter(Boolean)
             .join(" ")}
+          role="listitem"
         >
           <span className="adminv2-ws-kpi-label">{k.label}</span>
           <span className="adminv2-ws-kpi-value">
@@ -88,31 +88,29 @@ export default function KPIBlock({
   }
 
   return (
-    <div className="adminv2-ws-kpi-strip" style={{ padding: "12px 16px 14px" }}>
-      {items.map((k) => (
-        <div
-          key={k.id}
-          className="adminv2-ws-zone"
-          style={{
-            padding: "10px 12px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 4,
-            minHeight: 72,
-          }}
-        >
-          <span style={{ fontSize: 10, fontWeight: 700, color: derived.textSecondary, textTransform: "uppercase" }}>
-            {k.label}
-          </span>
-          <span style={{ fontSize: 20, fontWeight: 700, color: neutral.textPrimary, letterSpacing: "-0.02em" }}>
-            {k.value}
-            {k.unit ? <span style={{ fontSize: 12, fontWeight: 600, marginLeft: 2 }}>{k.unit}</span> : null}
-          </span>
-          {k.aiSummary && (
-            <span style={{ fontSize: 10, color: brand.secondary, lineHeight: 1.3 }}>{k.aiSummary}</span>
-          )}
-        </div>
-      ))}
+    <div className="adminv2-ws-kpi-root-band" role="group" aria-label="Key metrics">
+      <div className="adminv2-ws-kpi-strip adminv2-ws-kpi-strip--single-band" role="list">
+        {items.map((k) => (
+          <div
+            key={k.id}
+            className={[
+              "adminv2-ws-kpi-cell",
+              "adminv2-ws-kpi-cell--single-band",
+              k.tone && k.tone !== "neutral" ? `adminv2-ws-kpi-cell--tone-${k.tone}` : "",
+            ]
+              .filter(Boolean)
+              .join(" ")}
+            role="listitem"
+          >
+            <span className="adminv2-ws-kpi-label">{k.label}</span>
+            <span className="adminv2-ws-kpi-value">
+              {k.value}
+              {k.unit ? <span className="adminv2-ws-kpi-unit">{k.unit}</span> : null}
+            </span>
+            {k.aiSummary ? <span className="adminv2-ws-kpi-ai">{k.aiSummary}</span> : null}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -160,68 +160,84 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                 </div>
                             </header>
                             <div className="adminv2-ws-attention-stack">
-                                <div className="adminv2-ws-attention-card" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                                    {needsAttentionPreview.length ? (
-                                        <div className="mb-2">
-                                            <div className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/55 mb-1.5">
-                                                Next up
-                                            </div>
-                                            <ul className="space-y-1.5 pl-0 list-none" role="list">
-                                                {needsAttentionPreview.map((p) => (
-                                                    <li key={p.id}>
-                                                        <Link
-                                                            href={p.openQueueHref}
-                                                            className="block rounded-md border border-[var(--d-border,rgba(39,63,82,0.12))] bg-[var(--d-surface,#fff)] px-2 py-1.5 no-underline hover:opacity-[0.97]"
-                                                        >
-                                                            <div className="text-[11px] font-semibold text-alloy-midnight/90 leading-snug">
-                                                                {p.headline}
-                                                            </div>
-                                                            <div className="text-[10px] text-alloy-midnight/60 leading-snug mt-0.5">
-                                                                {p.detail}
-                                                            </div>
-                                                        </Link>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        </div>
-                                    ) : null}
-                                    {needsAttentionGroups.length ? (
-                                        <ul className="space-y-2 pl-0 list-none" role="list">
-                                            {needsAttentionGroups.map((g) => (
-                                                <li
-                                                    key={g.label}
-                                                    className="rounded-lg border border-[var(--d-border,rgba(39,63,82,0.14))] bg-[var(--d-surface,#fff)] px-2 py-2"
-                                                >
-                                                    <div
-                                                        style={{
-                                                            display: "grid",
-                                                            gridTemplateColumns: "minmax(0, 1fr) auto",
-                                                            gap: "8px 12px",
-                                                            alignItems: "start",
-                                                        }}
-                                                    >
-                                                        <div style={{ minWidth: 0 }}>
-                                                            <div className="text-xs font-semibold text-alloy-midnight/80 tabular-nums">
-                                                                {g.label}
-                                                            </div>
-                                                        </div>
-                                                        <div className="text-right">
-                                                            <div className="text-xs font-semibold tabular-nums text-alloy-midnight/80">
-                                                                {g.count}
-                                                            </div>
-                                                            <Link href={g.openQueueHref} className="adminv2-ws-attention-panel-viewall">
-                                                                Open queue
+                                <div className="adminv2-ws-attention-card adminv2-ws-attention-card--queue-aligned">
+                                    <div className="adminv2-ws-wu-v2" data-ws-surface="work_unit">
+                                        {needsAttentionPreview.length ? (
+                                            <div className="adminv2-ws-attention-preview-block">
+                                                <div className="adminv2-ws-wu-queue-section-label adminv2-ws-attention-preview-kicker" role="presentation">
+                                                    Next in queue
+                                                </div>
+                                                <ul className="adminv2-ws-queue-list" role="list">
+                                                    {needsAttentionPreview.map((p) => (
+                                                        <li key={p.id} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
+                                                            <Link
+                                                                href={p.openQueueHref}
+                                                                className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--attention adminv2-ws-wu-queue-card--tier-warning no-underline text-inherit hover:opacity-[0.98]"
+                                                                data-ws-wu-urgency="warning"
+                                                            >
+                                                                <div className="adminv2-ws-wu-queue-card-compact-text">
+                                                                    <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">
+                                                                        {p.headline}
+                                                                    </div>
+                                                                    <div className="adminv2-ws-wu-queue-card-sub adminv2-ws-wu-queue-card-sub--compact">
+                                                                        {p.detail}
+                                                                    </div>
+                                                                </div>
+                                                                <div className="adminv2-ws-wu-queue-card-compact-aside">
+                                                                    <span className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open adminv2-ws-wu-queue-action-chip--attention-open">
+                                                                        Open queue
+                                                                    </span>
+                                                                </div>
                                                             </Link>
-                                                        </div>
-                                                    </div>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    ) : needsAttentionPreview.length ? null : (
-                                        <p className="text-[11px]" style={{ color: "var(--d-muted)" }}>
-                                            Nothing needs intervention right now.
-                                        </p>
-                                    )}
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        ) : null}
+                                        {needsAttentionGroups.length ? (
+                                            <div className={needsAttentionPreview.length ? "mt-2 pt-2 adminv2-ws-attention-groups-divider" : ""}>
+                                                <div
+                                                    className="adminv2-ws-wu-queue-section-label adminv2-ws-attention-preview-kicker"
+                                                    role="presentation"
+                                                >
+                                                    By reason
+                                                </div>
+                                                <ul className="adminv2-ws-queue-list" role="list">
+                                                    {needsAttentionGroups.map((g) => (
+                                                        <li key={g.label} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
+                                                            <Link
+                                                                href={g.openQueueHref}
+                                                                className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--attention adminv2-ws-wu-queue-card--tier-warning no-underline text-inherit hover:opacity-[0.98]"
+                                                                data-ws-wu-urgency="warning"
+                                                            >
+                                                                <div className="adminv2-ws-wu-queue-card-compact-text">
+                                                                    <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">
+                                                                        {g.label}
+                                                                    </div>
+                                                                    <div className="adminv2-ws-wu-queue-card-sub adminv2-ws-wu-queue-card-sub--compact">
+                                                                        {g.count} {g.count === 1 ? "record" : "records"} in this bucket
+                                                                    </div>
+                                                                </div>
+                                                                <div className="adminv2-ws-wu-queue-card-compact-aside">
+                                                                    <span
+                                                                        className="adminv2-ws-wu-queue-count-badge adminv2-ws-wu-queue-count-badge--attention"
+                                                                        aria-label={`${g.count} items`}
+                                                                    >
+                                                                        {g.count}
+                                                                    </span>
+                                                                    <span className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open adminv2-ws-wu-queue-action-chip--attention-open">
+                                                                        Open queue
+                                                                    </span>
+                                                                </div>
+                                                            </Link>
+                                                        </li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        ) : needsAttentionPreview.length ? null : (
+                                            <p className="adminv2-ws-attention-empty-copy">Nothing needs intervention right now.</p>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </section>

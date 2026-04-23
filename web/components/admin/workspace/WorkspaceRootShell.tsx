@@ -2,6 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { useMemo } from "react";
+import Link from "next/link";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
 import "@/app/adminV2/components/workspace/workspace.css";
 import KPIBlock from "@/app/adminV2/components/workspace/blocks/KPIBlock";
@@ -147,7 +148,39 @@ export function WorkspaceRootShell({
             </section>
           </div>
 
-          <div className="adminv2-ws-dept-v2-command-column" data-adminv2-workspace-command-column aria-hidden />
+          <div className="adminv2-ws-dept-v2-command-column" data-adminv2-workspace-command-column>
+            <aside
+              className="adminv2-ws-dept-v2-rail adminv2-ws-dept-v2-rail--command-shell"
+              data-adminv2-workspace-command-rail
+              aria-label="Workspace orientation"
+            >
+              <section className="adminv2-ws-actions-rail adminv2-ws-actions-rail--dept-panel adminv2-ws-actions-rail--orientation px-3 pb-3 pt-3">
+                <h3 className="adminv2-ws-actions-rail-title">Orientation</h3>
+                <p className="adminv2-ws-workspace-orientation-lead">
+                  You are at the top of the hierarchy. Use the department cards to drill into work units and queues;
+                  this column stays lightweight.
+                </p>
+                <div className="adminv2-ws-workspace-orientation-meta" aria-label="Related admin surfaces">
+                  <span className="adminv2-ws-workspace-orientation-meta-k">Drill path</span>
+                  <span className="adminv2-ws-workspace-orientation-meta-v">Department → work unit → record</span>
+                </div>
+                <div className="adminv2-ws-actions-rail-list adminv2-ws-actions-rail-list--column mt-3">
+                  <Link
+                    href="/admin/opportunities"
+                    className="adminv2-ws-actions-rail-secondary adminv2-ws-workspace-orientation-link text-center no-underline rounded-md font-bold text-[11px] w-full"
+                  >
+                    Open inquiries (classic admin)
+                  </Link>
+                  <Link
+                    href="/admin/system/work-units"
+                    className="adminv2-ws-actions-rail-secondary adminv2-ws-workspace-orientation-link text-center no-underline rounded-md font-bold text-[11px] w-full"
+                  >
+                    Work unit registry
+                  </Link>
+                </div>
+              </section>
+            </aside>
+          </div>
         </div>
       </div>
     </div>

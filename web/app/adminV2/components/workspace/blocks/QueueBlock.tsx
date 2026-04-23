@@ -343,44 +343,46 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
                       {valueShown}
                     </span>
                   ) : null}
-                  {item.quickActions?.length ? (
-                    <div className="adminv2-ws-wu-queue-card-quick-actions" role="group" aria-label="Quick actions">
-                      {item.quickActions.map((qa) => (
-                        <button
-                          key={`${item.id}-qa-${qa.id}`}
-                          type="button"
-                          className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--quiet"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onAction({
-                              type: "queue.item.action",
-                              queueId: queue.id,
-                              itemId: item.id,
-                              actionId: qa.id,
-                              payload: qa.payload,
-                            });
-                          }}
-                        >
-                          {qa.label}
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                  <button
-                    type="button"
-                    className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onAction({
-                        type: "queue.item.action",
-                        queueId: queue.id,
-                        itemId: item.id,
-                        actionId: "open_record",
-                      });
-                    }}
-                  >
-                    Open
-                  </button>
+                  <div className="adminv2-ws-wu-queue-card-compact-cta-row">
+                    {item.quickActions?.length ? (
+                      <div className="adminv2-ws-wu-queue-card-quick-actions" role="group" aria-label="Quick actions">
+                        {item.quickActions.map((qa) => (
+                          <button
+                            key={`${item.id}-qa-${qa.id}`}
+                            type="button"
+                            className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--quiet"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onAction({
+                                type: "queue.item.action",
+                                queueId: queue.id,
+                                itemId: item.id,
+                                actionId: qa.id,
+                                payload: qa.payload,
+                              });
+                            }}
+                          >
+                            {qa.label}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                    <button
+                      type="button"
+                      className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onAction({
+                          type: "queue.item.action",
+                          queueId: queue.id,
+                          itemId: item.id,
+                          actionId: "open_record",
+                        });
+                      }}
+                    >
+                      Open
+                    </button>
+                  </div>
                 </div>
               </div>
             </li>
