@@ -5121,14 +5121,15 @@
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card-compact-cta-row .adminv2-ws-wu-queue-card-quick-actions {
   display: flex;
   flex-wrap: nowrap;
-  gap: 4px;
+  gap: 6px;
   flex: 1 1 auto;
   min-width: 0;
   justify-content: flex-end;
   overflow-x: auto;
   overflow-y: hidden;
-  padding-bottom: 1px;
+  padding-bottom: 2px;
   scrollbar-width: thin;
+  align-items: center;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card-compact-cta-row .adminv2-ws-wu-queue-action-chip--open {
@@ -5201,9 +5202,10 @@
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-action-chip--quiet {
-  padding: 2px 5px;
-  font-size: 8px;
-  font-weight: 600;
+  min-height: 24px;
+  padding: 3px 8px;
+  font-size: 9px;
+  font-weight: 650;
   letter-spacing: 0.01em;
   text-transform: none;
   border-radius: 4px;
@@ -5212,6 +5214,8 @@
   color: color-mix(in srgb, var(--d-muted) 22%, var(--d-text-primary, #273f52));
   flex: 0 0 auto;
   white-space: nowrap;
+  line-height: 1.15;
+  overflow: visible;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-value--compact {
@@ -5221,7 +5225,8 @@
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-action-chip--open {
-  padding: 3px 9px;
+  min-height: 26px;
+  padding: 3px 10px;
   font-size: 9px;
   font-weight: 800;
   letter-spacing: 0.05em;
@@ -5231,6 +5236,8 @@
   background: color-mix(in srgb, var(--d-pine) 92%, #0f172a);
   color: #fff;
   box-shadow: 0 1px 0 color-mix(in srgb, #ffffff 28%, transparent);
+  line-height: 1.1;
+  white-space: nowrap;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card-top {
