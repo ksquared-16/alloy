@@ -30,12 +30,11 @@ WHERE NOT EXISTS (
 );
 
 -- Ensure a "child" member relationship type exists for this org.
-INSERT INTO public.customer_member_relationship_types (org_id, key, label, description, sort_order, is_system, is_active)
+INSERT INTO public.customer_member_relationship_types (org_id, key, label, sort_order, is_system, is_active)
 SELECT
   '7803388d-cdee-4afb-89cf-23a137f39423'::uuid,
   'child',
   'Child',
-  'Child member of a household (seed)',
   10,
   true,
   true
