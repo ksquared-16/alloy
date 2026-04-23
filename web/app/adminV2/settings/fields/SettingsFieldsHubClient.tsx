@@ -73,6 +73,12 @@ export default function SettingsFieldsHubClient({ initialEntity }: { initialEnti
                             </option>
                         ))}
                     </select>
+                    <p className="mt-2 max-w-2xl text-xs text-alloy-midnight/55">
+                        Rows are org-scoped in <code className="rounded bg-alloy-stone/30 px-1">field_definitions</code>.
+                        Migrations that seed the registry run at deploy time (e.g. batch record-number fields for orgs
+                        that existed then). New orgs or partial deploys can show an empty list until you add fields or
+                        run the relevant backfill — this is expected, not an API filter bug.
+                    </p>
                 </div>
             </div>
 
