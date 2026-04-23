@@ -4996,7 +4996,9 @@ export default function AdminEntityDrawer() {
         }
         if (drawer.type === "opportunities") {
             visible = visible.filter((d) => !OPPORTUNITY_DRAWER_HIDE_PRICING_FIELD_KEYS.has(d.field_key));
-            visible = visible.filter((d) => d.field_key !== "status_key" && d.field_key !== "status");
+            // Allow config-driven overview to render inline-editable opportunity status via EntityDrawerOverview.
+            // Keep filtering legacy `status` token, but do not remove `status_key`.
+            visible = visible.filter((d) => d.field_key !== "status");
         }
         if (drawer.type === "jobs") {
             visible = visible.filter((d) => d.field_key !== "primary_contact_id");
@@ -7773,7 +7775,109 @@ export default function AdminEntityDrawer() {
                         ) : (
                             <>
                                 {drawer.type === "opportunities" && overviewData && !(overviewData as { _create?: boolean })._create ? (
-                                    <OpportunityLifecyclePanel record={overviewData as Record<string, unknown>} />
+                                    <>
+                                        <section
+                                            className="rounded-lg border border-admin-border bg-white/90 p-3 mb-2 shadow-sm"
+                                            data-opportunity-record-snapshot="true"
+                                        >
+                                            <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/55">
+                                                Record snapshot
+                                            </p>
+                                            <div className="mt-2 grid grid-cols-1 gap-x-3 gap-y-2 sm:grid-cols-2">
+                                                <div className="min-w-0">
+                                                    <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/55">
+                                                        Status
+                                                    </div>
+                                                    <select
+                                                        value={String(formData.status_key ?? (overviewData as Record<string, unknown>).status_key ?? "")}
+                                                        onChange={(e) =>
+                                                            setFormData((prev) => ({
+                                                                ...prev,
+                                                                status_key: e.target.value || null,
+                                                            }))
+                                                        }
+                                                        onBlur={() => {
+                                                            if (nonJobFormDirty) saveEdit();
+                                                        }}
+                                                        disabled={!canMutate}
+                                                        className="w-full rounded border border-admin-border bg-white px-2 py-1.5 text-sm text-alloy-forge focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
+                                                        aria-label="Opportunity status"
+                                                    >
+                                                        <option value="">— None —</option>
+                                                        {(() => {
+                                                            const current = String(
+                                                                formData.status_key ??
+                                                                    (overviewData as Record<string, unknown>).status_key ??
+                                                                    ""
+                                                            ).trim();
+                                                            let options =
+                                                                statusDefsForDrawer
+                                                                    ?.filter((s) => s.is_active !== false)
+                                                                    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)) ?? [];
+                                                            if (current && !options.some((s) => s.status_key === current)) {
+                                                                options = [
+                                                                    ...options,
+                                                                    { status_key: current, status_label: current, sort_order: 9999, is_active: true },
+                                                                ];
+                                                            }
+                                                            return options.map((s) => (
+                                                                <option key={s.status_key} value={s.status_key}>
+                                                                    {s.status_label ?? s.status_key}
+                                                                </option>
+                                                            ));
+                                                        })()}
+                                                    </select>
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/55">
+                                                        Lifecycle
+                                                    </div>
+                                                    <div className="text-sm font-medium text-alloy-midnight/85">
+                                                        {String((overviewData as Record<string, unknown>)._lifecycle_stage_title ?? "").trim() ||
+                                                            String((overviewData as Record<string, unknown>)._effective_lifecycle_stage ?? "").trim() ||
+                                                            "—"}
+                                                    </div>
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/55">
+                                                        Customer
+                                                    </div>
+                                                    <div className="text-sm font-medium text-alloy-midnight/85 truncate">
+                                                        {String((overviewData as Record<string, unknown>)._customer_name ?? "").trim() || "—"}
+                                                    </div>
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/55">
+                                                        Quote total
+                                                    </div>
+                                                    <div className="text-sm font-medium text-alloy-midnight/85 tabular-nums">
+                                                        {(() => {
+                                                            const d = overviewData as Record<string, unknown>;
+                                                            const disp = String(d._quote_total_display ?? "").trim();
+                                                            if (disp) return disp;
+                                                            const n = d.quote_total;
+                                                            if (n == null || n === "") return "—";
+                                                            const dollars = typeof n === "number" ? n : Number(n);
+                                                            return Number.isFinite(dollars) ? formatMoneyFromDollars(dollars) : "—";
+                                                        })()}
+                                                    </div>
+                                                </div>
+                                                <div className="min-w-0 sm:col-span-2">
+                                                    <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/55">
+                                                        Job date
+                                                    </div>
+                                                    <div className="text-sm font-medium text-alloy-midnight/85">
+                                                        {(() => {
+                                                            const v = (overviewData as Record<string, unknown>).job_date;
+                                                            const s = v != null ? String(v).trim() : "";
+                                                            return s ? formatDate(s) : "—";
+                                                        })()}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </section>
+                                        <OpportunityLifecyclePanel record={overviewData as Record<string, unknown>} />
+                                    </>
                                 ) : null}
                                 {drawer.type === "opportunities" ? opportunityQuoteSummaryNode : null}
                                 {drawer.type === "opportunities" ? opportunityQuoteIntakeNode : null}
