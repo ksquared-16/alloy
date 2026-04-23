@@ -69,7 +69,7 @@ function entityTypeDisplayLabel(
     return plural ?? FALLBACK_LABELS[entityType] ?? FALLBACK_LABELS[key] ?? entityType;
 }
 
-export default function StatusesClient() {
+export default function StatusesClient({ basePath = "/admin/system/statuses" }: { basePath?: string } = {}) {
     const searchParams = useSearchParams();
     const entityTypeFilter = searchParams.get("entity_type")?.trim() ?? "";
     const { labels } = useEntityLabels();
@@ -416,7 +416,7 @@ export default function StatusesClient() {
                         Filtered to: <strong>{filterLabel}</strong>
                     </span>
                     <Link
-                        href="/admin/system/statuses"
+                        href={basePath}
                         className="font-medium text-alloy-blue hover:underline"
                     >
                         Clear filter

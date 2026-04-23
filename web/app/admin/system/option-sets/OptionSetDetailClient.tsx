@@ -41,7 +41,13 @@ type ItemRow = {
     metadata: Record<string, unknown>;
 };
 
-export default function OptionSetDetailClient({ setKey }: { setKey: string }) {
+export default function OptionSetDetailClient({
+    setKey,
+    basePath = "/admin/system/option-sets",
+}: {
+    setKey: string;
+    basePath?: string;
+}) {
     const { canMutate } = useAdminAuth();
     const [setRow, setSetRow] = useState<SetRow | null>(null);
     const [items, setItems] = useState<ItemRow[]>([]);
@@ -276,7 +282,7 @@ export default function OptionSetDetailClient({ setKey }: { setKey: string }) {
     if (error && !setRow) {
         return (
             <div className="space-y-4">
-                <Link href="/admin/system/option-sets" className="text-sm text-alloy-pine hover:underline">
+                <Link href={basePath} className="text-sm text-alloy-pine hover:underline">
                     ← Option sets
                 </Link>
                 <div className="rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800">{error}</div>
@@ -287,7 +293,7 @@ export default function OptionSetDetailClient({ setKey }: { setKey: string }) {
     return (
         <>
             <div className="mb-4">
-                <Link href="/admin/system/option-sets" className="text-sm text-alloy-pine hover:underline">
+                <Link href={basePath} className="text-sm text-alloy-pine hover:underline">
                     ← Option sets
                 </Link>
             </div>

@@ -68,7 +68,7 @@ function newDraftRow(sortOrder: number): DraftItemRow {
     };
 }
 
-export default function OptionSetsClient() {
+export default function OptionSetsClient({ basePath = "/admin/system/option-sets" }: { basePath?: string } = {}) {
     const { canMutate } = useAdminAuth();
     const [items, setItems] = useState<OptionSetListRow[]>([]);
     const [loading, setLoading] = useState(true);
@@ -452,7 +452,7 @@ export default function OptionSetsClient() {
                                                 <td className="py-2">
                                                     <div className="flex flex-wrap gap-2">
                                                         <Link
-                                                            href={`/admin/system/option-sets/${encodeURIComponent(row.set_key)}`}
+                                                            href={`${basePath}/${encodeURIComponent(row.set_key)}`}
                                                             className="rounded border border-alloy-stone/50 px-2 py-1 text-xs font-medium hover:bg-alloy-stone/20"
                                                         >
                                                             Edit items
@@ -492,7 +492,7 @@ export default function OptionSetsClient() {
                                 <p>{partialBanner}</p>
                                 {createdSetKey && (
                                     <Link
-                                        href={`/admin/system/option-sets/${encodeURIComponent(createdSetKey)}`}
+                                        href={`${basePath}/${encodeURIComponent(createdSetKey)}`}
                                         className="mt-2 inline-block text-sm font-medium text-alloy-pine hover:underline"
                                     >
                                         Open set detail

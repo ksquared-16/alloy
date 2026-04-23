@@ -39,6 +39,13 @@ export default function Sidebar({
           >
             Workspace
           </Link>
+          <Link
+            href="/adminV2/settings"
+            className="text-xs font-semibold hover:underline"
+            style={{ color: brand.primary }}
+          >
+            Settings
+          </Link>
         </div>
       )}
     </aside>
