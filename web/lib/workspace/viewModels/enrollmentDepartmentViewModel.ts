@@ -1,4 +1,5 @@
 import type { KPIVm } from "@/lib/ui-v2/workspace-types";
+import { formatWorkspaceUsdGrouped } from "@/lib/ui-v2/formatWorkspaceCurrency";
 import type {
     OpportunityLifecycleKpisRuntime,
     WorkspaceOpportunityQueueRuntime,
@@ -56,14 +57,6 @@ function countsByStatusKey(k: OpportunityLifecycleKpisRuntime & { status: "ready
     return m;
 }
 
-function formatUsd(n: number): string {
-    return new Intl.NumberFormat(undefined, {
-        style: "currency",
-        currency: "USD",
-        maximumFractionDigits: n >= 100 ? 0 : 2,
-    }).format(n);
-}
-
 /** Merge queue preview rows by opportunity id so the same record is not double-counted across work units. */
 function mergedQueueItems(
     runtime: WorkspaceRuntimeData,
@@ -92,7 +85,7 @@ function sumPositiveQuotes(items: OppQueueItem[], statusKeys: Set<string> | null
 }
 
 function valueDisplayForSum(sum: number): string {
-    return sum > 0 ? formatUsd(sum) : "—";
+    return sum > 0 ? formatWorkspaceUsdGrouped(sum) : "—";
 }
 
 /** Enrollment funnel KPI strip only (status breakdown + pipeline value). No Needs Attention in this band. */
@@ -108,7 +101,8 @@ export function buildEnrollmentDepartmentKpis(runtime: WorkspaceRuntimeData): KP
     const toursInProgress = get("tour_scheduled") + get("tour_completed");
     const readyToEnroll = get("ready_to_enroll");
     const enrolledWaitlisted = enrolled + get("waitlisted");
-    const pipeline = k.values?.openPipeline != null ? `$${Math.round(Number(k.values.openPipeline))}` : "—";
+    const pipeline =
+        k.values?.openPipeline != null ? formatWorkspaceUsdGrouped(Number(k.values.openPipeline)) : "—";
 
     return [
         { id: "en_inquiries", label: "Inquiries", value: String(inquiries), lane: "business" },

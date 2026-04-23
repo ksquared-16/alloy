@@ -1,4 +1,5 @@
 import type { KPIVm } from "@/lib/ui-v2/workspace-types";
+import { formatWorkspaceUsdGrouped } from "@/lib/ui-v2/formatWorkspaceCurrency";
 import type { OpportunityLifecycleKpiCounts } from "@/lib/workspace/computeOpportunityLifecycleKpis";
 import { isGrowthSliceDepartmentKey } from "@/lib/workspace/growthSliceDepartments";
 
@@ -40,7 +41,7 @@ export function buildWorkspaceRootOrgOpportunityKpis(
         {
             id: "org_pipeline_value",
             label: "Pipeline value",
-            value: pipeline > 0 ? `$${Math.round(pipeline)}` : "—",
+            value: pipeline > 0 ? formatWorkspaceUsdGrouped(pipeline) : "—",
             lane: "business",
         },
         { id: "org_closed", label: "Closed outcomes", value: String(Math.max(0, closed)), lane: "business" },
@@ -59,7 +60,7 @@ export function buildWorkspaceRootDepartmentTileRollupLine(params: {
     if (isGrowthSliceDepartmentKey(params.departmentKey) && params.kpis?.counts) {
         const motion = inMotionCountFromLifecycleCounts(params.kpis.counts);
         const pipe = params.kpis.values?.openPipeline;
-        const pipeLabel = pipe != null && pipe > 0 ? ` · $${Math.round(Number(pipe))} open` : "";
+        const pipeLabel = pipe != null && pipe > 0 ? ` · ${formatWorkspaceUsdGrouped(Number(pipe))} open` : "";
         return `${motion} active in pipeline${pipeLabel}`;
     }
     if (params.workUnitCount >= 0) {

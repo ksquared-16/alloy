@@ -4,6 +4,7 @@ import type {
     QueueItemQuickActionVm,
     QueueItemVm,
 } from "@/lib/ui-v2/workspace-types";
+import { formatWorkspaceUsdGrouped } from "@/lib/ui-v2/formatWorkspaceCurrency";
 import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
 
 type OppRow = WorkspaceOpportunityQueueRuntime["items"][number];
@@ -30,14 +31,6 @@ export function enrollmentCrmContactCapabilityForRow(row: OppRow): EnrollmentCrm
     const phoneRaw = (row as { _primary_phone?: string | null })._primary_phone?.trim() ?? "";
     const phoneTel = phoneRaw.replace(/\D/g, "").length >= 10;
     return { emailMailto: email, phoneTel };
-}
-
-function formatUsd(n: number): string {
-    return new Intl.NumberFormat(undefined, {
-        style: "currency",
-        currency: "USD",
-        maximumFractionDigits: n >= 100 ? 0 : 2,
-    }).format(n);
 }
 
 function parseIsoMs(ts: string | null | undefined): number | null {
@@ -144,7 +137,7 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow): EnrollmentCrmRo
 
     const commercialValue =
         row.quote_total != null && Number.isFinite(Number(row.quote_total)) && Number(row.quote_total) > 0
-            ? formatUsd(Number(row.quote_total))
+            ? formatWorkspaceUsdGrouped(Number(row.quote_total))
             : null;
 
     const contactSnippet =

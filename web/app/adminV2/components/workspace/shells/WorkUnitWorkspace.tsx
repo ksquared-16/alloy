@@ -107,7 +107,11 @@ export default function WorkUnitWorkspace({ model, onAction }: Props) {
                     ) : null}
                   </div>
                 ) : null}
-                {hasKpis ? <KPIBlock kpis={model.kpis} surface={kpiSurface} maxVisible={6} /> : null}
+                {hasKpis ? (
+                  <div data-workspace-zone="kpi-banner">
+                    <KPIBlock kpis={model.kpis} surface={kpiSurface} maxVisible={6} />
+                  </div>
+                ) : null}
               </div>
             ) : null}
             <div

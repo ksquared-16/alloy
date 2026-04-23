@@ -958,8 +958,9 @@
   font-size: 13px;
 }
 
-/* KPI — single elevated band (org root + department bridge when all metrics share one strip) */
+/* KPI — single elevated band (org root + department bridge + work unit when one strip) */
 [data-ws-surface="department"].adminv2-ws-dept-v2 [data-workspace-zone="kpi-banner"] .adminv2-ws-kpi-root-band,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 [data-workspace-zone="kpi-banner"] .adminv2-ws-kpi-root-band,
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-kpi-root-band {
   margin-top: 2px;
   padding: 10px 14px 12px;
@@ -975,6 +976,7 @@
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 [data-workspace-zone="kpi-banner"] .adminv2-ws-kpi-strip--single-band,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 [data-workspace-zone="kpi-banner"] .adminv2-ws-kpi-strip--single-band,
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-kpi-strip--single-band {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
@@ -987,6 +989,7 @@
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 [data-workspace-zone="kpi-banner"] .adminv2-ws-kpi-cell--single-band,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 [data-workspace-zone="kpi-banner"] .adminv2-ws-kpi-cell--single-band,
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-kpi-cell--single-band {
   min-height: 58px;
   padding: 8px 10px 9px;
@@ -1003,12 +1006,14 @@
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 [data-workspace-zone="kpi-banner"] .adminv2-ws-kpi-cell--single-band:hover,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 [data-workspace-zone="kpi-banner"] .adminv2-ws-kpi-cell--single-band:hover,
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-kpi-cell--single-band:hover {
   border-color: color-mix(in srgb, var(--d-pine) 22%, var(--d-border));
   box-shadow: 0 1px 0 color-mix(in srgb, #ffffff 70%, transparent), 0 6px 16px color-mix(in srgb, var(--d-pine) 8%, transparent);
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 [data-workspace-zone="kpi-banner"] .adminv2-ws-kpi-cell--single-band .adminv2-ws-kpi-label,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 [data-workspace-zone="kpi-banner"] .adminv2-ws-kpi-cell--single-band .adminv2-ws-kpi-label,
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-kpi-cell--single-band .adminv2-ws-kpi-label {
   font-size: 9px;
   font-weight: 800;
@@ -1019,15 +1024,18 @@
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 [data-workspace-zone="kpi-banner"] .adminv2-ws-kpi-cell--single-band .adminv2-ws-kpi-value,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 [data-workspace-zone="kpi-banner"] .adminv2-ws-kpi-cell--single-band .adminv2-ws-kpi-value,
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-kpi-cell--single-band .adminv2-ws-kpi-value {
   font-size: 19px;
   font-weight: 800;
   letter-spacing: -0.03em;
   line-height: 1.05;
   color: var(--d-pine);
+  font-variant-numeric: tabular-nums;
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 [data-workspace-zone="kpi-banner"] .adminv2-ws-kpi-cell--single-band .adminv2-ws-kpi-unit,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 [data-workspace-zone="kpi-banner"] .adminv2-ws-kpi-cell--single-band .adminv2-ws-kpi-unit,
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-kpi-cell--single-band .adminv2-ws-kpi-unit {
   font-size: 11px;
   font-weight: 700;
@@ -1036,6 +1044,7 @@
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 [data-workspace-zone="kpi-banner"] .adminv2-ws-kpi-cell--single-band .adminv2-ws-kpi-ai,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 [data-workspace-zone="kpi-banner"] .adminv2-ws-kpi-cell--single-band .adminv2-ws-kpi-ai,
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-kpi-cell--single-band .adminv2-ws-kpi-ai {
   font-size: 9px;
   font-weight: 600;
@@ -1066,6 +1075,7 @@
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-kpi-measurement-strip .adminv2-ws-dept-v2-kpi-rail .adminv2-ws-kpi-value {
   font-size: 13.5px;
   letter-spacing: -0.022em;
+  font-variant-numeric: tabular-nums;
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-kpi-measurement-strip .adminv2-ws-dept-v2-kpi-rail .adminv2-ws-kpi-label,
@@ -1082,6 +1092,22 @@
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-kpi-measurement-strip .adminv2-ws-dept-v2-kpi-rail-heading {
   margin-bottom: 3px;
   opacity: 0.98;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck [data-workspace-zone="kpi-banner"] {
+  margin-top: 0;
+  margin-bottom: 2px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-kpi-measurement-strip .adminv2-ws-kpi-strip--dept-embedded {
+  row-gap: 2px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-kpi-measurement-strip .adminv2-ws-kpi-cell {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 2.65rem;
 }
 
 /* Needs attention — same compact queue record grammar as pipeline; exception tint */
@@ -1122,43 +1148,6 @@
   padding: 0;
   border: none;
   background: transparent;
-}
-
-/* Work unit queue — right rail: value on first line; quick chips + Open share one aligned row */
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card-compact-aside {
-  justify-content: flex-start;
-  gap: 6px;
-}
-
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card-compact-cta-row {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 5px 6px;
-  width: 100%;
-  margin-top: auto;
-}
-
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card-compact-aside > .adminv2-ws-wu-queue-value--compact {
-  align-self: flex-end;
-  margin-bottom: 0;
-}
-
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card-compact-cta-row .adminv2-ws-wu-queue-card-quick-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 5px;
-  max-width: none;
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card-compact-cta-row .adminv2-ws-wu-queue-action-chip--open {
-  flex: 0 0 auto;
-  margin-left: auto;
 }
 
 /* Workspace root — orientation rail (quiet companion to department grid) */
@@ -4939,15 +4928,15 @@
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-list {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 2px 2px 4px;
+  gap: 3px;
+  padding: 1px 2px 3px;
   list-style: none;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-item-wrap {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-section-label {
@@ -4972,7 +4961,7 @@
   border: 1px solid color-mix(in srgb, var(--d-border) 82%, transparent);
   background: color-mix(in srgb, #ffffff 96%, var(--d-surface));
   box-shadow: none;
-  padding: 4px 6px 5px;
+  padding: 3px 5px 4px;
   border-left-width: 2px;
   border-left-color: color-mix(in srgb, var(--d-pine) 35%, var(--d-border));
 }
@@ -4996,8 +4985,8 @@
   flex-direction: row;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 10px;
-  padding: 5px 8px 6px;
+  gap: 8px;
+  padding: 4px 6px 5px;
   min-height: 0;
 }
 
@@ -5015,7 +5004,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   padding-right: 2px;
 }
 
@@ -5103,10 +5092,47 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  justify-content: center;
-  gap: 4px;
-  min-width: 5.75rem;
+  justify-content: flex-start;
+  gap: 3px;
+  min-width: 5.25rem;
+  max-width: min(40%, 12.75rem);
   align-self: stretch;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card-compact-aside > .adminv2-ws-wu-queue-value--compact {
+  align-self: flex-end;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card-compact-cta-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  width: 100%;
+  min-width: 0;
+  margin-top: auto;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card-compact-cta-row .adminv2-ws-wu-queue-card-quick-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 4px;
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: flex-end;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 1px;
+  scrollbar-width: thin;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card-compact-cta-row .adminv2-ws-wu-queue-action-chip--open {
+  flex: 0 0 auto;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card-tags {
@@ -5169,37 +5195,42 @@
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card-quick-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: flex-end;
-  gap: 3px;
-  max-width: 9rem;
+  gap: 4px;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-action-chip--quiet {
-  padding: 1px 6px;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  padding: 2px 5px;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: none;
   border-radius: 4px;
-  border: 1px solid color-mix(in srgb, var(--d-border) 70%, transparent);
-  background: color-mix(in srgb, #ffffff 40%, transparent);
-  color: color-mix(in srgb, var(--d-muted) 40%, var(--d-text-primary, #273f52));
+  border: 1px solid color-mix(in srgb, var(--d-border) 58%, transparent);
+  background: color-mix(in srgb, var(--d-panel-quiet) 28%, transparent);
+  color: color-mix(in srgb, var(--d-muted) 22%, var(--d-text-primary, #273f52));
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-value--compact {
   font-size: 9px;
-  max-width: 7rem;
+  max-width: 100%;
   text-align: right;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-action-chip--open {
-  padding: 2px 8px;
+  padding: 3px 9px;
   font-size: 9px;
   font-weight: 800;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  border-radius: 4px;
+  border-radius: 5px;
+  border: 1px solid color-mix(in srgb, var(--d-pine) 55%, var(--d-border));
+  background: color-mix(in srgb, var(--d-pine) 92%, #0f172a);
+  color: #fff;
+  box-shadow: 0 1px 0 color-mix(in srgb, #ffffff 28%, transparent);
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card-top {
@@ -5448,6 +5479,19 @@
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-action-chip:hover {
   border-color: color-mix(in srgb, var(--d-brand) 48%, var(--d-border));
   background: color-mix(in srgb, var(--d-brand) 7%, #ffffff);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-action-chip--open:hover {
+  border-color: color-mix(in srgb, var(--d-pine) 72%, var(--d-border));
+  background: color-mix(in srgb, var(--d-pine) 88%, #0f172a);
+  color: #fff;
+  filter: brightness(1.05);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-action-chip--quiet:hover {
+  border-color: color-mix(in srgb, var(--d-border) 72%, transparent);
+  background: color-mix(in srgb, var(--d-panel-quiet) 42%, transparent);
+  color: color-mix(in srgb, var(--d-muted) 12%, var(--d-text-primary, #273f52));
 }
 
 /* Work unit — tight lane status strip above queue (operator note, not a card) */

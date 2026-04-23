@@ -1,17 +1,10 @@
 import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
 import type { QueueItemVm, QueueVm, WorkUnitWorkspaceModel } from "@/lib/ui-v2/workspace-types";
+import { formatWorkspaceUsdGrouped } from "@/lib/ui-v2/formatWorkspaceCurrency";
 import {
     buildEnrollmentOpportunityQueueItemVm,
     buildEnrollmentWorkUnitActionsRail,
 } from "@/lib/workspace/viewModels/enrollmentWorkUnitViewModel";
-
-function formatUsd(n: number): string {
-    return new Intl.NumberFormat(undefined, {
-        style: "currency",
-        currency: "USD",
-        maximumFractionDigits: n >= 100 ? 0 : 2,
-    }).format(n);
-}
 
 function parseIsoMs(ts: string | null | undefined): number | null {
     if (!ts) return null;
@@ -38,7 +31,7 @@ function defaultOpportunityQueueItemVm(row: WorkspaceOpportunityQueueRuntime["it
     const statusLabel = (row._status_display ?? "").trim() || status;
     const value =
         row.quote_total != null && Number.isFinite(Number(row.quote_total)) && Number(row.quote_total) > 0
-            ? formatUsd(Number(row.quote_total))
+            ? formatWorkspaceUsdGrouped(Number(row.quote_total))
             : undefined;
 
     const reasonLabel = (row as { _attention_reason_label?: string | null })._attention_reason_label?.trim() || null;
@@ -205,7 +198,7 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
             {
                 id: "wu_value",
                 label: "Queue value",
-                value: valueTotal > 0 ? formatUsd(valueTotal) : "—",
+                value: valueTotal > 0 ? formatWorkspaceUsdGrouped(valueTotal) : "—",
                 lane: "business",
             },
             { id: "wu_oldest", label: "Oldest in queue", value: oldestAgeLabel, lane: "business" },
