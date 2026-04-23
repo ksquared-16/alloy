@@ -9,23 +9,10 @@ import SectionCard from "@/components/admin/SectionCard";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import type { StatusDef } from "@/app/api/admin/status-definitions/route";
+import { ADMIN_STATUS_DEFINITIONS_ENTITY_TYPES } from "@/lib/admin/statusDefinitionsAdminEntityTypes";
 
-/** Canonical admin-configurable workflow statuses for core CRM entities (matches status_definitions.entity_type). */
-const ENTITY_TYPES = [
-    "schedules",
-    "jobs",
-    "customers",
-    "opportunities",
-    "vendors",
-    "service_plan_templates",
-    "persons",
-    "contacts",
-    "customer_members",
-    "locations",
-    "documents",
-    "payments",
-    "subscriptions",
-] as const;
+/** Canonical admin-configurable workflow statuses (kept in sync with GET /api/admin/status-definitions unscoped list). */
+const ENTITY_TYPES = ADMIN_STATUS_DEFINITIONS_ENTITY_TYPES;
 
 const ENTITY_TYPE_TO_LABEL_KEY: Record<string, string> = {
     opportunities: "opportunities",

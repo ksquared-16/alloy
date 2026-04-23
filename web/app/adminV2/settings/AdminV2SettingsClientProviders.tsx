@@ -4,6 +4,7 @@ import { AdminAuthProvider } from "@/contexts/AdminAuthContext";
 import { EntityLabelsProvider, type EntityLabelsMap } from "@/contexts/EntityLabelsContext";
 import type { EntityLabelsBootstrapMap } from "@/lib/admin/entityLabelsServer";
 import type { ReactNode } from "react";
+import SettingsHierarchyBreadcrumb from "./SettingsHierarchyBreadcrumb";
 
 interface AdminV2SettingsClientProvidersProps {
     children: ReactNode;
@@ -33,6 +34,12 @@ export default function AdminV2SettingsClientProviders({
         <AdminAuthProvider userEmail={safeEmail} role={safeRole}>
             <EntityLabelsProvider initialLabels={labels}>
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                    <div
+                        className="shrink-0 border-b border-admin-border px-6 py-2.5"
+                        style={{ backgroundColor: "rgba(255,255,255,0.55)" }}
+                    >
+                        <SettingsHierarchyBreadcrumb />
+                    </div>
                     <div className="min-h-0 flex-1 overflow-y-auto p-6">{children}</div>
                 </div>
             </EntityLabelsProvider>
