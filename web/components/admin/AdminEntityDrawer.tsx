@@ -5383,13 +5383,17 @@ export default function AdminEntityDrawer() {
         if (drawer.type === "schedules" && scheduleOrder?.length) {
             overviewSections = applyOverviewSectionOrder(overviewSections, scheduleOrder);
         }
+        const oppOrder = recordChromeOpportunity.layout?.config_json?.overview_section_order;
+        if (drawer.type === "opportunities" && oppOrder?.length) {
+            overviewSections = applyOverviewSectionOrder(overviewSections, oppOrder);
+        }
         /** Schedule overview tab: snapshot already shows status/timing — keep property + history only (tabs hold the rest). */
         if (drawer.type === "schedules" && overviewSections.length > 0) {
             const keepScheduleOverview = new Set<string>(["property_service", "reschedule_history"]);
             overviewSections = overviewSections.filter((s) => keepScheduleOverview.has(s.key));
         }
         return overviewSections;
-    }, [drawer.type, overviewData, presentationType, recordChromeSchedule.layout]);
+    }, [drawer.type, overviewData, presentationType, recordChromeSchedule.layout, recordChromeOpportunity.layout]);
 
     const overviewSelectOptionsByFieldKey = useMemo((): Record<string, { value: string; label: string }[]> => {
         const out: Record<string, { value: string; label: string }[]> = {};
@@ -7911,7 +7915,7 @@ export default function AdminEntityDrawer() {
                                                                 </select>
                                                             </div>
                                                             <div className="min-w-0">
-                                                                <div className={tinyLabel}>{commRoleLabel || "—"}</div>
+                                                                <div className={tinyLabel}>{commRoleLabel || ""}</div>
                                                                 <div className="rounded-lg border border-alloy-stone/25 bg-white px-2 py-1.5">
                                                                     <div className="text-[13px] font-semibold text-alloy-midnight/85 truncate">
                                                                         {commName || primaryContact || primaryPerson || household || "—"}
