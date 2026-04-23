@@ -7790,38 +7790,24 @@ export default function AdminEntityDrawer() {
                                                         | {
                                                               household?: { id: string; label: string } | null;
                                                               primary_person?: { id: string; label: string; email?: string | null; phone?: string | null; role_label?: string | null } | null;
-                                                              primary_contact?: { id: string; label: string; email?: string | null; phone?: string | null } | null;
+                                                              primary_contact?: { id: string; label: string; email?: string | null; phone?: string | null; role_label?: string | null } | null;
                                                               primary_child?: { id: string; display_name: string; relationship_label?: string | null } | null;
                                                               inquiry?: { title?: string | null; lines?: { key: string; label: string; value: string }[] } | null;
                                                           }
                                                         | null) ?? null;
-                                                const pickFirst = (keys: string[]): string | null => {
-                                                    for (const k of keys) {
-                                                        const v = d[k];
-                                                        if (v == null) continue;
-                                                        const s = String(v).trim();
-                                                        if (s) return s;
-                                                    }
-                                                    return null;
-                                                };
                                                 const household = String(ident?.household?.label ?? "").trim();
                                                 const primaryPerson = String(ident?.primary_person?.label ?? "").trim();
                                                 const primaryPersonRole = String(ident?.primary_person?.role_label ?? "").trim();
                                                 const primaryContact = String(ident?.primary_contact?.label ?? "").trim();
-                                                const contactEmail =
-                                                    String(ident?.primary_contact?.email ?? "").trim() ||
-                                                    String(ident?.primary_person?.email ?? "").trim() ||
-                                                    "";
-                                                const contactPhone =
-                                                    String(ident?.primary_contact?.phone ?? "").trim() ||
-                                                    String(ident?.primary_person?.phone ?? "").trim() ||
-                                                    "";
+                                                const comm = ident?.primary_contact ?? ident?.primary_person ?? null;
+                                                const commRoleLabel = String((comm as { role_label?: string | null } | null)?.role_label ?? "").trim();
+                                                const commName = String((comm as { label?: string | null } | null)?.label ?? "").trim();
+                                                const commEmail = String((comm as { email?: string | null } | null)?.email ?? "").trim();
+                                                const commPhone = String((comm as { phone?: string | null } | null)?.phone ?? "").trim();
                                                 const childName = String(ident?.primary_child?.display_name ?? "").trim();
                                                 const childRel = String(ident?.primary_child?.relationship_label ?? "").trim();
                                                 const inquiryTitle =
-                                                    String(ident?.inquiry?.title ?? "").trim() ||
-                                                    String(d.name ?? "").trim() ||
-                                                    "";
+                                                    String(ident?.inquiry?.title ?? "").trim() || "";
                                                 const inquiryLines =
                                                     (ident?.inquiry?.lines ?? []).filter((l) => String(l.value ?? "").trim()).slice(0, 3);
                                                 const stageLabel =
@@ -7868,9 +7854,13 @@ export default function AdminEntityDrawer() {
                                                                 </div>
                                                                 <div className="mt-0.5 min-w-0 space-y-0.5">
                                                                     <div className={`${strong} truncate`}>
-                                                                        {childName
-                                                                            ? `Child: ${childName}${childRel ? ` (${childRel})` : ""}`
-                                                                            : inquiryTitle || "—"}
+                                                                        {childName ? (
+                                                                            <>Child: {childName}{childRel ? <span className="text-alloy-midnight/55"> ({childRel})</span> : null}</>
+                                                                        ) : inquiryTitle ? (
+                                                                            inquiryTitle
+                                                                        ) : (
+                                                                            "—"
+                                                                        )}
                                                                     </div>
                                                                     <div className={`${soft} truncate`}>
                                                                         {[
@@ -7921,23 +7911,23 @@ export default function AdminEntityDrawer() {
                                                                 </select>
                                                             </div>
                                                             <div className="min-w-0">
-                                                                <div className={tinyLabel}>Contact</div>
+                                                                <div className={tinyLabel}>{commRoleLabel || "—"}</div>
                                                                 <div className="rounded-lg border border-alloy-stone/25 bg-white px-2 py-1.5">
                                                                     <div className="text-[13px] font-semibold text-alloy-midnight/85 truncate">
-                                                                        {primaryContact || primaryPerson || household || "—"}
+                                                                        {commName || primaryContact || primaryPerson || household || "—"}
                                                                     </div>
                                                                     <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[12px] font-medium text-alloy-midnight/65">
-                                                                        {contactPhone ? (
-                                                                            <a className={monoLink} href={`tel:${contactPhone}`}>
-                                                                                {contactPhone}
+                                                                        {commPhone ? (
+                                                                            <a className={monoLink} href={`tel:${commPhone}`}>
+                                                                                {commPhone}
                                                                             </a>
                                                                         ) : null}
-                                                                        {contactEmail ? (
-                                                                            <a className={monoLink} href={`mailto:${contactEmail}`}>
-                                                                                {contactEmail}
+                                                                        {commEmail ? (
+                                                                            <a className={monoLink} href={`mailto:${commEmail}`}>
+                                                                                {commEmail}
                                                                             </a>
                                                                         ) : null}
-                                                                        {!contactPhone && !contactEmail ? <span>—</span> : null}
+                                                                        {!commPhone && !commEmail ? <span>—</span> : null}
                                                                     </div>
                                                                 </div>
                                                             </div>

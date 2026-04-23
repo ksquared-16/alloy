@@ -64,6 +64,29 @@ function trimOrNull(v: unknown): string | null {
     return s ? s : null;
 }
 
+async function resolveCustomerPersonRole(
+    supabase: ReturnType<typeof createAdminClient>,
+    params: { orgId: string; customerId: string; personId: string }
+): Promise<{ role_key: string | null; role_label: string | null }> {
+    const { data: cp } = await supabase
+        .from("customer_persons")
+        .select("role_type")
+        .eq("org_id", params.orgId)
+        .eq("customer_id", params.customerId)
+        .eq("person_id", params.personId)
+        .maybeSingle();
+    const roleType = trimOrNull((cp as { role_type?: string | null } | null)?.role_type);
+    if (!roleType) return { role_key: null, role_label: null };
+    const { data: rt } = await supabase
+        .from("customer_person_role_types")
+        .select("label")
+        .eq("org_id", params.orgId)
+        .eq("key", roleType)
+        .maybeSingle();
+    const roleLabel = trimOrNull((rt as { label?: string | null } | null)?.label);
+    return { role_key: roleType, role_label: roleLabel };
+}
+
 export async function GET(
     request: NextRequest,
     { params }: { params: Promise<{ type: string; id: string }> }
@@ -274,23 +297,26 @@ export async function GET(
             let personRoleLabel: string | null = null;
             if (householdId && typeof opp.primary_person_id === "string" && opp.primary_person_id.trim()) {
                 const pid = opp.primary_person_id.trim();
-                const { data: cp } = await supabase
-                    .from("customer_persons")
-                    .select("role_type, is_primary")
+                const rr = await resolveCustomerPersonRole(supabase, { orgId, customerId: householdId, personId: pid });
+                personRoleKey = rr.role_key;
+                personRoleLabel = rr.role_label;
+            }
+
+            // Primary contact role label (same role system; derived via contact.person_id when available).
+            let contactRoleKey: string | null = null;
+            let contactRoleLabel: string | null = null;
+            if (householdId && typeof opp.primary_contact_id === "string" && opp.primary_contact_id.trim()) {
+                const { data: cRow } = await supabase
+                    .from("contacts")
+                    .select("person_id")
+                    .eq("id", opp.primary_contact_id.trim())
                     .eq("org_id", orgId)
-                    .eq("customer_id", householdId)
-                    .eq("person_id", pid)
                     .maybeSingle();
-                const roleType = trimOrNull((cp as { role_type?: string | null } | null)?.role_type);
-                personRoleKey = roleType;
-                if (roleType) {
-                    const { data: rt } = await supabase
-                        .from("customer_person_role_types")
-                        .select("label")
-                        .eq("org_id", orgId)
-                        .eq("key", roleType)
-                        .maybeSingle();
-                    personRoleLabel = trimOrNull((rt as { label?: string | null } | null)?.label);
+                const pid = trimOrNull((cRow as { person_id?: string | null } | null)?.person_id);
+                if (pid) {
+                    const rr = await resolveCustomerPersonRole(supabase, { orgId, customerId: householdId, personId: pid });
+                    contactRoleKey = rr.role_key;
+                    contactRoleLabel = rr.role_label;
                 }
             }
 
@@ -369,6 +395,8 @@ export async function GET(
                           label: trimOrNull(out._primary_contact_name) ?? rel.primary_contact_id?.label ?? "—",
                           email: trimOrNull(out._primary_contact_email),
                           phone: trimOrNull(out._primary_contact_phone),
+                          role_key: contactRoleKey,
+                          role_label: contactRoleLabel,
                       }
                     : null,
                 primary_child: child,
