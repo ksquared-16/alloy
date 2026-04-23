@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import PrimaryButton from "@/components/PrimaryButton";
+import { adminFieldEntitySingularLabel } from "@/lib/admin/adminFieldEntityDisplayLabel";
 import { slugifyAdminKey } from "@/lib/admin/slugifyAdminKey";
 
 const ENTITY_TYPES = [
@@ -55,6 +57,7 @@ const SECTION_KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 
 export default function FieldSectionsClient() {
     const { canMutate } = useAdminAuth();
+    const { labels } = useEntityLabels();
     const [entityType, setEntityType] = useState<EntityType>("person");
     const [rows, setRows] = useState<FieldSectionRow[]>([]);
     const [loading, setLoading] = useState(true);
@@ -78,6 +81,8 @@ export default function FieldSectionsClient() {
     const [editError, setEditError] = useState<string | null>(null);
 
     const [deleteError, setDeleteError] = useState<string | null>(null);
+
+    const entityTypeDisplay = useMemo(() => adminFieldEntitySingularLabel(labels, entityType), [labels, entityType]);
 
     const fetchRows = useCallback(async () => {
         setLoading(true);
@@ -208,7 +213,12 @@ export default function FieldSectionsClient() {
     const deleteRow = async (row: FieldSectionRow) => {
         if (!canMutate) return;
         setDeleteError(null);
-        if (!window.confirm(`Delete section "${row.section_key}" for ${row.entity_type}?`)) return;
+        if (
+            !window.confirm(
+                `Delete section "${row.section_key}" for ${adminFieldEntitySingularLabel(labels, row.entity_type)} (${row.entity_type})?`
+            )
+        )
+            return;
         try {
             const res = await fetch(`/api/admin/field-sections/${row.id}`, { method: "DELETE" });
             const json = await res.json().catch(() => ({}));
@@ -242,7 +252,7 @@ export default function FieldSectionsClient() {
                     >
                         {ENTITY_TYPES.map((t) => (
                             <option key={t} value={t}>
-                                {t}
+                                {adminFieldEntitySingularLabel(labels, t)}
                             </option>
                         ))}
                     </select>
@@ -265,7 +275,7 @@ export default function FieldSectionsClient() {
                     }
                     className="text-sm font-medium text-alloy-pine hover:underline"
                 >
-                    Edit {entityType} fields →
+                    Edit {entityTypeDisplay} fields →
                 </Link>
             </div>
 
@@ -275,7 +285,7 @@ export default function FieldSectionsClient() {
             )}
 
             {!loading && !error && (
-                <SectionCard title={`Sections for ${entityType}`}>
+                <SectionCard title={`Sections for ${entityTypeDisplay}`}>
                     {deleteError && (
                         <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
                             {deleteError}
@@ -349,7 +359,7 @@ export default function FieldSectionsClient() {
                         className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg border border-[#e6e8ec] bg-white p-4 shadow-xl"
                         onClick={(e) => e.stopPropagation()}
                     >
-                        <h3 className="mb-3 text-lg font-semibold text-[#31394d]">New section ({entityType})</h3>
+                        <h3 className="mb-3 text-lg font-semibold text-[#31394d]">New section ({entityTypeDisplay})</h3>
                         <div className="space-y-3">
                             <div>
                                 <label className="mb-0.5 block text-xs font-medium text-[#59678b]">Label</label>

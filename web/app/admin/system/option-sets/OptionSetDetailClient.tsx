@@ -5,7 +5,9 @@ import Link from "next/link";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import PrimaryButton from "@/components/PrimaryButton";
+import { adminFieldEntitySingularLabel } from "@/lib/admin/adminFieldEntityDisplayLabel";
 import type { OptionSetUsageBlocker } from "@/lib/admin/collectOptionSetUsage";
 import { uniqueAdminKey } from "@/lib/admin/slugifyAdminKey";
 
@@ -49,6 +51,7 @@ export default function OptionSetDetailClient({
     basePath?: string;
 }) {
     const { canMutate } = useAdminAuth();
+    const { labels } = useEntityLabels();
     const [setRow, setSetRow] = useState<SetRow | null>(null);
     const [items, setItems] = useState<ItemRow[]>([]);
     const [blockers, setBlockers] = useState<OptionSetUsageBlocker[]>([]);
@@ -311,7 +314,10 @@ export default function OptionSetDetailClient({
                         {blockers.map((b, i) =>
                             b.kind === "field_definition" ? (
                                 <li key={`fd-${b.id}-${i}`}>
-                                    Field <span className="font-mono">{b.entity_type}.{b.field_key}</span>
+                                    {adminFieldEntitySingularLabel(labels, b.entity_type)} field{" "}
+                                    <span className="font-mono">
+                                        {b.entity_type}.{b.field_key}
+                                    </span>
                                 </li>
                             ) : (
                                 <li key={`pd-${b.id}-${i}`}>

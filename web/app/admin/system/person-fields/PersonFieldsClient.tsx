@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import { useEntityLabels } from "@/contexts/EntityLabelsContext";
+import { adminFieldEntitySingularLabel } from "@/lib/admin/adminFieldEntityDisplayLabel";
 import type { FieldDef } from "@/app/api/admin/field-definitions/route";
 import { sortFieldDefinitionsForAdminList } from "@/lib/admin/sortFieldDefinitions";
 import OptionSetKeyPicker from "@/components/admin/OptionSetKeyPicker";
@@ -62,6 +64,14 @@ function toFieldDef(r: Record<string, unknown>): FieldDef {
 
 export default function PersonFieldsClient({ manageOptionSetsHref }: { manageOptionSetsHref?: string } = {}) {
     const { canMutate } = useAdminAuth();
+    const { labels } = useEntityLabels();
+    const personEntityLabel = useMemo(() => adminFieldEntitySingularLabel(labels, "person"), [labels]);
+    const pageTitle = useMemo(() => `${personEntityLabel} Fields`, [personEntityLabel]);
+    const pageSubtitle = useMemo(
+        () =>
+            `Configure field definitions for the ${personEntityLabel.toLowerCase()} entity. System fields can be customized (labels, visibility, order). Add custom fields for your org.`,
+        [personEntityLabel]
+    );
     const [items, setItems] = useState<FieldDef[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -319,10 +329,7 @@ export default function PersonFieldsClient({ manageOptionSetsHref }: { manageOpt
     return (
         <>
             <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-                <AdminPageHeader
-                    title="Person Fields"
-                    subtitle="Configure field definitions for the person entity. System fields can be customized (labels, visibility, order). Add custom fields for your org."
-                />
+                <AdminPageHeader title={pageTitle} subtitle={pageSubtitle} />
                 {canMutate && (
                     <button
                         type="button"

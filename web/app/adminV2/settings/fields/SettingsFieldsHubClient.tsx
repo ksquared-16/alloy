@@ -5,35 +5,21 @@ import { usePathname, useRouter } from "next/navigation";
 import EntityFieldsClient from "@/components/admin/EntityFieldsClient";
 import PersonFieldsClient from "@/app/admin/system/person-fields/PersonFieldsClient";
 import LocationFieldsClient from "@/app/admin/system/location-fields/LocationFieldsClient";
+import { useEntityLabels } from "@/contexts/EntityLabelsContext";
+import { adminFieldEntitySingularLabel } from "@/lib/admin/adminFieldEntityDisplayLabel";
 
 const MANAGE_OPTION_SETS_HREF = "/adminV2/settings/option-sets";
 
 export type FieldEntityKey = "person" | "location" | "customer" | "job" | "opportunity" | "vendor" | "schedule";
 
-const ALLOWED_KEYS: FieldEntityKey[] = ["person", "location", "customer", "job", "opportunity", "vendor", "schedule"];
+/** Display and URL `entity=` values (matches legacy hub order; location last). */
+const ENTITY_SELECT_ORDER: FieldEntityKey[] = ["person", "customer", "job", "opportunity", "vendor", "schedule", "location"];
 
-const ENTITY_OPTIONS: { key: FieldEntityKey; label: string }[] = [
-    { key: "person", label: "Person" },
-    { key: "customer", label: "Customer" },
-    { key: "job", label: "Job" },
-    { key: "opportunity", label: "Opportunity" },
-    { key: "vendor", label: "Vendor" },
-    { key: "schedule", label: "Schedule" },
-    { key: "location", label: "Location" },
-];
-
-/** Matches legacy /admin/system/*-fields page titles for EntityFieldsClient. */
-const LEGACY_ENTITY_FIELDS_TITLE: Partial<Record<FieldEntityKey, string>> = {
-    customer: "Customer Fields",
-    job: "Job Fields",
-    opportunity: "Opportunity Fields",
-    vendor: "Vendor Fields",
-    schedule: "Schedule Fields",
-};
+const ALLOWED_ENTITY_KEYS = new Set<string>(ENTITY_SELECT_ORDER);
 
 function normalizeEntity(raw: string | undefined): FieldEntityKey {
     const t = (raw ?? "").trim().toLowerCase();
-    return ALLOWED_KEYS.includes(t as FieldEntityKey) ? (t as FieldEntityKey) : "person";
+    return ALLOWED_ENTITY_KEYS.has(t) ? (t as FieldEntityKey) : "person";
 }
 
 function settingsFieldsBasePath(pathname: string): string {
@@ -45,7 +31,18 @@ function settingsFieldsBasePath(pathname: string): string {
 export default function SettingsFieldsHubClient({ initialEntity }: { initialEntity?: string }) {
     const router = useRouter();
     const pathname = usePathname();
+    const { labels } = useEntityLabels();
     const entity = useMemo(() => normalizeEntity(initialEntity), [initialEntity]);
+
+    const entityOptions = useMemo(
+        () => ENTITY_SELECT_ORDER.map((key) => ({ key, label: adminFieldEntitySingularLabel(labels, key) })),
+        [labels]
+    );
+
+    const entityFieldsTitle = useMemo(
+        () => `${adminFieldEntitySingularLabel(labels, entity)} Fields`,
+        [labels, entity]
+    );
 
     const onEntityChange = useCallback(
         (next: FieldEntityKey) => {
@@ -67,7 +64,7 @@ export default function SettingsFieldsHubClient({ initialEntity }: { initialEnti
                         value={entity}
                         onChange={(e) => onEntityChange(e.target.value as FieldEntityKey)}
                     >
-                        {ENTITY_OPTIONS.map((o) => (
+                        {entityOptions.map((o) => (
                             <option key={o.key} value={o.key}>
                                 {o.label}
                             </option>
@@ -90,7 +87,7 @@ export default function SettingsFieldsHubClient({ initialEntity }: { initialEnti
                 ) : (
                     <EntityFieldsClient
                         entityType={entity}
-                        title={LEGACY_ENTITY_FIELDS_TITLE[entity] ?? "Fields"}
+                        title={entityFieldsTitle}
                         subtitle="Field definitions for forms, drawers, and tables. Same APIs as legacy System pages."
                         manageOptionSetsHref={MANAGE_OPTION_SETS_HREF}
                     />

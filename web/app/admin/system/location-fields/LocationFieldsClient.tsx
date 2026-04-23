@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import { useEntityLabels } from "@/contexts/EntityLabelsContext";
+import { adminFieldEntityPluralLabel, adminFieldEntitySingularLabel } from "@/lib/admin/adminFieldEntityDisplayLabel";
 import type { FieldDef } from "@/app/api/admin/field-definitions/route";
 import { sortFieldDefinitionsForAdminList } from "@/lib/admin/sortFieldDefinitions";
 import OptionSetKeyPicker from "@/components/admin/OptionSetKeyPicker";
@@ -62,6 +64,15 @@ function toFieldDef(r: Record<string, unknown>): FieldDef {
 
 export default function LocationFieldsClient({ manageOptionSetsHref }: { manageOptionSetsHref?: string } = {}) {
     const { canMutate } = useAdminAuth();
+    const { labels } = useEntityLabels();
+    const locationEntityLabel = useMemo(() => adminFieldEntitySingularLabel(labels, "location"), [labels]);
+    const locationPluralLabel = useMemo(() => adminFieldEntityPluralLabel(labels, "location"), [labels]);
+    const pageTitle = useMemo(() => `${locationEntityLabel} Fields`, [locationEntityLabel]);
+    const pageSubtitle = useMemo(
+        () =>
+            `Configure custom fields for ${locationPluralLabel.toLowerCase()} (property, access, quote data). System columns stay on the locations table; these map to field_values.`,
+        [locationPluralLabel]
+    );
     const [items, setItems] = useState<FieldDef[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -319,10 +330,7 @@ export default function LocationFieldsClient({ manageOptionSetsHref }: { manageO
     return (
         <>
             <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-                <AdminPageHeader
-                    title="Location Fields"
-                    subtitle="Configure custom fields for locations (property, access, quote data). System columns stay on the locations table; these map to field_values."
-                />
+                <AdminPageHeader title={pageTitle} subtitle={pageSubtitle} />
                 {canMutate && (
                     <button
                         type="button"
