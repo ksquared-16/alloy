@@ -10,10 +10,18 @@ type OptionSetKeyPickerProps = {
     onChange: (setKey: string) => void;
     disabled?: boolean;
     id?: string;
+    /** Admin surface for managing option sets (e.g. Settings vs legacy System). */
+    manageOptionSetsHref?: string;
 };
 
 /** Loads org option sets for field_definitions.config.option_set_key. */
-export default function OptionSetKeyPicker({ value, onChange, disabled, id }: OptionSetKeyPickerProps) {
+export default function OptionSetKeyPicker({
+    value,
+    onChange,
+    disabled,
+    id,
+    manageOptionSetsHref = "/admin/system/option-sets",
+}: OptionSetKeyPickerProps) {
     const [sets, setSets] = useState<OptionSetSummary[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -64,7 +72,7 @@ export default function OptionSetKeyPicker({ value, onChange, disabled, id }: Op
             </div>
             <p className="text-xs text-[#59678b]">
                 Manage lists in{" "}
-                <Link href="/admin/system/option-sets" className="text-alloy-pine hover:underline font-medium">
+                <Link href={manageOptionSetsHref} className="text-alloy-pine hover:underline font-medium">
                     Option sets
                 </Link>
                 . Select/multiselect fields need option_set_key, catalog_key, or inline options.

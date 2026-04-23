@@ -46,6 +46,29 @@ export default function AdminV2SettingsIndexPage() {
           <div className="text-sm font-semibold text-alloy-midnight">Document field definitions</div>
           <div className="mt-1 text-xs text-alloy-midnight/60">Custom fields and types for document records.</div>
         </Link>
+        <Link
+          href="/adminV2/settings/departments"
+          className="rounded-xl border border-admin-border bg-white/80 p-4 shadow-sm hover:bg-white"
+        >
+          <div className="text-sm font-semibold text-alloy-midnight">Departments</div>
+          <div className="mt-1 text-xs text-alloy-midnight/60">Org departments for workspace and work units.</div>
+        </Link>
+        <Link
+          href="/adminV2/settings/work-units"
+          className="rounded-xl border border-admin-border bg-white/80 p-4 shadow-sm hover:bg-white"
+        >
+          <div className="text-sm font-semibold text-alloy-midnight">Work units</div>
+          <div className="mt-1 text-xs text-alloy-midnight/60">Queues and work surfaces scoped to departments.</div>
+        </Link>
+        <Link
+          href="/adminV2/settings/fields"
+          className="rounded-xl border border-admin-border bg-white/80 p-4 shadow-sm hover:bg-white"
+        >
+          <div className="text-sm font-semibold text-alloy-midnight">Fields</div>
+          <div className="mt-1 text-xs text-alloy-midnight/60">
+            Registry field definitions by entity (person, customer, job, opportunity, vendor, schedule, location).
+          </div>
+        </Link>
       </div>
     </div>
   );

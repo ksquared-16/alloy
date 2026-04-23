@@ -60,7 +60,7 @@ function toFieldDef(r: Record<string, unknown>): FieldDef {
     };
 }
 
-export default function LocationFieldsClient() {
+export default function LocationFieldsClient({ manageOptionSetsHref }: { manageOptionSetsHref?: string } = {}) {
     const { canMutate } = useAdminAuth();
     const [items, setItems] = useState<FieldDef[]>([]);
     const [loading, setLoading] = useState(true);
@@ -532,6 +532,7 @@ export default function LocationFieldsClient() {
                                         value={editOptionSetKey}
                                         onChange={setEditOptionSetKey}
                                         disabled={!canMutate || editSaving}
+                                        manageOptionSetsHref={manageOptionSetsHref}
                                     />
                                 </div>
                             )}
@@ -695,6 +696,7 @@ export default function LocationFieldsClient() {
                                         value={createOptionSetKey}
                                         onChange={setCreateOptionSetKey}
                                         disabled={!canMutate || createSaving}
+                                        manageOptionSetsHref={manageOptionSetsHref}
                                     />
                                 </div>
                             )}

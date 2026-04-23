@@ -60,7 +60,7 @@ function toFieldDef(r: Record<string, unknown>): FieldDef {
     };
 }
 
-export default function PersonFieldsClient() {
+export default function PersonFieldsClient({ manageOptionSetsHref }: { manageOptionSetsHref?: string } = {}) {
     const { canMutate } = useAdminAuth();
     const [items, setItems] = useState<FieldDef[]>([]);
     const [loading, setLoading] = useState(true);
@@ -532,6 +532,7 @@ export default function PersonFieldsClient() {
                                         value={editOptionSetKey}
                                         onChange={setEditOptionSetKey}
                                         disabled={!canMutate || editSaving}
+                                        manageOptionSetsHref={manageOptionSetsHref}
                                     />
                                 </div>
                             )}
@@ -695,6 +696,7 @@ export default function PersonFieldsClient() {
                                         value={createOptionSetKey}
                                         onChange={setCreateOptionSetKey}
                                         disabled={!canMutate || createSaving}
+                                        manageOptionSetsHref={manageOptionSetsHref}
                                     />
                                 </div>
                             )}

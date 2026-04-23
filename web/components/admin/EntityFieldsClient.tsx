@@ -67,9 +67,11 @@ export type EntityFieldsClientProps = {
     title: string;
     /** Optional subtitle */
     subtitle?: string;
+    /** Link target for “Option sets” helper (Settings vs legacy System). */
+    manageOptionSetsHref?: string;
 };
 
-export default function EntityFieldsClient({ entityType, title, subtitle }: EntityFieldsClientProps) {
+export default function EntityFieldsClient({ entityType, title, subtitle, manageOptionSetsHref }: EntityFieldsClientProps) {
     const { canMutate } = useAdminAuth();
     const [items, setItems] = useState<FieldDef[]>([]);
     const [loading, setLoading] = useState(true);
@@ -544,6 +546,7 @@ export default function EntityFieldsClient({ entityType, title, subtitle }: Enti
                                         value={editOptionSetKey}
                                         onChange={setEditOptionSetKey}
                                         disabled={!canMutate || editSaving}
+                                        manageOptionSetsHref={manageOptionSetsHref}
                                     />
                                 </div>
                             )}
@@ -707,6 +710,7 @@ export default function EntityFieldsClient({ entityType, title, subtitle }: Enti
                                         value={createOptionSetKey}
                                         onChange={setCreateOptionSetKey}
                                         disabled={!canMutate || createSaving}
+                                        manageOptionSetsHref={manageOptionSetsHref}
                                     />
                                 </div>
                             )}

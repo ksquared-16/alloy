@@ -70,6 +70,21 @@ function crumbsForPath(path: string): Crumb[] {
         return base;
     }
 
+    if (tail === "/departments" || tail.startsWith("/departments/")) {
+        base.push({ label: "Departments", href: null });
+        return base;
+    }
+
+    if (tail === "/work-units" || tail.startsWith("/work-units/")) {
+        base.push({ label: "Work units", href: null });
+        return base;
+    }
+
+    if (tail === "/fields" || tail.startsWith("/fields")) {
+        base.push({ label: "Fields", href: null });
+        return base;
+    }
+
     const remainder = tail.replace(/^\//, "").replace(/\/$/, "") || "Page";
     return [{ label: "Settings", href: SETTINGS_ROOT }, { label: remainder, href: null }];
 }
