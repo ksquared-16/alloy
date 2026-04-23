@@ -476,7 +476,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
         {
           key: "opportunity_details",
           title: "Opportunity Details",
-          defaultExpanded: true,
+          defaultExpanded: false,
           collapsible: true,
           gridCols: 2,
           fields: [

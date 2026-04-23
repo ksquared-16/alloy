@@ -5208,7 +5208,7 @@ export default function AdminEntityDrawer() {
         const fromDefs = sectionOrder.map(([sectionKey, fields]) => ({
             key: sectionKey,
             title: sectionTitleByKey.get(sectionKey) ?? defaultSectionTitle(sectionKey),
-            defaultExpanded: true,
+            defaultExpanded: drawer.type === "opportunities" ? false : true,
             collapsible: true,
             gridCols: 2 as const,
             fields: fields.sort((a, b) => a.sort_order - b.sort_order).map((f) => {
@@ -7801,6 +7801,16 @@ export default function AdminEntityDrawer() {
                                                     "";
                                                 const parent =
                                                     pickFirst(["_primary_person_name", "_parent_name", "parent_name", "primary_person_name"]) ?? "";
+                                                const parentEmail =
+                                                    pickFirst(["_primary_person_email", "_parent_email", "parent_email", "_customer_email", "customer_email"]) ?? "";
+                                                const parentPhone =
+                                                    pickFirst(["_primary_person_phone", "_parent_phone", "parent_phone", "_customer_phone", "customer_phone"]) ?? "";
+                                                const contactName =
+                                                    pickFirst(["_primary_contact_name", "_contact_name", "contact_name"]) ?? "";
+                                                const contactEmail =
+                                                    pickFirst(["_primary_contact_email", "_contact_email", "contact_email", parentEmail]) ?? "";
+                                                const contactPhone =
+                                                    pickFirst(["_primary_contact_phone", "_contact_phone", "contact_phone", parentPhone]) ?? "";
                                                 const child =
                                                     pickFirst(["_child_name", "child_name", "_member_name", "member_name", "child_full_name"]) ??
                                                     "";
@@ -7852,6 +7862,7 @@ export default function AdminEntityDrawer() {
                                                 const soft = "text-[12px] font-medium leading-snug text-alloy-midnight/80";
                                                 const pill =
                                                     "inline-flex items-center rounded-md border border-alloy-stone/25 bg-white px-2 py-0.5 text-[11px] font-semibold text-alloy-midnight/80";
+                                                const monoLink = "text-[12px] font-semibold text-alloy-blue hover:underline underline-offset-2";
 
                                                 return (
                                                     <div className="space-y-2">
@@ -7862,15 +7873,24 @@ export default function AdminEntityDrawer() {
                                                                 </div>
                                                                 <div className="mt-0.5 min-w-0 space-y-0.5">
                                                                     <div className={`${strong} truncate`}>
-                                                                        {child || inquiry || String(d.name ?? "").trim() || "—"}
+                                                                        {child ? `Child: ${child}` : inquiry || String(d.name ?? "").trim() || "—"}
                                                                     </div>
                                                                     <div className={`${soft} truncate`}>
-                                                                        {[family || null, parent ? `Parent: ${parent}` : null]
+                                                                        {[
+                                                                            family ? `Family: ${family}` : null,
+                                                                            parent ? `Parent: ${parent}` : null,
+                                                                            !parent && contactName ? `Contact: ${contactName}` : null,
+                                                                        ]
                                                                             .filter(Boolean)
                                                                             .join(" · ") || "—"}
                                                                     </div>
                                                                     <div className="text-[11px] font-medium text-alloy-midnight/65 truncate">
-                                                                        {[program ? `Program: ${program}` : null, room ? `Room: ${room}` : null, age ? `Age: ${age}` : null]
+                                                                        {[
+                                                                            inquiry && child ? `Inquiry: ${inquiry}` : null,
+                                                                            program ? `Program: ${program}` : null,
+                                                                            room ? `Room: ${room}` : null,
+                                                                            age ? `Age: ${age}` : null,
+                                                                        ]
                                                                             .filter(Boolean)
                                                                             .join(" · ")}
                                                                     </div>
@@ -7882,7 +7902,7 @@ export default function AdminEntityDrawer() {
                                                             </div>
                                                         </div>
 
-                                                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)_minmax(0,0.8fr)]">
+                                                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.9fr)]">
                                                             <div className="min-w-0">
                                                                 <div className={tinyLabel}>Status</div>
                                                                 <select
@@ -7909,15 +7929,37 @@ export default function AdminEntityDrawer() {
                                                                 </select>
                                                             </div>
                                                             <div className="min-w-0">
-                                                                <div className={tinyLabel}>Job date</div>
-                                                                <div className="rounded-lg border border-alloy-stone/25 bg-white px-2 py-1.5 text-[13px] font-semibold text-alloy-midnight/85">
-                                                                    {jobDate}
+                                                                <div className={tinyLabel}>Contact</div>
+                                                                <div className="rounded-lg border border-alloy-stone/25 bg-white px-2 py-1.5">
+                                                                    <div className="text-[13px] font-semibold text-alloy-midnight/85 truncate">
+                                                                        {parent || contactName || family || "—"}
+                                                                    </div>
+                                                                    <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[12px] font-medium text-alloy-midnight/65">
+                                                                        {contactPhone ? (
+                                                                            <a className={monoLink} href={`tel:${contactPhone}`}>
+                                                                                {contactPhone}
+                                                                            </a>
+                                                                        ) : null}
+                                                                        {contactEmail ? (
+                                                                            <a className={monoLink} href={`mailto:${contactEmail}`}>
+                                                                                {contactEmail}
+                                                                            </a>
+                                                                        ) : null}
+                                                                        {!contactPhone && !contactEmail ? <span>—</span> : null}
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                             <div className="min-w-0">
-                                                                <div className={tinyLabel}>Customer</div>
-                                                                <div className="rounded-lg border border-alloy-stone/25 bg-white px-2 py-1.5 text-[13px] font-semibold text-alloy-midnight/85 truncate">
-                                                                    {family || "—"}
+                                                                <div className={tinyLabel}>What they’re asking for</div>
+                                                                <div className="rounded-lg border border-alloy-stone/25 bg-white px-2 py-1.5">
+                                                                    <div className="text-[13px] font-semibold text-alloy-midnight/85 truncate">
+                                                                        {inquiry || program || "—"}
+                                                                    </div>
+                                                                    <div className="mt-0.5 text-[12px] font-medium text-alloy-midnight/65 truncate">
+                                                                        {[program ? `Program: ${program}` : null, room ? `Room: ${room}` : null, age ? `Age: ${age}` : null]
+                                                                            .filter(Boolean)
+                                                                            .join(" · ") || "—"}
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         </div>
