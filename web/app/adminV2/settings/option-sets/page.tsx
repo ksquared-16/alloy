@@ -4,10 +4,8 @@ export const dynamic = "force-dynamic";
 
 export default function AdminV2SettingsOptionSetsPage() {
   return (
-    <div className="w-full" style={{ padding: "20px 20px 32px" }}>
-      <div className="max-w-6xl">
-        <OptionSetsClient basePath="/adminV2/settings/option-sets" />
-      </div>
+    <div className="w-full max-w-6xl">
+      <OptionSetsClient basePath="/adminV2/settings/option-sets" />
     </div>
   );
 }

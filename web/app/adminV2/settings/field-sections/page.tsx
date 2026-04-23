@@ -4,10 +4,8 @@ export const dynamic = "force-dynamic";
 
 export default function AdminV2SettingsFieldSectionsPage() {
   return (
-    <div className="w-full" style={{ padding: "20px 20px 32px" }}>
-      <div className="max-w-6xl">
-        <FieldSectionsClient />
-      </div>
+    <div className="w-full max-w-6xl">
+      <FieldSectionsClient />
     </div>
   );
 }

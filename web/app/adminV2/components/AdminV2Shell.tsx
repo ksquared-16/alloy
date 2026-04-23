@@ -128,10 +128,10 @@ export default function AdminV2Shell({
             className="relative flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden"
             style={workspaceContentAmbientStyle}
           >
-            {isWorkspaceV2Route ? <WorkspaceAmbientLayer /> : null}
+            {isWorkspaceV2Route || isSettingsRoute ? <WorkspaceAmbientLayer /> : null}
             <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden isolate pb-[200px]">
               {isAiActivityRoute || isSettingsRoute ? (
-                <main className="flex min-h-0 flex-1 flex-col overflow-hidden">{children}</main>
+                <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</main>
               ) : (
                 children
               )}
