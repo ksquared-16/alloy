@@ -69,9 +69,17 @@ export type EntityFieldsClientProps = {
     subtitle?: string;
     /** Link target for “Option sets” helper (Settings vs legacy System). */
     manageOptionSetsHref?: string;
+    /** AdminV2 Settings hub: smaller title row + elevated section card. */
+    headerVariant?: "default" | "compact";
 };
 
-export default function EntityFieldsClient({ entityType, title, subtitle, manageOptionSetsHref }: EntityFieldsClientProps) {
+export default function EntityFieldsClient({
+    entityType,
+    title,
+    subtitle,
+    manageOptionSetsHref,
+    headerVariant = "default",
+}: EntityFieldsClientProps) {
     const { canMutate } = useAdminAuth();
     const [items, setItems] = useState<FieldDef[]>([]);
     const [loading, setLoading] = useState(true);
@@ -329,24 +337,43 @@ export default function EntityFieldsClient({ entityType, title, subtitle, manage
     };
 
     const defaultSubtitle = `Configure field definitions for ${title.toLowerCase().replace(/\s+fields$/, "")}. System fields can be customized (labels, visibility, order). Add custom fields for your org.`;
+    const resolvedSubtitle = subtitle ?? defaultSubtitle;
+    const compactSubtitle =
+        "System fields: labels, visibility, and order. Add custom fields for your org — same APIs as legacy System pages.";
+    const compactDescription = subtitle ?? compactSubtitle;
 
     return (
         <>
-            <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-                <AdminPageHeader
-                    title={title}
-                    subtitle={subtitle ?? defaultSubtitle}
-                />
-                {canMutate && (
-                    <button
-                        type="button"
-                        onClick={openCreate}
-                        className="shrink-0 px-3 py-1.5 text-sm font-medium bg-alloy-midnight text-white rounded-md hover:opacity-90"
-                    >
-                        Add custom field
-                    </button>
-                )}
-            </div>
+            {headerVariant === "compact" ? (
+                <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+                    <div className="min-w-0">
+                        <h2 className="text-base font-semibold tracking-tight text-alloy-midnight">{title}</h2>
+                        <p className="mt-0.5 max-w-3xl text-xs leading-snug text-alloy-midnight/55">{compactDescription}</p>
+                    </div>
+                    {canMutate && (
+                        <button
+                            type="button"
+                            onClick={openCreate}
+                            className="shrink-0 rounded-md bg-alloy-midnight px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
+                        >
+                            Add custom field
+                        </button>
+                    )}
+                </div>
+            ) : (
+                <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+                    <AdminPageHeader title={title} subtitle={resolvedSubtitle} />
+                    {canMutate && (
+                        <button
+                            type="button"
+                            onClick={openCreate}
+                            className="shrink-0 px-3 py-1.5 text-sm font-medium bg-alloy-midnight text-white rounded-md hover:opacity-90"
+                        >
+                            Add custom field
+                        </button>
+                    )}
+                </div>
+            )}
 
             {loading && <p className="text-sm text-[#59678b]">Loading…</p>}
             {error && (
@@ -356,7 +383,10 @@ export default function EntityFieldsClient({ entityType, title, subtitle, manage
             )}
 
             {!loading && !error && (
-                <SectionCard title={`${title} definitions`}>
+                <SectionCard
+                    title={headerVariant === "compact" ? "Field definitions" : `${title} definitions`}
+                    surfaceTone={headerVariant === "compact" ? "settingsPanel" : "default"}
+                >
                     {deleteError && (
                         <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{deleteError}</div>
                     )}

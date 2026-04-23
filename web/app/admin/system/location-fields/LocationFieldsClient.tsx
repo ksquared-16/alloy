@@ -62,7 +62,10 @@ function toFieldDef(r: Record<string, unknown>): FieldDef {
     };
 }
 
-export default function LocationFieldsClient({ manageOptionSetsHref }: { manageOptionSetsHref?: string } = {}) {
+export default function LocationFieldsClient({
+    manageOptionSetsHref,
+    headerVariant = "default",
+}: { manageOptionSetsHref?: string; headerVariant?: "default" | "compact" } = {}) {
     const { canMutate } = useAdminAuth();
     const { labels } = useEntityLabels();
     const locationEntityLabel = useMemo(() => adminFieldEntitySingularLabel(labels, "location"), [labels]);
@@ -327,20 +330,41 @@ export default function LocationFieldsClient({ manageOptionSetsHref }: { manageO
         }
     };
 
+    const compactSubtitle =
+        "Custom fields map to field_values; native columns stay on the locations table. Same APIs as legacy System pages.";
+
     return (
         <>
-            <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-                <AdminPageHeader title={pageTitle} subtitle={pageSubtitle} />
-                {canMutate && (
-                    <button
-                        type="button"
-                        onClick={openCreate}
-                        className="shrink-0 px-3 py-1.5 text-sm font-medium bg-alloy-midnight text-white rounded-md hover:opacity-90"
-                    >
-                        Add custom field
-                    </button>
-                )}
-            </div>
+            {headerVariant === "compact" ? (
+                <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+                    <div className="min-w-0">
+                        <h2 className="text-base font-semibold tracking-tight text-alloy-midnight">{pageTitle}</h2>
+                        <p className="mt-0.5 max-w-3xl text-xs leading-snug text-alloy-midnight/55">{compactSubtitle}</p>
+                    </div>
+                    {canMutate && (
+                        <button
+                            type="button"
+                            onClick={openCreate}
+                            className="shrink-0 rounded-md bg-alloy-midnight px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
+                        >
+                            Add custom field
+                        </button>
+                    )}
+                </div>
+            ) : (
+                <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+                    <AdminPageHeader title={pageTitle} subtitle={pageSubtitle} />
+                    {canMutate && (
+                        <button
+                            type="button"
+                            onClick={openCreate}
+                            className="shrink-0 px-3 py-1.5 text-sm font-medium bg-alloy-midnight text-white rounded-md hover:opacity-90"
+                        >
+                            Add custom field
+                        </button>
+                    )}
+                </div>
+            )}
 
             {loading && <p className="text-sm text-[#59678b]">Loading…</p>}
             {error && (
@@ -350,7 +374,10 @@ export default function LocationFieldsClient({ manageOptionSetsHref }: { manageO
             )}
 
             {!loading && !error && (
-                <SectionCard title="Location field definitions">
+                <SectionCard
+                    title={headerVariant === "compact" ? "Field definitions" : "Location field definitions"}
+                    surfaceTone={headerVariant === "compact" ? "settingsPanel" : "default"}
+                >
                     {deleteError && (
                         <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{deleteError}</div>
                     )}
