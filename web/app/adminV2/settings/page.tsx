@@ -1,6 +1,10 @@
 import Link from "next/link";
+import type { ReactNode } from "react";
 
 export const dynamic = "force-dynamic";
+
+/** Shared tile height so every group row aligns visually. */
+const TILE_MIN_H = "min-h-[5.5rem]";
 
 type SettingsCardAccent = "organization" | "records" | "vocabulary";
 
@@ -25,7 +29,8 @@ function SettingsCard({
         <Link
             href={href}
             className={[
-                "group flex min-h-[4.25rem] flex-col justify-center rounded-lg border border-alloy-forge/12 bg-white/50 px-3 py-2.5 shadow-sm backdrop-blur-[1px] transition-colors hover:bg-white/75",
+                "group flex h-full min-h-0 flex-col justify-center rounded-lg border border-alloy-forge/12 bg-white/50 px-3 py-2.5 shadow-sm backdrop-blur-[1px] transition-colors hover:bg-white/75",
+                TILE_MIN_H,
                 "border-l-[3px]",
                 accentBorder,
             ].join(" ")}
@@ -33,6 +38,27 @@ function SettingsCard({
             <div className="text-sm font-semibold leading-tight text-alloy-midnight group-hover:text-alloy-pine">{title}</div>
             <div className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-alloy-midnight/55">{children}</div>
         </Link>
+    );
+}
+
+/**
+ * Desktop: always four equal columns so 2-card groups match Records tile width (no awkward stretch).
+ * Mobile: two columns; placeholder cells are hidden.
+ */
+function SettingsTileGrid({ variant, children }: { variant: "four" | "two"; children: ReactNode }) {
+    const placeholders =
+        variant === "two" ? (
+            <>
+                <div className="hidden min-h-0 lg:block" aria-hidden />
+                <div className="hidden min-h-0 lg:block" aria-hidden />
+            </>
+        ) : null;
+
+    return (
+        <div className="grid grid-cols-2 gap-2 lg:auto-rows-fr lg:grid-cols-4">
+            {children}
+            {placeholders}
+        </div>
     );
 }
 
@@ -65,18 +91,18 @@ export default function AdminV2SettingsIndexPage() {
 
             <div className="space-y-4">
                 <Group label="Organization" accentClass="border-slate-400/40">
-                    <div className="grid grid-cols-2 gap-2">
+                    <SettingsTileGrid variant="two">
                         <SettingsCard href="/adminV2/settings/departments" title="Departments" accent="organization">
                             Departments and workspace hierarchy.
                         </SettingsCard>
                         <SettingsCard href="/adminV2/settings/work-units" title="Work units" accent="organization">
                             Queues and work-unit definitions.
                         </SettingsCard>
-                    </div>
+                    </SettingsTileGrid>
                 </Group>
 
                 <Group label="Records" accentClass="border-alloy-pine/45">
-                    <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+                    <SettingsTileGrid variant="four">
                         <SettingsCard href="/adminV2/settings/fields" title="Fields" accent="records">
                             Field definitions by entity for forms and drawers.
                         </SettingsCard>
@@ -89,11 +115,11 @@ export default function AdminV2SettingsIndexPage() {
                         <SettingsCard href="/adminV2/settings/entity-labels" title="Entity labels" accent="records">
                             Display names (Family, Inquiry, etc.).
                         </SettingsCard>
-                    </div>
+                    </SettingsTileGrid>
                 </Group>
 
                 <Group label="Vocabulary & documents" accentClass="border-alloy-forge/25">
-                    <div className="grid grid-cols-2 gap-2">
+                    <SettingsTileGrid variant="two">
                         <SettingsCard href="/adminV2/settings/option-sets" title="Option sets" accent="vocabulary">
                             Select lists, booking, and pricing dimensions.
                         </SettingsCard>
@@ -104,7 +130,7 @@ export default function AdminV2SettingsIndexPage() {
                         >
                             Schema per document type.
                         </SettingsCard>
-                    </div>
+                    </SettingsTileGrid>
                 </Group>
             </div>
 
