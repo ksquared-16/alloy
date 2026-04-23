@@ -186,13 +186,21 @@ export function useOperationsWorkspaceData(departmentId: string) {
         let cancelled = false;
         (async () => {
             try {
+                const perfDebug =
+                    typeof window !== "undefined" &&
+                    (window as unknown as { __WS_PERF_DEBUG__?: boolean }).__WS_PERF_DEBUG__ === true;
+                const t0 = perfDebug ? performance.now() : 0;
                 setLoading(true);
                 setDerivedError(null);
                 const fetchInit = workspaceDataFetchInit();
-                const dRes = await fetch("/api/admin/departments", fetchInit);
-                const wRes = await fetch(`/api/admin/work-units?department_id=${encodeURIComponent(deptId)}`, fetchInit);
-                const dj = (await dRes.json().catch(() => ({}))) as { items?: Dept[]; error?: string };
-                const wj = (await wRes.json().catch(() => ({}))) as { items?: WU[]; error?: string };
+                const [dRes, wRes] = await Promise.all([
+                    fetch("/api/admin/departments", fetchInit),
+                    fetch(`/api/admin/work-units?department_id=${encodeURIComponent(deptId)}`, fetchInit),
+                ]);
+                const [dj, wj] = await Promise.all([
+                    (async () => (await dRes.json().catch(() => ({}))) as { items?: Dept[]; error?: string })(),
+                    (async () => (await wRes.json().catch(() => ({}))) as { items?: WU[]; error?: string })(),
+                ]);
 
                 if (!dRes.ok) throw new Error(dj.error ?? "Departments request failed");
 
@@ -205,6 +213,16 @@ export function useOperationsWorkspaceData(departmentId: string) {
                 let wus: WU[] = [];
                 if (wRes.ok) {
                     wus = wj.items ?? [];
+                }
+
+                if (!cancelled) {
+                    setDept(d);
+                    setWorkUnits(wus);
+                    /**
+                     * Base surface readiness: allow the page to mount its real geometry immediately.
+                     * The runtime blocks (queues / KPIs / counts) will hydrate right after.
+                     */
+                    setLoading(false);
                 }
 
                 const deptKey = (d.key ?? "").trim().toLowerCase();
@@ -247,6 +265,25 @@ export function useOperationsWorkspaceData(departmentId: string) {
                         return [k, await fetchOpportunityQueueRuntime(keyToWu.get(k))] as const;
                     });
 
+                    const lifecycleKpisPromise = (async () => {
+                        let kpRes: Response | null = null;
+                        try {
+                            kpRes = await fetch(
+                                `/api/admin/departments/${encodeURIComponent(deptId)}/opportunity-lifecycle-kpis`,
+                                fetchInit
+                            );
+                        } catch {
+                            kpRes = null;
+                        }
+                        const kpj = (await (kpRes?.json().catch(() => ({})) ?? Promise.resolve({}))) as {
+                            error?: string;
+                            counts?: OpportunityLifecycleKpiSnapshot["counts"];
+                            values?: OpportunityLifecycleKpiSnapshot["values"];
+                            statusBreakdown?: OpportunityLifecycleKpiSnapshot["statusBreakdown"];
+                        };
+                        return { kpResOk: kpRes?.ok === true, kpj };
+                    })();
+
                     const queueSettled = await Promise.allSettled(queuePromises);
                     const queuePairs = queueSettled.map((result, i) => {
                         const key = queueKeys[i]!;
@@ -259,26 +296,12 @@ export function useOperationsWorkspaceData(departmentId: string) {
                         return [key, { total: 0, error: msg, items: empty }] as [string, WorkspaceOpportunityQueueRuntime];
                     });
 
-                    let kpRes: Response | null = null;
-                    try {
-                        kpRes = await fetch(
-                            `/api/admin/departments/${encodeURIComponent(deptId)}/opportunity-lifecycle-kpis`,
-                            fetchInit
-                        );
-                    } catch {
-                        kpRes = null;
-                    }
-                    const kpj = (await (kpRes?.json().catch(() => ({})) ?? Promise.resolve({}))) as {
-                        error?: string;
-                        counts?: OpportunityLifecycleKpiSnapshot["counts"];
-                        values?: OpportunityLifecycleKpiSnapshot["values"];
-                        statusBreakdown?: OpportunityLifecycleKpiSnapshot["statusBreakdown"];
-                    };
+                    const { kpResOk, kpj } = await lifecycleKpisPromise;
                     if (!cancelled) {
                         const oqMap: NonNullable<WorkspaceRuntimeData["opportunityQueues"]> = {};
                         for (const [k, v] of queuePairs) oqMap[k] = v;
                         setOpportunityQueues(oqMap);
-                        if (kpRes?.ok && kpj.counts && kpj.values) {
+                        if (kpResOk && kpj.counts && kpj.values) {
                             setLifecycleKpis({
                                 status: "ready",
                                 counts: kpj.counts,
@@ -291,8 +314,13 @@ export function useOperationsWorkspaceData(departmentId: string) {
                                 message: (kpj as { error?: string })?.error ?? "Pipeline KPIs unavailable",
                             });
                         }
-                        setDept(d);
-                        setWorkUnits(wus);
+                    }
+                    if (perfDebug) {
+                        const t1 = performance.now();
+                        console.debug(
+                            `[ws.dept] base+growth runtime ready in ${Math.round(t1 - t0)}ms`,
+                            { deptKey, queues: queueKeys.length }
+                        );
                     }
                     return;
                 }
@@ -348,12 +376,18 @@ export function useOperationsWorkspaceData(departmentId: string) {
                 }
 
                 if (!cancelled) {
-                    setDept(d);
-                    setWorkUnits(wus);
+                    if (perfDebug) {
+                        const t1 = performance.now();
+                        console.debug(`[ws.dept] base+ops runtime ready in ${Math.round(t1 - t0)}ms`, {
+                            deptKey,
+                            workUnits: wus.length,
+                        });
+                    }
                 }
             } catch (e) {
                 if (!cancelled) setError((e as Error).message);
             } finally {
+                // `loading` is flipped to false as soon as base dept/WUs are available.
                 if (!cancelled) setLoading(false);
             }
         })();

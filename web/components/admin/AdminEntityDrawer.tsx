@@ -5791,13 +5791,15 @@ export default function AdminEntityDrawer() {
                   .join(" · ") || undefined
             : undefined;
     const drawerTitleResolved =
-        isJobDrawerV2 && overviewData && !(overviewData as { _create?: boolean })?._create
-            ? String((overviewData as { title?: string }).title ?? "").trim() || "Job"
-            : typeof title === "string"
-              ? title
-              : title != null
-                ? String(title)
-                : "—";
+        showDrawerBodyLoading && drawer.type === "opportunities"
+            ? `Loading ${opportunitySingular.toLowerCase()}…`
+            : isJobDrawerV2 && overviewData && !(overviewData as { _create?: boolean })?._create
+              ? String((overviewData as { title?: string }).title ?? "").trim() || "Job"
+              : typeof title === "string"
+                ? title
+                : title != null
+                  ? String(title)
+                  : "—";
     const headerSubtitleResolved = jobV2MetaSubtitle ?? drawerHeaderRecordSubtitle ?? undefined;
 
     return (
@@ -5827,17 +5829,62 @@ export default function AdminEntityDrawer() {
         >
             <div className="adminv2-drawer-content-enter">
             {showDrawerBodyLoading &&
-                (isJobRecordModalTarget || isScheduleRecordModalTarget || isOpportunityRecordModalTarget ? (
+                (isOpportunityRecordModalTarget ? (
+                    <div className="space-y-4 px-1 py-2" aria-busy="true" aria-label="Loading opportunity record">
+                        <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                                <div className="h-4 w-56 skeleton-pulse rounded bg-alloy-stone/25" />
+                                <div className="mt-2 h-3 w-40 skeleton-pulse rounded bg-alloy-stone/12" style={{ animationDelay: "70ms" }} />
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="h-8 w-24 skeleton-pulse rounded-md bg-alloy-stone/10" />
+                                <div className="h-8 w-20 skeleton-pulse rounded-md bg-alloy-stone/10" style={{ animationDelay: "90ms" }} />
+                            </div>
+                        </div>
+
+                        <div className="flex gap-0.5 rounded-lg border border-admin-border bg-white p-0.5" aria-hidden>
+                            {Array.from({ length: 4 }).map((_, i) => (
+                                <div
+                                    key={i}
+                                    className="rounded-md px-3 py-2"
+                                    style={{ width: i === 0 ? 96 : 84 }}
+                                >
+                                    <div className="h-3 w-full skeleton-pulse rounded bg-alloy-stone/10" style={{ animationDelay: `${i * 40}ms` }} />
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="rounded-xl border border-admin-border bg-white/80 p-3">
+                            <div className="flex items-start justify-between gap-3">
+                                <div className="min-w-0 flex-1 space-y-2">
+                                    <div className="h-3 w-40 skeleton-pulse rounded bg-alloy-stone/15" />
+                                    <div className="h-3 w-64 skeleton-pulse rounded bg-alloy-stone/10" style={{ animationDelay: "60ms" }} />
+                                    <div className="h-3 w-52 skeleton-pulse rounded bg-alloy-stone/10" style={{ animationDelay: "120ms" }} />
+                                </div>
+                                <div className="space-y-2">
+                                    <div className="h-8 w-28 skeleton-pulse rounded-md bg-alloy-stone/10" />
+                                    <div className="h-8 w-28 skeleton-pulse rounded-md bg-alloy-stone/10" style={{ animationDelay: "80ms" }} />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="space-y-3" aria-hidden>
+                            {Array.from({ length: 3 }).map((_, i) => (
+                                <div key={i} className="rounded-xl border border-admin-border bg-white/70 p-3">
+                                    <div className="h-3 w-32 skeleton-pulse rounded bg-alloy-stone/15" />
+                                    <div className="mt-3 space-y-2">
+                                        <div className="h-3 w-full skeleton-pulse rounded bg-alloy-stone/10" style={{ animationDelay: "40ms" }} />
+                                        <div className="h-3 w-5/6 skeleton-pulse rounded bg-alloy-stone/10" style={{ animationDelay: "90ms" }} />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ) : isJobRecordModalTarget || isScheduleRecordModalTarget ? (
                     <div
                         className="space-y-4 px-1 py-2"
                         aria-busy="true"
-                        aria-label={
-                            isJobRecordModalTarget
-                                ? "Loading job"
-                                : isScheduleRecordModalTarget
-                                  ? "Loading schedule"
-                                  : "Loading opportunity"
-                        }
+                        aria-label={isJobRecordModalTarget ? "Loading job" : "Loading schedule"}
                     >
                         <div className="h-4 max-w-md w-full skeleton-pulse rounded-md bg-alloy-stone/25" />
                         <div className="h-28 skeleton-pulse rounded-xl bg-alloy-stone/15" style={{ animationDelay: "60ms" }} />
