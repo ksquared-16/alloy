@@ -9,7 +9,7 @@ describe("parseVerticalBootstrapPayload", () => {
         if (r.ok) {
             expect(r.payload.departments).toHaveLength(1);
             expect(r.payload.status_definitions.length).toBeGreaterThan(0);
-            expect(r.payload.work_units).toHaveLength(4);
+            expect(r.payload.work_units).toHaveLength(5);
             expect(r.payload.onboarding_context?.industry_key).toBe("childcare");
             expect(r.payload.onboarding_context?.starter_field_intake?.registration).toBe("deferred");
         }
@@ -47,7 +47,7 @@ describe("parseVerticalBootstrapPayload", () => {
             departments: [],
             status_definitions: [
                 {
-                    entity_type: "opportunity",
+                    entity_type: "opportunities",
                     status_key: "x",
                     status_label: "X",
                     metadata: { lifecycle_stage: "not_a_stage" },

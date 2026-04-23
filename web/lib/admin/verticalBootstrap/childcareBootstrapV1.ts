@@ -90,7 +90,7 @@ export const CHILDCARE_VERTICAL_BOOTSTRAP_V1: VerticalBootstrapPayloadV1 = {
     ],
     status_definitions: [
         {
-            entity_type: "opportunity",
+            entity_type: "opportunities",
             status_key: "new_inquiry",
             status_label: "New inquiry",
             sort_order: 10,
@@ -98,7 +98,7 @@ export const CHILDCARE_VERTICAL_BOOTSTRAP_V1: VerticalBootstrapPayloadV1 = {
             metadata: { lifecycle_stage: "intake" },
         },
         {
-            entity_type: "opportunity",
+            entity_type: "opportunities",
             status_key: "contacted",
             status_label: "Conversation had",
             sort_order: 20,
@@ -106,7 +106,7 @@ export const CHILDCARE_VERTICAL_BOOTSTRAP_V1: VerticalBootstrapPayloadV1 = {
             metadata: { lifecycle_stage: "qualification" },
         },
         {
-            entity_type: "opportunity",
+            entity_type: "opportunities",
             status_key: "tour_scheduled",
             status_label: "Tour scheduled",
             sort_order: 30,
@@ -114,7 +114,7 @@ export const CHILDCARE_VERTICAL_BOOTSTRAP_V1: VerticalBootstrapPayloadV1 = {
             metadata: { lifecycle_stage: "execution" },
         },
         {
-            entity_type: "opportunity",
+            entity_type: "opportunities",
             status_key: "tour_completed",
             status_label: "Tour completed",
             sort_order: 40,
@@ -122,7 +122,7 @@ export const CHILDCARE_VERTICAL_BOOTSTRAP_V1: VerticalBootstrapPayloadV1 = {
             metadata: { lifecycle_stage: "execution" },
         },
         {
-            entity_type: "opportunity",
+            entity_type: "opportunities",
             status_key: "ready_to_enroll",
             status_label: "Ready to enroll",
             sort_order: 50,
@@ -130,7 +130,7 @@ export const CHILDCARE_VERTICAL_BOOTSTRAP_V1: VerticalBootstrapPayloadV1 = {
             metadata: { lifecycle_stage: "decision" },
         },
         {
-            entity_type: "opportunity",
+            entity_type: "opportunities",
             status_key: "waitlisted",
             status_label: "Waitlisted",
             sort_order: 55,
@@ -138,7 +138,7 @@ export const CHILDCARE_VERTICAL_BOOTSTRAP_V1: VerticalBootstrapPayloadV1 = {
             metadata: { lifecycle_stage: "decision" },
         },
         {
-            entity_type: "opportunity",
+            entity_type: "opportunities",
             status_key: "enrolled",
             status_label: "Enrolled",
             sort_order: 60,
@@ -146,7 +146,7 @@ export const CHILDCARE_VERTICAL_BOOTSTRAP_V1: VerticalBootstrapPayloadV1 = {
             metadata: { lifecycle_stage: "success" },
         },
         {
-            entity_type: "opportunity",
+            entity_type: "opportunities",
             status_key: "lost",
             status_label: "Lost",
             sort_order: 70,
