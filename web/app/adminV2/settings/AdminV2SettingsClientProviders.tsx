@@ -34,13 +34,10 @@ export default function AdminV2SettingsClientProviders({
         <AdminAuthProvider userEmail={safeEmail} role={safeRole}>
             <EntityLabelsProvider initialLabels={labels}>
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-                    <div
-                        className="shrink-0 border-b border-admin-border px-6 py-2.5"
-                        style={{ backgroundColor: "rgba(255,255,255,0.55)" }}
-                    >
+                    <div className="shrink-0 border-b border-alloy-forge/10 bg-white/25 px-4 py-2 backdrop-blur-sm sm:px-5">
                         <SettingsHierarchyBreadcrumb />
                     </div>
-                    <div className="min-h-0 flex-1 overflow-y-auto p-6">{children}</div>
+                    <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-3 sm:px-5">{children}</div>
                 </div>
             </EntityLabelsProvider>
         </AdminAuthProvider>

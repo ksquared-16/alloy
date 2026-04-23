@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 export default function AdminV2SettingsStatusesPage() {
   return (
     <div className="w-full max-w-6xl">
-      <StatusesClient basePath="/adminV2/settings/statuses" />
+      <StatusesClient basePath="/adminV2/settings/statuses" adminV2Chrome />
     </div>
   );
 }

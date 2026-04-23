@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
+import SettingsPageHeader from "@/components/adminV2/settings/SettingsPageHeader";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import PrimaryButton from "@/components/PrimaryButton";
 import type { OptionSetListRow } from "@/app/api/admin/option-sets/route";
@@ -68,7 +69,10 @@ function newDraftRow(sortOrder: number): DraftItemRow {
     };
 }
 
-export default function OptionSetsClient({ basePath = "/admin/system/option-sets" }: { basePath?: string } = {}) {
+export default function OptionSetsClient({
+    basePath = "/admin/system/option-sets",
+    adminV2Chrome = false,
+}: { basePath?: string; adminV2Chrome?: boolean } = {}) {
     const { canMutate } = useAdminAuth();
     const [items, setItems] = useState<OptionSetListRow[]>([]);
     const [loading, setLoading] = useState(true);
@@ -401,15 +405,25 @@ export default function OptionSetsClient({ basePath = "/admin/system/option-sets
 
     const hasFailedRows = draftRows.some((r) => r.status === "error");
 
+    const newSetAction = canMutate ? <PrimaryButton onClick={openCreate}>New option set</PrimaryButton> : null;
+
     return (
         <>
-            <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-                <AdminPageHeader
+            {adminV2Chrome ? (
+                <SettingsPageHeader
                     title="Option sets"
                     subtitle="Org-scoped lists for select fields, booking, and pricing dimensions. Keys are auto-generated from labels unless you use Advanced."
+                    actions={newSetAction}
                 />
-                {canMutate && <PrimaryButton onClick={openCreate}>New option set</PrimaryButton>}
-            </div>
+            ) : (
+                <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+                    <AdminPageHeader
+                        title="Option sets"
+                        subtitle="Org-scoped lists for select fields, booking, and pricing dimensions. Keys are auto-generated from labels unless you use Advanced."
+                    />
+                    {newSetAction}
+                </div>
+            )}
 
             {loading && <p className="text-sm text-[#59678b]">Loading…</p>}
             {error && (

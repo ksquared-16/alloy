@@ -35,12 +35,9 @@ function crumbsForPath(path: string): Crumb[] {
     const base: Crumb[] = [{ label: "Settings", href: SETTINGS_ROOT }];
 
     if (tail.startsWith("/documents/document-fields")) {
-        base.push({ label: "Documents", href: null });
         base.push({ label: "Document field definitions", href: null });
         return base;
     }
-
-    base.push({ label: "System", href: null });
 
     if (tail.startsWith("/option-sets")) {
         const detailMatch = /^\/option-sets\/([^/]+)\/?$/.exec(tail);

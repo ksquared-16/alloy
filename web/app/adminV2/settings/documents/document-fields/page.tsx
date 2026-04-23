@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 export default function AdminV2SettingsDocumentFieldDefinitionsPage() {
   return (
     <div className="w-full max-w-6xl">
-      <DocumentFieldsClient />
+      <DocumentFieldsClient adminV2Chrome />
     </div>
   );
 }

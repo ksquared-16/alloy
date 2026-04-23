@@ -2,132 +2,119 @@ import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
-type SettingsCardAccent = "organization" | "records" | "supporting";
+type SettingsCardAccent = "organization" | "records" | "vocabulary";
 
 function SettingsCard({
     href,
     title,
     children,
-    accent = "supporting",
-    prominent = false,
+    accent = "vocabulary",
 }: {
     href: string;
     title: string;
     children: React.ReactNode;
     accent?: SettingsCardAccent;
-    /** Larger callout (e.g. Fields hub). */
-    prominent?: boolean;
 }) {
     const accentBorder =
         accent === "records"
-            ? "border-l-[3px] border-l-alloy-pine"
+            ? "border-l-alloy-pine/60"
             : accent === "organization"
-              ? "border-l-[3px] border-l-slate-500/45"
-              : "border-l-[3px] border-l-alloy-forge/20";
+              ? "border-l-slate-500/50"
+              : "border-l-alloy-forge/25";
     return (
         <Link
             href={href}
             className={[
-                "group block rounded-xl border border-alloy-forge/12 bg-white/55 shadow-[0_2px_10px_rgba(39,63,82,0.05)] backdrop-blur-[2px] transition-colors hover:bg-white/80",
+                "group flex min-h-[4.25rem] flex-col justify-center rounded-lg border border-alloy-forge/12 bg-white/50 px-3 py-2.5 shadow-sm backdrop-blur-[1px] transition-colors hover:bg-white/75",
+                "border-l-[3px]",
                 accentBorder,
-                prominent ? "p-5 sm:p-6" : "p-4",
             ].join(" ")}
         >
-            <div
-                className={
-                    prominent
-                        ? "text-base font-semibold tracking-tight text-alloy-midnight group-hover:text-alloy-pine"
-                        : "text-sm font-semibold text-alloy-midnight group-hover:text-alloy-pine"
-                }
-            >
-                {title}
-            </div>
-            <div className={`mt-1 text-alloy-midnight/60 ${prominent ? "text-sm leading-snug" : "text-xs"}`}>{children}</div>
+            <div className="text-sm font-semibold leading-tight text-alloy-midnight group-hover:text-alloy-pine">{title}</div>
+            <div className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-alloy-midnight/55">{children}</div>
         </Link>
     );
 }
 
-function SectionHeader({ title, description, prominent }: { title: string; description?: string; prominent?: boolean }) {
+function Group({
+    label,
+    accentClass,
+    children,
+}: {
+    label: string;
+    accentClass: string;
+    children: React.ReactNode;
+}) {
     return (
-        <div className={prominent ? "mb-4" : "mb-3"}>
-            <h3
-                className={
-                    prominent
-                        ? "text-sm font-semibold uppercase tracking-[0.08em] text-alloy-midnight"
-                        : "text-xs font-semibold uppercase tracking-[0.1em] text-alloy-midnight/55"
-                }
-            >
-                {title}
-            </h3>
-            {description ? (
-                <p className={`mt-1 text-alloy-midnight/60 ${prominent ? "text-sm" : "text-xs"}`}>{description}</p>
-            ) : null}
+        <div className={`space-y-2 border-l-2 pl-3 ${accentClass}`}>
+            <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-alloy-midnight/50">{label}</h3>
+            {children}
         </div>
     );
 }
 
 export default function AdminV2SettingsIndexPage() {
     return (
-        <div className="w-full max-w-5xl space-y-12">
-            <div className="mb-2">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/55">Control plane</div>
-                <h2 className="mt-1 text-2xl font-semibold tracking-tight text-alloy-midnight">Settings</h2>
-                <p className="mt-2 text-sm text-alloy-midnight/65">
-                    Tenant configuration lives here. Workspace surfaces may link to these pages but should not host full editors.
+        <div className="w-full max-w-4xl space-y-5 pb-2">
+            <header>
+                <h1 className="text-xl font-semibold tracking-tight text-alloy-midnight">Settings</h1>
+                <p className="mt-1 max-w-2xl text-xs leading-snug text-alloy-midnight/60">
+                    Tenant control plane — workspace links here; editors stay in Settings, not on department surfaces.
                 </p>
-            </div>
+            </header>
 
-            <section className="space-y-3">
-                <SectionHeader title="Organization" description="Structure for departments, queues, and work-unit surfaces." />
-                <div className="grid gap-3 sm:grid-cols-2">
-                    <SettingsCard href="/adminV2/settings/departments" title="Departments" accent="organization">
-                        Org departments that scope work units and workspace layout.
-                    </SettingsCard>
-                    <SettingsCard href="/adminV2/settings/work-units" title="Work units" accent="organization">
-                        Queues and work surfaces; queue definitions follow the existing edit flow.
-                    </SettingsCard>
-                </div>
-            </section>
-
-            <section className="rounded-2xl border border-alloy-pine/20 bg-gradient-to-br from-white/75 via-white/60 to-alloy-pine/[0.04] p-5 shadow-[0_4px_24px_rgba(39,63,82,0.06)] sm:p-7">
-                <SectionHeader
-                    prominent
-                    title="Records & terminology"
-                    description="How entities behave in the UI: statuses, field layout, per-entity field registry, and display names."
-                />
-                <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="sm:col-span-2">
-                        <SettingsCard href="/adminV2/settings/fields" title="Fields" accent="records" prominent>
-                            Field definitions by entity (person, customer, job, opportunity, vendor, schedule, location) — the
-                            registry forms, drawers, and tables use these keys.
+            <div className="space-y-4">
+                <Group label="Organization" accentClass="border-slate-400/40">
+                    <div className="grid grid-cols-2 gap-2">
+                        <SettingsCard href="/adminV2/settings/departments" title="Departments" accent="organization">
+                            Departments and workspace hierarchy.
+                        </SettingsCard>
+                        <SettingsCard href="/adminV2/settings/work-units" title="Work units" accent="organization">
+                            Queues and work-unit definitions.
                         </SettingsCard>
                     </div>
-                    <SettingsCard href="/adminV2/settings/statuses" title="Statuses" accent="records">
-                        Workflow and entity status keys (drawers and APIs resolve labels from here).
-                    </SettingsCard>
-                    <SettingsCard href="/adminV2/settings/field-sections" title="Field sections" accent="records">
-                        Group and order fields on record layouts.
-                    </SettingsCard>
-                    <SettingsCard href="/adminV2/settings/entity-labels" title="Entity labels" accent="records">
-                        Industry defaults and per-org overrides for Family, Inquiry, Location, and other display names.
-                    </SettingsCard>
-                </div>
-            </section>
+                </Group>
 
-            <section className="space-y-3">
-                <SectionHeader
-                    title="Supporting vocabulary"
-                    description="Reusable lists referenced by fields, booking, and pricing (not entity records themselves)."
-                />
-                <div className="grid gap-3 sm:grid-cols-2">
-                    <SettingsCard href="/adminV2/settings/option-sets" title="Option sets" accent="supporting">
-                        Org-scoped lists for select fields, booking, and pricing dimensions.
-                    </SettingsCard>
-                    <SettingsCard href="/adminV2/settings/documents/document-fields" title="Document field definitions" accent="supporting">
-                        Custom fields and types for document records.
-                    </SettingsCard>
+                <Group label="Records" accentClass="border-alloy-pine/45">
+                    <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
+                        <SettingsCard href="/adminV2/settings/fields" title="Fields" accent="records">
+                            Field definitions by entity for forms and drawers.
+                        </SettingsCard>
+                        <SettingsCard href="/adminV2/settings/field-sections" title="Field sections" accent="records">
+                            Group and order fields on layouts.
+                        </SettingsCard>
+                        <SettingsCard href="/adminV2/settings/statuses" title="Statuses" accent="records">
+                            Status keys and labels per entity type.
+                        </SettingsCard>
+                        <SettingsCard href="/adminV2/settings/entity-labels" title="Entity labels" accent="records">
+                            Display names (Family, Inquiry, etc.).
+                        </SettingsCard>
+                    </div>
+                </Group>
+
+                <Group label="Vocabulary & documents" accentClass="border-alloy-forge/25">
+                    <div className="grid grid-cols-2 gap-2">
+                        <SettingsCard href="/adminV2/settings/option-sets" title="Option sets" accent="vocabulary">
+                            Select lists, booking, and pricing dimensions.
+                        </SettingsCard>
+                        <SettingsCard
+                            href="/adminV2/settings/documents/document-fields"
+                            title="Document field definitions"
+                            accent="vocabulary"
+                        >
+                            Schema per document type.
+                        </SettingsCard>
+                    </div>
+                </Group>
+            </div>
+
+            <footer className="border-t border-alloy-forge/10 pt-2.5">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-alloy-midnight/35">Later</p>
+                <div className="mt-1 flex flex-wrap gap-x-5 gap-y-0.5 text-[10px] text-alloy-midnight/40">
+                    <span>Automation</span>
+                    <span>Financial configuration</span>
                 </div>
-            </section>
+            </footer>
         </div>
     );
 }

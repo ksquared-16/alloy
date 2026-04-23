@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
+import SettingsPageHeader from "@/components/adminV2/settings/SettingsPageHeader";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import PrimaryButton from "@/components/PrimaryButton";
@@ -55,7 +56,7 @@ async function readApiError(res: Response): Promise<string> {
 
 const SECTION_KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 
-export default function FieldSectionsClient() {
+export default function FieldSectionsClient({ adminV2Chrome = false }: { adminV2Chrome?: boolean } = {}) {
     const { canMutate } = useAdminAuth();
     const { labels } = useEntityLabels();
     const [entityType, setEntityType] = useState<EntityType>("person");
@@ -232,15 +233,25 @@ export default function FieldSectionsClient() {
         }
     };
 
+    const newSectionAction = canMutate ? <PrimaryButton onClick={openCreate}>New section</PrimaryButton> : null;
+
     return (
         <>
-            <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-                <AdminPageHeader
+            {adminV2Chrome ? (
+                <SettingsPageHeader
                     title="Field sections"
                     subtitle="Labels and ordering for field groups (field_definitions.section_key). One catalog per entity type."
+                    actions={newSectionAction}
                 />
-                {canMutate && <PrimaryButton onClick={openCreate}>New section</PrimaryButton>}
-            </div>
+            ) : (
+                <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+                    <AdminPageHeader
+                        title="Field sections"
+                        subtitle="Labels and ordering for field groups (field_definitions.section_key). One catalog per entity type."
+                    />
+                    {newSectionAction}
+                </div>
+            )}
 
             <div className="mb-4 flex flex-wrap items-center gap-3">
                 <label className="text-sm text-[#59678b]">

@@ -53,7 +53,7 @@ export default function SettingsFieldsHubClient({ initialEntity }: { initialEnti
     );
 
     return (
-        <div className="w-full max-w-6xl space-y-5">
+        <div className="w-full max-w-6xl space-y-6">
             <SettingsEntityTabBar tabs={entityTabs} activeKey={entity} onSelect={onEntityChange} />
 
             <p className="text-xs leading-relaxed text-alloy-midnight/50">
@@ -63,15 +63,15 @@ export default function SettingsFieldsHubClient({ initialEntity }: { initialEnti
 
             <div key={entity} className="space-y-4">
                 {entity === "person" ? (
-                    <PersonFieldsClient manageOptionSetsHref={MANAGE_OPTION_SETS_HREF} headerVariant="compact" />
+                    <PersonFieldsClient manageOptionSetsHref={MANAGE_OPTION_SETS_HREF} adminV2Chrome />
                 ) : entity === "location" ? (
-                    <LocationFieldsClient manageOptionSetsHref={MANAGE_OPTION_SETS_HREF} headerVariant="compact" />
+                    <LocationFieldsClient manageOptionSetsHref={MANAGE_OPTION_SETS_HREF} adminV2Chrome />
                 ) : (
                     <EntityFieldsClient
                         entityType={entity}
                         title={entityFieldsTitle}
                         manageOptionSetsHref={MANAGE_OPTION_SETS_HREF}
-                        headerVariant="compact"
+                        adminV2Chrome
                     />
                 )}
             </div>

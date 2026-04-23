@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
+import SettingsPageHeader from "@/components/adminV2/settings/SettingsPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 
@@ -19,7 +20,7 @@ export type DepartmentRow = {
 
 const KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 
-export default function DepartmentsClient() {
+export default function DepartmentsClient({ adminV2Chrome = false }: { adminV2Chrome?: boolean } = {}) {
     const { canMutate } = useAdminAuth();
     const [items, setItems] = useState<DepartmentRow[]>([]);
     const [loading, setLoading] = useState(true);
@@ -147,23 +148,31 @@ export default function DepartmentsClient() {
         await fetchItems();
     };
 
+    const addDeptAction = canMutate ? (
+        <button
+            type="button"
+            onClick={openCreate}
+            className="rounded-lg bg-alloy-pine px-4 py-2 text-sm font-medium text-white hover:bg-alloy-pine/90"
+        >
+            Add department
+        </button>
+    ) : null;
+
     return (
         <div>
-            <AdminPageHeader
-                title="Departments"
-                subtitle="Business functions within your organization (hierarchy). Work units belong to departments."
-                actions={
-                    canMutate ? (
-                        <button
-                            type="button"
-                            onClick={openCreate}
-                            className="px-4 py-2 rounded-lg bg-alloy-pine text-white text-sm font-medium hover:bg-alloy-pine/90"
-                        >
-                            Add department
-                        </button>
-                    ) : null
-                }
-            />
+            {adminV2Chrome ? (
+                <SettingsPageHeader
+                    title="Departments"
+                    subtitle="Business functions within your organization (hierarchy). Work units belong to departments."
+                    actions={addDeptAction}
+                />
+            ) : (
+                <AdminPageHeader
+                    title="Departments"
+                    subtitle="Business functions within your organization (hierarchy). Work units belong to departments."
+                    actions={addDeptAction}
+                />
+            )}
 
             <SectionCard title="All departments">
                 {loading ? (

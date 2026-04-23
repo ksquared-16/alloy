@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
+import SettingsPageHeader from "@/components/adminV2/settings/SettingsPageHeader";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 
 const FIELD_TYPES = ["text", "email", "phone", "number", "date", "datetime", "boolean"] as const;
@@ -41,7 +42,10 @@ function toDef(r: Record<string, unknown>): DocFieldDef {
     };
 }
 
-export default function DocumentFieldsClient() {
+const DOC_FIELDS_SUBTITLE =
+    "Per doc_type schema for structured values and future AI extraction. Doc type is a free-form key (e.g. w9, contract, general) — align with documents.doc_type when uploading.";
+
+export default function DocumentFieldsClient({ adminV2Chrome = false }: { adminV2Chrome?: boolean } = {}) {
     const { canMutate } = useAdminAuth();
     const [docTypeFilter, setDocTypeFilter] = useState("general");
     const [docTypeInput, setDocTypeInput] = useState("general");
@@ -199,12 +203,13 @@ export default function DocumentFieldsClient() {
 
     return (
         <>
-            <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-                <AdminPageHeader
-                    title="Document field definitions"
-                    subtitle="Per doc_type schema for structured values and future AI extraction. Doc type is a free-form key (e.g. w9, contract, general) — align with documents.doc_type when uploading."
-                />
-            </div>
+            {adminV2Chrome ? (
+                <SettingsPageHeader title="Document field definitions" subtitle={DOC_FIELDS_SUBTITLE} />
+            ) : (
+                <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+                    <AdminPageHeader title="Document field definitions" subtitle={DOC_FIELDS_SUBTITLE} />
+                </div>
+            )}
 
             <SectionCard title="Doc type">
                 <div className="flex flex-wrap items-end gap-2">

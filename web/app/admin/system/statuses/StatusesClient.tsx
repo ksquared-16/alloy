@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ChevronDown } from "lucide-react";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
+import SettingsPageHeader from "@/components/adminV2/settings/SettingsPageHeader";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import type { StatusDef } from "@/app/api/admin/status-definitions/route";
@@ -56,7 +57,13 @@ function entityTypeDisplayLabel(
     return plural ?? FALLBACK_LABELS[entityType] ?? FALLBACK_LABELS[key] ?? entityType;
 }
 
-export default function StatusesClient({ basePath = "/admin/system/statuses" }: { basePath?: string } = {}) {
+const STATUSES_DEFAULT_SUBTITLE =
+    "Single source of truth for admin status labels and keys on schedules, jobs, customers, opportunities, vendors, plan templates, and people. Drawers read options from here; the saved value remains each entity’s status key (and server logic keeps legacy FKs in sync where needed).";
+
+export default function StatusesClient({
+    basePath = "/admin/system/statuses",
+    adminV2Chrome = false,
+}: { basePath?: string; adminV2Chrome?: boolean } = {}) {
     const searchParams = useSearchParams();
     const entityTypeFilter = searchParams.get("entity_type")?.trim() ?? "";
     const { labels } = useEntityLabels();
@@ -373,29 +380,30 @@ export default function StatusesClient({ basePath = "/admin/system/statuses" }: 
         </div>
     );
 
+    const statusTitle = entityTypeFilter ? `Statuses — ${filterLabel}` : "Statuses";
+    const statusSubtitle = entityTypeFilter ? undefined : STATUSES_DEFAULT_SUBTITLE;
+    const newStatusBtn = canMutate ? (
+        <button
+            type="button"
+            onClick={() => openNewModal()}
+            className="shrink-0 rounded-md bg-alloy-midnight px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
+        >
+            New Status
+        </button>
+    ) : null;
+
     return (
         <>
-            <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-                <div>
-                    <AdminPageHeader
-                        title={entityTypeFilter ? `Statuses — ${filterLabel}` : "Statuses"}
-                        subtitle={
-                            entityTypeFilter
-                                ? undefined
-                                : "Single source of truth for admin status labels and keys on schedules, jobs, customers, opportunities, vendors, plan templates, and people. Drawers read options from here; the saved value remains each entity’s status key (and server logic keeps legacy FKs in sync where needed)."
-                        }
-                    />
+            {adminV2Chrome ? (
+                <SettingsPageHeader title={statusTitle} subtitle={statusSubtitle} actions={newStatusBtn} />
+            ) : (
+                <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                        <AdminPageHeader title={statusTitle} subtitle={statusSubtitle} />
+                    </div>
+                    {newStatusBtn}
                 </div>
-                {canMutate && (
-                    <button
-                        type="button"
-                        onClick={() => openNewModal()}
-                        className="shrink-0 px-3 py-1.5 text-sm font-medium bg-alloy-midnight text-white rounded-md hover:opacity-90"
-                    >
-                        New Status
-                    </button>
-                )}
-            </div>
+            )}
 
             {entityTypeFilter && (
                 <div className="mb-6 flex flex-wrap items-center gap-2 rounded-lg border border-[#e6e8ec] bg-[#F4F6F9] px-4 py-3 text-sm">

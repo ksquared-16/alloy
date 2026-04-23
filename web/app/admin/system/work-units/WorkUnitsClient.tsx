@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
+import SettingsPageHeader from "@/components/adminV2/settings/SettingsPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { getQueueDefinitionStoredVersion } from "@/lib/rrs/queue/queueDefinitionV1";
@@ -31,7 +32,7 @@ function stringifyQueue(q: Record<string, unknown>): string {
     }
 }
 
-export default function WorkUnitsClient() {
+export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chrome?: boolean } = {}) {
     const { canMutate } = useAdminAuth();
     const [departments, setDepartments] = useState<DepartmentRow[]>([]);
     const [items, setItems] = useState<WorkUnitRow[]>([]);
@@ -236,24 +237,32 @@ export default function WorkUnitsClient() {
         await fetchItems();
     };
 
+    const addWuAction = canMutate ? (
+        <button
+            type="button"
+            onClick={openCreate}
+            disabled={departments.length === 0}
+            className="rounded-lg bg-alloy-pine px-4 py-2 text-sm font-medium text-white hover:bg-alloy-pine/90 disabled:opacity-50"
+        >
+            Add work unit
+        </button>
+    ) : null;
+
     return (
         <div>
-            <AdminPageHeader
-                title="Work units"
-                subtitle="Operational queues or cohorts within a department. Queue definition is raw JSON for now."
-                actions={
-                    canMutate ? (
-                        <button
-                            type="button"
-                            onClick={openCreate}
-                            disabled={departments.length === 0}
-                            className="px-4 py-2 rounded-lg bg-alloy-pine text-white text-sm font-medium hover:bg-alloy-pine/90 disabled:opacity-50"
-                        >
-                            Add work unit
-                        </button>
-                    ) : null
-                }
-            />
+            {adminV2Chrome ? (
+                <SettingsPageHeader
+                    title="Work units"
+                    subtitle="Operational queues or cohorts within a department. Queue definition is raw JSON for now."
+                    actions={addWuAction}
+                />
+            ) : (
+                <AdminPageHeader
+                    title="Work units"
+                    subtitle="Operational queues or cohorts within a department. Queue definition is raw JSON for now."
+                    actions={addWuAction}
+                />
+            )}
 
             <SectionCard title="Filter">
                 <label className="flex flex-wrap items-center gap-2 text-sm text-alloy-forge">

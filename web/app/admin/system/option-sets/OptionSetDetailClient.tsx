@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
+import SettingsPageHeader from "@/components/adminV2/settings/SettingsPageHeader";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
 import PrimaryButton from "@/components/PrimaryButton";
@@ -46,9 +47,11 @@ type ItemRow = {
 export default function OptionSetDetailClient({
     setKey,
     basePath = "/admin/system/option-sets",
+    adminV2Chrome = false,
 }: {
     setKey: string;
     basePath?: string;
+    adminV2Chrome?: boolean;
 }) {
     const { canMutate } = useAdminAuth();
     const { labels } = useEntityLabels();
@@ -300,10 +303,18 @@ export default function OptionSetDetailClient({
                     ← Option sets
                 </Link>
             </div>
-            <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-                <AdminPageHeader title={setRow?.label ?? setKey} subtitle={`Set key: ${setKey}`} />
-                {canMutate && <PrimaryButton onClick={openCreateItem}>Add item</PrimaryButton>}
-            </div>
+            {adminV2Chrome ? (
+                <SettingsPageHeader
+                    title={setRow?.label ?? setKey}
+                    subtitle={`Set key: ${setKey}`}
+                    actions={canMutate ? <PrimaryButton onClick={openCreateItem}>Add item</PrimaryButton> : undefined}
+                />
+            ) : (
+                <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+                    <AdminPageHeader title={setRow?.label ?? setKey} subtitle={`Set key: ${setKey}`} />
+                    {canMutate && <PrimaryButton onClick={openCreateItem}>Add item</PrimaryButton>}
+                </div>
+            )}
 
             {blockers.length > 0 && (
                 <SectionCard title="Usage">
