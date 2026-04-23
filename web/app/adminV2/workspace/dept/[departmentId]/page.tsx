@@ -7,6 +7,7 @@ import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import { useOperationsWorkspaceData } from "@/hooks/useOperationsWorkspaceData";
 import { DepartmentWorkspaceBridgeShell } from "@/components/admin/workspace/DepartmentWorkspaceBridgeShell";
 import KPIBlock from "@/app/adminV2/components/workspace/blocks/KPIBlock";
+import DeptLoading from "./loading";
 import {
     buildEnrollmentDepartmentActionLinks,
     buildEnrollmentDepartmentKpis,
@@ -47,163 +48,9 @@ export default function AdminV2WorkspaceDepartmentPage() {
 
     const enrollmentActions = useMemo(() => (isEnrollment ? buildEnrollmentDepartmentActionLinks() : []), [isEnrollment]);
 
-    if (loading && !dept) {
-        return (
-            <WorkspaceChrome
-                variant="bridge"
-                breadcrumbs={[
-                    { href: WORKSPACE_BASE, label: "Workspace" },
-                    { href: `${WORKSPACE_BASE}/dept/${departmentId}`, label: "…" },
-                ]}
-                title="Loading…"
-                subtitle=""
-            >
-                <div className="relative">
-                    <div
-                        data-ws-surface="department"
-                        className="adminv2-ws-root adminv2-ws-department adminv2-ws-dept-v2 opacity-[0.98]"
-                        aria-busy="true"
-                        aria-label="Loading department workspace"
-                    >
-                        <div className="adminv2-ws-dept-v2-contain">
-                            <div className="adminv2-ws-dept-v2-page-split">
-                                <div className="adminv2-ws-dept-v2-primary-column">
-                                    <div className="adminv2-ws-dept-v2-control-deck">
-                                        <div className="adminv2-ws-dept-v2-top-stack">
-                                            <div className="adminv2-ws-dept-v2-brief">
-                                                <div className="adminv2-ws-dept-v2-brief-focus-label">Today&apos;s focus</div>
-                                                <div className="adminv2-ws-dept-v2-brief-head-row">
-                                                    <h2 className="adminv2-ws-dept-v2-brief-headline adminv2-ws-dept-v2-brief-headline--placeholder">
-                                                        Loading department
-                                                    </h2>
-                                                </div>
-                                                <div className="mt-3 space-y-2 max-w-3xl" aria-hidden>
-                                                    <div className="h-3 w-full skeleton-pulse rounded bg-alloy-stone/15" />
-                                                    <div
-                                                        className="h-3 w-2/3 skeleton-pulse rounded bg-alloy-stone/10"
-                                                        style={{ animationDelay: "70ms" }}
-                                                    />
-                                                </div>
-                                            </div>
-                                            <div data-workspace-zone="kpi-banner">
-                                                <div className="adminv2-ws-kpi-root-band" role="status" aria-label="Loading KPI banner">
-                                                    <div className="adminv2-ws-kpi-strip adminv2-ws-kpi-strip--single-band" role="list" aria-hidden>
-                                                        {Array.from({ length: 6 }).map((_, i) => (
-                                                            <div
-                                                                key={i}
-                                                                className="adminv2-ws-kpi-cell adminv2-ws-kpi-cell--single-band adminv2-ws-kpi-cell--placeholder"
-                                                            >
-                                                                <span className="adminv2-ws-kpi-label"> </span>
-                                                                <span className="adminv2-ws-kpi-value adminv2-ws-kpi-value--placeholder">—</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div
-                                        className="adminv2-ws-dept-v2-operational-row adminv2-ws-dept-v2-operational-row--triple"
-                                        aria-label="Operational lanes"
-                                    >
-                                        <div className="adminv2-ws-dept-v2-lane adminv2-ws-dept-v2-lane--throughput" data-ws-lane-kind="throughput">
-                                            <div className="adminv2-ws-dept-v2-lane-chrome adminv2-ws-dept-v2-lane-chrome--throughput-deck">
-                                                <section
-                                                    className="adminv2-ws-dept-qsec adminv2-ws-dept-qsec--primary adminv2-ws-dept-throughput-panel"
-                                                    aria-label="Pipeline lanes"
-                                                >
-                                                    <header className="adminv2-ws-queue-header">
-                                                        <div className="adminv2-ws-queue-title-row">
-                                                            <h3 className="adminv2-ws-queue-title">Pipeline</h3>
-                                                        </div>
-                                                    </header>
-                                                    <div className="adminv2-ws-wu-v2" data-ws-surface="work_unit">
-                                                        <ul className="adminv2-ws-queue-list" role="list" aria-hidden>
-                                                            {Array.from({ length: 3 }).map((_, i) => (
-                                                                <li key={i} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
-                                                                    <div className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-standard flex flex-col items-stretch">
-                                                                        <div className="adminv2-ws-wu-queue-card-compact-text">
-                                                                            <div className="h-3 w-40 skeleton-pulse rounded bg-alloy-stone/20" />
-                                                                            <div
-                                                                                className="mt-2 h-3 w-56 skeleton-pulse rounded bg-alloy-stone/12"
-                                                                                style={{ animationDelay: "70ms" }}
-                                                                            />
-                                                                        </div>
-                                                                        <div className="adminv2-ws-wu-queue-card-compact-aside">
-                                                                            <span className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open">
-                                                                                <span className="inline-block h-3 w-16 align-middle skeleton-pulse rounded bg-alloy-stone/10" />
-                                                                            </span>
-                                                                        </div>
-                                                                    </div>
-                                                                </li>
-                                                            ))}
-                                                        </ul>
-                                                    </div>
-                                                </section>
-                                            </div>
-                                        </div>
-
-                                        <div className="adminv2-ws-dept-v2-lane adminv2-ws-dept-v2-lane--attention" data-ws-lane-kind="attention">
-                                            <div className="adminv2-ws-dept-v2-lane-chrome adminv2-ws-dept-v2-board-secondary-slot">
-                                                <section
-                                                    className="adminv2-ws-dept-qsec adminv2-ws-dept-qsec--secondary adminv2-ws-dept-attention-panel"
-                                                    aria-label="Needs Attention"
-                                                >
-                                                    <header className="adminv2-ws-attention-panel-header">
-                                                        <div>
-                                                            <div className="adminv2-ws-attention-panel-kicker">Needs attention</div>
-                                                            <h3 className="adminv2-ws-attention-panel-title">Needs Attention</h3>
-                                                            <div className="mt-2 space-y-2" aria-hidden>
-                                                                <div className="h-3 w-48 skeleton-pulse rounded bg-alloy-stone/10" />
-                                                                <div
-                                                                    className="h-3 w-56 skeleton-pulse rounded bg-alloy-stone/10"
-                                                                    style={{ animationDelay: "90ms" }}
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                    </header>
-                                                </section>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="adminv2-ws-dept-v2-command-column" data-adminv2-workspace-command-column>
-                                    <aside
-                                        className="adminv2-ws-dept-v2-rail adminv2-ws-dept-v2-rail--command-shell"
-                                        data-adminv2-workspace-command-rail
-                                        aria-label="Decisions and actions"
-                                    >
-                                        <section className="adminv2-ws-actions-rail adminv2-ws-actions-rail--dept-panel px-3 pb-3 pt-3">
-                                            <div className="h-4 w-20 skeleton-pulse rounded bg-alloy-stone/15" aria-hidden />
-                                            <div className="mt-3 space-y-2" aria-hidden>
-                                                <div className="h-8 w-full skeleton-pulse rounded-md bg-alloy-stone/10" />
-                                                <div
-                                                    className="h-8 w-full skeleton-pulse rounded-md bg-alloy-stone/10"
-                                                    style={{ animationDelay: "55ms" }}
-                                                />
-                                                <div
-                                                    className="h-8 w-full skeleton-pulse rounded-md bg-alloy-stone/10"
-                                                    style={{ animationDelay: "110ms" }}
-                                                />
-                                            </div>
-                                        </section>
-                                    </aside>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="ws-loading-overlay" aria-hidden>
-                        <div className="ws-loading-indicator">
-                            <span className="ws-loading-spinner" />
-                            Loading department
-                        </div>
-                    </div>
-                </div>
-            </WorkspaceChrome>
-        );
+    if (loading) {
+        // Single loading contract: identical to route-level `loading.tsx`.
+        return <DeptLoading />;
     }
 
     return (
@@ -211,9 +58,9 @@ export default function AdminV2WorkspaceDepartmentPage() {
             variant="bridge"
             breadcrumbs={[
                 { href: WORKSPACE_BASE, label: "Workspace" },
-                { href: `${WORKSPACE_BASE}/dept/${departmentId}`, label: loading ? "…" : title },
+                { href: `${WORKSPACE_BASE}/dept/${departmentId}`, label: title },
             ]}
-            title={loading ? "Loading…" : title}
+            title={title}
             subtitle=""
         >
             {error && !loading && dept ? <p className="text-sm text-amber-800 px-1">{error}</p> : null}
