@@ -18,10 +18,13 @@ const PERSON_ROLES_SUBTITLE =
 export default function CustomerPersonRolesClient({
     adminV2Chrome = false,
     omitOuterHeader = false,
+    hideEyebrowTitle = false,
 }: {
     adminV2Chrome?: boolean;
     /** When true with adminV2Chrome, skip page header (parent Settings page provides it). */
     omitOuterHeader?: boolean;
+    /** With omitOuterHeader + adminV2Chrome: hide the small uppercase section title (e.g. when tabs label the panel). */
+    hideEyebrowTitle?: boolean;
 } = {}) {
     const { canMutate } = useAdminAuth();
     const { verticals } = useAdminVertical();
@@ -174,10 +177,16 @@ export default function CustomerPersonRolesClient({
 
     const pageHeader =
         omitOuterHeader && adminV2Chrome ? (
-            <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-                <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-alloy-midnight/50">Family / person roles</h3>
-                {addRoleBtn}
-            </div>
+            hideEyebrowTitle ? (
+                addRoleBtn ? (
+                    <div className="mb-3 flex flex-wrap justify-end">{addRoleBtn}</div>
+                ) : null
+            ) : (
+                <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+                    <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-alloy-midnight/50">Family / person roles</h3>
+                    {addRoleBtn}
+                </div>
+            )
         ) : adminV2Chrome ? (
             <SettingsPageHeader title="Person Roles" subtitle={PERSON_ROLES_SUBTITLE} actions={addRoleBtn} className="mb-4" />
         ) : (

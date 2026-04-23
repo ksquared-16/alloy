@@ -18,9 +18,11 @@ const REL_TYPES_SUBTITLE =
 export default function PersonRelationshipTypesClient({
     adminV2Chrome = false,
     omitOuterHeader = false,
+    hideEyebrowTitle = false,
 }: {
     adminV2Chrome?: boolean;
     omitOuterHeader?: boolean;
+    hideEyebrowTitle?: boolean;
 } = {}) {
     const { canMutate } = useAdminAuth();
     const { verticals } = useAdminVertical();
@@ -173,10 +175,16 @@ export default function PersonRelationshipTypesClient({
 
     const pageHeader =
         omitOuterHeader && adminV2Chrome ? (
-            <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-                <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-alloy-midnight/50">Person-to-person types</h3>
-                {addRelBtn}
-            </div>
+            hideEyebrowTitle ? (
+                addRelBtn ? (
+                    <div className="mb-3 flex flex-wrap justify-end">{addRelBtn}</div>
+                ) : null
+            ) : (
+                <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+                    <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-alloy-midnight/50">Person-to-person types</h3>
+                    {addRelBtn}
+                </div>
+            )
         ) : adminV2Chrome ? (
             <SettingsPageHeader title="Relationship Types" subtitle={REL_TYPES_SUBTITLE} actions={addRelBtn} className="mb-4" />
         ) : (
