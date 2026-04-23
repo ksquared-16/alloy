@@ -1019,7 +1019,15 @@ export default function AdminEntityDrawer() {
     const [contactRelatedData, setContactRelatedData] = useState<ContactRelatedPayload | null>(null);
     const [contactRelatedLoading, setContactRelatedLoading] = useState(false);
     type CustomerRelatedPayload = {
-        people?: { person_id: string; _person_name?: string | null; role_label?: string | null; _person_email?: string | null; _person_phone?: string | null; created_at?: string }[];
+        people?: {
+            person_id: string;
+            role_type?: string | null;
+            _person_name?: string | null;
+            role_label?: string | null;
+            _person_email?: string | null;
+            _person_phone?: string | null;
+            created_at?: string;
+        }[];
         contacts: { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null; status_key?: string | null }[];
         opportunities: { id: string; name?: string | null; status?: string | null; job_date?: string | null; quote_total?: number | null }[];
         jobs: { id: string; title?: string | null; scheduled_at?: string | null; opportunity_id?: string | null }[];
@@ -1105,7 +1113,7 @@ export default function AdminEntityDrawer() {
     const [addonRelatedData, setAddonRelatedData] = useState<AddonRelatedPayload | null>(null);
     const [addonRelatedLoading, setAddonRelatedLoading] = useState(false);
     type PersonRelatedPayload = {
-        customer_persons: { id: string; customer_id: string; _customer_name?: string | null }[];
+        customer_persons: { id: string; customer_id: string; role_type?: string | null; _customer_name?: string | null; _role_label?: string | null }[];
         person_relationships: { id: string; _other_person_id: string; _other_person_name?: string | null; relationship_type?: string | null }[];
         compatibility_contacts: unknown[];
         compatibility_members: unknown[];
@@ -4530,7 +4538,7 @@ export default function AdminEntityDrawer() {
                     customer_id: string;
                     _customer_name?: string | null;
                     _role_label?: string | null;
-                    role?: string | null;
+                    role_type?: string | null;
                 }[]) ?? [];
             const subheading = "text-xs font-semibold uppercase tracking-wide text-alloy-midnight/50 mb-2";
             return {
@@ -4551,8 +4559,8 @@ export default function AdminEntityDrawer() {
                                             >
                                                 {cp._customer_name?.trim() || cp.customer_id.slice(0, 8) + "…"}
                                             </button>
-                                            {(cp._role_label ?? cp.role) ? (
-                                                <span className="text-alloy-muted ml-1">· {cp._role_label ?? cp.role}</span>
+                                            {(cp._role_label ?? cp.role_type) ? (
+                                                <span className="text-alloy-muted ml-1">· {cp._role_label ?? cp.role_type}</span>
                                             ) : null}
                                         </li>
                                     ))}
@@ -6139,11 +6147,11 @@ export default function AdminEntityDrawer() {
                             <section>
                                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Customers</h3>
                                             <ul className="space-y-1.5 text-sm">
-                                                {personRelatedData.customer_persons.map((cp: { id: string; customer_id: string; _customer_name?: string | null; role?: string | null; _role_label?: string | null }) => (
+                                                {personRelatedData.customer_persons.map((cp: { id: string; customer_id: string; _customer_name?: string | null; role_type?: string | null; _role_label?: string | null }) => (
                                                     <li key={cp.id}>
                                                         <button type="button" onClick={() => openDrawer({ type: "customers", id: cp.customer_id })} className="text-alloy-blue hover:underline">
                                                             {cp._customer_name ?? cp.customer_id.slice(0, 8) + "…"}
-                                                            {(cp._role_label ?? cp.role) ? ` · ${cp._role_label ?? cp.role}` : ""}
+                                                            {(cp._role_label ?? cp.role_type) ? ` · ${cp._role_label ?? cp.role_type}` : ""}
                                                         </button>
                                                     </li>
                                                 ))}

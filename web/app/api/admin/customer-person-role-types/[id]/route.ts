@@ -95,7 +95,7 @@ export async function PATCH(
     return NextResponse.json(updated);
 }
 
-/** DELETE: not implemented. Use is_active=false to deactivate. Records may reference key in customer_persons.role. */
+/** DELETE: not implemented. Use is_active=false to deactivate. Records may reference key in customer_persons.role_type. */
 export async function DELETE() {
     return NextResponse.json(
         { error: "Delete not supported. Set is_active to false to deactivate." },

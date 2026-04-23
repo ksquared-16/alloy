@@ -10,7 +10,7 @@ type CustomerPersonRow = {
     id: string;
     customer_id: string;
     person_id: string;
-    role: string | null;
+    role_type: string | null;
     role_label: string | null;
     _customer_name: string | null;
     _person_name: string | null;
@@ -130,7 +130,7 @@ export default function DbRelationshipsClient() {
                                                         onClick={() => openDrawer({ type: "persons", id: row.person_id })}
                                                     />
                                                 </td>
-                                                <td className="py-2 pr-4 text-[#59678b]">{row.role_label ?? row.role ?? "—"}</td>
+                                                <td className="py-2 pr-4 text-[#59678b]">{row.role_label ?? row.role_type ?? "—"}</td>
                                                 <td className="py-2 pr-4 text-[#59678b]">{row.created_at ? formatDateTime(row.created_at) : "—"}</td>
                                             </tr>
                                         ))

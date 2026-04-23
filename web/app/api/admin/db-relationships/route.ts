@@ -18,7 +18,7 @@ export async function GET() {
         const [cpRes, personIdsRes, relTypesRes, roleTypesRes] = await Promise.all([
             supabase
                 .from("customer_persons")
-                .select("id, customer_id, person_id, role, created_at")
+                .select("id, customer_id, person_id, role_type, created_at")
                 .eq("org_id", ctx.orgId)
                 .order("created_at", { ascending: false }),
             supabase.from("persons").select("id").eq("org_id", ctx.orgId),
@@ -57,12 +57,12 @@ export async function GET() {
             ])
         );
 
-        const customer_persons = cpRows.map((r: { id: string; customer_id: string; person_id: string; role?: string | null; created_at?: string }) => ({
+        const customer_persons = cpRows.map((r: { id: string; customer_id: string; person_id: string; role_type?: string | null; created_at?: string }) => ({
             id: r.id,
             customer_id: r.customer_id,
             person_id: r.person_id,
-            role: r.role ?? null,
-            role_label: r.role ? (roleLabelMap.get(r.role) ?? r.role) : null,
+            role_type: r.role_type ?? null,
+            role_label: r.role_type ? (roleLabelMap.get(r.role_type) ?? r.role_type) : null,
             _customer_name: customerMap.get(r.customer_id) ?? null,
             _person_name: personNameMap.get(r.person_id) ?? null,
             created_at: r.created_at,

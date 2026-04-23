@@ -171,6 +171,8 @@ export async function seedChildcareDemo(supabase: SupabaseClient, orgId: string)
         }
         if (!parentB) return { ok: false, error: `parent B family ${f}` };
 
+        // primary_contact matches BOOKING_CUSTOMER_PERSON_ROLE_TYPE / bookingCustomerPersonLink; childcare
+        // vocabulary also includes parent/guardian for household semantics — seed uses primary_contact for demo/booking parity.
         await ensureCustomerPerson(supabase, orgId, customerId, parentA, "primary_contact", true);
         await ensureCustomerPerson(supabase, orgId, customerId, parentB, "primary_contact", false);
 

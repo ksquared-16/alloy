@@ -115,7 +115,7 @@ export async function GET(
                     .order("created_at", { ascending: false })
                     .limit(LIMIT)
                     .then((r) => (r.error ? { data: [] } : r)),
-                supabase.from("customer_persons").select("id, customer_id, person_id, role, created_at").eq("customer_id", id).eq("org_id", ctx.orgId).order("created_at", { ascending: false }).limit(LIMIT),
+                supabase.from("customer_persons").select("id, customer_id, person_id, role_type, created_at").eq("customer_id", id).eq("org_id", ctx.orgId).order("created_at", { ascending: false }).limit(LIMIT),
             ]);
             const cpRows = cpRes.data ?? [];
             const personIds = [...new Set(cpRows.map((r: { person_id: string }) => r.person_id))];
@@ -123,20 +123,20 @@ export async function GET(
                 ? await supabase.from("persons").select("id, first_name, last_name, email, phone").in("id", personIds)
                 : { data: [] as { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone?: string | null }[] };
             const personMap = new Map((personRows ?? []).map((p) => [p.id, p]));
-            const roleKeys = [...new Set(cpRows.map((r: { role?: string | null }) => r.role).filter(Boolean))] as string[];
+            const roleKeys = [...new Set(cpRows.map((r: { role_type?: string | null }) => r.role_type).filter(Boolean))] as string[];
             const { data: roleTypeRows } = roleKeys.length > 0
                 ? await supabase.from("customer_person_role_types").select("key, label").eq("org_id", ctx.orgId).in("key", roleKeys)
                 : { data: [] as { key: string; label: string | null }[] };
             const roleLabelMap = new Map((roleTypeRows ?? []).map((r) => [r.key, r.label ?? r.key]));
-            const people = cpRows.map((r: { id: string; customer_id: string; person_id: string; role?: string | null; created_at?: string }) => {
+            const people = cpRows.map((r: { id: string; customer_id: string; person_id: string; role_type?: string | null; created_at?: string }) => {
                 const person = personMap.get(r.person_id);
                 const name = person ? [person.first_name, person.last_name].filter(Boolean).join(" ").trim() || null : null;
                 return {
                     id: r.id,
                     person_id: r.person_id,
                     customer_id: r.customer_id,
-                    role: r.role ?? null,
-                    role_label: r.role ? (roleLabelMap.get(r.role) ?? r.role) : null,
+                    role_type: r.role_type ?? null,
+                    role_label: r.role_type ? (roleLabelMap.get(r.role_type) ?? r.role_type) : null,
                     _person_name: name,
                     _person_email: person?.email ?? null,
                     _person_phone: person?.phone ?? null,
@@ -641,7 +641,7 @@ export async function GET(
             const [customerPersonsRes, relationshipsRes, contactsRes, membersRes, plRes, oppRes, documentsRes] = await Promise.all([
                 supabase
                     .from("customer_persons")
-                    .select("id, customer_id, person_id, role, created_at")
+                    .select("id, customer_id, person_id, role_type, created_at")
                     .eq("person_id", id)
                     .eq("org_id", ctx.orgId)
                     .order("created_at", { ascending: false })
@@ -690,17 +690,17 @@ export async function GET(
             ]);
             const cpRows = customerPersonsRes.data ?? [];
             const customerIds = [...new Set(cpRows.map((r: { customer_id: string }) => r.customer_id))];
-            const roleKeys = [...new Set(cpRows.map((r: { role?: string | null }) => r.role).filter(Boolean))] as string[];
+            const roleKeys = [...new Set(cpRows.map((r: { role_type?: string | null }) => r.role_type).filter(Boolean))] as string[];
             const [customerRowsRes, roleTypesRes] = await Promise.all([
                 customerIds.length > 0 ? supabase.from("customers").select("id, name").in("id", customerIds) : { data: [] as { id: string; name: string | null }[] },
                 roleKeys.length > 0 ? supabase.from("customer_person_role_types").select("key, label").eq("org_id", ctx.orgId).in("key", roleKeys) : { data: [] as { key: string; label: string | null }[] },
             ]);
             const customerMap = new Map((customerRowsRes.data ?? []).map((c) => [c.id, c.name ?? null]));
             const roleLabelMap = new Map((roleTypesRes.data ?? []).map((r) => [r.key, r.label ?? r.key]));
-            const customer_persons = cpRows.map((r: { id: string; customer_id: string; person_id: string; role?: string | null; created_at?: string }) => ({
+            const customer_persons = cpRows.map((r: { id: string; customer_id: string; person_id: string; role_type?: string | null; created_at?: string }) => ({
                 ...r,
                 _customer_name: customerMap.get(r.customer_id) ?? null,
-                _role_label: r.role ? (roleLabelMap.get(r.role) ?? r.role) : null,
+                _role_label: r.role_type ? (roleLabelMap.get(r.role_type) ?? r.role_type) : null,
             }));
             const relRows = relationshipsRes.data ?? [];
             const relTypeKeys = [...new Set(relRows.map((r: { relationship_type?: string | null }) => r.relationship_type).filter(Boolean))] as string[];

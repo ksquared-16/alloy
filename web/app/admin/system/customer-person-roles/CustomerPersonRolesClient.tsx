@@ -154,7 +154,7 @@ export default function CustomerPersonRolesClient() {
             <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
                 <AdminPageHeader
                     title="Person Roles"
-                    subtitle="Role types when linking a person to a customer. Defaults are driven by your org industry (Entity Labels). Used for customer_persons.role."
+                    subtitle="Role types when linking a person to a customer. Defaults are driven by your org industry (Entity Labels). Used for customer_persons.role_type."
                 />
                 {canMutate && (
                     <button
