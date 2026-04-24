@@ -20,6 +20,31 @@ export type RecordLayoutConfigJson = {
     /** Order of `EntityDrawerSectionConfig.key` values for the record overview. */
     overview_section_order?: string[];
     /**
+     * Opportunity drawer (org override): when `inquiry_drawer_mode` is set, the UI may apply
+     * inquiry-specific chrome (workflow sections, quote suppression, etc.). See `AdminEntityDrawer`.
+     */
+    inquiry_drawer_mode?: "workflow_v1";
+    /**
+     * Opportunity drawer: hide config-driven overview sections whose `section_key` matches
+     * one of these strings (field_definitions grouping).
+     */
+    overview_hidden_sections?: string[];
+    /**
+     * When true, omit the injected `__unified_status` overview section for opportunities
+     * (status lives in the drawer header snapshot only).
+     */
+    suppress_body_status?: boolean;
+    /**
+     * Opportunity inquiry workflow: synthetic overview sections built from visible field_definitions
+     * by `field_key` (source sections may be hidden via `overview_hidden_sections`).
+     */
+    inquiry_workflow_sections?: {
+        key: string;
+        title: string;
+        field_keys: string[];
+        default_expanded?: boolean;
+    }[];
+    /**
      * Schedule v1: each inner array is one visual row (2–4 field tokens).
      * Tokens map via `SCHEDULE_OVERVIEW_ROW_TOKEN_TO_FIELD_KEY` → field keys.
      */

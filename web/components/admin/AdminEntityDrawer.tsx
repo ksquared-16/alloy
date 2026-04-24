@@ -82,7 +82,7 @@ import {
 } from "@/lib/admin/jobPaymentSummary";
 import { useRecordChromeConfig } from "@/hooks/useRecordChromeConfig";
 import { getSectionOrderFromScheduleLayoutBlocks } from "@/lib/recordChrome/scheduleLayoutConfig";
-import { applyOverviewSectionOrder } from "@/lib/recordChrome/types";
+import { applyOverviewSectionOrder, type RecordLayoutConfigJson } from "@/lib/recordChrome/types";
 import { executeOpportunityRecordAction } from "@/lib/recordChrome/executeOpportunityRecordAction";
 import OpportunityQuoteIntakeSection from "@/components/admin/quoteIntake/OpportunityQuoteIntakeSection";
 
@@ -3584,6 +3584,9 @@ export default function AdminEntityDrawer() {
     const recordChromeOpportunity = useRecordChromeConfig(
         drawer.type === "opportunities" && drawer.id && drawer.id !== "new" ? "opportunity" : null
     );
+    const opportunityInquiryWorkflowDrawer =
+        drawer.type === "opportunities" &&
+        (recordChromeOpportunity.layout?.config_json as RecordLayoutConfigJson | null)?.inquiry_drawer_mode === "workflow_v1";
     /** Modal shell for /adminV2 jobs — use before data loads so geometry never flashes sidebar-first. */
     const isJobRecordModalTarget =
         drawerShellVariant === "adminV2" &&
@@ -4984,33 +4987,65 @@ export default function AdminEntityDrawer() {
             };
         }
         if (drawer.type === "opportunities" && overviewData && !(overviewData as { _create?: boolean })._create) {
-            const order = recordChromeOpportunity.layout?.config_json?.overview_section_order ?? null;
+            const oppCfg = (recordChromeOpportunity.layout?.config_json ?? null) as RecordLayoutConfigJson | null;
+            const out: Record<string, React.ReactNode> = {};
+            if (oppCfg?.inquiry_drawer_mode === "workflow_v1") {
+                out.inquiry_tuition = (
+                    <div className="rounded-lg border border-alloy-stone/25 bg-white px-3 py-2.5 text-sm text-alloy-midnight/70">
+                        <p className="text-[13px] font-semibold text-alloy-midnight/85">Tuition & fees</p>
+                        <p className="mt-1 text-xs leading-relaxed text-alloy-midnight/60">
+                            Estimated tuition will tie to enrollment program, schedule, and discounts. Use quote / value fields in{" "}
+                            <span className="font-medium text-alloy-midnight/75">Enrollment needs</span> until billing is wired.
+                        </p>
+                    </div>
+                );
+            }
+            const order = oppCfg?.overview_section_order ?? null;
             const allowInquiryChildren = Array.isArray(order) && order.includes("inquiry_children");
-            if (!allowInquiryChildren) return {};
-            const raw = (d._inquiry_children as unknown[]) ?? [];
-            const rows: InquiryChildRow[] = Array.isArray(raw)
-                ? raw.map((x) => {
-                      const r = x as Record<string, unknown>;
-                      return {
-                          id: String(r.id ?? ""),
-                          customer_member_id: String(r.customer_member_id ?? ""),
-                          person_id: r.person_id != null && String(r.person_id).trim() ? String(r.person_id) : null,
-                          display_name: r.display_name != null ? String(r.display_name) : null,
-                          dob: r.dob != null && String(r.dob).trim() ? String(r.dob) : null,
-                          age: r.age != null && String(r.age).trim() ? String(r.age) : null,
-                          desired_program_type: r.desired_program_type != null && String(r.desired_program_type).trim() ? String(r.desired_program_type) : null,
-                          desired_program_label: r.desired_program_label != null ? String(r.desired_program_label) : null,
-                          desired_schedule_type: r.desired_schedule_type != null && String(r.desired_schedule_type).trim() ? String(r.desired_schedule_type) : null,
-                          desired_schedule_label: r.desired_schedule_label != null ? String(r.desired_schedule_label) : null,
-                          outcome_status_key: r.outcome_status_key != null && String(r.outcome_status_key).trim() ? String(r.outcome_status_key) : null,
-                          outcome_status_label: r.outcome_status_label != null ? String(r.outcome_status_label) : null,
-                          notes: r.notes != null ? String(r.notes) : null,
-                      };
-                  })
-                : [];
-            return {
-                inquiry_children: <OpportunityInquiryChildrenSection rows={rows.filter((r) => r.id && r.customer_member_id)} canEdit={!!canMutate} />,
-            };
+            if (allowInquiryChildren) {
+                const raw = (d._inquiry_children as unknown[]) ?? [];
+                const rows: InquiryChildRow[] = Array.isArray(raw)
+                    ? raw.map((x) => {
+                          const r = x as Record<string, unknown>;
+                          return {
+                              id: String(r.id ?? ""),
+                              customer_member_id: String(r.customer_member_id ?? ""),
+                              person_id: r.person_id != null && String(r.person_id).trim() ? String(r.person_id) : null,
+                              display_name: r.display_name != null ? String(r.display_name) : null,
+                              dob: r.dob != null && String(r.dob).trim() ? String(r.dob) : null,
+                              age: r.age != null && String(r.age).trim() ? String(r.age) : null,
+                              desired_program_type:
+                                  r.desired_program_type != null && String(r.desired_program_type).trim()
+                                      ? String(r.desired_program_type)
+                                      : null,
+                              desired_program_label: r.desired_program_label != null ? String(r.desired_program_label) : null,
+                              desired_schedule_type:
+                                  r.desired_schedule_type != null && String(r.desired_schedule_type).trim()
+                                      ? String(r.desired_schedule_type)
+                                      : null,
+                              desired_schedule_label: r.desired_schedule_label != null ? String(r.desired_schedule_label) : null,
+                              outcome_status_key:
+                                  r.outcome_status_key != null && String(r.outcome_status_key).trim()
+                                      ? String(r.outcome_status_key)
+                                      : null,
+                              outcome_status_label: r.outcome_status_label != null ? String(r.outcome_status_label) : null,
+                              notes: r.notes != null ? String(r.notes) : null,
+                          };
+                      })
+                    : [];
+                out.inquiry_children = (
+                    <OpportunityInquiryChildrenSection
+                        rows={rows.filter((r) => r.id && r.customer_member_id)}
+                        canEdit={!!canMutate}
+                        onOpenChild={(row) => {
+                            if (row.person_id) openDrawer({ type: "persons", id: row.person_id });
+                            else openDrawer({ type: "customer_members", id: row.customer_member_id });
+                        }}
+                    />
+                );
+            }
+            if (Object.keys(out).length === 0) return {};
+            return out;
         }
         return {};
     }, [
@@ -5032,6 +5067,7 @@ export default function AdminEntityDrawer() {
         isEditing,
         refetch,
         recordChromeOpportunity.layout,
+        getStatusLabel,
     ]);
 
     const configDrivenOverviewSections = useMemo((): EntityDrawerSectionConfig[] => {
@@ -5240,6 +5276,27 @@ export default function AdminEntityDrawer() {
             }
             return null;
         };
+        const mapOpportunityFieldDefToDrawerField = (f: {
+            field_key: string;
+            field_type: string;
+            label: string | null;
+            sort_order: number;
+        }): EntityDrawerFieldConfig => {
+            const fieldKey = f.field_key;
+            const rel = relFieldOverride(f.field_key);
+            let baseHint = hintFromType(f.field_type);
+            if (fieldKey.endsWith("_cents") || f.field_key === "discount_amount" || f.field_key === "display_total_cents") {
+                baseHint = "money";
+            }
+            return {
+                key: fieldKey,
+                label: f.label ?? f.field_key,
+                span: 1 as const,
+                renderHint: (rel?.renderHint ?? baseHint) as EntityDrawerFieldConfig["renderHint"],
+                editable: true,
+                ...(rel?.linkTarget ? { linkTarget: rel.linkTarget } : {}),
+            };
+        };
         const sectionTitleByKey = new Map(
             (
                 (overviewData?._field_sections ?? []) as {
@@ -5370,6 +5427,55 @@ export default function AdminEntityDrawer() {
                 ];
             }
         }
+        if (drawer.type === "opportunities" && overviewData && !(overviewData as { _create?: boolean })._create) {
+            const oppLayoutJson = (recordChromeOpportunity.layout?.config_json ?? null) as RecordLayoutConfigJson | null;
+            if (
+                oppLayoutJson?.inquiry_drawer_mode === "workflow_v1" &&
+                Array.isArray(oppLayoutJson.inquiry_workflow_sections) &&
+                oppLayoutJson.inquiry_workflow_sections.length > 0
+            ) {
+                const hidden = new Set(oppLayoutJson.overview_hidden_sections ?? []);
+                result = result.filter((s) => !hidden.has(s.key));
+                const defByKey = new Map<
+                    string,
+                    { field_key: string; field_type: string; label: string | null; sort_order: number }
+                >();
+                for (const fd of visible) {
+                    const prev = defByKey.get(fd.field_key);
+                    if (!prev || fd.sort_order < prev.sort_order) {
+                        defByKey.set(fd.field_key, fd);
+                    }
+                }
+                const virtuals: EntityDrawerSectionConfig[] = [];
+                for (const ws of oppLayoutJson.inquiry_workflow_sections) {
+                    const fields = (ws.field_keys ?? [])
+                        .map((k) => defByKey.get(k))
+                        .filter((x): x is NonNullable<typeof x> => Boolean(x))
+                        .map((fd) => mapOpportunityFieldDefToDrawerField(fd));
+                    if (!fields.length) continue;
+                    virtuals.push({
+                        key: ws.key,
+                        title: ws.title,
+                        defaultExpanded: ws.default_expanded !== false,
+                        collapsible: true,
+                        gridCols: 2,
+                        fields,
+                        locked: true,
+                    });
+                }
+                const tuitionSection: EntityDrawerSectionConfig = {
+                    key: "inquiry_tuition",
+                    title: "Tuition & pricing",
+                    defaultExpanded: false,
+                    collapsible: true,
+                    gridCols: 1,
+                    fields: [],
+                    locked: true,
+                };
+                const injected = new Set<string>([...virtuals.map((v) => v.key), tuitionSection.key]);
+                result = [...virtuals, tuitionSection, ...result.filter((s) => !injected.has(s.key))];
+            }
+        }
         if (drawer.type === "jobs" && overviewData && !(overviewData as { _create?: boolean })._create) {
             const jobSectionRank: Record<string, number> = {
                 job_details: 0,
@@ -5448,6 +5554,10 @@ export default function AdminEntityDrawer() {
         const oppOrder = recordChromeOpportunity.layout?.config_json?.overview_section_order;
         if (drawer.type === "opportunities" && oppOrder?.length) {
             overviewSections = applyOverviewSectionOrder(overviewSections, oppOrder);
+        }
+        const oppDrawerCfg = (recordChromeOpportunity.layout?.config_json ?? null) as RecordLayoutConfigJson | null;
+        if (drawer.type === "opportunities" && oppDrawerCfg?.suppress_body_status) {
+            overviewSections = overviewSections.filter((s) => s.key !== "__unified_status");
         }
         /** Schedule overview tab: snapshot already shows status/timing — keep property + history only (tabs hold the rest). */
         if (drawer.type === "schedules" && overviewSections.length > 0) {
@@ -5952,7 +6062,7 @@ export default function AdminEntityDrawer() {
             {error && <p className="text-alloy-ember">Error: {error}</p>}
             {data && !loading && dataMatchesDrawer && (
                 <div
-                    className={`${isJobDrawerV2 && drawer.type === "jobs" ? "space-y-3 max-w-none" : showScheduleRecordModalV2 || showOpportunityRecordModalV2 ? "space-y-3 max-w-none" : "space-y-6"}`}
+                    className={`${isJobDrawerV2 && drawer.type === "jobs" ? "space-y-3 max-w-none" : showScheduleRecordModalV2 || showOpportunityRecordModalV2 ? "space-y-3 max-w-none" : "space-y-6"}${showOpportunityRecordModalV2 ? " pb-24 sm:pb-28" : ""}`}
                     data-adminv2-job-drawer-body={isJobDrawerV2 && drawer.type === "jobs" ? "true" : undefined}
                     data-adminv2-schedule-drawer-body={showScheduleRecordModalV2 ? "true" : undefined}
                     data-adminv2-opportunity-drawer-body={showOpportunityRecordModalV2 ? "true" : undefined}
@@ -7922,12 +8032,27 @@ export default function AdminEntityDrawer() {
                                                 const childRel = String(ident?.primary_child?.relationship_label ?? "").trim();
                                                 const inquiryTitle =
                                                     String(ident?.inquiry?.title ?? "").trim() || "";
-                                                const inquiryLines =
-                                                    (ident?.inquiry?.lines ?? []).filter((l) => String(l.value ?? "").trim()).slice(0, 3);
                                                 const stageLabel =
                                                     String(d._lifecycle_stage_title ?? "").trim() ||
                                                     String(d._effective_lifecycle_stage ?? "").trim() ||
                                                     "—";
+                                                const householdId =
+                                                    ident?.household?.id ?? (String(d.customer_id ?? "").trim() || null);
+                                                const childMemberId = String(ident?.primary_child?.id ?? "").trim() || null;
+                                                const desiredStartRaw = d.desired_start_date;
+                                                const tourRaw = d.tour_date;
+                                                const desiredStartFmt =
+                                                    desiredStartRaw != null && String(desiredStartRaw).trim()
+                                                        ? formatDate(String(desiredStartRaw))
+                                                        : null;
+                                                const tourFmt =
+                                                    tourRaw != null && String(tourRaw).trim() ? formatDate(String(tourRaw)) : null;
+                                                const nextStep = d._lifecycle_next_step as { title?: string; lines?: string[] } | undefined;
+                                                const nextStepText = (nextStep?.lines ?? [])
+                                                    .map((l) => String(l).trim())
+                                                    .filter(Boolean)
+                                                    .slice(0, 2)
+                                                    .join(" · ");
                                                 const currentStatus = String(formData.status_key ?? d.status_key ?? "").trim();
                                                 let statusOptions =
                                                     statusDefsForDrawer
@@ -7943,6 +8068,197 @@ export default function AdminEntityDrawer() {
                                                 const tinyLabel = "mb-0.5 text-[8px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45";
                                                 const strong = "text-[13px] font-semibold leading-snug text-alloy-midnight/90";
                                                 const monoLink = "text-[12px] font-semibold text-alloy-blue hover:underline underline-offset-2";
+                                                const statusLabelForBadge = getStatusLabel(currentStatus) ?? currentStatus ?? "—";
+                                                const openPrimaryContactRecord = () => {
+                                                    const pid = String(d.primary_person_id ?? "").trim();
+                                                    const cid = String(d.primary_contact_id ?? "").trim();
+                                                    if (pid) openDrawer({ type: "persons", id: pid });
+                                                    else if (cid) openDrawer({ type: "contacts", id: cid });
+                                                };
+
+                                                if (opportunityInquiryWorkflowDrawer) {
+                                                    return (
+                                                        <div className="space-y-2.5">
+                                                            <div className="min-w-0">
+                                                                <div className={tinyLabel}>Inquiry</div>
+                                                                <div className={`mt-0.5 ${strong} truncate`}>{inquiryTitle || "—"}</div>
+                                                                <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] font-medium text-alloy-midnight/70">
+                                                                    <span className="text-alloy-midnight/55">Family:</span>
+                                                                    {householdId ? (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => openDrawer({ type: "customers", id: householdId })}
+                                                                            className="text-alloy-blue hover:underline truncate max-w-[16rem] text-left font-semibold text-alloy-midnight/85"
+                                                                        >
+                                                                            {household || "Open family"}
+                                                                        </button>
+                                                                    ) : (
+                                                                        <span className="truncate">{household || "—"}</span>
+                                                                    )}
+                                                                    {childName ? (
+                                                                        <>
+                                                                            <span className="text-alloy-midnight/35">·</span>
+                                                                            <span className="text-alloy-midnight/55">Focus child:</span>
+                                                                            {childMemberId ? (
+                                                                                <button
+                                                                                    type="button"
+                                                                                    onClick={() =>
+                                                                                        openDrawer({ type: "customer_members", id: childMemberId })
+                                                                                    }
+                                                                                    className="text-alloy-blue hover:underline truncate max-w-[14rem] text-left font-semibold text-alloy-midnight/85"
+                                                                                >
+                                                                                    {childName}
+                                                                                    {childRel ? (
+                                                                                        <span className="text-alloy-midnight/55"> ({childRel})</span>
+                                                                                    ) : null}
+                                                                                </button>
+                                                                            ) : (
+                                                                                <span className="truncate">
+                                                                                    {childName}
+                                                                                    {childRel ? (
+                                                                                        <span className="text-alloy-midnight/55"> ({childRel})</span>
+                                                                                    ) : null}
+                                                                                </span>
+                                                                            )}
+                                                                        </>
+                                                                    ) : null}
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="grid grid-cols-1 gap-2 lg:grid-cols-3">
+                                                                <div className="min-w-0 rounded-lg border border-alloy-stone/25 bg-white px-2 py-1.5">
+                                                                    <div className={tinyLabel}>Pipeline status</div>
+                                                                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                                                                        <StatusBadge label={statusLabelForBadge} variant={getStatusVariant(currentStatus)} />
+                                                                        <span className="text-[11px] font-medium text-alloy-midnight/50 truncate">{stageLabel}</span>
+                                                                    </div>
+                                                                    <div className="mt-2">
+                                                                        <div className={tinyLabel}>Update status</div>
+                                                                        <select
+                                                                            value={currentStatus}
+                                                                            onChange={(e) =>
+                                                                                setFormData((prev) => ({
+                                                                                    ...prev,
+                                                                                    status_key: e.target.value || null,
+                                                                                }))
+                                                                            }
+                                                                            onBlur={() => {
+                                                                                if (nonJobFormDirty) saveEdit();
+                                                                            }}
+                                                                            disabled={!canMutate}
+                                                                            className="mt-0.5 w-full min-w-0 rounded-md border border-admin-border bg-white px-2 py-1.5 text-[12px] font-semibold text-alloy-forge focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
+                                                                            aria-label="Opportunity status"
+                                                                        >
+                                                                            <option value="">— None —</option>
+                                                                            {statusOptions.map((s) => (
+                                                                                <option key={s.status_key} value={s.status_key}>
+                                                                                    {s.status_label ?? s.status_key}
+                                                                                </option>
+                                                                            ))}
+                                                                        </select>
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="min-w-0 rounded-lg border border-alloy-stone/25 bg-white px-2 py-1.5">
+                                                                    <div className={tinyLabel}>
+                                                                        {commRoleLabel ? `Primary contact (${commRoleLabel})` : "Primary contact"}
+                                                                    </div>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={openPrimaryContactRecord}
+                                                                        className="mt-1 block w-full truncate text-left text-[13px] font-semibold text-alloy-blue hover:underline"
+                                                                    >
+                                                                        {commName || primaryContact || primaryPerson || "—"}
+                                                                    </button>
+                                                                    <div className="mt-1 space-y-0.5 text-[12px] font-medium text-alloy-midnight/70">
+                                                                        <div className="tabular-nums">
+                                                                            {commPhone ? (
+                                                                                <>
+                                                                                    <span className="text-alloy-midnight/50">Phone: </span>
+                                                                                    <a className={monoLink} href={`tel:${commPhone}`}>
+                                                                                        {formatPhoneUS(commPhone)}
+                                                                                    </a>
+                                                                                </>
+                                                                            ) : (
+                                                                                <span className="text-alloy-midnight/50">Phone: —</span>
+                                                                            )}
+                                                                        </div>
+                                                                        <div className="truncate">
+                                                                            {commEmail ? (
+                                                                                <>
+                                                                                    <span className="text-alloy-midnight/50">Email: </span>
+                                                                                    <a className={monoLink} href={`mailto:${commEmail}`}>
+                                                                                        {commEmail}
+                                                                                    </a>
+                                                                                </>
+                                                                            ) : (
+                                                                                <span className="text-alloy-midnight/50">Email: —</span>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="mt-2 flex flex-wrap gap-1.5">
+                                                                        <button
+                                                                            type="button"
+                                                                            disabled
+                                                                            className="rounded-md border border-alloy-stone/30 bg-alloy-stone/10 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/45"
+                                                                            title="Coming soon"
+                                                                        >
+                                                                            Message
+                                                                        </button>
+                                                                        {commPhone ? (
+                                                                            <a
+                                                                                href={`tel:${commPhone}`}
+                                                                                className="rounded-md border border-alloy-stone/30 bg-white px-2 py-1 text-[11px] font-semibold text-alloy-midnight/70 hover:bg-alloy-stone/10"
+                                                                            >
+                                                                                Call
+                                                                            </a>
+                                                                        ) : (
+                                                                            <span className="rounded-md border border-alloy-stone/20 bg-alloy-stone/10 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/40">
+                                                                                Call
+                                                                            </span>
+                                                                        )}
+                                                                        {commEmail ? (
+                                                                            <a
+                                                                                href={`mailto:${commEmail}`}
+                                                                                className="rounded-md border border-alloy-stone/30 bg-white px-2 py-1 text-[11px] font-semibold text-alloy-midnight/70 hover:bg-alloy-stone/10"
+                                                                            >
+                                                                                Email
+                                                                            </a>
+                                                                        ) : (
+                                                                            <span className="rounded-md border border-alloy-stone/20 bg-alloy-stone/10 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/40">
+                                                                                Email
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="min-w-0 rounded-lg border border-alloy-stone/25 bg-white px-2 py-1.5">
+                                                                    <div className={tinyLabel}>Schedule & next step</div>
+                                                                    <div className="mt-1 space-y-1 text-[12px] font-medium text-alloy-midnight/75">
+                                                                        <div className="flex justify-between gap-2">
+                                                                            <span className="text-alloy-midnight/55">Desired start</span>
+                                                                            <span className="tabular-nums">{desiredStartFmt ?? "—"}</span>
+                                                                        </div>
+                                                                        <div className="flex justify-between gap-2">
+                                                                            <span className="text-alloy-midnight/55">Tour</span>
+                                                                            <span className="tabular-nums">{tourFmt ?? "—"}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                    {nextStepText ? (
+                                                                        <p className="mt-2 text-[11px] font-medium leading-snug text-alloy-midnight/65">
+                                                                            <span className="font-semibold text-alloy-midnight/55">
+                                                                                {(nextStep?.title ?? "Next").trim()}:{" "}
+                                                                            </span>
+                                                                            {nextStepText}
+                                                                        </p>
+                                                                    ) : (
+                                                                        <p className="mt-2 text-[11px] text-alloy-midnight/45">No suggested next step.</p>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                }
 
                                                 return (
                                                     <div className="space-y-2">
@@ -8025,8 +8341,8 @@ export default function AdminEntityDrawer() {
                                         </section>
                                     </>
                                 ) : null}
-                                {drawer.type === "opportunities" ? opportunityQuoteSummaryNode : null}
-                                {drawer.type === "opportunities" ? opportunityQuoteIntakeNode : null}
+                                {drawer.type === "opportunities" && !opportunityInquiryWorkflowDrawer ? opportunityQuoteSummaryNode : null}
+                                {drawer.type === "opportunities" && !opportunityInquiryWorkflowDrawer ? opportunityQuoteIntakeNode : null}
                                 <EntityDrawerOverview
                                     entityType={presentationType}
                                     data={entityDrawerOverviewData}

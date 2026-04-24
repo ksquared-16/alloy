@@ -69,9 +69,11 @@ function useDebouncedPatch(ms: number) {
 export default function OpportunityInquiryChildrenSection({
     rows,
     canEdit,
+    onOpenChild,
 }: {
     rows: InquiryChildRow[];
     canEdit: boolean;
+    onOpenChild?: (row: Pick<InquiryChildRow, "person_id" | "customer_member_id" | "display_name">) => void;
 }) {
     if (!rows.length) {
         return (
@@ -206,7 +208,25 @@ export default function OpportunityInquiryChildrenSection({
                             const fallbackOutcome = (r.outcome_status_label ?? "").trim() || (st.outcome_status_key ? (statusLabelByKey.get(st.outcome_status_key) ?? st.outcome_status_key) : "—");
                             return (
                                 <tr key={r.id} className="border-b border-alloy-stone/20 last:border-b-0">
-                                    <td className="px-3 py-2 font-medium text-alloy-midnight/85">{name}</td>
+                                    <td className="px-3 py-2 font-medium text-alloy-midnight/85">
+                                        {onOpenChild && name !== "—" ? (
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    onOpenChild({
+                                                        person_id: r.person_id,
+                                                        customer_member_id: r.customer_member_id,
+                                                        display_name: r.display_name,
+                                                    })
+                                                }
+                                                className="text-left text-alloy-blue hover:underline font-semibold"
+                                            >
+                                                {name}
+                                            </button>
+                                        ) : (
+                                            name
+                                        )}
+                                    </td>
                                     <td className="px-3 py-2 text-alloy-midnight/65 tabular-nums">{dobAge}</td>
                                     <td className="px-3 py-2 text-alloy-midnight/65">
                                         {canEdit ? (
