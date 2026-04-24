@@ -68,6 +68,8 @@ interface EntityDrawerOverviewProps {
   scheduleOverviewRows?: string[][];
   /** Schedule record: full layout config; when `version === 2` and `layout_blocks` set, drives structured chrome. */
   scheduleRecordLayout?: RecordLayoutConfigJson | null;
+  /** Body section chrome (e.g. childcare inquiry workflow drawer). */
+  sectionSurface?: "default" | "premium";
 }
 
 function formatFieldValue(
@@ -506,10 +508,10 @@ export default function EntityDrawerOverview({
   selectOptionsByFieldKey,
   scheduleOverviewRows,
   scheduleRecordLayout,
+  sectionSurface = "default",
 }: EntityDrawerOverviewProps) {
   const config = getEntityPresentation(entityType);
   const baseSections = overviewSectionsOverride ?? config.drawer?.overviewSections ?? [];
-  if (!baseSections.length) return null;
 
   const fieldIndex = flattenOverviewFieldIndex(baseSections);
   const useScheduleLayoutV2 =
@@ -525,11 +527,14 @@ export default function EntityDrawerOverview({
     ? scheduleSectionsAfterRowExtraction(baseSections, rowKeySet, customSectionContent)
     : baseSections;
 
-  const record = data ?? {};
+  const record = useMemo(() => (data ?? {}) as Record<string, unknown>, [data]);
   const scheduleSnapshot = useMemo(
     () => (entityType === "schedules" ? getScheduleSnapshot(record) : null),
     [entityType, record]
   );
+
+  if (!baseSections.length) return null;
+
   const editFormData = formData ?? record;
   const handleFieldChange = onFieldChange ?? (() => {});
   const handleBlur = onBlur ?? (() => {});
@@ -736,8 +741,13 @@ export default function EntityDrawerOverview({
 
   return (
     <div
-      className={`space-y-0 ${entityType === "schedules" ? "pt-2 [&_section[data-entity-section]]:mb-3" : "pt-4"}`}
+      className={`${
+        sectionSurface === "premium"
+          ? "space-y-4 pt-3 [&_section[data-entity-section]]:mb-0"
+          : `space-y-0 ${entityType === "schedules" ? "pt-2 [&_section[data-entity-section]]:mb-3" : "pt-4"}`
+      }`}
       data-entity-drawer-overview
+      data-section-surface={sectionSurface}
     >
       {useScheduleLayoutV2 && layoutBlocks?.length && entityType === "schedules" ? (
         <div className="mb-2 space-y-1.5" data-schedule-layout-version="2">
@@ -874,16 +884,21 @@ export default function EntityDrawerOverview({
 
         const gridInner = section.gridCols === 2 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1";
 
+        const subsectionTitleClass =
+          sectionSurface === "premium"
+            ? "text-[10px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/50 border-b border-alloy-stone/15 pb-1.5 mb-2.5"
+            : "text-xs font-semibold uppercase tracking-wider text-alloy-forge/80 border-b border-admin-border pb-2 mb-3";
+
         const children: ReactNode =
           customContent ??
           (hasSubsections ? (
-            <div className={`${section.gridCols === 2 ? "md:col-span-2" : ""} w-full space-y-6`}>
+            <div className={`${section.gridCols === 2 ? "md:col-span-2" : ""} w-full ${sectionSurface === "premium" ? "space-y-5" : "space-y-6"}`}>
               {section.subsections!.map((sub) => (
                 <div key={sub.title}>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-alloy-forge/80 border-b border-admin-border pb-2 mb-3">
-                    {sub.title}
-                  </p>
-                  <div className={`grid gap-x-6 gap-y-4 ${gridInner}`}>{sub.fields.map((f) => renderOverviewField(f))}</div>
+                  <p className={subsectionTitleClass}>{sub.title}</p>
+                  <div className={`grid ${sectionSurface === "premium" ? "gap-x-4 gap-y-3" : "gap-x-6 gap-y-4"} ${gridInner}`}>
+                    {sub.fields.map((f) => renderOverviewField(f))}
+                  </div>
                 </div>
               ))}
             </div>
@@ -894,7 +909,7 @@ export default function EntityDrawerOverview({
         if (!hasFields && !customContent) return null;
 
         return (
-          <EntityDrawerSection key={section.key} config={section}>
+          <EntityDrawerSection key={section.key} config={section} surface={sectionSurface}>
             {children}
           </EntityDrawerSection>
         );

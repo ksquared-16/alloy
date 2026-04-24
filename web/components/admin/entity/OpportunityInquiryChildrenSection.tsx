@@ -70,18 +70,18 @@ export default function OpportunityInquiryChildrenSection({
     rows,
     canEdit,
     onOpenChild,
+    /** When true, outer EntityDrawerSection already provides premium card chrome — avoid nested heavy cards. */
+    embeddedInPremiumSection = false,
 }: {
     rows: InquiryChildRow[];
     canEdit: boolean;
     onOpenChild?: (row: Pick<InquiryChildRow, "person_id" | "customer_member_id" | "display_name">) => void;
+    embeddedInPremiumSection?: boolean;
 }) {
-    if (!rows.length) {
-        return (
-            <div className="md:col-span-2 rounded-lg border border-alloy-stone/25 bg-white px-3 py-2 text-sm text-alloy-midnight/60">
-                No children added to this inquiry yet.
-            </div>
-        );
-    }
+    const rootCol = embeddedInPremiumSection ? "min-w-0 w-full" : "md:col-span-2";
+    const emptyBox = embeddedInPremiumSection
+        ? "rounded-md border border-dashed border-alloy-stone/25 bg-white/50 px-3 py-2.5 text-sm text-alloy-midnight/60"
+        : "rounded-lg border border-alloy-stone/25 bg-white px-3 py-2 text-sm text-alloy-midnight/60";
 
     const [programItems, setProgramItems] = useState<OptionItem[]>([]);
     const [scheduleItems, setScheduleItems] = useState<OptionItem[]>([]);
@@ -167,11 +167,26 @@ export default function OpportunityInquiryChildrenSection({
         setSavingById((p) => ({ ...p, [id]: false }));
     };
 
+    if (!rows.length) {
+        return (
+            <div className={`${rootCol} ${emptyBox}`}>
+                No children added to this inquiry yet.
+            </div>
+        );
+    }
+
+    const tableWrap = embeddedInPremiumSection
+        ? "overflow-x-auto rounded-md border border-alloy-stone/15 bg-white/75"
+        : "overflow-x-auto rounded-lg border border-alloy-stone/25 bg-white";
+    const theadRow = embeddedInPremiumSection
+        ? "border-b border-alloy-stone/15 bg-alloy-stone/[0.04]"
+        : "border-b border-alloy-stone/25 bg-alloy-stone/10";
+
     return (
-        <div className="md:col-span-2">
-            <div className="overflow-x-auto rounded-lg border border-alloy-stone/25 bg-white">
+        <div className={rootCol}>
+            <div className={tableWrap}>
                 <table className="w-full min-w-[760px] text-left text-sm">
-                    <thead className="border-b border-alloy-stone/25 bg-alloy-stone/10">
+                    <thead className={theadRow}>
                         <tr className="text-[11px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/55">
                             <th className="px-3 py-2">Child</th>
                             <th className="px-3 py-2">DOB / Age</th>

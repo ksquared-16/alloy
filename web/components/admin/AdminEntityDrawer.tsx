@@ -105,6 +105,38 @@ const OPPORTUNITY_DRAWER_HIDE_PRICING_FIELD_KEYS = new Set([
     "discount_validated_at",
 ]);
 
+/** Childcare inquiry workflow v1: fields promoted to the drawer header snapshot — omit from body grids. */
+const OPPORTUNITY_INQUIRY_HEADER_BODY_FIELD_KEYS = new Set([
+    "status_key",
+    "_status_display",
+    "desired_start_date",
+    "tour_date",
+    "program_type",
+    "schedule_type",
+    "primary_contact_id",
+    "primary_person_id",
+    "customer_id",
+    "next_follow_up_at",
+    "follow_up_notes",
+    "tour_notes",
+]);
+
+function isOpportunityTourFollowUpSection(s: EntityDrawerSectionConfig): boolean {
+    const k = (s.key ?? "").toLowerCase().replace(/-/g, "_");
+    const t = (s.title ?? "").toLowerCase();
+    if (k.includes("tour") && k.includes("follow")) return true;
+    if (t.includes("tour") && (t.includes("follow") || t.includes("follow-up"))) return true;
+    if (["follow_up", "followup", "tour_follow_up", "tour_and_follow_up"].includes(k)) return true;
+    return false;
+}
+
+function toDateInputValue(v: unknown): string {
+    if (v == null || v === "") return "";
+    const s = String(v).trim();
+    if (!s) return "";
+    return s.length >= 10 ? s.slice(0, 10) : s;
+}
+
 type FieldDefRow = {
     field_key: string;
     field_type: string;
@@ -825,6 +857,9 @@ export default function AdminEntityDrawer() {
     const [oppDiscountLoading, setOppDiscountLoading] = useState(false);
     const [oppDiscountSelection, setOppDiscountSelection] = useState<string>("");
     const [oppPromoCode, setOppPromoCode] = useState("");
+    /** Childcare inquiry header: option-set labels for opportunity-level program / schedule type selects. */
+    const [oppChildcareProgramSelectOpts, setOppChildcareProgramSelectOpts] = useState<{ value: string; label: string }[]>([]);
+    const [oppChildcareScheduleSelectOpts, setOppChildcareScheduleSelectOpts] = useState<{ value: string; label: string }[]>([]);
     const [oppOverrideOpen, setOppOverrideOpen] = useState(false);
     const [oppOverrideAmount, setOppOverrideAmount] = useState("");
     const [oppOverrideReason, setOppOverrideReason] = useState("");
@@ -3375,6 +3410,12 @@ export default function AdminEntityDrawer() {
                 // Normalize nullable date fields: HTML date inputs emit "" when cleared.
                 // Sending job_date: "" causes Postgres "invalid input syntax for type date".
                 if (typeof payload.job_date === "string" && payload.job_date.trim() === "") payload.job_date = null;
+                for (const dk of ["desired_start_date", "tour_date"] as const) {
+                    const tv = payload[dk];
+                    if (tv === "" || tv === undefined || (typeof tv === "string" && tv.trim() === "")) {
+                        payload[dk] = null;
+                    }
+                }
             }
             if (drawer.type === "jobs") {
                 if ("internal_notes" in payload) {
@@ -3587,6 +3628,39 @@ export default function AdminEntityDrawer() {
     const opportunityInquiryWorkflowDrawer =
         drawer.type === "opportunities" &&
         (recordChromeOpportunity.layout?.config_json as RecordLayoutConfigJson | null)?.inquiry_drawer_mode === "workflow_v1";
+
+    useEffect(() => {
+        const mode = (recordChromeOpportunity.layout?.config_json as RecordLayoutConfigJson | null)?.inquiry_drawer_mode;
+        if (drawer.type !== "opportunities" || mode !== "workflow_v1") {
+            setOppChildcareProgramSelectOpts([]);
+            setOppChildcareScheduleSelectOpts([]);
+            return;
+        }
+        let cancelled = false;
+        (async () => {
+            try {
+                const [progRes, schedRes] = await Promise.all([
+                    fetch("/api/admin/option-sets/childcare_program_type"),
+                    fetch("/api/admin/option-sets/childcare_schedule_type"),
+                ]);
+                const progJson = (await progRes.json().catch(() => ({}))) as { items?: { item_key: string; label?: string | null }[] };
+                const schedJson = (await schedRes.json().catch(() => ({}))) as { items?: { item_key: string; label?: string | null }[] };
+                if (cancelled) return;
+                const pm = (progJson.items ?? []).map((i) => ({ value: i.item_key, label: i.label ?? i.item_key }));
+                const sm = (schedJson.items ?? []).map((i) => ({ value: i.item_key, label: i.label ?? i.item_key }));
+                setOppChildcareProgramSelectOpts(pm);
+                setOppChildcareScheduleSelectOpts(sm);
+            } catch {
+                if (!cancelled) {
+                    setOppChildcareProgramSelectOpts([]);
+                    setOppChildcareScheduleSelectOpts([]);
+                }
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [drawer.type, drawer.id, recordChromeOpportunity.layout?.config_json?.inquiry_drawer_mode]);
     /** Modal shell for /adminV2 jobs — use before data loads so geometry never flashes sidebar-first. */
     const isJobRecordModalTarget =
         drawerShellVariant === "adminV2" &&
@@ -4991,11 +5065,11 @@ export default function AdminEntityDrawer() {
             const out: Record<string, React.ReactNode> = {};
             if (oppCfg?.inquiry_drawer_mode === "workflow_v1") {
                 out.inquiry_tuition = (
-                    <div className="rounded-lg border border-alloy-stone/25 bg-white px-3 py-2.5 text-sm text-alloy-midnight/70">
-                        <p className="text-[13px] font-semibold text-alloy-midnight/85">Tuition & fees</p>
-                        <p className="mt-1 text-xs leading-relaxed text-alloy-midnight/60">
-                            Estimated tuition will tie to enrollment program, schedule, and discounts. Use quote / value fields in{" "}
-                            <span className="font-medium text-alloy-midnight/75">Enrollment needs</span> until billing is wired.
+                    <div className="min-w-0 space-y-1.5 text-sm text-alloy-midnight/70">
+                        <p className="text-[13px] font-semibold text-alloy-midnight/85">Tuition / pricing</p>
+                        <p className="text-xs leading-relaxed text-alloy-midnight/60">
+                            Estimated tuition will tie to program, schedule, and discounts from the inquiry header. Billing integration
+                            is upcoming.
                         </p>
                     </div>
                 );
@@ -5037,6 +5111,7 @@ export default function AdminEntityDrawer() {
                     <OpportunityInquiryChildrenSection
                         rows={rows.filter((r) => r.id && r.customer_member_id)}
                         canEdit={!!canMutate}
+                        embeddedInPremiumSection={oppCfg?.inquiry_drawer_mode === "workflow_v1"}
                         onOpenChild={(row) => {
                             if (row.person_id) openDrawer({ type: "persons", id: row.person_id });
                             else openDrawer({ type: "customer_members", id: row.customer_member_id });
@@ -5083,6 +5158,10 @@ export default function AdminEntityDrawer() {
             // Allow config-driven overview to render inline-editable opportunity status via EntityDrawerOverview.
             // Keep filtering legacy `status` token, but do not remove `status_key`.
             visible = visible.filter((d) => d.field_key !== "status");
+            const oppInqLayout = (recordChromeOpportunity.layout?.config_json ?? null) as RecordLayoutConfigJson | null;
+            if (oppInqLayout?.inquiry_drawer_mode === "workflow_v1") {
+                visible = visible.filter((d) => !OPPORTUNITY_INQUIRY_HEADER_BODY_FIELD_KEYS.has(d.field_key));
+            }
         }
         if (drawer.type === "jobs") {
             visible = visible.filter((d) => d.field_key !== "primary_contact_id");
@@ -5449,6 +5528,7 @@ export default function AdminEntityDrawer() {
                 const virtuals: EntityDrawerSectionConfig[] = [];
                 for (const ws of oppLayoutJson.inquiry_workflow_sections) {
                     const fields = (ws.field_keys ?? [])
+                        .filter((k) => !OPPORTUNITY_INQUIRY_HEADER_BODY_FIELD_KEYS.has(k))
                         .map((k) => defByKey.get(k))
                         .filter((x): x is NonNullable<typeof x> => Boolean(x))
                         .map((fd) => mapOpportunityFieldDefToDrawerField(fd));
@@ -5465,7 +5545,7 @@ export default function AdminEntityDrawer() {
                 }
                 const tuitionSection: EntityDrawerSectionConfig = {
                     key: "inquiry_tuition",
-                    title: "Tuition & pricing",
+                    title: "Tuition / pricing",
                     defaultExpanded: false,
                     collapsible: true,
                     gridCols: 1,
@@ -5556,8 +5636,24 @@ export default function AdminEntityDrawer() {
             overviewSections = applyOverviewSectionOrder(overviewSections, oppOrder);
         }
         const oppDrawerCfg = (recordChromeOpportunity.layout?.config_json ?? null) as RecordLayoutConfigJson | null;
-        if (drawer.type === "opportunities" && oppDrawerCfg?.suppress_body_status) {
+        const oppInquiryWorkflowV1 = drawer.type === "opportunities" && oppDrawerCfg?.inquiry_drawer_mode === "workflow_v1";
+        if (drawer.type === "opportunities" && (oppDrawerCfg?.suppress_body_status || oppInquiryWorkflowV1)) {
             overviewSections = overviewSections.filter((s) => s.key !== "__unified_status");
+        }
+        if (oppInquiryWorkflowV1) {
+            const icIdx = overviewSections.findIndex((s) => s.key === "inquiry_children");
+            if (icIdx > 0) {
+                const ic = overviewSections[icIdx]!;
+                overviewSections = [ic, ...overviewSections.slice(0, icIdx), ...overviewSections.slice(icIdx + 1)];
+            }
+            overviewSections = overviewSections.map((s) =>
+                s.key === "inquiry_children" ? { ...s, defaultExpanded: true } : s
+            );
+            const stripPricingKeys = new Set(["pricing", "tuition", "tuition_pricing", "fee_schedule"]);
+            if (overviewSections.some((s) => s.key === "inquiry_tuition")) {
+                overviewSections = overviewSections.filter((s) => !stripPricingKeys.has(s.key));
+            }
+            overviewSections = overviewSections.filter((s) => !isOpportunityTourFollowUpSection(s));
         }
         /** Schedule overview tab: snapshot already shows status/timing — keep property + history only (tabs hold the rest). */
         if (drawer.type === "schedules" && overviewSections.length > 0) {
@@ -5768,6 +5864,7 @@ export default function AdminEntityDrawer() {
                 </div>
             )
         ) : drawer.type === "opportunities" &&
+          !opportunityInquiryWorkflowDrawer &&
           (opportunityOverviewStatusBadgeLabel(overviewData as Record<string, unknown>) ||
               (overviewData as { status_key?: string }).status_key) ? (
             <StatusBadge
@@ -5818,7 +5915,9 @@ export default function AdminEntityDrawer() {
                 }
                 variant="default"
             />
-        ) : STATUS_ENTITY_TYPES.includes(drawer.type) && (overviewData as { status_key?: string }).status_key ? (
+        ) : STATUS_ENTITY_TYPES.includes(drawer.type) &&
+          !(drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer) &&
+          (overviewData as { status_key?: string }).status_key ? (
             <StatusBadge label={getStatusLabel((overviewData as { status_key: string }).status_key) ?? (overviewData as { status_key: string }).status_key} variant="default" />
         ) : null
     ) : null;
@@ -8039,14 +8138,6 @@ export default function AdminEntityDrawer() {
                                                 const householdId =
                                                     ident?.household?.id ?? (String(d.customer_id ?? "").trim() || null);
                                                 const childMemberId = String(ident?.primary_child?.id ?? "").trim() || null;
-                                                const desiredStartRaw = d.desired_start_date;
-                                                const tourRaw = d.tour_date;
-                                                const desiredStartFmt =
-                                                    desiredStartRaw != null && String(desiredStartRaw).trim()
-                                                        ? formatDate(String(desiredStartRaw))
-                                                        : null;
-                                                const tourFmt =
-                                                    tourRaw != null && String(tourRaw).trim() ? formatDate(String(tourRaw)) : null;
                                                 const nextStep = d._lifecycle_next_step as { title?: string; lines?: string[] } | undefined;
                                                 const nextStepText = (nextStep?.lines ?? [])
                                                     .map((l) => String(l).trim())
@@ -8068,7 +8159,6 @@ export default function AdminEntityDrawer() {
                                                 const tinyLabel = "mb-0.5 text-[8px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45";
                                                 const strong = "text-[13px] font-semibold leading-snug text-alloy-midnight/90";
                                                 const monoLink = "text-[12px] font-semibold text-alloy-blue hover:underline underline-offset-2";
-                                                const statusLabelForBadge = getStatusLabel(currentStatus) ?? currentStatus ?? "—";
                                                 const openPrimaryContactRecord = () => {
                                                     const pid = String(d.primary_person_id ?? "").trim();
                                                     const cid = String(d.primary_contact_id ?? "").trim();
@@ -8077,9 +8167,21 @@ export default function AdminEntityDrawer() {
                                                 };
 
                                                 if (opportunityInquiryWorkflowDrawer) {
+                                                    const snapInput =
+                                                        "mt-0.5 w-full min-w-0 rounded-md border border-admin-border bg-white px-2 py-1.5 text-[12px] font-medium text-alloy-forge focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60";
+                                                    const progVal = String(formData.program_type ?? d.program_type ?? "").trim();
+                                                    const schedVal = String(formData.schedule_type ?? d.schedule_type ?? "").trim();
+                                                    const progOpts = [...oppChildcareProgramSelectOpts];
+                                                    if (progVal && !progOpts.some((o) => o.value === progVal)) {
+                                                        progOpts.unshift({ value: progVal, label: progVal });
+                                                    }
+                                                    const schedOpts = [...oppChildcareScheduleSelectOpts];
+                                                    if (schedVal && !schedOpts.some((o) => o.value === schedVal)) {
+                                                        schedOpts.unshift({ value: schedVal, label: schedVal });
+                                                    }
                                                     return (
                                                         <div className="space-y-2.5">
-                                                            <div className="min-w-0">
+                                                            <div className="min-w-0 rounded-lg border-l-[3px] border-l-[rgb(0,162,131)] border border-alloy-stone/20 bg-white/95 px-2.5 py-2 shadow-sm">
                                                                 <div className={tinyLabel}>Inquiry</div>
                                                                 <div className={`mt-0.5 ${strong} truncate`}>{inquiryTitle || "—"}</div>
                                                                 <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] font-medium text-alloy-midnight/70">
@@ -8125,41 +8227,35 @@ export default function AdminEntityDrawer() {
                                                                 </div>
                                                             </div>
 
-                                                            <div className="grid grid-cols-1 gap-2 lg:grid-cols-3">
-                                                                <div className="min-w-0 rounded-lg border border-alloy-stone/25 bg-white px-2 py-1.5">
-                                                                    <div className={tinyLabel}>Pipeline status</div>
-                                                                    <div className="mt-1 flex flex-wrap items-center gap-2">
-                                                                        <StatusBadge label={statusLabelForBadge} variant={getStatusVariant(currentStatus)} />
-                                                                        <span className="text-[11px] font-medium text-alloy-midnight/50 truncate">{stageLabel}</span>
-                                                                    </div>
-                                                                    <div className="mt-2">
-                                                                        <div className={tinyLabel}>Update status</div>
-                                                                        <select
-                                                                            value={currentStatus}
-                                                                            onChange={(e) =>
-                                                                                setFormData((prev) => ({
-                                                                                    ...prev,
-                                                                                    status_key: e.target.value || null,
-                                                                                }))
-                                                                            }
-                                                                            onBlur={() => {
-                                                                                if (nonJobFormDirty) saveEdit();
-                                                                            }}
-                                                                            disabled={!canMutate}
-                                                                            className="mt-0.5 w-full min-w-0 rounded-md border border-admin-border bg-white px-2 py-1.5 text-[12px] font-semibold text-alloy-forge focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
-                                                                            aria-label="Opportunity status"
-                                                                        >
-                                                                            <option value="">— None —</option>
-                                                                            {statusOptions.map((s) => (
-                                                                                <option key={s.status_key} value={s.status_key}>
-                                                                                    {s.status_label ?? s.status_key}
-                                                                                </option>
-                                                                            ))}
-                                                                        </select>
-                                                                    </div>
+                                                            <div className="grid grid-cols-1 gap-2 xl:grid-cols-4">
+                                                                <div className="min-w-0 rounded-lg border-l-[3px] border-l-[rgb(0,162,131)] border border-alloy-stone/20 bg-white/95 px-2 py-1.5 shadow-sm">
+                                                                    <div className={tinyLabel}>Status</div>
+                                                                    <p className="mt-0.5 text-[11px] font-medium text-alloy-midnight/50 truncate">{stageLabel}</p>
+                                                                    <select
+                                                                        value={currentStatus}
+                                                                        onChange={(e) =>
+                                                                            setFormData((prev) => ({
+                                                                                ...prev,
+                                                                                status_key: e.target.value || null,
+                                                                            }))
+                                                                        }
+                                                                        onBlur={() => {
+                                                                            if (nonJobFormDirty) saveEdit();
+                                                                        }}
+                                                                        disabled={!canMutate}
+                                                                        className={`${snapInput} mt-1 font-semibold`}
+                                                                        aria-label="Opportunity status"
+                                                                    >
+                                                                        <option value="">— None —</option>
+                                                                        {statusOptions.map((s) => (
+                                                                            <option key={s.status_key} value={s.status_key}>
+                                                                                {s.status_label ?? s.status_key}
+                                                                            </option>
+                                                                        ))}
+                                                                    </select>
                                                                 </div>
 
-                                                                <div className="min-w-0 rounded-lg border border-alloy-stone/25 bg-white px-2 py-1.5">
+                                                                <div className="min-w-0 rounded-lg border-l-[3px] border-l-[rgb(0,162,131)] border border-alloy-stone/20 bg-white/95 px-2 py-1.5 shadow-sm">
                                                                     <div className={tinyLabel}>
                                                                         {commRoleLabel ? `Primary contact (${commRoleLabel})` : "Primary contact"}
                                                                     </div>
@@ -8232,27 +8328,105 @@ export default function AdminEntityDrawer() {
                                                                     </div>
                                                                 </div>
 
-                                                                <div className="min-w-0 rounded-lg border border-alloy-stone/25 bg-white px-2 py-1.5">
-                                                                    <div className={tinyLabel}>Schedule & next step</div>
-                                                                    <div className="mt-1 space-y-1 text-[12px] font-medium text-alloy-midnight/75">
-                                                                        <div className="flex justify-between gap-2">
-                                                                            <span className="text-alloy-midnight/55">Desired start</span>
-                                                                            <span className="tabular-nums">{desiredStartFmt ?? "—"}</span>
+                                                                <div className="min-w-0 rounded-lg border-l-[3px] border-l-[rgb(0,162,131)] border border-alloy-stone/20 bg-white/95 px-2 py-1.5 shadow-sm xl:col-span-2">
+                                                                    <div className={tinyLabel}>Enrollment & visits</div>
+                                                                    <div className="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                                                        <div>
+                                                                            <div className={tinyLabel}>Desired start</div>
+                                                                            <input
+                                                                                type="date"
+                                                                                value={toDateInputValue(formData.desired_start_date ?? d.desired_start_date)}
+                                                                                onChange={(e) =>
+                                                                                    setFormData((prev) => ({
+                                                                                        ...prev,
+                                                                                        desired_start_date: e.target.value || null,
+                                                                                    }))
+                                                                                }
+                                                                                onBlur={() => {
+                                                                                    if (nonJobFormDirty) saveEdit();
+                                                                                }}
+                                                                                disabled={!canMutate}
+                                                                                className={snapInput}
+                                                                            />
                                                                         </div>
-                                                                        <div className="flex justify-between gap-2">
-                                                                            <span className="text-alloy-midnight/55">Tour</span>
-                                                                            <span className="tabular-nums">{tourFmt ?? "—"}</span>
+                                                                        <div>
+                                                                            <div className={tinyLabel}>Tour date</div>
+                                                                            <input
+                                                                                type="date"
+                                                                                value={toDateInputValue(formData.tour_date ?? d.tour_date)}
+                                                                                onChange={(e) =>
+                                                                                    setFormData((prev) => ({
+                                                                                        ...prev,
+                                                                                        tour_date: e.target.value || null,
+                                                                                    }))
+                                                                                }
+                                                                                onBlur={() => {
+                                                                                    if (nonJobFormDirty) saveEdit();
+                                                                                }}
+                                                                                disabled={!canMutate}
+                                                                                className={snapInput}
+                                                                            />
+                                                                        </div>
+                                                                        <div>
+                                                                            <div className={tinyLabel}>Program type</div>
+                                                                            <select
+                                                                                value={progVal}
+                                                                                onChange={(e) =>
+                                                                                    setFormData((prev) => ({
+                                                                                        ...prev,
+                                                                                        program_type: e.target.value || null,
+                                                                                    }))
+                                                                                }
+                                                                                onBlur={() => {
+                                                                                    if (nonJobFormDirty) saveEdit();
+                                                                                }}
+                                                                                disabled={!canMutate}
+                                                                                className={snapInput}
+                                                                            >
+                                                                                <option value="">—</option>
+                                                                                {progOpts.map((o) => (
+                                                                                    <option key={o.value} value={o.value}>
+                                                                                        {o.label}
+                                                                                    </option>
+                                                                                ))}
+                                                                            </select>
+                                                                        </div>
+                                                                        <div>
+                                                                            <div className={tinyLabel}>Schedule type</div>
+                                                                            <select
+                                                                                value={schedVal}
+                                                                                onChange={(e) =>
+                                                                                    setFormData((prev) => ({
+                                                                                        ...prev,
+                                                                                        schedule_type: e.target.value || null,
+                                                                                    }))
+                                                                                }
+                                                                                onBlur={() => {
+                                                                                    if (nonJobFormDirty) saveEdit();
+                                                                                }}
+                                                                                disabled={!canMutate}
+                                                                                className={snapInput}
+                                                                            >
+                                                                                <option value="">—</option>
+                                                                                {schedOpts.map((o) => (
+                                                                                    <option key={o.value} value={o.value}>
+                                                                                        {o.label}
+                                                                                    </option>
+                                                                                ))}
+                                                                            </select>
                                                                         </div>
                                                                     </div>
                                                                     {nextStepText ? (
-                                                                        <p className="mt-2 text-[11px] font-medium leading-snug text-alloy-midnight/65">
+                                                                        <p className="mt-2 text-[11px] font-medium leading-snug text-alloy-midnight/65 border-t border-alloy-stone/15 pt-2">
                                                                             <span className="font-semibold text-alloy-midnight/55">
-                                                                                {(nextStep?.title ?? "Next").trim()}:{" "}
+                                                                                {(nextStep?.title ?? "Next step").trim()}:{" "}
                                                                             </span>
                                                                             {nextStepText}
                                                                         </p>
                                                                     ) : (
-                                                                        <p className="mt-2 text-[11px] text-alloy-midnight/45">No suggested next step.</p>
+                                                                        <p className="mt-2 text-[11px] text-alloy-midnight/45 border-t border-alloy-stone/15 pt-2">
+                                                                            No follow-up note from automation.
+                                                                        </p>
                                                                     )}
                                                                 </div>
                                                             </div>
@@ -8367,6 +8541,7 @@ export default function AdminEntityDrawer() {
                                     statusDefs={statusDefsForDrawer}
                                     getStatusLabel={getStatusLabel}
                                     onOpenDrawer={(type, id) => openDrawer({ type: type as AdminDrawerEntityType, id })}
+                                    sectionSurface={opportunityInquiryWorkflowDrawer ? "premium" : "default"}
                                 />
                             </>
                         )
