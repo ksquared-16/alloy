@@ -1,6 +1,6 @@
 "use client";
 
-import { type CSSProperties, type ReactNode, useEffect } from "react";
+import { type CSSProperties, isValidElement, type ReactNode, useEffect } from "react";
 import { neutral, derived, brand, palette } from "@/styles/tokens/colors";
 
 interface DrawerProps {
@@ -75,7 +75,10 @@ export default function Drawer({
 
     if (!isOpen) return null;
 
-    const titleText = typeof title === "string" ? title : title != null ? String(title) : "—";
+    const titleContent: ReactNode =
+        title != null && (typeof title === "string" || typeof title === "number" || isValidElement(title))
+            ? title
+            : "—";
 
     const isV2 = variant === "adminV2";
     const isModal = isV2 && presentation === "modal";
@@ -163,7 +166,7 @@ export default function Drawer({
                         }
                         style={isV2 && !cleaningRecordModalTone ? { color: neutral.textPrimary } : undefined}
                     >
-                        {titleText}
+                        {titleContent}
                     </h2>
                     {headerSubtitle != null && headerSubtitle !== false && (
                         <p
