@@ -57,6 +57,7 @@ import { opportunityOverviewStatusBadgeLabel } from "@/lib/admin/opportunityOver
 import { formatVendorOptionLabel, type AdminVendorSelectOption } from "@/lib/admin/vendorOptionLabel";
 import { mergeUnifiedStatusIntoConfigOverview } from "@/lib/admin/unifiedDrawerStatus";
 import { recordSurfaceContextStyle } from "@/lib/visualContext";
+import OpportunityInquiryChildrenSection, { type InquiryChildRow } from "@/components/admin/entity/OpportunityInquiryChildrenSection";
 import {
     JobDrawerV2TabBar,
     JobDrawerV2SignalsStrip,
@@ -4982,6 +4983,32 @@ export default function AdminEntityDrawer() {
                 job_pricing_breakdown: <JobPricingBreakdown record={jobRec} />,
             };
         }
+        if (drawer.type === "opportunities" && overviewData && !(overviewData as { _create?: boolean })._create) {
+            const order = recordChromeOpportunity.layout?.config_json?.overview_section_order ?? null;
+            const allowInquiryChildren = Array.isArray(order) && order.includes("inquiry_children");
+            if (!allowInquiryChildren) return {};
+            const raw = (d._inquiry_children as unknown[]) ?? [];
+            const rows: InquiryChildRow[] = Array.isArray(raw)
+                ? raw.map((x) => {
+                      const r = x as Record<string, unknown>;
+                      return {
+                          id: String(r.id ?? ""),
+                          customer_member_id: String(r.customer_member_id ?? ""),
+                          person_id: r.person_id != null && String(r.person_id).trim() ? String(r.person_id) : null,
+                          display_name: r.display_name != null ? String(r.display_name) : null,
+                          dob: r.dob != null && String(r.dob).trim() ? String(r.dob) : null,
+                          age: r.age != null && String(r.age).trim() ? String(r.age) : null,
+                          desired_program_label: r.desired_program_label != null ? String(r.desired_program_label) : null,
+                          desired_schedule_label: r.desired_schedule_label != null ? String(r.desired_schedule_label) : null,
+                          outcome_status_label: r.outcome_status_label != null ? String(r.outcome_status_label) : null,
+                          notes: r.notes != null ? String(r.notes) : null,
+                      };
+                  })
+                : [];
+            return {
+                inquiry_children: <OpportunityInquiryChildrenSection rows={rows.filter((r) => r.id && r.customer_member_id)} />,
+            };
+        }
         return {};
     }, [
         drawer.type,
@@ -5001,6 +5028,7 @@ export default function AdminEntityDrawer() {
         statusDefsForDrawer,
         isEditing,
         refetch,
+        recordChromeOpportunity.layout,
     ]);
 
     const configDrivenOverviewSections = useMemo((): EntityDrawerSectionConfig[] => {
@@ -5322,6 +5350,23 @@ export default function AdminEntityDrawer() {
             }
         }
         let result: EntityDrawerSectionConfig[] = [...sectionBlocks, ...append];
+        if (drawer.type === "opportunities" && overviewData && !(overviewData as { _create?: boolean })._create) {
+            const keys2 = new Set(result.map((s) => s.key));
+            if (!keys2.has("inquiry_children")) {
+                result = [
+                    ...result,
+                    {
+                        key: "inquiry_children",
+                        title: "Inquiry children",
+                        defaultExpanded: false,
+                        collapsible: true,
+                        gridCols: 1,
+                        fields: [],
+                        locked: true,
+                    },
+                ];
+            }
+        }
         if (drawer.type === "jobs" && overviewData && !(overviewData as { _create?: boolean })._create) {
             const jobSectionRank: Record<string, number> = {
                 job_details: 0,
