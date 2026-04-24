@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import { useOperationsWorkspaceData } from "@/hooks/useOperationsWorkspaceData";
 import { DepartmentWorkspaceBridgeShell } from "@/components/admin/workspace/DepartmentWorkspaceBridgeShell";
