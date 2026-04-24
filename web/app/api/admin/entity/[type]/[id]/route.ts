@@ -64,6 +64,25 @@ function trimOrNull(v: unknown): string | null {
     return s ? s : null;
 }
 
+function ageFromDobIso(dobIso: string | null | undefined): { years: number; months: number; label: string } | null {
+    const raw = String(dobIso ?? "").trim();
+    if (!raw) return null;
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return null;
+    const now = new Date();
+    let years = now.getFullYear() - d.getFullYear();
+    let months = now.getMonth() - d.getMonth();
+    const dayDelta = now.getDate() - d.getDate();
+    if (dayDelta < 0) months -= 1;
+    if (months < 0) {
+        years -= 1;
+        months += 12;
+    }
+    if (years < 0) return null;
+    const label = years >= 2 ? `${years}y` : years >= 1 ? `${years}y ${months}m` : `${Math.max(0, years * 12 + months)}m`;
+    return { years, months, label };
+}
+
 async function resolveCustomerPersonRole(
     supabase: ReturnType<typeof createAdminClient>,
     params: { orgId: string; customerId: string; personId: string }
@@ -356,6 +375,90 @@ export async function GET(
                     };
                 }
             }
+
+            // -----------------------------------------------------------------
+            // Child links for this inquiry (opportunity_customer_members)
+            // -----------------------------------------------------------------
+            // This is the canonical “which siblings are included in this inquiry?” relationship.
+            // desired_program_type / desired_schedule_type may override opportunity-level defaults (when null, inherit).
+            const oppDefaultProgramType = trimOrNull(out.program_type);
+            const oppDefaultScheduleType = trimOrNull(out.schedule_type);
+            const { data: joinRows } = await supabase
+                .from("opportunity_customer_members")
+                .select("id, customer_member_id, desired_program_type, desired_schedule_type, fit_status, notes, metadata, created_at, updated_at")
+                .eq("org_id", orgId)
+                .eq("opportunity_id", id)
+                .order("created_at", { ascending: true });
+            const jrows = (joinRows ?? []) as {
+                id: string;
+                customer_member_id: string;
+                desired_program_type?: string | null;
+                desired_schedule_type?: string | null;
+                fit_status?: string | null;
+                notes?: string | null;
+                metadata?: Record<string, unknown> | null;
+                created_at?: string | null;
+                updated_at?: string | null;
+            }[];
+            const memberIds = [...new Set(jrows.map((r) => r.customer_member_id).filter(Boolean))] as string[];
+            const { data: memberRows } =
+                memberIds.length > 0
+                    ? await supabase
+                          .from("customer_members")
+                          .select("id, display_name, relationship, dob, person_id, first_name, last_name")
+                          .eq("org_id", orgId)
+                          .in("id", memberIds)
+                    : { data: [] as { id: string }[] };
+            const memList = (memberRows ?? []) as {
+                id: string;
+                display_name: string;
+                relationship?: string | null;
+                dob?: string | null;
+                person_id?: string | null;
+                first_name?: string | null;
+                last_name?: string | null;
+            }[];
+            const memberMap = new Map(memList.map((m) => [m.id, m]));
+            const personIds = [...new Set(memList.map((m) => trimOrNull(m.person_id)).filter(Boolean))] as string[];
+            const { data: personRows } =
+                personIds.length > 0
+                    ? await supabase.from("persons").select("id, first_name, last_name, full_name, date_of_birth").eq("org_id", orgId).in("id", personIds)
+                    : { data: [] as { id: string }[] };
+            const pmap = new Map(
+                ((personRows ?? []) as { id: string; first_name?: string | null; last_name?: string | null; full_name?: string | null; date_of_birth?: string | null }[]).map((p) => [p.id, p])
+            );
+
+            const inquiryChildren = await Promise.all(
+                jrows.map(async (r) => {
+                    const m = memberMap.get(r.customer_member_id) ?? null;
+                    const pid = trimOrNull(m?.person_id);
+                    const p = pid ? (pmap.get(pid) ?? null) : null;
+                    const dob = m?.dob ? String(m.dob) : p?.date_of_birth ? String(p.date_of_birth) : null;
+                    const age = ageFromDobIso(dob);
+                    const desiredProgramType = trimOrNull(r.desired_program_type) ?? oppDefaultProgramType;
+                    const desiredScheduleType = trimOrNull(r.desired_schedule_type) ?? oppDefaultScheduleType;
+                    const desiredProgramLabel = await optionItemLabelForOrg(supabase, orgId, "childcare_program_type", desiredProgramType);
+                    const desiredScheduleLabel = await optionItemLabelForOrg(supabase, orgId, "childcare_schedule_type", desiredScheduleType);
+                    return {
+                        id: r.id,
+                        customer_member_id: r.customer_member_id,
+                        person_id: pid,
+                        display_name: m?.display_name ?? (pid ? personDisplayName(p) : null) ?? r.customer_member_id.slice(0, 8) + "…",
+                        dob,
+                        age: age ? age.label : null,
+                        desired_program_type: desiredProgramType,
+                        desired_program_label: desiredProgramLabel,
+                        desired_schedule_type: desiredScheduleType,
+                        desired_schedule_label: desiredScheduleLabel,
+                        fit_status: trimOrNull(r.fit_status),
+                        notes: trimOrNull(r.notes),
+                        metadata: (r.metadata as Record<string, unknown>) ?? null,
+                        created_at: r.created_at ?? null,
+                        updated_at: r.updated_at ?? null,
+                    };
+                })
+            );
+            out._inquiry_children = inquiryChildren;
 
             // Inquiry summary from configured field_definitions in the "quote" section when present.
             const defs = (out._field_definitions as { field_key: string; label: string | null; section_key: string | null; is_visible_in_drawer?: boolean }[] | undefined) ?? [];
