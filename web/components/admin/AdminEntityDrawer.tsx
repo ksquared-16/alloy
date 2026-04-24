@@ -4998,15 +4998,18 @@ export default function AdminEntityDrawer() {
                           display_name: r.display_name != null ? String(r.display_name) : null,
                           dob: r.dob != null && String(r.dob).trim() ? String(r.dob) : null,
                           age: r.age != null && String(r.age).trim() ? String(r.age) : null,
+                          desired_program_type: r.desired_program_type != null && String(r.desired_program_type).trim() ? String(r.desired_program_type) : null,
                           desired_program_label: r.desired_program_label != null ? String(r.desired_program_label) : null,
+                          desired_schedule_type: r.desired_schedule_type != null && String(r.desired_schedule_type).trim() ? String(r.desired_schedule_type) : null,
                           desired_schedule_label: r.desired_schedule_label != null ? String(r.desired_schedule_label) : null,
+                          outcome_status_key: r.outcome_status_key != null && String(r.outcome_status_key).trim() ? String(r.outcome_status_key) : null,
                           outcome_status_label: r.outcome_status_label != null ? String(r.outcome_status_label) : null,
                           notes: r.notes != null ? String(r.notes) : null,
                       };
                   })
                 : [];
             return {
-                inquiry_children: <OpportunityInquiryChildrenSection rows={rows.filter((r) => r.id && r.customer_member_id)} />,
+                inquiry_children: <OpportunityInquiryChildrenSection rows={rows.filter((r) => r.id && r.customer_member_id)} canEdit={!!canMutate} />,
             };
         }
         return {};
@@ -5358,7 +5361,7 @@ export default function AdminEntityDrawer() {
                     {
                         key: "inquiry_children",
                         title: "Inquiry children",
-                        defaultExpanded: false,
+                        defaultExpanded: true,
                         collapsible: true,
                         gridCols: 1,
                         fields: [],
@@ -7925,18 +7928,6 @@ export default function AdminEntityDrawer() {
                                                     String(d._lifecycle_stage_title ?? "").trim() ||
                                                     String(d._effective_lifecycle_stage ?? "").trim() ||
                                                     "—";
-                                                const meaning = String(d._lifecycle_stage_meaning ?? "").trim();
-                                                const nextStep = d._lifecycle_next_step as { title?: string; lines?: string[] } | undefined;
-
-                                                const quoteTotal = (() => {
-                                                    const disp = String(d._quote_total_display ?? "").trim();
-                                                    if (disp) return disp;
-                                                    const n = d.quote_total;
-                                                    if (n == null || n === "") return "—";
-                                                    const dollars = typeof n === "number" ? n : Number(n);
-                                                    return Number.isFinite(dollars) ? formatMoneyFromDollars(dollars) : "—";
-                                                })();
-
                                                 const currentStatus = String(formData.status_key ?? d.status_key ?? "").trim();
                                                 let statusOptions =
                                                     statusDefsForDrawer
@@ -7951,51 +7942,36 @@ export default function AdminEntityDrawer() {
 
                                                 const tinyLabel = "mb-0.5 text-[8px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45";
                                                 const strong = "text-[13px] font-semibold leading-snug text-alloy-midnight/90";
-                                                const soft = "text-[12px] font-medium leading-snug text-alloy-midnight/80";
-                                                const pill =
-                                                    "inline-flex items-center rounded-md border border-alloy-stone/25 bg-white px-2 py-0.5 text-[11px] font-semibold text-alloy-midnight/80";
                                                 const monoLink = "text-[12px] font-semibold text-alloy-blue hover:underline underline-offset-2";
 
                                                 return (
                                                     <div className="space-y-2">
-                                                        <div className="flex flex-wrap items-start justify-between gap-2">
-                                                            <div className="min-w-0">
-                                                                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45">
-                                                                    Opportunity
-                                                                </div>
-                                                                <div className="mt-0.5 min-w-0 space-y-0.5">
-                                                                    <div className={`${strong} truncate`}>
-                                                                        {childName ? (
-                                                                            <>Child: {childName}{childRel ? <span className="text-alloy-midnight/55"> ({childRel})</span> : null}</>
-                                                                        ) : inquiryTitle ? (
-                                                                            inquiryTitle
-                                                                        ) : (
-                                                                            "—"
-                                                                        )}
-                                                                    </div>
-                                                                    <div className={`${soft} truncate`}>
-                                                                        {[
-                                                                            household ? `Household: ${household}` : null,
-                                                                            primaryPerson ? `${primaryPersonRole || "Primary person"}: ${primaryPerson}` : null,
-                                                                            !primaryPerson && primaryContact ? `Primary contact: ${primaryContact}` : null,
-                                                                        ]
-                                                                            .filter(Boolean)
-                                                                            .join(" · ") || "—"}
-                                                                    </div>
-                                                                    <div className="text-[11px] font-medium text-alloy-midnight/65 truncate">
-                                                                        {inquiryLines.length
-                                                                            ? inquiryLines.map((l) => `${l.label}: ${l.value}`).join(" · ")
-                                                                            : ""}
-                                                                    </div>
-                                                                </div>
+                                                        <div className="min-w-0">
+                                                            <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45">
+                                                                Opportunity
                                                             </div>
-                                                            <div className="shrink-0 flex flex-wrap items-center gap-2 pt-0.5">
-                                                                <span className={pill}>{stageLabel}</span>
-                                                                <span className={`${pill} tabular-nums`}>{quoteTotal}</span>
+                                                            <div className={`mt-0.5 ${strong} truncate`}>
+                                                                {childName ? (
+                                                                    <>
+                                                                        Child: {childName}
+                                                                        {childRel ? <span className="text-alloy-midnight/55"> ({childRel})</span> : null}
+                                                                    </>
+                                                                ) : (
+                                                                    inquiryTitle || "—"
+                                                                )}
+                                                            </div>
+                                                            <div className="mt-0.5 text-[12px] font-medium text-alloy-midnight/70 truncate">
+                                                                {[
+                                                                    household ? `Household: ${household}` : null,
+                                                                    primaryPerson ? `${primaryPersonRole || "Primary person"}: ${primaryPerson}` : null,
+                                                                    !primaryPerson && primaryContact ? `Primary contact: ${primaryContact}` : null,
+                                                                ]
+                                                                    .filter(Boolean)
+                                                                    .join(" · ") || "—"}
                                                             </div>
                                                         </div>
 
-                                                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,0.9fr)]">
+                                                        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                                                             <div className="min-w-0">
                                                                 <div className={tinyLabel}>Status</div>
                                                                 <select
@@ -8042,36 +8018,7 @@ export default function AdminEntityDrawer() {
                                                                     </div>
                                                                 </div>
                                                             </div>
-                                                            <div className="min-w-0">
-                                                                <div className={tinyLabel}>What they’re asking for</div>
-                                                                <div className="rounded-lg border border-alloy-stone/25 bg-white px-2 py-1.5">
-                                                                    <div className="text-[13px] font-semibold text-alloy-midnight/85 truncate">
-                                                                        {inquiryTitle || "—"}
-                                                                    </div>
-                                                                    <div className="mt-0.5 text-[12px] font-medium text-alloy-midnight/65 truncate">
-                                                                        {inquiryLines.length
-                                                                            ? inquiryLines.map((l) => `${l.label}: ${l.value}`).join(" · ")
-                                                                            : "—"}
-                                                                    </div>
-                                                                </div>
-                                                            </div>
                                                         </div>
-
-                                                        {meaning ? (
-                                                            <div className="text-[12px] font-medium text-alloy-midnight/65 leading-snug">
-                                                                {meaning}
-                                                            </div>
-                                                        ) : null}
-                                                        {nextStep?.lines?.length ? (
-                                                            <div className="rounded-lg border border-alloy-stone/20 bg-alloy-stone/10 px-2.5 py-2">
-                                                                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45">
-                                                                    {nextStep.title?.trim() || "Next step"}
-                                                                </div>
-                                                                <div className="mt-1 text-[12px] font-medium text-alloy-midnight/75 leading-snug">
-                                                                    {nextStep.lines.filter((l) => String(l).trim()).slice(0, 2).join(" · ")}
-                                                                </div>
-                                                            </div>
-                                                        ) : null}
                                                     </div>
                                                 );
                                             })()}
