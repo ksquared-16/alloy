@@ -7,6 +7,7 @@ export const ADMIN_STATUS_DEFINITIONS_ENTITY_TYPES = [
     "jobs",
     "customers",
     "opportunities",
+    "opportunity_customer_members",
     "vendors",
     "service_plan_templates",
     "persons",

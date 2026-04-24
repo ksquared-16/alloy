@@ -385,7 +385,7 @@ export async function GET(
             const oppDefaultScheduleType = trimOrNull(out.schedule_type);
             const { data: joinRows } = await supabase
                 .from("opportunity_customer_members")
-                .select("id, customer_member_id, desired_program_type, desired_schedule_type, fit_status, notes, metadata, created_at, updated_at")
+                .select("id, customer_member_id, desired_program_type, desired_schedule_type, outcome_status_key, fit_status, notes, metadata, created_at, updated_at")
                 .eq("org_id", orgId)
                 .eq("opportunity_id", id)
                 .order("created_at", { ascending: true });
@@ -394,6 +394,7 @@ export async function GET(
                 customer_member_id: string;
                 desired_program_type?: string | null;
                 desired_schedule_type?: string | null;
+                outcome_status_key?: string | null;
                 fit_status?: string | null;
                 notes?: string | null;
                 metadata?: Record<string, unknown> | null;
@@ -439,6 +440,10 @@ export async function GET(
                     const desiredScheduleType = trimOrNull(r.desired_schedule_type) ?? oppDefaultScheduleType;
                     const desiredProgramLabel = await optionItemLabelForOrg(supabase, orgId, "childcare_program_type", desiredProgramType);
                     const desiredScheduleLabel = await optionItemLabelForOrg(supabase, orgId, "childcare_schedule_type", desiredScheduleType);
+                    const outcomeStatusKey = trimOrNull(r.outcome_status_key);
+                    const outcomeStatusLabel = outcomeStatusKey
+                        ? await resolveStatusLabel(supabase, orgId, "opportunity_customer_members", outcomeStatusKey)
+                        : null;
                     return {
                         id: r.id,
                         customer_member_id: r.customer_member_id,
@@ -450,6 +455,8 @@ export async function GET(
                         desired_program_label: desiredProgramLabel,
                         desired_schedule_type: desiredScheduleType,
                         desired_schedule_label: desiredScheduleLabel,
+                        outcome_status_key: outcomeStatusKey,
+                        outcome_status_label: outcomeStatusLabel,
                         fit_status: trimOrNull(r.fit_status),
                         notes: trimOrNull(r.notes),
                         metadata: (r.metadata as Record<string, unknown>) ?? null,
