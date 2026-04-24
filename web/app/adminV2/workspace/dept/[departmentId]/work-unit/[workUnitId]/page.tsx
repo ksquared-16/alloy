@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import WorkUnitWorkspace from "@/app/adminV2/components/workspace/shells/WorkUnitWorkspace";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
-import WorkUnitLoading from "./loading";
+import { WorkUnitRouteSkeletonBody, WsRouteLoadingRibbon } from "@/components/admin/workspace/workspaceRouteSkeletons";
 import { executeOpportunityRecordAction } from "@/lib/recordChrome/executeOpportunityRecordAction";
 import type { WorkspaceAction } from "@/lib/ui-v2/workspace-actions";
 import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
@@ -247,21 +247,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
             breadcrumbs={[
                 { href: WORKSPACE_BASE, label: "Workspace" },
                 { href: `${WORKSPACE_BASE}/dept/${departmentId}`, label: deptName },
-                { href: `${WORKSPACE_BASE}/dept/${departmentId}/work-unit/${workUnitId}`, label: wuName },
+                { label: wuName },
             ]}
             title={wuName}
             subtitle=""
         >
             {loading ? (
-                <div className="relative">
-                    <WorkUnitLoading />
-                    <div className="ws-loading-overlay" aria-hidden>
-                        <div className="ws-loading-indicator">
-                            <span className="ws-loading-spinner" />
-                            Loading work unit
-                        </div>
-                    </div>
-                </div>
+                <>
+                    <WsRouteLoadingRibbon label="Loading work unit" />
+                    <WorkUnitRouteSkeletonBody />
+                </>
             ) : model ? (
                 <WorkUnitWorkspace model={model} onAction={onAction} />
             ) : (

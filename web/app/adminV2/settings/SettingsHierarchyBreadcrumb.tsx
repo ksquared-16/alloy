@@ -1,8 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo } from "react";
 import { usePathname } from "next/navigation";
+import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import { ChevronRight } from "lucide-react";
 import { derived, neutral } from "@/styles/tokens/colors";
 
@@ -96,9 +96,16 @@ function crumbsForPath(path: string): Crumb[] {
     return [{ label: "Settings", href: SETTINGS_ROOT }, { label: remainder, href: null }];
 }
 
+function crumbActive(href: string, path: string): boolean {
+    const h = href.replace(/\/$/, "");
+    const p = path.replace(/\/$/, "");
+    return p === h || p.startsWith(`${h}/`);
+}
+
 export default function SettingsHierarchyBreadcrumb() {
     const pathname = usePathname();
-    const crumbs = useMemo(() => crumbsForPath(normalizedPathname(pathname)), [pathname]);
+    const path = useMemo(() => normalizedPathname(pathname), [pathname]);
+    const crumbs = useMemo(() => crumbsForPath(path), [path]);
 
     return (
         <nav
@@ -114,9 +121,13 @@ export default function SettingsHierarchyBreadcrumb() {
                             <ChevronRight className="h-3.5 w-3.5 shrink-0 opacity-50" aria-hidden style={{ color: neutral.textPrimary }} />
                         )}
                         {c.href && !isLast ? (
-                            <Link href={c.href} className="font-medium text-alloy-blue hover:underline">
+                            <AdminV2NavLink
+                                href={c.href}
+                                active={crumbActive(c.href, path)}
+                                className="font-medium text-alloy-blue hover:underline px-0.5 -mx-0.5 rounded"
+                            >
                                 {c.label}
-                            </Link>
+                            </AdminV2NavLink>
                         ) : (
                             <span
                                 className={isLast ? "font-semibold text-alloy-midnight" : "font-medium text-alloy-midnight/75"}

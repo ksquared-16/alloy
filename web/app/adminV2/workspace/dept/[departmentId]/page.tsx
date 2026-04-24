@@ -2,12 +2,14 @@
 
 import { useMemo } from "react";
 import { useParams } from "next/navigation";
-import Link from "next/link";
 import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import { useOperationsWorkspaceData } from "@/hooks/useOperationsWorkspaceData";
 import { DepartmentWorkspaceBridgeShell } from "@/components/admin/workspace/DepartmentWorkspaceBridgeShell";
 import KPIBlock from "@/app/adminV2/components/workspace/blocks/KPIBlock";
-import DeptLoading from "./loading";
+import {
+    DepartmentRouteSkeletonBody,
+    WsRouteLoadingRibbon,
+} from "@/components/admin/workspace/workspaceRouteSkeletons";
 import {
     buildEnrollmentDepartmentActionLinks,
     buildEnrollmentDepartmentKpis,
@@ -49,8 +51,20 @@ export default function AdminV2WorkspaceDepartmentPage() {
     const enrollmentActions = useMemo(() => (isEnrollment ? buildEnrollmentDepartmentActionLinks() : []), [isEnrollment]);
 
     if (loading) {
-        // Single loading contract: identical to route-level `loading.tsx`.
-        return <DeptLoading />;
+        return (
+            <WorkspaceChrome
+                variant="bridge"
+                breadcrumbs={[
+                    { href: WORKSPACE_BASE, label: "Workspace" },
+                    { label: "Loading…" },
+                ]}
+                title={title}
+                subtitle=""
+            >
+                <WsRouteLoadingRibbon label="Loading department" />
+                <DepartmentRouteSkeletonBody />
+            </WorkspaceChrome>
+        );
     }
 
     return (

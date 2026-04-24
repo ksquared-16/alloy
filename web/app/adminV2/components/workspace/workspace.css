@@ -1835,7 +1835,80 @@
   pointer-events: none;
 }
 
+/* Route segment loading — top ribbon (non-blocking; pairs with skeleton body). */
+.ws-route-loading-ribbon {
+  position: relative;
+  height: 3px;
+  width: 100%;
+  max-width: min(100%, 1520px);
+  margin: 0 auto 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--d-border, rgba(39, 63, 82, 0.14)) 55%, transparent);
+}
+
+.ws-route-loading-ribbon__bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 42%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--d-accent, #00a283) 0%, transparent),
+    color-mix(in srgb, var(--d-accent, #00a283) 55%, transparent),
+    color-mix(in srgb, var(--d-accent, #00a283) 0%, transparent)
+  );
+  animation: ws-route-loading-ribbon-slide 1.1s ease-in-out infinite;
+  will-change: transform;
+}
+
+@keyframes ws-route-loading-ribbon-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+
+.adminv2-shimmer-bar {
+  position: relative;
+  overflow: hidden;
+}
+
+.adminv2-shimmer-bar::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, #ffffff 72%, transparent),
+    transparent
+  );
+  animation: adminv2-shimmer-sweep 1.35s ease-in-out infinite;
+}
+
+@keyframes adminv2-shimmer-sweep {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .ws-route-loading-ribbon__bar {
+    animation: none;
+    width: 100%;
+    opacity: 0.55;
+  }
+
+  .adminv2-shimmer-bar::after {
+    animation: none;
+    transform: none;
+    opacity: 0;
+  }
+
   .skeleton-pulse {
     animation: none;
     opacity: 0.78;

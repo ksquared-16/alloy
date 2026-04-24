@@ -1,4 +1,5 @@
 import "@/app/adminV2/components/workspace/workspace.css";
+import { WsRouteLoadingRibbon } from "@/components/admin/workspace/workspaceRouteSkeletons";
 
 function KpiStripSkeleton({ rails = 2 }: { rails?: 1 | 2 }) {
   if (rails === 1) {
@@ -68,6 +69,7 @@ export default function Loading() {
   return (
     <div data-ws-surface="company" className="adminv2-ws-root adminv2-ws-company adminv2-ws-company-v2">
       <div className="adminv2-ws-dept-v2-contain relative">
+        <WsRouteLoadingRibbon label="Loading workspace" />
         <nav className="text-sm text-alloy-midnight/60 flex flex-wrap items-center gap-1 pb-2" aria-label="Breadcrumb">
           <span className="text-alloy-midnight/80 font-medium">Workspace</span>
         </nav>
@@ -129,12 +131,6 @@ export default function Loading() {
               </section>
             </aside>
           </div>
-        </div>
-      </div>
-      <div className="ws-loading-overlay" aria-hidden>
-        <div className="ws-loading-indicator">
-          <span className="ws-loading-spinner" />
-          Loading workspace
         </div>
       </div>
     </div>

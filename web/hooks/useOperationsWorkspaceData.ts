@@ -16,6 +16,7 @@ import type {
 import { isGrowthSliceDepartmentKey } from "@/lib/workspace/growthSliceDepartments";
 import type { OpportunityLifecycleKpiSnapshot } from "@/lib/workspace/computeOpportunityLifecycleKpis";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 
 type Dept = { id: string; name: string | null; key?: string | null };
 type WU = { id: string; name: string | null; department_id: string; key?: string | null };
@@ -195,8 +196,8 @@ export function useOperationsWorkspaceData(departmentId: string) {
                 setError(null);
                 const fetchInit = workspaceDataFetchInit();
                 const [dRes, wRes] = await Promise.all([
-                    fetch("/api/admin/departments", fetchInit),
-                    fetch(`/api/admin/work-units?department_id=${encodeURIComponent(deptId)}`, fetchInit),
+                    dedupeAdminFetch("/api/admin/departments", fetchInit),
+                    dedupeAdminFetch(`/api/admin/work-units?department_id=${encodeURIComponent(deptId)}`, fetchInit),
                 ]);
                 const [dj, wj] = await Promise.all([
                     (async () => (await dRes.json().catch(() => ({}))) as { items?: Dept[]; error?: string })(),

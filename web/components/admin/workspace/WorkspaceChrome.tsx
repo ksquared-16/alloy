@@ -1,7 +1,22 @@
 "use client";
 
 import type { ReactNode } from "react";
-import Link from "next/link";
+import { useMemo } from "react";
+import { usePathname } from "next/navigation";
+import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
+
+export type WorkspaceBreadcrumb = { href?: string | null; label: string };
+
+function normalizedPathname(pathname: string): string {
+    if (pathname === "/admin/v2" || pathname.startsWith("/admin/v2/")) {
+        if (pathname === "/admin/v2") return "/adminV2/workspace";
+        return `/adminV2${pathname.slice("/admin/v2".length)}`;
+    }
+    if (pathname === "/adminv2" || pathname.startsWith("/adminv2/")) {
+        return `/adminV2${pathname.slice("/adminv2".length)}`;
+    }
+    return pathname;
+}
 
 export function WorkspaceChrome({
     breadcrumbs,
@@ -10,13 +25,16 @@ export function WorkspaceChrome({
     variant = "default",
     children,
 }: {
-    breadcrumbs: { href: string; label: string }[];
+    breadcrumbs: WorkspaceBreadcrumb[];
     title: string;
     subtitle?: string;
     /** `bridge`: breadcrumbs only — main title/subtitle live in the Admin V2 department shell. */
     variant?: "default" | "bridge";
     children: ReactNode;
 }) {
+    const pathname = usePathname();
+    const path = useMemo(() => normalizedPathname(pathname), [pathname]);
+
     const outer =
         variant === "bridge"
             ? "w-full max-w-none mx-0 px-0 pt-2 pb-0 space-y-4"
@@ -25,18 +43,39 @@ export function WorkspaceChrome({
     return (
         <div className={outer}>
             <nav className="text-sm text-alloy-midnight/60 flex flex-wrap items-center gap-1 px-1" aria-label="Breadcrumb">
-                {breadcrumbs.map((b, i) => (
-                    <span key={`${b.href}-${i}`} className="flex items-center gap-1">
-                        {i > 0 ? <span className="text-alloy-midnight/40" aria-hidden>/</span> : null}
-                        {i === breadcrumbs.length - 1 ? (
-                            <span className="text-alloy-midnight/80 font-medium">{b.label}</span>
-                        ) : (
-                            <Link href={b.href} className="hover:text-alloy-blue">
-                                {b.label}
-                            </Link>
-                        )}
-                    </span>
-                ))}
+                {breadcrumbs.map((b, i) => {
+                    const isLast = i === breadcrumbs.length - 1;
+                    const href = b.href?.trim() || null;
+                    const showLink = Boolean(href) && !isLast;
+                    const active = Boolean(
+                        href && path.replace(/\/$/, "") === href.replace(/\/$/, "")
+                    );
+
+                    return (
+                        <span key={`${b.label}-${i}`} className="flex items-center gap-1">
+                            {i > 0 ? <span className="text-alloy-midnight/40" aria-hidden>/</span> : null}
+                            {showLink && href ? (
+                                <AdminV2NavLink
+                                    href={href}
+                                    active={active}
+                                    className="px-1 -mx-0.5 py-0.5 text-alloy-midnight/75 hover:text-alloy-blue font-medium"
+                                >
+                                    {b.label}
+                                </AdminV2NavLink>
+                            ) : (
+                                <span
+                                    className={
+                                        isLast
+                                            ? "text-alloy-midnight/90 font-medium px-1 py-0.5 rounded"
+                                            : "text-alloy-midnight/55 px-1 py-0.5"
+                                    }
+                                >
+                                    {b.label}
+                                </span>
+                            )}
+                        </span>
+                    );
+                })}
             </nav>
             {variant !== "bridge" ? (
                 <header>

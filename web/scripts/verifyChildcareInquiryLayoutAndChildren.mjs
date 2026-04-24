@@ -97,7 +97,7 @@ async function main() {
   const oppId = link.opportunity_id;
   const { data: oppRow, error: oppErr } = await sb
     .from("opportunities")
-    .select("id, org_id, customer_id, program_type, schedule_type")
+    .select("id, org_id, customer_id")
     .eq("org_id", orgId)
     .eq("id", oppId)
     .maybeSingle();

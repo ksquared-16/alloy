@@ -37,7 +37,7 @@ const FALLBACK_LABELS: Record<string, string> = {
     jobs: "Jobs",
     schedules: "Schedules",
     customers: "Customers",
-    opportunity_customer_members: "Children on Inquiry",
+    opportunity_customer_members: "Opportunity Sub Statuses",
     vendors: "Vendors",
     service_plan_templates: "Plan templates",
     persons: "People",
