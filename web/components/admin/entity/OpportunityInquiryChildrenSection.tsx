@@ -26,6 +26,33 @@ function normalizeKey(v: string | null | undefined): string {
     return (v ?? "").trim();
 }
 
+/** Matches opportunity inquiry outcome keys/labels that imply waitlist (subtle attention styling). */
+function isWaitlistedInquiryOutcome(outcomeKey: string, outcomeLabel: string): boolean {
+    const k = outcomeKey.toLowerCase();
+    const l = outcomeLabel.toLowerCase();
+    return k.includes("waitlist") || l.includes("waitlist");
+}
+
+function inquiryChildRowAttention(args: {
+    dob: string | null;
+    desiredProgramType: string;
+    desiredScheduleType: string;
+    outcomeKey: string;
+    outcomeLabel: string;
+}): boolean {
+    const { dob, desiredProgramType, desiredScheduleType, outcomeKey, outcomeLabel } = args;
+    const missingDob = !normalizeKey(dob);
+    const missingProgram = !normalizeKey(desiredProgramType);
+    const missingSchedule = !normalizeKey(desiredScheduleType);
+    const waitlisted = isWaitlistedInquiryOutcome(outcomeKey, outcomeLabel);
+    const k = outcomeKey.toLowerCase();
+    const l = outcomeLabel.toLowerCase();
+    const noFitOrBlocked =
+        /no_?fit|no_classroom|blocked|enrollment_?block/i.test(k) ||
+        /no fit|no classroom|blocked enrollment|enrollment block/i.test(l);
+    return waitlisted || missingDob || missingProgram || missingSchedule || noFitOrBlocked;
+}
+
 function useDebouncedPatch(ms: number) {
     const timers = useRef(new Map<string, number>());
     const queue = useRef(new Map<string, Record<string, unknown>>());
@@ -221,8 +248,22 @@ export default function OpportunityInquiryChildrenSection({
                             const fallbackProgram = (r.desired_program_label ?? "").trim() || (st.desired_program_type ? (programLabelByKey.get(st.desired_program_type) ?? st.desired_program_type) : "—");
                             const fallbackSchedule = (r.desired_schedule_label ?? "").trim() || (st.desired_schedule_type ? (scheduleLabelByKey.get(st.desired_schedule_type) ?? st.desired_schedule_type) : "—");
                             const fallbackOutcome = (r.outcome_status_label ?? "").trim() || (st.outcome_status_key ? (statusLabelByKey.get(st.outcome_status_key) ?? st.outcome_status_key) : "—");
+                            const attention = inquiryChildRowAttention({
+                                dob: r.dob,
+                                desiredProgramType: st.desired_program_type || normalizeKey(r.desired_program_type),
+                                desiredScheduleType: st.desired_schedule_type || normalizeKey(r.desired_schedule_type),
+                                outcomeKey: st.outcome_status_key,
+                                outcomeLabel: fallbackOutcome,
+                            });
+                            const rowAttentionClass = attention
+                                ? "bg-amber-50/[0.38] [box-shadow:inset_3px_0_0_0_rgba(245,158,11,0.55)]"
+                                : "";
+                            const outcomeSelectAttention =
+                                attention && isWaitlistedInquiryOutcome(st.outcome_status_key, fallbackOutcome)
+                                    ? "border-amber-300/80 bg-amber-50/50"
+                                    : "";
                             return (
-                                <tr key={r.id} className="border-b border-alloy-stone/20 last:border-b-0">
+                                <tr key={r.id} className={`border-b border-alloy-stone/20 last:border-b-0 ${rowAttentionClass}`}>
                                     <td className="px-3 py-2 font-medium text-alloy-midnight/85">
                                         {onOpenChild && name !== "—" ? (
                                             <button
@@ -301,7 +342,7 @@ export default function OpportunityInquiryChildrenSection({
                                                     setLocal((p) => ({ ...p, [r.id]: { ...st, outcome_status_key: v } }));
                                                     debounced.schedule(r.id, { outcome_status_key: v || null }, savePatch);
                                                 }}
-                                                className="w-full min-w-[150px] rounded-md border border-alloy-stone/40 bg-white px-2 py-1 text-sm disabled:opacity-60"
+                                                className={`w-full min-w-[150px] rounded-md border border-alloy-stone/40 bg-white px-2 py-1 text-sm disabled:opacity-60 ${outcomeSelectAttention}`}
                                                 aria-label={`Outcome for ${name}`}
                                             >
                                                 <option value="">—</option>

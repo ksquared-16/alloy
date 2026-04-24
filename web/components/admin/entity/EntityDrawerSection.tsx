@@ -10,9 +10,9 @@ const SECTION_HEADER_CLASS =
 const PREMIUM_SECTION =
   "rounded-lg border border-alloy-stone/20 border-l-[3px] border-l-[rgb(0,162,131)] bg-white/90 shadow-sm shadow-alloy-stone/10 ring-1 ring-alloy-stone/10 overflow-hidden";
 const PREMIUM_HEADER_BTN =
-  "flex w-full items-center justify-between gap-2 border-b border-alloy-stone/15 bg-alloy-stone/[0.05] px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.1em] text-alloy-forge/80 transition-colors duration-150 hover:bg-alloy-stone/10";
+  "flex w-full items-center justify-between gap-2 border-b border-alloy-stone/15 bg-alloy-stone/[0.05] px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.1em] text-alloy-forge/80 transition-colors duration-150 hover:bg-alloy-stone/10";
 const PREMIUM_HEADER_STATIC =
-  "border-b border-alloy-stone/15 bg-alloy-stone/[0.05] px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-alloy-forge/80";
+  "border-b border-alloy-stone/15 bg-alloy-stone/[0.05] px-3 py-2.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-alloy-forge/80";
 
 interface EntityDrawerSectionProps {
   config: EntityDrawerSectionConfig;
@@ -43,7 +43,7 @@ export default function EntityDrawerSection({
 
   return (
     <section
-      className={`${isPremium ? `mb-0 ${PREMIUM_SECTION}` : "mb-6"} ${className}`}
+      className={`${isPremium ? `mb-0 ${PREMIUM_SECTION} ${isCollapsible && !expanded ? "shadow-md shadow-alloy-stone/15" : ""}` : "mb-6"} ${className}`}
       data-entity-section
       data-section-key={config.key}
       data-section-surface={surface}
@@ -71,7 +71,7 @@ export default function EntityDrawerSection({
         <div
           className={
             isPremium
-              ? `min-w-0 w-full px-3 pb-3 ${isCollapsible ? "pt-2" : "pt-2.5"} grid gap-x-4 gap-y-2.5 ${gridCols} [&>*]:min-w-0`
+              ? `min-w-0 w-full px-3 pb-4 pt-3 grid gap-x-4 gap-y-2.5 ${gridCols} [&>*]:min-w-0`
               : `grid gap-x-4 gap-y-2 ${gridCols} ${isCollapsible ? "mt-2" : "mt-3"}`
           }
         >
