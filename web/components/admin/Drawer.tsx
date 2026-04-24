@@ -1,23 +1,28 @@
 "use client";
 
-import { type CSSProperties, isValidElement, type ReactNode, useEffect } from "react";
-import { neutral, derived, brand, palette } from "@/styles/tokens/colors";
+import React, { type CSSProperties, isValidElement, useEffect } from "react";
+import { neutral, derived, palette } from "@/styles/tokens/colors";
 
 interface DrawerProps {
     isOpen: boolean;
     onClose: () => void;
-    title: ReactNode;
+    title: React.ReactNode;
     /** Optional: muted line under the title (e.g. record number). */
-    headerSubtitle?: ReactNode;
-    children: ReactNode;
+    headerSubtitle?: React.ReactNode;
+    /**
+     * Optional dense record context between subtitle and status/actions (e.g. workflow chips).
+     * Connects header to body without changing entity-specific layout config.
+     */
+    headerRecordContext?: React.ReactNode;
+    children: React.ReactNode;
     /** Optional: status badge shown on second row with actions */
-    statusBadge?: ReactNode;
+    statusBadge?: React.ReactNode;
     /** Optional: primary action buttons on second row (sticky) */
-    headerActions?: ReactNode;
+    headerActions?: React.ReactNode;
     /** Optional: strip below actions row (e.g. workspace-style signal cards). Only body scrolls. */
-    headerSignals?: ReactNode;
+    headerSignals?: React.ReactNode;
     /** Optional: sticky content below title/actions/signals (e.g. tabs). Only body scrolls. */
-    headerExtra?: ReactNode;
+    headerExtra?: React.ReactNode;
     /** Optional: use higher z-index when stacking drawers (e.g. 60/70) */
     zIndexBackdrop?: number;
     zIndexPanel?: number;
@@ -48,6 +53,7 @@ export default function Drawer({
     onClose,
     title,
     headerSubtitle,
+    headerRecordContext,
     statusBadge,
     headerActions,
     headerSignals,
@@ -75,7 +81,7 @@ export default function Drawer({
 
     if (!isOpen) return null;
 
-    const titleContent: ReactNode =
+    const titleContent: React.ReactNode =
         title != null && (typeof title === "string" || typeof title === "number" || isValidElement(title))
             ? title
             : "—";
@@ -188,6 +194,23 @@ export default function Drawer({
                         </p>
                     )}
                 </div>
+                {headerRecordContext != null && headerRecordContext !== false && (
+                    <div
+                        data-adminv2-drawer-header-record-context
+                        className={`border-t border-b px-6 py-2 ${cleaningRecordModalTone ? "border-[var(--vc-drawer-hairline,rgba(39,63,82,0.12))] bg-[color-mix(in_srgb,var(--vc-drawer-header-bg,#fff)_92%,rgba(39,63,82,0.04))]" : "border-alloy-stone/15 bg-alloy-stone/[0.035]"}`}
+                        style={
+                            isV2 && !cleaningRecordModalTone
+                                ? {
+                                      borderTopColor: derived.border,
+                                      borderBottomColor: derived.border,
+                                      backgroundColor: "rgba(246, 248, 252, 0.65)",
+                                  }
+                                : undefined
+                        }
+                    >
+                        {headerRecordContext}
+                    </div>
+                )}
                 <div
                     className={`px-6 flex items-center justify-between ${cleaningRecordModalTone ? "pb-3 gap-3" : "pb-4 gap-4"}`}
                 >
