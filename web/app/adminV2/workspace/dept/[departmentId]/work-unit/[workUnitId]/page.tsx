@@ -138,12 +138,23 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 }
 
                 const isAttention = (wu.key ?? "").trim().toLowerCase() === "needs_attention";
-                // Prefer the new QueueService-backed queues. If not supported yet (501), fall back to legacy opportunity queues.
+                // Prefer the new QueueService-backed queues. Only fall back to legacy opportunity runtime on 501 or
+                // network/runtime failures that indicate the new queue API isn't usable.
                 let usedNewQueueApi = false;
+                let shouldFallbackToLegacy = false;
+                let fallbackReason: string | null = null;
                 try {
                     const route = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?limit=3`;
                     const res = await fetch(route, init);
                     const j = (await res.json().catch(() => ({}))) as { error?: string; queues?: QueueSummary[] };
+                    // Temporary debug logging: helps confirm which path is taken in production.
+                    console.info("[adminV2][work-unit] queue summaries", {
+                        route,
+                        status: res.status,
+                        ok: res.ok,
+                        keys: Array.isArray(j.queues) ? (j.queues ?? []).map((q) => q.key) : [],
+                        error: j.error ?? null,
+                    });
                     if (res.ok) {
                         usedNewQueueApi = true;
                         if (!cancelled) {
@@ -154,12 +165,17 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             setSelectedQueueKey(qs[0]?.key ?? null);
                         }
                     } else if (res.status === 501) {
+                        shouldFallbackToLegacy = true;
+                        fallbackReason = "queue_api_501_not_supported";
                         if (!cancelled) {
                             setQueueSummaries(null);
                             setQueueSummariesError("Queue type not supported yet");
                             setQueueSummariesRoute(route);
                         }
                     } else {
+                        // Do NOT fall back on validation/query errors; show the error so we don't mask issues with legacy buckets.
+                        shouldFallbackToLegacy = false;
+                        fallbackReason = `queue_api_${res.status}`;
                         if (!cancelled) {
                             setQueueSummaries(null);
                             setQueueSummariesError(j.error ?? "Failed to load queues");
@@ -167,15 +183,24 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         }
                     }
                 } catch (e) {
+                    // Network/runtime failures: allow legacy fallback so the surface doesn't go blank.
+                    shouldFallbackToLegacy = true;
+                    fallbackReason = "queue_api_exception";
+                    const route = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues`;
+                    console.warn("[adminV2][work-unit] queue summaries failed", { route, error: e });
                     if (!cancelled) {
                         setQueueSummaries(null);
                         setQueueSummariesError(e instanceof Error ? e.message : "Failed to load queues");
-                        setQueueSummariesRoute(`/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues`);
+                        setQueueSummariesRoute(route);
                     }
                 }
 
                 let oqRuntime: WorkspaceOpportunityQueueRuntime | null = null;
-                if (!usedNewQueueApi) {
+                if (!usedNewQueueApi && shouldFallbackToLegacy) {
+                    console.info("[adminV2][work-unit] falling back to legacy opportunity runtime", {
+                        reason: fallbackReason,
+                        workUnitId,
+                    });
                     try {
                         const oqRes = await fetch(
                             `/api/admin/work-units/${encodeURIComponent(workUnitId)}/${isAttention ? "opportunity-attention-queue" : "opportunity-queue"}`,
@@ -203,6 +228,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         const msg = e instanceof Error ? e.message : "Queue request failed";
                         oqRuntime = { total: 0, error: msg, items: [] };
                     }
+                } else if (!usedNewQueueApi) {
+                    console.info("[adminV2][work-unit] legacy fallback not used", {
+                        reason: fallbackReason,
+                        workUnitId,
+                    });
                 }
 
                 const naList = deptWusRes.ok ? (deptWusJson.items ?? []) : [];
