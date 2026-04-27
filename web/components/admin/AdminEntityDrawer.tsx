@@ -8333,6 +8333,8 @@ export default function AdminEntityDrawer() {
                                                     .filter(Boolean)
                                                     .slice(0, 2)
                                                     .join(" · ");
+                                                const nextStepTitle = String(nextStep?.title ?? "").trim();
+                                                const nextStepIsWhatsNext = nextStepTitle.toLowerCase() === "what’s next" || nextStepTitle.toLowerCase() === "what's next";
                                                 const currentStatus = String(formData.status_key ?? d.status_key ?? "").trim();
                                                 let statusOptions =
                                                     statusDefsForDrawer
@@ -8380,6 +8382,11 @@ export default function AdminEntityDrawer() {
                                                                     </span>
                                                                 ) : null}
                                                             </div>
+                                                            {nextStepIsWhatsNext && nextStepText ? (
+                                                                <div className="mt-2 rounded-lg border border-alloy-stone/10 bg-white/70 px-2 py-1.5 text-[12px] font-medium text-alloy-midnight/70">
+                                                                    <span className="text-alloy-midnight/45">What’s next:</span> {nextStepText}
+                                                                </div>
+                                                            ) : null}
                                                             <div className="mt-2.5 grid grid-cols-1 gap-2.5 lg:grid-cols-2 lg:items-start lg:gap-3">
                                                                 <div className={innerCard}>
                                                                     <div className={tinyLabel}>Family & contact</div>
@@ -8505,7 +8512,7 @@ export default function AdminEntityDrawer() {
                                                                             />
                                                                         </div>
                                                                     </div>
-                                                                    {nextStepText ? (
+                                                                    {nextStepText && !nextStepIsWhatsNext ? (
                                                                         <p className="mt-2 text-[12px] font-medium leading-snug text-alloy-midnight/75">
                                                                             <span className="text-alloy-midnight/50">
                                                                                 {(nextStep?.title ?? "Suggested next step").trim()}:{" "}

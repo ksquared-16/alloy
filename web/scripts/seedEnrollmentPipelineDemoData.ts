@@ -386,6 +386,14 @@ async function main() {
         seed_key: spec.seed_key,
         demo_seed_package: "enrollment_pipeline_demo_v1",
         demo_note: spec.note,
+        child_name: `Child — ${(spec.seed_key.split("_").slice(-1)[0] ?? "A").toUpperCase()}`,
+        program_label: "Toddler (2–3)",
+        desired_start_date: new Date(Date.now() + 1000 * 60 * 60 * 24 * 21).toISOString().slice(0, 10),
+        tour_date:
+          spec.status_key === "tour_scheduled" || spec.status_key === "tour_completed"
+            ? new Date(Date.now() + 1000 * 60 * 60 * 24 * 3).toISOString().slice(0, 10)
+            : null,
+        notes: spec.note,
       },
     };
     if (hasWorkUnitIdCol) payload.work_unit_id = workUnitId;

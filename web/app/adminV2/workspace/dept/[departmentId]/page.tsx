@@ -188,17 +188,47 @@ export default function AdminV2WorkspaceDepartmentPage() {
         };
     }, [departmentId, isEnrollment, primaryEnrollmentWorkUnit?.id]);
 
+    const enrollmentLifecycleQueues = useMemo(() => {
+        if (!primaryEnrollmentWorkUnit || !enrollmentV1Queues) return null;
+        // Exclude overlay queues from pipeline/KPIs.
+        return enrollmentV1Queues.filter((q) => q.key !== "needs_attention");
+    }, [enrollmentV1Queues, primaryEnrollmentWorkUnit]);
+
+    const enrollmentNeedsAttentionQueue = useMemo(() => {
+        if (!primaryEnrollmentWorkUnit || !enrollmentV1Queues) return null;
+        return enrollmentV1Queues.find((q) => q.key === "needs_attention") ?? null;
+    }, [enrollmentV1Queues, primaryEnrollmentWorkUnit]);
+
+    const enrollmentPipelineTotal = useMemo(() => {
+        if (!primaryEnrollmentWorkUnit || !enrollmentV1Queues) return null;
+        // Prefer the configured "all" queue as the single-source-of-truth total (no double-counting).
+        const all = enrollmentV1Queues.find((q) => q.key === "all");
+        if (all) return all.count ?? 0;
+        // Fallback: avoid summing buckets (would double-count); use max lifecycle bucket.
+        const lifecycle = (enrollmentLifecycleQueues ?? []).filter((q) => q.key !== "needs_attention");
+        return lifecycle.reduce((m, q) => Math.max(m, q.count ?? 0), 0);
+    }, [enrollmentLifecycleQueues, enrollmentV1Queues, primaryEnrollmentWorkUnit]);
+
     const enrollmentKpis = useMemo(() => {
-        if (primaryEnrollmentWorkUnit && enrollmentV1Queues) {
-            return enrollmentV1Queues.slice(0, 6).map((q) => ({
+        if (!primaryEnrollmentWorkUnit || !enrollmentV1Queues) return [];
+        const all = enrollmentV1Queues.find((q) => q.key === "all") ?? null;
+        const lifecycle = (enrollmentLifecycleQueues ?? []).filter((q) => q.key !== "all");
+        const rest = [all, ...lifecycle].filter(Boolean).slice(0, 5) as V1QueueSummary[];
+        return [
+            {
+                id: "en_pipeline_total",
+                label: "Pipeline families",
+                value: String(enrollmentPipelineTotal ?? 0),
+                lane: "business" as const,
+            },
+            ...rest.map((q) => ({
                 id: `en_q_${q.key}`,
                 label: q.label,
                 value: String(q.count ?? 0),
                 lane: "business" as const,
-            }));
-        }
-        return [];
-    }, [enrollmentV1Queues, primaryEnrollmentWorkUnit]);
+            })),
+        ];
+    }, [enrollmentLifecycleQueues, enrollmentPipelineTotal, enrollmentV1Queues, primaryEnrollmentWorkUnit]);
 
     const enrollmentPipelineCards = useMemo(
         () =>
@@ -304,32 +334,11 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                 </div>
                             </header>
                             <div className="adminv2-ws-wu-v2" data-ws-surface="work_unit">
-                                {primaryEnrollmentWorkUnit ? (
-                                    <div className="mb-2 rounded-lg border border-admin-border bg-admin-surface-card px-3 py-3">
-                                        <div className="text-sm font-medium text-alloy-forge">
-                                            Configured work unit: {primaryEnrollmentWorkUnit.name ?? "Enrollment pipeline"}
-                                        </div>
-                                        <div className="mt-1 text-xs text-alloy-forge/60">
-                                            This department is configured with a QueueDefinition v1 work unit. Open it to see the
-                                            configured queues.
-                                        </div>
-                                        <div className="mt-2">
-                                            <Link
-                                                href={`${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(
-                                                    primaryEnrollmentWorkUnit.id
-                                                )}`}
-                                                className="adminv2-ws-action-row inline-flex"
-                                            >
-                                                Open enrollment work unit
-                                            </Link>
-                                        </div>
-                                        {enrollmentV1QueuesError ? (
-                                            <div className="mt-2 text-xs text-alloy-ember">
-                                                Failed to load configured queue labels: {enrollmentV1QueuesError}
-                                                {enrollmentV1QueuesRoute ? (
-                                                    <div className="mt-1 text-[11px] opacity-80">Route: {enrollmentV1QueuesRoute}</div>
-                                                ) : null}
-                                            </div>
+                                {enrollmentV1QueuesError ? (
+                                    <div className="mb-2 rounded-lg border border-admin-border bg-admin-surface-card px-3 py-2 text-xs text-alloy-ember">
+                                        Failed to load configured queue labels: {enrollmentV1QueuesError}
+                                        {enrollmentV1QueuesRoute ? (
+                                            <div className="mt-1 text-[11px] opacity-80">Route: {enrollmentV1QueuesRoute}</div>
                                         ) : null}
                                     </div>
                                 ) : null}
@@ -370,14 +379,14 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                             </li>
                                         ))}
                                     </ul>
-                                ) : primaryEnrollmentWorkUnit && enrollmentV1Queues ? (
+                                ) : primaryEnrollmentWorkUnit && enrollmentLifecycleQueues ? (
                                     <ul className="adminv2-ws-queue-list" role="list">
-                                        {enrollmentV1Queues.map((q) => (
+                                        {enrollmentLifecycleQueues.map((q) => (
                                             <li key={q.key} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
                                                 <Link
                                                     href={`${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(
                                                         primaryEnrollmentWorkUnit.id
-                                                    )}`}
+                                                    )}?queue=${encodeURIComponent(q.key)}`}
                                                     className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-standard flex flex-col items-stretch no-underline text-inherit hover:opacity-[0.98]"
                                                     data-ws-wu-urgency="standard"
                                                     data-enrollment-queue-key={q.key}
@@ -484,7 +493,41 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             <div className="adminv2-ws-attention-stack">
                                 <div className="adminv2-ws-attention-card adminv2-ws-attention-card--queue-aligned">
                                     <div className="adminv2-ws-wu-v2" data-ws-surface="work_unit">
-                                        {!isEnrollmentRuntimeReady ? (
+                                        {primaryEnrollmentWorkUnit && enrollmentNeedsAttentionQueue ? (
+                                            <ul className="adminv2-ws-queue-list" role="list">
+                                                <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
+                                                    <Link
+                                                        href={`${WORKSPACE_BASE}/dept/${encodeURIComponent(
+                                                            departmentId
+                                                        )}/work-unit/${encodeURIComponent(primaryEnrollmentWorkUnit.id)}?queue=needs_attention`}
+                                                        className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--attention adminv2-ws-wu-queue-card--tier-warning no-underline text-inherit hover:opacity-[0.98]"
+                                                        data-ws-wu-urgency="warning"
+                                                    >
+                                                        <div className="adminv2-ws-wu-queue-card-compact-text">
+                                                            <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">
+                                                                {enrollmentNeedsAttentionQueue.label}
+                                                            </div>
+                                                            {enrollmentNeedsAttentionQueue.description ? (
+                                                                <div className="adminv2-ws-wu-queue-card-sub adminv2-ws-wu-queue-card-sub--compact">
+                                                                    {enrollmentNeedsAttentionQueue.description}
+                                                                </div>
+                                                            ) : null}
+                                                        </div>
+                                                        <div className="adminv2-ws-wu-queue-card-compact-aside">
+                                                            <span
+                                                                className="adminv2-ws-wu-queue-count-badge adminv2-ws-wu-queue-count-badge--attention"
+                                                                aria-label={`${enrollmentNeedsAttentionQueue.count} items`}
+                                                            >
+                                                                {enrollmentNeedsAttentionQueue.count}
+                                                            </span>
+                                                            <span className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open adminv2-ws-wu-queue-action-chip--attention-open">
+                                                                Open queue
+                                                            </span>
+                                                        </div>
+                                                    </Link>
+                                                </li>
+                                            </ul>
+                                        ) : !isEnrollmentRuntimeReady ? (
                                             <ul className="adminv2-ws-queue-list" role="list" aria-hidden>
                                                 {Array.from({ length: 2 }).map((_, i) => (
                                                     <li key={i} className="adminv2-ws-wu-queue-item-wrap" role="listitem">

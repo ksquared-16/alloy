@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { validateQueueDefinition, type QueueConfig, type QueueDefinitionV1, type QueueFilter } from "@/lib/config/queueDefinitionSchema";
 import type { QueueItemsResult, QueueSummary } from "@/lib/queues/types";
+import { fetchEffectiveStatusDefinitions, displayLabelsFromDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 
 type JobRowPreview = {
     id: string;
@@ -22,6 +23,7 @@ type OpportunityRowPreview = {
     work_unit_id: string | null;
     created_at: string;
     updated_at: string;
+    metadata?: Record<string, unknown> | null;
 };
 
 export class QueueServiceError extends Error {
@@ -242,6 +244,89 @@ function opportunityNeedsAttention(row: OpportunityNeedsAttentionRow, now: Date)
     }
 
     return false;
+}
+
+function opportunityNeedsAttentionReasonLabel(row: OpportunityNeedsAttentionRow, now: Date): string | null {
+    const updatedAt = row.updated_at ? new Date(row.updated_at) : null;
+    if (!updatedAt || Number.isNaN(updatedAt.getTime())) return null;
+    if (row.primary_contact_id == null || row.customer_id == null) return "Missing contact/customer";
+    if (updatedAt.getTime() < subtractDays(now, 3).getTime()) return "Stale > 3 days";
+    const sk = (row.status_key ?? "").trim().toLowerCase();
+    if ((sk === "qualified" || sk === "scheduled" || sk === "booked") && updatedAt.getTime() < subtractDays(now, 2).getTime()) {
+        return "High-value stale > 2 days";
+    }
+    return null;
+}
+
+async function enrichOpportunityRows(params: {
+    supabase: ReturnType<typeof createAdminClient>;
+    orgId: string;
+    rows: OpportunityRowPreview[];
+}): Promise<Array<Record<string, unknown>>> {
+    const { supabase, orgId, rows } = params;
+    if (!rows.length) return [];
+
+    const contactIds = [...new Set(rows.map((r) => r.primary_contact_id).filter((x): x is string => typeof x === "string" && x.trim() !== ""))];
+    const customerIds = [...new Set(rows.map((r) => r.customer_id).filter((x): x is string => typeof x === "string" && x.trim() !== ""))];
+
+    const [contactsRes, customersRes, defs] = await Promise.all([
+        contactIds.length
+            ? supabase
+                  .from("contacts")
+                  .select("id, first_name, last_name, email, phone, customer_id")
+                  .eq("org_id", orgId)
+                  .in("id", contactIds as any)
+            : Promise.resolve({ data: [] as any[], error: null as any }),
+        customerIds.length
+            ? supabase.from("customers").select("id, name").eq("org_id", orgId).in("id", customerIds as any)
+            : Promise.resolve({ data: [] as any[], error: null as any }),
+        fetchEffectiveStatusDefinitions(supabase as any, orgId, "opportunities", { activeOnly: true }),
+    ]);
+
+    const labelByKey = displayLabelsFromDefinitions(defs);
+
+    const contactById = new Map<string, any>();
+    for (const c of (contactsRes as any).data ?? []) contactById.set(String(c.id), c);
+    const customerById = new Map<string, any>();
+    for (const c of (customersRes as any).data ?? []) customerById.set(String(c.id), c);
+
+    return rows.map((r) => {
+        const contact = r.primary_contact_id ? contactById.get(r.primary_contact_id) : null;
+        const customer = r.customer_id ? customerById.get(r.customer_id) : null;
+        const contactName =
+            contact && (String(contact.first_name ?? "").trim() || String(contact.last_name ?? "").trim())
+                ? [contact.first_name, contact.last_name].filter(Boolean).join(" ").trim()
+                : null;
+
+        const md = (r.metadata ?? null) as Record<string, unknown> | null;
+        const child = typeof md?.child_name === "string" ? md.child_name : null;
+        const program = typeof md?.program_label === "string" ? md.program_label : null;
+        const desiredStart = typeof md?.desired_start_date === "string" ? md.desired_start_date : null;
+        const tourDate = typeof md?.tour_date === "string" ? md.tour_date : null;
+        const notes = typeof md?.notes === "string" ? md.notes : typeof md?.demo_note === "string" ? md.demo_note : null;
+
+        const sk = (r.status_key ?? "").trim();
+        const statusDisplay = sk ? labelByKey.get(sk) ?? sk : null;
+
+        const attentionReason = opportunityNeedsAttentionReasonLabel(r, new Date());
+        const tourContext = tourDate ? `Tour: ${tourDate}` : null;
+
+        return {
+            ...r,
+            title: r.name ?? null,
+            _customer_name: customer?.name ?? null,
+            _primary_contact_line: contactName ?? null,
+            _primary_phone: contact?.phone ?? null,
+            _primary_email: contact?.email ?? null,
+            _child_display_name: child,
+            _requested_program: program,
+            _desired_start_date: desiredStart,
+            _tour_context: tourContext,
+            _notes_preview: notes,
+            _status_display: statusDisplay,
+            _attention_reason_label: attentionReason,
+        };
+    });
 }
 
 function buildOpportunityNeedsAttentionOrExpr(now: Date): string {
@@ -510,7 +595,7 @@ export async function getWorkUnitQueueSummaries(params: {
 
         const previewQ0 = supabase
             .from("opportunities")
-            .select("id, name, title, status_key, customer_id, primary_contact_id, work_unit_id, created_at, updated_at")
+            .select("id, name, title, status_key, customer_id, primary_contact_id, work_unit_id, metadata, created_at, updated_at")
             .eq("org_id", params.orgId)
             .eq("work_unit_id", params.workUnitId);
         const previewQ1 = applySortToJobQuery(applyOpsToJobQuery(previewQ0 as never, ops) as never, sort);
@@ -519,9 +604,7 @@ export async function getWorkUnitQueueSummaries(params: {
             throw new QueueServiceError(previewErr.message, 400, "DB_ERROR");
         }
         const previewRows = (previewRaw ?? []) as OpportunityRowPreview[];
-        const preview = previewRows.map((row: OpportunityRowPreview) => {
-            return { ...row, title: row.name ?? null };
-        });
+        const preview = await enrichOpportunityRows({ supabase, orgId: params.orgId, rows: previewRows });
 
         out.push({
             key: q.key,
@@ -612,7 +695,7 @@ export async function getWorkUnitQueueItems(params: {
 
     const itemsBase = supabase
         .from("opportunities")
-        .select("id, name, title, status_key, customer_id, primary_contact_id, work_unit_id, created_at, updated_at")
+        .select("id, name, title, status_key, customer_id, primary_contact_id, work_unit_id, metadata, created_at, updated_at")
         .eq("org_id", params.orgId)
         .eq("work_unit_id", params.workUnitId);
 
@@ -622,9 +705,7 @@ export async function getWorkUnitQueueItems(params: {
         throw new QueueServiceError(error.message, 400, "DB_ERROR");
     }
     const itemRows = (raw ?? []) as OpportunityRowPreview[];
-    const items = itemRows.map((row: OpportunityRowPreview) => {
-        return { ...row, title: row.name ?? null };
-    });
+    const items = await enrichOpportunityRows({ supabase, orgId: params.orgId, rows: itemRows });
 
     return {
         queue: {

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import WorkUnitWorkspace from "@/app/adminV2/components/workspace/shells/WorkUnitWorkspace";
@@ -57,6 +58,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const departmentId = workspaceRouteParam(params.departmentId);
     const workUnitId = workspaceRouteParam(params.workUnitId);
     const searchParams = useSearchParams();
+    const router = useRouter();
     const { openDrawer, drawer } = useAdminDrawer();
     const debugEnabled =
         typeof window !== "undefined" &&
@@ -211,7 +213,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             setQueueSummaries(qs);
                             setQueueSummariesError(null);
                             setQueueSummariesRoute(route);
-                            setSelectedQueueKey(qs[0]?.key ?? null);
+                            // Select queue from URL if present, otherwise default to first queue.
+                            const qFromUrl = (searchParams?.get("queue") ?? "").trim();
+                            const initial =
+                                qFromUrl && qs.some((x) => x.key === qFromUrl)
+                                    ? qFromUrl
+                                    : selectedQueueKey && qs.some((x) => x.key === selectedQueueKey)
+                                      ? selectedQueueKey
+                                      : qs[0]?.key ?? null;
+                            setSelectedQueueKey(initial);
                         }
                     } else if (res.status === 501) {
                         shouldFallbackToLegacy = true;
@@ -316,7 +326,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         return () => {
             cancelled = true;
         };
-    }, [departmentId, workUnitId]);
+    }, [departmentId, searchParams, workUnitId]);
 
     const fetchQueueItems = useCallback(
         async (workUnitId: string, queueKey: string) => {
@@ -373,30 +383,53 @@ export default function AdminV2OpportunityWorkUnitPage() {
             );
         }
         return (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
                 {queueSummaries.map((q) => {
                     const selected = q.key === selectedQueueKey;
+                    const tier =
+                        q.priority === "critical"
+                            ? "critical"
+                            : q.priority === "attention"
+                              ? "attention"
+                              : "standard";
+                    const baseCls =
+                        "rounded-md border px-2.5 py-1.5 text-left transition-colors max-w-[260px]";
+                    const tierCls =
+                        tier === "critical"
+                            ? selected
+                                ? "border-alloy-ember bg-alloy-ember/10"
+                                : "border-alloy-ember/40 bg-admin-surface-card"
+                            : tier === "attention"
+                              ? selected
+                                  ? "border-alloy-honey bg-alloy-honey/10"
+                                  : "border-alloy-honey/40 bg-admin-surface-card"
+                              : selected
+                                ? "border-alloy-pine bg-alloy-stone/20"
+                                : "border-admin-border bg-admin-surface-card";
                     return (
                         <button
                             key={q.key}
                             type="button"
                             onClick={() => {
                                 setSelectedQueueKey(q.key);
+                                if (typeof window !== "undefined") {
+                                    const url = new URL(window.location.href);
+                                    url.searchParams.set("queue", q.key);
+                                    router.replace(url.pathname + "?" + url.searchParams.toString());
+                                }
                                 void fetchQueueItems(workUnitId, q.key);
                             }}
-                            className={`rounded-md border px-3 py-2 text-left ${
-                                selected ? "border-alloy-pine bg-alloy-stone/20" : "border-admin-border bg-admin-surface-card"
-                            }`}
+                            className={`${baseCls} ${tierCls}`}
                             aria-pressed={selected}
                         >
                             <div className="flex items-start justify-between gap-2">
                                 <div className="min-w-0">
-                                    <div className="text-sm font-medium text-alloy-forge truncate">{q.label}</div>
+                                    <div className="text-xs font-semibold text-alloy-forge truncate">{q.label}</div>
                                     {q.description ? (
-                                        <div className="text-xs text-alloy-forge/60 truncate">{q.description}</div>
+                                        <div className="text-[11px] text-alloy-forge/55 truncate">{q.description}</div>
                                     ) : null}
                                 </div>
-                                <div className="text-xs text-alloy-forge/70 font-semibold">{q.count}</div>
+                                <div className="text-[11px] text-alloy-forge/70 font-semibold tabular-nums">{q.count}</div>
                             </div>
                         </button>
                     );
@@ -416,26 +449,86 @@ export default function AdminV2OpportunityWorkUnitPage() {
         const entity = queueItems?.queue.entity_type ?? activeQueue?.entity_type ?? "job";
         const items = (queueItems?.items ?? []) as any[];
 
-        const vmItems = items.map((r) => {
-            const rid = typeof r?.id === "string" ? r.id : null;
-            const id = rid ?? `row_${Math.random().toString(16).slice(2)}`;
-            const title =
-                typeof r?.title === "string" && r.title.trim()
-                    ? r.title.trim()
-                    : rid
-                      ? rid
-                      : "Item";
-            const subtitle =
-                typeof r?.status_key === "string" && r.status_key.trim()
-                    ? `status: ${r.status_key.trim()}`
-                    : undefined;
-            return {
-                id,
-                title,
-                subtitle,
-                quickActions: [],
-            };
-        });
+        const vmItems = items
+            .filter((r) => typeof r?.id === "string" && r.id.trim())
+            .map((r) => {
+                const rid = r.id as string;
+                const title =
+                    typeof r?.name === "string" && r.name.trim()
+                        ? r.name.trim()
+                        : typeof r?.title === "string" && r.title.trim()
+                          ? r.title.trim()
+                          : rid;
+                const statusLabel =
+                    typeof r?._status_display === "string" && r._status_display.trim()
+                        ? r._status_display.trim()
+                        : typeof r?.status_key === "string"
+                          ? r.status_key
+                          : "";
+                const contactName =
+                    typeof r?._primary_contact_line === "string" ? r._primary_contact_line.trim() : "";
+                const phone = typeof r?._primary_phone === "string" ? r._primary_phone.trim() : "";
+                const email = typeof r?._primary_email === "string" ? r._primary_email.trim() : "";
+                const childName = typeof r?._child_display_name === "string" ? r._child_display_name.trim() : "";
+                const program = typeof r?._requested_program === "string" ? r._requested_program.trim() : "";
+                const desiredStart =
+                    typeof r?._desired_start_date === "string" ? r._desired_start_date.trim() : "";
+                const tourCtx = typeof r?._tour_context === "string" ? r._tour_context.trim() : "";
+                const note = typeof r?._notes_preview === "string" ? r._notes_preview.trim() : "";
+                const attentionReason =
+                    typeof r?._attention_reason_label === "string" ? r._attention_reason_label.trim() : "";
+
+                const quickActions: Array<{
+                    id: string;
+                    label: string;
+                    actionId: string;
+                    variant?: "primary" | "secondary" | "danger";
+                    payload?: Record<string, unknown>;
+                }> = [
+                    { id: "open", label: "Open", actionId: "open_record", variant: "primary" },
+                ];
+                if (phone) {
+                    quickActions.push({
+                        id: "call",
+                        label: "Call",
+                        actionId: "crm_tel",
+                        variant: "secondary",
+                        payload: { href: `tel:${phone}` },
+                    });
+                }
+                if (email) {
+                    quickActions.push({
+                        id: "email",
+                        label: "Email",
+                        actionId: "crm_mailto",
+                        variant: "secondary",
+                        payload: { href: `mailto:${email}` },
+                    });
+                }
+
+                return {
+                    id: rid,
+                    title,
+                    subtitle: statusLabel ? `Status: ${statusLabel}` : undefined,
+                    quickActions,
+                    semanticEnrollmentCrm: {
+                        primaryIdentity: title,
+                        childName: childName || null,
+                        stageLabel: null,
+                        statusLabel: statusLabel || null,
+                        nextStep: null,
+                        lastActivity: null,
+                        commercialValue: null,
+                        contactSnippet: [contactName, phone || email].filter(Boolean).join(" · ") || null,
+                        programContext: program || null,
+                        roomContext: null,
+                        ageContext: desiredStart ? `Start: ${desiredStart}` : null,
+                        tourContext: tourCtx || null,
+                        attentionReason: attentionReason || null,
+                        familyNote: note || null,
+                    },
+                };
+            });
 
         const laneTitle = activeQueue?.label ?? workUnit.name ?? "Queue";
         const errorLine = queueItemsError
