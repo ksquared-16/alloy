@@ -4,6 +4,9 @@
  *
  * Idempotency: uses `metadata.seed_key` to avoid duplicates.
  *
+ * Optional: set `ENROLL_DEMO_RESET_OPPORTUNITIES=1` to delete existing `enroll_demo_*` opportunities
+ * in the target org before seeding (full re-seed for that org’s demo keys).
+ *
  * Target (defaults):
  * - org:       7803388d-cdee-4afb-89cf-23a137f39423
  * - work unit: c2b640e5-e09a-4319-9d1b-d752ebb80122
@@ -12,13 +15,30 @@
 import { config as loadEnv } from "dotenv";
 import { resolve } from "path";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getWorkUnitQueueItems, getWorkUnitQueueSummaries } from "@/lib/queues/QueueService";
+import {
+  getWorkUnitQueueItems,
+  getWorkUnitQueueSummaries,
+  OPPORTUNITY_HIGH_VALUE_STALE_STATUS_KEY_SET,
+} from "@/lib/queues/QueueService";
 
 loadEnv({ path: resolve(process.cwd(), ".env.local") });
 loadEnv({ path: resolve(process.cwd(), ".env") });
 
 const DEFAULT_ORG_ID = "7803388d-cdee-4afb-89cf-23a137f39423";
 const DEFAULT_WORK_UNIT_KEY = "enrollment_pipeline";
+
+/** Active childcare opportunity `status_key` values — seed must not use anything else. */
+const CHILD_CARE_ACTIVE_OPPORTUNITY_STATUS_KEYS = new Set([
+  "new_inquiry",
+  "contacted",
+  "tour_scheduled",
+  "tour_completed",
+  "application_in_progress",
+  "ready_to_enroll",
+  "waitlisted",
+  "enrolled",
+  "lost",
+]);
 
 type SeedSpec = {
   seed_key: string;
@@ -95,6 +115,18 @@ async function main() {
     throw new Error(
       `Work unit org mismatch: work_unit.org_id=${wu.org_id} but DEV_QUEUE_ORG_ID=${orgId}. Refusing to seed.`
     );
+  }
+
+  if (process.env.ENROLL_DEMO_RESET_OPPORTUNITIES === "1") {
+    const { data: delRows, error: delErr } = await supabase
+      .from("opportunities")
+      .delete()
+      .eq("org_id", orgId)
+      .like("metadata->>seed_key", "enroll_demo%")
+      .select("id");
+    if (delErr) throw new Error(`ENROLL_DEMO_RESET_OPPORTUNITIES failed: ${delErr.message}`);
+    console.log(`ENROLL_DEMO_RESET_OPPORTUNITIES: removed ${(delRows ?? []).length} enroll_demo_* opportunity row(s).`);
+    console.log("");
   }
 
   const workUnitId = wu.id;
@@ -175,7 +207,7 @@ async function main() {
 
     // Touring + post-tour (4)
     { seed_key: "enroll_demo_tour_scheduled_1", name: "Enrollment — Garcia Family", status_key: "tour_scheduled", created_at_iso: iso(subDays(now, 3.5)), updated_at_iso: iso(subDays(now, 0.3)), customer_mode: "reuse", contact_mode: "reuse", note: "Tour scheduled" },
-    { seed_key: "enroll_demo_tour_scheduled_stale", name: "Enrollment — Nguyen Family", status_key: "tour_scheduled", created_at_iso: iso(subDays(now, 7.0)), updated_at_iso: iso(subDays(now, 2.5)), customer_mode: "reuse", contact_mode: "reuse", note: "Tour scheduled but stale >2d (needs attention: value/readiness via legacy predicate if status is qualified/scheduled/booked; otherwise stale3d/missing only)" },
+    { seed_key: "enroll_demo_tour_scheduled_stale", name: "Enrollment — Nguyen Family", status_key: "tour_scheduled", created_at_iso: iso(subDays(now, 7.0)), updated_at_iso: iso(subDays(now, 2.5)), customer_mode: "reuse", contact_mode: "reuse", note: "Tour scheduled but stale >2d (needs attention: high-value stale)" },
     { seed_key: "enroll_demo_tour_completed_1", name: "Enrollment — Kim Family", status_key: "tour_completed", created_at_iso: iso(subDays(now, 4.2)), updated_at_iso: iso(subDays(now, 1.0)), customer_mode: "reuse", contact_mode: "reuse", note: "Tour completed" },
     { seed_key: "enroll_demo_tour_completed_followup", name: "Enrollment — O’Neil Family", status_key: "tour_completed", created_at_iso: iso(subDays(now, 6.0)), updated_at_iso: iso(subDays(now, 2.2)), customer_mode: "reuse", contact_mode: "reuse", note: "Tour completed; follow-up needed" },
 
@@ -194,11 +226,13 @@ async function main() {
     { seed_key: "enroll_demo_stale_3d", name: "Enrollment — Stale Case", status_key: "contacted", created_at_iso: iso(subDays(now, 9)), updated_at_iso: iso(subDays(now, 3.2)), customer_mode: "reuse", contact_mode: "reuse", note: "Stale >3d (needs attention: stale)" },
     { seed_key: "enroll_demo_missing_contact", name: "Enrollment — Missing Contact", status_key: "new_inquiry", created_at_iso: iso(subDays(now, 0.9)), updated_at_iso: iso(subDays(now, 0.9)), customer_mode: "reuse", contact_mode: "null", note: "Missing primary_contact_id (needs attention: missing data)" },
     { seed_key: "enroll_demo_missing_customer", name: "Enrollment — Missing Customer", status_key: "new_inquiry", created_at_iso: iso(subDays(now, 0.9)), updated_at_iso: iso(subDays(now, 0.9)), customer_mode: "null", contact_mode: "reuse", note: "Missing customer_id (needs attention: missing data)" },
-
-    // Legacy predicate coverage: keep 2 records in qualified/scheduled/booked that are stale >2d
-    { seed_key: "enroll_demo_legacy_qualified_stale2d", name: "Enrollment — Legacy Qualified (stale)", status_key: "qualified", created_at_iso: iso(subDays(now, 5.0)), updated_at_iso: iso(subDays(now, 2.2)), customer_mode: "reuse", contact_mode: "reuse", note: "Legacy status_key qualified, stale >2d (needs attention: value/readiness predicate)" },
-    { seed_key: "enroll_demo_legacy_booked_stale2d", name: "Enrollment — Legacy Booked (stale)", status_key: "booked", created_at_iso: iso(subDays(now, 6.0)), updated_at_iso: iso(subDays(now, 2.3)), customer_mode: "reuse", contact_mode: "reuse", note: "Legacy status_key booked, stale >2d (needs attention: value/readiness predicate)" },
   ];
+
+  for (const s of specs) {
+    if (!CHILD_CARE_ACTIVE_OPPORTUNITY_STATUS_KEYS.has(s.status_key)) {
+      throw new Error(`Invalid childcare status_key in seed spec ${s.seed_key}: ${s.status_key}`);
+    }
+  }
 
   const seedKeys = specs.map((s) => s.seed_key);
 
@@ -508,6 +542,7 @@ async function main() {
     if (hasWorkUnitIdCol && row.work_unit_id == null) patch.work_unit_id = workUnitId;
 
     if (Object.keys(patch).length === 0) continue;
+    (patch as Record<string, unknown>).updated_at = row.updated_at;
     const { error: updErr } = await supabase.from("opportunities").update(patch).eq("id", row.id).eq("org_id", orgId);
     if (!updErr) {
       normalized++;
@@ -516,7 +551,9 @@ async function main() {
       const stale3d = updatedAt != null && !Number.isNaN(updatedAt.getTime()) && updatedAt.getTime() < subDays(now, 3).getTime();
       const stale2d = updatedAt != null && !Number.isNaN(updatedAt.getTime()) && updatedAt.getTime() < subDays(now, 2).getTime();
       const missing = finalRow.primary_contact_id == null || finalRow.customer_id == null;
-      const highValue = ["qualified", "scheduled", "booked"].includes(String(finalRow.status_key ?? "").trim().toLowerCase()) && stale2d;
+      const highValue =
+        OPPORTUNITY_HIGH_VALUE_STALE_STATUS_KEY_SET.has(String(finalRow.status_key ?? "").trim().toLowerCase()) &&
+        stale2d;
       if (stale3d || missing || highValue) {
         const reason = stale3d ? "stale_3d" : missing ? "missing_data" : "high_value_stale_2d";
         normalizedNeedsAttentionExpected.push({ seed_key: seedKey, id: String(finalRow.id), reason });
@@ -536,10 +573,11 @@ async function main() {
 
     const { error: backfillErr } = await supabase
       .from("opportunities")
-      // Important: do NOT touch updated_at here — seed needs stale timestamps to remain stale across reruns.
+      // Important: only rows missing work_unit_id — a broad update bumps `updated_at` via triggers and breaks stale demo rows.
       .update({ work_unit_id: workUnitId })
       .eq("org_id", orgId)
-      .like("metadata->>seed_key", "enroll_demo_%");
+      .like("metadata->>seed_key", "enroll_demo_%")
+      .is("work_unit_id", null);
     if (backfillErr) {
       throw new Error(`backfill work_unit_id failed: ${backfillErr.message}`);
     }
@@ -564,7 +602,7 @@ async function main() {
     .eq("org_id", orgId)
     .in("metadata->>seed_key", seedKeys as any);
 
-  const seeded = (seededRows ?? []) as any[];
+  let seeded = (seededRows ?? []) as any[];
   // Ensure seeded opportunities have the intended link completeness (without changing timestamps).
   // Only the explicit missing-data cases should remain missing.
   const intentionalMissingContact = new Set(["enroll_demo_missing_contact"]);
@@ -584,6 +622,7 @@ async function main() {
       if (ccid && r.primary_contact_id !== ccid) patch.primary_contact_id = ccid;
     }
     if (Object.keys(patch).length === 0) continue;
+    patch.updated_at = r.updated_at;
     const { error } = await supabase.from("opportunities").update(patch).eq("id", r.id).eq("org_id", orgId);
     if (!error) linkPatched++;
   }
@@ -606,15 +645,16 @@ async function main() {
     if (!error) contactCustomerAligned++;
   }
 
-  // Refresh demo metadata on every run so previews stay rich and deterministic (does not touch updated_at).
+  // Refresh demo metadata on every run so previews stay rich and deterministic.
+  // Preserve `updated_at` so needs-attention stale / high-value predicates stay aligned with seed specs.
   let metadataSynced = 0;
   const { data: allSeedOppsForMeta } = await supabase
     .from("opportunities")
-    .select("id, metadata")
+    .select("id, metadata, updated_at")
     .eq("org_id", orgId)
     .in("metadata->>seed_key", seedKeys as any);
   for (const rowAny of allSeedOppsForMeta ?? []) {
-    const row = rowAny as { id?: string; metadata?: Record<string, unknown> | null };
+    const row = rowAny as { id?: string; metadata?: Record<string, unknown> | null; updated_at?: string | null };
     const seedKey = row?.metadata?.seed_key;
     if (typeof seedKey !== "string") continue;
     const spec = specs.find((s) => s.seed_key === seedKey);
@@ -623,25 +663,40 @@ async function main() {
     const person = familyNames[idx % familyNames.length]!;
     const nextMeta = demoMetadataForSeed(spec, person, idx, now);
     const merged = { ...(typeof row.metadata === "object" && row.metadata != null ? row.metadata : {}), ...nextMeta };
-    const { error } = await supabase.from("opportunities").update({ metadata: merged }).eq("id", row.id).eq("org_id", orgId);
+    const payload: Record<string, unknown> = { metadata: merged };
+    if (row.updated_at != null) payload.updated_at = row.updated_at;
+    const { error } = await supabase.from("opportunities").update(payload as any).eq("id", row.id).eq("org_id", orgId);
     if (!error) metadataSynced++;
   }
+
+  const { data: seededRowsAfterMeta } = await supabase
+    .from("opportunities")
+    .select("id, status_key, updated_at, customer_id, primary_contact_id, metadata, name")
+    .eq("org_id", orgId)
+    .in("metadata->>seed_key", seedKeys as any);
+  seeded = (seededRowsAfterMeta ?? []) as any[];
 
   const byStatus = new Map<string, number>();
   const needsAttentionExpected: Array<{ id: string; seed_key: string; reason: string }> = [];
   const needsAttentionExpectedAll: Array<{ id: string; seed_key: string; name: string; status_key: string; reason: string }> = [];
 
   for (const r of seeded) {
-    const sk = String(r.status_key ?? "").trim() || "—";
+    const skNorm = String(r.status_key ?? "").trim().toLowerCase();
+    if (!CHILD_CARE_ACTIVE_OPPORTUNITY_STATUS_KEYS.has(skNorm)) {
+      const seedKey = r?.metadata?.seed_key;
+      throw new Error(
+        `Childcare status verification failed: id=${r.id} seed_key=${typeof seedKey === "string" ? seedKey : "?"} status_key=${skNorm || "(empty)"}`
+      );
+    }
+    const sk = skNorm || "—";
     byStatus.set(sk, (byStatus.get(sk) ?? 0) + 1);
 
     const seedKey = r?.metadata?.seed_key;
     const updatedAt = r.updated_at ? new Date(r.updated_at) : null;
-    const nowMs = now.getTime();
     const stale3d = updatedAt != null && !Number.isNaN(updatedAt.getTime()) && updatedAt.getTime() < subDays(now, 3).getTime();
     const stale2d = updatedAt != null && !Number.isNaN(updatedAt.getTime()) && updatedAt.getTime() < subDays(now, 2).getTime();
     const missing = r.primary_contact_id == null || r.customer_id == null;
-    const highValue = ["qualified", "scheduled", "booked"].includes(String(r.status_key ?? "").trim().toLowerCase()) && stale2d;
+    const highValue = OPPORTUNITY_HIGH_VALUE_STALE_STATUS_KEY_SET.has(skNorm) && stale2d;
     if (stale3d || missing || highValue) {
       const reason = stale3d ? "stale_3d" : missing ? "missing_data" : "high_value_stale_2d";
       if (typeof r.id === "string" && typeof seedKey === "string") {

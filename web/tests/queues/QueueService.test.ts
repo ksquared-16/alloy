@@ -72,6 +72,13 @@ describe("QueueService — pure helpers", () => {
         expect(() => __testing.buildOpportunityPlan(q as any)).toThrowError(QueueServiceError);
     });
 
+    it("needs attention OR expr uses per-status and() branches (no status_key.in list)", () => {
+        const now = new Date("2026-01-10T12:00:00.000Z");
+        const expr = __testing.buildOpportunityNeedsAttentionOrExpr(now);
+        expect(expr).toContain("and(status_key.eq.application_in_progress,");
+        expect(expr).toContain("and(status_key.eq.ready_to_enroll,");
+    });
+
     it("opportunity exception queue returns 501 when evaluated", () => {
         const q = {
             key: "needs_attention",
@@ -124,41 +131,13 @@ describe("QueueService — pure helpers", () => {
         ).toBe(true);
     });
 
-    it("needs attention: qualified/scheduled/booked stale included", () => {
+    it("needs attention: childcare funnel statuses stale >2d included", () => {
         const now = new Date("2026-01-10T12:00:00.000Z");
-        expect(
-            __testing.opportunityNeedsAttention(
-                {
-                    updated_at: "2026-01-08T11:59:59.000Z", // just over 2 days stale
-                    primary_contact_id: "pc1",
-                    customer_id: "c1",
-                    status_key: "qualified",
-                },
-                now
-            )
-        ).toBe(true);
-        expect(
-            __testing.opportunityNeedsAttention(
-                {
-                    updated_at: "2026-01-08T11:59:59.000Z",
-                    primary_contact_id: "pc1",
-                    customer_id: "c1",
-                    status_key: "scheduled",
-                },
-                now
-            )
-        ).toBe(true);
-        expect(
-            __testing.opportunityNeedsAttention(
-                {
-                    updated_at: "2026-01-08T11:59:59.000Z",
-                    primary_contact_id: "pc1",
-                    customer_id: "c1",
-                    status_key: "booked",
-                },
-                now
-            )
-        ).toBe(true);
+        const stale2d = "2026-01-08T11:59:59.000Z"; // just over 2 days before `now`
+        const row = { updated_at: stale2d, primary_contact_id: "pc1", customer_id: "c1" };
+        for (const status_key of ["tour_scheduled", "tour_completed", "application_in_progress", "ready_to_enroll"]) {
+            expect(__testing.opportunityNeedsAttention({ ...row, status_key }, now)).toBe(true);
+        }
     });
 
     it("needs attention: non-matching record excluded", () => {

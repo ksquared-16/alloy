@@ -227,6 +227,25 @@ type OpportunityNeedsAttentionRow = {
     status_key?: string | null;
 };
 
+/** Enrollment funnel stages: stale >2d should surface in needs_attention (replaces legacy qualified/scheduled/booked). */
+export const OPPORTUNITY_HIGH_VALUE_STALE_STATUS_KEY_SET = new Set([
+    "tour_scheduled",
+    "tour_completed",
+    "application_in_progress",
+    "ready_to_enroll",
+]);
+
+/**
+ * PostgREST `or` list must not use `status_key.in.(a,b,c)` — commas inside `in.(...)` break the outer `or` list.
+ * One `and(status_key.eq.<key>,updated_at.lt...)` per status (no quotes on keys; `eq.<token>` treats underscores as part of the value).
+ */
+function buildOpportunityHighValueStaleOrBranches(stale2dIso: string): string {
+    return [...OPPORTUNITY_HIGH_VALUE_STALE_STATUS_KEY_SET]
+        .sort()
+        .map((k) => `and(status_key.eq.${k},updated_at.lt.${stale2dIso})`)
+        .join(",");
+}
+
 function opportunityNeedsAttention(row: OpportunityNeedsAttentionRow, now: Date): boolean {
     const updatedAt = row.updated_at ? new Date(row.updated_at) : null;
     if (!updatedAt || Number.isNaN(updatedAt.getTime())) return false;
@@ -237,9 +256,9 @@ function opportunityNeedsAttention(row: OpportunityNeedsAttentionRow, now: Date)
     // 2) missing data: primary_contact_id IS NULL OR customer_id IS NULL
     if (row.primary_contact_id == null || row.customer_id == null) return true;
 
-    // 3) value/readiness: status_key in ('qualified','scheduled','booked') AND updated_at < now - 2 days
+    // 3) value/readiness: active funnel status AND updated_at < now - 2 days
     const sk = (row.status_key ?? "").trim().toLowerCase();
-    if ((sk === "qualified" || sk === "scheduled" || sk === "booked") && updatedAt.getTime() < subtractDays(now, 2).getTime()) {
+    if (OPPORTUNITY_HIGH_VALUE_STALE_STATUS_KEY_SET.has(sk) && updatedAt.getTime() < subtractDays(now, 2).getTime()) {
         return true;
     }
 
@@ -252,7 +271,7 @@ function opportunityNeedsAttentionReasonLabel(row: OpportunityNeedsAttentionRow,
     if (row.primary_contact_id == null || row.customer_id == null) return "Missing contact/customer";
     if (updatedAt.getTime() < subtractDays(now, 3).getTime()) return "Stale > 3 days";
     const sk = (row.status_key ?? "").trim().toLowerCase();
-    if ((sk === "qualified" || sk === "scheduled" || sk === "booked") && updatedAt.getTime() < subtractDays(now, 2).getTime()) {
+    if (OPPORTUNITY_HIGH_VALUE_STALE_STATUS_KEY_SET.has(sk) && updatedAt.getTime() < subtractDays(now, 2).getTime()) {
         return "High-value stale > 2 days";
     }
     return null;
@@ -337,15 +356,57 @@ async function enrichOpportunityRows(params: {
 function buildOpportunityNeedsAttentionOrExpr(now: Date): string {
     const stale3d = toIso(subtractDays(now, 3));
     const stale2d = toIso(subtractDays(now, 2));
-    // PostgREST `or` grammar:
-    // - "a.eq.1,b.is.null,and(x.eq.1,y.lt.2)"
-    // This implements: stale OR missing customer OR missing contact OR (high-value status AND stale2d).
+    // PostgREST `or` grammar (used by tests / future SQL); enrollment `needs_attention` queue is evaluated in-memory instead.
     return [
         `updated_at.lt.${stale3d}`,
         "primary_contact_id.is.null",
         "customer_id.is.null",
-        `and(status_key.in.(qualified,scheduled,booked),updated_at.lt.${stale2d})`,
+        buildOpportunityHighValueStaleOrBranches(stale2d),
     ].join(",");
+}
+
+/** Cap for in-memory needs_attention evaluation (avoids fragile nested `or`/`and` PostgREST URL parsing). */
+const NEEDS_ATTENTION_OPPORTUNITY_FETCH_CAP = 5000;
+
+function sortOpportunityRowsByPlan(rows: OpportunityRowPreview[], sort: OpportunitySortPlan[]): OpportunityRowPreview[] {
+    if (!rows.length) return rows;
+    const plans = sort.length ? sort : [{ column: "updated_at", ascending: true }];
+    return [...rows].sort((a, b) => {
+        for (const p of plans) {
+            const av = (a as Record<string, unknown>)[p.column];
+            const bv = (b as Record<string, unknown>)[p.column];
+            const as = av == null ? "" : String(av);
+            const bs = bv == null ? "" : String(bv);
+            if (as < bs) return p.ascending ? -1 : 1;
+            if (as > bs) return p.ascending ? 1 : -1;
+        }
+        return 0;
+    });
+}
+
+async function loadOpportunityNeedsAttentionRows(params: {
+    supabase: ReturnType<typeof createAdminClient>;
+    orgId: string;
+    workUnitId: string;
+    sort: OpportunitySortPlan[];
+    now: Date;
+}): Promise<OpportunityRowPreview[]> {
+    let q = params.supabase
+        .from("opportunities")
+        .select("id, name, title, status_key, customer_id, primary_contact_id, work_unit_id, metadata, created_at, updated_at")
+        .eq("org_id", params.orgId)
+        .eq("work_unit_id", params.workUnitId) as any;
+    const plans = params.sort.length ? params.sort : [{ column: "updated_at", ascending: true }];
+    for (const p of plans) {
+        q = q.order(p.column, { ascending: p.ascending });
+    }
+    const { data, error } = await q.limit(NEEDS_ATTENTION_OPPORTUNITY_FETCH_CAP);
+    if (error) {
+        throw new QueueServiceError(error.message, 400, "DB_ERROR");
+    }
+    const rows = (data ?? []) as OpportunityRowPreview[];
+    const filtered = rows.filter((r) => opportunityNeedsAttention(r, params.now));
+    return sortOpportunityRowsByPlan(filtered, params.sort);
 }
 
 function opportunityFilterToOps(f: QueueFilter, now: Date): OpportunityQueryPlanOp[] {
@@ -586,6 +647,30 @@ export async function getWorkUnitQueueSummaries(params: {
             throw e;
         }
 
+        if (q.key === "needs_attention") {
+            const now = new Date();
+            const matched = await loadOpportunityNeedsAttentionRows({
+                supabase,
+                orgId: params.orgId,
+                workUnitId: params.workUnitId,
+                sort,
+                now,
+            });
+            const previewRows = matched.slice(0, previewLimit);
+            const preview = await enrichOpportunityRows({ supabase, orgId: params.orgId, rows: previewRows });
+            out.push({
+                key: q.key,
+                label: q.label,
+                description: q.description,
+                entity_type: def.entity_type,
+                priority: q.priority ?? "standard",
+                display: q.display ?? "list",
+                count: matched.length,
+                preview: preview as unknown[],
+            });
+            continue;
+        }
+
         const base = supabase
             .from("opportunities")
             .select("id", { count: "exact", head: true })
@@ -686,6 +771,33 @@ export async function getWorkUnitQueueItems(params: {
 
     // opportunity
     const { ops, sort } = buildOpportunityPlan(q);
+
+    if (params.queueKey === "needs_attention") {
+        const now = new Date();
+        const matched = await loadOpportunityNeedsAttentionRows({
+            supabase,
+            orgId: params.orgId,
+            workUnitId: params.workUnitId,
+            sort,
+            now,
+        });
+        const slice = matched.slice(effectiveOffset, effectiveOffset + effectiveLimit);
+        const items = await enrichOpportunityRows({ supabase, orgId: params.orgId, rows: slice });
+        return {
+            queue: {
+                key: q.key,
+                label: q.label,
+                description: q.description,
+                entity_type: def.entity_type,
+                priority: q.priority ?? "standard",
+                display: q.display ?? "list",
+            },
+            items: items as unknown[],
+            total: matched.length,
+            limit: effectiveLimit,
+            offset: effectiveOffset,
+        };
+    }
 
     const countBase = supabase
         .from("opportunities")
