@@ -5917,104 +5917,6 @@ export default function AdminEntityDrawer() {
         setFormData,
     ]);
 
-    const opportunityInquiryWorkflowHeaderRecordContext = useMemo(() => {
-        if (!opportunityInquiryWorkflowDrawer || drawer.type !== "opportunities" || loading) return null;
-        if (!overviewData || (overviewData as { _create?: boolean })._create) return null;
-        const d = overviewData as Record<string, unknown>;
-        const ident =
-            ((d as { _identity?: unknown })._identity as
-                | {
-                      household?: { id: string; label: string } | null;
-                      primary_contact?: { id: string; label: string; email?: string | null; phone?: string | null } | null;
-                      primary_person?: { id: string; label: string; email?: string | null; phone?: string | null; role_label?: string | null } | null;
-                  }
-                | null) ?? null;
-        const household = String(ident?.household?.label ?? "").trim();
-        const householdId = ident?.household?.id ?? (String(d.customer_id ?? "").trim() || null);
-        const comm = ident?.primary_contact ?? ident?.primary_person ?? null;
-        const commName = String((comm as { label?: string | null } | null)?.label ?? "").trim();
-        const commEmail = String((comm as { email?: string | null } | null)?.email ?? "").trim();
-        const commPhone = String((comm as { phone?: string | null } | null)?.phone ?? "").trim();
-        const missingContactChannels = !commPhone.trim() && !commEmail.trim();
-        const stageLabel =
-            String(d._lifecycle_stage_title ?? "").trim() || String(d._effective_lifecycle_stage ?? "").trim() || "";
-        const desired = toDateInputValue(formData.desired_start_date ?? d.desired_start_date);
-        const tour = toDateInputValue(formData.tour_date ?? d.tour_date);
-        const progVal = String(formData.program_type ?? d.program_type ?? "").trim();
-        const schedVal = String(formData.schedule_type ?? d.schedule_type ?? "").trim();
-        const progOpts = [...oppChildcareProgramSelectOpts];
-        if (progVal && !progOpts.some((o) => o.value === progVal)) {
-            progOpts.unshift({ value: progVal, label: progVal });
-        }
-        const schedOpts = [...oppChildcareScheduleSelectOpts];
-        if (schedVal && !schedOpts.some((o) => o.value === schedVal)) {
-            schedOpts.unshift({ value: schedVal, label: schedVal });
-        }
-        const progLabel = progVal ? progOpts.find((o) => o.value === progVal)?.label ?? progVal : "—";
-        const schedLabel = schedVal ? schedOpts.find((o) => o.value === schedVal)?.label ?? schedVal : "—";
-
-        const chip = (
-            reactKey: string,
-            label: string,
-            value: string,
-            attention?: boolean,
-            onClick?: () => void
-        ) => {
-            const cls = `inline-flex max-w-[min(100%,15rem)] min-w-0 items-baseline gap-1 rounded-md border px-2 py-1 text-[11px] leading-tight shadow-sm ${
-                attention
-                    ? "border-amber-200/90 bg-amber-50/90 text-amber-950/90"
-                    : "border-alloy-stone/20 bg-white text-alloy-midnight/85"
-            }${onClick ? " cursor-pointer transition-colors hover:border-alloy-blue/40 hover:text-alloy-blue" : ""}`;
-            const inner = (
-                <>
-                    <span className="shrink-0 font-semibold uppercase tracking-[0.05em] text-alloy-midnight/38">{label}</span>
-                    <span className="min-w-0 truncate font-medium">{value || "—"}</span>
-                </>
-            );
-            return onClick ? (
-                <button key={reactKey} type="button" onClick={onClick} className={cls}>
-                    {inner}
-                </button>
-            ) : (
-                <span key={reactKey} className={cls}>
-                    {inner}
-                </span>
-            );
-        };
-
-        return (
-            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-2">
-                {household
-                    ? chip(
-                          "meta-family",
-                          "Family",
-                          household,
-                          false,
-                          householdId ? () => openDrawer({ type: "customers", id: householdId }) : undefined
-                      )
-                    : null}
-                {commName ? chip("meta-contact", "Contact", commName, missingContactChannels) : null}
-                {chip("meta-start", "Start", desired ? formatDate(desired) : "—")}
-                {chip("meta-tour", "Tour", tour ? formatDate(tour) : "—")}
-                {chip("meta-prog", "Program", progLabel)}
-                {chip("meta-sched", "Schedule", schedLabel)}
-                {stageLabel ? chip("meta-stage", "Stage", stageLabel) : null}
-            </div>
-        );
-    }, [
-        opportunityInquiryWorkflowDrawer,
-        drawer.type,
-        loading,
-        overviewData,
-        formData.desired_start_date,
-        formData.tour_date,
-        formData.program_type,
-        formData.schedule_type,
-        oppChildcareProgramSelectOpts,
-        oppChildcareScheduleSelectOpts,
-        openDrawer,
-    ]);
-
     if (!drawer.type || !drawer.id) return null;
 
     const drawerStatusBadge = overviewData && !loading && !(overviewData as { _create?: boolean })?._create ? (
@@ -6256,7 +6158,6 @@ export default function AdminEntityDrawer() {
             onClose={closeDrawer}
             title={drawerTitleResolved}
             headerSubtitle={headerSubtitleResolved}
-            headerRecordContext={opportunityInquiryWorkflowHeaderRecordContext}
             statusBadge={drawerStatusBadge}
             headerActions={drawerHeaderActions}
             headerSignals={isJobDrawerV2 ? jobDrawerV2SignalsNode : undefined}
@@ -8287,7 +8188,11 @@ export default function AdminEntityDrawer() {
                                 {drawer.type === "opportunities" && overviewData && !(overviewData as { _create?: boolean })._create ? (
                                     <>
                                         <section
-                                            className="rounded-xl border border-admin-border bg-white/80 px-2.5 py-2 mb-2 shadow-sm"
+                                            className={
+                                                opportunityInquiryWorkflowDrawer
+                                                    ? "mb-3"
+                                                    : "rounded-xl border border-admin-border bg-white/80 px-2.5 py-2 mb-2 shadow-sm"
+                                            }
                                             data-opportunity-record-snapshot="true"
                                         >
                                             {(() => {
@@ -8351,12 +8256,29 @@ export default function AdminEntityDrawer() {
                                                     const followNotesRaw = formData.follow_up_notes ?? d.follow_up_notes;
                                                     const followNotes = String(followNotesRaw ?? "").trim();
                                                     const followUpOverdue = isOpportunityFollowUpOverdue(d.next_follow_up_at);
-                                                    const hasNotesBlock = Boolean(nextStepText) || Boolean(followNotes) || followUpOverdue;
-                                                    const missingContactChannels = !commPhone.trim() && !commEmail.trim();
+                                                    const householdId =
+                                                        ident?.household?.id ?? (String(d.customer_id ?? "").trim() || null);
+                                                    const progVal = String(formData.program_type ?? d.program_type ?? "").trim();
+                                                    const schedVal = String(formData.schedule_type ?? d.schedule_type ?? "").trim();
+                                                    const progOpts = [...oppChildcareProgramSelectOpts];
+                                                    if (progVal && !progOpts.some((o) => o.value === progVal)) {
+                                                        progOpts.unshift({ value: progVal, label: progVal });
+                                                    }
+                                                    const schedOpts = [...oppChildcareScheduleSelectOpts];
+                                                    if (schedVal && !schedOpts.some((o) => o.value === schedVal)) {
+                                                        schedOpts.unshift({ value: schedVal, label: schedVal });
+                                                    }
+                                                    const fieldInput =
+                                                        "w-full min-w-0 rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 text-[13px] font-medium text-alloy-midnight/90 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60";
+                                                    const innerCard =
+                                                        "min-w-0 rounded-lg border border-alloy-stone/[0.1] bg-white/[0.97] p-2.5 shadow-sm ring-1 ring-alloy-stone/[0.06]";
 
                                                     return (
-                                                        <div className="rounded-xl border border-alloy-stone/[0.14] border-l-[3px] border-l-[rgb(0,162,131)] bg-gradient-to-b from-white via-white to-alloy-stone/[0.04] px-3 py-3 shadow-md ring-1 ring-alloy-stone/10">
-                                                            <div className="mb-3 flex flex-wrap items-end justify-between gap-2 border-b border-alloy-stone/12 pb-2">
+                                                        <div
+                                                            className="rounded-xl border border-alloy-stone/15 border-l-[3px] border-l-[rgb(0,162,131)] bg-gradient-to-br from-emerald-50/45 via-white to-white px-3 py-3 shadow-md ring-1 ring-alloy-stone/10"
+                                                            data-opportunity-inquiry-summary="true"
+                                                        >
+                                                            <div className="flex flex-wrap items-end justify-between gap-2 border-b border-alloy-stone/12 pb-2">
                                                                 <span className={tinyLabel}>Inquiry summary</span>
                                                                 {stageLabel && stageLabel !== "—" ? (
                                                                     <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-alloy-midnight/40">
@@ -8364,111 +8286,212 @@ export default function AdminEntityDrawer() {
                                                                     </span>
                                                                 ) : null}
                                                             </div>
-                                                            <div
-                                                                className={`rounded-lg px-2 py-2 ${
-                                                                    missingContactChannels
-                                                                        ? "border border-amber-200/80 bg-amber-50/40"
-                                                                        : "border border-alloy-stone/12 bg-white/80"
-                                                                }`}
-                                                            >
-                                                                <div className={tinyLabel}>
-                                                                    {commRoleLabel ? `Primary contact (${commRoleLabel})` : "Primary contact"}
-                                                                </div>
-                                                                <button
-                                                                    type="button"
-                                                                    onClick={openPrimaryContactRecord}
-                                                                    className="mt-0.5 block w-full truncate text-left text-[13px] font-semibold text-alloy-blue hover:underline"
-                                                                >
-                                                                    {commName || primaryContact || primaryPerson || "—"}
-                                                                </button>
-                                                                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-alloy-midnight/70">
-                                                                    {commPhone ? (
-                                                                        <span className="tabular-nums">
-                                                                            <span className="text-alloy-midnight/45">Phone </span>
-                                                                            <a className={monoLink} href={`tel:${commPhone}`}>
-                                                                                {formatPhoneUS(commPhone)}
-                                                                            </a>
-                                                                        </span>
+                                                            <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-3 lg:items-start lg:gap-4">
+                                                                <div className={innerCard}>
+                                                                    <div className={tinyLabel}>Family & contact</div>
+                                                                    {household ? (
+                                                                        householdId ? (
+                                                                            <button
+                                                                                type="button"
+                                                                                onClick={() => openDrawer({ type: "customers", id: householdId })}
+                                                                                className="mt-1 block w-full truncate text-left text-[13px] font-semibold text-alloy-blue hover:underline"
+                                                                            >
+                                                                                {household}
+                                                                            </button>
+                                                                        ) : (
+                                                                            <div className="mt-1 text-[13px] font-semibold text-alloy-midnight/85">{household}</div>
+                                                                        )
                                                                     ) : (
-                                                                        <span className="text-alloy-midnight/40">Phone —</span>
+                                                                        <div className="mt-1 text-[12px] text-alloy-midnight/45">No household on file.</div>
                                                                     )}
-                                                                    {commEmail ? (
-                                                                        <span className="min-w-0 truncate">
-                                                                            <span className="text-alloy-midnight/45">Email </span>
-                                                                            <a className={monoLink} href={`mailto:${commEmail}`}>
-                                                                                {commEmail}
-                                                                            </a>
-                                                                        </span>
-                                                                    ) : (
-                                                                        <span className="text-alloy-midnight/40">Email —</span>
-                                                                    )}
-                                                                </div>
-                                                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                                                    <div className={`${tinyLabel} mt-2.5`}>
+                                                                        {commRoleLabel ? `Primary contact (${commRoleLabel})` : "Primary contact"}
+                                                                    </div>
                                                                     <button
                                                                         type="button"
-                                                                        disabled
-                                                                        className="rounded-md border border-alloy-stone/25 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/40"
-                                                                        title="Coming soon"
+                                                                        onClick={openPrimaryContactRecord}
+                                                                        className="mt-0.5 block w-full truncate text-left text-[13px] font-semibold text-alloy-blue hover:underline"
                                                                     >
-                                                                        Message
+                                                                        {commName || primaryContact || primaryPerson || "—"}
                                                                     </button>
-                                                                    {commPhone ? (
-                                                                        <a
-                                                                            href={`tel:${commPhone}`}
-                                                                            className="rounded-md border border-alloy-stone/25 bg-white px-2 py-1 text-[11px] font-semibold text-alloy-midnight/75 hover:border-alloy-blue/35 hover:text-alloy-blue"
+                                                                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-alloy-midnight/70">
+                                                                        {commPhone ? (
+                                                                            <span className="tabular-nums">
+                                                                                <span className="text-alloy-midnight/45">Phone </span>
+                                                                                <a className={monoLink} href={`tel:${commPhone}`}>
+                                                                                    {formatPhoneUS(commPhone)}
+                                                                                </a>
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="text-alloy-midnight/45">Phone —</span>
+                                                                        )}
+                                                                        {commEmail ? (
+                                                                            <span className="min-w-0 truncate">
+                                                                                <span className="text-alloy-midnight/45">Email </span>
+                                                                                <a className={monoLink} href={`mailto:${commEmail}`}>
+                                                                                    {commEmail}
+                                                                                </a>
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="text-alloy-midnight/45">Email —</span>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="mt-2 flex flex-wrap gap-1.5">
+                                                                        <button
+                                                                            type="button"
+                                                                            disabled
+                                                                            className="rounded-md border border-alloy-stone/25 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/40"
+                                                                            title="Coming soon"
                                                                         >
-                                                                            Call
-                                                                        </a>
-                                                                    ) : (
-                                                                        <span className="rounded-md border border-alloy-stone/15 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/35">
-                                                                            Call
-                                                                        </span>
-                                                                    )}
-                                                                    {commEmail ? (
-                                                                        <a
-                                                                            href={`mailto:${commEmail}`}
-                                                                            className="rounded-md border border-alloy-stone/25 bg-white px-2 py-1 text-[11px] font-semibold text-alloy-midnight/75 hover:border-alloy-blue/35 hover:text-alloy-blue"
-                                                                        >
-                                                                            Email
-                                                                        </a>
-                                                                    ) : (
-                                                                        <span className="rounded-md border border-alloy-stone/15 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/35">
-                                                                            Email
-                                                                        </span>
-                                                                    )}
+                                                                            Message
+                                                                        </button>
+                                                                        {commPhone ? (
+                                                                            <a
+                                                                                href={`tel:${commPhone}`}
+                                                                                className="rounded-md border border-alloy-stone/25 bg-white px-2 py-1 text-[11px] font-semibold text-alloy-midnight/75 hover:border-alloy-blue/35 hover:text-alloy-blue"
+                                                                            >
+                                                                                Call
+                                                                            </a>
+                                                                        ) : (
+                                                                            <span className="rounded-md border border-alloy-stone/15 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/35">
+                                                                                Call
+                                                                            </span>
+                                                                        )}
+                                                                        {commEmail ? (
+                                                                            <a
+                                                                                href={`mailto:${commEmail}`}
+                                                                                className="rounded-md border border-alloy-stone/25 bg-white px-2 py-1 text-[11px] font-semibold text-alloy-midnight/75 hover:border-alloy-blue/35 hover:text-alloy-blue"
+                                                                            >
+                                                                                Email
+                                                                            </a>
+                                                                        ) : (
+                                                                            <span className="rounded-md border border-alloy-stone/15 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/35">
+                                                                                Email
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
-                                                            </div>
-                                                            {hasNotesBlock ? (
+                                                                <div className={innerCard}>
+                                                                    <div className={tinyLabel}>Inquiry needs</div>
+                                                                    <div className="mt-2 space-y-2">
+                                                                        <div>
+                                                                            <div className={tinyLabel}>Desired start</div>
+                                                                            <input
+                                                                                type="date"
+                                                                                value={toDateInputValue(formData.desired_start_date ?? d.desired_start_date)}
+                                                                                onChange={(e) =>
+                                                                                    setFormData((prev) => ({
+                                                                                        ...prev,
+                                                                                        desired_start_date: e.target.value || null,
+                                                                                    }))
+                                                                                }
+                                                                                onBlur={() => {
+                                                                                    if (nonJobFormDirty) saveEdit();
+                                                                                }}
+                                                                                disabled={!canMutate}
+                                                                                className={fieldInput}
+                                                                            />
+                                                                        </div>
+                                                                        <div>
+                                                                            <div className={tinyLabel}>Tour date</div>
+                                                                            <input
+                                                                                type="date"
+                                                                                value={toDateInputValue(formData.tour_date ?? d.tour_date)}
+                                                                                onChange={(e) =>
+                                                                                    setFormData((prev) => ({
+                                                                                        ...prev,
+                                                                                        tour_date: e.target.value || null,
+                                                                                    }))
+                                                                                }
+                                                                                onBlur={() => {
+                                                                                    if (nonJobFormDirty) saveEdit();
+                                                                                }}
+                                                                                disabled={!canMutate}
+                                                                                className={fieldInput}
+                                                                            />
+                                                                        </div>
+                                                                        <div>
+                                                                            <div className={tinyLabel}>Program type</div>
+                                                                            <select
+                                                                                value={progVal}
+                                                                                onChange={(e) =>
+                                                                                    setFormData((prev) => ({
+                                                                                        ...prev,
+                                                                                        program_type: e.target.value || null,
+                                                                                    }))
+                                                                                }
+                                                                                onBlur={() => {
+                                                                                    if (nonJobFormDirty) saveEdit();
+                                                                                }}
+                                                                                disabled={!canMutate}
+                                                                                className={fieldInput}
+                                                                            >
+                                                                                <option value="">—</option>
+                                                                                {progOpts.map((o) => (
+                                                                                    <option key={o.value} value={o.value}>
+                                                                                        {o.label}
+                                                                                    </option>
+                                                                                ))}
+                                                                            </select>
+                                                                        </div>
+                                                                        <div>
+                                                                            <div className={tinyLabel}>Schedule type</div>
+                                                                            <select
+                                                                                value={schedVal}
+                                                                                onChange={(e) =>
+                                                                                    setFormData((prev) => ({
+                                                                                        ...prev,
+                                                                                        schedule_type: e.target.value || null,
+                                                                                    }))
+                                                                                }
+                                                                                onBlur={() => {
+                                                                                    if (nonJobFormDirty) saveEdit();
+                                                                                }}
+                                                                                disabled={!canMutate}
+                                                                                className={fieldInput}
+                                                                            >
+                                                                                <option value="">—</option>
+                                                                                {schedOpts.map((o) => (
+                                                                                    <option key={o.value} value={o.value}>
+                                                                                        {o.label}
+                                                                                    </option>
+                                                                                ))}
+                                                                            </select>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
                                                                 <div
-                                                                    className={`mt-3 border-t border-alloy-stone/15 pt-2 ${
+                                                                    className={`${innerCard} ${
                                                                         followUpOverdue
-                                                                            ? "rounded-md border border-amber-200/80 bg-amber-50/50 px-2 py-1.5"
+                                                                            ? "border-amber-200/75 bg-amber-50/[0.32] ring-amber-100/40"
                                                                             : ""
                                                                     }`}
                                                                 >
                                                                     <div className={tinyLabel}>
-                                                                        Notes / Next step
+                                                                        Next step & notes
                                                                         {followUpOverdue ? (
-                                                                            <span className="ml-2 font-semibold normal-case text-amber-800/90">
+                                                                            <span className="ml-2 font-semibold normal-case text-amber-900/85">
                                                                                 Follow-up overdue
                                                                             </span>
                                                                         ) : null}
                                                                     </div>
                                                                     {nextStepText ? (
-                                                                        <p className="mt-1 text-[12px] font-medium leading-snug text-alloy-midnight/75">
+                                                                        <p className="mt-1.5 text-[12px] font-medium leading-snug text-alloy-midnight/75">
                                                                             <span className="text-alloy-midnight/50">
                                                                                 {(nextStep?.title ?? "Next step").trim()}:{" "}
                                                                             </span>
                                                                             {nextStepText}
                                                                         </p>
-                                                                    ) : null}
+                                                                    ) : (
+                                                                        <p className="mt-1.5 text-[11px] text-alloy-midnight/45">No lifecycle next step.</p>
+                                                                    )}
                                                                     {followNotes ? (
-                                                                        <p className="mt-1 whitespace-pre-wrap text-[12px] leading-snug text-alloy-midnight/70">{followNotes}</p>
-                                                                    ) : !nextStepText && !followUpOverdue ? (
-                                                                        <p className="mt-1 text-[11px] text-alloy-midnight/45">No notes on file.</p>
-                                                                    ) : null}
+                                                                        <p className="mt-2 whitespace-pre-wrap text-[12px] leading-snug text-alloy-midnight/70">{followNotes}</p>
+                                                                    ) : (
+                                                                        <p className="mt-2 text-[11px] text-alloy-midnight/45">No follow-up notes.</p>
+                                                                    )}
                                                                 </div>
-                                                            ) : null}
+                                                            </div>
                                                         </div>
                                                     );
                                                 }
