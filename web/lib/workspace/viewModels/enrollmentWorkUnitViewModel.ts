@@ -14,7 +14,7 @@ type OppRow = WorkspaceOpportunityQueueRuntime["items"][number];
  * (no persons.children join, no messaging routes). Used for docs + future payload work.
  */
 export const ENROLLMENT_CRM_QUEUE_PAYLOAD_GAPS = [
-    "child_name (no `opportunities` → child person join in queue payload; optional `metadata.demo_child_name` only if seeded)",
+    "multi-child display prefers `metadata.inquiry_children[]` (seed/demo) or `opportunity_customer_members` resolved elsewhere; queue rows use contact + metadata enrichment",
     "dedicated_sms_action (no SMS/comms API route wired from workspace queue)",
     "in_app_message_action (no threaded message UI route from workspace row)",
 ] as const;
@@ -140,17 +140,22 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow): CrmCompactRowSe
             ? formatWorkspaceUsdGrouped(Number(row.quote_total))
             : null;
 
-    const contactSnippet =
-        (row as { _primary_contact_line?: string | null })._primary_contact_line?.trim() ||
-        [((row as { _primary_email?: string | null })._primary_email ?? "").trim(), ((row as { _primary_phone?: string | null })._primary_phone ?? "").trim()]
-            .filter(Boolean)
-            .join(" · ") ||
-        null;
+    const contactLine = (row as { _primary_contact_line?: string | null })._primary_contact_line?.trim() || "";
+    const email = ((row as { _primary_email?: string | null })._primary_email ?? "").trim();
+    const phone = ((row as { _primary_phone?: string | null })._primary_phone ?? "").trim();
+    const contactSnippet = [contactLine, phone, email].filter(Boolean).join(" · ") || null;
 
     const programContext = (row as { _requested_program?: string | null })._requested_program?.trim() || null;
     const roomContext = (row as { _room_label?: string | null })._room_label?.trim() || null;
-    const ageContext = (row as { _age_band?: string | null })._age_band?.trim() || null;
-    const tourContext = (row as { _tour_timing?: string | null })._tour_timing?.trim() || null;
+    const desiredStart = (row as { _desired_start_date?: string | null })._desired_start_date?.trim() || null;
+    const ageContext =
+        desiredStart ||
+        (row as { _age_band?: string | null })._age_band?.trim() ||
+        null;
+    const tourCtx =
+        (row as { _tour_context?: string | null })._tour_context?.trim() ||
+        (row as { _tour_timing?: string | null })._tour_timing?.trim() ||
+        null;
 
     const attentionReason = (row as { _attention_reason_label?: string | null })._attention_reason_label?.trim() || null;
     const familyNote = (row as { _notes_preview?: string | null })._notes_preview?.trim() || null;
@@ -167,7 +172,7 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow): CrmCompactRowSe
         programContext,
         roomContext,
         ageContext,
-        tourContext,
+        tourContext: tourCtx,
         attentionReason,
         familyNote,
     };

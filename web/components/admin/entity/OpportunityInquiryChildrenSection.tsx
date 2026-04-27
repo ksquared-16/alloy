@@ -233,6 +233,7 @@ export default function OpportunityInquiryChildrenSection({
                         ) : null}
                         {rows.map((r) => {
                             const name = (r.display_name ?? "").trim() || "—";
+                            const isMetadataOnly = (r.customer_member_id ?? "").startsWith("metadata_child:");
                             const dob = r.dob ? formatDate(r.dob) : "—";
                             const age = (r.age ?? "").trim();
                             const dobAge = age ? `${dob} · ${age}` : dob;
@@ -244,6 +245,7 @@ export default function OpportunityInquiryChildrenSection({
                             };
                             const saving = !!savingById[r.id];
                             const err = errorById[r.id];
+                            const rowCanEdit = canEdit && !isMetadataOnly;
 
                             const fallbackProgram = (r.desired_program_label ?? "").trim() || (st.desired_program_type ? (programLabelByKey.get(st.desired_program_type) ?? st.desired_program_type) : "—");
                             const fallbackSchedule = (r.desired_schedule_label ?? "").trim() || (st.desired_schedule_type ? (scheduleLabelByKey.get(st.desired_schedule_type) ?? st.desired_schedule_type) : "—");
@@ -265,7 +267,7 @@ export default function OpportunityInquiryChildrenSection({
                             return (
                                 <tr key={r.id} className={`border-b border-alloy-stone/20 last:border-b-0 ${rowAttentionClass}`}>
                                     <td className="px-3 py-2 font-medium text-alloy-midnight/85">
-                                        {onOpenChild && name !== "—" ? (
+                                        {onOpenChild && name !== "—" && !isMetadataOnly ? (
                                             <button
                                                 type="button"
                                                 onClick={() =>
@@ -285,10 +287,10 @@ export default function OpportunityInquiryChildrenSection({
                                     </td>
                                     <td className="px-3 py-2 text-alloy-midnight/65 tabular-nums">{dobAge}</td>
                                     <td className="px-3 py-2 text-alloy-midnight/65">
-                                        {canEdit ? (
+                                        {rowCanEdit ? (
                                             <select
                                                 value={st.desired_program_type}
-                                                disabled={!canEdit || saving}
+                                                disabled={!rowCanEdit || saving}
                                                 onChange={(e) => {
                                                     const v = e.target.value;
                                                     setLocal((p) => ({ ...p, [r.id]: { ...st, desired_program_type: v } }));
@@ -309,10 +311,10 @@ export default function OpportunityInquiryChildrenSection({
                                         )}
                                     </td>
                                     <td className="px-3 py-2 text-alloy-midnight/65">
-                                        {canEdit ? (
+                                        {rowCanEdit ? (
                                             <select
                                                 value={st.desired_schedule_type}
-                                                disabled={!canEdit || saving}
+                                                disabled={!rowCanEdit || saving}
                                                 onChange={(e) => {
                                                     const v = e.target.value;
                                                     setLocal((p) => ({ ...p, [r.id]: { ...st, desired_schedule_type: v } }));
@@ -333,10 +335,10 @@ export default function OpportunityInquiryChildrenSection({
                                         )}
                                     </td>
                                     <td className="px-3 py-2 text-alloy-midnight/65">
-                                        {canEdit ? (
+                                        {rowCanEdit ? (
                                             <select
                                                 value={st.outcome_status_key}
-                                                disabled={!canEdit || saving}
+                                                disabled={!rowCanEdit || saving}
                                                 onChange={(e) => {
                                                     const v = e.target.value;
                                                     setLocal((p) => ({ ...p, [r.id]: { ...st, outcome_status_key: v } }));
@@ -357,11 +359,11 @@ export default function OpportunityInquiryChildrenSection({
                                         )}
                                     </td>
                                     <td className="px-3 py-2 text-alloy-midnight/65">
-                                        {canEdit ? (
+                                        {rowCanEdit ? (
                                             <div className="min-w-[260px] max-w-[420px]">
                                                 <input
                                                     value={st.notes}
-                                                    disabled={!canEdit || saving}
+                                                    disabled={!rowCanEdit || saving}
                                                     onChange={(e) => {
                                                         const v = e.target.value;
                                                         setLocal((p) => ({ ...p, [r.id]: { ...st, notes: v } }));

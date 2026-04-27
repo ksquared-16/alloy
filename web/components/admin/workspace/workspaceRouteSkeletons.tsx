@@ -254,19 +254,6 @@ export function WorkUnitRouteSkeletonBody() {
                         <div className="adminv2-ws-dept-v2-operational-row adminv2-ws-dept-v2-operational-row--double" aria-label="Lane queue">
                             <div className="adminv2-ws-dept-v2-lane adminv2-ws-dept-v2-lane--throughput" data-ws-lane-kind="lane_queue">
                                 <div className="adminv2-ws-dept-v2-lane-chrome adminv2-ws-dept-v2-lane-chrome--throughput-deck">
-                                    <div className="adminv2-ws-wu-lane-strip" aria-label="Lane status" aria-hidden>
-                                        <p className="adminv2-ws-wu-lane-strip-line">
-                                            <span className="adminv2-ws-wu-lane-strip-k">Lane status</span>
-                                            <span className="inline-block h-3 w-56 align-middle adminv2-shimmer-bar rounded bg-alloy-stone/10" />
-                                        </p>
-                                        <p className="adminv2-ws-wu-lane-strip-line">
-                                            <span className="adminv2-ws-wu-lane-strip-k">Recommended</span>
-                                            <span
-                                                className="inline-block h-3 w-44 align-middle adminv2-shimmer-bar rounded bg-alloy-stone/10"
-                                                style={{ animationDelay: "80ms" }}
-                                            />
-                                        </p>
-                                    </div>
                                     <div className="adminv2-ws-wu-queue" aria-hidden>
                                         {Array.from({ length: 8 }).map((_, i) => (
                                             <QueueRowSkeleton key={i} />

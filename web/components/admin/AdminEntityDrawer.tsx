@@ -5114,12 +5114,14 @@ export default function AdminEntityDrawer() {
                     : [];
                 out.inquiry_children = (
                     <OpportunityInquiryChildrenSection
-                        rows={rows.filter((r) => r.id && r.customer_member_id)}
+                        rows={rows.filter((r) => r.id && (r.customer_member_id || r.display_name))}
                         canEdit={!!canMutate}
                         embeddedInPremiumSection={oppCfg?.inquiry_drawer_mode === "workflow_v1"}
                         onOpenChild={(row) => {
+                            const cm = row.customer_member_id?.trim() ?? "";
+                            if (!cm || cm.startsWith("metadata_child:")) return;
                             if (row.person_id) openDrawer({ type: "persons", id: row.person_id });
-                            else openDrawer({ type: "customer_members", id: row.customer_member_id });
+                            else openDrawer({ type: "customer_members", id: cm });
                         }}
                     />
                 );

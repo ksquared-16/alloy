@@ -318,15 +318,57 @@ async function enrichOpportunityRows(params: {
                 : null;
 
         const md = (r.metadata ?? null) as Record<string, unknown> | null;
-        const child = typeof md?.child_name === "string" ? md.child_name : null;
-        const programLabel = typeof md?.program_label === "string" ? md.program_label : null;
-        const ageGroup = typeof md?.age_group === "string" ? md.age_group.trim() : null;
-        const programCombined =
-            [programLabel, ageGroup].filter((x): x is string => Boolean(x && x.trim())).join(" · ").trim() || programLabel;
-        const desiredStart = typeof md?.desired_start_date === "string" ? md.desired_start_date : null;
-        const tourDate = typeof md?.tour_date === "string" ? md.tour_date : null;
         const notes = typeof md?.notes === "string" ? md.notes : typeof md?.demo_note === "string" ? md.demo_note : null;
         const nextStepPreview = typeof md?.next_step === "string" ? md.next_step.trim() : null;
+
+        const inquiryChildren = md && Array.isArray((md as { inquiry_children?: unknown }).inquiry_children)
+            ? ((md as { inquiry_children: unknown[] }).inquiry_children ?? []).filter((x) => x && typeof x === "object")
+            : [];
+
+        let childDisplay: string | null = null;
+        let programsDisplay: string | null = null;
+        let programCombined: string | null = null;
+        let desiredStart: string | null = null;
+        let tourDate: string | null = null;
+
+        if (inquiryChildren.length > 0) {
+            const names: string[] = [];
+            const programs: string[] = [];
+            for (const raw of inquiryChildren) {
+                const row = raw as Record<string, unknown>;
+                const disp = typeof row.display_name === "string" ? row.display_name.trim() : "";
+                if (disp) names.push(disp);
+                const pl =
+                    typeof row.program_label === "string"
+                        ? row.program_label.trim()
+                        : typeof row.program_short === "string"
+                          ? String(row.program_short).trim()
+                          : "";
+                if (pl) programs.push(pl);
+            }
+            childDisplay = names.length ? names.join(" · ") : typeof md?.child_name === "string" ? md.child_name : null;
+            const uniq = [...new Set(programs.filter(Boolean))];
+            programsDisplay = uniq.length ? uniq.join(", ") : null;
+            const firstAgeRow = inquiryChildren[0] as Record<string, unknown>;
+            const ageGroup =
+                typeof firstAgeRow.age_group === "string" ? firstAgeRow.age_group.trim() : "";
+            programCombined =
+                programsDisplay && ageGroup
+                    ? `${programsDisplay} · ${ageGroup}`
+                    : programsDisplay ?? (typeof md?.program_label === "string" ? md.program_label : null);
+            desiredStart = typeof md?.desired_start_date === "string" ? md.desired_start_date : null;
+            tourDate = typeof md?.tour_date === "string" ? md.tour_date : null;
+        } else {
+            const child = typeof md?.child_name === "string" ? md.child_name : null;
+            const programLabel = typeof md?.program_label === "string" ? md.program_label : null;
+            const ageGroup = typeof md?.age_group === "string" ? md.age_group.trim() : null;
+            programCombined =
+                [programLabel, ageGroup].filter((x): x is string => Boolean(x && x.trim())).join(" · ").trim() || programLabel;
+            childDisplay = child;
+            programsDisplay = programLabel;
+            desiredStart = typeof md?.desired_start_date === "string" ? md.desired_start_date : null;
+            tourDate = typeof md?.tour_date === "string" ? md.tour_date : null;
+        }
 
         const sk = (r.status_key ?? "").trim();
         const statusDisplay = sk ? labelByKey.get(sk) ?? sk : null;
@@ -341,8 +383,8 @@ async function enrichOpportunityRows(params: {
             _primary_contact_line: contactName ?? null,
             _primary_phone: contact?.phone ?? null,
             _primary_email: contact?.email ?? null,
-            _child_display_name: child,
-            _requested_program: programCombined ?? null,
+            _child_display_name: childDisplay,
+            _requested_program: inquiryChildren.length > 0 ? programsDisplay ?? programCombined : programCombined,
             _desired_start_date: desiredStart,
             _tour_context: tourContext,
             _notes_preview: notes,

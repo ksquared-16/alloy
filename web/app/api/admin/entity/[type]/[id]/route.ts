@@ -151,19 +151,28 @@ export async function GET(
             if (opp.primary_person_id) {
                 const { data: person } = await supabase
                     .from("persons")
-                    .select("id, first_name, last_name, full_name")
+                    .select("id, first_name, last_name, full_name, email, phone")
                     .eq("id", opp.primary_person_id)
                     .eq("org_id", orgId)
                     .maybeSingle();
-                const p = person as { id: string; first_name?: string | null; last_name?: string | null; full_name?: string | null } | null;
+                const p = person as {
+                    id: string;
+                    first_name?: string | null;
+                    last_name?: string | null;
+                    full_name?: string | null;
+                    email?: string | null;
+                    phone?: string | null;
+                } | null;
                 out._primary_person_id = p?.id ?? null;
                 out._primary_person_name = personDisplayName(p);
+                out._primary_person_email = trimOrNull(p?.email);
+                out._primary_person_phone = trimOrNull(p?.phone);
                 out._contact_name = out._primary_person_name;
                 out._primary_contact_name = out._primary_person_name;
             } else if (opp.primary_contact_id) {
                 const contact = await supabase
                     .from("contacts")
-                    .select("first_name, last_name, person_id")
+                    .select("first_name, last_name, person_id, email, phone")
                     .eq("id", opp.primary_contact_id)
                     .eq("org_id", orgId)
                     .single();
@@ -171,16 +180,27 @@ export async function GET(
                 const name = c ? [c.first_name, c.last_name].filter(Boolean).join(" ") || null : null;
                 out._contact_name = name;
                 out._primary_contact_name = name;
+                out._primary_contact_email = trimOrNull((c as { email?: string | null } | null)?.email);
+                out._primary_contact_phone = trimOrNull((c as { phone?: string | null } | null)?.phone);
                 if (c && (c as { person_id?: string | null }).person_id) {
                     const { data: person } = await supabase
                         .from("persons")
-                        .select("id, first_name, last_name, full_name")
+                        .select("id, first_name, last_name, full_name, email, phone")
                         .eq("id", (c as { person_id: string }).person_id)
                         .eq("org_id", orgId)
                         .maybeSingle();
-                    const p = person as { id: string; first_name?: string | null; last_name?: string | null; full_name?: string | null } | null;
+                    const p = person as {
+                        id: string;
+                        first_name?: string | null;
+                        last_name?: string | null;
+                        full_name?: string | null;
+                        email?: string | null;
+                        phone?: string | null;
+                    } | null;
                     out._primary_person_id = p?.id ?? null;
                     out._primary_person_name = personDisplayName(p);
+                    if (!out._primary_contact_email && p?.email) out._primary_contact_email = trimOrNull(p.email);
+                    if (!out._primary_contact_phone && p?.phone) out._primary_contact_phone = trimOrNull(p.phone);
                 } else {
                     out._primary_person_id = null;
                     out._primary_person_name = null;
@@ -304,6 +324,16 @@ export async function GET(
             await attachFieldDefinitionsAndValues(supabase, out, "opportunities", id);
             await attachDirectFkRelationshipDisplays(supabase, orgId, "opportunities", out);
 
+            const oppMeta = (opp.metadata ?? null) as Record<string, unknown> | null;
+            const metaDesired = oppMeta && typeof oppMeta.desired_start_date === "string" ? oppMeta.desired_start_date.trim() : "";
+            const metaTour = oppMeta && typeof oppMeta.tour_date === "string" ? oppMeta.tour_date.trim() : "";
+            if (metaDesired && (out.desired_start_date == null || String(out.desired_start_date).trim() === "")) {
+                out.desired_start_date = metaDesired;
+            }
+            if (metaTour && (out.tour_date == null || String(out.tour_date).trim() === "")) {
+                out.tour_date = metaTour;
+            }
+
             // -----------------------------------------------------------------
             // Canonical identity block (relationship/FK-derived; avoids UI key-guessing)
             // -----------------------------------------------------------------
@@ -406,7 +436,7 @@ export async function GET(
                 memberIds.length > 0
                     ? await supabase
                           .from("customer_members")
-                          .select("id, display_name, relationship, dob, person_id, first_name, last_name")
+                          .select("id, display_name, relationship, dob, person_id, first_name, last_name, metadata")
                           .eq("org_id", orgId)
                           .in("id", memberIds)
                     : { data: [] as { id: string }[] };
@@ -418,6 +448,7 @@ export async function GET(
                 person_id?: string | null;
                 first_name?: string | null;
                 last_name?: string | null;
+                metadata?: Record<string, unknown> | null;
             }[];
             const memberMap = new Map(memList.map((m) => [m.id, m]));
             const personIds = [...new Set(memList.map((m) => trimOrNull(m.person_id)).filter(Boolean))] as string[];
@@ -438,7 +469,10 @@ export async function GET(
                     const age = ageFromDobIso(dob);
                     const desiredProgramType = trimOrNull(r.desired_program_type) ?? oppDefaultProgramType;
                     const desiredScheduleType = trimOrNull(r.desired_schedule_type) ?? oppDefaultScheduleType;
-                    const desiredProgramLabel = await optionItemLabelForOrg(supabase, orgId, "childcare_program_type", desiredProgramType);
+                    const memMeta = (m?.metadata ?? null) as Record<string, unknown> | null;
+                    const demoProgramLabel = memMeta && typeof memMeta.demo_program_label === "string" ? trimOrNull(memMeta.demo_program_label) : null;
+                    const desiredProgramLabel =
+                        (await optionItemLabelForOrg(supabase, orgId, "childcare_program_type", desiredProgramType)) ?? demoProgramLabel;
                     const desiredScheduleLabel = await optionItemLabelForOrg(supabase, orgId, "childcare_schedule_type", desiredScheduleType);
                     const outcomeStatusKey = trimOrNull(r.outcome_status_key);
                     const outcomeStatusLabel = outcomeStatusKey
@@ -465,7 +499,49 @@ export async function GET(
                     };
                 })
             );
-            out._inquiry_children = inquiryChildren;
+            let inquiryChildrenOut = inquiryChildren;
+            if (!inquiryChildrenOut.length && oppMeta && Array.isArray(oppMeta.inquiry_children)) {
+                const mdKids = oppMeta.inquiry_children as unknown[];
+                inquiryChildrenOut = mdKids
+                    .map((raw, i) => {
+                        if (!raw || typeof raw !== "object") return null;
+                        const row = raw as Record<string, unknown>;
+                        const displayName =
+                            typeof row.display_name === "string" && row.display_name.trim()
+                                ? row.display_name.trim()
+                                : typeof row.child_name === "string" && row.child_name.trim()
+                                  ? row.child_name.trim()
+                                  : null;
+                        if (!displayName) return null;
+                        const sid = `metadata_child:${id}:${i}`;
+                        return {
+                            id: sid,
+                            customer_member_id: sid,
+                            person_id: null,
+                            display_name: displayName,
+                            dob: typeof row.dob === "string" ? row.dob : null,
+                            age: typeof row.age === "string" ? row.age : null,
+                            desired_program_type: typeof row.program_type_key === "string" ? trimOrNull(row.program_type_key) : null,
+                            desired_program_label:
+                                typeof row.program_label === "string"
+                                    ? trimOrNull(row.program_label)
+                                    : typeof row.program_short === "string"
+                                      ? trimOrNull(row.program_short)
+                                      : null,
+                            desired_schedule_type: null,
+                            desired_schedule_label: null,
+                            outcome_status_key: null,
+                            outcome_status_label: null,
+                            fit_status: null,
+                            notes: typeof row.notes === "string" ? trimOrNull(row.notes) : null,
+                            metadata: (row.metadata as Record<string, unknown>) ?? { source: "opportunity_metadata" },
+                            created_at: null,
+                            updated_at: null,
+                        };
+                    })
+                    .filter(Boolean) as typeof inquiryChildren;
+            }
+            out._inquiry_children = inquiryChildrenOut;
 
             // Inquiry summary from configured field_definitions in the "quote" section when present.
             const defs = (out._field_definitions as { field_key: string; label: string | null; section_key: string | null; is_visible_in_drawer?: boolean }[] | undefined) ?? [];

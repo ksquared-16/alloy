@@ -292,6 +292,35 @@ async function main() {
     { program_label: "Young Toddler (12–24 mo)", age_group: "Ages 12–24 mo" },
   ];
 
+  /** Three demo families with two real children each (DB + metadata stay aligned). */
+  function multiChildDefinitions(seedKey: string): Array<{
+    first: string;
+    last: string;
+    program_type: string;
+    program_label: string;
+    age_group: string;
+  }> | null {
+    switch (seedKey) {
+      case "enroll_demo_contacted_1":
+        return [
+          { first: "Liam", last: "Patel", program_type: "toddler", program_label: "Toddler", age_group: "Ages 24–36 mo" },
+          { first: "Mia", last: "Patel", program_type: "preschool", program_label: "Preschool", age_group: "Ages 36–48 mo" },
+        ];
+      case "enroll_demo_tour_scheduled_1":
+        return [
+          { first: "Sofia", last: "Garcia", program_type: "infant", program_label: "Infant", age_group: "Ages 6–12 mo" },
+          { first: "Mateo", last: "Garcia", program_type: "toddler", program_label: "Toddler", age_group: "Ages 12–24 mo" },
+        ];
+      case "enroll_demo_paperwork_1":
+        return [
+          { first: "Nora", last: "Williams", program_type: "preschool", program_label: "Preschool", age_group: "Ages 36–48 mo" },
+          { first: "Ivy", last: "Williams", program_type: "pre_k", program_label: "Pre-K", age_group: "Ages 48–60 mo" },
+        ];
+      default:
+        return null;
+    }
+  }
+
   function nextStepForStatus(status_key: string, note: string): string {
     switch (status_key) {
       case "new_inquiry":
@@ -333,6 +362,31 @@ async function main() {
     const tourDate = tourEligible
       ? new Date(seedNow.getTime() + (2 + (idx % 6)) * 86400000).toISOString().slice(0, 10)
       : null;
+    const multi = multiChildDefinitions(spec.seed_key);
+    if (multi && multi.length > 0) {
+      const inquiry_children = multi.map((ch) => ({
+        display_name: `${ch.first} ${ch.last}`,
+        program_type_key: ch.program_type,
+        program_label: ch.program_label,
+        age_group: ch.age_group,
+      }));
+      const names = inquiry_children.map((c) => c.display_name);
+      const programs = inquiry_children.map((c) => c.program_label);
+      const notes = `${spec.note}. ${names.join(" and ")} enrolled in inquiry; programs ${programs.join(" & ")}.`;
+      return {
+        seed_key: spec.seed_key,
+        demo_seed_package: "enrollment_pipeline_demo_v1",
+        demo_note: spec.note,
+        inquiry_children,
+        child_name: names.join(" · "),
+        program_label: programs.join(", "),
+        age_group: multi.map((c) => c.age_group).join(" · "),
+        desired_start_date: desired,
+        tour_date: tourDate,
+        notes,
+        next_step: nextStepForStatus(spec.status_key, spec.note),
+      };
+    }
     const childName = `${person.first} ${person.last}`;
     const notes = `${spec.note}. Interested in ${prog.program_label}; prefers morning drop-off when possible.`;
     return {
@@ -668,6 +722,78 @@ async function main() {
     const { error } = await supabase.from("opportunities").update(payload as any).eq("id", row.id).eq("org_id", orgId);
     if (!error) metadataSynced++;
   }
+
+  const multiSeedKeys = ["enroll_demo_contacted_1", "enroll_demo_tour_scheduled_1", "enroll_demo_paperwork_1"];
+  let multiChildLinksSynced = 0;
+  {
+    const probe = await supabase.from("opportunity_customer_members").select("id").limit(1);
+    if (probe.error) {
+      console.log("WARN: opportunity_customer_members unavailable; skipping multi-child link seed:", probe.error.message);
+    } else {
+      for (const seedKey of multiSeedKeys) {
+        const defs = multiChildDefinitions(seedKey);
+        if (!defs?.length) continue;
+        const customerId = seedCustomerBySeedKey.get(seedKey);
+        if (!customerId) continue;
+        const { data: oppRow } = await supabase
+          .from("opportunities")
+          .select("id")
+          .eq("org_id", orgId)
+          .eq("metadata->>seed_key", seedKey)
+          .maybeSingle();
+        const opportunityId = (oppRow as { id?: string } | null)?.id;
+        if (!opportunityId) continue;
+
+        await supabase.from("opportunity_customer_members").delete().eq("opportunity_id", opportunityId).eq("org_id", orgId);
+        await supabase
+          .from("customer_members")
+          .delete()
+          .eq("org_id", orgId)
+          .eq("customer_id", customerId)
+          .eq("metadata->>demo_family_seed_key", seedKey);
+
+        for (const ch of defs) {
+          const { data: ins, error: insErr } = await supabase
+            .from("customer_members")
+            .insert({
+              org_id: orgId,
+              customer_id: customerId,
+              display_name: `${ch.first} ${ch.last}`,
+              first_name: ch.first,
+              last_name: ch.last,
+              relationship: "child",
+              is_active: true,
+              metadata: {
+                seed_key: `${seedKey}_child_${ch.first}`,
+                demo_seed_package: "enrollment_pipeline_demo_v1",
+                demo_family_seed_key: seedKey,
+                demo_program_label: ch.program_label,
+              },
+            } as any)
+            .select("id")
+            .single();
+          if (insErr || !(ins as any)?.id) {
+            console.log("WARN: customer_members insert failed", { seedKey, err: insErr?.message });
+            continue;
+          }
+          const memberId = (ins as any).id as string;
+          const { error: ocmErr } = await supabase.from("opportunity_customer_members").insert({
+            org_id: orgId,
+            opportunity_id: opportunityId,
+            customer_member_id: memberId,
+            desired_program_type: ch.program_type,
+            metadata: { demo_seed_package: "enrollment_pipeline_demo_v1" },
+          } as any);
+          if (ocmErr) {
+            console.log("WARN: opportunity_customer_members insert failed", { seedKey, err: ocmErr.message });
+            continue;
+          }
+          multiChildLinksSynced++;
+        }
+      }
+    }
+  }
+  console.log("multi_child_opportunity_customer_member_links:", multiChildLinksSynced);
 
   const { data: seededRowsAfterMeta } = await supabase
     .from("opportunities")

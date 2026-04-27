@@ -136,41 +136,51 @@ function queueQuickActionDispatchId(qa: QueueItemQuickActionVm): string {
 
 /** CRM-compact preview — renders only from `CrmCompactRowSemanticSlots` (config-driven). */
 function EnrollmentCrmCompactPreview({ slots }: { slots: CrmCompactRowSemanticSlots }) {
-  const careParts = [slots.programContext, slots.roomContext, slots.ageContext].filter(Boolean) as string[];
   const stageStatus =
     slots.stageLabel && slots.statusLabel && slots.stageLabel !== slots.statusLabel
       ? `${slots.stageLabel} · ${slots.statusLabel}`
       : slots.stageLabel || slots.statusLabel || null;
   const showOpsLine = Boolean(slots.nextStep || slots.lastActivity);
+  const noteStress = Boolean(slots.attentionReason?.trim());
 
   return (
     <div className="adminv2-ws-wu-queue-card-compact-text adminv2-ws-enrollment-crm-preview">
       <div className="adminv2-ws-enrollment-crm-preview__identity" data-enrollment-crm-slot="primaryIdentity">
-        {slots.primaryIdentity}
+        <span className="adminv2-ws-enrollment-crm-preview__k">Family</span> {slots.primaryIdentity}
       </div>
       {stageStatus ? (
         <div className="adminv2-ws-enrollment-crm-preview__stage" data-enrollment-crm-slot="stageStatus">
-          {stageStatus}
+          <span className="adminv2-ws-enrollment-crm-preview__k">Status</span> {stageStatus}
         </div>
       ) : null}
       {slots.contactSnippet ? (
         <div className="adminv2-ws-enrollment-crm-preview__contact" data-enrollment-crm-slot="contactSnippet">
-          {slots.contactSnippet}
+          <span className="adminv2-ws-enrollment-crm-preview__k">Contact</span> {slots.contactSnippet}
         </div>
       ) : null}
       {slots.childName ? (
         <div className="adminv2-ws-enrollment-crm-preview__child" data-enrollment-crm-slot="childName">
-          Child: {slots.childName}
+          <span className="adminv2-ws-enrollment-crm-preview__k">Children</span> {slots.childName}
         </div>
       ) : null}
-      {careParts.length ? (
-        <div className="adminv2-ws-enrollment-crm-preview__care" data-enrollment-crm-slot="careContext">
-          {careParts.join(" · ")}
+      {slots.programContext ? (
+        <div className="adminv2-ws-enrollment-crm-preview__care" data-enrollment-crm-slot="programs">
+          <span className="adminv2-ws-enrollment-crm-preview__k">Programs</span> {slots.programContext}
+        </div>
+      ) : null}
+      {slots.roomContext ? (
+        <div className="adminv2-ws-enrollment-crm-preview__care" data-enrollment-crm-slot="roomContext">
+          <span className="adminv2-ws-enrollment-crm-preview__k">Room</span> {slots.roomContext}
+        </div>
+      ) : null}
+      {slots.ageContext ? (
+        <div className="adminv2-ws-enrollment-crm-preview__care" data-enrollment-crm-slot="startDate">
+          <span className="adminv2-ws-enrollment-crm-preview__k">Start</span> {slots.ageContext}
         </div>
       ) : null}
       {slots.tourContext ? (
         <div className="adminv2-ws-enrollment-crm-preview__tour" data-enrollment-crm-slot="tourContext">
-          {slots.tourContext}
+          {slots.tourContext.startsWith("Tour:") ? slots.tourContext : <>Tour: {slots.tourContext}</>}
         </div>
       ) : null}
       {slots.attentionReason ? (
@@ -179,15 +189,22 @@ function EnrollmentCrmCompactPreview({ slots }: { slots: CrmCompactRowSemanticSl
         </div>
       ) : null}
       {slots.familyNote ? (
-        <div className="adminv2-ws-enrollment-crm-preview__note" data-enrollment-crm-slot="familyNote">
-          {slots.familyNote}
+        <div
+          className={
+            noteStress
+              ? "adminv2-ws-enrollment-crm-preview__note adminv2-ws-enrollment-crm-preview__note--stress"
+              : "adminv2-ws-enrollment-crm-preview__note"
+          }
+          data-enrollment-crm-slot="familyNote"
+        >
+          <span className="adminv2-ws-enrollment-crm-preview__k">Notes</span> {slots.familyNote}
         </div>
       ) : null}
       {showOpsLine ? (
         <div className="adminv2-ws-enrollment-crm-preview__ops" data-enrollment-crm-slot="nextLast">
           {slots.nextStep ? (
             <span data-enrollment-crm-slot="nextStep">
-              <span className="adminv2-ws-enrollment-crm-preview__k">Next</span> {slots.nextStep}
+              <span className="adminv2-ws-enrollment-crm-preview__k">Next step</span> {slots.nextStep}
             </span>
           ) : null}
           {slots.nextStep && slots.lastActivity ? (

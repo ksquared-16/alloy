@@ -51,7 +51,7 @@ export type QueueItemWaitStatusVm = "safe" | "approaching" | "breached";
  */
 export type CrmCompactRowSemanticSlots = {
   primaryIdentity: string;
-  /** Child / learner name when present on the payload (e.g. seed `metadata.demo_child_name`); else null. */
+  /** One child name or multiple joined with ` · ` when `metadata.inquiry_children` / enrichment supplies it. */
   childName: string | null;
   stageLabel: string | null;
   statusLabel: string | null;

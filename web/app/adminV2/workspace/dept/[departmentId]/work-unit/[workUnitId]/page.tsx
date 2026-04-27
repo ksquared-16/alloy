@@ -544,6 +544,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         : typeof r?.title === "string" && r.title.trim()
                           ? r.title.trim()
                           : rid;
+                const familyTitle =
+                    typeof r?._customer_name === "string" && r._customer_name.trim()
+                        ? r._customer_name.trim()
+                        : title;
                 const statusLabel =
                     typeof r?._status_display === "string" && r._status_display.trim()
                         ? r._status_display.trim()
@@ -605,13 +609,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
                 return {
                     id: rid,
-                    title,
+                    title: familyTitle,
                     subtitle: previewCfg.variant === "basic" ? (basicSubtitleParts.filter(Boolean).join(" · ") || undefined) : undefined,
                     quickActions,
                     semanticCrmCompact:
                         previewCfg.variant === "crm_compact"
                             ? {
-                                  primaryIdentity: title,
+                                  primaryIdentity: familyTitle,
                                   childName: want("child_name") ? childName || null : null,
                                   stageLabel: null,
                                   statusLabel: want("status") ? statusLabel || null : null,
@@ -627,7 +631,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                           .join(" · ") || null,
                                   programContext: want("program") ? program || null : null,
                                   roomContext: null,
-                                  ageContext: want("desired_start_date") ? (desiredStart ? `Start: ${desiredStart}` : null) : null,
+                                  ageContext: want("desired_start_date") ? (desiredStart || null) : null,
                                   tourContext: want("tour_date") ? tourCtx || null : null,
                                   attentionReason: attentionReason || null,
                                   familyNote: note || null,
@@ -650,21 +654,17 @@ export default function AdminV2OpportunityWorkUnitPage() {
             aiSummary: {
                 headline: laneTitle,
                 subline: `${dept.name ?? "Department"} · ${workUnit.name ?? "Work unit"}`,
-                aiAwarenessLine:
-                    entity === "job"
-                        ? "Server-evaluated queues (previews only)."
-                        : "Queue type not supported yet (previews only).",
+                aiAwarenessLine: entity === "job" ? "Server-evaluated queues (previews only)." : undefined,
             },
-            laneInterpretation: {
-                laneStatusLine:
-                    queueItemsLoading
-                        ? "Loading queue items…"
-                        : `Queue: ${activeQueue?.key ?? "—"} · ${queueItems?.total ?? activeQueue?.count ?? 0} items`,
-                recommendedActionLine:
-                    entity === "job"
-                        ? "Open a row to view the record in the drawer."
-                        : "This queue type is not supported yet in the new queue engine.",
-            },
+            laneInterpretation:
+                entity === "job"
+                    ? {
+                          laneStatusLine: queueItemsLoading
+                              ? "Loading queue items…"
+                              : `Queue: ${activeQueue?.key ?? "—"} · ${queueItems?.total ?? activeQueue?.count ?? 0} items`,
+                          recommendedActionLine: "Open a row to view the record in the drawer.",
+                      }
+                    : null,
             signals: [],
             kpis: [],
             primaryQueue: {
@@ -681,7 +681,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 primaries: [],
                 systemActions: [{ id: "wu_back_department", label: "← Department overview", variant: "primary" }],
                 quickOperations: [{ id: "wu_manage_work_units", label: "Configure work units" }],
-                systemStatusLines: ["Rows are previews only; open a row to see full details."],
             },
             contextRail: { title: "About", groups: [] },
         };
