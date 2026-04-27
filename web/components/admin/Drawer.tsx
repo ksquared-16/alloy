@@ -9,6 +9,8 @@ interface DrawerProps {
     title: React.ReactNode;
     /** Optional: muted line under the title (e.g. record number). */
     headerSubtitle?: React.ReactNode;
+    /** Optional: right-side controls aligned with title/subtitle row. */
+    headerTitleRight?: React.ReactNode;
     /**
      * Optional dense record context between subtitle and status/actions (e.g. workflow chips).
      * Connects header to body without changing entity-specific layout config.
@@ -53,6 +55,7 @@ export default function Drawer({
     onClose,
     title,
     headerSubtitle,
+    headerTitleRight,
     headerRecordContext,
     statusBadge,
     headerActions,
@@ -162,37 +165,57 @@ export default function Drawer({
                         : undefined
                 }
             >
-                <div className={cleaningRecordModalTone ? "px-6 pt-5 pb-1.5" : "px-6 pt-4 pb-2"}>
-                    <h2
-                        id={isModal ? "admin-drawer-title" : undefined}
-                        className={
-                            cleaningRecordModalTone
-                                ? "text-[1.375rem] sm:text-2xl font-semibold tracking-tight leading-[1.2] break-words text-[rgb(39,63,82)]"
-                                : `text-xl font-bold leading-snug break-words ${isV2 ? "" : "text-alloy-forge"}`
-                        }
-                        style={isV2 && !cleaningRecordModalTone ? { color: neutral.textPrimary } : undefined}
-                    >
-                        {titleContent}
-                    </h2>
-                    {headerSubtitle != null && headerSubtitle !== false && (
-                        <p
+                <div
+                    className={`${cleaningRecordModalTone ? "px-6 pt-5 pb-1.5" : "px-6 pt-4 pb-2"} ${
+                        headerTitleRight != null && headerTitleRight !== false ? "flex items-start justify-between gap-4" : ""
+                    }`}
+                >
+                    <div className={headerTitleRight != null && headerTitleRight !== false ? "min-w-0 flex-1" : ""}>
+                        <h2
+                            id={isModal ? "admin-drawer-title" : undefined}
                             className={
                                 cleaningRecordModalTone
-                                    ? "mt-1.5 text-[13px] font-normal leading-snug"
-                                    : `mt-1 text-sm font-medium ${isV2 ? "" : "text-alloy-midnight/55"}`
+                                    ? "text-[1.375rem] sm:text-2xl font-semibold tracking-tight leading-[1.2] break-words text-[rgb(39,63,82)]"
+                                    : `text-xl font-bold leading-snug break-words ${isV2 ? "" : "text-alloy-forge"}`
                             }
-                            style={
-                                isV2
-                                    ? {
-                                          color: derived.textSecondary,
-                                          ...(cleaningRecordModalTone ? { opacity: 0.88 } : {}),
-                                      }
-                                    : undefined
-                            }
+                            style={isV2 && !cleaningRecordModalTone ? { color: neutral.textPrimary } : undefined}
                         >
-                            {headerSubtitle}
-                        </p>
-                    )}
+                            {titleContent}
+                        </h2>
+                        {headerSubtitle != null && headerSubtitle !== false && (
+                            <p
+                                className={
+                                    cleaningRecordModalTone
+                                        ? "mt-1.5 text-[13px] font-normal leading-snug"
+                                        : `mt-1 text-sm font-medium ${isV2 ? "" : "text-alloy-midnight/55"}`
+                                }
+                                style={
+                                    isV2
+                                        ? {
+                                              color: derived.textSecondary,
+                                              ...(cleaningRecordModalTone ? { opacity: 0.88 } : {}),
+                                          }
+                                        : undefined
+                                }
+                            >
+                                {headerSubtitle}
+                            </p>
+                        )}
+                    </div>
+                    {headerTitleRight != null && headerTitleRight !== false ? (
+                        <div className="flex shrink-0 items-start gap-3">
+                            {headerTitleRight}
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className={`shrink-0 text-2xl leading-none transition-colors p-1 ${isV2 ? "" : "text-alloy-midnight/70 hover:text-alloy-forge"}`}
+                                style={isV2 ? { color: derived.textSecondary } : undefined}
+                                aria-label="Close"
+                            >
+                                ×
+                            </button>
+                        </div>
+                    ) : null}
                 </div>
                 {headerRecordContext != null && headerRecordContext !== false && (
                     <div
@@ -211,23 +234,25 @@ export default function Drawer({
                         {headerRecordContext}
                     </div>
                 )}
-                <div
-                    className={`px-6 flex items-center justify-between ${cleaningRecordModalTone ? "pb-3 gap-3" : "pb-4 gap-4"}`}
-                >
-                    <div className={`flex items-center min-w-0 ${cleaningRecordModalTone ? "gap-2" : "gap-3"}`}>
-                        {statusBadge != null && statusBadge !== false && statusBadge}
-                        {headerActions}
-                    </div>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className={`shrink-0 text-2xl leading-none transition-colors p-1 ${isV2 ? "" : "text-alloy-midnight/70 hover:text-alloy-forge"}`}
-                        style={isV2 ? { color: derived.textSecondary } : undefined}
-                        aria-label="Close"
+                {headerTitleRight == null || headerTitleRight === false ? (
+                    <div
+                        className={`px-6 flex items-center justify-between ${cleaningRecordModalTone ? "pb-3 gap-3" : "pb-4 gap-4"}`}
                     >
-                        ×
-                    </button>
-                </div>
+                        <div className={`flex items-center min-w-0 ${cleaningRecordModalTone ? "gap-2" : "gap-3"}`}>
+                            {statusBadge != null && statusBadge !== false && statusBadge}
+                            {headerActions}
+                        </div>
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className={`shrink-0 text-2xl leading-none transition-colors p-1 ${isV2 ? "" : "text-alloy-midnight/70 hover:text-alloy-forge"}`}
+                            style={isV2 ? { color: derived.textSecondary } : undefined}
+                            aria-label="Close"
+                        >
+                            ×
+                        </button>
+                    </div>
+                ) : null}
                 {headerSignals != null && headerSignals !== false && (
                     <div
                         data-adminv2-record-modal-signals-wrap

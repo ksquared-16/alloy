@@ -4278,7 +4278,11 @@ export default function AdminEntityDrawer() {
     const presentationType = drawer.type ? toPresentationType(drawer.type) : null;
     const presentationConfig = presentationType ? getEntityPresentation(presentationType) : null;
     const configTabs = presentationConfig?.drawer?.tabs;
-    const tabList: DrawerTabKey[] = configTabs?.length ? [...configTabs] : ["overview", "related", "activity"];
+    const tabListBase: DrawerTabKey[] = configTabs?.length ? [...configTabs] : ["overview", "related", "activity"];
+    const tabList: DrawerTabKey[] =
+        drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer
+            ? tabListBase.filter((t) => t !== "related")
+            : tabListBase;
     const tabLabels: Record<string, string> = {
         overview: "Overview",
         rrs_overview: "RRS overview",
@@ -4329,6 +4333,12 @@ export default function AdminEntityDrawer() {
             setDrawerTab("overview");
         }
     }, [isJobRecordModalTarget, drawer.type, drawerTab]);
+
+    useEffect(() => {
+        if (drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer && drawerTab === "related") {
+            setDrawerTab("overview");
+        }
+    }, [drawer.type, opportunityInquiryWorkflowDrawer, drawerTab]);
 
     const hasFieldDefsForOverview = useMemo(() => {
         if (!overviewData || (overviewData as { _create?: boolean })._create) return false;
@@ -5911,9 +5921,9 @@ export default function AdminEntityDrawer() {
         return (
             <div
                 data-opportunity-workflow-timeline
-                className="rounded-xl border border-alloy-stone/15 bg-white/80 px-3 py-2 shadow-sm ring-1 ring-alloy-stone/10"
+                className="rounded-xl border border-alloy-stone/15 bg-white/80 px-2.5 py-2 shadow-sm ring-1 ring-alloy-stone/10"
             >
-                <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     {stages.map((s, i) => {
                         const key = String(s.status_key ?? "").trim();
                         const label = String(s.status_label ?? s.status_key ?? "").trim() || "—";
@@ -5936,8 +5946,8 @@ export default function AdminEntityDrawer() {
                                 : "text-alloy-midnight/55";
 
                         return (
-                            <div key={key || `${i}`} className="flex min-w-max items-center gap-2">
-                                <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${dotClass}`}>
+                            <div key={key || `${i}`} className="flex min-w-0 items-center gap-1.5">
+                                <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${dotClass}`}>
                                     {completed ? (
                                         <span className="text-[12px] leading-none font-semibold" aria-hidden>
                                             ✓
@@ -5948,11 +5958,11 @@ export default function AdminEntityDrawer() {
                                         </span>
                                     )}
                                 </div>
-                                <span className={`text-[12px] font-medium whitespace-nowrap ${labelClass}`}>{label}</span>
+                                <span className={`text-[11px] font-medium whitespace-nowrap ${labelClass}`}>{label}</span>
                                 {i < stages.length - 1 ? (
                                     <span
                                         aria-hidden
-                                        className={`mx-1 h-[2px] w-8 rounded-full ${
+                                        className={`mx-0.5 h-[2px] w-4 rounded-full ${
                                             completed ? "bg-[rgb(0,162,131)]/45" : current ? "bg-alloy-blue/35" : "bg-alloy-stone/20"
                                         }`}
                                     />
@@ -6189,7 +6199,14 @@ export default function AdminEntityDrawer() {
                     const d = overviewData as Record<string, unknown>;
                     const inquiryTitle = opportunityInquiryIdentityInquiryTitle(d);
                     const nm = String((d.name as string | undefined) ?? "").trim();
-                    return inquiryTitle || nm || opportunitySingular;
+                    const raw = inquiryTitle || nm || opportunitySingular;
+                    return (
+                        raw
+                            .replace(/\bInquiry\b/gi, "")
+                            .replace(/\s{2,}/g, " ")
+                            .replace(/^\s*[-:]\s*/g, "")
+                            .trim() || raw
+                    );
                 })()
               : isJobDrawerV2 && overviewData && !(overviewData as { _create?: boolean })?._create
                 ? String((overviewData as { title?: string }).title ?? "").trim() || "Job"
@@ -6200,14 +6217,27 @@ export default function AdminEntityDrawer() {
                     : "—";
     const headerSubtitleResolved = jobV2MetaSubtitle ?? drawerHeaderRecordSubtitle ?? undefined;
 
+    const workflowHeaderTitleRight =
+        drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer ? (
+            <div className="flex flex-wrap items-start justify-end gap-2">
+                {drawerStatusBadge}
+                {opportunityHeaderQuickActionsNode}
+            </div>
+        ) : undefined;
+
     return (
         <Drawer
             isOpen
             onClose={closeDrawer}
             title={drawerTitleResolved}
             headerSubtitle={headerSubtitleResolved}
-            statusBadge={drawerStatusBadge}
-            headerActions={drawerHeaderActions}
+            headerTitleRight={workflowHeaderTitleRight}
+            statusBadge={
+                drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer ? undefined : drawerStatusBadge
+            }
+            headerActions={
+                drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer ? undefined : drawerHeaderActions
+            }
             headerSignals={isJobDrawerV2 ? jobDrawerV2SignalsNode : opportunityInquiryWorkflowHeaderTimeline}
             headerExtra={drawerHeaderExtra}
             zIndexBackdrop={60}
@@ -8304,16 +8334,17 @@ export default function AdminEntityDrawer() {
                                                     const followNotesRaw = formData.follow_up_notes ?? d.follow_up_notes;
                                                     const followNotes = String(followNotesRaw ?? "").trim();
                                                     const followUpOverdue = isOpportunityFollowUpOverdue(d.next_follow_up_at);
+                                                    const followNotesValue = String(formData.follow_up_notes ?? d.follow_up_notes ?? "");
                                                     const householdId =
                                                         ident?.household?.id ?? (String(d.customer_id ?? "").trim() || null);
                                                     const fieldInput =
                                                         "w-full min-w-0 rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 text-[13px] font-medium text-alloy-midnight/90 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60";
                                                     const innerCard =
-                                                        "min-w-0 rounded-lg border border-alloy-stone/[0.1] bg-white/[0.97] p-2.5 shadow-sm ring-1 ring-alloy-stone/[0.06]";
+                                                        "min-w-0 rounded-lg border border-alloy-stone/[0.1] bg-white/[0.97] p-2 shadow-sm ring-1 ring-alloy-stone/[0.06]";
 
                                                     return (
                                                         <div
-                                                            className="rounded-xl border border-alloy-stone/15 border-l-[3px] border-l-[rgb(0,162,131)] bg-gradient-to-br from-emerald-50/45 via-white to-white px-3 py-3 shadow-md ring-1 ring-alloy-stone/10"
+                                                            className="rounded-xl border border-alloy-stone/15 border-l-[3px] border-l-[rgb(0,162,131)] bg-gradient-to-br from-emerald-50/45 via-white to-white px-2.5 py-2.5 shadow-md ring-1 ring-alloy-stone/10"
                                                             data-opportunity-inquiry-summary="true"
                                                         >
                                                             <div className="flex flex-wrap items-end justify-between gap-2 border-b border-alloy-stone/12 pb-2">
@@ -8324,7 +8355,7 @@ export default function AdminEntityDrawer() {
                                                                     </span>
                                                                 ) : null}
                                                             </div>
-                                                            <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2 lg:items-start lg:gap-4">
+                                                            <div className="mt-2.5 grid grid-cols-1 gap-2.5 lg:grid-cols-2 lg:items-start lg:gap-3">
                                                                 <div className={innerCard}>
                                                                     <div className={tinyLabel}>Family & contact</div>
                                                                     {household ? (
@@ -8411,7 +8442,7 @@ export default function AdminEntityDrawer() {
                                                                 </div>
                                                                 <div className={innerCard}>
                                                                     <div className={tinyLabel}>What matters now</div>
-                                                                    <div className="mt-2 space-y-2">
+                                                                    <div className="mt-1.5 space-y-2">
                                                                         <div>
                                                                             <div className={tinyLabel}>Desired start</div>
                                                                             <input
@@ -8449,10 +8480,18 @@ export default function AdminEntityDrawer() {
                                                                             />
                                                                         </div>
                                                                     </div>
+                                                                    {nextStepText ? (
+                                                                        <p className="mt-2 text-[12px] font-medium leading-snug text-alloy-midnight/75">
+                                                                            <span className="text-alloy-midnight/50">
+                                                                                {(nextStep?.title ?? "Suggested next step").trim()}:{" "}
+                                                                            </span>
+                                                                            {nextStepText}
+                                                                        </p>
+                                                                    ) : null}
                                                                 </div>
                                                             </div>
                                                             <div
-                                                                className={`mt-3 rounded-lg border border-alloy-stone/[0.1] bg-white/[0.97] p-3 shadow-sm ring-1 ring-alloy-stone/[0.06] ${
+                                                                className={`mt-2.5 rounded-lg border border-alloy-stone/[0.1] bg-white/[0.97] p-2.5 shadow-sm ring-1 ring-alloy-stone/[0.06] ${
                                                                     followUpOverdue ? "border-amber-200/75 bg-amber-50/[0.22] ring-amber-100/40" : ""
                                                                 }`}
                                                             >
@@ -8464,23 +8503,22 @@ export default function AdminEntityDrawer() {
                                                                         </span>
                                                                     ) : null}
                                                                 </div>
-                                                                {nextStepText ? (
-                                                                    <p className="mt-1.5 text-[12px] font-medium leading-snug text-alloy-midnight/75">
-                                                                        <span className="text-alloy-midnight/50">
-                                                                            {(nextStep?.title ?? "Suggested next step").trim()}:{" "}
-                                                                        </span>
-                                                                        {nextStepText}
-                                                                    </p>
-                                                                ) : (
-                                                                    <p className="mt-1.5 text-[11px] text-alloy-midnight/45">No suggested next step.</p>
-                                                                )}
-                                                                {followNotes ? (
-                                                                    <div className="mt-2 rounded-md border border-alloy-stone/15 bg-white px-2.5 py-2">
-                                                                        <p className="whitespace-pre-wrap text-[12px] leading-snug text-alloy-midnight/70">{followNotes}</p>
-                                                                    </div>
-                                                                ) : (
-                                                                    <p className="mt-2 text-[11px] text-alloy-midnight/45">No follow-up notes.</p>
-                                                                )}
+                                                                <textarea
+                                                                    value={followNotesValue}
+                                                                    onChange={(e) =>
+                                                                        setFormData((prev) => ({
+                                                                            ...prev,
+                                                                            follow_up_notes: e.target.value,
+                                                                        }))
+                                                                    }
+                                                                    onBlur={() => {
+                                                                        if (nonJobFormDirty) saveEdit();
+                                                                    }}
+                                                                    rows={3}
+                                                                    disabled={!canMutate}
+                                                                    placeholder="Add follow-up notes…"
+                                                                    className="mt-1.5 w-full resize-none rounded-md border border-alloy-stone/20 bg-white px-2.5 py-2 text-[12px] leading-snug text-alloy-midnight/80 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
+                                                                />
                                                             </div>
                                                         </div>
                                                     );

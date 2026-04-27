@@ -71,7 +71,7 @@ export default function EntityDrawerSection({
         <div
           className={
             isPremium
-              ? `min-w-0 w-full px-3 pb-4 pt-3 grid gap-x-4 gap-y-2.5 ${gridCols} [&>*]:min-w-0`
+              ? `min-w-0 w-full px-3 pb-3 pt-2.5 grid gap-x-4 gap-y-2 ${gridCols} [&>*]:min-w-0`
               : `grid gap-x-4 gap-y-2 ${gridCols} ${isCollapsible ? "mt-2" : "mt-3"}`
           }
         >
