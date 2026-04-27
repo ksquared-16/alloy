@@ -276,7 +276,14 @@ export type WorkspaceOpportunityQueueRuntime = {
 /** Runtime values fetched by the page and passed into blocks (keeps blocks mostly presentational). */
 export type WorkspaceRuntimeData = {
     metrics: Partial<Record<WorkspaceSignalMetricKey, number | null>>;
-    workUnits: Array<{ id: string; name: string | null; key?: string | null; department_id: string }>;
+    workUnits: Array<{
+        id: string;
+        name: string | null;
+        key?: string | null;
+        department_id: string;
+        /** Raw JSON from `work_units.queue_definition` (nullable). */
+        queue_definition?: unknown;
+    }>;
     /** Populated when layout includes an `attention` block — keyed by `WorkspaceAttentionCategoryKey`. */
     attention?: Partial<Record<WorkspaceAttentionCategoryKey, WorkspaceAttentionCategoryRuntime>>;
     /** Growth: opportunity rows from GET `/api/admin/work-units/:id/opportunity-queue` (projections, not truth). */

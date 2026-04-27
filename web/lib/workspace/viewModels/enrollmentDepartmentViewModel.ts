@@ -294,10 +294,32 @@ export function buildEnrollmentNeedsAttentionGroupsVm(
     }));
 }
 
-export function buildEnrollmentDepartmentActionLinks(): EnrollmentDepartmentActionLinkVm[] {
+export function buildEnrollmentDepartmentActionLinks(params?: {
+    workspaceBasePath?: string;
+    departmentId?: string;
+    primaryWorkUnitId?: string | null;
+}): EnrollmentDepartmentActionLinkVm[] {
+    const base =
+        params?.workspaceBasePath && params?.departmentId
+            ? `${params.workspaceBasePath.replace(/\/$/, "")}/dept/${encodeURIComponent(params.departmentId)}`
+            : null;
+    const primaryHref =
+        base && params?.primaryWorkUnitId
+            ? `${base}/work-unit/${encodeURIComponent(params.primaryWorkUnitId)}`
+            : null;
     return [
-        { id: "new_inquiry", label: "New inquiry", href: "/admin/opportunities", variant: "primary" },
-        { id: "open_all_inquiries", label: "Open all inquiries", href: "/admin/opportunities", variant: "secondary" },
+        {
+            id: "new_inquiry",
+            label: "New inquiry",
+            href: primaryHref ?? "/admin/opportunities",
+            variant: "primary",
+        },
+        {
+            id: "open_all_inquiries",
+            label: "Open all inquiries",
+            href: primaryHref ?? "/admin/opportunities",
+            variant: "secondary",
+        },
         { id: "manage_work_units", label: "Manage work units", href: "/admin/system/work-units", variant: "secondary" },
     ];
 }

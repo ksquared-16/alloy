@@ -19,7 +19,13 @@ import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 
 type Dept = { id: string; name: string | null; key?: string | null };
-type WU = { id: string; name: string | null; department_id: string; key?: string | null };
+type WU = {
+    id: string;
+    name: string | null;
+    department_id: string;
+    key?: string | null;
+    queue_definition?: unknown;
+};
 
 async function fetchOpportunityQueueRuntime(wu: WU | undefined): Promise<WorkspaceOpportunityQueueRuntime> {
     if (!wu?.id) {

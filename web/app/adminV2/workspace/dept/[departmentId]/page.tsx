@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
@@ -22,6 +22,10 @@ import { workspaceRouteParam } from "@/lib/workspace/workspaceRouteParam";
 
 const WORKSPACE_BASE = "/adminV2/workspace";
 
+function isQueueDefinitionV1(qd: unknown): qd is { version: 1 } {
+    return typeof (qd as { version?: unknown } | null)?.version === "number" && (qd as { version: number }).version === 1;
+}
+
 export default function AdminV2WorkspaceDepartmentPage() {
     const params = useParams();
     const departmentId = workspaceRouteParam(params.departmentId);
@@ -32,10 +36,57 @@ export default function AdminV2WorkspaceDepartmentPage() {
     const isEnrollment = deptKey === "enrollment";
     const isEnrollmentRuntimeReady = runtime.opportunityQueues != null;
 
+    const primaryEnrollmentWorkUnit = useMemo(() => {
+        if (!isEnrollment) return null;
+        const wus = runtime.workUnits ?? [];
+        const v1 = wus.filter((w) => isQueueDefinitionV1(w.queue_definition));
+        const preferred =
+            v1.find((w) => String(w.key ?? "").trim().toLowerCase() === "enrollment_pipeline") ?? v1[0] ?? null;
+        return preferred;
+    }, [isEnrollment, runtime.workUnits]);
+
+    useEffect(() => {
+        if (!isEnrollment) return;
+        const wus = runtime.workUnits ?? [];
+        const rows = wus.map((w) => ({
+            id: w.id,
+            key: String(w.key ?? ""),
+            name: w.name ?? null,
+            hasQueueDefV1: isQueueDefinitionV1(w.queue_definition),
+        }));
+        const primary = primaryEnrollmentWorkUnit
+            ? { id: primaryEnrollmentWorkUnit.id, key: primaryEnrollmentWorkUnit.key, name: primaryEnrollmentWorkUnit.name }
+            : null;
+        console.info("[adminV2][dept] work units discovered", {
+            departmentId,
+            deptKey,
+            workUnits: rows,
+            primaryWorkUnit: primary,
+            primaryRoute: primary ? `${WORKSPACE_BASE}/dept/${departmentId}/work-unit/${primary.id}` : null,
+        });
+    }, [departmentId, deptKey, isEnrollment, primaryEnrollmentWorkUnit, runtime.workUnits]);
+
+    useEffect(() => {
+        if (!isEnrollment) return;
+        console.info("[adminV2][dept] enrollment routes", {
+            departmentId,
+            primaryWorkUnitId: primaryEnrollmentWorkUnit?.id ?? null,
+            actions: enrollmentActions.map((a) => ({ id: a.id, label: a.label, href: a.href })),
+            legacyPipelineCardRoutes: enrollmentPipelineCards.map((c) => ({
+                segmentKey: c.segmentKey,
+                stageLabel: c.stageLabel,
+                href: c.openQueueAction.href,
+            })),
+        });
+    }, [departmentId, enrollmentActions, enrollmentPipelineCards, isEnrollment, primaryEnrollmentWorkUnit?.id]);
+
     const enrollmentKpis = useMemo(() => buildEnrollmentDepartmentKpis(runtime), [runtime]);
 
     const enrollmentPipelineCards = useMemo(
-        () => (isEnrollment ? buildEnrollmentPipelineCardsVm(runtime, WORKSPACE_BASE, departmentId) : []),
+        () =>
+            isEnrollment && !primaryEnrollmentWorkUnit
+                ? buildEnrollmentPipelineCardsVm(runtime, WORKSPACE_BASE, departmentId)
+                : [],
         [runtime, isEnrollment, departmentId]
     );
 
@@ -49,7 +100,17 @@ export default function AdminV2WorkspaceDepartmentPage() {
         [runtime, isEnrollment, departmentId]
     );
 
-    const enrollmentActions = useMemo(() => (isEnrollment ? buildEnrollmentDepartmentActionLinks() : []), [isEnrollment]);
+    const enrollmentActions = useMemo(
+        () =>
+            isEnrollment
+                ? buildEnrollmentDepartmentActionLinks({
+                      workspaceBasePath: WORKSPACE_BASE,
+                      departmentId,
+                      primaryWorkUnitId: primaryEnrollmentWorkUnit?.id ?? null,
+                  })
+                : [],
+        [departmentId, isEnrollment, primaryEnrollmentWorkUnit?.id]
+    );
 
     if (loading) {
         return (
@@ -109,6 +170,27 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                 </div>
                             </header>
                             <div className="adminv2-ws-wu-v2" data-ws-surface="work_unit">
+                                {primaryEnrollmentWorkUnit ? (
+                                    <div className="mb-2 rounded-lg border border-admin-border bg-admin-surface-card px-3 py-3">
+                                        <div className="text-sm font-medium text-alloy-forge">
+                                            Configured work unit: {primaryEnrollmentWorkUnit.name ?? "Enrollment pipeline"}
+                                        </div>
+                                        <div className="mt-1 text-xs text-alloy-forge/60">
+                                            This department is configured with a QueueDefinition v1 work unit. Open it to see the
+                                            configured queues.
+                                        </div>
+                                        <div className="mt-2">
+                                            <Link
+                                                href={`${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(
+                                                    primaryEnrollmentWorkUnit.id
+                                                )}`}
+                                                className="adminv2-ws-action-row inline-flex"
+                                            >
+                                                Open enrollment work unit
+                                            </Link>
+                                        </div>
+                                    </div>
+                                ) : null}
                                 {!isEnrollmentRuntimeReady ? (
                                     <ul className="adminv2-ws-queue-list" role="list" aria-hidden>
                                         {Array.from({ length: 3 }).map((_, i) => (
@@ -146,7 +228,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                             </li>
                                         ))}
                                     </ul>
-                                ) : (
+                                ) : enrollmentPipelineCards.length ? (
                                     <ul className="adminv2-ws-queue-list" role="list">
                                         {enrollmentPipelineCards.map((card) => (
                                             <li key={card.segmentKey} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
@@ -195,7 +277,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                             </li>
                                         ))}
                                     </ul>
-                                )}
+                                ) : null}
                             </div>
                         </section>
                     }
