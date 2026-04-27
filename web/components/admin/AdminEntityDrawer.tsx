@@ -5931,6 +5931,9 @@ export default function AdminEntityDrawer() {
                         const current = currentIdx >= 0 && i === currentIdx;
                         const future = currentIdx >= 0 && i > currentIdx;
 
+                        // TODO: Once we have workflow/status history, map each stage -> first-hit timestamp and render here.
+                        const stageDateLabel: string | null = null;
+
                         const dotClass = completed
                             ? "bg-[rgb(0,162,131)] text-white"
                             : current
@@ -5946,7 +5949,7 @@ export default function AdminEntityDrawer() {
                                 : "text-alloy-midnight/55";
 
                         return (
-                            <div key={key || `${i}`} className="flex min-w-0 items-center gap-1.5">
+                            <div key={key || `${i}`} className="flex min-w-0 items-start gap-1.5">
                                 <div className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${dotClass}`}>
                                     {completed ? (
                                         <span className="text-[12px] leading-none font-semibold" aria-hidden>
@@ -5958,7 +5961,14 @@ export default function AdminEntityDrawer() {
                                         </span>
                                     )}
                                 </div>
-                                <span className={`text-[11px] font-medium whitespace-nowrap ${labelClass}`}>{label}</span>
+                                <div className="min-w-0">
+                                    <div className={`text-[11px] font-medium whitespace-nowrap ${labelClass}`}>{label}</div>
+                                    {stageDateLabel ? (
+                                        <div className="mt-0.5 text-[10px] font-medium text-alloy-midnight/45 whitespace-nowrap">
+                                            {stageDateLabel}
+                                        </div>
+                                    ) : null}
+                                </div>
                                 {i < stages.length - 1 ? (
                                     <span
                                         aria-hidden
@@ -6215,12 +6225,20 @@ export default function AdminEntityDrawer() {
                   : title != null
                     ? String(title)
                     : "—";
-    const headerSubtitleResolved = jobV2MetaSubtitle ?? drawerHeaderRecordSubtitle ?? undefined;
+    const headerSubtitleBase = jobV2MetaSubtitle ?? drawerHeaderRecordSubtitle ?? undefined;
+    const headerSubtitleResolved =
+        drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer ? (
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+                {headerSubtitleBase ? <span>{headerSubtitleBase}</span> : null}
+                <span className="shrink-0">{opportunityInquiryWorkflowHeaderStatus}</span>
+            </div>
+        ) : (
+            headerSubtitleBase
+        );
 
     const workflowHeaderTitleRight =
         drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer ? (
             <div className="flex flex-wrap items-start justify-end gap-2">
-                {drawerStatusBadge}
                 {opportunityHeaderQuickActionsNode}
             </div>
         ) : undefined;
@@ -8503,6 +8521,23 @@ export default function AdminEntityDrawer() {
                                                                         </span>
                                                                     ) : null}
                                                                 </div>
+                                                                <div className="mt-1 flex flex-wrap items-center gap-2">
+                                                                    <button
+                                                                        type="button"
+                                                                        disabled
+                                                                        className="rounded-md border border-alloy-stone/25 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/40"
+                                                                        title="Coming soon"
+                                                                    >
+                                                                        Add note
+                                                                    </button>
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => setDrawerTab("activity")}
+                                                                        className="rounded-md border border-alloy-stone/25 bg-white px-2 py-1 text-[11px] font-semibold text-alloy-midnight/75 hover:border-alloy-blue/35 hover:text-alloy-blue"
+                                                                    >
+                                                                        View activity
+                                                                    </button>
+                                                                </div>
                                                                 <textarea
                                                                     value={followNotesValue}
                                                                     onChange={(e) =>
@@ -8519,6 +8554,48 @@ export default function AdminEntityDrawer() {
                                                                     placeholder="Add follow-up notes…"
                                                                     className="mt-1.5 w-full resize-none rounded-md border border-alloy-stone/20 bg-white px-2.5 py-2 text-[12px] leading-snug text-alloy-midnight/80 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
                                                                 />
+                                                            </div>
+                                                            <div className={`${innerCard} mt-2.5`}>
+                                                                <div className={tinyLabel}>Communication</div>
+                                                                <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                                                                    <button
+                                                                        type="button"
+                                                                        disabled
+                                                                        className="rounded-md border border-alloy-stone/25 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/40"
+                                                                        title="Messaging coming soon"
+                                                                    >
+                                                                        Message family
+                                                                    </button>
+                                                                    {commPhone ? (
+                                                                        <a
+                                                                            href={`tel:${commPhone}`}
+                                                                            className="rounded-md border border-alloy-stone/25 bg-white px-2 py-1 text-[11px] font-semibold text-alloy-midnight/75 hover:border-alloy-blue/35 hover:text-alloy-blue"
+                                                                        >
+                                                                            Call
+                                                                        </a>
+                                                                    ) : (
+                                                                        <span className="rounded-md border border-alloy-stone/15 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/35">
+                                                                            Call
+                                                                        </span>
+                                                                    )}
+                                                                    {commEmail ? (
+                                                                        <a
+                                                                            href={`mailto:${commEmail}`}
+                                                                            className="rounded-md border border-alloy-stone/25 bg-white px-2 py-1 text-[11px] font-semibold text-alloy-midnight/75 hover:border-alloy-blue/35 hover:text-alloy-blue"
+                                                                        >
+                                                                            Email
+                                                                        </a>
+                                                                    ) : (
+                                                                        <span className="rounded-md border border-alloy-stone/15 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/35">
+                                                                            Email
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                <div className="mt-2 rounded-md border border-dashed border-alloy-stone/25 bg-white/60 px-2.5 py-2">
+                                                                    <p className="text-[12px] font-medium text-alloy-midnight/55">
+                                                                        Messages with this family will appear here.
+                                                                    </p>
+                                                                </div>
                                                             </div>
                                                         </div>
                                                     );

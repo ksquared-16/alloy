@@ -43,7 +43,11 @@ export default function EntityDrawerSection({
 
   return (
     <section
-      className={`${isPremium ? `mb-0 ${PREMIUM_SECTION} ${isCollapsible && !expanded ? "shadow-md shadow-alloy-stone/15" : ""}` : "mb-6"} ${className}`}
+      className={`${
+        isPremium
+          ? `mb-5 ${PREMIUM_SECTION} ${isCollapsible && !expanded ? "shadow-md shadow-alloy-stone/15" : ""}`
+          : "mb-6"
+      } ${className}`}
       data-entity-section
       data-section-key={config.key}
       data-section-surface={surface}
