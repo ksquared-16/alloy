@@ -15,6 +15,8 @@ import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
 import { buildRealOpportunityWorkUnitWorkspaceModel } from "@/lib/ui-v2/adapters/realWorkUnitFromOpportunities";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { workspaceRouteParam } from "@/lib/workspace/workspaceRouteParam";
+import { validateQueueDefinition, type QueueDefinitionV1 } from "@/lib/config/queueDefinitionSchema";
+import { getQueueUiConfig, type QueueUiConfig, type QueueUiRowPreviewField } from "@/lib/ui-v2/queueUiConfig";
 
 const WORKSPACE_BASE = "/adminV2/workspace";
 
@@ -23,6 +25,7 @@ type WorkUnitRow = {
     department_id: string;
     key: string | null;
     name: string | null;
+    queue_definition?: unknown;
 };
 
 type DeptRow = { id: string; name: string | null; key: string | null };
@@ -52,6 +55,10 @@ type QueueItemsResult = {
     limit: number;
     offset: number;
 };
+
+function isRowPreviewFieldEnabled(fields: QueueUiRowPreviewField[], f: QueueUiRowPreviewField): boolean {
+    return fields.includes(f);
+}
 
 export default function AdminV2OpportunityWorkUnitPage() {
     const params = useParams();
@@ -86,6 +93,42 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [queueItemsError, setQueueItemsError] = useState<string | null>(null);
     const [queueItemsRoute, setQueueItemsRoute] = useState<string | null>(null);
     const [queueItemsLoading, setQueueItemsLoading] = useState(false);
+
+    const queueDef = useMemo<QueueDefinitionV1 | null>(() => {
+        if (!workUnit?.queue_definition) return null;
+        try {
+            return validateQueueDefinition(workUnit.queue_definition);
+        } catch {
+            return null;
+        }
+    }, [workUnit?.queue_definition]);
+
+    const queueUi = useMemo<QueueUiConfig | null>(() => {
+        if (!queueDef) return null;
+        return getQueueUiConfig(queueDef);
+    }, [queueDef]);
+
+    const sectionedQueueSummaries = useMemo(() => {
+        if (!queueSummaries) return null;
+        if (!queueUi) {
+            // fallback to existing flat list; but still deterministic
+            return [{ key: "all", label: "Queues", tone: "standard" as const, queues: queueSummaries }];
+        }
+        const byKey = new Map(queueSummaries.map((q) => [q.key, q]));
+        const used = new Set<string>();
+        const sections = queueUi.sections
+            .map((s) => {
+                const qs = s.queue_keys
+                    .map((k) => byKey.get(k) ?? null)
+                    .filter((x): x is QueueSummary => Boolean(x));
+                for (const q of qs) used.add(q.key);
+                return { key: s.key, label: s.label, tone: s.tone ?? "standard", queues: qs };
+            })
+            .filter((s) => s.queues.length > 0);
+        if (sections.length > 0) return sections;
+        // If config sections don't match summaries, fall back to all queues.
+        return [{ key: "all", label: "Queues", tone: "standard" as const, queues: queueSummaries }];
+    }, [queueSummaries, queueUi]);
 
     useEffect(() => {
         if (!debugEnabled) return;
@@ -213,14 +256,24 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             setQueueSummaries(qs);
                             setQueueSummariesError(null);
                             setQueueSummariesRoute(route);
-                            // Select queue from URL if present, otherwise default to first queue.
+                            // Select queue from URL if present, otherwise default to first queue in UI config order.
                             const qFromUrl = (searchParams?.get("queue") ?? "").trim();
+                            const uiOrder = (() => {
+                                try {
+                                    const def = validateQueueDefinition(wu.queue_definition);
+                                    const ui = getQueueUiConfig(def);
+                                    return ui.sections.flatMap((s) => s.queue_keys);
+                                } catch {
+                                    return qs.map((x) => x.key);
+                                }
+                            })();
+                            const firstByUi = uiOrder.find((k) => qs.some((x) => x.key === k)) ?? qs[0]?.key ?? null;
                             const initial =
                                 qFromUrl && qs.some((x) => x.key === qFromUrl)
                                     ? qFromUrl
                                     : selectedQueueKey && qs.some((x) => x.key === selectedQueueKey)
                                       ? selectedQueueKey
-                                      : qs[0]?.key ?? null;
+                                      : firstByUi;
                             setSelectedQueueKey(initial);
                         }
                     } else if (res.status === 501) {
@@ -383,60 +436,79 @@ export default function AdminV2OpportunityWorkUnitPage() {
             );
         }
         return (
-            <div className="flex flex-wrap gap-1.5">
-                {queueSummaries.map((q) => {
-                    const selected = q.key === selectedQueueKey;
-                    const tier =
-                        q.priority === "critical"
-                            ? "critical"
-                            : q.priority === "attention"
-                              ? "attention"
-                              : "standard";
-                    const baseCls =
-                        "rounded-md border px-2.5 py-1.5 text-left transition-colors max-w-[260px]";
-                    const tierCls =
-                        tier === "critical"
-                            ? selected
-                                ? "border-alloy-ember bg-alloy-ember/10"
-                                : "border-alloy-ember/40 bg-admin-surface-card"
-                            : tier === "attention"
-                              ? selected
-                                  ? "border-alloy-honey bg-alloy-honey/10"
-                                  : "border-alloy-honey/40 bg-admin-surface-card"
-                              : selected
-                                ? "border-alloy-pine bg-alloy-stone/20"
-                                : "border-admin-border bg-admin-surface-card";
-                    return (
-                        <button
-                            key={q.key}
-                            type="button"
-                            onClick={() => {
-                                setSelectedQueueKey(q.key);
-                                if (typeof window !== "undefined") {
-                                    const url = new URL(window.location.href);
-                                    url.searchParams.set("queue", q.key);
-                                    router.replace(url.pathname + "?" + url.searchParams.toString());
-                                }
-                                void fetchQueueItems(workUnitId, q.key);
-                            }}
-                            className={`${baseCls} ${tierCls}`}
-                            aria-pressed={selected}
-                        >
-                            <div className="flex items-start justify-between gap-2">
-                                <div className="min-w-0">
-                                    <div className="text-xs font-semibold text-alloy-forge truncate">{q.label}</div>
-                                    {q.description ? (
-                                        <div className="text-[11px] text-alloy-forge/55 truncate">{q.description}</div>
-                                    ) : null}
-                                </div>
-                                <div className="text-[11px] text-alloy-forge/70 font-semibold tabular-nums">{q.count}</div>
+            <div className="flex flex-col gap-2">
+                {(sectionedQueueSummaries ?? [{ key: "all", label: "Queues", tone: "standard" as const, queues: queueSummaries }]).map(
+                    (section) => (
+                        <section key={section.key} aria-label={section.label}>
+                            {sectionedQueueSummaries && sectionedQueueSummaries.length > 1 ? (
+                                <div className="mb-1 text-[11px] font-semibold text-alloy-forge/70">{section.label}</div>
+                            ) : null}
+                            <div className="flex flex-wrap gap-1.5">
+                                {section.queues.map((q) => {
+                                    const selected = q.key === selectedQueueKey;
+                                    const tier =
+                                        q.priority === "critical"
+                                            ? "critical"
+                                            : q.priority === "attention"
+                                              ? "attention"
+                                              : "standard";
+                                    const baseCls =
+                                        "rounded-md border px-2.5 py-1.5 text-left transition-colors max-w-[260px]";
+                                    const tierCls =
+                                        tier === "critical"
+                                            ? selected
+                                                ? "border-alloy-ember bg-alloy-ember/10"
+                                                : "border-alloy-ember/40 bg-admin-surface-card"
+                                            : tier === "attention"
+                                              ? selected
+                                                  ? "border-alloy-honey bg-alloy-honey/10"
+                                                  : "border-alloy-honey/40 bg-admin-surface-card"
+                                              : selected
+                                                ? "border-alloy-pine bg-alloy-stone/20"
+                                                : "border-admin-border bg-admin-surface-card";
+                                    return (
+                                        <button
+                                            key={q.key}
+                                            type="button"
+                                            onClick={() => {
+                                                setSelectedQueueKey(q.key);
+                                                if (typeof window !== "undefined") {
+                                                    const url = new URL(window.location.href);
+                                                    url.searchParams.set("queue", q.key);
+                                                    router.replace(url.pathname + "?" + url.searchParams.toString());
+                                                }
+                                                void fetchQueueItems(workUnitId, q.key);
+                                            }}
+                                            className={`${baseCls} ${tierCls}`}
+                                            aria-pressed={selected}
+                                        >
+                                            <div className="flex items-start justify-between gap-2">
+                                                <div className="min-w-0">
+                                                    <div className="text-xs font-semibold text-alloy-forge truncate">{q.label}</div>
+                                                    {q.description ? (
+                                                        <div className="text-[11px] text-alloy-forge/55 truncate">{q.description}</div>
+                                                    ) : null}
+                                                </div>
+                                                <div className="text-[11px] text-alloy-forge/70 font-semibold tabular-nums">{q.count}</div>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
                             </div>
-                        </button>
-                    );
-                })}
+                        </section>
+                    )
+                )}
             </div>
         );
-    }, [fetchQueueItems, queueSummaries, queueSummariesError, queueSummariesRoute, selectedQueueKey, workUnitId]);
+    }, [
+        fetchQueueItems,
+        queueSummaries,
+        queueSummariesError,
+        queueSummariesRoute,
+        sectionedQueueSummaries,
+        selectedQueueKey,
+        workUnitId,
+    ]);
 
     const queueModel = useMemo<WorkUnitWorkspaceModel | null>(() => {
         if (!workUnit || !dept) return null;
@@ -448,6 +520,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
         const entity = queueItems?.queue.entity_type ?? activeQueue?.entity_type ?? "job";
         const items = (queueItems?.items ?? []) as any[];
+
+        const previewCfg = queueUi?.row_preview ?? { variant: "basic" as const, fields: ["title", "status"] as QueueUiRowPreviewField[], actions: ["open"] as const };
+        const previewFields = previewCfg.fields ?? (["title", "status"] as QueueUiRowPreviewField[]);
+        const previewActions = previewCfg.actions ?? (["open"] as const);
 
         const vmItems = items
             .filter((r) => typeof r?.id === "string" && r.id.trim())
@@ -485,48 +561,66 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     variant?: "primary" | "secondary" | "danger";
                     payload?: Record<string, unknown>;
                 }> = [
-                    { id: "open", label: "Open", actionId: "open_record", variant: "primary" },
+                    ...(previewActions.includes("open")
+                        ? [{ id: "open", label: "Open", actionId: "open_record", variant: "primary" as const }]
+                        : []),
                 ];
-                if (phone) {
+                if (previewActions.includes("call") && phone) {
                     quickActions.push({
                         id: "call",
                         label: "Call",
                         actionId: "crm_tel",
-                        variant: "secondary",
+                        variant: "secondary" as const,
                         payload: { href: `tel:${phone}` },
                     });
                 }
-                if (email) {
+                if (previewActions.includes("email") && email) {
                     quickActions.push({
                         id: "email",
                         label: "Email",
                         actionId: "crm_mailto",
-                        variant: "secondary",
+                        variant: "secondary" as const,
                         payload: { href: `mailto:${email}` },
                     });
+                }
+
+                const want = (f: QueueUiRowPreviewField) => isRowPreviewFieldEnabled(previewFields, f);
+
+                const basicSubtitleParts: string[] = [];
+                if (want("status") && statusLabel) basicSubtitleParts.push(`Status: ${statusLabel}`);
+                if (want("primary_contact") && contactName) basicSubtitleParts.push(contactName);
+                if ((want("phone") && phone) || (want("email") && email)) {
+                    const bits = [want("phone") ? phone : "", want("email") ? email : ""].filter(Boolean);
+                    if (bits.length) basicSubtitleParts.push(bits.join(" · "));
                 }
 
                 return {
                     id: rid,
                     title,
-                    subtitle: statusLabel ? `Status: ${statusLabel}` : undefined,
+                    subtitle: previewCfg.variant === "basic" ? (basicSubtitleParts.filter(Boolean).join(" · ") || undefined) : undefined,
                     quickActions,
-                    semanticEnrollmentCrm: {
-                        primaryIdentity: title,
-                        childName: childName || null,
-                        stageLabel: null,
-                        statusLabel: statusLabel || null,
-                        nextStep: null,
-                        lastActivity: null,
-                        commercialValue: null,
-                        contactSnippet: [contactName, phone || email].filter(Boolean).join(" · ") || null,
-                        programContext: program || null,
-                        roomContext: null,
-                        ageContext: desiredStart ? `Start: ${desiredStart}` : null,
-                        tourContext: tourCtx || null,
-                        attentionReason: attentionReason || null,
-                        familyNote: note || null,
-                    },
+                    semanticCrmCompact:
+                        previewCfg.variant === "crm_compact"
+                            ? {
+                                  primaryIdentity: title,
+                                  childName: want("child_name") ? childName || null : null,
+                                  stageLabel: null,
+                                  statusLabel: want("status") ? statusLabel || null : null,
+                                  nextStep: null,
+                                  lastActivity: null,
+                                  commercialValue: null,
+                                  contactSnippet:
+                                      [want("primary_contact") ? contactName : "", want("phone") ? phone : "", want("email") ? email : ""]
+                                          .filter(Boolean)
+                                          .join(" · ") || null,
+                                  programContext: want("program") ? program || null : null,
+                                  roomContext: null,
+                                  ageContext: want("desired_start_date") ? (desiredStart ? `Start: ${desiredStart}` : null) : null,
+                                  tourContext: want("tour_date") ? tourCtx || null : null,
+                                  attentionReason: attentionReason || null,
+                                  familyNote: note || null,
+                              }
+                            : undefined,
                 };
             });
 
@@ -578,7 +672,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             },
             contextRail: { title: "About", groups: [] },
         };
-    }, [dept, queueItems, queueItemsError, queueItemsLoading, queueItemsRoute, queueSummaries, selectedQueueKey, workUnit]);
+    }, [dept, queueItems, queueItemsError, queueItemsLoading, queueItemsRoute, queueSummaries, selectedQueueKey, workUnit, queueUi]);
 
     const model = useMemo(() => {
         if (!workUnit || !dept || !oq) return null;

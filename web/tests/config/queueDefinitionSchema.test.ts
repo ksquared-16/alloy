@@ -105,5 +105,35 @@ describe("QueueDefinition v1 schema", () => {
         };
         expect(validateQueueDefinition(input)).toEqual(input);
     });
+
+    it("accepts v1 ui config", () => {
+        const input = {
+            version: 1,
+            entity_type: "opportunity",
+            ui: {
+                layout: "pipeline_with_attention",
+                primary_total_label: "Pipeline families",
+                primary_total_queue: "all",
+                sections: [
+                    { key: "pipeline", label: "Pipeline", queue_keys: ["all"] },
+                    { key: "attention", label: "Needs Attention", tone: "critical", queue_keys: ["needs_attention"] },
+                ],
+                row_preview: { variant: "crm_compact", fields: ["title", "status", "email"], actions: ["open", "email"] },
+            },
+            queues: [{ key: "all", label: "All", filters: [] }],
+        };
+        expect(validateQueueDefinition(input)).toEqual(input);
+    });
+
+    it("rejects ui.section.queue_keys empty", () => {
+        expect(() =>
+            validateQueueDefinition({
+                version: 1,
+                entity_type: "opportunity",
+                ui: { layout: "single_section", sections: [{ key: "x", label: "X", queue_keys: [] }] },
+                queues: [{ key: "all", label: "All", filters: [] }],
+            })
+        ).toThrow();
+    });
 });
 

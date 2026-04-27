@@ -85,11 +85,53 @@ export const queueConfigSchema = z
     .strict()
     .readonly();
 
+const queueUiRowPreviewSchema = z
+    .object({
+        variant: z.enum(["crm_compact", "basic"]).default("basic"),
+        fields: z
+            .array(
+                z.enum([
+                    "title",
+                    "status",
+                    "primary_contact",
+                    "phone",
+                    "email",
+                    "child_name",
+                    "program",
+                    "desired_start_date",
+                    "tour_date",
+                ])
+            )
+            .default(["title", "status"]),
+        actions: z.array(z.enum(["open", "call", "email"])).default(["open"]),
+    })
+    .strict();
+
+const queueUiSectionSchema = z
+    .object({
+        key: z.string().min(1),
+        label: z.string().min(1),
+        tone: z.enum(["standard", "attention", "critical"]).optional(),
+        queue_keys: z.array(z.string().min(1)).nonempty(),
+    })
+    .strict();
+
+const queueUiSchema = z
+    .object({
+        layout: z.enum(["pipeline_with_attention", "single_section"]).default("single_section"),
+        primary_total_label: z.string().min(1).optional(),
+        primary_total_queue: z.string().min(1).optional(),
+        sections: z.array(queueUiSectionSchema).nonempty().optional(),
+        row_preview: queueUiRowPreviewSchema.optional(),
+    })
+    .strict();
+
 export const queueDefinitionV1Schema = z
     .object({
         version: z.literal(1),
         entity_type: z.enum(["job", "schedule", "opportunity"]),
         queues: z.array(queueConfigSchema).nonempty(),
+        ui: queueUiSchema.optional(),
     })
     .strict()
     .readonly();

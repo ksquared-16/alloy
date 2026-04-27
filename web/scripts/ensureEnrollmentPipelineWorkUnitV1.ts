@@ -126,6 +126,47 @@ function buildEnrollmentQueueDefinitionV1() {
     return {
         version: 1,
         entity_type: "opportunity",
+        ui: {
+            layout: "pipeline_with_attention",
+            primary_total_label: "Pipeline families",
+            primary_total_queue: "all",
+            sections: [
+                {
+                    key: "pipeline",
+                    label: "Pipeline",
+                    queue_keys: [
+                        "all",
+                        "new_inquiries",
+                        "contacted_touring",
+                        "post_tour_followup",
+                        "paperwork",
+                        "ready_to_enroll",
+                        "enrolled_starting",
+                    ],
+                },
+                {
+                    key: "attention",
+                    label: "Needs Attention",
+                    tone: "critical",
+                    queue_keys: ["needs_attention"],
+                },
+            ],
+            row_preview: {
+                variant: "crm_compact",
+                fields: [
+                    "title",
+                    "status",
+                    "primary_contact",
+                    "phone",
+                    "email",
+                    "child_name",
+                    "program",
+                    "desired_start_date",
+                    "tour_date",
+                ],
+                actions: ["open", "call", "email"],
+            },
+        },
         queues,
     } as const;
 }

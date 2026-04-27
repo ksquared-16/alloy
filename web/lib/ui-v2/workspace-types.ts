@@ -46,10 +46,10 @@ export type QueueItemQuickActionVm = {
 export type QueueItemWaitStatusVm = "safe" | "approaching" | "breached";
 
 /**
- * Stable semantic slots for Enrollment CRM queue rows — future AI/config can target these keys
+ * Stable semantic slots for CRM-compact queue rows — config can target these keys
  * without reshaping the whole `QueueItemVm`.
  */
-export type EnrollmentCrmRowSemanticSlots = {
+export type CrmCompactRowSemanticSlots = {
   primaryIdentity: string;
   /** Child / learner name when present on the payload (e.g. seed `metadata.demo_child_name`); else null. */
   childName: string | null;
@@ -103,10 +103,10 @@ export type QueueItemVm = {
   /** Visual emphasis for SLA / risk (queue card rail + badge tone) */
   urgencyTier?: "critical" | "warning" | "standard";
   /**
-   * When set, `QueueBlock` renders the Enrollment CRM preview from these slots (config/AI-ready),
+   * When set, `QueueBlock` renders the CRM-compact preview from these slots,
    * instead of inferring layout from title/subtitle/meta alone.
    */
-  semanticEnrollmentCrm?: EnrollmentCrmRowSemanticSlots;
+  semanticCrmCompact?: CrmCompactRowSemanticSlots;
 };
 
 /** Department throughput / attention lanes — grouped counts (not work-unit rows). */

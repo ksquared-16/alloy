@@ -11,19 +11,15 @@ import {
     DepartmentRouteSkeletonBody,
     WsRouteLoadingRibbon,
 } from "@/components/admin/workspace/workspaceRouteSkeletons";
-import {
-    buildEnrollmentDepartmentActionLinks,
-    buildEnrollmentNeedsAttentionGroupsVm,
-    buildEnrollmentNeedsAttentionPreviewVm,
-    buildEnrollmentPipelineCardsVm,
-} from "@/lib/workspace/viewModels/enrollmentDepartmentViewModel";
 import { workspaceRouteParam } from "@/lib/workspace/workspaceRouteParam";
+import { validateQueueDefinition, type QueueDefinitionV1 } from "@/lib/config/queueDefinitionSchema";
+import {
+    getQueueUiConfig,
+    partitionQueueUiSections,
+    queuePrimaryTotalFromSummaries,
+} from "@/lib/ui-v2/queueUiConfig";
 
 const WORKSPACE_BASE = "/adminV2/workspace";
-
-function isQueueDefinitionV1(qd: unknown): qd is { version: 1 } {
-    return typeof (qd as { version?: unknown } | null)?.version === "number" && (qd as { version: number }).version === 1;
-}
 
 type V1QueueSummary = {
     key: string;
@@ -45,38 +41,42 @@ export default function AdminV2WorkspaceDepartmentPage() {
     const { dept, title, runtime, error, loading } = useOperationsWorkspaceData(departmentId);
 
     const deptKey = (dept?.key ?? "").trim().toLowerCase();
-    const isEnrollment = deptKey === "enrollment";
-    const isEnrollmentRuntimeReady = runtime.opportunityQueues != null;
 
-    const [enrollmentV1Queues, setEnrollmentV1Queues] = useState<V1QueueSummary[] | null>(null);
-    const [enrollmentV1QueuesError, setEnrollmentV1QueuesError] = useState<string | null>(null);
-    const [enrollmentV1QueuesRoute, setEnrollmentV1QueuesRoute] = useState<string | null>(null);
+    const [v1Queues, setV1Queues] = useState<V1QueueSummary[] | null>(null);
+    const [v1QueuesError, setV1QueuesError] = useState<string | null>(null);
+    const [v1QueuesRoute, setV1QueuesRoute] = useState<string | null>(null);
     const [ctxDebug, setCtxDebug] = useState<{
         orgId: string;
         orgName: string | null;
         orgSlug: string | null;
     } | null>(null);
 
-    const primaryEnrollmentWorkUnit = useMemo(() => {
-        if (!isEnrollment) return null;
+    const primaryWorkUnit = useMemo(() => {
         const wus = runtime.workUnits ?? [];
-        const v1 = wus.filter((w) => isQueueDefinitionV1(w.queue_definition));
-        const preferred =
-            v1.find((w) => String(w.key ?? "").trim().toLowerCase() === "enrollment_pipeline") ?? v1[0] ?? null;
-        return preferred;
-    }, [isEnrollment, runtime.workUnits]);
+        for (const w of wus) {
+            try {
+                const def = validateQueueDefinition(w.queue_definition);
+                if (def.version === 1) return w;
+            } catch {
+                // ignore
+            }
+        }
+        return null;
+    }, [runtime.workUnits]);
 
-    const enrollmentActions = useMemo(
-        () =>
-            isEnrollment
-                ? buildEnrollmentDepartmentActionLinks({
-                      workspaceBasePath: WORKSPACE_BASE,
-                      departmentId,
-                      primaryWorkUnitId: primaryEnrollmentWorkUnit?.id ?? null,
-                  })
-                : [],
-        [departmentId, isEnrollment, primaryEnrollmentWorkUnit?.id]
-    );
+    const queueDef = useMemo<QueueDefinitionV1 | null>(() => {
+        if (!primaryWorkUnit) return null;
+        try {
+            return validateQueueDefinition(primaryWorkUnit.queue_definition);
+        } catch {
+            return null;
+        }
+    }, [primaryWorkUnit]);
+
+    const queueUi = useMemo(() => {
+        if (!queueDef) return null;
+        return getQueueUiConfig(queueDef);
+    }, [queueDef]);
 
     useEffect(() => {
         if (!debugEnabled) return;
@@ -119,16 +119,21 @@ export default function AdminV2WorkspaceDepartmentPage() {
     }, [debugEnabled, departmentId]);
 
     useEffect(() => {
-        if (!isEnrollment) return;
         const wus = runtime.workUnits ?? [];
         const rows = wus.map((w) => ({
             id: w.id,
             key: String(w.key ?? ""),
             name: w.name ?? null,
-            hasQueueDefV1: isQueueDefinitionV1(w.queue_definition),
+            hasQueueDefV1: (() => {
+                try {
+                    return validateQueueDefinition(w.queue_definition).version === 1;
+                } catch {
+                    return false;
+                }
+            })(),
         }));
-        const primary = primaryEnrollmentWorkUnit
-            ? { id: primaryEnrollmentWorkUnit.id, key: primaryEnrollmentWorkUnit.key, name: primaryEnrollmentWorkUnit.name }
+        const primary = primaryWorkUnit
+            ? { id: primaryWorkUnit.id, key: primaryWorkUnit.key, name: primaryWorkUnit.name }
             : null;
         console.info("[adminV2][dept] work units discovered", {
             departmentId,
@@ -137,26 +142,25 @@ export default function AdminV2WorkspaceDepartmentPage() {
             primaryWorkUnit: primary,
             primaryRoute: primary ? `${WORKSPACE_BASE}/dept/${departmentId}/work-unit/${primary.id}` : null,
         });
-    }, [departmentId, deptKey, isEnrollment, primaryEnrollmentWorkUnit, runtime.workUnits]);
+    }, [departmentId, deptKey, primaryWorkUnit, runtime.workUnits]);
 
     useEffect(() => {
-        if (!isEnrollment) return;
-        const workUnitId = primaryEnrollmentWorkUnit?.id ?? "";
+        const workUnitId = primaryWorkUnit?.id ?? "";
         if (!workUnitId) {
-            setEnrollmentV1Queues(null);
-            setEnrollmentV1QueuesError(null);
-            setEnrollmentV1QueuesRoute(null);
+            setV1Queues(null);
+            setV1QueuesError(null);
+            setV1QueuesRoute(null);
             return;
         }
         let cancelled = false;
         (async () => {
             const route = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?limit=50`;
-            setEnrollmentV1QueuesRoute(route);
-            setEnrollmentV1QueuesError(null);
+            setV1QueuesRoute(route);
+            setV1QueuesError(null);
             try {
                 const res = await fetch(route, { credentials: "include" });
                 const j = (await res.json().catch(() => ({}))) as { error?: string; queues?: V1QueueSummary[] };
-                console.info("[adminV2][dept] enrollment v1 queues", {
+                console.info("[adminV2][dept] v1 queues", {
                     route,
                     status: res.status,
                     ok: res.ok,
@@ -165,102 +169,144 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 });
                 if (!res.ok) {
                     if (!cancelled) {
-                        setEnrollmentV1Queues(null);
-                        setEnrollmentV1QueuesError(j.error ?? "Failed to load queues");
+                        setV1Queues(null);
+                        setV1QueuesError(j.error ?? "Failed to load queues");
                     }
                     return;
                 }
                 if (!cancelled) {
-                    setEnrollmentV1Queues((j.queues ?? []) as V1QueueSummary[]);
-                    setEnrollmentV1QueuesError(null);
+                    setV1Queues((j.queues ?? []) as V1QueueSummary[]);
+                    setV1QueuesError(null);
                 }
             } catch (e) {
                 const msg = e instanceof Error ? e.message : "Failed to load queues";
-                console.warn("[adminV2][dept] enrollment v1 queues failed", { route, error: e });
+                console.warn("[adminV2][dept] v1 queues failed", { route, error: e });
                 if (!cancelled) {
-                    setEnrollmentV1Queues(null);
-                    setEnrollmentV1QueuesError(msg);
+                    setV1Queues(null);
+                    setV1QueuesError(msg);
                 }
             }
         })();
         return () => {
             cancelled = true;
         };
-    }, [departmentId, isEnrollment, primaryEnrollmentWorkUnit?.id]);
+    }, [departmentId, primaryWorkUnit?.id]);
 
-    const enrollmentLifecycleQueues = useMemo(() => {
-        if (!primaryEnrollmentWorkUnit || !enrollmentV1Queues) return null;
-        // Exclude overlay queues from pipeline/KPIs.
-        return enrollmentV1Queues.filter((q) => q.key !== "needs_attention");
-    }, [enrollmentV1Queues, primaryEnrollmentWorkUnit]);
+    const uiSections = useMemo(() => {
+        if (!queueUi) return null;
+        return partitionQueueUiSections(queueUi);
+    }, [queueUi]);
 
-    const enrollmentNeedsAttentionQueue = useMemo(() => {
-        if (!primaryEnrollmentWorkUnit || !enrollmentV1Queues) return null;
-        return enrollmentV1Queues.find((q) => q.key === "needs_attention") ?? null;
-    }, [enrollmentV1Queues, primaryEnrollmentWorkUnit]);
+    const primaryTotal = useMemo(() => {
+        if (!queueUi || !v1Queues) return null;
+        return queuePrimaryTotalFromSummaries({ ui: queueUi, summaries: v1Queues });
+    }, [queueUi, v1Queues]);
 
-    const enrollmentPipelineTotal = useMemo(() => {
-        if (!primaryEnrollmentWorkUnit || !enrollmentV1Queues) return null;
-        // Prefer the configured "all" queue as the single-source-of-truth total (no double-counting).
-        const all = enrollmentV1Queues.find((q) => q.key === "all");
-        if (all) return all.count ?? 0;
-        // Fallback: avoid summing buckets (would double-count); use max lifecycle bucket.
-        const lifecycle = (enrollmentLifecycleQueues ?? []).filter((q) => q.key !== "needs_attention");
-        return lifecycle.reduce((m, q) => Math.max(m, q.count ?? 0), 0);
-    }, [enrollmentLifecycleQueues, enrollmentV1Queues, primaryEnrollmentWorkUnit]);
+    const kpis = useMemo(() => {
+        if (!queueUi || !v1Queues) return [];
+        const totalLabel = (queueUi.primary_total_label ?? "").trim();
+        const out: Array<{ id: string; label: string; value: string; lane: "business" }> = [];
+        if (totalLabel && primaryTotal != null) {
+            out.push({ id: "primary_total", label: totalLabel, value: String(primaryTotal), lane: "business" });
+        }
+        // Also show up to 5 queue counts in the configured order (first section first).
+        const keys = queueUi.sections.flatMap((s) => s.queue_keys);
+        const uniq: string[] = [];
+        const seen = new Set<string>();
+        for (const k of keys) {
+            if (seen.has(k)) continue;
+            seen.add(k);
+            uniq.push(k);
+        }
+        for (const k of uniq.slice(0, 5)) {
+            const q = v1Queues.find((x) => x.key === k);
+            if (!q) continue;
+            out.push({ id: `q_${q.key}`, label: q.label, value: String(q.count ?? 0), lane: "business" });
+        }
+        return out;
+    }, [primaryTotal, queueUi, v1Queues]);
 
-    const enrollmentKpis = useMemo(() => {
-        if (!primaryEnrollmentWorkUnit || !enrollmentV1Queues) return [];
-        const all = enrollmentV1Queues.find((q) => q.key === "all") ?? null;
-        const lifecycle = (enrollmentLifecycleQueues ?? []).filter((q) => q.key !== "all");
-        const rest = [all, ...lifecycle].filter(Boolean).slice(0, 5) as V1QueueSummary[];
-        return [
-            {
-                id: "en_pipeline_total",
-                label: "Pipeline families",
-                value: String(enrollmentPipelineTotal ?? 0),
-                lane: "business" as const,
-            },
-            ...rest.map((q) => ({
-                id: `en_q_${q.key}`,
-                label: q.label,
-                value: String(q.count ?? 0),
-                lane: "business" as const,
-            })),
-        ];
-    }, [enrollmentLifecycleQueues, enrollmentPipelineTotal, enrollmentV1Queues, primaryEnrollmentWorkUnit]);
+    const queuesByKey = useMemo(() => {
+        const map = new Map<string, V1QueueSummary>();
+        for (const q of v1Queues ?? []) map.set(q.key, q);
+        return map;
+    }, [v1Queues]);
 
-    const enrollmentPipelineCards = useMemo(
-        () =>
-            isEnrollment && !primaryEnrollmentWorkUnit
-                ? buildEnrollmentPipelineCardsVm(runtime, WORKSPACE_BASE, departmentId)
-                : [],
-        [runtime, isEnrollment, departmentId]
-    );
+    const renderSectionQueues = (params: { sectionKey: string; sectionLabel: string; queueKeys: string[]; tone?: "critical" | "attention" | "standard" }) => {
+        if (!primaryWorkUnit) return null;
+        const qs = params.queueKeys
+            .map((k) => queuesByKey.get(k) ?? null)
+            .filter((x): x is V1QueueSummary => Boolean(x));
+        if (qs.length === 0) return null;
 
-    useEffect(() => {
-        if (!isEnrollment) return;
-        console.info("[adminV2][dept] enrollment routes", {
-            departmentId,
-            primaryWorkUnitId: primaryEnrollmentWorkUnit?.id ?? null,
-            actions: enrollmentActions.map((a) => ({ id: a.id, label: a.label, href: a.href })),
-            legacyPipelineCardRoutes: enrollmentPipelineCards.map((c) => ({
-                segmentKey: c.segmentKey,
-                stageLabel: c.stageLabel,
-                href: c.openQueueAction.href,
-            })),
-        });
-    }, [departmentId, enrollmentActions, enrollmentPipelineCards, isEnrollment, primaryEnrollmentWorkUnit?.id]);
+        const isCritical = params.tone === "critical";
+        const tierCls = isCritical ? "adminv2-ws-wu-queue-card--attention adminv2-ws-wu-queue-card--tier-warning" : "adminv2-ws-wu-queue-card--tier-standard";
+        const urg = isCritical ? "warning" : "standard";
 
-    const needsAttentionGroups = useMemo(
-        () => (isEnrollment ? buildEnrollmentNeedsAttentionGroupsVm(runtime, WORKSPACE_BASE, departmentId) : []),
-        [runtime, isEnrollment, departmentId]
-    );
-
-    const needsAttentionPreview = useMemo(
-        () => (isEnrollment ? buildEnrollmentNeedsAttentionPreviewVm(runtime, WORKSPACE_BASE, departmentId, 3) : []),
-        [runtime, isEnrollment, departmentId]
-    );
+        return (
+            <section
+                className={`adminv2-ws-dept-qsec ${isCritical ? "adminv2-ws-dept-qsec--secondary adminv2-ws-dept-attention-panel" : "adminv2-ws-dept-qsec--primary adminv2-ws-dept-throughput-panel"}`}
+                aria-label={params.sectionLabel}
+            >
+                <header className="adminv2-ws-queue-header">
+                    <div className="adminv2-ws-queue-title-row">
+                        <h3 className="adminv2-ws-queue-title">{params.sectionLabel}</h3>
+                    </div>
+                </header>
+                <div className="adminv2-ws-wu-v2" data-ws-surface="work_unit">
+                    <ul className="adminv2-ws-queue-list" role="list">
+                        {qs.map((q) => (
+                            <li key={`${params.sectionKey}:${q.key}`} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
+                                <Link
+                                    href={`${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(
+                                        primaryWorkUnit.id
+                                    )}?queue=${encodeURIComponent(q.key)}`}
+                                    className={`adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact ${tierCls} flex flex-col items-stretch no-underline text-inherit hover:opacity-[0.98]`}
+                                    data-ws-wu-urgency={urg}
+                                >
+                                    <div className="adminv2-ws-wu-queue-card-compact-text">
+                                        <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">
+                                            {q.label}
+                                        </div>
+                                        {q.description ? (
+                                            <div className="adminv2-ws-wu-queue-card-sub adminv2-ws-wu-queue-card-sub--compact">
+                                                {q.description}
+                                            </div>
+                                        ) : null}
+                                        <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] tabular-nums" style={{ color: "var(--d-muted)" }}>
+                                            <div>
+                                                <span className="font-medium text-alloy-midnight/75">Count</span>{" "}
+                                                <span className="text-alloy-midnight/85">{q.count ?? 0}</span>
+                                            </div>
+                                            <div className="text-right">
+                                                <span className="font-medium text-alloy-midnight/75">Value</span>{" "}
+                                                <span className="text-alloy-midnight/85">—</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="adminv2-ws-wu-queue-card-compact-aside">
+                                        {isCritical ? (
+                                            <span
+                                                className="adminv2-ws-wu-queue-count-badge adminv2-ws-wu-queue-count-badge--attention"
+                                                aria-label={`${q.count} items`}
+                                            >
+                                                {q.count}
+                                            </span>
+                                        ) : null}
+                                        <span
+                                            className={`adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open${isCritical ? " adminv2-ws-wu-queue-action-chip--attention-open" : ""}`}
+                                        >
+                                            Open queue
+                                        </span>
+                                    </div>
+                                </Link>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            </section>
+        );
+    };
 
     if (loading) {
         return (
@@ -312,346 +358,53 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     {error ??
                         "This department could not be loaded. Use the workspace link above to pick another department."}
                 </div>
-            ) : isEnrollment ? (
+            ) : primaryWorkUnit && queueUi ? (
                 <DepartmentWorkspaceBridgeShell
                     departmentKey={deptKey}
                     briefTitle={title}
                     briefSubtitle=""
                     signalsSlot={null}
                     kpiSlot={
-                        enrollmentKpis.length ? (
-                            <KPIBlock kpis={enrollmentKpis} surface="default" maxVisible={6} />
+                        kpis.length ? (
+                            <KPIBlock kpis={kpis} surface="default" maxVisible={6} />
                         ) : null
                     }
                     throughputSlot={
-                        <section
-                            className="adminv2-ws-dept-qsec adminv2-ws-dept-qsec--primary adminv2-ws-dept-throughput-panel"
-                            aria-label="Pipeline lanes"
-                        >
-                            <header className="adminv2-ws-queue-header">
-                                <div className="adminv2-ws-queue-title-row">
-                                    <h3 className="adminv2-ws-queue-title">Pipeline</h3>
+                        <div>
+                            {v1QueuesError ? (
+                                <div className="mb-2 rounded-lg border border-admin-border bg-admin-surface-card px-3 py-2 text-xs text-alloy-ember">
+                                    Failed to load configured queue labels: {v1QueuesError}
+                                    {v1QueuesRoute ? (
+                                        <div className="mt-1 text-[11px] opacity-80">Route: {v1QueuesRoute}</div>
+                                    ) : null}
                                 </div>
-                            </header>
-                            <div className="adminv2-ws-wu-v2" data-ws-surface="work_unit">
-                                {enrollmentV1QueuesError ? (
-                                    <div className="mb-2 rounded-lg border border-admin-border bg-admin-surface-card px-3 py-2 text-xs text-alloy-ember">
-                                        Failed to load configured queue labels: {enrollmentV1QueuesError}
-                                        {enrollmentV1QueuesRoute ? (
-                                            <div className="mt-1 text-[11px] opacity-80">Route: {enrollmentV1QueuesRoute}</div>
-                                        ) : null}
-                                    </div>
-                                ) : null}
-                                {!isEnrollmentRuntimeReady ? (
-                                    <ul className="adminv2-ws-queue-list" role="list" aria-hidden>
-                                        {Array.from({ length: 3 }).map((_, i) => (
-                                            <li key={i} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
-                                                <div className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-standard flex flex-col items-stretch">
-                                                    <div className="adminv2-ws-wu-queue-card-compact-text">
-                                                        <div className="h-3 w-40 skeleton-pulse rounded bg-alloy-stone/20" />
-                                                        <div
-                                                            className="mt-2 h-3 w-56 skeleton-pulse rounded bg-alloy-stone/12"
-                                                            style={{ animationDelay: "70ms" }}
-                                                        />
-                                                        <div
-                                                            className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] tabular-nums"
-                                                            style={{ color: "var(--d-muted)" }}
-                                                        >
-                                                            <div>
-                                                                <span className="font-medium text-alloy-midnight/75">Count</span>{" "}
-                                                                <span className="inline-block h-3 w-10 align-middle skeleton-pulse rounded bg-alloy-stone/12" />
-                                                            </div>
-                                                            <div className="text-right">
-                                                                <span className="font-medium text-alloy-midnight/75">Value</span>{" "}
-                                                                <span
-                                                                    className="inline-block h-3 w-14 align-middle skeleton-pulse rounded bg-alloy-stone/12"
-                                                                    style={{ animationDelay: "120ms" }}
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <div className="adminv2-ws-wu-queue-card-compact-aside">
-                                                        <span className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open">
-                                                            <span className="inline-block h-3 w-16 align-middle skeleton-pulse rounded bg-alloy-stone/10" />
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                ) : primaryEnrollmentWorkUnit && enrollmentLifecycleQueues ? (
-                                    <ul className="adminv2-ws-queue-list" role="list">
-                                        {enrollmentLifecycleQueues.map((q) => (
-                                            <li key={q.key} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
-                                                <Link
-                                                    href={`${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(
-                                                        primaryEnrollmentWorkUnit.id
-                                                    )}?queue=${encodeURIComponent(q.key)}`}
-                                                    className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-standard flex flex-col items-stretch no-underline text-inherit hover:opacity-[0.98]"
-                                                    data-ws-wu-urgency="standard"
-                                                    data-enrollment-queue-key={q.key}
-                                                >
-                                                    <div className="adminv2-ws-wu-queue-card-compact-text">
-                                                        <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">
-                                                            {q.label}
-                                                        </div>
-                                                        {q.description ? (
-                                                            <div className="adminv2-ws-wu-queue-card-sub adminv2-ws-wu-queue-card-sub--compact">
-                                                                {q.description}
-                                                            </div>
-                                                        ) : null}
-                                                        <div
-                                                            className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] tabular-nums"
-                                                            style={{ color: "var(--d-muted)" }}
-                                                        >
-                                                            <div>
-                                                                <span className="font-medium text-alloy-midnight/75">Count</span>{" "}
-                                                                <span className="text-alloy-midnight/85">{q.count ?? 0}</span>
-                                                            </div>
-                                                            <div className="text-right">
-                                                                <span className="font-medium text-alloy-midnight/75">Value</span>{" "}
-                                                                <span className="text-alloy-midnight/85">—</span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <div className="adminv2-ws-wu-queue-card-compact-aside">
-                                                        <span className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open">
-                                                            Open queue
-                                                        </span>
-                                                    </div>
-                                                </Link>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                ) : enrollmentPipelineCards.length ? (
-                                    <ul className="adminv2-ws-queue-list" role="list">
-                                        {enrollmentPipelineCards.map((card) => (
-                                            <li key={card.segmentKey} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
-                                                <Link
-                                                    href={card.openQueueAction.href}
-                                                    className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-standard flex flex-col items-stretch no-underline text-inherit hover:opacity-[0.98]"
-                                                    data-ws-wu-urgency="standard"
-                                                    data-enrollment-funnel-segment={card.segmentKey}
-                                                >
-                                                    <div className="adminv2-ws-wu-queue-card-compact-text">
-                                                        <div
-                                                            className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact"
-                                                            data-enrollment-funnel-slot="stageLabel"
-                                                        >
-                                                            {card.stageLabel}
-                                                        </div>
-                                                        <div
-                                                            className="adminv2-ws-wu-queue-card-sub adminv2-ws-wu-queue-card-sub--compact"
-                                                            data-enrollment-funnel-slot="supportingCopy"
-                                                        >
-                                                            {card.supportingCopy}
-                                                        </div>
-                                                        <div
-                                                            className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] tabular-nums"
-                                                            style={{ color: "var(--d-muted)" }}
-                                                        >
-                                                            <div data-enrollment-funnel-slot="count">
-                                                                <span className="font-medium text-alloy-midnight/75">Count</span>{" "}
-                                                                <span className="text-alloy-midnight/85">{card.countDisplay}</span>
-                                                            </div>
-                                                            <div className="text-right" data-enrollment-funnel-slot="value">
-                                                                <span className="font-medium text-alloy-midnight/75">Value</span>{" "}
-                                                                <span className="text-alloy-midnight/85">{card.valueDisplay}</span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <div className="adminv2-ws-wu-queue-card-compact-aside">
-                                                        <span
-                                                            className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open"
-                                                            data-enrollment-funnel-slot="openQueue"
-                                                        >
-                                                            {card.openQueueAction.label}
-                                                        </span>
-                                                    </div>
-                                                </Link>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                ) : null}
-                            </div>
-                        </section>
+                            ) : null}
+                            {(uiSections?.throughput ?? []).map((s) =>
+                                renderSectionQueues({ sectionKey: s.key, sectionLabel: s.label, queueKeys: s.queue_keys })
+                            )}
+                        </div>
                     }
                     attentionSlot={
-                        <section
-                            className="adminv2-ws-dept-qsec adminv2-ws-dept-qsec--secondary adminv2-ws-dept-attention-panel"
-                            aria-label="Needs Attention"
-                        >
-                            <header className="adminv2-ws-attention-panel-header">
-                                <div>
-                                    <div className="adminv2-ws-attention-panel-kicker">Needs attention</div>
-                                    <h3 className="adminv2-ws-attention-panel-title">Needs Attention</h3>
-                                    <p className="adminv2-ws-attention-card-sub" style={{ marginTop: 6 }}>
-                                        Exceptions grouped by reason (from queue runtime).
-                                    </p>
-                                </div>
-                            </header>
-                            <div className="adminv2-ws-attention-stack">
-                                <div className="adminv2-ws-attention-card adminv2-ws-attention-card--queue-aligned">
-                                    <div className="adminv2-ws-wu-v2" data-ws-surface="work_unit">
-                                        {primaryEnrollmentWorkUnit && enrollmentNeedsAttentionQueue ? (
-                                            <ul className="adminv2-ws-queue-list" role="list">
-                                                <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
-                                                    <Link
-                                                        href={`${WORKSPACE_BASE}/dept/${encodeURIComponent(
-                                                            departmentId
-                                                        )}/work-unit/${encodeURIComponent(primaryEnrollmentWorkUnit.id)}?queue=needs_attention`}
-                                                        className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--attention adminv2-ws-wu-queue-card--tier-warning no-underline text-inherit hover:opacity-[0.98]"
-                                                        data-ws-wu-urgency="warning"
-                                                    >
-                                                        <div className="adminv2-ws-wu-queue-card-compact-text">
-                                                            <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">
-                                                                {enrollmentNeedsAttentionQueue.label}
-                                                            </div>
-                                                            {enrollmentNeedsAttentionQueue.description ? (
-                                                                <div className="adminv2-ws-wu-queue-card-sub adminv2-ws-wu-queue-card-sub--compact">
-                                                                    {enrollmentNeedsAttentionQueue.description}
-                                                                </div>
-                                                            ) : null}
-                                                        </div>
-                                                        <div className="adminv2-ws-wu-queue-card-compact-aside">
-                                                            <span
-                                                                className="adminv2-ws-wu-queue-count-badge adminv2-ws-wu-queue-count-badge--attention"
-                                                                aria-label={`${enrollmentNeedsAttentionQueue.count} items`}
-                                                            >
-                                                                {enrollmentNeedsAttentionQueue.count}
-                                                            </span>
-                                                            <span className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open adminv2-ws-wu-queue-action-chip--attention-open">
-                                                                Open queue
-                                                            </span>
-                                                        </div>
-                                                    </Link>
-                                                </li>
-                                            </ul>
-                                        ) : !isEnrollmentRuntimeReady ? (
-                                            <ul className="adminv2-ws-queue-list" role="list" aria-hidden>
-                                                {Array.from({ length: 2 }).map((_, i) => (
-                                                    <li key={i} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
-                                                        <div className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--attention adminv2-ws-wu-queue-card--tier-warning flex flex-col items-stretch">
-                                                            <div className="adminv2-ws-wu-queue-card-compact-text">
-                                                                <div className="h-3 w-44 skeleton-pulse rounded bg-alloy-stone/20" />
-                                                                <div
-                                                                    className="mt-2 h-3 w-60 skeleton-pulse rounded bg-alloy-stone/12"
-                                                                    style={{ animationDelay: "70ms" }}
-                                                                />
-                                                            </div>
-                                                            <div className="adminv2-ws-wu-queue-card-compact-aside">
-                                                                <span className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open adminv2-ws-wu-queue-action-chip--attention-open">
-                                                                    <span className="inline-block h-3 w-16 align-middle skeleton-pulse rounded bg-alloy-stone/10" />
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                    </li>
-                                                ))}
-                                            </ul>
-                                        ) : needsAttentionPreview.length ? (
-                                            <div className="adminv2-ws-attention-preview-block">
-                                                <div className="adminv2-ws-wu-queue-section-label adminv2-ws-attention-preview-kicker" role="presentation">
-                                                    Next in queue
-                                                </div>
-                                                <ul className="adminv2-ws-queue-list" role="list">
-                                                    {needsAttentionPreview.map((p) => (
-                                                        <li key={p.id} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
-                                                            <Link
-                                                                href={p.openQueueHref}
-                                                                className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--attention adminv2-ws-wu-queue-card--tier-warning no-underline text-inherit hover:opacity-[0.98]"
-                                                                data-ws-wu-urgency="warning"
-                                                            >
-                                                                <div className="adminv2-ws-wu-queue-card-compact-text">
-                                                                    <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">
-                                                                        {p.headline}
-                                                                    </div>
-                                                                    <div className="adminv2-ws-wu-queue-card-sub adminv2-ws-wu-queue-card-sub--compact">
-                                                                        {p.detail}
-                                                                    </div>
-                                                                </div>
-                                                                <div className="adminv2-ws-wu-queue-card-compact-aside">
-                                                                    <span className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open adminv2-ws-wu-queue-action-chip--attention-open">
-                                                                        Open queue
-                                                                    </span>
-                                                                </div>
-                                                            </Link>
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-                                        ) : null}
-                                        {needsAttentionGroups.length ? (
-                                            <div className={needsAttentionPreview.length ? "mt-2 pt-2 adminv2-ws-attention-groups-divider" : ""}>
-                                                <div
-                                                    className="adminv2-ws-wu-queue-section-label adminv2-ws-attention-preview-kicker"
-                                                    role="presentation"
-                                                >
-                                                    By reason
-                                                </div>
-                                                <ul className="adminv2-ws-queue-list" role="list">
-                                                    {needsAttentionGroups.map((g) => (
-                                                        <li key={g.label} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
-                                                            <Link
-                                                                href={g.openQueueHref}
-                                                                className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--attention adminv2-ws-wu-queue-card--tier-warning no-underline text-inherit hover:opacity-[0.98]"
-                                                                data-ws-wu-urgency="warning"
-                                                            >
-                                                                <div className="adminv2-ws-wu-queue-card-compact-text">
-                                                                    <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">
-                                                                        {g.label}
-                                                                    </div>
-                                                                    <div className="adminv2-ws-wu-queue-card-sub adminv2-ws-wu-queue-card-sub--compact">
-                                                                        {g.count} {g.count === 1 ? "record" : "records"} in this bucket
-                                                                    </div>
-                                                                </div>
-                                                                <div className="adminv2-ws-wu-queue-card-compact-aside">
-                                                                    <span
-                                                                        className="adminv2-ws-wu-queue-count-badge adminv2-ws-wu-queue-count-badge--attention"
-                                                                        aria-label={`${g.count} items`}
-                                                                    >
-                                                                        {g.count}
-                                                                    </span>
-                                                                    <span className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open adminv2-ws-wu-queue-action-chip--attention-open">
-                                                                        Open queue
-                                                                    </span>
-                                                                </div>
-                                                            </Link>
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-                                        ) : needsAttentionPreview.length ? null : (
-                                            <p className="adminv2-ws-attention-empty-copy">Nothing needs intervention right now.</p>
-                                        )}
-                                    </div>
-                                </div>
-                            </div>
-                        </section>
+                        <div>
+                            {(uiSections?.attention ?? []).map((s) =>
+                                renderSectionQueues({
+                                    sectionKey: s.key,
+                                    sectionLabel: s.label,
+                                    queueKeys: s.queue_keys,
+                                    tone: "critical",
+                                })
+                            )}
+                        </div>
                     }
                     contextSlot={null}
-                    railSlot={
-                        <section className="adminv2-ws-actions-rail adminv2-ws-actions-rail--dept-panel px-3 pb-3 pt-3">
-                            <h3 className="adminv2-ws-actions-rail-title">Actions</h3>
-                            <div className="mt-2 flex flex-col gap-2">
-                                {enrollmentActions.map((a) => (
-                                    <Link
-                                        key={a.id}
-                                        href={a.href}
-                                        className={a.variant === "primary" ? "adminv2-ws-action-primary" : "adminv2-ws-action-row"}
-                                    >
-                                        {a.label}
-                                    </Link>
-                                ))}
-                            </div>
-                        </section>
-                    }
+                    railSlot={null}
                 />
             ) : (
                 <div
                     className="rounded-xl border px-4 py-10 text-center text-sm text-alloy-midnight/55"
                     style={{ borderColor: "var(--d-border, rgba(39,63,82,0.14))" }}
                 >
-                    Department contract UI is implemented for Enrollment only.
+                    No configured Work Unit UI was found for this department.
                 </div>
             )}
         </WorkspaceChrome>

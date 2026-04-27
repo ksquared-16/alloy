@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
-import type { EnrollmentCrmRowSemanticSlots, QueueItemVm, QueueVm } from "@/lib/ui-v2/workspace-types";
+import type { CrmCompactRowSemanticSlots, QueueItemVm, QueueVm } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
 
 type Props = {
@@ -127,13 +127,14 @@ function workUnitSectionKey(item: QueueItemVm): string | undefined {
   return item.groupKey?.trim() || item.groupLabel?.trim() || undefined;
 }
 
-/** Enrollment CRM preview — renders only from `EnrollmentCrmRowSemanticSlots` (config/AI-ready). */
-function EnrollmentCrmCompactPreview({ slots }: { slots: EnrollmentCrmRowSemanticSlots }) {
+/** CRM-compact preview — renders only from `CrmCompactRowSemanticSlots` (config-driven). */
+function EnrollmentCrmCompactPreview({ slots }: { slots: CrmCompactRowSemanticSlots }) {
   const careParts = [slots.programContext, slots.roomContext, slots.ageContext].filter(Boolean) as string[];
   const stageStatus =
     slots.stageLabel && slots.statusLabel && slots.stageLabel !== slots.statusLabel
       ? `${slots.stageLabel} · ${slots.statusLabel}`
-      : slots.stageLabel || slots.statusLabel || "—";
+      : slots.stageLabel || slots.statusLabel || null;
+  const showOpsLine = Boolean(slots.nextStep || slots.lastActivity);
 
   return (
     <div className="adminv2-ws-wu-queue-card-compact-text adminv2-ws-enrollment-crm-preview">
@@ -145,20 +146,30 @@ function EnrollmentCrmCompactPreview({ slots }: { slots: EnrollmentCrmRowSemanti
           Child: {slots.childName}
         </div>
       ) : null}
-      <div className="adminv2-ws-enrollment-crm-preview__stage" data-enrollment-crm-slot="stageStatus">
-        {stageStatus}
-      </div>
-      <div className="adminv2-ws-enrollment-crm-preview__ops" data-enrollment-crm-slot="nextLast">
-        <span data-enrollment-crm-slot="nextStep">
-          <span className="adminv2-ws-enrollment-crm-preview__k">Next</span> {slots.nextStep ?? "—"}
-        </span>
-        <span className="adminv2-ws-enrollment-crm-preview__sep" aria-hidden>
-          ·
-        </span>
-        <span data-enrollment-crm-slot="lastActivity">
-          <span className="adminv2-ws-enrollment-crm-preview__k">Last</span> {slots.lastActivity ?? "—"}
-        </span>
-      </div>
+      {stageStatus ? (
+        <div className="adminv2-ws-enrollment-crm-preview__stage" data-enrollment-crm-slot="stageStatus">
+          {stageStatus}
+        </div>
+      ) : null}
+      {showOpsLine ? (
+        <div className="adminv2-ws-enrollment-crm-preview__ops" data-enrollment-crm-slot="nextLast">
+          {slots.nextStep ? (
+            <span data-enrollment-crm-slot="nextStep">
+              <span className="adminv2-ws-enrollment-crm-preview__k">Next</span> {slots.nextStep}
+            </span>
+          ) : null}
+          {slots.nextStep && slots.lastActivity ? (
+            <span className="adminv2-ws-enrollment-crm-preview__sep" aria-hidden>
+              ·
+            </span>
+          ) : null}
+          {slots.lastActivity ? (
+            <span data-enrollment-crm-slot="lastActivity">
+              <span className="adminv2-ws-enrollment-crm-preview__k">Last</span> {slots.lastActivity}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
       {careParts.length ? (
         <div className="adminv2-ws-enrollment-crm-preview__care" data-enrollment-crm-slot="careContext">
           {careParts.join(" · ")}
@@ -230,7 +241,7 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
           if (sectionKey) lastSectionKey = sectionKey;
 
           const tier = item.urgencyTier ?? "standard";
-          const crm = item.semanticEnrollmentCrm;
+          const crm = item.semanticCrmCompact;
           const valueShown = (crm?.commercialValue ?? item.valueLabel)?.trim() ?? "";
           const hasValue = Boolean(valueShown);
 

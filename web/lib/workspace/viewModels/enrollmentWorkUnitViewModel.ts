@@ -1,6 +1,6 @@
 import type {
     ActionsVm,
-    EnrollmentCrmRowSemanticSlots,
+    CrmCompactRowSemanticSlots,
     QueueItemQuickActionVm,
     QueueItemVm,
 } from "@/lib/ui-v2/workspace-types";
@@ -118,7 +118,7 @@ function crmContactQuickActions(row: OppRow): QueueItemQuickActionVm[] {
     return out;
 }
 
-export function buildEnrollmentCrmRowSemanticSlots(row: OppRow): EnrollmentCrmRowSemanticSlots {
+export function buildEnrollmentCrmRowSemanticSlots(row: OppRow): CrmCompactRowSemanticSlots {
     const customer = (row._customer_name ?? "").trim();
     const titleBase = (row.name ?? "").trim();
     const primaryIdentity = customer || titleBase || row.id.slice(-8);
@@ -174,7 +174,7 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow): EnrollmentCrmRo
 }
 
 /**
- * Enrollment work-unit queue row — binds `semanticEnrollmentCrm` for config/AI-driven layout,
+ * Enrollment work-unit queue row — binds `semanticCrmCompact` for config-driven layout,
  * plus legacy `QueueItemVm` fields for grouping and fallbacks.
  */
 export function buildEnrollmentOpportunityQueueItemVm(row: OppRow, ctx: { workUnitKey: string }): QueueItemVm {
@@ -199,7 +199,7 @@ export function buildEnrollmentOpportunityQueueItemVm(row: OppRow, ctx: { workUn
                 : slots.stageLabel || slots.statusLabel || undefined,
         valueLabel: slots.commercialValue ?? undefined,
         quickActions,
-        semanticEnrollmentCrm: slots,
+        semanticCrmCompact: slots,
         urgencyTier: ctx.workUnitKey.trim().toLowerCase() === "priced_followup" ? "warning" : "standard",
     };
     if (statusLabel) {

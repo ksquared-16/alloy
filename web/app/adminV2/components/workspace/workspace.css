@@ -5185,7 +5185,7 @@
   gap: 1px;
 }
 
-/* Enrollment CRM semantic row — slots map 1:1 to `EnrollmentCrmRowSemanticSlots` for future config/AI. */
+/* CRM-compact semantic row — slots map 1:1 to `CrmCompactRowSemanticSlots` for config. */
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-enrollment-crm-preview {
   flex: 1;
   min-width: 0;
