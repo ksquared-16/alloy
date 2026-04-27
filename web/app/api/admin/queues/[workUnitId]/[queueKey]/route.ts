@@ -40,6 +40,7 @@ export async function GET(
     if (!workUnitId) return NextResponse.json({ error: "Missing workUnitId" }, { status: 400 });
     if (!queueKey) return NextResponse.json({ error: "Missing queueKey" }, { status: 400 });
 
+    const t0 = Date.now();
     try {
         const { limit, offset } = parseLimitOffset(request.nextUrl.searchParams);
         const result = await getWorkUnitQueueItems({
@@ -49,6 +50,14 @@ export async function GET(
             limit,
             offset,
         });
+        const ms = Date.now() - t0;
+        if (ms > 200) {
+            console.warn("[admin-timing] GET /api/admin/queues/[workUnitId]/[queueKey]", {
+                ms,
+                work_unit_id: workUnitId,
+                queue_key: queueKey,
+            });
+        }
         return NextResponse.json(result);
     } catch (e) {
         if (e instanceof QueueServiceError) {

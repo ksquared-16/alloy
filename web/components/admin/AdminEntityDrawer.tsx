@@ -81,9 +81,12 @@ import {
     type PaymentRowLike,
 } from "@/lib/admin/jobPaymentSummary";
 import { useRecordChromeConfig } from "@/hooks/useRecordChromeConfig";
+import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
+import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { getSectionOrderFromScheduleLayoutBlocks } from "@/lib/recordChrome/scheduleLayoutConfig";
 import { applyOverviewSectionOrder, type RecordLayoutConfigJson } from "@/lib/recordChrome/types";
 import { executeOpportunityRecordAction } from "@/lib/recordChrome/executeOpportunityRecordAction";
+import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import OpportunityQuoteIntakeSection from "@/components/admin/quoteIntake/OpportunityQuoteIntakeSection";
 
 function dispatchAfterPaymentRun(jobId: string, scheduleId: string | null) {
@@ -870,6 +873,8 @@ export default function AdminEntityDrawer() {
     const [workflowActionAdvanced, setWorkflowActionAdvanced] = useState<Record<number, boolean>>({});
     const [jobActionLoading, setJobActionLoading] = useState<string | null>(null);
     const [opportunityActionLoading, setOpportunityActionLoading] = useState<string | null>(null);
+    const [opportunityResolvedHeaderActions, setOpportunityResolvedHeaderActions] = useState<ResolvedActionsBySlot | null>(null);
+    const [opportunityResolvedHeaderLoading, setOpportunityResolvedHeaderLoading] = useState(false);
     const [oppQuoteIntakeOpen, setOppQuoteIntakeOpen] = useState(false);
     const [oppDiscountOptions, setOppDiscountOptions] = useState<{ value: string; label: string }[] | null>(null);
     const [oppDiscountLoading, setOppDiscountLoading] = useState(false);
@@ -1856,6 +1861,104 @@ export default function AdminEntityDrawer() {
         },
         [drawer.id, drawer.type, refetch, router]
     );
+
+    const handleResolvedOpportunityHeaderAction = useCallback(
+        async (a: ResolvedActionForClient) => {
+            if (!drawer.id || drawer.id === "new" || drawer.type !== "opportunities") return;
+            if (a.action_type === "navigate") {
+                const href = a.payload?.href != null ? String(a.payload.href) : "";
+                if (href) router.push(href);
+                return;
+            }
+            if (a.action_type === "external_link") {
+                const href = a.payload?.href != null ? String(a.payload.href) : "";
+                if (href) window.open(href, "_blank", "noopener,noreferrer");
+                return;
+            }
+            if (a.action_type === "open_drawer") {
+                const d =
+                    a.payload?.drawer && typeof a.payload.drawer === "object"
+                        ? (a.payload.drawer as Record<string, unknown>)
+                        : {};
+                const defSurf = d.defaultSurface != null ? String(d.defaultSurface) : null;
+                if (defSurf === "quote_intake" || a.key === "start_quote") {
+                    setSaveError(null);
+                    setOppQuoteIntakeOpen(true);
+                    return;
+                }
+                openDrawer({ type: "opportunities", id: drawer.id });
+                return;
+            }
+            if (a.action_type === "ui_intent") return;
+            setOpportunityActionLoading(a.key);
+            setSaveError(null);
+            try {
+                const res = await fetch("/api/admin/actions/execute", {
+                    method: "POST",
+                    credentials: "include",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        action_key: a.key,
+                        entity_type: "opportunity",
+                        entity_id: drawer.id,
+                        context: { surface: "record_header" },
+                    }),
+                });
+                const json = (await res.json().catch(() => ({}))) as {
+                    ok?: boolean;
+                    error?: string;
+                    execution_result?: { row?: Record<string, unknown> };
+                };
+                if (!res.ok || !json.ok) {
+                    setSaveError(json.error ?? "Action failed");
+                    return;
+                }
+                const row = json.execution_result?.row;
+                if (row && typeof row === "object") {
+                    setData((prev) => (prev && typeof prev === "object" ? { ...prev, ...row } : prev));
+                } else {
+                    refetch();
+                }
+                router.refresh();
+            } catch (e) {
+                setSaveError(e instanceof Error ? e.message : "Action failed");
+            } finally {
+                setOpportunityActionLoading(null);
+            }
+        },
+        [drawer.id, drawer.type, openDrawer, refetch, router]
+    );
+
+    useEffect(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
+            setOpportunityResolvedHeaderActions(null);
+            setOpportunityResolvedHeaderLoading(false);
+            return;
+        }
+        let cancelled = false;
+        setOpportunityResolvedHeaderLoading(true);
+        const qs = new URLSearchParams({
+            surface: "record_header",
+            entity_type: "opportunity",
+            entity_id: drawer.id,
+        });
+        const actionsUrl = `/api/admin/actions?${qs.toString()}`;
+        dedupeAdminFetch(actionsUrl, workspaceDataFetchInit())
+            .then((r) => r.json())
+            .then((j: { actions?: ResolvedActionsBySlot }) => {
+                if (cancelled) return;
+                setOpportunityResolvedHeaderActions(j.actions ?? null);
+            })
+            .catch(() => {
+                if (!cancelled) setOpportunityResolvedHeaderActions(null);
+            })
+            .finally(() => {
+                if (!cancelled) setOpportunityResolvedHeaderLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [drawer.type, drawer.id]);
 
     // If a caller opened the drawer with a surface hint, respect it once.
     useEffect(() => {
@@ -3850,8 +3953,16 @@ export default function AdminEntityDrawer() {
     const opportunityChromeSecondary = (recordChromeOpportunity.actions ?? []).filter((a) => a.placement === "secondary");
     const hasOpportunityChromeActions = opportunityChromePrimary.length + opportunityChromeSecondary.length > 0;
 
+    const resolvedHeader = opportunityResolvedHeaderActions;
+    const resolvedHeaderCount =
+        (resolvedHeader?.primary.length ?? 0) +
+        (resolvedHeader?.secondary.length ?? 0) +
+        (resolvedHeader?.overflow.length ?? 0);
+    const useOpportunityActionRegistryHeader =
+        !opportunityResolvedHeaderLoading && resolvedHeader != null && resolvedHeaderCount > 0;
+
     const opportunityHeaderQuickActionsNode =
-        isOpportunityExistingView && drawer.id && hasOpportunityChromeActions ? (
+        isOpportunityExistingView && drawer.id && (useOpportunityActionRegistryHeader || hasOpportunityChromeActions) ? (
             <div
                 className={`flex flex-wrap gap-2 items-center ${
                     drawerShellVariant === "adminV2"
@@ -3862,36 +3973,84 @@ export default function AdminEntityDrawer() {
                 }`}
                 data-opportunity-record-actions={drawerShellVariant === "adminV2" ? "true" : undefined}
             >
-                {opportunityChromePrimary.map((a) => (
-                    <button
-                        key={a.id}
-                        type="button"
-                        disabled={!canMutate || !!opportunityActionLoading}
-                        onClick={() => void handleOpportunityRecordChromeAction(a.event_key)}
-                        className={
-                            opportunityInquiryWorkflowDrawer
-                                ? "px-4 py-2 text-[12px] font-semibold bg-alloy-blue text-white rounded-full shadow-sm hover:opacity-90 disabled:opacity-50"
-                                : "px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
-                        }
-                    >
-                        {opportunityActionLoading === a.event_key ? "…" : a.label}
-                    </button>
-                ))}
-                {opportunityChromeSecondary.map((a) => (
-                    <button
-                        key={a.id}
-                        type="button"
-                        disabled={!canMutate || !!opportunityActionLoading}
-                        onClick={() => void handleOpportunityRecordChromeAction(a.event_key)}
-                        className={
-                            opportunityInquiryWorkflowDrawer
-                                ? "px-4 py-2 text-[12px] font-semibold border border-alloy-stone/40 bg-white rounded-full hover:bg-alloy-stone/10 disabled:opacity-50"
-                                : "px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30 disabled:opacity-50"
-                        }
-                    >
-                        {opportunityActionLoading === a.event_key ? "…" : a.label}
-                    </button>
-                ))}
+                {useOpportunityActionRegistryHeader ? (
+                    <>
+                        {(resolvedHeader?.primary ?? []).map((a) => (
+                            <button
+                                key={a.key}
+                                type="button"
+                                disabled={!canMutate || !!opportunityActionLoading}
+                                onClick={() => void handleResolvedOpportunityHeaderAction(a)}
+                                className={
+                                    opportunityInquiryWorkflowDrawer
+                                        ? "px-4 py-2 text-[12px] font-semibold bg-alloy-blue text-white rounded-full shadow-sm hover:opacity-90 disabled:opacity-50"
+                                        : "px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
+                                }
+                            >
+                                {opportunityActionLoading === a.key ? "…" : a.label}
+                            </button>
+                        ))}
+                        {(resolvedHeader?.secondary ?? []).map((a) => (
+                            <button
+                                key={a.key}
+                                type="button"
+                                disabled={!canMutate || !!opportunityActionLoading}
+                                onClick={() => void handleResolvedOpportunityHeaderAction(a)}
+                                className={
+                                    opportunityInquiryWorkflowDrawer
+                                        ? "px-4 py-2 text-[12px] font-semibold border border-alloy-stone/40 bg-white rounded-full hover:bg-alloy-stone/10 disabled:opacity-50"
+                                        : "px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30 disabled:opacity-50"
+                                }
+                            >
+                                {opportunityActionLoading === a.key ? "…" : a.label}
+                            </button>
+                        ))}
+                        {(resolvedHeader?.overflow ?? []).map((a) => (
+                            <button
+                                key={a.key}
+                                type="button"
+                                disabled={!canMutate || !!opportunityActionLoading}
+                                onClick={() => void handleResolvedOpportunityHeaderAction(a)}
+                                className="px-3 py-1.5 text-sm border border-alloy-stone/50 rounded-md hover:bg-alloy-stone/20 disabled:opacity-50"
+                            >
+                                {opportunityActionLoading === a.key ? "…" : a.label}
+                            </button>
+                        ))}
+                    </>
+                ) : (
+                    <>
+                        {opportunityChromePrimary.map((a) => (
+                            <button
+                                key={a.id}
+                                type="button"
+                                disabled={!canMutate || !!opportunityActionLoading}
+                                onClick={() => void handleOpportunityRecordChromeAction(a.event_key)}
+                                className={
+                                    opportunityInquiryWorkflowDrawer
+                                        ? "px-4 py-2 text-[12px] font-semibold bg-alloy-blue text-white rounded-full shadow-sm hover:opacity-90 disabled:opacity-50"
+                                        : "px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
+                                }
+                            >
+                                {opportunityActionLoading === a.event_key ? "…" : a.label}
+                            </button>
+                        ))}
+                        {opportunityChromeSecondary.map((a) => (
+                            <button
+                                key={a.id}
+                                type="button"
+                                disabled={!canMutate || !!opportunityActionLoading}
+                                onClick={() => void handleOpportunityRecordChromeAction(a.event_key)}
+                                className={
+                                    opportunityInquiryWorkflowDrawer
+                                        ? "px-4 py-2 text-[12px] font-semibold border border-alloy-stone/40 bg-white rounded-full hover:bg-alloy-stone/10 disabled:opacity-50"
+                                        : "px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30 disabled:opacity-50"
+                                }
+                            >
+                                {opportunityActionLoading === a.event_key ? "…" : a.label}
+                            </button>
+                        ))}
+                    </>
+                )}
             </div>
         ) : null;
 

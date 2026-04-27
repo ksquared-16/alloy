@@ -8,9 +8,10 @@ import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import WorkUnitWorkspace from "@/app/adminV2/components/workspace/shells/WorkUnitWorkspace";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { WorkUnitRouteSkeletonBody, WsRouteLoadingRibbon } from "@/components/admin/workspace/workspaceRouteSkeletons";
+import type { ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { executeOpportunityRecordAction } from "@/lib/recordChrome/executeOpportunityRecordAction";
 import type { WorkspaceAction } from "@/lib/ui-v2/workspace-actions";
-import type { WorkUnitWorkspaceModel } from "@/lib/ui-v2/workspace-types";
+import type { QueueItemQuickActionVm, WorkUnitWorkspaceModel } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
 import { buildRealOpportunityWorkUnitWorkspaceModel } from "@/lib/ui-v2/adapters/realWorkUnitFromOpportunities";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
@@ -19,6 +20,14 @@ import { validateQueueDefinition, type QueueDefinitionV1 } from "@/lib/config/qu
 import { getQueueUiConfig, type QueueUiConfig, type QueueUiRowPreviewField } from "@/lib/ui-v2/queueUiConfig";
 
 const WORKSPACE_BASE = "/adminV2/workspace";
+
+function registryQuickActionsFromResolved(rowInline: { key: string; label: string; action_type: string }[]): QueueItemQuickActionVm[] {
+    return rowInline.map((a) => ({
+        id: a.key,
+        label: a.label,
+        payload: { source: "action_registry" as const, actionType: a.action_type },
+    }));
+}
 
 type WorkUnitRow = {
     id: string;
@@ -83,6 +92,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [dept, setDept] = useState<DeptRow | null>(null);
     const [oq, setOq] = useState<WorkspaceOpportunityQueueRuntime | null>(null);
     const [needsAttentionWorkUnitId, setNeedsAttentionWorkUnitId] = useState<string | null>(null);
+    const [opportunityQueueRowActions, setOpportunityQueueRowActions] = useState<QueueItemQuickActionVm[] | null>(null);
 
     const [queueSummaries, setQueueSummaries] = useState<QueueSummary[] | null>(null);
     const [queueSummariesError, setQueueSummariesError] = useState<string | null>(null);
@@ -185,6 +195,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             setQueueItemsError(null);
             setQueueItemsRoute(null);
             setQueueItemsLoading(false);
+            setOpportunityQueueRowActions(null);
             setError("Missing department or work unit in the URL.");
             return;
         }
@@ -208,6 +219,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     setQueueItemsError(null);
                     setQueueItemsRoute(null);
                     setQueueItemsLoading(false);
+                    setOpportunityQueueRowActions(null);
                 }
 
                 const [wuRes, deptRes, deptWusRes] = await Promise.all([
@@ -237,73 +249,114 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 let usedNewQueueApi = false;
                 let shouldFallbackToLegacy = false;
                 let fallbackReason: string | null = null;
-                try {
-                    const route = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?limit=3`;
-                    const res = await fetch(route, init);
-                    const j = (await res.json().catch(() => ({}))) as { error?: string; queues?: QueueSummary[] };
-                    // Temporary debug logging: helps confirm which path is taken in production.
-                    console.info("[adminV2][work-unit] queue summaries", {
-                        route,
-                        status: res.status,
-                        ok: res.ok,
-                        keys: Array.isArray(j.queues) ? (j.queues ?? []).map((q) => q.key) : [],
-                        error: j.error ?? null,
-                    });
-                    if (res.ok) {
-                        usedNewQueueApi = true;
-                        if (!cancelled) {
-                            const qs = (j.queues ?? []) as QueueSummary[];
-                            setQueueSummaries(qs);
-                            setQueueSummariesError(null);
-                            setQueueSummariesRoute(route);
-                            // Select queue from URL if present, otherwise default to first queue in UI config order.
-                            const qFromUrl = (searchParams?.get("queue") ?? "").trim();
-                            const uiOrder = (() => {
-                                try {
-                                    const def = validateQueueDefinition(wu.queue_definition);
-                                    const ui = getQueueUiConfig(def);
-                                    return ui.sections.flatMap((s) => s.queue_keys);
-                                } catch {
-                                    return qs.map((x) => x.key);
-                                }
-                            })();
-                            const firstByUi = uiOrder.find((k) => qs.some((x) => x.key === k)) ?? qs[0]?.key ?? null;
-                            const initial =
-                                qFromUrl && qs.some((x) => x.key === qFromUrl)
-                                    ? qFromUrl
-                                    : selectedQueueKey && qs.some((x) => x.key === selectedQueueKey)
-                                      ? selectedQueueKey
-                                      : firstByUi;
-                            setSelectedQueueKey(initial);
+                const queueListRoute = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?limit=3`;
+                const actionsListRoute =
+                    `/api/admin/actions?` +
+                    new URLSearchParams({
+                        surface: "queue_row",
+                        entity_type: "opportunity",
+                        work_unit_id: wu.id,
+                        department_id: departmentId,
+                    }).toString();
+
+                let parsedQueueRowQuick: QueueItemQuickActionVm[] | null = null;
+                const [queuesSettled, actionsSettled] = await Promise.allSettled([
+                    fetch(queueListRoute, init),
+                    fetch(actionsListRoute, init),
+                ]);
+
+                if (actionsSettled.status === "fulfilled") {
+                    try {
+                        const ar = actionsSettled.value;
+                        const aj = (await ar.json().catch(() => ({}))) as { actions?: ResolvedActionsBySlot };
+                        if (ar.ok) {
+                            const row = aj.actions?.row_inline ?? [];
+                            if (row.length) parsedQueueRowQuick = registryQuickActionsFromResolved(row);
                         }
-                    } else if (res.status === 501) {
+                    } catch {
+                        /* non-fatal */
+                    }
+                }
+
+                if (queuesSettled.status === "fulfilled") {
+                    try {
+                        const res = queuesSettled.value;
+                        const j = (await res.json().catch(() => ({}))) as { error?: string; queues?: QueueSummary[] };
+                        const route = queueListRoute;
+                        console.info("[adminV2][work-unit] queue summaries", {
+                            route,
+                            status: res.status,
+                            ok: res.ok,
+                            keys: Array.isArray(j.queues) ? (j.queues ?? []).map((q) => q.key) : [],
+                            error: j.error ?? null,
+                        });
+                        if (res.ok) {
+                            usedNewQueueApi = true;
+                            if (!cancelled) {
+                                const qs = (j.queues ?? []) as QueueSummary[];
+                                setQueueSummaries(qs);
+                                setQueueSummariesError(null);
+                                setQueueSummariesRoute(route);
+                                const qFromUrl = (searchParams?.get("queue") ?? "").trim();
+                                const uiOrder = (() => {
+                                    try {
+                                        const def = validateQueueDefinition(wu.queue_definition);
+                                        const ui = getQueueUiConfig(def);
+                                        return ui.sections.flatMap((s) => s.queue_keys);
+                                    } catch {
+                                        return qs.map((x) => x.key);
+                                    }
+                                })();
+                                const firstByUi = uiOrder.find((k) => qs.some((x) => x.key === k)) ?? qs[0]?.key ?? null;
+                                const initial =
+                                    qFromUrl && qs.some((x) => x.key === qFromUrl)
+                                        ? qFromUrl
+                                        : selectedQueueKey && qs.some((x) => x.key === selectedQueueKey)
+                                          ? selectedQueueKey
+                                          : firstByUi;
+                                setSelectedQueueKey(initial);
+                            }
+                        } else if (res.status === 501) {
+                            shouldFallbackToLegacy = true;
+                            fallbackReason = "queue_api_501_not_supported";
+                            if (!cancelled) {
+                                setQueueSummaries(null);
+                                setQueueSummariesError("Queue type not supported yet");
+                                setQueueSummariesRoute(route);
+                            }
+                        } else {
+                            shouldFallbackToLegacy = false;
+                            fallbackReason = `queue_api_${res.status}`;
+                            if (!cancelled) {
+                                setQueueSummaries(null);
+                                setQueueSummariesError(j.error ?? "Failed to load queues");
+                                setQueueSummariesRoute(route);
+                            }
+                        }
+                    } catch (e) {
                         shouldFallbackToLegacy = true;
-                        fallbackReason = "queue_api_501_not_supported";
+                        fallbackReason = "queue_api_exception";
+                        console.warn("[adminV2][work-unit] queue summaries failed", { route: queueListRoute, error: e });
                         if (!cancelled) {
                             setQueueSummaries(null);
-                            setQueueSummariesError("Queue type not supported yet");
-                            setQueueSummariesRoute(route);
-                        }
-                    } else {
-                        // Do NOT fall back on validation/query errors; show the error so we don't mask issues with legacy buckets.
-                        shouldFallbackToLegacy = false;
-                        fallbackReason = `queue_api_${res.status}`;
-                        if (!cancelled) {
-                            setQueueSummaries(null);
-                            setQueueSummariesError(j.error ?? "Failed to load queues");
-                            setQueueSummariesRoute(route);
+                            setQueueSummariesError(e instanceof Error ? e.message : "Failed to load queues");
+                            setQueueSummariesRoute(queueListRoute);
                         }
                     }
-                } catch (e) {
-                    // Network/runtime failures: allow legacy fallback so the surface doesn't go blank.
+                } else {
                     shouldFallbackToLegacy = true;
                     fallbackReason = "queue_api_exception";
-                    const route = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues`;
-                    console.warn("[adminV2][work-unit] queue summaries failed", { route, error: e });
+                    const reason =
+                        queuesSettled.status === "rejected"
+                            ? queuesSettled.reason instanceof Error
+                                ? queuesSettled.reason.message
+                                : "Queue request failed"
+                            : "Queue request failed";
+                    console.warn("[adminV2][work-unit] queue summaries rejected", { route: queueListRoute, error: reason });
                     if (!cancelled) {
                         setQueueSummaries(null);
-                        setQueueSummariesError(e instanceof Error ? e.message : "Failed to load queues");
-                        setQueueSummariesRoute(route);
+                        setQueueSummariesError(reason);
+                        setQueueSummariesRoute(queueListRoute);
                     }
                 }
 
@@ -355,6 +408,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     setDept(deptJson as DeptRow);
                     setOq(oqRuntime);
                     setNeedsAttentionWorkUnitId(naWu?.id ?? null);
+                    setOpportunityQueueRowActions(parsedQueueRowQuick);
                 }
             } catch (e) {
                 if (!cancelled) {
@@ -371,6 +425,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     setQueueItemsError(null);
                     setQueueItemsRoute(null);
                     setQueueItemsLoading(false);
+                    setOpportunityQueueRowActions(null);
                 }
             } finally {
                 if (!cancelled) setLoading(false);
@@ -723,11 +778,61 @@ export default function AdminV2OpportunityWorkUnitPage() {
             deptName: dept.name ?? "Department",
             departmentKey: dept.key,
             oq: oqFiltered,
+            queueRowQuickActions: opportunityQueueRowActions,
         });
-    }, [departmentId, dept, oq, searchParams, workUnit]);
+    }, [departmentId, dept, oq, opportunityQueueRowActions, searchParams, workUnit]);
 
     const onAction = useCallback(
         async (action: WorkspaceAction) => {
+            if (
+                action.type === "queue.item.action" &&
+                action.payload &&
+                typeof action.payload === "object" &&
+                (action.payload as { source?: string }).source === "action_registry" &&
+                action.actionId &&
+                action.itemId
+            ) {
+                const res = await fetch("/api/admin/actions/execute", {
+                    method: "POST",
+                    credentials: "include",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        action_key: action.actionId,
+                        entity_type: "opportunity",
+                        entity_id: action.itemId,
+                        context: {
+                            surface: "queue_row",
+                            work_unit_id: workUnit?.id ?? null,
+                            department_id: departmentId,
+                        },
+                    }),
+                });
+                const json = (await res.json().catch(() => ({}))) as {
+                    ok?: boolean;
+                    error?: string;
+                    execution_result?: { kind?: string; href?: string; drawer?: { defaultSurface?: string | null } };
+                };
+                if (!res.ok || !json.ok) {
+                    console.warn("[work-unit] action execute failed", json.error);
+                    return;
+                }
+                const er = json.execution_result;
+                if (er?.kind === "open_drawer") {
+                    if (er.drawer?.defaultSurface === "quote_intake") {
+                        openDrawer({ type: "opportunities", id: action.itemId, defaultOpportunitySurface: "quote_intake" });
+                    } else {
+                        openDrawer({ type: "opportunities", id: action.itemId });
+                    }
+                    router.refresh();
+                    return;
+                }
+                if (er?.kind === "navigate" && er.href) {
+                    router.push(er.href);
+                    return;
+                }
+                router.refresh();
+                return;
+            }
             if (action.type === "queue.item.action" && action.actionId === "open_record") {
                 const entityType = queueItems?.queue.entity_type;
                 if (entityType === "job") {
@@ -796,7 +901,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 }
             }
         },
-        [departmentId, needsAttentionWorkUnitId, openDrawer, queueItems?.queue.entity_type]
+        [departmentId, needsAttentionWorkUnitId, openDrawer, queueItems?.queue.entity_type, router, workUnit?.id]
     );
 
     const deptName = dept?.name?.trim() || "Department";
@@ -835,7 +940,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     <WorkUnitRouteSkeletonBody />
                 </>
             ) : effectiveModel ? (
-                <WorkUnitWorkspace model={effectiveModel} onAction={onAction} headerQueuePicker={queueModel ? queuePicker : null} />
+                <WorkUnitWorkspace
+                    model={effectiveModel}
+                    onAction={onAction}
+                    headerQueuePicker={queueModel ? queuePicker : null}
+                    queueRowsLoading={queueItemsLoading && !queueItems}
+                />
             ) : (
                 <p className="text-sm text-alloy-ember px-1 py-4">{error ?? "Unable to load this work unit."}</p>
             )}

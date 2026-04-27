@@ -1,5 +1,5 @@
 import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
-import type { QueueItemVm, QueueVm, WorkUnitWorkspaceModel } from "@/lib/ui-v2/workspace-types";
+import type { QueueItemQuickActionVm, QueueItemVm, QueueVm, WorkUnitWorkspaceModel } from "@/lib/ui-v2/workspace-types";
 import { formatWorkspaceUsdGrouped } from "@/lib/ui-v2/formatWorkspaceCurrency";
 import {
     buildEnrollmentOpportunityQueueItemVm,
@@ -119,16 +119,22 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
     deptName: string;
     departmentKey?: string | null;
     oq: WorkspaceOpportunityQueueRuntime;
+    /** When set (e.g. from GET /api/admin/actions?surface=queue_row), overrides per-row hardcoded quick actions. */
+    queueRowQuickActions?: QueueItemQuickActionVm[] | null;
 }): WorkUnitWorkspaceModel {
     const workUnitKeyLower = input.workUnitKey.trim().toLowerCase();
     const isAllInquiries = workUnitKeyLower === "pipeline_overview";
     const isEnrollmentDept = (input.departmentKey ?? "").trim().toLowerCase() === "enrollment";
 
-    const rawItems: QueueItemVm[] = input.oq.items.map((row) =>
-        isEnrollmentDept
+    const rawItems: QueueItemVm[] = input.oq.items.map((row) => {
+        const base = isEnrollmentDept
             ? buildEnrollmentOpportunityQueueItemVm(row, { workUnitKey: input.workUnitKey })
-            : defaultOpportunityQueueItemVm(row, input.workUnitKey)
-    );
+            : defaultOpportunityQueueItemVm(row, input.workUnitKey);
+        if (input.queueRowQuickActions?.length) {
+            return { ...base, quickActions: input.queueRowQuickActions };
+        }
+        return base;
+    });
 
     const items = rawItems.slice().sort((a, b) => {
         const ak = (a.groupLabel ?? "").toLowerCase();

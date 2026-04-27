@@ -13,13 +13,15 @@ type Props = {
   onAction: WorkspaceActionHandler;
   /** Compact queue pills in the control-deck header (below lane headline). Body starts with queue rows only. */
   headerQueuePicker?: React.ReactNode;
+  /** First drill-in fetch: show a lightweight hint above queue rows. */
+  queueRowsLoading?: boolean;
 };
 
 /**
  * Work unit — same shell grammar as Department (control deck, KPI strip, 75/25 split, workflows strip, command rail).
  * Main surface is a structured queue of drillable records (not department rollups). No inline AI form — shell bar only.
  */
-export default function WorkUnitWorkspace({ model, onAction, headerQueuePicker }: Props) {
+export default function WorkUnitWorkspace({ model, onAction, headerQueuePicker, queueRowsLoading }: Props) {
   const wuShellStyle: CSSProperties = useMemo(
     () =>
       operationalWorkspaceShellStyle({
@@ -147,6 +149,14 @@ export default function WorkUnitWorkspace({ model, onAction, headerQueuePicker }
                         </p>
                       ) : null}
                     </div>
+                  ) : null}
+                  {queueRowsLoading ? (
+                    <p
+                      className="m-0 mb-2 rounded-md border border-admin-border/60 bg-white/80 px-2 py-1.5 text-[11px] font-medium text-alloy-forge/70"
+                      aria-live="polite"
+                    >
+                      Loading queue rows…
+                    </p>
                   ) : null}
                   <QueueBlock queue={model.primaryQueue} onAction={onAction} variant="primary" surface="work_unit" />
                 </div>
