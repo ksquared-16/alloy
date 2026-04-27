@@ -17,7 +17,7 @@ loadEnv({ path: resolve(process.cwd(), ".env.local") });
 loadEnv({ path: resolve(process.cwd(), ".env") });
 
 const DEFAULT_ORG_ID = "7803388d-cdee-4afb-89cf-23a137f39423";
-const DEFAULT_WORK_UNIT_ID = "c2b640e5-e09a-4319-9d1b-d752ebb80122";
+const DEFAULT_WORK_UNIT_KEY = "enrollment_pipeline";
 
 type SeedSpec = {
   seed_key: string;
@@ -45,7 +45,6 @@ function pick<T>(arr: T[], idx: number): T | null {
 
 async function main() {
   const orgId = (process.env.DEV_QUEUE_ORG_ID?.trim() || DEFAULT_ORG_ID).trim();
-  const workUnitId = (process.env.DEV_QUEUE_WORK_UNIT_ID?.trim() || DEFAULT_WORK_UNIT_ID).trim();
   const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
 
   const supabaseUrlRaw = process.env.SUPABASE_URL?.trim() || "";
@@ -59,10 +58,54 @@ async function main() {
   console.log("--- Enrollment pipeline demo seed (preflight) ---");
   console.log("SUPABASE_URL host:", supabaseHost);
   console.log("org_id target:", orgId);
-  console.log("work_unit_id target:", workUnitId);
   console.log("");
 
   const supabase = createAdminClient();
+
+  // Resolve target work unit (do NOT hardcode ids).
+  const envWorkUnitId = process.env.DEV_QUEUE_WORK_UNIT_ID?.trim() || "";
+  const envWorkUnitKey = (process.env.DEV_QUEUE_WORK_UNIT_KEY?.trim() || DEFAULT_WORK_UNIT_KEY).trim();
+
+  const wuLookup = envWorkUnitId
+    ? await supabase
+        .from("work_units")
+        .select("id, org_id, key, name")
+        .eq("id", envWorkUnitId)
+        .maybeSingle()
+    : await supabase
+        .from("work_units")
+        .select("id, org_id, key, name")
+        .eq("org_id", orgId)
+        .eq("key", envWorkUnitKey)
+        .maybeSingle();
+
+  if (wuLookup.error) {
+    throw new Error(`work_units lookup failed: ${wuLookup.error.message}`);
+  }
+  const wu = wuLookup.data as { id: string; org_id: string; key?: string | null; name?: string | null } | null;
+  if (!wu?.id) {
+    throw new Error(
+      envWorkUnitId
+        ? `Work unit not found: DEV_QUEUE_WORK_UNIT_ID=${envWorkUnitId}`
+        : `Work unit not found in org: key=${envWorkUnitKey} org_id=${orgId}`
+    );
+  }
+  if (wu.org_id !== orgId) {
+    throw new Error(
+      `Work unit org mismatch: work_unit.org_id=${wu.org_id} but DEV_QUEUE_ORG_ID=${orgId}. Refusing to seed.`
+    );
+  }
+
+  const workUnitId = wu.id;
+  const workUnitKey = (wu.key ?? null) as string | null;
+  const workUnitName = (wu.name ?? null) as string | null;
+
+  console.log("resolved work unit:");
+  console.log("- org_id:", orgId);
+  console.log("- work_unit_id:", workUnitId);
+  console.log("- work_unit_key:", workUnitKey ?? "—");
+  console.log("- work_unit_name:", workUnitName ?? "—");
+  console.log("");
 
   // Detect whether opportunities.work_unit_id exists (explicit probe; avoids relying on sample row keys / cached schema).
   const workUnitProbe = await supabase
@@ -269,6 +312,8 @@ async function main() {
   console.log("--- Enrollment pipeline demo seed ---");
   console.log("org_id:", orgId);
   console.log("work_unit_id target:", workUnitId);
+  console.log("work_unit_key target:", workUnitKey ?? "—");
+  console.log("work_unit_name target:", workUnitName ?? "—");
   console.log("opportunities columns (sample):", sampleKeys.length ? sampleKeys.join(", ") : "— (no sample row)");
   console.log("opportunities scoped by work_unit_id column:", hasWorkUnitIdCol ? "YES (seed sets it)" : "NO (seed cannot set it)");
   if (!hasWorkUnitIdCol && workUnitProbeErr) {

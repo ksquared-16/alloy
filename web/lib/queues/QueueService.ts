@@ -53,8 +53,12 @@ function getStoredQueueDefinitionVersion(raw: unknown): number | null {
 }
 
 function loadQueueDefinitionOrThrow(raw: unknown): QueueDefinitionV1 {
-    const validated = validateQueueDefinition(raw);
-    return validated;
+    try {
+        const validated = validateQueueDefinition(raw);
+        return validated;
+    } catch {
+        throw new QueueServiceError("Work unit queue_definition is not QueueDefinitionV1", 400, "INVALID_QUEUE_DEFINITION");
+    }
 }
 
 function findQueueByKey(def: QueueDefinitionV1, queueKey: string): QueueConfig {
