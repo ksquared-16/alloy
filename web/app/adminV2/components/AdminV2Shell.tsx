@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, type CSSProperties } from "react";
+import { Suspense, useState, type CSSProperties } from "react";
 import { usePathname } from "next/navigation";
-import { neutral, derived } from "@/styles/tokens/colors";
+import { neutral, derived, palette } from "@/styles/tokens/colors";
 
 const CHAMBER_FRAME = `inset 0 0 0 1px ${derived.adminV2BoundaryAmberInset}`;
 import TopNavBar from "./TopNavBar";
@@ -122,7 +122,19 @@ export default function AdminV2Shell({
           onToggle={() => setSidebarCollapsed((c) => !c)}
         />
         <div className="flex flex-1 flex-col min-w-0 min-h-0 overflow-hidden">
-          <TopNavBar />
+          <Suspense
+            fallback={
+              <div
+                className="flex h-12 flex-shrink-0 items-center px-4 text-sm text-white/70"
+                style={{ backgroundColor: palette.midnightForge }}
+                aria-hidden
+              >
+                Loading…
+              </div>
+            }
+          >
+            <TopNavBar />
+          </Suspense>
           <div
             data-adminv2-workspace-ambient-root
             className="relative flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden"
@@ -160,7 +172,19 @@ export default function AdminV2Shell({
         onToggle={() => setSidebarCollapsed((c) => !c)}
       />
       <div className="flex flex-1 flex-col min-w-0">
-        <TopNavBar />
+        <Suspense
+          fallback={
+            <div
+              className="flex h-12 flex-shrink-0 items-center px-4 text-sm text-white/70"
+              style={{ backgroundColor: palette.midnightForge }}
+              aria-hidden
+            >
+              Loading…
+            </div>
+          }
+        >
+          <TopNavBar />
+        </Suspense>
         <BreadcrumbBar
           zoomLevel={zoomLevel}
           departmentName={selectedDepartmentKey ? getDepartmentName(selectedDepartmentKey) : null}
