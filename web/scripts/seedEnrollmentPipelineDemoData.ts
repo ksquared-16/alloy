@@ -187,7 +187,7 @@ async function main() {
     // Waitlisted + enrolled + lost (3)
     { seed_key: "enroll_demo_waitlisted_1", name: "Enrollment — Martinez Family", status_key: "waitlisted", created_at_iso: iso(subDays(now, 10)), updated_at_iso: iso(subDays(now, 1.1)), customer_mode: "reuse", contact_mode: "reuse", note: "Waitlisted" },
     { seed_key: "enroll_demo_enrolled_1", name: "Enrollment — Thompson Family", status_key: "enrolled", created_at_iso: iso(subDays(now, 12)), updated_at_iso: iso(subDays(now, 0.7)), customer_mode: "reuse", contact_mode: "reuse", note: "Enrolled" },
-    { seed_key: "enroll_demo_lost_1", name: "Enrollment — Thompson Family", status_key: "lost", created_at_iso: iso(subDays(now, 12)), updated_at_iso: iso(subDays(now, 0.7)), customer_mode: "reuse", contact_mode: "reuse", note: "Lost" },
+    { seed_key: "enroll_demo_lost_1", name: "Enrollment — Moore Family", status_key: "lost", created_at_iso: iso(subDays(now, 12)), updated_at_iso: iso(subDays(now, 0.7)), customer_mode: "reuse", contact_mode: "reuse", note: "Lost — chose another center" },
     { seed_key: "enroll_demo_lost_2", name: "Enrollment — Anderson Family", status_key: "lost", created_at_iso: iso(subDays(now, 13)), updated_at_iso: iso(subDays(now, 0.5)), customer_mode: "reuse", contact_mode: "reuse", note: "Lost" },
 
     // Needs attention boosters (ensure >=5 hit):
@@ -250,18 +250,83 @@ async function main() {
     { last: "Anderson", first: "Benjamin" },
   ];
 
+  const DEMO_PROGRAMS: Array<{ program_label: string; age_group: string }> = [
+    { program_label: "Toddler (2–3)", age_group: "Ages 24–36 mo" },
+    { program_label: "Preschool (3–4)", age_group: "Ages 36–48 mo" },
+    { program_label: "Pre-K (4–5)", age_group: "Ages 48–60 mo" },
+    { program_label: "Infant (6–12 mo)", age_group: "Ages 6–12 mo" },
+    { program_label: "Young Toddler (12–24 mo)", age_group: "Ages 12–24 mo" },
+  ];
+
+  function nextStepForStatus(status_key: string, note: string): string {
+    switch (status_key) {
+      case "new_inquiry":
+        return "Call within one business day to confirm age and preferred start window.";
+      case "contacted":
+        return "Send recap email and propose two tour times.";
+      case "tour_scheduled":
+        return "Send tour reminder 24h ahead; confirm arrival and parking.";
+      case "tour_completed":
+        return "Follow up with tuition summary and enrollment packet link.";
+      case "application_in_progress":
+        return "Check outstanding forms; offer upload help.";
+      case "ready_to_enroll":
+        return "Finalize start date and deposit; schedule orientation.";
+      case "waitlisted":
+        return "Monthly waitlist check-in; note alternate start dates.";
+      case "enrolled":
+        return "Confirm first-day supplies and classroom introduction.";
+      case "lost":
+        return "Polite close-out; invite to re-apply if plans change.";
+      default:
+        return `Operational follow-up: ${note}`;
+    }
+  }
+
+  function demoMetadataForSeed(
+    spec: SeedSpec,
+    person: { last: string; first: string },
+    idx: number,
+    seedNow: Date
+  ): Record<string, unknown> {
+    const prog = DEMO_PROGRAMS[idx % DEMO_PROGRAMS.length]!;
+    const desired = new Date(seedNow.getTime() + (18 + (idx % 14)) * 86400000).toISOString().slice(0, 10);
+    const tourEligible =
+      spec.status_key === "tour_scheduled" ||
+      spec.status_key === "tour_completed" ||
+      spec.status_key === "application_in_progress" ||
+      spec.status_key === "ready_to_enroll";
+    const tourDate = tourEligible
+      ? new Date(seedNow.getTime() + (2 + (idx % 6)) * 86400000).toISOString().slice(0, 10)
+      : null;
+    const childName = `${person.first} ${person.last}`;
+    const notes = `${spec.note}. Interested in ${prog.program_label}; prefers morning drop-off when possible.`;
+    return {
+      seed_key: spec.seed_key,
+      demo_seed_package: "enrollment_pipeline_demo_v1",
+      demo_note: spec.note,
+      child_name: childName,
+      program_label: prog.program_label,
+      age_group: prog.age_group,
+      desired_start_date: desired,
+      tour_date: tourDate,
+      notes,
+      next_step: nextStepForStatus(spec.status_key, spec.note),
+    };
+  }
+
   function seedEmail(seedKey: string): string {
-    const local = seedKey.trim().toLowerCase().replace(/[^a-z0-9_]+/g, "_").slice(0, 48) || "seed";
-    return `${local}@demo.alloy.invalid`;
+    // `contacts_email_unique` is global on lower(trim(email)), not scoped by org_id.
+    const orgTag = orgId.replace(/-/g, "");
+    const n = Math.abs(seedKey.split("").reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) | 0, 0)) % 1_000_000;
+    const slug = (seedKey.trim().toLowerCase().replace(/[^a-z0-9_]+/g, "_") || "seed").slice(0, 18);
+    return `${slug}.${String(n).padStart(6, "0")}+${orgTag}@demo.alloy.invalid`;
   }
 
   function seedPhone(seedKey: string): string {
-    // Deterministic but fake; avoids collisions. Not guaranteed to pass strict E.164 validators, but works in our UI.
-    const n = Math.abs(
-      seedKey
-        .split("")
-        .reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) % 10000000, 7)
-    );
+    // `contacts_phone_unique` is global; mix in org_id so demo contacts do not collide across orgs or seed keys.
+    const combined = `${seedKey}|${orgId}`;
+    const n = Math.abs(combined.split("").reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) | 0, 0));
     const s = String(1000000 + (n % 9000000));
     return `+1415${s}`;
   }
@@ -303,8 +368,8 @@ async function main() {
         .maybeSingle();
       if (contactErr) {
         console.log("WARN: seed contact insert failed", { seed_key: spec.seed_key, error: contactErr.message });
-        // If we hit a unique constraint on email, recover by reusing the existing contact.
         const email = seedEmail(spec.seed_key);
+        const phone = seedPhone(spec.seed_key);
         const { data: existingByEmail } = await supabase
           .from("contacts")
           .select("id")
@@ -313,6 +378,26 @@ async function main() {
           .maybeSingle();
         if ((existingByEmail as any)?.id) {
           seedContactBySeedKey.set(spec.seed_key, (existingByEmail as any).id);
+        } else {
+          const { data: existingByPhone } = await supabase
+            .from("contacts")
+            .select("id")
+            .eq("org_id", orgId)
+            .eq("phone", phone)
+            .maybeSingle();
+          if ((existingByPhone as any)?.id) {
+            seedContactBySeedKey.set(spec.seed_key, (existingByPhone as any).id);
+          } else {
+            const { data: existingBySeedMeta } = await supabase
+              .from("contacts")
+              .select("id")
+              .eq("org_id", orgId)
+              .eq("metadata->>seed_key", spec.seed_key)
+              .maybeSingle();
+            if ((existingBySeedMeta as any)?.id) {
+              seedContactBySeedKey.set(spec.seed_key, (existingBySeedMeta as any).id);
+            }
+          }
         }
       }
       if ((createdContact as any)?.id) seedContactBySeedKey.set(spec.seed_key, (createdContact as any).id);
@@ -373,6 +458,7 @@ async function main() {
         ? seedContactBySeedKey.get(spec.seed_key) ?? pick(contactIds, i) ?? null
         : null;
 
+    const person = familyNames[i % familyNames.length]!;
     const payload: Record<string, unknown> = {
       org_id: orgId,
       name: spec.name,
@@ -382,19 +468,7 @@ async function main() {
       primary_contact_id,
       created_at: spec.created_at_iso,
       updated_at: spec.updated_at_iso,
-      metadata: {
-        seed_key: spec.seed_key,
-        demo_seed_package: "enrollment_pipeline_demo_v1",
-        demo_note: spec.note,
-        child_name: `Child — ${(spec.seed_key.split("_").slice(-1)[0] ?? "A").toUpperCase()}`,
-        program_label: "Toddler (2–3)",
-        desired_start_date: new Date(Date.now() + 1000 * 60 * 60 * 24 * 21).toISOString().slice(0, 10),
-        tour_date:
-          spec.status_key === "tour_scheduled" || spec.status_key === "tour_completed"
-            ? new Date(Date.now() + 1000 * 60 * 60 * 24 * 3).toISOString().slice(0, 10)
-            : null,
-        notes: spec.note,
-      },
+      metadata: demoMetadataForSeed(spec, person, i, now),
     };
     if (hasWorkUnitIdCol) payload.work_unit_id = workUnitId;
 
@@ -504,9 +578,10 @@ async function main() {
       const cid = seedCustomerBySeedKey.get(seedKey);
       if (cid) patch.customer_id = cid;
     }
-    if (!intentionalMissingContact.has(seedKey) && r.primary_contact_id == null) {
+    if (!intentionalMissingContact.has(seedKey)) {
       const ccid = seedContactBySeedKey.get(seedKey);
-      if (ccid) patch.primary_contact_id = ccid;
+      // Backfill nulls and fix wrong FK (legacy inserts used `pick(contactIds)` when seed contact was not in the map).
+      if (ccid && r.primary_contact_id !== ccid) patch.primary_contact_id = ccid;
     }
     if (Object.keys(patch).length === 0) continue;
     const { error } = await supabase.from("opportunities").update(patch).eq("id", r.id).eq("org_id", orgId);
@@ -530,6 +605,28 @@ async function main() {
       .eq("id", contactId);
     if (!error) contactCustomerAligned++;
   }
+
+  // Refresh demo metadata on every run so previews stay rich and deterministic (does not touch updated_at).
+  let metadataSynced = 0;
+  const { data: allSeedOppsForMeta } = await supabase
+    .from("opportunities")
+    .select("id, metadata")
+    .eq("org_id", orgId)
+    .in("metadata->>seed_key", seedKeys as any);
+  for (const rowAny of allSeedOppsForMeta ?? []) {
+    const row = rowAny as { id?: string; metadata?: Record<string, unknown> | null };
+    const seedKey = row?.metadata?.seed_key;
+    if (typeof seedKey !== "string") continue;
+    const spec = specs.find((s) => s.seed_key === seedKey);
+    if (!spec) continue;
+    const idx = specs.findIndex((s) => s.seed_key === seedKey);
+    const person = familyNames[idx % familyNames.length]!;
+    const nextMeta = demoMetadataForSeed(spec, person, idx, now);
+    const merged = { ...(typeof row.metadata === "object" && row.metadata != null ? row.metadata : {}), ...nextMeta };
+    const { error } = await supabase.from("opportunities").update({ metadata: merged }).eq("id", row.id).eq("org_id", orgId);
+    if (!error) metadataSynced++;
+  }
+
   const byStatus = new Map<string, number>();
   const needsAttentionExpected: Array<{ id: string; seed_key: string; reason: string }> = [];
   const needsAttentionExpectedAll: Array<{ id: string; seed_key: string; name: string; status_key: string; reason: string }> = [];
@@ -583,6 +680,7 @@ async function main() {
   console.log("normalized_legacy_seeded_rows:", normalized);
   console.log("patched_seeded_opportunity_links:", linkPatched);
   console.log("aligned_seeded_contact_customer_ids:", contactCustomerAligned);
+  console.log("demo_metadata_synced_rows:", metadataSynced);
   console.log("seeded counts by status:", byStatusSorted.map(([k, v]) => `${k}:${v}`).join(", "));
   console.log("");
   console.log("needs_attention expected (>=5 target):", needsAttentionExpected.length);
@@ -598,6 +696,12 @@ async function main() {
     }
   }
   console.log("");
+
+  const INTENTIONAL_BROKEN = new Set(["enroll_demo_missing_contact", "enroll_demo_missing_customer"]);
+  /** Only rows defined by *this* script run — avoids failing on orphan legacy `enroll_demo_*` keys still in the DB. */
+  const verifiableSeedKeys = new Set(specs.map((s) => s.seed_key).filter((k) => !INTENTIONAL_BROKEN.has(k)));
+  const needsTourContext = (statusKey: string) =>
+    ["tour_scheduled", "tour_completed", "application_in_progress", "ready_to_enroll"].includes(statusKey);
 
   try {
     const qs = await getWorkUnitQueueSummaries({ orgId, workUnitId, limit: 3 });
@@ -622,6 +726,67 @@ async function main() {
     }
   } catch (e) {
     console.log("WARN: QueueService smoke check failed:", e instanceof Error ? e.message : String(e));
+  }
+
+  try {
+    const allQ = await getWorkUnitQueueItems({ orgId, workUnitId, queueKey: "all", limit: 120, offset: 0 });
+    console.log("");
+    console.log("--- QueueService `all` first 5 preview (enriched) ---");
+    for (const r of (allQ.items ?? []).slice(0, 5)) {
+      const row = r as Record<string, unknown>;
+      console.log(
+        JSON.stringify(
+          {
+            title: row.name ?? row.title,
+            _status_display: row._status_display,
+            _primary_contact_line: row._primary_contact_line,
+            _primary_phone: row._primary_phone,
+            _primary_email: row._primary_email,
+            _child_display_name: row._child_display_name,
+            _requested_program: row._requested_program,
+            _desired_start_date: row._desired_start_date,
+            _tour_context: row._tour_context,
+          },
+          null,
+          2
+        )
+      );
+    }
+
+    for (const r of allQ.items ?? []) {
+      const row = r as Record<string, unknown>;
+      const seedKey = (row.metadata as { seed_key?: string } | null | undefined)?.seed_key;
+      if (typeof seedKey !== "string" || !verifiableSeedKeys.has(seedKey)) continue;
+      const sk = String(row.status_key ?? "");
+      const checks: Array<[string, unknown]> = [
+        ["title", (row.name ?? row.title ?? "").toString().trim()],
+        ["_status_display", (row._status_display ?? "").toString().trim()],
+        ["_primary_contact_line", (row._primary_contact_line ?? "").toString().trim()],
+        ["_primary_phone", (row._primary_phone ?? "").toString().trim()],
+        ["_primary_email", (row._primary_email ?? "").toString().trim()],
+        ["_child_display_name", (row._child_display_name ?? "").toString().trim()],
+        ["_requested_program", (row._requested_program ?? "").toString().trim()],
+        ["_desired_start_date", (row._desired_start_date ?? "").toString().trim()],
+        ["_notes_preview", (row._notes_preview ?? "").toString().trim()],
+        ["_next_step_preview", (row._next_step_preview ?? "").toString().trim()],
+      ];
+      if (needsTourContext(sk)) {
+        checks.push(["_tour_context", (row._tour_context ?? "").toString().trim()]);
+      }
+      for (const [k, v] of checks) {
+        if (!v) {
+          console.error("FAIL: seed preview verification — missing enriched field", { seedKey, status_key: sk, field: k });
+          process.exit(1);
+        }
+      }
+    }
+    console.log("");
+    console.log(
+      "QueueService preview verification: OK (current seed package rows in `all` queue have required preview fields)."
+    );
+  } catch (e) {
+    console.error("FAIL: QueueService preview verification error:", e instanceof Error ? e.message : String(e));
+    process.exit(1);
   }
 
   // Sample record with linked contact/customer details.

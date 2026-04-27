@@ -82,7 +82,7 @@ export default function RecentAiActionsStrip() {
                         Recent AI actions
                     </span>
                     <Link
-                        href="/admin/v2/ai-activity"
+                        href="/adminV2/ai-activity"
                         className="text-[10px] font-medium underline-offset-2 hover:underline"
                         style={{ color: derived.textSecondary }}
                     >

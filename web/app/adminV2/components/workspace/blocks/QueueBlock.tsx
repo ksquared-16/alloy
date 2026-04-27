@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
-import type { CrmCompactRowSemanticSlots, QueueItemVm, QueueVm } from "@/lib/ui-v2/workspace-types";
+import type { CrmCompactRowSemanticSlots, QueueItemQuickActionVm, QueueItemVm, QueueVm } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
 
 type Props = {
@@ -127,6 +127,13 @@ function workUnitSectionKey(item: QueueItemVm): string | undefined {
   return item.groupKey?.trim() || item.groupLabel?.trim() || undefined;
 }
 
+function queueQuickActionDispatchId(qa: QueueItemQuickActionVm): string {
+  const withAction = qa as QueueItemQuickActionVm & { actionId?: string };
+  if (typeof withAction.actionId === "string" && withAction.actionId.trim()) return withAction.actionId.trim();
+  if (qa.id === "open") return "open_record";
+  return qa.id;
+}
+
 /** CRM-compact preview — renders only from `CrmCompactRowSemanticSlots` (config-driven). */
 function EnrollmentCrmCompactPreview({ slots }: { slots: CrmCompactRowSemanticSlots }) {
   const careParts = [slots.programContext, slots.roomContext, slots.ageContext].filter(Boolean) as string[];
@@ -141,14 +148,39 @@ function EnrollmentCrmCompactPreview({ slots }: { slots: CrmCompactRowSemanticSl
       <div className="adminv2-ws-enrollment-crm-preview__identity" data-enrollment-crm-slot="primaryIdentity">
         {slots.primaryIdentity}
       </div>
+      {stageStatus ? (
+        <div className="adminv2-ws-enrollment-crm-preview__stage" data-enrollment-crm-slot="stageStatus">
+          {stageStatus}
+        </div>
+      ) : null}
+      {slots.contactSnippet ? (
+        <div className="adminv2-ws-enrollment-crm-preview__contact" data-enrollment-crm-slot="contactSnippet">
+          {slots.contactSnippet}
+        </div>
+      ) : null}
       {slots.childName ? (
         <div className="adminv2-ws-enrollment-crm-preview__child" data-enrollment-crm-slot="childName">
           Child: {slots.childName}
         </div>
       ) : null}
-      {stageStatus ? (
-        <div className="adminv2-ws-enrollment-crm-preview__stage" data-enrollment-crm-slot="stageStatus">
-          {stageStatus}
+      {careParts.length ? (
+        <div className="adminv2-ws-enrollment-crm-preview__care" data-enrollment-crm-slot="careContext">
+          {careParts.join(" · ")}
+        </div>
+      ) : null}
+      {slots.tourContext ? (
+        <div className="adminv2-ws-enrollment-crm-preview__tour" data-enrollment-crm-slot="tourContext">
+          {slots.tourContext}
+        </div>
+      ) : null}
+      {slots.attentionReason ? (
+        <div className="adminv2-ws-enrollment-crm-preview__attention" data-enrollment-crm-slot="attentionReason">
+          {slots.attentionReason}
+        </div>
+      ) : null}
+      {slots.familyNote ? (
+        <div className="adminv2-ws-enrollment-crm-preview__note" data-enrollment-crm-slot="familyNote">
+          {slots.familyNote}
         </div>
       ) : null}
       {showOpsLine ? (
@@ -170,31 +202,6 @@ function EnrollmentCrmCompactPreview({ slots }: { slots: CrmCompactRowSemanticSl
           ) : null}
         </div>
       ) : null}
-      {careParts.length ? (
-        <div className="adminv2-ws-enrollment-crm-preview__care" data-enrollment-crm-slot="careContext">
-          {careParts.join(" · ")}
-        </div>
-      ) : null}
-      {slots.tourContext ? (
-        <div className="adminv2-ws-enrollment-crm-preview__tour" data-enrollment-crm-slot="tourContext">
-          {slots.tourContext}
-        </div>
-      ) : null}
-      {slots.contactSnippet ? (
-        <div className="adminv2-ws-enrollment-crm-preview__contact" data-enrollment-crm-slot="contactSnippet">
-          {slots.contactSnippet}
-        </div>
-      ) : null}
-      {slots.attentionReason ? (
-        <div className="adminv2-ws-enrollment-crm-preview__attention" data-enrollment-crm-slot="attentionReason">
-          {slots.attentionReason}
-        </div>
-      ) : null}
-      {slots.familyNote ? (
-        <div className="adminv2-ws-enrollment-crm-preview__note" data-enrollment-crm-slot="familyNote">
-          {slots.familyNote}
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -212,22 +219,25 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
 
   let lastSectionKey: string | undefined;
 
+  const showQueueHeader = Boolean(queue.title?.trim());
   return (
     <section
       className="adminv2-ws-dept-qsec adminv2-ws-dept-qsec--primary adminv2-ws-wu-queue-shell"
       data-ws-queue-id={queue.id}
-      aria-label={queue.title}
+      aria-label={queue.title?.trim() || "Queue"}
     >
-      <header className="adminv2-ws-queue-header">
-        <div className="adminv2-ws-queue-title-row">
-          <h3 className="adminv2-ws-queue-title">{queue.title}</h3>
-          {queue.countBadge != null ? (
-            <span className="adminv2-ws-wu-queue-count-badge" aria-label={`${queue.countBadge} in queue`}>
-              {queue.countBadge}
-            </span>
-          ) : null}
-        </div>
-      </header>
+      {showQueueHeader ? (
+        <header className="adminv2-ws-queue-header">
+          <div className="adminv2-ws-queue-title-row">
+            {queue.title?.trim() ? <h3 className="adminv2-ws-queue-title">{queue.title.trim()}</h3> : <span className="sr-only">Queue</span>}
+            {queue.countBadge != null ? (
+              <span className="adminv2-ws-wu-queue-count-badge" aria-label={`${queue.countBadge} in queue`}>
+                {queue.countBadge}
+              </span>
+            ) : null}
+          </div>
+        </header>
+      ) : null}
       {queue.rollupSummary ? <p className="adminv2-ws-wu-queue-summary">{queue.rollupSummary}</p> : null}
       {queue.sortCaption ? (
         <p className="adminv2-ws-wu-queue-sort-caption" role="note">
@@ -290,50 +300,43 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
                 }}
               >
                 {crm ? (
-                  <div className="adminv2-ws-enrollment-crm-row" data-enrollment-row-layout="stacked_actions">
+                  <div className="adminv2-ws-enrollment-crm-row adminv2-ws-enrollment-crm-row--split" data-enrollment-row-layout="split_actions">
                     <div className="adminv2-ws-enrollment-crm-row__content">
                       <EnrollmentCrmCompactPreview slots={crm} />
                     </div>
-                    <div className="adminv2-ws-enrollment-crm-row__actions" role="group" aria-label="Actions">
-                      {item.quickActions?.length ? (
-                        <div className="adminv2-ws-enrollment-crm-row__quick-actions" role="group" aria-label="Quick actions">
-                          {item.quickActions.map((qa) => (
-                            <button
-                              key={`${item.id}-qa-${qa.id}`}
-                              type="button"
-                              className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--quiet"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onAction({
-                                  type: "queue.item.action",
-                                  queueId: queue.id,
-                                  itemId: item.id,
-                                  actionId: qa.id,
-                                  payload: qa.payload,
-                                });
-                              }}
-                            >
-                              {qa.label}
-                            </button>
-                          ))}
+                    {item.quickActions?.length ? (
+                      <div className="adminv2-ws-enrollment-crm-row__actions" role="group" aria-label="Actions">
+                        <div className="adminv2-ws-enrollment-crm-row__action-stack">
+                          {item.quickActions.map((qa) => {
+                            const dispatchId = queueQuickActionDispatchId(qa);
+                            const isOpen = dispatchId === "open_record";
+                            return (
+                              <button
+                                key={`${item.id}-qa-${qa.id}`}
+                                type="button"
+                                className={
+                                  isOpen
+                                    ? "adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open"
+                                    : "adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--quiet"
+                                }
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onAction({
+                                    type: "queue.item.action",
+                                    queueId: queue.id,
+                                    itemId: item.id,
+                                    actionId: dispatchId,
+                                    payload: qa.payload,
+                                  });
+                                }}
+                              >
+                                {qa.label}
+                              </button>
+                            );
+                          })}
                         </div>
-                      ) : null}
-                      <button
-                        type="button"
-                        className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onAction({
-                            type: "queue.item.action",
-                            queueId: queue.id,
-                            itemId: item.id,
-                            actionId: "open_record",
-                          });
-                        }}
-                      >
-                        Open
-                      </button>
-                    </div>
+                      </div>
+                    ) : null}
                   </div>
                 ) : (
                   <div className="adminv2-ws-wu-queue-card-compact-text">

@@ -435,69 +435,78 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 </div>
             );
         }
+        const activeSummary = selectedQueueKey
+            ? queueSummaries.find((q) => q.key === selectedQueueKey) ?? queueSummaries[0]
+            : queueSummaries[0];
+        const pillBase =
+            "inline-flex max-w-full items-center gap-1.5 rounded-full border px-2 py-0.5 text-left text-[11px] font-semibold leading-tight transition-colors";
+        const sections = sectionedQueueSummaries ?? [
+            { key: "all", label: "Queues", tone: "standard" as const, queues: queueSummaries },
+        ];
+        const multiSection = sections.length > 1;
         return (
-            <div className="flex flex-col gap-2">
-                {(sectionedQueueSummaries ?? [{ key: "all", label: "Queues", tone: "standard" as const, queues: queueSummaries }]).map(
-                    (section) => (
-                        <section key={section.key} aria-label={section.label}>
-                            {sectionedQueueSummaries && sectionedQueueSummaries.length > 1 ? (
-                                <div className="mb-1 text-[11px] font-semibold text-alloy-forge/70">{section.label}</div>
+            <div className="flex flex-col gap-1.5 min-w-0">
+                <div className="flex flex-col gap-1">
+                    {sections.map((section) => (
+                        <div key={section.key} className="flex flex-wrap items-center gap-1" role="group" aria-label={section.label}>
+                            {multiSection ? (
+                                <span className="w-full text-[10px] font-semibold uppercase tracking-wide text-alloy-forge/50 sm:w-auto sm:mr-1">
+                                    {section.label}
+                                </span>
                             ) : null}
-                            <div className="flex flex-wrap gap-1.5">
-                                {section.queues.map((q) => {
-                                    const selected = q.key === selectedQueueKey;
-                                    const tier =
-                                        q.priority === "critical"
-                                            ? "critical"
-                                            : q.priority === "attention"
-                                              ? "attention"
-                                              : "standard";
-                                    const baseCls =
-                                        "rounded-md border px-2.5 py-1.5 text-left transition-colors max-w-[260px]";
-                                    const tierCls =
-                                        tier === "critical"
-                                            ? selected
-                                                ? "border-alloy-ember bg-alloy-ember/10"
-                                                : "border-alloy-ember/40 bg-admin-surface-card"
-                                            : tier === "attention"
-                                              ? selected
-                                                  ? "border-alloy-honey bg-alloy-honey/10"
-                                                  : "border-alloy-honey/40 bg-admin-surface-card"
-                                              : selected
-                                                ? "border-alloy-pine bg-alloy-stone/20"
-                                                : "border-admin-border bg-admin-surface-card";
-                                    return (
-                                        <button
-                                            key={q.key}
-                                            type="button"
-                                            onClick={() => {
-                                                setSelectedQueueKey(q.key);
-                                                if (typeof window !== "undefined") {
-                                                    const url = new URL(window.location.href);
-                                                    url.searchParams.set("queue", q.key);
-                                                    router.replace(url.pathname + "?" + url.searchParams.toString());
-                                                }
-                                                void fetchQueueItems(workUnitId, q.key);
-                                            }}
-                                            className={`${baseCls} ${tierCls}`}
-                                            aria-pressed={selected}
+                            {section.queues.map((q) => {
+                                const selected = q.key === selectedQueueKey;
+                                const tier =
+                                    q.priority === "critical"
+                                        ? "critical"
+                                        : q.priority === "attention"
+                                          ? "attention"
+                                          : "standard";
+                                const ring =
+                                    tier === "critical"
+                                        ? selected
+                                            ? "border-alloy-ember bg-alloy-ember/12 text-alloy-forge"
+                                            : "border-alloy-ember/35 bg-white/60 text-alloy-forge/85"
+                                        : tier === "attention"
+                                          ? selected
+                                              ? "border-alloy-honey bg-alloy-honey/12 text-alloy-forge"
+                                              : "border-alloy-honey/40 bg-white/60 text-alloy-forge/85"
+                                          : selected
+                                            ? "border-alloy-pine bg-alloy-stone/15 text-alloy-forge"
+                                            : "border-admin-border bg-white/70 text-alloy-forge/80";
+                                return (
+                                    <button
+                                        key={q.key}
+                                        type="button"
+                                        onClick={() => {
+                                            setSelectedQueueKey(q.key);
+                                            if (typeof window !== "undefined") {
+                                                const url = new URL(window.location.href);
+                                                url.searchParams.set("queue", q.key);
+                                                router.replace(url.pathname + "?" + url.searchParams.toString());
+                                            }
+                                            void fetchQueueItems(workUnitId, q.key);
+                                        }}
+                                        className={`${pillBase} ${ring}`}
+                                        aria-pressed={selected}
+                                    >
+                                        <span className="truncate">{q.label}</span>
+                                        <span
+                                            className={`tabular-nums rounded-full px-1 py-px text-[10px] font-bold ${
+                                                selected ? "bg-alloy-forge/10 text-alloy-forge" : "bg-alloy-stone/15 text-alloy-forge/70"
+                                            }`}
                                         >
-                                            <div className="flex items-start justify-between gap-2">
-                                                <div className="min-w-0">
-                                                    <div className="text-xs font-semibold text-alloy-forge truncate">{q.label}</div>
-                                                    {q.description ? (
-                                                        <div className="text-[11px] text-alloy-forge/55 truncate">{q.description}</div>
-                                                    ) : null}
-                                                </div>
-                                                <div className="text-[11px] text-alloy-forge/70 font-semibold tabular-nums">{q.count}</div>
-                                            </div>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </section>
-                    )
-                )}
+                                            {q.count}
+                                        </span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    ))}
+                </div>
+                {activeSummary?.description?.trim() ? (
+                    <p className="m-0 text-[11px] leading-snug text-alloy-forge/60 line-clamp-2">{activeSummary.description.trim()}</p>
+                ) : null}
             </div>
         );
     }, [
@@ -606,7 +615,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                   childName: want("child_name") ? childName || null : null,
                                   stageLabel: null,
                                   statusLabel: want("status") ? statusLabel || null : null,
-                                  nextStep: null,
+                                  nextStep:
+                                      typeof r?._next_step_preview === "string" && r._next_step_preview.trim()
+                                          ? r._next_step_preview.trim()
+                                          : null,
                                   lastActivity: null,
                                   commercialValue: null,
                                   contactSnippet:
@@ -657,11 +669,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
             kpis: [],
             primaryQueue: {
                 id: `wu:${workUnit.id}:queue:${activeQueue?.key ?? "unknown"}`,
-                title: laneTitle,
+                // Title lives in the shell headline + queue pills; body starts with rows only.
+                title: "",
                 countBadge: queueItems?.total ?? activeQueue?.count ?? 0,
                 items: vmItems,
                 sortCaption: errorLine ? errorLine : undefined,
-                rollupSummary: activeQueue?.description,
+                rollupSummary: undefined,
             },
             workSummary: null,
             actionsRail: {
@@ -823,7 +836,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     <WorkUnitRouteSkeletonBody />
                 </>
             ) : effectiveModel ? (
-                <WorkUnitWorkspace model={effectiveModel} onAction={onAction} queuePicker={queueModel ? queuePicker : null} />
+                <WorkUnitWorkspace model={effectiveModel} onAction={onAction} headerQueuePicker={queueModel ? queuePicker : null} />
             ) : (
                 <p className="text-sm text-alloy-ember px-1 py-4">{error ?? "Unable to load this work unit."}</p>
             )}

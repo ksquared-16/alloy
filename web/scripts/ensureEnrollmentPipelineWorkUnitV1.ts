@@ -62,7 +62,7 @@ function buildEnrollmentQueueDefinitionV1() {
         },
         {
             key: "contacted_touring",
-            label: "Contacted / touring",
+            label: "Active conversations",
             description: "Families in conversation or with tours scheduled.",
             filters: [{ type: "status", operator: "in", values: ["contacted", "tour_scheduled"] }],
             sort: [{ field: "updated_at", direction: "desc" }],
@@ -72,7 +72,7 @@ function buildEnrollmentQueueDefinitionV1() {
         },
         {
             key: "post_tour_followup",
-            label: "Post-tour follow-up",
+            label: "Tour follow-up",
             description: "Tours completed; awaiting decision or follow-up.",
             filters: [{ type: "status", operator: "in", values: ["tour_completed"] }],
             sort: [{ field: "updated_at", direction: "asc" }],
@@ -82,7 +82,7 @@ function buildEnrollmentQueueDefinitionV1() {
         },
         {
             key: "paperwork",
-            label: "Paperwork in progress",
+            label: "Paperwork",
             description: "Enrollment paperwork or application in progress.",
             filters: [{ type: "status", operator: "in", values: ["application_in_progress"] }],
             sort: [{ field: "updated_at", direction: "asc" }],
@@ -102,7 +102,7 @@ function buildEnrollmentQueueDefinitionV1() {
         },
         {
             key: "enrolled_starting",
-            label: "Enrolled / starting soon",
+            label: "Starting soon",
             description: "Confirmed enrollments preparing to start.",
             filters: [{ type: "status", operator: "in", values: ["enrolled"] }],
             sort: [{ field: "updated_at", direction: "desc" }],

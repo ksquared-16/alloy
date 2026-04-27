@@ -300,10 +300,14 @@ async function enrichOpportunityRows(params: {
 
         const md = (r.metadata ?? null) as Record<string, unknown> | null;
         const child = typeof md?.child_name === "string" ? md.child_name : null;
-        const program = typeof md?.program_label === "string" ? md.program_label : null;
+        const programLabel = typeof md?.program_label === "string" ? md.program_label : null;
+        const ageGroup = typeof md?.age_group === "string" ? md.age_group.trim() : null;
+        const programCombined =
+            [programLabel, ageGroup].filter((x): x is string => Boolean(x && x.trim())).join(" · ").trim() || programLabel;
         const desiredStart = typeof md?.desired_start_date === "string" ? md.desired_start_date : null;
         const tourDate = typeof md?.tour_date === "string" ? md.tour_date : null;
         const notes = typeof md?.notes === "string" ? md.notes : typeof md?.demo_note === "string" ? md.demo_note : null;
+        const nextStepPreview = typeof md?.next_step === "string" ? md.next_step.trim() : null;
 
         const sk = (r.status_key ?? "").trim();
         const statusDisplay = sk ? labelByKey.get(sk) ?? sk : null;
@@ -319,10 +323,11 @@ async function enrichOpportunityRows(params: {
             _primary_phone: contact?.phone ?? null,
             _primary_email: contact?.email ?? null,
             _child_display_name: child,
-            _requested_program: program,
+            _requested_program: programCombined ?? null,
             _desired_start_date: desiredStart,
             _tour_context: tourContext,
             _notes_preview: notes,
+            _next_step_preview: nextStepPreview,
             _status_display: statusDisplay,
             _attention_reason_label: attentionReason,
         };

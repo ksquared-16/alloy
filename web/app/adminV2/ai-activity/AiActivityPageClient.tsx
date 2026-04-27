@@ -133,7 +133,7 @@ export default function AiActivityPageClient() {
                             footer={
                                 <p className="text-[10px]" style={{ color: derived.textSecondary }}>
                                     <Link
-                                        href="/admin/v2/workspace"
+                                        href="/adminV2/workspace"
                                         className="font-medium underline-offset-2 hover:underline"
                                         style={{ color: brand.secondary }}
                                     >

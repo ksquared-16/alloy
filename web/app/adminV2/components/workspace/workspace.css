@@ -5323,7 +5323,7 @@
   flex: 0 0 auto;
 }
 
-/* Enrollment CRM row — content full width + second action row (no narrow right aside) */
+/* CRM-compact row — main content left, compact actions right */
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-enrollment-crm-row {
   flex: 1;
   min-width: 0;
@@ -5332,18 +5332,35 @@
   gap: 8px;
 }
 
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-enrollment-crm-row--split {
+  flex-direction: row;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-enrollment-crm-row__content {
   min-width: 0;
+  flex: 1;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-enrollment-crm-row__actions {
+  flex: 0 0 auto;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  min-width: 0;
-  padding-top: 6px;
-  border-top: 1px solid color-mix(in srgb, var(--d-border) 55%, transparent);
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 6px;
+  padding-top: 0;
+  border-top: none;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-enrollment-crm-row__action-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  min-width: 72px;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-enrollment-crm-row__quick-actions {
@@ -5358,24 +5375,27 @@
   scrollbar-width: thin;
 }
 
-/* Enrollment CRM row: larger, clearer buttons (keeps Open primary) */
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2
   .adminv2-ws-enrollment-crm-row
   .adminv2-ws-wu-queue-action-chip.adminv2-ws-wu-queue-action-chip--quiet {
-  min-height: 28px;
-  padding: 4px 10px;
+  min-height: 26px;
+  padding: 3px 8px;
   font-size: 10px;
   font-weight: 650;
   border-radius: 6px;
+  width: 100%;
+  text-align: center;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2
   .adminv2-ws-enrollment-crm-row
   .adminv2-ws-wu-queue-action-chip.adminv2-ws-wu-queue-action-chip--open {
-  min-height: 30px;
-  padding: 5px 14px;
+  min-height: 28px;
+  padding: 4px 10px;
   font-size: 10px;
-  border-radius: 7px;
+  border-radius: 6px;
+  width: 100%;
+  text-align: center;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card-tags {
