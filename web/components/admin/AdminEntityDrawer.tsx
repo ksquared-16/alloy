@@ -876,8 +876,6 @@ export default function AdminEntityDrawer() {
     const [oppDiscountSelection, setOppDiscountSelection] = useState<string>("");
     const [oppPromoCode, setOppPromoCode] = useState("");
     /** Childcare inquiry header: option-set labels for opportunity-level program / schedule type selects. */
-    const [oppChildcareProgramSelectOpts, setOppChildcareProgramSelectOpts] = useState<{ value: string; label: string }[]>([]);
-    const [oppChildcareScheduleSelectOpts, setOppChildcareScheduleSelectOpts] = useState<{ value: string; label: string }[]>([]);
     const [oppOverrideOpen, setOppOverrideOpen] = useState(false);
     const [oppOverrideAmount, setOppOverrideAmount] = useState("");
     const [oppOverrideReason, setOppOverrideReason] = useState("");
@@ -3646,39 +3644,6 @@ export default function AdminEntityDrawer() {
     const opportunityInquiryWorkflowDrawer =
         drawer.type === "opportunities" &&
         (recordChromeOpportunity.layout?.config_json as RecordLayoutConfigJson | null)?.inquiry_drawer_mode === "workflow_v1";
-
-    useEffect(() => {
-        const mode = (recordChromeOpportunity.layout?.config_json as RecordLayoutConfigJson | null)?.inquiry_drawer_mode;
-        if (drawer.type !== "opportunities" || mode !== "workflow_v1") {
-            setOppChildcareProgramSelectOpts([]);
-            setOppChildcareScheduleSelectOpts([]);
-            return;
-        }
-        let cancelled = false;
-        (async () => {
-            try {
-                const [progRes, schedRes] = await Promise.all([
-                    fetch("/api/admin/option-sets/childcare_program_type"),
-                    fetch("/api/admin/option-sets/childcare_schedule_type"),
-                ]);
-                const progJson = (await progRes.json().catch(() => ({}))) as { items?: { item_key: string; label?: string | null }[] };
-                const schedJson = (await schedRes.json().catch(() => ({}))) as { items?: { item_key: string; label?: string | null }[] };
-                if (cancelled) return;
-                const pm = (progJson.items ?? []).map((i) => ({ value: i.item_key, label: i.label ?? i.item_key }));
-                const sm = (schedJson.items ?? []).map((i) => ({ value: i.item_key, label: i.label ?? i.item_key }));
-                setOppChildcareProgramSelectOpts(pm);
-                setOppChildcareScheduleSelectOpts(sm);
-            } catch {
-                if (!cancelled) {
-                    setOppChildcareProgramSelectOpts([]);
-                    setOppChildcareScheduleSelectOpts([]);
-                }
-            }
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, [drawer.type, drawer.id, recordChromeOpportunity.layout?.config_json?.inquiry_drawer_mode]);
     /** Modal shell for /adminV2 jobs — use before data loads so geometry never flashes sidebar-first. */
     const isJobRecordModalTarget =
         drawerShellVariant === "adminV2" &&
@@ -3889,7 +3854,11 @@ export default function AdminEntityDrawer() {
         isOpportunityExistingView && drawer.id && hasOpportunityChromeActions ? (
             <div
                 className={`flex flex-wrap gap-2 items-center ${
-                    drawerShellVariant === "adminV2" ? "rounded-lg border border-admin-border/45 bg-white/70 px-2.5 py-1.5 shadow-sm" : ""
+                    drawerShellVariant === "adminV2"
+                        ? opportunityInquiryWorkflowDrawer
+                            ? "rounded-xl border border-admin-border/45 bg-white/80 px-2.5 py-2 shadow-sm ring-1 ring-alloy-stone/10"
+                            : "rounded-lg border border-admin-border/45 bg-white/70 px-2.5 py-1.5 shadow-sm"
+                        : ""
                 }`}
                 data-opportunity-record-actions={drawerShellVariant === "adminV2" ? "true" : undefined}
             >
@@ -3899,7 +3868,11 @@ export default function AdminEntityDrawer() {
                         type="button"
                         disabled={!canMutate || !!opportunityActionLoading}
                         onClick={() => void handleOpportunityRecordChromeAction(a.event_key)}
-                        className="px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
+                        className={
+                            opportunityInquiryWorkflowDrawer
+                                ? "px-4 py-2 text-[12px] font-semibold bg-alloy-blue text-white rounded-full shadow-sm hover:opacity-90 disabled:opacity-50"
+                                : "px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
+                        }
                     >
                         {opportunityActionLoading === a.event_key ? "…" : a.label}
                     </button>
@@ -3910,7 +3883,11 @@ export default function AdminEntityDrawer() {
                         type="button"
                         disabled={!canMutate || !!opportunityActionLoading}
                         onClick={() => void handleOpportunityRecordChromeAction(a.event_key)}
-                        className="px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30 disabled:opacity-50"
+                        className={
+                            opportunityInquiryWorkflowDrawer
+                                ? "px-4 py-2 text-[12px] font-semibold border border-alloy-stone/40 bg-white rounded-full hover:bg-alloy-stone/10 disabled:opacity-50"
+                                : "px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30 disabled:opacity-50"
+                        }
                     >
                         {opportunityActionLoading === a.event_key ? "…" : a.label}
                     </button>
@@ -5893,7 +5870,7 @@ export default function AdminEntityDrawer() {
                         if (nonJobFormDirty) saveEdit();
                     }}
                     disabled={!canMutate}
-                    className="w-full min-w-0 rounded-md border border-alloy-stone/35 bg-white px-2 py-1.5 text-[12px] font-semibold text-alloy-midnight/90 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/25 disabled:opacity-60"
+                    className="w-full min-w-0 rounded-full border border-alloy-stone/30 bg-white px-3 py-2 text-[12px] font-semibold text-alloy-midnight/90 shadow-md shadow-alloy-stone/10 ring-1 ring-alloy-stone/10 focus:border-alloy-blue focus:outline-none focus:ring-2 focus:ring-alloy-blue/20 disabled:opacity-60"
                     aria-label="Opportunity status"
                 >
                     <option value="">— None —</option>
@@ -5916,6 +5893,77 @@ export default function AdminEntityDrawer() {
         saveEdit,
         setFormData,
     ]);
+
+    const opportunityInquiryWorkflowHeaderTimeline = useMemo(() => {
+        if (!opportunityInquiryWorkflowDrawer || drawer.type !== "opportunities") return undefined;
+        if (!overviewData || (overviewData as { _create?: boolean })._create) return undefined;
+        const d = overviewData as Record<string, unknown>;
+        const currentStatus = String(formData.status_key ?? d.status_key ?? "").trim();
+        const stages =
+            statusDefsForDrawer
+                ?.filter((s) => s.is_active !== false)
+                .slice()
+                .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)) ?? [];
+        if (!stages.length) return undefined;
+
+        const currentIdx = currentStatus ? stages.findIndex((s) => String(s.status_key ?? "").trim() === currentStatus) : -1;
+
+        return (
+            <div
+                data-opportunity-workflow-timeline
+                className="rounded-xl border border-alloy-stone/15 bg-white/80 px-3 py-2 shadow-sm ring-1 ring-alloy-stone/10"
+            >
+                <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
+                    {stages.map((s, i) => {
+                        const key = String(s.status_key ?? "").trim();
+                        const label = String(s.status_label ?? s.status_key ?? "").trim() || "—";
+                        const completed = currentIdx >= 0 && i < currentIdx;
+                        const current = currentIdx >= 0 && i === currentIdx;
+                        const future = currentIdx >= 0 && i > currentIdx;
+
+                        const dotClass = completed
+                            ? "bg-[rgb(0,162,131)] text-white"
+                            : current
+                              ? "bg-alloy-blue text-white ring-2 ring-alloy-blue/20"
+                              : "bg-white text-alloy-midnight/45 ring-1 ring-alloy-stone/20";
+
+                        const labelClass = completed
+                            ? "text-alloy-midnight/75"
+                            : current
+                              ? "text-alloy-midnight/90"
+                              : future
+                                ? "text-alloy-midnight/45"
+                                : "text-alloy-midnight/55";
+
+                        return (
+                            <div key={key || `${i}`} className="flex min-w-max items-center gap-2">
+                                <div className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${dotClass}`}>
+                                    {completed ? (
+                                        <span className="text-[12px] leading-none font-semibold" aria-hidden>
+                                            ✓
+                                        </span>
+                                    ) : (
+                                        <span className="text-[11px] leading-none font-semibold" aria-hidden>
+                                            {i + 1}
+                                        </span>
+                                    )}
+                                </div>
+                                <span className={`text-[12px] font-medium whitespace-nowrap ${labelClass}`}>{label}</span>
+                                {i < stages.length - 1 ? (
+                                    <span
+                                        aria-hidden
+                                        className={`mx-1 h-[2px] w-8 rounded-full ${
+                                            completed ? "bg-[rgb(0,162,131)]/45" : current ? "bg-alloy-blue/35" : "bg-alloy-stone/20"
+                                        }`}
+                                    />
+                                ) : null}
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+        );
+    }, [opportunityInquiryWorkflowDrawer, drawer.type, overviewData, formData.status_key, statusDefsForDrawer]);
 
     if (!drawer.type || !drawer.id) return null;
 
@@ -6160,7 +6208,7 @@ export default function AdminEntityDrawer() {
             headerSubtitle={headerSubtitleResolved}
             statusBadge={drawerStatusBadge}
             headerActions={drawerHeaderActions}
-            headerSignals={isJobDrawerV2 ? jobDrawerV2SignalsNode : undefined}
+            headerSignals={isJobDrawerV2 ? jobDrawerV2SignalsNode : opportunityInquiryWorkflowHeaderTimeline}
             headerExtra={drawerHeaderExtra}
             zIndexBackdrop={60}
             zIndexPanel={70}
@@ -8190,7 +8238,7 @@ export default function AdminEntityDrawer() {
                                         <section
                                             className={
                                                 opportunityInquiryWorkflowDrawer
-                                                    ? "mb-3"
+                                                    ? "mb-5"
                                                     : "rounded-xl border border-admin-border bg-white/80 px-2.5 py-2 mb-2 shadow-sm"
                                             }
                                             data-opportunity-record-snapshot="true"
@@ -8258,16 +8306,6 @@ export default function AdminEntityDrawer() {
                                                     const followUpOverdue = isOpportunityFollowUpOverdue(d.next_follow_up_at);
                                                     const householdId =
                                                         ident?.household?.id ?? (String(d.customer_id ?? "").trim() || null);
-                                                    const progVal = String(formData.program_type ?? d.program_type ?? "").trim();
-                                                    const schedVal = String(formData.schedule_type ?? d.schedule_type ?? "").trim();
-                                                    const progOpts = [...oppChildcareProgramSelectOpts];
-                                                    if (progVal && !progOpts.some((o) => o.value === progVal)) {
-                                                        progOpts.unshift({ value: progVal, label: progVal });
-                                                    }
-                                                    const schedOpts = [...oppChildcareScheduleSelectOpts];
-                                                    if (schedVal && !schedOpts.some((o) => o.value === schedVal)) {
-                                                        schedOpts.unshift({ value: schedVal, label: schedVal });
-                                                    }
                                                     const fieldInput =
                                                         "w-full min-w-0 rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 text-[13px] font-medium text-alloy-midnight/90 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60";
                                                     const innerCard =
@@ -8286,7 +8324,7 @@ export default function AdminEntityDrawer() {
                                                                     </span>
                                                                 ) : null}
                                                             </div>
-                                                            <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-3 lg:items-start lg:gap-4">
+                                                            <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2 lg:items-start lg:gap-4">
                                                                 <div className={innerCard}>
                                                                     <div className={tinyLabel}>Family & contact</div>
                                                                     {household ? (
@@ -8372,7 +8410,7 @@ export default function AdminEntityDrawer() {
                                                                     </div>
                                                                 </div>
                                                                 <div className={innerCard}>
-                                                                    <div className={tinyLabel}>Inquiry needs</div>
+                                                                    <div className={tinyLabel}>What matters now</div>
                                                                     <div className="mt-2 space-y-2">
                                                                         <div>
                                                                             <div className={tinyLabel}>Desired start</div>
@@ -8410,87 +8448,39 @@ export default function AdminEntityDrawer() {
                                                                                 className={fieldInput}
                                                                             />
                                                                         </div>
-                                                                        <div>
-                                                                            <div className={tinyLabel}>Program type</div>
-                                                                            <select
-                                                                                value={progVal}
-                                                                                onChange={(e) =>
-                                                                                    setFormData((prev) => ({
-                                                                                        ...prev,
-                                                                                        program_type: e.target.value || null,
-                                                                                    }))
-                                                                                }
-                                                                                onBlur={() => {
-                                                                                    if (nonJobFormDirty) saveEdit();
-                                                                                }}
-                                                                                disabled={!canMutate}
-                                                                                className={fieldInput}
-                                                                            >
-                                                                                <option value="">—</option>
-                                                                                {progOpts.map((o) => (
-                                                                                    <option key={o.value} value={o.value}>
-                                                                                        {o.label}
-                                                                                    </option>
-                                                                                ))}
-                                                                            </select>
-                                                                        </div>
-                                                                        <div>
-                                                                            <div className={tinyLabel}>Schedule type</div>
-                                                                            <select
-                                                                                value={schedVal}
-                                                                                onChange={(e) =>
-                                                                                    setFormData((prev) => ({
-                                                                                        ...prev,
-                                                                                        schedule_type: e.target.value || null,
-                                                                                    }))
-                                                                                }
-                                                                                onBlur={() => {
-                                                                                    if (nonJobFormDirty) saveEdit();
-                                                                                }}
-                                                                                disabled={!canMutate}
-                                                                                className={fieldInput}
-                                                                            >
-                                                                                <option value="">—</option>
-                                                                                {schedOpts.map((o) => (
-                                                                                    <option key={o.value} value={o.value}>
-                                                                                        {o.label}
-                                                                                    </option>
-                                                                                ))}
-                                                                            </select>
-                                                                        </div>
                                                                     </div>
                                                                 </div>
-                                                                <div
-                                                                    className={`${innerCard} ${
-                                                                        followUpOverdue
-                                                                            ? "border-amber-200/75 bg-amber-50/[0.32] ring-amber-100/40"
-                                                                            : ""
-                                                                    }`}
-                                                                >
-                                                                    <div className={tinyLabel}>
-                                                                        Next step & notes
-                                                                        {followUpOverdue ? (
-                                                                            <span className="ml-2 font-semibold normal-case text-amber-900/85">
-                                                                                Follow-up overdue
-                                                                            </span>
-                                                                        ) : null}
-                                                                    </div>
-                                                                    {nextStepText ? (
-                                                                        <p className="mt-1.5 text-[12px] font-medium leading-snug text-alloy-midnight/75">
-                                                                            <span className="text-alloy-midnight/50">
-                                                                                {(nextStep?.title ?? "Next step").trim()}:{" "}
-                                                                            </span>
-                                                                            {nextStepText}
-                                                                        </p>
-                                                                    ) : (
-                                                                        <p className="mt-1.5 text-[11px] text-alloy-midnight/45">No lifecycle next step.</p>
-                                                                    )}
-                                                                    {followNotes ? (
-                                                                        <p className="mt-2 whitespace-pre-wrap text-[12px] leading-snug text-alloy-midnight/70">{followNotes}</p>
-                                                                    ) : (
-                                                                        <p className="mt-2 text-[11px] text-alloy-midnight/45">No follow-up notes.</p>
-                                                                    )}
+                                                            </div>
+                                                            <div
+                                                                className={`mt-3 rounded-lg border border-alloy-stone/[0.1] bg-white/[0.97] p-3 shadow-sm ring-1 ring-alloy-stone/[0.06] ${
+                                                                    followUpOverdue ? "border-amber-200/75 bg-amber-50/[0.22] ring-amber-100/40" : ""
+                                                                }`}
+                                                            >
+                                                                <div className={tinyLabel}>
+                                                                    Notes & next step
+                                                                    {followUpOverdue ? (
+                                                                        <span className="ml-2 font-semibold normal-case text-amber-900/85">
+                                                                            Follow-up overdue
+                                                                        </span>
+                                                                    ) : null}
                                                                 </div>
+                                                                {nextStepText ? (
+                                                                    <p className="mt-1.5 text-[12px] font-medium leading-snug text-alloy-midnight/75">
+                                                                        <span className="text-alloy-midnight/50">
+                                                                            {(nextStep?.title ?? "Suggested next step").trim()}:{" "}
+                                                                        </span>
+                                                                        {nextStepText}
+                                                                    </p>
+                                                                ) : (
+                                                                    <p className="mt-1.5 text-[11px] text-alloy-midnight/45">No suggested next step.</p>
+                                                                )}
+                                                                {followNotes ? (
+                                                                    <div className="mt-2 rounded-md border border-alloy-stone/15 bg-white px-2.5 py-2">
+                                                                        <p className="whitespace-pre-wrap text-[12px] leading-snug text-alloy-midnight/70">{followNotes}</p>
+                                                                    </div>
+                                                                ) : (
+                                                                    <p className="mt-2 text-[11px] text-alloy-midnight/45">No follow-up notes.</p>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     );
