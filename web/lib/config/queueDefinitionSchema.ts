@@ -1,0 +1,104 @@
+import { z } from "zod";
+
+const StatusFilterSchema = z
+    .object({
+        type: z.literal("status"),
+        operator: z.literal("in"),
+        values: z.array(z.string()),
+    })
+    .strict();
+
+const FieldFilterSchema = z
+    .object({
+        type: z.literal("field"),
+        field_key: z.string(),
+        operator: z.enum(["eq", "gt", "lt"]),
+        value: z.unknown(),
+    })
+    .strict();
+
+const DateFilterSchema = z
+    .object({
+        type: z.literal("date"),
+        field: z.string(),
+        operator: z.enum(["today", "past_due"]),
+    })
+    .strict();
+
+const AssignmentFilterSchema = z
+    .object({
+        type: z.literal("assignment"),
+        operator: z.enum(["is_null", "equals"]),
+        value: z.string().optional(),
+    })
+    .strict()
+    .superRefine((val, ctx) => {
+        if (val.operator === "equals" && !val.value) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "assignment.equals requires value",
+                path: ["value"],
+            });
+        }
+        if (val.operator === "is_null" && val.value !== undefined) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                message: "assignment.is_null must not include value",
+                path: ["value"],
+            });
+        }
+    });
+
+const ExceptionFilterSchema = z
+    .object({
+        type: z.literal("exception"),
+        operator: z.literal("exists"),
+        exception_types: z.array(z.string()).optional(),
+    })
+    .strict();
+
+export const queueFilterSchema = z
+    .union([StatusFilterSchema, FieldFilterSchema, DateFilterSchema, AssignmentFilterSchema, ExceptionFilterSchema])
+    .readonly();
+
+export const queueConfigSchema = z
+    .object({
+        key: z.string().min(1),
+        label: z.string().min(1),
+        description: z.string().optional(),
+        filters: z.array(queueFilterSchema),
+        sort: z
+            .array(
+                z
+                    .object({
+                        field: z.string().min(1),
+                        direction: z.enum(["asc", "desc"]),
+                    })
+                    .strict()
+            )
+            .optional(),
+        limit: z.number().int().positive().optional(),
+        priority: z.enum(["standard", "attention", "critical"]).optional(),
+        display: z.enum(["list", "cards"]).optional(),
+        group_by: z.string().min(1).optional(),
+    })
+    .strict()
+    .readonly();
+
+export const queueDefinitionV1Schema = z
+    .object({
+        version: z.literal(1),
+        entity_type: z.enum(["job", "schedule", "opportunity"]),
+        queues: z.array(queueConfigSchema).nonempty(),
+    })
+    .strict()
+    .readonly();
+
+export type QueueFilter = z.infer<typeof queueFilterSchema>;
+export type QueueConfig = z.infer<typeof queueConfigSchema>;
+export type QueueDefinitionV1 = z.infer<typeof queueDefinitionV1Schema>;
+
+export function validateQueueDefinition(input: unknown): QueueDefinitionV1 {
+    return queueDefinitionV1Schema.parse(input);
+}
+

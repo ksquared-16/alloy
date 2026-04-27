@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
-import { prepareQueueDefinitionPatch } from "@/lib/agent/v0/applyWorkUnitQueueDefinitionUpdate";
+import { validateQueueDefinition } from "@/lib/config/queueDefinitionSchema";
 
 const KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 
@@ -148,18 +148,45 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     }
 
     if (touchesQueue) {
-        const prep = prepareQueueDefinitionPatch(
-            existingRow.queue_definition,
-            qdRaw === undefined ? null : qdRaw,
-            expRaw as number
-        );
-        if (!prep.ok) {
+        // Keep existing optimistic concurrency contract (required together w/ queue_definition).
+        // Version safety:
+        // - missing/null/{} current config may be replaced with v1
+        // - existing versioned config must be version 1
+        const currentQd = existingRow.queue_definition;
+        const currentIsEmpty =
+            currentQd == null ||
+            (typeof currentQd === "object" &&
+                !Array.isArray(currentQd) &&
+                Object.keys(currentQd as Record<string, unknown>).length === 0);
+
+        if (!currentIsEmpty) {
+            const currentVersion =
+                typeof currentQd === "object" && currentQd != null && !Array.isArray(currentQd)
+                    ? (currentQd as Record<string, unknown>).version
+                    : undefined;
+            if (currentVersion !== 1) {
+                return NextResponse.json(
+                    { error: "Existing queue_definition version is not supported (expected version 1)" },
+                    { status: 400 }
+                );
+            }
+        }
+
+        // Incoming handling:
+        // - when provided, it must validate as strict QueueDefinitionV1 (no null clears)
+        if (qdRaw === null) {
             return NextResponse.json(
-                { error: prep.error, code: prep.code },
-                { status: prep.status }
+                { error: "queue_definition must be a valid QueueDefinitionV1 object" },
+                { status: 400 }
             );
         }
-        updates.queue_definition = prep.nextQueueDefinition;
+        try {
+            const validated = validateQueueDefinition(qdRaw);
+            updates.queue_definition = validated as unknown as Record<string, unknown>;
+        } catch (e) {
+            const msg = e instanceof Error && e.message ? e.message : "queue_definition is invalid";
+            return NextResponse.json({ error: msg }, { status: 400 });
+        }
     }
 
     if (Object.keys(updates).length <= 1) {
