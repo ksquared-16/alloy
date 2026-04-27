@@ -19,6 +19,7 @@ type OpportunityRowPreview = {
     status_key: string | null;
     customer_id: string | null;
     primary_contact_id: string | null;
+    work_unit_id: string | null;
     created_at: string;
     updated_at: string;
 };
@@ -494,7 +495,8 @@ export async function getWorkUnitQueueSummaries(params: {
         const base = supabase
             .from("opportunities")
             .select("id", { count: "exact", head: true })
-            .eq("org_id", params.orgId);
+            .eq("org_id", params.orgId)
+            .eq("work_unit_id", params.workUnitId);
 
         const countQ = applyOpsToJobQuery(base as never, ops);
         const { count, error: countErr } = await countQ;
@@ -504,15 +506,16 @@ export async function getWorkUnitQueueSummaries(params: {
 
         const previewQ0 = supabase
             .from("opportunities")
-            .select("id, name, status_key, customer_id, primary_contact_id, created_at, updated_at")
-            .eq("org_id", params.orgId);
+            .select("id, name, title, status_key, customer_id, primary_contact_id, work_unit_id, created_at, updated_at")
+            .eq("org_id", params.orgId)
+            .eq("work_unit_id", params.workUnitId);
         const previewQ1 = applySortToJobQuery(applyOpsToJobQuery(previewQ0 as never, ops) as never, sort);
         const { data: previewRaw, error: previewErr } = await previewQ1.limit(previewLimit);
         if (previewErr) {
             throw new QueueServiceError(previewErr.message, 400, "DB_ERROR");
         }
-        const preview = (previewRaw ?? []).map((r) => {
-            const row = r as OpportunityRowPreview;
+        const previewRows = (previewRaw ?? []) as OpportunityRowPreview[];
+        const preview = previewRows.map((row: OpportunityRowPreview) => {
             return { ...row, title: row.name ?? null };
         });
 
@@ -595,7 +598,8 @@ export async function getWorkUnitQueueItems(params: {
     const countBase = supabase
         .from("opportunities")
         .select("id", { count: "exact", head: true })
-        .eq("org_id", params.orgId);
+        .eq("org_id", params.orgId)
+        .eq("work_unit_id", params.workUnitId);
     const countQ = applyOpsToJobQuery(countBase as never, ops);
     const { count, error: countErr } = await countQ;
     if (countErr) {
@@ -604,16 +608,17 @@ export async function getWorkUnitQueueItems(params: {
 
     const itemsBase = supabase
         .from("opportunities")
-        .select("id, name, status_key, customer_id, primary_contact_id, created_at, updated_at")
-        .eq("org_id", params.orgId);
+        .select("id, name, title, status_key, customer_id, primary_contact_id, work_unit_id, created_at, updated_at")
+        .eq("org_id", params.orgId)
+        .eq("work_unit_id", params.workUnitId);
 
     const itemsQ0 = applySortToJobQuery(applyOpsToJobQuery(itemsBase as never, ops) as never, sort);
     const { data: raw, error } = await itemsQ0.range(effectiveOffset, effectiveOffset + effectiveLimit - 1);
     if (error) {
         throw new QueueServiceError(error.message, 400, "DB_ERROR");
     }
-    const items = (raw ?? []).map((r) => {
-        const row = r as OpportunityRowPreview;
+    const itemRows = (raw ?? []) as OpportunityRowPreview[];
+    const items = itemRows.map((row: OpportunityRowPreview) => {
         return { ...row, title: row.name ?? null };
     });
 

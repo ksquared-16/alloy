@@ -48,7 +48,33 @@ async function main() {
   const workUnitId = (process.env.DEV_QUEUE_WORK_UNIT_ID?.trim() || DEFAULT_WORK_UNIT_ID).trim();
   const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");
 
+  const supabaseUrlRaw = process.env.SUPABASE_URL?.trim() || "";
+  let supabaseHost = "—";
+  try {
+    supabaseHost = supabaseUrlRaw ? new URL(supabaseUrlRaw).host : "—";
+  } catch {
+    supabaseHost = supabaseUrlRaw ? "(invalid SUPABASE_URL)" : "—";
+  }
+
+  console.log("--- Enrollment pipeline demo seed (preflight) ---");
+  console.log("SUPABASE_URL host:", supabaseHost);
+  console.log("org_id target:", orgId);
+  console.log("work_unit_id target:", workUnitId);
+  console.log("");
+
   const supabase = createAdminClient();
+
+  // Detect whether opportunities.work_unit_id exists (explicit probe; avoids relying on sample row keys / cached schema).
+  const workUnitProbe = await supabase
+    .from("opportunities")
+    .select("work_unit_id")
+    .eq("org_id", orgId)
+    .limit(1);
+  const hasWorkUnitIdCol = !workUnitProbe.error;
+  const workUnitProbeErr =
+    workUnitProbe.error != null
+      ? { message: workUnitProbe.error.message, code: (workUnitProbe.error as any).code ?? null }
+      : null;
 
   // Inspect opportunity columns via one sample row (best-effort, no raw SQL).
   const { data: sampleOpp } = await supabase
@@ -60,7 +86,6 @@ async function main() {
     .maybeSingle();
 
   const sampleKeys = sampleOpp && typeof sampleOpp === "object" ? Object.keys(sampleOpp as Record<string, unknown>).sort() : [];
-  const hasWorkUnitIdCol = sampleKeys.includes("work_unit_id");
 
   // Reuse a handful of existing customers when available (keeps seed lightweight).
   const [{ data: custs }] = await Promise.all([
@@ -177,6 +202,38 @@ async function main() {
     insertedIds.push({ seed_key: spec.seed_key, id: (created as any).id, status_key: (created as any).status_key ?? spec.status_key, note: spec.note });
   }
 
+  // Safe backfill for existing seeded records once opportunities.work_unit_id exists.
+  let backfilled = 0;
+  if (hasWorkUnitIdCol) {
+    const { count: beforeCount } = await supabase
+      .from("opportunities")
+      .select("id", { count: "exact", head: true })
+      .eq("org_id", orgId)
+      .like("metadata->>seed_key", "enroll_demo_%")
+      .is("work_unit_id", null);
+
+    const { error: backfillErr } = await supabase
+      .from("opportunities")
+      .update({ work_unit_id: workUnitId, updated_at: new Date().toISOString() })
+      .eq("org_id", orgId)
+      .like("metadata->>seed_key", "enroll_demo_%");
+    if (backfillErr) {
+      throw new Error(`backfill work_unit_id failed: ${backfillErr.message}`);
+    }
+
+    const { count: afterCount } = await supabase
+      .from("opportunities")
+      .select("id", { count: "exact", head: true })
+      .eq("org_id", orgId)
+      .like("metadata->>seed_key", "enroll_demo_%")
+      .eq("work_unit_id", workUnitId);
+
+    backfilled = typeof beforeCount === "number" ? beforeCount : 0;
+    const confirmed = typeof afterCount === "number" ? afterCount : 0;
+    console.log("backfill_work_unit_id_attempted:", backfilled);
+    console.log("backfill_work_unit_id_confirmed:", confirmed);
+  }
+
   // Recount seeded rows by status
   const { data: seededRows } = await supabase
     .from("opportunities")
@@ -214,7 +271,15 @@ async function main() {
   console.log("work_unit_id target:", workUnitId);
   console.log("opportunities columns (sample):", sampleKeys.length ? sampleKeys.join(", ") : "— (no sample row)");
   console.log("opportunities scoped by work_unit_id column:", hasWorkUnitIdCol ? "YES (seed sets it)" : "NO (seed cannot set it)");
-  console.log("NOTE: QueueService opportunity queries are currently scoped by org_id only (not work_unit_id).");
+  if (!hasWorkUnitIdCol && workUnitProbeErr) {
+    console.log("work_unit_id_probe_error:", `${workUnitProbeErr.message}${workUnitProbeErr.code ? ` (code ${workUnitProbeErr.code})` : ""}`);
+  }
+  if (!hasWorkUnitIdCol) {
+    console.log("NOTE: Apply migration adding opportunities.work_unit_id, then re-run this script to backfill seeded records.");
+    console.log(
+      "NOTE: Check that Supabase CLI project and .env.local SUPABASE_URL point to the same project, or refresh PostgREST schema cache."
+    );
+  }
   console.log("");
   console.log("inserted:", inserted, "skipped(existing):", skipped, "total_seed_keys:", seedKeys.length);
   console.log("seeded counts by status:", byStatusSorted.map(([k, v]) => `${k}:${v}`).join(", "));
