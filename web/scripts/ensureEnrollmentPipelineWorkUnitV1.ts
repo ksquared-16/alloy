@@ -20,35 +20,30 @@ loadEnv({ path: resolve(process.cwd(), ".env") });
 
 const ENROLLMENT_PIPELINE_KEY = "enrollment_pipeline";
 
-type StatusDefRow = { status_key: string | null; status_label: string | null; entity_type: string | null; is_active: boolean | null };
+type StatusDefRow = {
+    status_key: string | null;
+    status_label: string | null;
+    entity_type: string | null;
+    is_active: boolean | null;
+};
 
-function pickPaperworkStatuses(statusKeys: string[]): string[] {
-    // We only include this queue if there are explicit status keys for paperwork/application/contract/enrollment-in-progress.
-    const needles = [
-        "paperwork",
-        "application",
-        "apply",
-        "applied",
-        "contract",
-        "enrollment_in_progress",
-        "enrolling",
-        "docs_pending",
-        "forms_pending",
-    ];
-    const out: string[] = [];
-    for (const k of statusKeys) {
-        const s = k.toLowerCase();
-        if (needles.some((n) => s.includes(n))) out.push(k);
-    }
-    return [...new Set(out)];
-}
+const CHILDCARE_ENROLLMENT_STATUS_KEYS = [
+    "new_inquiry",
+    "contacted",
+    "tour_scheduled",
+    "tour_completed",
+    "application_in_progress",
+    "ready_to_enroll",
+    "enrolled",
+] as const;
 
-function buildEnrollmentQueueDefinitionV1(opts: { paperworkStatusKeys: string[] }) {
-    const baseQueues: any[] = [
+function buildEnrollmentQueueDefinitionV1() {
+    // Note: schema priority is limited to standard|attention|critical. We map the requested "high" to "attention".
+    const queues: any[] = [
         {
             key: "all",
-            label: "All enrollment records",
-            description: "All enrollment opportunities.",
+            label: "All families",
+            description: "All enrollment records.",
             filters: [],
             sort: [{ field: "updated_at", direction: "desc" }],
             limit: 5,
@@ -56,56 +51,60 @@ function buildEnrollmentQueueDefinitionV1(opts: { paperworkStatusKeys: string[] 
             display: "list",
         },
         {
-            key: "new_contacted",
-            label: "New & contacted",
-            description: "New inquiries and contacted families.",
-            filters: [{ type: "status", operator: "in", values: ["new", "contacted"] }],
+            key: "new_inquiries",
+            label: "New inquiries",
+            description: "New families not yet contacted.",
+            filters: [{ type: "status", operator: "in", values: ["new_inquiry"] }],
             sort: [{ field: "updated_at", direction: "desc" }],
             limit: 5,
             priority: "standard",
             display: "list",
         },
         {
-            key: "tours_in_progress",
-            label: "Tours / qualified",
-            description: "Qualified and scheduled enrollment opportunities.",
-            filters: [{ type: "status", operator: "in", values: ["qualified", "scheduled"] }],
+            key: "contacted_touring",
+            label: "Contacted / touring",
+            description: "Families in conversation or with tours scheduled.",
+            filters: [{ type: "status", operator: "in", values: ["contacted", "tour_scheduled"] }],
             sort: [{ field: "updated_at", direction: "desc" }],
             limit: 5,
             priority: "standard",
             display: "list",
         },
-    ];
-
-    if (opts.paperworkStatusKeys.length > 0) {
-        baseQueues.push({
+        {
+            key: "post_tour_followup",
+            label: "Post-tour follow-up",
+            description: "Tours completed; awaiting decision or follow-up.",
+            filters: [{ type: "status", operator: "in", values: ["tour_completed"] }],
+            sort: [{ field: "updated_at", direction: "asc" }],
+            limit: 5,
+            priority: "attention",
+            display: "list",
+        },
+        {
             key: "paperwork",
-            label: "Enrollment paperwork",
-            description: "Applications, contracts, and paperwork in progress.",
-            filters: [{ type: "status", operator: "in", values: opts.paperworkStatusKeys }],
-            sort: [{ field: "updated_at", direction: "desc" }],
-            limit: 5,
-            priority: "attention",
-            display: "list",
-        });
-    }
-
-    baseQueues.push(
-        {
-            key: "booked_enrolling",
-            label: "Booked / enrolling",
-            description: "Booked enrollment opportunities (in progress).",
-            filters: [{ type: "status", operator: "in", values: ["booked"] }],
-            sort: [{ field: "updated_at", direction: "desc" }],
+            label: "Paperwork in progress",
+            description: "Enrollment paperwork or application in progress.",
+            filters: [{ type: "status", operator: "in", values: ["application_in_progress"] }],
+            sort: [{ field: "updated_at", direction: "asc" }],
             limit: 5,
             priority: "attention",
             display: "list",
         },
         {
-            key: "closed",
-            label: "Closed",
-            description: "Closed enrollment opportunities (won or lost).",
-            filters: [{ type: "status", operator: "in", values: ["won", "lost"] }],
+            key: "ready_to_enroll",
+            label: "Ready to enroll",
+            description: "Families ready for final enrollment decision.",
+            filters: [{ type: "status", operator: "in", values: ["ready_to_enroll"] }],
+            sort: [{ field: "updated_at", direction: "asc" }],
+            limit: 5,
+            priority: "attention",
+            display: "list",
+        },
+        {
+            key: "enrolled_starting",
+            label: "Enrolled / starting soon",
+            description: "Confirmed enrollments preparing to start.",
+            filters: [{ type: "status", operator: "in", values: ["enrolled"] }],
             sort: [{ field: "updated_at", direction: "desc" }],
             limit: 5,
             priority: "standard",
@@ -115,19 +114,19 @@ function buildEnrollmentQueueDefinitionV1(opts: { paperworkStatusKeys: string[] 
             key: "needs_attention",
             label: "Needs attention",
             description:
-                "Enrollment records that need review. Intended exception categories: time_related, information_clarity, value_readiness.",
+                "Records requiring intervention (time, missing info, or readiness issues). Intended exception categories: time_related, information_clarity, value_readiness.",
             filters: [{ type: "exception", operator: "exists" }],
             sort: [{ field: "updated_at", direction: "asc" }],
             limit: 5,
             priority: "critical",
             display: "list",
-        }
-    );
+        },
+    ];
 
     return {
         version: 1,
         entity_type: "opportunity",
-        queues: baseQueues,
+        queues,
     } as const;
 }
 
@@ -174,8 +173,19 @@ async function main() {
     const oppStatusKeys = (statusDefs ?? [])
         .map((r) => (r as StatusDefRow).status_key)
         .filter((k): k is string => typeof k === "string" && k.trim() !== "");
-    const paperworkStatusKeys = pickPaperworkStatuses(oppStatusKeys);
-    const enrollmentQueueDefinition = buildEnrollmentQueueDefinitionV1({ paperworkStatusKeys });
+
+    const required = [...CHILDCARE_ENROLLMENT_STATUS_KEYS];
+    const missing = required.filter((k) => !oppStatusKeys.includes(k));
+    if (missing.length > 0) {
+        console.error("Missing required opportunity status keys for childcare enrollment config:");
+        for (const k of missing) console.error(`- ${k}`);
+        console.error("Active opportunity status keys found:");
+        console.error(oppStatusKeys.join(", ") || "—");
+        console.error("Refusing to apply queue_definition; fix status_definitions first.");
+        process.exit(1);
+    }
+
+    const enrollmentQueueDefinition = buildEnrollmentQueueDefinitionV1();
     const validated = validateQueueDefinition(enrollmentQueueDefinition);
 
     const [{ data: depts, error: deptErr }, { data: wus, error: wuErr }] = await Promise.all([
@@ -232,7 +242,6 @@ async function main() {
     const dept = deptById.get(targetDeptId) ?? null;
     console.log("--- Enrollment candidates ---");
     console.log("Opportunity status keys (active):", oppStatusKeys.join(", ") || "—");
-    console.log("Paperwork status keys chosen:", paperworkStatusKeys.join(", ") || "— (paperwork queue omitted)");
     console.log(
         "Enrollment-like departments:",
         deptRows.filter(looksEnrollmentishDepartment).map((d) => `${d.key} (${d.id})`).join(", ") || "—"
@@ -296,12 +305,12 @@ async function main() {
     console.log("\nManual smoke test:");
     console.log(`  ${baseUrl}/api/admin/work-units/${pipelineId}/queues`);
     console.log(`  ${baseUrl}/api/admin/queues/${pipelineId}/all`);
-    console.log(`  ${baseUrl}/api/admin/queues/${pipelineId}/new_contacted`);
-    console.log(`  ${baseUrl}/api/admin/queues/${pipelineId}/tours_in_progress`);
-    if (paperworkStatusKeys.length > 0) {
-        console.log(`  ${baseUrl}/api/admin/queues/${pipelineId}/paperwork`);
-    }
-    console.log(`  ${baseUrl}/api/admin/queues/${pipelineId}/ready_waitlist`);
+    console.log(`  ${baseUrl}/api/admin/queues/${pipelineId}/new_inquiries`);
+    console.log(`  ${baseUrl}/api/admin/queues/${pipelineId}/contacted_touring`);
+    console.log(`  ${baseUrl}/api/admin/queues/${pipelineId}/post_tour_followup`);
+    console.log(`  ${baseUrl}/api/admin/queues/${pipelineId}/paperwork`);
+    console.log(`  ${baseUrl}/api/admin/queues/${pipelineId}/ready_to_enroll`);
+    console.log(`  ${baseUrl}/api/admin/queues/${pipelineId}/enrolled_starting`);
     console.log(`  ${baseUrl}/api/admin/queues/${pipelineId}/needs_attention`);
 }
 

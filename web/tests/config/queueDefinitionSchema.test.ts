@@ -83,8 +83,8 @@ describe("QueueDefinition v1 schema", () => {
             queues: [
                 {
                     key: "all",
-                    label: "All inquiries",
-                    description: "All enrollment opportunities.",
+                    label: "All families",
+                    description: "All enrollment records.",
                     filters: [],
                     sort: [{ field: "updated_at", direction: "desc" }],
                     limit: 5,
@@ -94,7 +94,7 @@ describe("QueueDefinition v1 schema", () => {
                 {
                     key: "needs_attention",
                     label: "Needs attention",
-                    description: "Enrollment records that need review.",
+                    description: "Records requiring intervention (time, missing info, or readiness issues).",
                     filters: [{ type: "exception", operator: "exists" }],
                     sort: [{ field: "updated_at", direction: "asc" }],
                     limit: 5,
