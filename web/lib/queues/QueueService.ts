@@ -12,6 +12,17 @@ type JobRowPreview = {
     updated_at: string;
 };
 
+type OpportunityRowPreview = {
+    id: string;
+    name: string | null;
+    title?: string | null;
+    status_key: string | null;
+    customer_id: string | null;
+    primary_contact_id: string | null;
+    created_at: string;
+    updated_at: string;
+};
+
 export class QueueServiceError extends Error {
     status: number;
     code: string;
@@ -25,6 +36,10 @@ export class QueueServiceError extends Error {
 const JOB_FIELD_ALLOWLIST = new Set(["status_key", "assigned_vendor_id", "work_unit_id", "created_at"] as const);
 const JOB_SORT_ALLOWLIST = new Set(["created_at", "updated_at", "status_key"] as const);
 const JOB_DATE_FIELD_ALLOWLIST = new Set(["created_at"] as const);
+
+const OPPORTUNITY_FIELD_ALLOWLIST = new Set(["status_key", "created_at", "updated_at"] as const);
+const OPPORTUNITY_SORT_ALLOWLIST = new Set(["updated_at", "created_at", "status_key", "name"] as const);
+const OPPORTUNITY_DATE_FIELD_ALLOWLIST = new Set(["created_at", "updated_at"] as const);
 
 function isPlainObject(v: unknown): v is Record<string, unknown> {
     return v != null && typeof v === "object" && !Array.isArray(v);
@@ -51,6 +66,7 @@ function findQueueByKey(def: QueueDefinitionV1, queueKey: string): QueueConfig {
 
 function assertSupportedEntityType(def: QueueDefinitionV1) {
     if (def.entity_type === "job") return;
+    if (def.entity_type === "opportunity") return;
     throw new QueueServiceError(`QueueService does not support entity_type: ${def.entity_type}`, 501, "NOT_IMPLEMENTED");
 }
 
@@ -71,6 +87,9 @@ type JobQueryPlanOp =
 
 type JobSortPlan = { column: string; ascending: boolean };
 
+type OpportunityQueryPlanOp = JobQueryPlanOp;
+type OpportunitySortPlan = { column: string; ascending: boolean };
+
 function buildJobPlan(queue: QueueConfig): { ops: JobQueryPlanOp[]; sort: JobSortPlan[] } {
     const ops: JobQueryPlanOp[] = [];
 
@@ -83,6 +102,35 @@ function buildJobPlan(queue: QueueConfig): { ops: JobQueryPlanOp[]; sort: JobSor
         for (const s of queue.sort) {
             if (!JOB_SORT_ALLOWLIST.has(s.field as (typeof JOB_SORT_ALLOWLIST extends Set<infer T> ? T : never))) {
                 throw new QueueServiceError(`Unsupported job sort field: ${s.field}`, 400, "UNSUPPORTED_SORT_FIELD");
+            }
+            sort.push({ column: s.field, ascending: s.direction === "asc" });
+        }
+    } else {
+        sort.push({ column: "updated_at", ascending: false });
+    }
+
+    return { ops, sort };
+}
+
+function buildOpportunityPlan(queue: QueueConfig): { ops: OpportunityQueryPlanOp[]; sort: OpportunitySortPlan[] } {
+    const ops: OpportunityQueryPlanOp[] = [];
+    for (const f of queue.filters) {
+        ops.push(...opportunityFilterToOps(f));
+    }
+
+    const sort: OpportunitySortPlan[] = [];
+    if (queue.sort) {
+        for (const s of queue.sort) {
+            if (
+                !OPPORTUNITY_SORT_ALLOWLIST.has(
+                    s.field as (typeof OPPORTUNITY_SORT_ALLOWLIST extends Set<infer T> ? T : never)
+                )
+            ) {
+                throw new QueueServiceError(
+                    `Unsupported opportunity sort field: ${s.field}`,
+                    400,
+                    "UNSUPPORTED_SORT_FIELD"
+                );
             }
             sort.push({ column: s.field, ascending: s.direction === "asc" });
         }
@@ -145,6 +193,79 @@ function jobFilterToOps(f: QueueFilter): JobQueryPlanOp[] {
         }
         case "exception": {
             throw new QueueServiceError("exception filter evaluation is not implemented", 501, "NOT_IMPLEMENTED");
+        }
+        default: {
+            const _exhaustive: never = f;
+            return _exhaustive;
+        }
+    }
+}
+
+function opportunityFilterToOps(f: QueueFilter): OpportunityQueryPlanOp[] {
+    switch (f.type) {
+        case "status": {
+            if (f.operator !== "in") {
+                throw new QueueServiceError(
+                    `Unsupported status operator: ${String((f as { operator?: unknown }).operator)}`,
+                    400,
+                    "UNSUPPORTED_OPERATOR"
+                );
+            }
+            const values = (f.values ?? []).filter((x) => typeof x === "string" && x.trim() !== "");
+            return [{ kind: "in", column: "status_key", values }];
+        }
+        case "field": {
+            if (
+                !OPPORTUNITY_FIELD_ALLOWLIST.has(
+                    f.field_key as (typeof OPPORTUNITY_FIELD_ALLOWLIST extends Set<infer T> ? T : never)
+                )
+            ) {
+                throw new QueueServiceError(`Unsupported opportunity field: ${f.field_key}`, 400, "UNSUPPORTED_FIELD");
+            }
+            const col = f.field_key;
+            if (f.operator === "eq") return [{ kind: "eq", column: col, value: f.value }];
+            if (f.operator === "gt") return [{ kind: "gt", column: col, value: f.value }];
+            if (f.operator === "lt") return [{ kind: "lt", column: col, value: f.value }];
+            throw new QueueServiceError(
+                `Unsupported field operator: ${String((f as { operator?: unknown }).operator)}`,
+                400,
+                "UNSUPPORTED_OPERATOR"
+            );
+        }
+        case "date": {
+            if (
+                !OPPORTUNITY_DATE_FIELD_ALLOWLIST.has(
+                    f.field as (typeof OPPORTUNITY_DATE_FIELD_ALLOWLIST extends Set<infer T> ? T : never)
+                )
+            ) {
+                throw new QueueServiceError(`Unsupported opportunity date field: ${f.field}`, 400, "UNSUPPORTED_DATE_FIELD");
+            }
+            const start = startOfTodayServerLocal();
+            const startIso = start.toISOString();
+            if (f.operator === "today") {
+                const end = new Date(start);
+                end.setDate(end.getDate() + 1);
+                const endIso = end.toISOString();
+                return [
+                    { kind: "gte", column: f.field, value: startIso },
+                    { kind: "range_lt", column: f.field, value: endIso },
+                ];
+            }
+            if (f.operator === "past_due") {
+                return [{ kind: "lt", column: f.field, value: startIso }];
+            }
+            throw new QueueServiceError(
+                `Unsupported date operator: ${String((f as { operator?: unknown }).operator)}`,
+                400,
+                "UNSUPPORTED_OPERATOR"
+            );
+        }
+        case "exception": {
+            // Per-queue support: we do not implement exception predicates yet for opportunity queues.
+            throw new QueueServiceError("exception filter evaluation is not implemented for opportunities", 501, "NOT_IMPLEMENTED");
+        }
+        case "assignment": {
+            throw new QueueServiceError("assignment filter is not supported for opportunities", 400, "UNSUPPORTED_FILTER");
         }
         default: {
             const _exhaustive: never = f;
@@ -245,13 +366,73 @@ export async function getWorkUnitQueueSummaries(params: {
     const previewLimit = clampLimit(params.limit ?? 3, 1, 10);
 
     for (const q of def.queues) {
-        const { ops, sort } = buildJobPlan(q);
+        if (def.entity_type === "job") {
+            const { ops, sort } = buildJobPlan(q);
+
+            const base = supabase
+                .from("jobs")
+                .select("id", { count: "exact", head: true })
+                .eq("org_id", params.orgId)
+                .eq("work_unit_id", params.workUnitId);
+
+            const countQ = applyOpsToJobQuery(base as never, ops);
+            const { count, error: countErr } = await countQ;
+            if (countErr) {
+                throw new QueueServiceError(countErr.message, 400, "DB_ERROR");
+            }
+
+            const previewQ0 = supabase
+                .from("jobs")
+                .select("id, title, status_key, work_unit_id, assigned_vendor_id, created_at, updated_at")
+                .eq("org_id", params.orgId)
+                .eq("work_unit_id", params.workUnitId);
+            const previewQ1 = applySortToJobQuery(applyOpsToJobQuery(previewQ0 as never, ops) as never, sort);
+            const { data: preview, error: previewErr } = await previewQ1.limit(previewLimit);
+            if (previewErr) {
+                throw new QueueServiceError(previewErr.message, 400, "DB_ERROR");
+            }
+
+            out.push({
+                key: q.key,
+                label: q.label,
+                description: q.description,
+                entity_type: def.entity_type,
+                priority: q.priority ?? "standard",
+                display: q.display ?? "list",
+                count: count ?? 0,
+                preview: (preview ?? []) as unknown[],
+            });
+            continue;
+        }
+
+        // opportunity
+        let ops: OpportunityQueryPlanOp[] = [];
+        let sort: OpportunitySortPlan[] = [];
+        try {
+            const plan = buildOpportunityPlan(q);
+            ops = plan.ops;
+            sort = plan.sort;
+        } catch (e) {
+            if (e instanceof QueueServiceError && e.status === 501) {
+                out.push({
+                    key: q.key,
+                    label: q.label,
+                    description: q.description,
+                    entity_type: def.entity_type,
+                    priority: q.priority ?? "standard",
+                    display: q.display ?? "list",
+                    count: 0,
+                    preview: [],
+                });
+                continue;
+            }
+            throw e;
+        }
 
         const base = supabase
-            .from("jobs")
+            .from("opportunities")
             .select("id", { count: "exact", head: true })
-            .eq("org_id", params.orgId)
-            .eq("work_unit_id", params.workUnitId);
+            .eq("org_id", params.orgId);
 
         const countQ = applyOpsToJobQuery(base as never, ops);
         const { count, error: countErr } = await countQ;
@@ -260,15 +441,18 @@ export async function getWorkUnitQueueSummaries(params: {
         }
 
         const previewQ0 = supabase
-            .from("jobs")
-            .select("id, title, status_key, work_unit_id, assigned_vendor_id, created_at, updated_at")
-            .eq("org_id", params.orgId)
-            .eq("work_unit_id", params.workUnitId);
+            .from("opportunities")
+            .select("id, name, status_key, customer_id, primary_contact_id, created_at, updated_at")
+            .eq("org_id", params.orgId);
         const previewQ1 = applySortToJobQuery(applyOpsToJobQuery(previewQ0 as never, ops) as never, sort);
-        const { data: preview, error: previewErr } = await previewQ1.limit(previewLimit);
+        const { data: previewRaw, error: previewErr } = await previewQ1.limit(previewLimit);
         if (previewErr) {
             throw new QueueServiceError(previewErr.message, 400, "DB_ERROR");
         }
+        const preview = (previewRaw ?? []).map((r) => {
+            const row = r as OpportunityRowPreview;
+            return { ...row, title: row.name ?? null };
+        });
 
         out.push({
             key: q.key,
@@ -278,7 +462,7 @@ export async function getWorkUnitQueueSummaries(params: {
             priority: q.priority ?? "standard",
             display: q.display ?? "list",
             count: count ?? 0,
-            preview: (preview ?? []) as unknown[],
+            preview: preview as unknown[],
         });
     }
 
@@ -297,16 +481,59 @@ export async function getWorkUnitQueueItems(params: {
     const q = findQueueByKey(def, params.queueKey);
 
     const supabase = createAdminClient();
-    const { ops, sort } = buildJobPlan(q);
 
     const effectiveLimit = clampLimit(params.limit ?? q.limit ?? 50, 1, 200);
     const effectiveOffset = clampLimit(params.offset ?? 0, 0, 1000000);
 
+    if (def.entity_type === "job") {
+        const { ops, sort } = buildJobPlan(q);
+
+        const countBase = supabase
+            .from("jobs")
+            .select("id", { count: "exact", head: true })
+            .eq("org_id", params.orgId)
+            .eq("work_unit_id", params.workUnitId);
+        const countQ = applyOpsToJobQuery(countBase as never, ops);
+        const { count, error: countErr } = await countQ;
+        if (countErr) {
+            throw new QueueServiceError(countErr.message, 400, "DB_ERROR");
+        }
+
+        const itemsBase = supabase
+            .from("jobs")
+            .select("id, title, status_key, work_unit_id, assigned_vendor_id, created_at, updated_at")
+            .eq("org_id", params.orgId)
+            .eq("work_unit_id", params.workUnitId);
+
+        const itemsQ0 = applySortToJobQuery(applyOpsToJobQuery(itemsBase as never, ops) as never, sort);
+        const { data, error } = await itemsQ0.range(effectiveOffset, effectiveOffset + effectiveLimit - 1);
+        if (error) {
+            throw new QueueServiceError(error.message, 400, "DB_ERROR");
+        }
+
+        return {
+            queue: {
+                key: q.key,
+                label: q.label,
+                description: q.description,
+                entity_type: def.entity_type,
+                priority: q.priority ?? "standard",
+                display: q.display ?? "list",
+            },
+            items: (data ?? []) as unknown[],
+            total: count ?? 0,
+            limit: effectiveLimit,
+            offset: effectiveOffset,
+        };
+    }
+
+    // opportunity
+    const { ops, sort } = buildOpportunityPlan(q);
+
     const countBase = supabase
-        .from("jobs")
+        .from("opportunities")
         .select("id", { count: "exact", head: true })
-        .eq("org_id", params.orgId)
-        .eq("work_unit_id", params.workUnitId);
+        .eq("org_id", params.orgId);
     const countQ = applyOpsToJobQuery(countBase as never, ops);
     const { count, error: countErr } = await countQ;
     if (countErr) {
@@ -314,16 +541,19 @@ export async function getWorkUnitQueueItems(params: {
     }
 
     const itemsBase = supabase
-        .from("jobs")
-        .select("id, title, status_key, work_unit_id, assigned_vendor_id, created_at, updated_at")
-        .eq("org_id", params.orgId)
-        .eq("work_unit_id", params.workUnitId);
+        .from("opportunities")
+        .select("id, name, status_key, customer_id, primary_contact_id, created_at, updated_at")
+        .eq("org_id", params.orgId);
 
     const itemsQ0 = applySortToJobQuery(applyOpsToJobQuery(itemsBase as never, ops) as never, sort);
-    const { data, error } = await itemsQ0.range(effectiveOffset, effectiveOffset + effectiveLimit - 1);
+    const { data: raw, error } = await itemsQ0.range(effectiveOffset, effectiveOffset + effectiveLimit - 1);
     if (error) {
         throw new QueueServiceError(error.message, 400, "DB_ERROR");
     }
+    const items = (raw ?? []).map((r) => {
+        const row = r as OpportunityRowPreview;
+        return { ...row, title: row.name ?? null };
+    });
 
     return {
         queue: {
@@ -334,7 +564,7 @@ export async function getWorkUnitQueueItems(params: {
             priority: q.priority ?? "standard",
             display: q.display ?? "list",
         },
-        items: (data ?? []) as unknown[],
+        items: items as unknown[],
         total: count ?? 0,
         limit: effectiveLimit,
         offset: effectiveOffset,
@@ -343,6 +573,7 @@ export async function getWorkUnitQueueItems(params: {
 
 export const __testing = {
     buildJobPlan,
+    buildOpportunityPlan,
     findQueueByKey,
     assertSupportedEntityType,
 };

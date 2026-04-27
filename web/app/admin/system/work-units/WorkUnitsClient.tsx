@@ -8,6 +8,32 @@ import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { getQueueDefinitionStoredVersion } from "@/lib/rrs/queue/queueDefinitionV1";
 import type { DepartmentRow } from "../departments/DepartmentsClient";
 
+type QueueSummary = {
+    key: string;
+    label: string;
+    description?: string;
+    entity_type: "job" | "schedule" | "opportunity";
+    priority: "standard" | "attention" | "critical";
+    display: "list" | "cards";
+    count: number;
+    preview: unknown[];
+};
+
+type QueueItemsResult = {
+    queue: {
+        key: string;
+        label: string;
+        description?: string;
+        entity_type: "job" | "schedule" | "opportunity";
+        priority: "standard" | "attention" | "critical";
+        display: "list" | "cards";
+    };
+    items: unknown[];
+    total: number;
+    limit: number;
+    offset: number;
+};
+
 export type WorkUnitRow = {
     id: string;
     org_id: string;
@@ -53,6 +79,17 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
     const [modalQueueExpectedVersion, setModalQueueExpectedVersion] = useState(0);
     const [modalSaving, setModalSaving] = useState(false);
     const [modalError, setModalError] = useState<string | null>(null);
+
+    const [queuesLoading, setQueuesLoading] = useState(false);
+    const [queuesError, setQueuesError] = useState<string | null>(null);
+    const [queuesRoute, setQueuesRoute] = useState<string | null>(null);
+    const [queueSummaries, setQueueSummaries] = useState<QueueSummary[]>([]);
+    const [selectedQueueKey, setSelectedQueueKey] = useState<string | null>(null);
+
+    const [queueItemsLoading, setQueueItemsLoading] = useState(false);
+    const [queueItemsError, setQueueItemsError] = useState<string | null>(null);
+    const [queueItemsRoute, setQueueItemsRoute] = useState<string | null>(null);
+    const [queueItemsResult, setQueueItemsResult] = useState<QueueItemsResult | null>(null);
 
     const deptNameById = useMemo(() => {
         const m = new Map<string, string>();
@@ -125,6 +162,15 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
         setModalQueueJson("{}");
         setModalQueueExpectedVersion(0);
         setModalError(null);
+        setQueuesLoading(false);
+        setQueuesError(null);
+        setQueuesRoute(null);
+        setQueueSummaries([]);
+        setSelectedQueueKey(null);
+        setQueueItemsLoading(false);
+        setQueueItemsError(null);
+        setQueueItemsRoute(null);
+        setQueueItemsResult(null);
         setModalOpen(true);
     };
 
@@ -139,8 +185,75 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
         setModalQueueJson(stringifyQueue(row.queue_definition));
         setModalQueueExpectedVersion(getQueueDefinitionStoredVersion(row.queue_definition));
         setModalError(null);
+        setQueuesLoading(false);
+        setQueuesError(null);
+        setQueuesRoute(null);
+        setQueueSummaries([]);
+        setSelectedQueueKey(null);
+        setQueueItemsLoading(false);
+        setQueueItemsError(null);
+        setQueueItemsRoute(null);
+        setQueueItemsResult(null);
         setModalOpen(true);
     };
+
+    const fetchQueueSummaries = useCallback(async (workUnitId: string) => {
+        setQueuesLoading(true);
+        setQueuesError(null);
+        const route = `/api/admin/work-units/${workUnitId}/queues`;
+        setQueuesRoute(route);
+        try {
+            const res = await fetch(route);
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                const msg = (json as { error?: string }).error ?? "Failed to load queues";
+                throw new Error(msg);
+            }
+            setQueueSummaries(((json as { queues?: QueueSummary[] }).queues ?? []) as QueueSummary[]);
+        } catch (e) {
+            setQueueSummaries([]);
+            setQueuesError((e as Error).message);
+        } finally {
+            setQueuesLoading(false);
+        }
+    }, []);
+
+    const fetchQueueItems = useCallback(async (workUnitId: string, queueKey: string) => {
+        setQueueItemsLoading(true);
+        setQueueItemsError(null);
+        const route = `/api/admin/queues/${encodeURIComponent(workUnitId)}/${encodeURIComponent(queueKey)}?limit=20&offset=0`;
+        setQueueItemsRoute(route);
+        try {
+            const res = await fetch(route);
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                const status = res.status;
+                if (status === 501) {
+                    throw new Error("Queue type not supported yet");
+                }
+                const msg = (json as { error?: string }).error ?? "Failed to load queue items";
+                throw new Error(msg);
+            }
+            setQueueItemsResult(json as QueueItemsResult);
+        } catch (e) {
+            setQueueItemsResult(null);
+            setQueueItemsError((e as Error).message);
+        } finally {
+            setQueueItemsLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (!modalOpen || !modalId) return;
+        fetchQueueSummaries(modalId);
+    }, [modalOpen, modalId, fetchQueueSummaries]);
+
+    const entityHref = useCallback((entityType: QueueSummary["entity_type"] | undefined, id: string) => {
+        if (entityType === "job") return `/admin/jobs/${id}`;
+        if (entityType === "schedule") return `/admin/schedules/${id}`;
+        if (entityType === "opportunity") return `/admin/opportunities/${id}`;
+        return null;
+    }, []);
 
     const saveModal = async () => {
         if (!canMutate) return;
@@ -174,32 +287,33 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
             setModalError("Invalid JSON in queue definition.");
             return;
         }
-
-        /** Empty object clears stored queue_definition (server treats null as clear to `{}`). */
-        const queue_definition =
-            Object.keys(queueParsed).length === 0 ? null : queueParsed;
+        const touchesQueueDefinition = Object.keys(queueParsed).length > 0;
 
         setModalSaving(true);
         setModalError(null);
         try {
             if (modalId) {
+                const patchBody: Record<string, unknown> = {
+                    department_id: modalDeptId,
+                    key,
+                    name: modalName.trim(),
+                    description: modalDescription.trim() || null,
+                    sort_order: modalSortOrder,
+                    is_active: modalActive,
+                };
+                if (touchesQueueDefinition) {
+                    patchBody.queue_definition = queueParsed;
+                    patchBody.expected_queue_definition_version = modalQueueExpectedVersion;
+                }
                 const res = await fetch(`/api/admin/work-units/${modalId}`, {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        department_id: modalDeptId,
-                        key,
-                        name: modalName.trim(),
-                        description: modalDescription.trim() || null,
-                        sort_order: modalSortOrder,
-                        is_active: modalActive,
-                        queue_definition,
-                        expected_queue_definition_version: modalQueueExpectedVersion,
-                    }),
+                    body: JSON.stringify(patchBody),
                 });
                 const json = await res.json().catch(() => ({}));
                 if (!res.ok) throw new Error((json as { error?: string }).error ?? "Save failed");
             } else {
+                const queue_definition = queueParsed;
                 const res = await fetch("/api/admin/work-units", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -337,7 +451,7 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
 
             {modalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-alloy-midnight/40 overflow-y-auto">
-                    <div className="bg-admin-surface-card border border-admin-border rounded-xl shadow-lg max-w-lg w-full p-6 my-8">
+                    <div className="bg-admin-surface-card border border-admin-border rounded-xl shadow-lg max-w-3xl w-full p-6 my-8">
                         <h2 className="text-lg font-semibold text-alloy-forge">{modalId ? "Edit work unit" : "New work unit"}</h2>
                         <div className="mt-4 space-y-3">
                             <label className="block text-sm">
@@ -402,6 +516,157 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
                             </label>
                             {modalError ? <p className="text-sm text-red-600">{modalError}</p> : null}
                         </div>
+
+                        {modalId ? (
+                            <div className="mt-6 border-t border-admin-border/70 pt-4">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div>
+                                        <h3 className="text-sm font-semibold text-alloy-forge">Queue configuration preview</h3>
+                                        <p className="mt-0.5 text-xs text-alloy-forge/60">
+                                            This is a read-only preview of server-evaluated queues for validating configuration (not the primary workspace UI).
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="text-sm text-alloy-pine font-medium"
+                                        onClick={() => fetchQueueSummaries(modalId)}
+                                        disabled={queuesLoading}
+                                    >
+                                        {queuesLoading ? "Refreshing…" : "Refresh"}
+                                    </button>
+                                </div>
+
+                                {queuesError ? (
+                                    <p className="mt-2 text-sm text-red-600">
+                                        {queuesError}
+                                        {queuesRoute ? (
+                                            <span className="block text-xs text-red-600/80 mt-1">Route: {queuesRoute}</span>
+                                        ) : null}
+                                    </p>
+                                ) : queuesLoading ? (
+                                    <p className="mt-2 text-sm text-alloy-forge/70">Loading queues…</p>
+                                ) : queueSummaries.length === 0 ? (
+                                    <p className="mt-2 text-sm text-alloy-forge/70">No queues returned.</p>
+                                ) : (
+                                    <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                                        {queueSummaries.map((q) => (
+                                            <button
+                                                type="button"
+                                                key={q.key}
+                                                onClick={() => {
+                                                    setSelectedQueueKey(q.key);
+                                                    void fetchQueueItems(modalId, q.key);
+                                                }}
+                                                className={`text-left rounded-lg border px-4 py-3 hover:bg-alloy-stone/20 ${
+                                                    selectedQueueKey === q.key ? "border-alloy-pine" : "border-admin-border"
+                                                }`}
+                                            >
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div>
+                                                        <div className="font-medium text-alloy-forge">{q.label}</div>
+                                                        {q.description ? (
+                                                            <div className="mt-0.5 text-xs text-alloy-forge/70">
+                                                                {q.description}
+                                                            </div>
+                                                        ) : null}
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <div className="text-sm font-semibold text-alloy-forge">{q.count}</div>
+                                                        <div className="text-xs text-alloy-forge/60">
+                                                            {q.priority} • {q.display}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {Array.isArray(q.preview) && q.preview.length ? (
+                                                    <div className="mt-2 space-y-1">
+                                                        {q.preview.slice(0, 3).map((it, idx) => {
+                                                            const rec = it as any;
+                                                            const rid = typeof rec?.id === "string" ? rec.id : null;
+                                                            const title = typeof rec?.title === "string" ? rec.title : null;
+                                                            return (
+                                                                <div key={idx} className="text-xs text-alloy-forge/70 truncate">
+                                                                    {title ?? rid ?? JSON.stringify(it)}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                ) : null}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {selectedQueueKey ? (
+                                    <div className="mt-4 rounded-lg border border-admin-border p-4">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <div className="text-sm font-semibold text-alloy-forge">
+                                                Queue: {selectedQueueKey}
+                                            </div>
+                                            <button
+                                                type="button"
+                                                className="text-sm text-alloy-pine font-medium"
+                                                onClick={() => void fetchQueueItems(modalId, selectedQueueKey)}
+                                                disabled={queueItemsLoading}
+                                            >
+                                                {queueItemsLoading ? "Loading…" : "Reload"}
+                                            </button>
+                                        </div>
+
+                                        {queueItemsError ? (
+                                            <p className="mt-2 text-sm text-red-600">
+                                                {queueItemsError}
+                                                {queueItemsRoute ? (
+                                                    <span className="block text-xs text-red-600/80 mt-1">Route: {queueItemsRoute}</span>
+                                                ) : null}
+                                            </p>
+                                        ) : queueItemsLoading ? (
+                                            <p className="mt-2 text-sm text-alloy-forge/70">Loading items…</p>
+                                        ) : !queueItemsResult ? (
+                                            <p className="mt-2 text-sm text-alloy-forge/70">No items loaded.</p>
+                                        ) : (
+                                            <>
+                                                <div className="mt-2 text-xs text-alloy-forge/60">
+                                                    Total: {queueItemsResult.total} • Showing {queueItemsResult.items.length} • Limit {queueItemsResult.limit} • Offset {queueItemsResult.offset}
+                                                </div>
+                                                <div className="mt-3 space-y-2">
+                                                    {queueItemsResult.items.slice(0, 20).map((it, idx) => {
+                                                        const rec = it as any;
+                                                        const rid = typeof rec?.id === "string" ? rec.id : null;
+                                                        const title = typeof rec?.title === "string" ? rec.title : null;
+                                                        const href = rid ? entityHref(queueItemsResult.queue.entity_type, rid) : null;
+                                                        return (
+                                                            <div key={idx} className="flex items-center justify-between gap-3 rounded-md border border-admin-border/70 px-3 py-2">
+                                                                <div className="min-w-0">
+                                                                    <div className="text-sm text-alloy-forge truncate">{title ?? rid ?? "Item"}</div>
+                                                                    {rid ? (
+                                                                        <div className="text-xs text-alloy-forge/60 font-mono truncate">
+                                                                            {rid}
+                                                                        </div>
+                                                                    ) : null}
+                                                                </div>
+                                                                {href ? (
+                                                                    <a
+                                                                        className="text-sm text-alloy-pine font-medium whitespace-nowrap"
+                                                                        href={href}
+                                                                        target="_blank"
+                                                                        rel="noreferrer"
+                                                                    >
+                                                                        Open
+                                                                    </a>
+                                                                ) : (
+                                                                    <span className="text-xs text-alloy-forge/50">Preview only</span>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </>
+                                        )}
+                                    </div>
+                                ) : null}
+                            </div>
+                        ) : null}
+
                         <div className="mt-6 flex justify-end gap-2">
                             <button type="button" className="px-4 py-2 text-sm border border-admin-border rounded-lg" onClick={() => setModalOpen(false)}>
                                 Cancel

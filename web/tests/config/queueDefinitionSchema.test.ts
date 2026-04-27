@@ -75,5 +75,35 @@ describe("QueueDefinition v1 schema", () => {
             })
         ).toThrow();
     });
+
+    it("accepts Enrollment opportunity config shape", () => {
+        const input = {
+            version: 1,
+            entity_type: "opportunity",
+            queues: [
+                {
+                    key: "all",
+                    label: "All inquiries",
+                    description: "All enrollment opportunities.",
+                    filters: [],
+                    sort: [{ field: "updated_at", direction: "desc" }],
+                    limit: 5,
+                    priority: "standard",
+                    display: "list",
+                },
+                {
+                    key: "needs_attention",
+                    label: "Needs attention",
+                    description: "Enrollment records that need review.",
+                    filters: [{ type: "exception", operator: "exists" }],
+                    sort: [{ field: "updated_at", direction: "asc" }],
+                    limit: 5,
+                    priority: "critical",
+                    display: "list",
+                },
+            ],
+        };
+        expect(validateQueueDefinition(input)).toEqual(input);
+    });
 });
 

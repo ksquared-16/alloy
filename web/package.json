@@ -14,6 +14,8 @@
     "test:playwright-smoke": "playwright test playwright/tests/smoke-field-registry.spec.ts",
     "dev:tenant:childcare": "tsx --tsconfig tsconfig.json scripts/spinupChildcareTenant.ts",
     "dev:seed:work-unit-job-queues": "tsx --tsconfig tsconfig.json scripts/seedWorkUnitJobQueueDefinitionV1.ts",
+    "dev:seed:enrollment-opportunity-queues": "tsx --tsconfig tsconfig.json scripts/seedEnrollmentOpportunityQueuesV1.ts",
+    "dev:seed:ensure-enrollment-pipeline": "tsx --tsconfig tsconfig.json scripts/ensureEnrollmentPipelineWorkUnitV1.ts",
     "test:tenant:e2e": "vitest run tests/admin/tenantEndToEnd.test.ts"
   },
   "dependencies": {

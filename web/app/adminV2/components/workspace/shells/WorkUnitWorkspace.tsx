@@ -11,13 +11,15 @@ import "../workspace.css";
 type Props = {
   model: WorkUnitWorkspaceModel;
   onAction: WorkspaceActionHandler;
+  /** Optional injected control (e.g. queue selector) shown above primary lane. */
+  queuePicker?: React.ReactNode;
 };
 
 /**
  * Work unit — same shell grammar as Department (control deck, KPI strip, 75/25 split, workflows strip, command rail).
  * Main surface is a structured queue of drillable records (not department rollups). No inline AI form — shell bar only.
  */
-export default function WorkUnitWorkspace({ model, onAction }: Props) {
+export default function WorkUnitWorkspace({ model, onAction, queuePicker }: Props) {
   const wuShellStyle: CSSProperties = useMemo(
     () =>
       operationalWorkspaceShellStyle({
@@ -124,6 +126,7 @@ export default function WorkUnitWorkspace({ model, onAction }: Props) {
                 data-ws-lane-drill-queue={model.primaryQueue.id}
               >
                 <div className="adminv2-ws-dept-v2-lane-chrome adminv2-ws-dept-v2-lane-chrome--throughput-deck">
+                  {queuePicker ? <div className="adminv2-ws-wu-queue-picker">{queuePicker}</div> : null}
                   {hasLaneStrip ? (
                     <div className="adminv2-ws-wu-lane-strip" aria-label="Lane status">
                       {statusLine ? (
