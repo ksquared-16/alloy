@@ -110,11 +110,19 @@ export async function fetchEffectiveStatusDefinitions(
     entityType: string,
     opts?: { activeOnly?: boolean }
 ): Promise<StatusDefinitionRow[]> {
-    const orgRows = await fetchOrgStatusDefinitions(supabase, orgId, entityType, opts);
+    // For schedules/opportunities we need *all* org overrides (including inactive) so an inactive org row can
+    // explicitly hide an industry default in the effective list.
+    const needsMergeDefaults = entityType === "schedules" || entityType === "opportunities";
+    const orgRows = await fetchOrgStatusDefinitions(
+        supabase,
+        orgId,
+        entityType,
+        needsMergeDefaults ? { activeOnly: false } : opts
+    );
 
     // Schedules (and opportunities) must merge defaults with org rows so a partial org override
     // does not hide industry defaults required by workflows/actions.
-    if (entityType === "schedules" || entityType === "opportunities") {
+    if (needsMergeDefaults) {
         const industryKey = await getOrgIndustryKey(supabase, orgId);
         const defaultRows = await fetchIndustryDefaultStatusDefinitions(supabase, entityType, industryKey, opts);
         const activeOnly = opts?.activeOnly !== false;
