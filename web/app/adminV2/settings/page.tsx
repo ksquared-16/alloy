@@ -121,6 +121,14 @@ export default function AdminV2SettingsIndexPage() {
                     </SettingsTileGrid>
                 </Group>
 
+                <Group label="Automation" accentClass="border-alloy-pine/35">
+                    <SettingsTileGrid variant="two">
+                        <SettingsCard href="/adminV2/workflows" title="Workflows" accent="records">
+                            Review runs, triggers, and steps — AdminV2 control panel (read-heavy; deep edit links to classic admin).
+                        </SettingsCard>
+                    </SettingsTileGrid>
+                </Group>
+
                 <Group label="Vocabulary & documents" accentClass="border-alloy-forge/25">
                     <SettingsTileGrid variant="two">
                         <SettingsCard href="/adminV2/settings/option-sets" title="Option sets" accent="vocabulary">

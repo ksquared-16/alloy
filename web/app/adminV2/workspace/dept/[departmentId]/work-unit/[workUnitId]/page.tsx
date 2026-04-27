@@ -8,12 +8,16 @@ import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import WorkUnitWorkspace from "@/app/adminV2/components/workspace/shells/WorkUnitWorkspace";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { WorkUnitRouteSkeletonBody, WsRouteLoadingRibbon } from "@/components/admin/workspace/workspaceRouteSkeletons";
-import type { ResolvedActionsBySlot } from "@/lib/admin/actions/types";
+import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
+import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
+import { REGISTRY_RIGHT_RAIL_ACTION_ID_PREFIX } from "@/lib/workspace/viewModels/enrollmentRightRailMerge";
 import { executeOpportunityRecordAction } from "@/lib/recordChrome/executeOpportunityRecordAction";
 import type { WorkspaceAction } from "@/lib/ui-v2/workspace-actions";
 import type { QueueItemQuickActionVm, WorkUnitWorkspaceModel } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
 import { buildRealOpportunityWorkUnitWorkspaceModel } from "@/lib/ui-v2/adapters/realWorkUnitFromOpportunities";
+import { buildEnrollmentWorkUnitActionsRail } from "@/lib/workspace/viewModels/enrollmentWorkUnitViewModel";
+import { mergeEnrollmentRightRailActions } from "@/lib/workspace/viewModels/enrollmentRightRailMerge";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { workspaceRouteParam } from "@/lib/workspace/workspaceRouteParam";
 import { validateQueueDefinition, type QueueDefinitionV1 } from "@/lib/config/queueDefinitionSchema";
@@ -93,6 +97,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [oq, setOq] = useState<WorkspaceOpportunityQueueRuntime | null>(null);
     const [needsAttentionWorkUnitId, setNeedsAttentionWorkUnitId] = useState<string | null>(null);
     const [opportunityQueueRowActions, setOpportunityQueueRowActions] = useState<QueueItemQuickActionVm[] | null>(null);
+    const [enrollmentRightRailResolved, setEnrollmentRightRailResolved] = useState<ResolvedActionForClient[] | null>(null);
+    const [actionFeedback, setActionFeedback] = useState<string | null>(null);
 
     const [queueSummaries, setQueueSummaries] = useState<QueueSummary[] | null>(null);
     const [queueSummariesError, setQueueSummariesError] = useState<string | null>(null);
@@ -181,6 +187,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
     }, [debugEnabled, departmentId, workUnitId]);
 
     useEffect(() => {
+        if (!actionFeedback) return;
+        const t = setTimeout(() => setActionFeedback(null), 10000);
+        return () => clearTimeout(t);
+    }, [actionFeedback]);
+
+    useEffect(() => {
         if (!departmentId || !workUnitId) {
             setLoading(false);
             setWorkUnit(null);
@@ -196,6 +208,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             setQueueItemsRoute(null);
             setQueueItemsLoading(false);
             setOpportunityQueueRowActions(null);
+            setEnrollmentRightRailResolved(null);
             setError("Missing department or work unit in the URL.");
             return;
         }
@@ -220,6 +233,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     setQueueItemsRoute(null);
                     setQueueItemsLoading(false);
                     setOpportunityQueueRowActions(null);
+                    setEnrollmentRightRailResolved(null);
                 }
 
                 const [wuRes, deptRes, deptWusRes] = await Promise.all([
@@ -258,11 +272,21 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         work_unit_id: wu.id,
                         department_id: departmentId,
                     }).toString();
+                const rightRailActionsRoute =
+                    `/api/admin/actions?` +
+                    new URLSearchParams({
+                        surface: "right_rail",
+                        entity_type: "opportunity",
+                        work_unit_id: wu.id,
+                        department_id: departmentId,
+                    }).toString();
 
                 let parsedQueueRowQuick: QueueItemQuickActionVm[] | null = null;
-                const [queuesSettled, actionsSettled] = await Promise.allSettled([
+                let parsedRightRail: ResolvedActionForClient[] = [];
+                const [queuesSettled, actionsSettled, rightRailSettled] = await Promise.allSettled([
                     fetch(queueListRoute, init),
                     fetch(actionsListRoute, init),
+                    fetch(rightRailActionsRoute, init),
                 ]);
 
                 if (actionsSettled.status === "fulfilled") {
@@ -272,6 +296,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         if (ar.ok) {
                             const row = aj.actions?.row_inline ?? [];
                             if (row.length) parsedQueueRowQuick = registryQuickActionsFromResolved(row);
+                        }
+                    } catch {
+                        /* non-fatal */
+                    }
+                }
+
+                if (rightRailSettled.status === "fulfilled") {
+                    try {
+                        const ar = rightRailSettled.value;
+                        const aj = (await ar.json().catch(() => ({}))) as { actions?: ResolvedActionsBySlot };
+                        if (ar.ok) {
+                            parsedRightRail = aj.actions?.right_rail ?? [];
                         }
                     } catch {
                         /* non-fatal */
@@ -409,6 +445,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     setOq(oqRuntime);
                     setNeedsAttentionWorkUnitId(naWu?.id ?? null);
                     setOpportunityQueueRowActions(parsedQueueRowQuick);
+                    setEnrollmentRightRailResolved(parsedRightRail);
                 }
             } catch (e) {
                 if (!cancelled) {
@@ -426,6 +463,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     setQueueItemsRoute(null);
                     setQueueItemsLoading(false);
                     setOpportunityQueueRowActions(null);
+                    setEnrollmentRightRailResolved(null);
                 }
             } finally {
                 if (!cancelled) setLoading(false);
@@ -732,14 +770,35 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 rollupSummary: undefined,
             },
             workSummary: null,
-            actionsRail: {
-                primaries: [],
-                systemActions: [{ id: "wu_back_department", label: "← Department overview", variant: "primary" }],
-                quickOperations: [{ id: "wu_manage_work_units", label: "Configure work units" }],
-            },
+            actionsRail: (() => {
+                const isEnrollmentDept = (dept.key ?? "").trim().toLowerCase() === "enrollment";
+                const base = isEnrollmentDept
+                    ? buildEnrollmentWorkUnitActionsRail()
+                    : {
+                          primaries: [],
+                          systemActions: [
+                              { id: "wu_back_department", label: "← Department overview", variant: "primary" as const },
+                          ],
+                          quickOperations: [{ id: "wu_manage_work_units", label: "Configure work units" }],
+                      };
+                return isEnrollmentDept
+                    ? mergeEnrollmentRightRailActions(enrollmentRightRailResolved ?? [], base)
+                    : base;
+            })(),
             contextRail: { title: "About", groups: [] },
         };
-    }, [dept, queueItems, queueItemsError, queueItemsLoading, queueItemsRoute, queueSummaries, selectedQueueKey, workUnit, queueUi]);
+    }, [
+        dept,
+        enrollmentRightRailResolved,
+        queueItems,
+        queueItemsError,
+        queueItemsLoading,
+        queueItemsRoute,
+        queueSummaries,
+        selectedQueueKey,
+        workUnit,
+        queueUi,
+    ]);
 
     const model = useMemo(() => {
         if (!workUnit || !dept || !oq) return null;
@@ -779,11 +838,42 @@ export default function AdminV2OpportunityWorkUnitPage() {
             departmentKey: dept.key,
             oq: oqFiltered,
             queueRowQuickActions: opportunityQueueRowActions,
+            rightRailResolved: enrollmentRightRailResolved ?? [],
         });
-    }, [departmentId, dept, oq, opportunityQueueRowActions, searchParams, workUnit]);
+    }, [departmentId, dept, enrollmentRightRailResolved, oq, opportunityQueueRowActions, searchParams, workUnit]);
+
+    const enrollmentRightRailByKey = useMemo(() => {
+        const m = new Map<string, ResolvedActionForClient>();
+        for (const a of enrollmentRightRailResolved ?? []) m.set(a.key, a);
+        return m;
+    }, [enrollmentRightRailResolved]);
 
     const onAction = useCallback(
         async (action: WorkspaceAction) => {
+            if (
+                action.type === "actions.block" &&
+                action.actionId.startsWith(REGISTRY_RIGHT_RAIL_ACTION_ID_PREFIX)
+            ) {
+                const key = action.actionId.slice(REGISTRY_RIGHT_RAIL_ACTION_ID_PREFIX.length);
+                const resolved = enrollmentRightRailByKey.get(key);
+                if (!resolved) return;
+                const out = await applyRegistryResolvedActionClient(resolved, {
+                    router,
+                    openDrawer,
+                    departmentId,
+                    workUnitId: workUnit?.id ?? null,
+                    context: {
+                        surface: "right_rail",
+                        department_id: departmentId,
+                        work_unit_id: workUnit?.id ?? null,
+                    },
+                });
+                const wf = out.ok ? out.execution_result?.workflow_run_id : undefined;
+                if (typeof wf === "string" && wf.trim()) {
+                    setActionFeedback(`Workflow run ${wf.trim().slice(0, 8)}… completed.`);
+                }
+                return;
+            }
             if (
                 action.type === "queue.item.action" &&
                 action.payload &&
@@ -810,13 +900,21 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 const json = (await res.json().catch(() => ({}))) as {
                     ok?: boolean;
                     error?: string;
-                    execution_result?: { kind?: string; href?: string; drawer?: { defaultSurface?: string | null } };
+                    execution_result?: {
+                        kind?: string;
+                        href?: string;
+                        drawer?: { defaultSurface?: string | null };
+                        workflow_run_id?: string;
+                    };
                 };
                 if (!res.ok || !json.ok) {
                     console.warn("[work-unit] action execute failed", json.error);
                     return;
                 }
                 const er = json.execution_result;
+                if (er?.kind === "start_workflow" && typeof er.workflow_run_id === "string" && er.workflow_run_id.trim()) {
+                    setActionFeedback(`Workflow run ${er.workflow_run_id.trim().slice(0, 8)}… completed.`);
+                }
                 if (er?.kind === "open_drawer") {
                     if (er.drawer?.defaultSurface === "quote_intake") {
                         openDrawer({ type: "opportunities", id: action.itemId, defaultOpportunitySurface: "quote_intake" });
@@ -901,7 +999,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 }
             }
         },
-        [departmentId, needsAttentionWorkUnitId, openDrawer, queueItems?.queue.entity_type, router, workUnit?.id]
+        [
+            departmentId,
+            enrollmentRightRailByKey,
+            needsAttentionWorkUnitId,
+            openDrawer,
+            queueItems?.queue.entity_type,
+            router,
+            workUnit?.id,
+        ]
     );
 
     const deptName = dept?.name?.trim() || "Department";
@@ -940,12 +1046,25 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     <WorkUnitRouteSkeletonBody />
                 </>
             ) : effectiveModel ? (
-                <WorkUnitWorkspace
-                    model={effectiveModel}
-                    onAction={onAction}
-                    headerQueuePicker={queueModel ? queuePicker : null}
-                    queueRowsLoading={queueItemsLoading && !queueItems}
-                />
+                <>
+                    {actionFeedback ? (
+                        <div
+                            className="mb-2 rounded-md border border-alloy-pine/30 bg-emerald-50/90 px-3 py-2 text-sm text-alloy-midnight"
+                            role="status"
+                        >
+                            {actionFeedback}{" "}
+                            <a href="/adminV2/workflows" className="font-semibold text-alloy-blue hover:underline">
+                                View workflows
+                            </a>
+                        </div>
+                    ) : null}
+                    <WorkUnitWorkspace
+                        model={effectiveModel}
+                        onAction={onAction}
+                        headerQueuePicker={queueModel ? queuePicker : null}
+                        queueRowsLoading={queueItemsLoading && !queueItems}
+                    />
+                </>
             ) : (
                 <p className="text-sm text-alloy-ember px-1 py-4">{error ?? "Unable to load this work unit."}</p>
             )}

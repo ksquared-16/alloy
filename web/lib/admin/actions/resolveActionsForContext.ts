@@ -9,15 +9,19 @@ export type ResolveActionsQuery = {
     entityId?: string | null;
     departmentId?: string | null;
     workUnitId?: string | null;
+    /** Required filtering dimension for `record_section` (matches action_placements.section_key). */
+    sectionKey?: string | null;
 };
 
 type PlacementRow = {
     id: string;
     surface: string;
     slot: string;
+    org_id: string | null;
     entity_type: string | null;
     department_id: string | null;
     work_unit_id: string | null;
+    section_key: string | null;
     order_index: number;
     display_style: string;
     condition_config: Record<string, unknown> | null;
@@ -100,6 +104,10 @@ export async function resolveActionsForContext(
 ): Promise<ResolvedActionsBySlot> {
     const out = emptyResolvedActionsBySlot();
     const et = normEt(query.entityType);
+    const recordSectionKey = query.surface === "record_section" ? (query.sectionKey ?? "").trim() : "";
+    if (query.surface === "record_section" && !recordSectionKey) {
+        return out;
+    }
     let statusKey: string | null = null;
     if (et === "opportunity" && query.entityId?.trim()) {
         statusKey = await fetchOpportunityStatusKey(supabase, query.orgId, query.entityId.trim());
@@ -112,9 +120,11 @@ export async function resolveActionsForContext(
                 "id",
                 "surface",
                 "slot",
+                "org_id",
                 "entity_type",
                 "department_id",
                 "work_unit_id",
+                "section_key",
                 "order_index",
                 "display_style",
                 "condition_config",
@@ -136,6 +146,7 @@ export async function resolveActionsForContext(
     for (const row of list) {
         const d = row.action_definitions;
         if (!d || !d.is_active) continue;
+        if (row.org_id != null && String(row.org_id) !== query.orgId) continue;
         if (d.org_id != null && d.org_id !== query.orgId) continue;
         if (row.entity_type != null && String(row.entity_type).trim() !== "" && et != null) {
             if (normEt(row.entity_type) !== et) continue;
@@ -144,6 +155,10 @@ export async function resolveActionsForContext(
             if (normEt(d.entity_type) !== et) continue;
         }
         if (!passesPlacementScope(row, query)) continue;
+        if (query.surface === "record_section") {
+            const psk = row.section_key != null ? String(row.section_key).trim() : "";
+            if (!psk || psk !== recordSectionKey) continue;
+        }
         if (!passesConditionConfig(d.condition_config, row.condition_config, statusKey)) continue;
 
         const payload = (d.payload_schema && typeof d.payload_schema === "object" ? d.payload_schema : {}) as Record<string, unknown>;

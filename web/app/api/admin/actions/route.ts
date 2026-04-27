@@ -35,6 +35,16 @@ export async function GET(request: NextRequest) {
     const entityId = searchParams.get("entity_id")?.trim() || null;
     const departmentId = searchParams.get("department_id")?.trim() || null;
     const workUnitId = searchParams.get("work_unit_id")?.trim() || null;
+    const sectionKey = searchParams.get("section_key")?.trim() || null;
+
+    if (surface === "record_section") {
+        if (!entityId || !sectionKey) {
+            return NextResponse.json(
+                { error: "record_section requires entity_id and section_key" },
+                { status: 400 }
+            );
+        }
+    }
 
     const t0 = Date.now();
     try {
@@ -51,6 +61,7 @@ export async function GET(request: NextRequest) {
                     entityId,
                     departmentId,
                     workUnitId,
+                    sectionKey,
                 });
             },
             [
@@ -61,6 +72,7 @@ export async function GET(request: NextRequest) {
                 entityId ?? "-",
                 departmentId ?? "-",
                 workUnitId ?? "-",
+                sectionKey ?? "-",
             ],
             { revalidate: revalidateSec, tags: [orgTag] }
         )();

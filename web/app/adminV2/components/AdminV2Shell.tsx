@@ -87,6 +87,11 @@ export default function AdminV2Shell({
     pathname.startsWith("/adminV2/settings/") ||
     pathname === "/admin/v2/settings" ||
     pathname.startsWith("/admin/v2/settings/");
+  const isWorkflowsRoute =
+    pathname === "/adminV2/workflows" ||
+    pathname.startsWith("/adminV2/workflows/") ||
+    pathname === "/admin/v2/workflows" ||
+    pathname.startsWith("/admin/v2/workflows/");
 
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [zoomLevel, setZoomLevel] = useState<"company" | "department">("company");
@@ -111,7 +116,7 @@ export default function AdminV2Shell({
 
   const showRecordsExpandable = zoomLevel === "department" && selectedDepartmentKey != null;
 
-  if (isWorkspaceV2Route || isAiActivityRoute || isSettingsRoute) {
+  if (isWorkspaceV2Route || isAiActivityRoute || isSettingsRoute || isWorkflowsRoute) {
     return (
       <div
         className="flex h-screen w-full overflow-hidden"
@@ -140,9 +145,9 @@ export default function AdminV2Shell({
             className="relative flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden"
             style={workspaceContentAmbientStyle}
           >
-            {isWorkspaceV2Route || isSettingsRoute ? <WorkspaceAmbientLayer /> : null}
+            {isWorkspaceV2Route || isSettingsRoute || isWorkflowsRoute ? <WorkspaceAmbientLayer /> : null}
             <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden isolate pb-[200px]">
-              {isAiActivityRoute || isSettingsRoute ? (
+              {isAiActivityRoute || isSettingsRoute || isWorkflowsRoute ? (
                 <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</main>
               ) : (
                 children

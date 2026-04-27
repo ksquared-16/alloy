@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import { useOperationsWorkspaceData } from "@/hooks/useOperationsWorkspaceData";
@@ -18,6 +18,19 @@ import {
     partitionQueueUiSections,
     queuePrimaryTotalFromSummaries,
 } from "@/lib/ui-v2/queueUiConfig";
+import ActionsBlock from "@/app/adminV2/components/workspace/blocks/ActionsBlock";
+import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import type { WorkspaceAction } from "@/lib/ui-v2/workspace-actions";
+import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
+import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
+import {
+    REGISTRY_RIGHT_RAIL_ACTION_ID_PREFIX,
+    mergeEnrollmentRightRailActions,
+} from "@/lib/workspace/viewModels/enrollmentRightRailMerge";
+import {
+    buildEnrollmentDepartmentCommandRail,
+} from "@/lib/workspace/viewModels/enrollmentWorkUnitViewModel";
+import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
 const WORKSPACE_BASE = "/adminV2/workspace";
 
@@ -33,6 +46,8 @@ type V1QueueSummary = {
 
 export default function AdminV2WorkspaceDepartmentPage() {
     const params = useParams();
+    const router = useRouter();
+    const { openDrawer } = useAdminDrawer();
     const departmentId = workspaceRouteParam(params.departmentId);
     const debugEnabled =
         typeof window !== "undefined" &&
@@ -41,6 +56,14 @@ export default function AdminV2WorkspaceDepartmentPage() {
     const { dept, title, runtime, error, loading } = useOperationsWorkspaceData(departmentId);
 
     const deptKey = (dept?.key ?? "").trim().toLowerCase();
+
+    const [enrollmentDeptRightRail, setEnrollmentDeptRightRail] = useState<ResolvedActionForClient[] | null>(null);
+
+    const needsAttentionWorkUnitId = useMemo(() => {
+        const wus = runtime.workUnits ?? [];
+        const na = wus.find((r) => String(r.key ?? "").trim().toLowerCase() === "needs_attention");
+        return na?.id ?? null;
+    }, [runtime.workUnits]);
 
     const [v1Queues, setV1Queues] = useState<V1QueueSummary[] | null>(null);
     const [v1QueuesError, setV1QueuesError] = useState<string | null>(null);
@@ -191,6 +214,104 @@ export default function AdminV2WorkspaceDepartmentPage() {
             cancelled = true;
         };
     }, [departmentId, primaryWorkUnit?.id]);
+
+    useEffect(() => {
+        if (deptKey !== "enrollment" || !departmentId || !primaryWorkUnit?.id) {
+            setEnrollmentDeptRightRail(null);
+            return;
+        }
+        let cancelled = false;
+        const route =
+            `/api/admin/actions?` +
+            new URLSearchParams({
+                surface: "right_rail",
+                entity_type: "opportunity",
+                department_id: departmentId,
+                work_unit_id: primaryWorkUnit.id,
+            }).toString();
+        (async () => {
+            try {
+                const res = await fetch(route, workspaceDataFetchInit());
+                const j = (await res.json().catch(() => ({}))) as { actions?: { right_rail?: ResolvedActionForClient[] } };
+                if (!cancelled && res.ok) {
+                    setEnrollmentDeptRightRail(j.actions?.right_rail ?? []);
+                } else if (!cancelled) {
+                    setEnrollmentDeptRightRail([]);
+                }
+            } catch {
+                if (!cancelled) setEnrollmentDeptRightRail([]);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [deptKey, departmentId, primaryWorkUnit?.id]);
+
+    const enrollmentDepartmentRailModel = useMemo(() => {
+        if (deptKey !== "enrollment" || !primaryWorkUnit) return null;
+        return mergeEnrollmentRightRailActions(enrollmentDeptRightRail ?? [], buildEnrollmentDepartmentCommandRail());
+    }, [deptKey, enrollmentDeptRightRail, primaryWorkUnit]);
+
+    const enrollmentRightRailByKey = useMemo(() => {
+        const m = new Map<string, ResolvedActionForClient>();
+        for (const a of enrollmentDeptRightRail ?? []) m.set(a.key, a);
+        return m;
+    }, [enrollmentDeptRightRail]);
+
+    const onEnrollmentDeptRailAction = useCallback(
+        async (action: WorkspaceAction) => {
+            if (action.type !== "actions.block") return;
+            if (action.actionId.startsWith(REGISTRY_RIGHT_RAIL_ACTION_ID_PREFIX)) {
+                const key = action.actionId.slice(REGISTRY_RIGHT_RAIL_ACTION_ID_PREFIX.length);
+                const resolved = enrollmentRightRailByKey.get(key);
+                if (!resolved) return;
+                await applyRegistryResolvedActionClient(resolved, {
+                    router,
+                    openDrawer,
+                    departmentId,
+                    workUnitId: primaryWorkUnit?.id ?? null,
+                    context: {
+                        surface: "right_rail",
+                        department_id: departmentId,
+                        work_unit_id: primaryWorkUnit?.id ?? null,
+                    },
+                });
+                return;
+            }
+            if (action.actionId === "wu_new_inquiry") {
+                window.location.href = "/admin/opportunities";
+                return;
+            }
+            if (action.actionId === "dept_open_enrollment_wu" && primaryWorkUnit?.id) {
+                router.push(
+                    `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(primaryWorkUnit.id)}`
+                );
+                return;
+            }
+            if (action.actionId === "wu_open_all_inquiries") {
+                window.location.href = "/admin/opportunities";
+                return;
+            }
+            if (action.actionId === "wu_open_needs_attention") {
+                if (needsAttentionWorkUnitId) {
+                    router.push(
+                        `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(needsAttentionWorkUnitId)}`
+                    );
+                } else {
+                    router.push(`${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}`);
+                }
+                return;
+            }
+            if (action.actionId === "wu_manage_work_units") {
+                window.location.href = "/admin/system/work-units";
+                return;
+            }
+            if (action.actionId === "wu_workspace_root") {
+                router.push(WORKSPACE_BASE);
+            }
+        },
+        [departmentId, enrollmentRightRailByKey, needsAttentionWorkUnitId, openDrawer, primaryWorkUnit?.id, router]
+    );
 
     const uiSections = useMemo(() => {
         if (!queueUi) return null;
@@ -397,7 +518,16 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         </div>
                     }
                     contextSlot={null}
-                    railSlot={null}
+                    railSlot={
+                        enrollmentDepartmentRailModel ? (
+                            <ActionsBlock
+                                model={enrollmentDepartmentRailModel}
+                                onAction={onEnrollmentDeptRailAction}
+                                title="Actions"
+                                surface="department"
+                            />
+                        ) : null
+                    }
                 />
             ) : (
                 <div

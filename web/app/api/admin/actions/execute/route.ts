@@ -10,7 +10,7 @@ type ExecuteBody = {
     action_key?: string;
     entity_type?: string;
     entity_id?: string;
-    context?: { surface?: string; department_id?: string | null; work_unit_id?: string | null };
+    context?: { surface?: string; department_id?: string | null; work_unit_id?: string | null; section_key?: string | null };
     payload?: Record<string, unknown>;
 };
 

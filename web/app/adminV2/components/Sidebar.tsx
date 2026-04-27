@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Building2, Boxes, LayoutGrid, PanelLeftClose, PanelLeft, Settings } from "lucide-react";
+import { Building2, Boxes, GitBranch, LayoutGrid, PanelLeftClose, PanelLeft, Settings } from "lucide-react";
 import { neutral, brand } from "@/styles/tokens/colors";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
@@ -42,6 +42,7 @@ export default function Sidebar({
     const { departmentId, workUnitId } = parseWorkspaceRoute(path);
     const onWorkspace = path === WORKSPACE || path.startsWith(`${WORKSPACE}/`);
     const onSettings = path.startsWith("/adminV2/settings");
+    const onWorkflows = path.startsWith("/adminV2/workflows");
 
     const [depts, setDepts] = useState<Dept[]>([]);
     const [wus, setWus] = useState<WU[]>([]);
@@ -155,6 +156,16 @@ export default function Sidebar({
                     ) : null}
                     <div className="flex-1 min-h-[8px]" />
                     <AdminV2NavLink
+                        href="/adminV2/workflows"
+                        title="Workflows"
+                        aria-label="Workflows"
+                        active={onWorkflows}
+                        className="adminv2-sidebar-rail-link"
+                        style={{ color: brand.primary }}
+                    >
+                        <GitBranch size={20} strokeWidth={1.75} />
+                    </AdminV2NavLink>
+                    <AdminV2NavLink
                         href="/adminV2/settings"
                         title="Settings"
                         aria-label="Settings"
@@ -177,6 +188,14 @@ export default function Sidebar({
                         style={{ color: brand.primary }}
                     >
                         Workspace
+                    </AdminV2NavLink>
+                    <AdminV2NavLink
+                        href="/adminV2/workflows"
+                        active={onWorkflows}
+                        className="rounded-md px-2 py-1.5 font-medium text-alloy-midnight/85 hover:bg-alloy-stone/10"
+                        style={{ color: brand.primary }}
+                    >
+                        Workflows
                     </AdminV2NavLink>
 
                     {path.startsWith("/adminV2/workspace") ? (

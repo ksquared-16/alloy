@@ -229,3 +229,19 @@ export function buildEnrollmentWorkUnitActionsRail(): ActionsVm {
         overflow: [{ id: "wu_workspace_root", label: "Organization workspace", variant: "secondary" }],
     };
 }
+
+/** Department overview (Enrollment) — command rail when no per-row entity context. */
+export function buildEnrollmentDepartmentCommandRail(): ActionsVm {
+    return {
+        primaries: [],
+        systemActions: [
+            { id: "wu_new_inquiry", label: "New inquiry", variant: "primary" },
+            { id: "dept_open_enrollment_wu", label: "Open enrollment queue", variant: "primary" },
+        ],
+        quickOperations: [
+            { id: "wu_open_all_inquiries", label: "Browse all inquiries" },
+            { id: "wu_manage_work_units", label: "Manage work units" },
+        ],
+        overflow: [{ id: "wu_workspace_root", label: "Organization workspace", variant: "secondary" }],
+    };
+}

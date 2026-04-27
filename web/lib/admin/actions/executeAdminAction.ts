@@ -14,6 +14,7 @@ export type ExecuteAdminActionInput = {
         surface?: string;
         department_id?: string | null;
         work_unit_id?: string | null;
+        section_key?: string | null;
     };
     payload?: Record<string, unknown>;
 };

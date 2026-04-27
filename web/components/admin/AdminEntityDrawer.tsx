@@ -43,6 +43,8 @@ import {
 } from "@/lib/entityPresentation";
 import EntityDrawerOverview from "@/components/admin/entity/EntityDrawerOverview";
 import OpportunityLifecyclePanel from "@/components/admin/opportunity/OpportunityLifecyclePanel";
+import OpportunityRecordSectionRegistryActions from "@/components/admin/opportunity/OpportunityRecordSectionRegistryActions";
+import { OPPORTUNITY_RECORD_SECTION_LIFECYCLE } from "@/lib/admin/actions/opportunityRecordSectionKeys";
 import EntityDrawerSection from "@/components/admin/entity/EntityDrawerSection";
 import JobPricingBreakdown from "@/components/admin/JobPricingBreakdown";
 import JobRrsOverviewTab from "@/components/admin/JobRrsOverviewTab";
@@ -955,6 +957,11 @@ export default function AdminEntityDrawer() {
     const [jobPaymentSummaryFromApi, setJobPaymentSummaryFromApi] = useState<JobPaymentsSummaryFromApi | null>(null);
     const [jobPaymentsFetchError, setJobPaymentsFetchError] = useState<string | null>(null);
     const [paymentToast, setPaymentToast] = useState<{ type: "success" | "error"; message: string } | null>(null);
+    const [registryActionFeedback, setRegistryActionFeedback] = useState<{
+        type: "success" | "error";
+        message: string;
+        workflow_run_id?: string | null;
+    } | null>(null);
     const [collectPaymentOpen, setCollectPaymentOpen] = useState(false);
     const [collectPaymentContext, setCollectPaymentContext] = useState<AdminCollectPaymentModalContext | null>(null);
     const [collectPaymentContextRefresh, setCollectPaymentContextRefresh] = useState(0);
@@ -1907,13 +1914,26 @@ export default function AdminEntityDrawer() {
                 const json = (await res.json().catch(() => ({}))) as {
                     ok?: boolean;
                     error?: string;
-                    execution_result?: { row?: Record<string, unknown> };
+                    execution_result?: Record<string, unknown> & {
+                        row?: Record<string, unknown>;
+                        kind?: string;
+                        workflow_run_id?: string;
+                    };
                 };
                 if (!res.ok || !json.ok) {
                     setSaveError(json.error ?? "Action failed");
                     return;
                 }
-                const row = json.execution_result?.row;
+                const er = json.execution_result;
+                if (er?.kind === "start_workflow" && typeof er.workflow_run_id === "string" && er.workflow_run_id.trim()) {
+                    const rid = er.workflow_run_id.trim();
+                    setRegistryActionFeedback({
+                        type: "success",
+                        message: `Workflow run completed (${rid.slice(0, 8)}…).`,
+                        workflow_run_id: rid,
+                    });
+                }
+                const row = er?.row;
                 if (row && typeof row === "object") {
                     setData((prev) => (prev && typeof prev === "object" ? { ...prev, ...row } : prev));
                 } else {
@@ -1980,6 +2000,16 @@ export default function AdminEntityDrawer() {
         const t = setTimeout(() => setPaymentToast(null), 8000);
         return () => clearTimeout(t);
     }, [paymentToast]);
+
+    useEffect(() => {
+        if (!registryActionFeedback) return;
+        const t = setTimeout(() => setRegistryActionFeedback(null), 12000);
+        return () => clearTimeout(t);
+    }, [registryActionFeedback]);
+
+    useEffect(() => {
+        setRegistryActionFeedback(null);
+    }, [drawer.type, drawer.id]);
 
     useEffect(() => {
         if (drawer.type === "jobs" && data) {
@@ -3960,6 +3990,12 @@ export default function AdminEntityDrawer() {
         (resolvedHeader?.overflow.length ?? 0);
     const useOpportunityActionRegistryHeader =
         !opportunityResolvedHeaderLoading && resolvedHeader != null && resolvedHeaderCount > 0;
+
+    const opportunityRegistryHeaderActionKeys = useMemo(() => {
+        const h = opportunityResolvedHeaderActions;
+        if (!h) return new Set<string>();
+        return new Set([...h.primary, ...h.secondary, ...h.overflow].map((a) => a.key));
+    }, [opportunityResolvedHeaderActions]);
 
     const opportunityHeaderQuickActionsNode =
         isOpportunityExistingView && drawer.id && (useOpportunityActionRegistryHeader || hasOpportunityChromeActions) ? (
@@ -6516,6 +6552,28 @@ export default function AdminEntityDrawer() {
                     data-adminv2-opportunity-drawer-body={showOpportunityRecordModalV2 ? "true" : undefined}
                 >
                     {saveError && <p className="text-alloy-ember text-sm">{saveError}</p>}
+                    {registryActionFeedback ? (
+                        <div
+                            className={`rounded-md border px-3 py-2 text-sm ${
+                                registryActionFeedback.type === "success"
+                                    ? "border-alloy-pine/35 bg-emerald-50/90 text-alloy-midnight"
+                                    : "border-alloy-ember/40 bg-amber-50 text-alloy-ember"
+                            }`}
+                            role="status"
+                        >
+                            <div className="font-medium">{registryActionFeedback.message}</div>
+                            {registryActionFeedback.workflow_run_id ? (
+                                <div className="mt-1.5 text-xs">
+                                    <Link
+                                        href={`/adminV2/workflows?run=${encodeURIComponent(registryActionFeedback.workflow_run_id)}`}
+                                        className="font-semibold text-alloy-blue hover:underline"
+                                    >
+                                        Review workflow runs
+                                    </Link>
+                                </div>
+                            ) : null}
+                        </div>
+                    ) : null}
                     {drawer.type === "schedules" &&
                         showScheduleRecordModalV2 &&
                         scheduleCancelPrompt &&
@@ -8857,6 +8915,74 @@ export default function AdminEntityDrawer() {
                                                 );
                                             })()}
                                         </section>
+                                        {!opportunityInquiryWorkflowDrawer ? (
+                                            <section
+                                                className="rounded-lg border border-admin-border bg-white/90 px-2.5 py-2 mb-2 shadow-sm"
+                                                data-opportunity-section-key={OPPORTUNITY_RECORD_SECTION_LIFECYCLE}
+                                            >
+                                                <OpportunityLifecyclePanel record={overviewData as Record<string, unknown>} />
+                                                {drawer.id ? (
+                                                    <OpportunityRecordSectionRegistryActions
+                                                        opportunityId={drawer.id}
+                                                        sectionKey={OPPORTUNITY_RECORD_SECTION_LIFECYCLE}
+                                                        excludeActionKeys={opportunityRegistryHeaderActionKeys}
+                                                        canMutate={!!canMutate}
+                                                        router={router}
+                                                        openDrawer={openDrawer}
+                                                        onApplied={() => {
+                                                            void refetch();
+                                                            router.refresh();
+                                                        }}
+                                                        onExecutionResult={(er) => {
+                                                            if (
+                                                                er?.kind === "start_workflow" &&
+                                                                typeof er.workflow_run_id === "string" &&
+                                                                er.workflow_run_id.trim()
+                                                            ) {
+                                                                const rid = er.workflow_run_id.trim();
+                                                                setRegistryActionFeedback({
+                                                                    type: "success",
+                                                                    message: `Workflow run completed (${rid.slice(0, 8)}…).`,
+                                                                    workflow_run_id: rid,
+                                                                });
+                                                            }
+                                                        }}
+                                                    />
+                                                ) : null}
+                                            </section>
+                                        ) : drawer.id ? (
+                                            <div
+                                                className="mt-2 px-0.5"
+                                                data-opportunity-section-key={OPPORTUNITY_RECORD_SECTION_LIFECYCLE}
+                                            >
+                                                <OpportunityRecordSectionRegistryActions
+                                                    opportunityId={drawer.id}
+                                                    sectionKey={OPPORTUNITY_RECORD_SECTION_LIFECYCLE}
+                                                    excludeActionKeys={opportunityRegistryHeaderActionKeys}
+                                                    canMutate={!!canMutate}
+                                                    router={router}
+                                                    openDrawer={openDrawer}
+                                                    onApplied={() => {
+                                                        void refetch();
+                                                        router.refresh();
+                                                    }}
+                                                    onExecutionResult={(er) => {
+                                                        if (
+                                                            er?.kind === "start_workflow" &&
+                                                            typeof er.workflow_run_id === "string" &&
+                                                            er.workflow_run_id.trim()
+                                                        ) {
+                                                            const rid = er.workflow_run_id.trim();
+                                                            setRegistryActionFeedback({
+                                                                type: "success",
+                                                                message: `Workflow run completed (${rid.slice(0, 8)}…).`,
+                                                                workflow_run_id: rid,
+                                                            });
+                                                        }
+                                                    }}
+                                                />
+                                            </div>
+                                        ) : null}
                                     </>
                                 ) : null}
                                 {drawer.type === "opportunities" && !opportunityInquiryWorkflowDrawer ? opportunityQuoteSummaryNode : null}
