@@ -5921,7 +5921,7 @@ export default function AdminEntityDrawer() {
         return (
             <div
                 data-opportunity-workflow-timeline
-                className="rounded-xl border border-alloy-stone/15 bg-white/80 px-2.5 py-2 shadow-sm ring-1 ring-alloy-stone/10"
+                className="rounded-xl border border-alloy-stone/15 bg-white/80 px-2.5 py-1.5 shadow-sm ring-1 ring-alloy-stone/10"
             >
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     {stages.map((s, i) => {
@@ -6226,10 +6226,17 @@ export default function AdminEntityDrawer() {
                     ? String(title)
                     : "—";
     const headerSubtitleBase = jobV2MetaSubtitle ?? drawerHeaderRecordSubtitle ?? undefined;
+    const workflowCompactRecordNum =
+        drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer && typeof headerSubtitleBase === "string"
+            ? (() => {
+                  const m = headerSubtitleBase.match(/#\s*(\d+)/);
+                  return m?.[1] ? `#${m[1]}` : headerSubtitleBase;
+              })()
+            : headerSubtitleBase;
     const headerSubtitleResolved =
         drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer ? (
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-                {headerSubtitleBase ? <span>{headerSubtitleBase}</span> : null}
+            <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                {workflowCompactRecordNum ? <span>{workflowCompactRecordNum}</span> : null}
                 <span className="shrink-0">{opportunityInquiryWorkflowHeaderStatus}</span>
             </div>
         ) : (
@@ -8508,93 +8515,95 @@ export default function AdminEntityDrawer() {
                                                                     ) : null}
                                                                 </div>
                                                             </div>
-                                                            <div
-                                                                className={`mt-2.5 rounded-lg border border-alloy-stone/[0.1] bg-white/[0.97] p-2.5 shadow-sm ring-1 ring-alloy-stone/[0.06] ${
-                                                                    followUpOverdue ? "border-amber-200/75 bg-amber-50/[0.22] ring-amber-100/40" : ""
-                                                                }`}
-                                                            >
-                                                                <div className={tinyLabel}>
-                                                                    Notes & next step
-                                                                    {followUpOverdue ? (
-                                                                        <span className="ml-2 font-semibold normal-case text-amber-900/85">
-                                                                            Follow-up overdue
-                                                                        </span>
-                                                                    ) : null}
-                                                                </div>
-                                                                <div className="mt-1 flex flex-wrap items-center gap-2">
-                                                                    <button
-                                                                        type="button"
-                                                                        disabled
-                                                                        className="rounded-md border border-alloy-stone/25 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/40"
-                                                                        title="Coming soon"
-                                                                    >
-                                                                        Add note
-                                                                    </button>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={() => setDrawerTab("activity")}
-                                                                        className="rounded-md border border-alloy-stone/25 bg-white px-2 py-1 text-[11px] font-semibold text-alloy-midnight/75 hover:border-alloy-blue/35 hover:text-alloy-blue"
-                                                                    >
-                                                                        View activity
-                                                                    </button>
-                                                                </div>
-                                                                <textarea
-                                                                    value={followNotesValue}
-                                                                    onChange={(e) =>
-                                                                        setFormData((prev) => ({
-                                                                            ...prev,
-                                                                            follow_up_notes: e.target.value,
-                                                                        }))
-                                                                    }
-                                                                    onBlur={() => {
-                                                                        if (nonJobFormDirty) saveEdit();
-                                                                    }}
-                                                                    rows={3}
-                                                                    disabled={!canMutate}
-                                                                    placeholder="Add follow-up notes…"
-                                                                    className="mt-1.5 w-full resize-none rounded-md border border-alloy-stone/20 bg-white px-2.5 py-2 text-[12px] leading-snug text-alloy-midnight/80 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
-                                                                />
-                                                            </div>
-                                                            <div className={`${innerCard} mt-2.5`}>
-                                                                <div className={tinyLabel}>Communication</div>
-                                                                <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                                                                    <button
-                                                                        type="button"
-                                                                        disabled
-                                                                        className="rounded-md border border-alloy-stone/25 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/40"
-                                                                        title="Messaging coming soon"
-                                                                    >
-                                                                        Message family
-                                                                    </button>
-                                                                    {commPhone ? (
-                                                                        <a
-                                                                            href={`tel:${commPhone}`}
+                                                            <div className="mt-2.5 grid grid-cols-1 gap-2.5 lg:grid-cols-2 lg:gap-3">
+                                                                <div
+                                                                    className={`rounded-lg border border-alloy-stone/[0.1] bg-white/[0.97] p-2.5 shadow-sm ring-1 ring-alloy-stone/[0.06] ${
+                                                                        followUpOverdue ? "border-amber-200/75 bg-amber-50/[0.22] ring-amber-100/40" : ""
+                                                                    }`}
+                                                                >
+                                                                    <div className={tinyLabel}>
+                                                                        Notes & next step
+                                                                        {followUpOverdue ? (
+                                                                            <span className="ml-2 font-semibold normal-case text-amber-900/85">
+                                                                                Follow-up overdue
+                                                                            </span>
+                                                                        ) : null}
+                                                                    </div>
+                                                                    <div className="mt-1 flex flex-wrap items-center gap-2">
+                                                                        <button
+                                                                            type="button"
+                                                                            disabled
+                                                                            className="rounded-md border border-alloy-stone/25 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/40"
+                                                                            title="Coming soon"
+                                                                        >
+                                                                            Add note
+                                                                        </button>
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => setDrawerTab("activity")}
                                                                             className="rounded-md border border-alloy-stone/25 bg-white px-2 py-1 text-[11px] font-semibold text-alloy-midnight/75 hover:border-alloy-blue/35 hover:text-alloy-blue"
                                                                         >
-                                                                            Call
-                                                                        </a>
-                                                                    ) : (
-                                                                        <span className="rounded-md border border-alloy-stone/15 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/35">
-                                                                            Call
-                                                                        </span>
-                                                                    )}
-                                                                    {commEmail ? (
-                                                                        <a
-                                                                            href={`mailto:${commEmail}`}
-                                                                            className="rounded-md border border-alloy-stone/25 bg-white px-2 py-1 text-[11px] font-semibold text-alloy-midnight/75 hover:border-alloy-blue/35 hover:text-alloy-blue"
-                                                                        >
-                                                                            Email
-                                                                        </a>
-                                                                    ) : (
-                                                                        <span className="rounded-md border border-alloy-stone/15 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/35">
-                                                                            Email
-                                                                        </span>
-                                                                    )}
+                                                                            View activity
+                                                                        </button>
+                                                                    </div>
+                                                                    <textarea
+                                                                        value={followNotesValue}
+                                                                        onChange={(e) =>
+                                                                            setFormData((prev) => ({
+                                                                                ...prev,
+                                                                                follow_up_notes: e.target.value,
+                                                                            }))
+                                                                        }
+                                                                        onBlur={() => {
+                                                                            if (nonJobFormDirty) saveEdit();
+                                                                        }}
+                                                                        rows={3}
+                                                                        disabled={!canMutate}
+                                                                        placeholder="Add follow-up notes…"
+                                                                        className="mt-1.5 w-full resize-none rounded-md border border-alloy-stone/20 bg-white px-2.5 py-2 text-[12px] leading-snug text-alloy-midnight/80 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
+                                                                    />
                                                                 </div>
-                                                                <div className="mt-2 rounded-md border border-dashed border-alloy-stone/25 bg-white/60 px-2.5 py-2">
-                                                                    <p className="text-[12px] font-medium text-alloy-midnight/55">
-                                                                        Messages with this family will appear here.
-                                                                    </p>
+                                                                <div className={innerCard}>
+                                                                    <div className={tinyLabel}>Communication</div>
+                                                                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                                                                        <button
+                                                                            type="button"
+                                                                            disabled
+                                                                            className="rounded-md border border-alloy-stone/25 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/40"
+                                                                            title="Messaging coming soon"
+                                                                        >
+                                                                            Message family
+                                                                        </button>
+                                                                        {commPhone ? (
+                                                                            <a
+                                                                                href={`tel:${commPhone}`}
+                                                                                className="rounded-md border border-alloy-stone/25 bg-white px-2 py-1 text-[11px] font-semibold text-alloy-midnight/75 hover:border-alloy-blue/35 hover:text-alloy-blue"
+                                                                            >
+                                                                                Call
+                                                                            </a>
+                                                                        ) : (
+                                                                            <span className="rounded-md border border-alloy-stone/15 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/35">
+                                                                                Call
+                                                                            </span>
+                                                                        )}
+                                                                        {commEmail ? (
+                                                                            <a
+                                                                                href={`mailto:${commEmail}`}
+                                                                                className="rounded-md border border-alloy-stone/25 bg-white px-2 py-1 text-[11px] font-semibold text-alloy-midnight/75 hover:border-alloy-blue/35 hover:text-alloy-blue"
+                                                                            >
+                                                                                Email
+                                                                            </a>
+                                                                        ) : (
+                                                                            <span className="rounded-md border border-alloy-stone/15 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/35">
+                                                                                Email
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="mt-2 rounded-md border border-dashed border-alloy-stone/25 bg-white/60 px-2.5 py-2">
+                                                                        <p className="text-[12px] font-medium text-alloy-midnight/55">
+                                                                            Messages with this family will appear here.
+                                                                        </p>
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         </div>
