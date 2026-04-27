@@ -78,12 +78,102 @@ describe("QueueService — pure helpers", () => {
             label: "Needs attention",
             filters: [{ type: "exception", operator: "exists" }],
         };
-        try {
-            __testing.buildOpportunityPlan(q as any);
-        } catch (e) {
-            expect(e).toBeInstanceOf(QueueServiceError);
-            expect((e as QueueServiceError).status).toBe(501);
-        }
+        const now = new Date("2026-01-10T12:00:00.000Z");
+        const plan = __testing.buildOpportunityPlan(q as any, now);
+        expect(plan.ops.some((op: any) => op.kind === "or")).toBe(true);
+    });
+
+    it("needs attention: stale opportunity included", () => {
+        const now = new Date("2026-01-10T12:00:00.000Z");
+        expect(
+            __testing.opportunityNeedsAttention(
+                {
+                    updated_at: "2026-01-06T11:59:59.000Z", // >3 days stale
+                    primary_contact_id: "pc1",
+                    customer_id: "c1",
+                    status_key: "contacted",
+                },
+                now
+            )
+        ).toBe(true);
+    });
+
+    it("needs attention: missing customer/contact included", () => {
+        const now = new Date("2026-01-10T12:00:00.000Z");
+        expect(
+            __testing.opportunityNeedsAttention(
+                {
+                    updated_at: "2026-01-10T11:00:00.000Z",
+                    primary_contact_id: null,
+                    customer_id: "c1",
+                    status_key: "new",
+                },
+                now
+            )
+        ).toBe(true);
+        expect(
+            __testing.opportunityNeedsAttention(
+                {
+                    updated_at: "2026-01-10T11:00:00.000Z",
+                    primary_contact_id: "pc1",
+                    customer_id: null,
+                    status_key: "new",
+                },
+                now
+            )
+        ).toBe(true);
+    });
+
+    it("needs attention: qualified/scheduled/booked stale included", () => {
+        const now = new Date("2026-01-10T12:00:00.000Z");
+        expect(
+            __testing.opportunityNeedsAttention(
+                {
+                    updated_at: "2026-01-08T11:59:59.000Z", // just over 2 days stale
+                    primary_contact_id: "pc1",
+                    customer_id: "c1",
+                    status_key: "qualified",
+                },
+                now
+            )
+        ).toBe(true);
+        expect(
+            __testing.opportunityNeedsAttention(
+                {
+                    updated_at: "2026-01-08T11:59:59.000Z",
+                    primary_contact_id: "pc1",
+                    customer_id: "c1",
+                    status_key: "scheduled",
+                },
+                now
+            )
+        ).toBe(true);
+        expect(
+            __testing.opportunityNeedsAttention(
+                {
+                    updated_at: "2026-01-08T11:59:59.000Z",
+                    primary_contact_id: "pc1",
+                    customer_id: "c1",
+                    status_key: "booked",
+                },
+                now
+            )
+        ).toBe(true);
+    });
+
+    it("needs attention: non-matching record excluded", () => {
+        const now = new Date("2026-01-10T12:00:00.000Z");
+        expect(
+            __testing.opportunityNeedsAttention(
+                {
+                    updated_at: "2026-01-10T11:00:00.000Z",
+                    primary_contact_id: "pc1",
+                    customer_id: "c1",
+                    status_key: "contacted",
+                },
+                now
+            )
+        ).toBe(false);
     });
 });
 

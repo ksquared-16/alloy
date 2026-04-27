@@ -83,7 +83,8 @@ type JobQueryPlanOp =
     | { kind: "in"; column: string; values: string[] }
     | { kind: "is_null"; column: string }
     | { kind: "gte"; column: string; value: string }
-    | { kind: "range_lt"; column: string; value: string };
+    | { kind: "range_lt"; column: string; value: string }
+    | { kind: "or"; expr: string };
 
 type JobSortPlan = { column: string; ascending: boolean };
 
@@ -112,10 +113,13 @@ function buildJobPlan(queue: QueueConfig): { ops: JobQueryPlanOp[]; sort: JobSor
     return { ops, sort };
 }
 
-function buildOpportunityPlan(queue: QueueConfig): { ops: OpportunityQueryPlanOp[]; sort: OpportunitySortPlan[] } {
+function buildOpportunityPlan(
+    queue: QueueConfig,
+    now: Date = new Date()
+): { ops: OpportunityQueryPlanOp[]; sort: OpportunitySortPlan[] } {
     const ops: OpportunityQueryPlanOp[] = [];
     for (const f of queue.filters) {
-        ops.push(...opportunityFilterToOps(f));
+        ops.push(...opportunityFilterToOps(f, now));
     }
 
     const sort: OpportunitySortPlan[] = [];
@@ -201,7 +205,55 @@ function jobFilterToOps(f: QueueFilter): JobQueryPlanOp[] {
     }
 }
 
-function opportunityFilterToOps(f: QueueFilter): OpportunityQueryPlanOp[] {
+function subtractDays(now: Date, days: number): Date {
+    return new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+}
+
+function toIso(d: Date): string {
+    return d.toISOString();
+}
+
+type OpportunityNeedsAttentionRow = {
+    updated_at?: string | null;
+    primary_contact_id?: string | null;
+    customer_id?: string | null;
+    status_key?: string | null;
+};
+
+function opportunityNeedsAttention(row: OpportunityNeedsAttentionRow, now: Date): boolean {
+    const updatedAt = row.updated_at ? new Date(row.updated_at) : null;
+    if (!updatedAt || Number.isNaN(updatedAt.getTime())) return false;
+
+    // 1) stale: updated_at < now - 3 days
+    if (updatedAt.getTime() < subtractDays(now, 3).getTime()) return true;
+
+    // 2) missing data: primary_contact_id IS NULL OR customer_id IS NULL
+    if (row.primary_contact_id == null || row.customer_id == null) return true;
+
+    // 3) value/readiness: status_key in ('qualified','scheduled','booked') AND updated_at < now - 2 days
+    const sk = (row.status_key ?? "").trim().toLowerCase();
+    if ((sk === "qualified" || sk === "scheduled" || sk === "booked") && updatedAt.getTime() < subtractDays(now, 2).getTime()) {
+        return true;
+    }
+
+    return false;
+}
+
+function buildOpportunityNeedsAttentionOrExpr(now: Date): string {
+    const stale3d = toIso(subtractDays(now, 3));
+    const stale2d = toIso(subtractDays(now, 2));
+    // PostgREST `or` grammar:
+    // - "a.eq.1,b.is.null,and(x.eq.1,y.lt.2)"
+    // This implements: stale OR missing customer OR missing contact OR (high-value status AND stale2d).
+    return [
+        `updated_at.lt.${stale3d}`,
+        "primary_contact_id.is.null",
+        "customer_id.is.null",
+        `and(status_key.in.(qualified,scheduled,booked),updated_at.lt.${stale2d})`,
+    ].join(",");
+}
+
+function opportunityFilterToOps(f: QueueFilter, now: Date): OpportunityQueryPlanOp[] {
     switch (f.type) {
         case "status": {
             if (f.operator !== "in") {
@@ -261,8 +313,15 @@ function opportunityFilterToOps(f: QueueFilter): OpportunityQueryPlanOp[] {
             );
         }
         case "exception": {
-            // Per-queue support: we do not implement exception predicates yet for opportunity queues.
-            throw new QueueServiceError("exception filter evaluation is not implemented for opportunities", 501, "NOT_IMPLEMENTED");
+            if (f.operator !== "exists") {
+                throw new QueueServiceError(
+                    `Unsupported exception operator: ${String((f as { operator?: unknown }).operator)}`,
+                    400,
+                    "UNSUPPORTED_OPERATOR"
+                );
+            }
+            // Minimal needs-attention v1: stale OR missing data OR high-value stale.
+            return [{ kind: "or", expr: buildOpportunityNeedsAttentionOrExpr(now) }];
         }
         case "assignment": {
             throw new QueueServiceError("assignment filter is not supported for opportunities", 400, "UNSUPPORTED_FILTER");
@@ -301,6 +360,9 @@ function applyOpsToJobQuery(
                 break;
             case "range_lt":
                 out = out.lt(op.column, op.value as never);
+                break;
+            case "or":
+                out = out.or(op.expr);
                 break;
         }
     }
@@ -574,6 +636,8 @@ export async function getWorkUnitQueueItems(params: {
 export const __testing = {
     buildJobPlan,
     buildOpportunityPlan,
+    buildOpportunityNeedsAttentionOrExpr,
+    opportunityNeedsAttention,
     findQueueByKey,
     assertSupportedEntityType,
 };
