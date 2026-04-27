@@ -58,6 +58,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const workUnitId = workspaceRouteParam(params.workUnitId);
     const searchParams = useSearchParams();
     const { openDrawer, drawer } = useAdminDrawer();
+    const debugEnabled =
+        typeof window !== "undefined" &&
+        new URLSearchParams(window.location.search).has("debug");
+
+    const [ctxDebug, setCtxDebug] = useState<{
+        orgId: string;
+        orgName: string | null;
+        orgSlug: string | null;
+    } | null>(null);
 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -75,6 +84,46 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [queueItemsError, setQueueItemsError] = useState<string | null>(null);
     const [queueItemsRoute, setQueueItemsRoute] = useState<string | null>(null);
     const [queueItemsLoading, setQueueItemsLoading] = useState(false);
+
+    useEffect(() => {
+        if (!debugEnabled) return;
+        let cancelled = false;
+        (async () => {
+            const route = "/api/admin/debug/context";
+            try {
+                const res = await fetch(route, { credentials: "include" });
+                const j = (await res.json().catch(() => ({}))) as {
+                    orgId?: string;
+                    orgName?: string | null;
+                    orgSlug?: string | null;
+                    error?: string;
+                };
+                if (!cancelled) {
+                    if (res.ok && typeof j.orgId === "string" && j.orgId) {
+                        setCtxDebug({ orgId: j.orgId, orgName: j.orgName ?? null, orgSlug: j.orgSlug ?? null });
+                    } else {
+                        setCtxDebug(null);
+                    }
+                }
+                console.info("[adminV2][debug] ctx", {
+                    route,
+                    ok: res.ok,
+                    status: res.status,
+                    orgId: j.orgId ?? null,
+                    orgName: j.orgName ?? null,
+                    departmentId,
+                    workUnitId,
+                    error: j.error ?? null,
+                });
+            } catch (e) {
+                console.warn("[adminV2][debug] ctx failed", { departmentId, workUnitId, error: e });
+                if (!cancelled) setCtxDebug(null);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [debugEnabled, departmentId, workUnitId]);
 
     useEffect(() => {
         if (!departmentId || !workUnitId) {
@@ -566,6 +615,21 @@ export default function AdminV2OpportunityWorkUnitPage() {
             title={wuName}
             subtitle=""
         >
+            {debugEnabled ? (
+                <div className="mb-2 rounded-md border border-admin-border bg-admin-surface-card px-3 py-2 text-[11px] text-alloy-forge/70">
+                    <div>
+                        <span className="font-semibold text-alloy-forge/80">Debug</span>{" "}
+                        <span>org:</span>{" "}
+                        <span className="font-mono">{ctxDebug?.orgId ?? "—"}</span>{" "}
+                        <span className="ml-2">name:</span>{" "}
+                        <span>{ctxDebug?.orgName ?? "—"}</span>
+                    </div>
+                    <div className="mt-1">
+                        <span>route dept:</span> <span className="font-mono">{departmentId}</span>{" "}
+                        <span className="ml-2">work unit:</span> <span className="font-mono">{workUnitId}</span>
+                    </div>
+                </div>
+            ) : null}
             {loading ? (
                 <>
                     <WsRouteLoadingRibbon label="Loading work unit" />

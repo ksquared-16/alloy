@@ -38,6 +38,9 @@ type V1QueueSummary = {
 export default function AdminV2WorkspaceDepartmentPage() {
     const params = useParams();
     const departmentId = workspaceRouteParam(params.departmentId);
+    const debugEnabled =
+        typeof window !== "undefined" &&
+        new URLSearchParams(window.location.search).has("debug");
 
     const { dept, title, runtime, error, loading } = useOperationsWorkspaceData(departmentId);
 
@@ -48,6 +51,11 @@ export default function AdminV2WorkspaceDepartmentPage() {
     const [enrollmentV1Queues, setEnrollmentV1Queues] = useState<V1QueueSummary[] | null>(null);
     const [enrollmentV1QueuesError, setEnrollmentV1QueuesError] = useState<string | null>(null);
     const [enrollmentV1QueuesRoute, setEnrollmentV1QueuesRoute] = useState<string | null>(null);
+    const [ctxDebug, setCtxDebug] = useState<{
+        orgId: string;
+        orgName: string | null;
+        orgSlug: string | null;
+    } | null>(null);
 
     const primaryEnrollmentWorkUnit = useMemo(() => {
         if (!isEnrollment) return null;
@@ -69,6 +77,46 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 : [],
         [departmentId, isEnrollment, primaryEnrollmentWorkUnit?.id]
     );
+
+    useEffect(() => {
+        if (!debugEnabled) return;
+        let cancelled = false;
+        (async () => {
+            const route = "/api/admin/debug/context";
+            try {
+                const res = await fetch(route, { credentials: "include" });
+                const j = (await res.json().catch(() => ({}))) as {
+                    orgId?: string;
+                    orgName?: string | null;
+                    orgSlug?: string | null;
+                    error?: string;
+                };
+                if (!cancelled) {
+                    if (res.ok && typeof j.orgId === "string" && j.orgId) {
+                        setCtxDebug({ orgId: j.orgId, orgName: j.orgName ?? null, orgSlug: j.orgSlug ?? null });
+                    } else {
+                        setCtxDebug(null);
+                    }
+                }
+                console.info("[adminV2][debug] ctx", {
+                    route,
+                    ok: res.ok,
+                    status: res.status,
+                    orgId: j.orgId ?? null,
+                    orgName: j.orgName ?? null,
+                    departmentId,
+                    workUnitId: null,
+                    error: j.error ?? null,
+                });
+            } catch (e) {
+                console.warn("[adminV2][debug] ctx failed", { departmentId, error: e });
+                if (!cancelled) setCtxDebug(null);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [debugEnabled, departmentId]);
 
     useEffect(() => {
         if (!isEnrollment) return;
@@ -211,6 +259,20 @@ export default function AdminV2WorkspaceDepartmentPage() {
             title={title}
             subtitle=""
         >
+            {debugEnabled ? (
+                <div className="mb-2 rounded-md border border-admin-border bg-admin-surface-card px-3 py-2 text-[11px] text-alloy-forge/70">
+                    <div>
+                        <span className="font-semibold text-alloy-forge/80">Debug</span>{" "}
+                        <span>org:</span>{" "}
+                        <span className="font-mono">{ctxDebug?.orgId ?? "—"}</span>{" "}
+                        <span className="ml-2">name:</span>{" "}
+                        <span>{ctxDebug?.orgName ?? "—"}</span>
+                    </div>
+                    <div className="mt-1">
+                        <span>route dept:</span> <span className="font-mono">{departmentId}</span>
+                    </div>
+                </div>
+            ) : null}
             {error && !loading && dept ? <p className="text-sm text-amber-800 px-1">{error}</p> : null}
             {!dept ? (
                 <div
