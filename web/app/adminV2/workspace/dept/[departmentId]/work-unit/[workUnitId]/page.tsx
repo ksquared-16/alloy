@@ -10,7 +10,6 @@ import { AutomationWorkflowsBlock } from "@/app/adminV2/components/workspace/blo
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { WorkUnitRouteSkeletonBody, WsRouteLoadingRibbon } from "@/components/admin/workspace/workspaceRouteSkeletons";
 import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
-import { emptyResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
 import { REGISTRY_RIGHT_RAIL_ACTION_ID_PREFIX } from "@/lib/workspace/viewModels/enrollmentRightRailMerge";
 import { executeOpportunityRecordAction } from "@/lib/recordChrome/executeOpportunityRecordAction";
@@ -27,7 +26,6 @@ import { getQueueUiConfig, type QueueUiConfig, type QueueUiRowPreviewField } fro
 import { UpdateStatusAddNoteModal } from "@/components/admin/opportunity/actions/UpdateStatusAddNoteModal";
 
 const WORKSPACE_BASE = "/adminV2/workspace";
-const DEBUG_ACTION_KEY = "update_status_add_note";
 
 function registryQuickActionsFromResolved(rowInline: { key: string; label: string; action_type: string }[]): QueueItemQuickActionVm[] {
     return rowInline.map((a) => ({
@@ -114,18 +112,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const { openDrawer, drawer } = useAdminDrawer();
-    const debugEnabled =
-        typeof window !== "undefined" &&
-        new URLSearchParams(window.location.search).has("debug");
-    const debugActionsEnabled =
-        typeof window !== "undefined" &&
-        new URLSearchParams(window.location.search).has("debug_actions");
-
-    const [ctxDebug, setCtxDebug] = useState<{
-        orgId: string;
-        orgName: string | null;
-        orgSlug: string | null;
-    } | null>(null);
 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -137,29 +123,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [opportunityQueueRowResolved, setOpportunityQueueRowResolved] = useState<ResolvedActionForClient[] | null>(null);
     const [enrollmentRightRailResolved, setEnrollmentRightRailResolved] = useState<ResolvedActionForClient[] | null>(null);
     const [actionFeedback, setActionFeedback] = useState<string | null>(null);
-
-    const [actionsDebug, setActionsDebug] = useState<{
-        org_id: string | null;
-        department_id: string;
-        work_unit_id: string;
-        entity_type: string;
-        requested: Array<{
-            surface: "queue_row" | "right_rail" | "record_header";
-            route: string;
-            ok: boolean;
-            status: number;
-            actions: ResolvedActionsBySlot;
-            error: string | null;
-        }>;
-        inventory_matches: Array<{
-            surface: string;
-            slot: string;
-            entity_type: string | null;
-            department_id: string | null;
-            work_unit_id: string | null;
-            is_active: boolean;
-        }>;
-    } | null>(null);
 
     const [queueSummaries, setQueueSummaries] = useState<QueueSummary[] | null>(null);
     const [queueSummariesError, setQueueSummariesError] = useState<string | null>(null);
@@ -213,140 +176,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
         // If config sections don't match summaries, fall back to all queues.
         return [{ key: "all", label: "Queues", tone: "standard" as const, queues: queueSummaries }];
     }, [queueSummaries, queueUi]);
-
-    useEffect(() => {
-        if (!debugEnabled) return;
-        let cancelled = false;
-        (async () => {
-            const route = "/api/admin/debug/context";
-            try {
-                const res = await fetch(route, { credentials: "include" });
-                const j = (await res.json().catch(() => ({}))) as {
-                    orgId?: string;
-                    orgName?: string | null;
-                    orgSlug?: string | null;
-                    error?: string;
-                };
-                if (!cancelled) {
-                    if (res.ok && typeof j.orgId === "string" && j.orgId) {
-                        setCtxDebug({ orgId: j.orgId, orgName: j.orgName ?? null, orgSlug: j.orgSlug ?? null });
-                    } else {
-                        setCtxDebug(null);
-                    }
-                }
-            } catch (e) {
-                if (!cancelled) setCtxDebug(null);
-            }
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, [debugEnabled, departmentId, workUnitId]);
-
-    useEffect(() => {
-        if (!debugActionsEnabled) return;
-        if (!departmentId || !workUnitId) return;
-        let cancelled = false;
-        (async () => {
-            const init = workspaceDataFetchInit();
-            const entityType = "opportunity";
-            const surfaces: Array<"queue_row" | "right_rail" | "record_header"> = ["right_rail", "queue_row", "record_header"];
-
-            const requested: Array<{
-                surface: "queue_row" | "right_rail" | "record_header";
-                route: string;
-                ok: boolean;
-                status: number;
-                actions: ResolvedActionsBySlot;
-                error: string | null;
-            }> = [];
-
-            for (const surface of surfaces) {
-                const sp = new URLSearchParams({
-                    surface,
-                    entity_type: entityType,
-                    department_id: departmentId,
-                    work_unit_id: workUnitId,
-                });
-                if (surface === "record_header") {
-                    const drawerOppId = drawer?.type === "opportunities" ? String(drawer.id ?? "") : "";
-                    if (drawerOppId) sp.set("entity_id", drawerOppId);
-                }
-                const route = `/api/admin/actions?${sp.toString()}`;
-                try {
-                    const res = await fetch(route, init);
-                    const j = (await res.json().catch(() => ({}))) as { actions?: ResolvedActionsBySlot; error?: string };
-                    requested.push({
-                        surface,
-                        route,
-                        ok: res.ok,
-                        status: res.status,
-                        actions: (j.actions ?? emptyResolvedActionsBySlot()) as ResolvedActionsBySlot,
-                        error: j.error ?? null,
-                    });
-                } catch (e) {
-                    requested.push({
-                        surface,
-                        route,
-                        ok: false,
-                        status: 0,
-                        actions: emptyResolvedActionsBySlot(),
-                        error: e instanceof Error ? e.message : "Request failed",
-                    });
-                }
-            }
-
-            let inventoryMatches: Array<{
-                surface: string;
-                slot: string;
-                entity_type: string | null;
-                department_id: string | null;
-                work_unit_id: string | null;
-                is_active: boolean;
-            }> = [];
-            try {
-                const invRes = await fetch("/api/admin/actions/inventory", init);
-                const invJson = (await invRes.json().catch(() => ({}))) as {
-                    items?: Array<{
-                        definition?: { key?: string };
-                        placement?: {
-                            surface?: string;
-                            slot?: string;
-                            entity_type?: string | null;
-                            department_id?: string | null;
-                            work_unit_id?: string | null;
-                            is_active?: boolean;
-                        };
-                    }>;
-                    error?: string;
-                };
-                const matches = (invJson.items ?? []).filter((r) => r.definition?.key === DEBUG_ACTION_KEY);
-                inventoryMatches = matches.map((r) => ({
-                    surface: r.placement?.surface ?? "",
-                    slot: r.placement?.slot ?? "",
-                    entity_type: r.placement?.entity_type ?? null,
-                    department_id: r.placement?.department_id ?? null,
-                    work_unit_id: r.placement?.work_unit_id ?? null,
-                    is_active: Boolean(r.placement?.is_active),
-                }));
-            } catch {
-                inventoryMatches = [];
-            }
-
-            if (cancelled) return;
-            setActionsDebug({
-                org_id: ctxDebug?.orgId ?? null,
-                department_id: departmentId,
-                work_unit_id: workUnitId,
-                entity_type: entityType,
-                requested,
-                inventory_matches: inventoryMatches,
-            });
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, [ctxDebug?.orgId, debugActionsEnabled, departmentId, drawer?.id, drawer?.type, workUnitId]);
 
     useEffect(() => {
         if (!actionFeedback) return;
@@ -1248,93 +1077,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const wuName = workUnit?.name?.trim() || "Work unit";
     const effectiveModel = queueModel ?? model;
 
-    const debugActionsNode = useMemo(() => {
-        if (!debugActionsEnabled || !actionsDebug) return null;
-
-        const countActions = (a: ResolvedActionsBySlot): number => {
-            const all = Object.values(a) as unknown as Array<unknown[]>;
-            return all.reduce((acc, arr) => acc + (Array.isArray(arr) ? arr.length : 0), 0);
-        };
-
-        const surfaceBlock = (s: (typeof actionsDebug)["requested"][number]) => {
-            const groups = Object.entries(s.actions).filter(([, v]) => Array.isArray(v) && v.length > 0);
-            return (
-                <div key={s.surface} className="rounded-md border border-admin-border bg-admin-surface-card px-3 py-2">
-                    <div className="flex items-center justify-between">
-                        <div className="text-[11px] font-semibold text-alloy-midnight">{s.surface}</div>
-                        <div className="text-[11px] text-alloy-forge/60">
-                            {s.ok ? "OK" : "ERR"} {s.status ? `(${s.status})` : ""}
-                        </div>
-                    </div>
-                    <div className="mt-1 text-[11px] text-alloy-forge/60">
-                        route: <span className="font-mono">{s.route}</span>
-                    </div>
-                    {s.error ? <div className="mt-1 text-[11px] text-red-700/80">error: {s.error}</div> : null}
-                    <div className="mt-1 text-[11px] text-alloy-forge/70">total actions: {countActions(s.actions)}</div>
-                    <div className="mt-2 space-y-1">
-                        {groups.length ? (
-                            groups.map(([slot, arr]) => (
-                                <div key={slot} className="text-[11px] text-alloy-forge/70">
-                                    <span className="font-semibold text-alloy-midnight/80">{slot}</span>:{" "}
-                                    <span className="font-mono">
-                                        {(arr as Array<{ key: string }>).map((x) => x.key).join(", ")}
-                                    </span>
-                                </div>
-                            ))
-                        ) : (
-                            <div className="text-[11px] text-alloy-forge/60">No actions returned.</div>
-                        )}
-                    </div>
-                </div>
-            );
-        };
-
-        const inventory = actionsDebug.inventory_matches;
-        return (
-            <div className="mb-2 rounded-md border border-alloy-forge/20 bg-white/60 px-3 py-2 text-[11px]">
-                <div className="flex items-center justify-between">
-                    <div className="font-semibold text-alloy-midnight">Action registry debug</div>
-                    <div className="text-alloy-forge/60">
-                        key: <span className="font-mono">{DEBUG_ACTION_KEY}</span>
-                    </div>
-                </div>
-                <div className="mt-1 text-alloy-forge/70">
-                    org_id: <span className="font-mono">{actionsDebug.org_id ?? "—"}</span>{" "}
-                    <span className="ml-2">department_id:</span> <span className="font-mono">{actionsDebug.department_id}</span>{" "}
-                    <span className="ml-2">work_unit_id:</span> <span className="font-mono">{actionsDebug.work_unit_id}</span>{" "}
-                    <span className="ml-2">entity_type:</span> <span className="font-mono">{actionsDebug.entity_type}</span>
-                </div>
-
-                <div className="mt-2 rounded-md border border-admin-border bg-admin-surface-card px-3 py-2">
-                    <div className="font-semibold text-alloy-midnight/80">Inventory matches (definition + placements)</div>
-                    {inventory.length ? (
-                        <div className="mt-1 space-y-1">
-                            {inventory.map((p, idx) => (
-                                <div key={idx} className="text-[11px] text-alloy-forge/70">
-                                    <span className="font-semibold text-alloy-midnight/80">
-                                        {p.surface}/{p.slot}
-                                    </span>{" "}
-                                    <span className="ml-2">entity_type:</span> <span className="font-mono">{p.entity_type ?? "—"}</span>{" "}
-                                    <span className="ml-2">dept:</span> <span className="font-mono">{p.department_id ?? "—"}</span>{" "}
-                                    <span className="ml-2">wu:</span> <span className="font-mono">{p.work_unit_id ?? "—"}</span>{" "}
-                                    <span className="ml-2">active:</span> <span className="font-mono">{String(p.is_active)}</span>
-                                </div>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="mt-1 text-[11px] text-alloy-forge/60">
-                            No inventory rows for <span className="font-mono">{DEBUG_ACTION_KEY}</span> (or inventory API unavailable).
-                        </div>
-                    )}
-                </div>
-
-                <div className="mt-2 grid grid-cols-1 gap-2 lg:grid-cols-3">
-                    {actionsDebug.requested.map(surfaceBlock)}
-                </div>
-            </div>
-        );
-    }, [actionsDebug, debugActionsEnabled]);
-
     return (
         <WorkspaceChrome
             variant="bridge"
@@ -1346,7 +1088,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
             title={wuName}
             subtitle=""
         >
-            {debugActionsNode}
             {loading ? (
                 <>
                     <WsRouteLoadingRibbon label="Loading work unit" />
