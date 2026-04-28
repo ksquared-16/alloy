@@ -209,10 +209,100 @@ async function ensureOppChildJoin(supabase: any, orgId: string, opportunityId: s
     }
 }
 
+async function deleteDemoRowsForOrg(supabase: any, orgId: string): Promise<{
+    deleted_ocm: number;
+    deleted_opportunities: number;
+    deleted_customer_members: number;
+    deleted_customer_persons: number;
+    deleted_contacts: number;
+    deleted_customers: number;
+    deleted_persons: number;
+}> {
+    const packages = ["enrollment_pipeline_demo_v1", "enrollment_pipeline_demo_v2"];
+    const likeSeed = "enroll_demo_%";
+
+    // Collect demo opportunity ids first (for FK-safe join deletes).
+    const { data: demoOpps } = await supabase
+        .from("opportunities")
+        .select("id")
+        .eq("org_id", orgId)
+        .or(`metadata->>demo_seed_package.in.(${packages.join(",")}),metadata->>seed_key.like.${likeSeed}`);
+    const oppIds = (demoOpps ?? []).map((r: any) => r?.id).filter((x: any) => typeof x === "string" && x.trim());
+
+    let deleted_ocm = 0;
+    if (oppIds.length) {
+        const { data } = await supabase
+            .from("opportunity_customer_members")
+            .delete()
+            .eq("org_id", orgId)
+            .in("opportunity_id", oppIds as any)
+            .select("id");
+        deleted_ocm = (data ?? []).length;
+    }
+
+    const { data: deletedOppRows } = await supabase
+        .from("opportunities")
+        .delete()
+        .eq("org_id", orgId)
+        .or(`metadata->>demo_seed_package.in.(${packages.join(",")}),metadata->>seed_key.like.${likeSeed}`)
+        .select("id");
+    const deleted_opportunities = (deletedOppRows ?? []).length;
+
+    const { data: deletedMemberRows } = await supabase
+        .from("customer_members")
+        .delete()
+        .eq("org_id", orgId)
+        .or(`metadata->>demo_seed_package.in.(${packages.join(",")}),metadata->>seed_key.like.${likeSeed}`)
+        .select("id");
+    const deleted_customer_members = (deletedMemberRows ?? []).length;
+
+    const { data: deletedCpRows } = await supabase
+        .from("customer_persons")
+        .delete()
+        .eq("org_id", orgId)
+        .or(`metadata->>demo_seed_package.in.(${packages.join(",")}),metadata->>seed_key.like.${likeSeed}`)
+        .select("id");
+    const deleted_customer_persons = (deletedCpRows ?? []).length;
+
+    // Contacts should not exist for the new seed, but clean v1 anyway.
+    const { data: deletedContactRows } = await supabase
+        .from("contacts")
+        .delete()
+        .eq("org_id", orgId)
+        .or(`metadata->>demo_seed_package.in.(${packages.join(",")}),metadata->>seed_key.like.${likeSeed}`)
+        .select("id");
+    const deleted_contacts = (deletedContactRows ?? []).length;
+
+    const { data: deletedCustRows } = await supabase
+        .from("customers")
+        .delete()
+        .eq("org_id", orgId)
+        .or(`metadata->>demo_seed_package.in.(${packages.join(",")}),metadata->>seed_key.like.${likeSeed}`)
+        .select("id");
+    const deleted_customers = (deletedCustRows ?? []).length;
+
+    const { data: deletedPersonRows } = await supabase
+        .from("persons")
+        .delete()
+        .eq("org_id", orgId)
+        .or(`metadata->>demo_seed_package.in.(${packages.join(",")}),metadata->>seed_key.like.${likeSeed}`)
+        .select("id");
+    const deleted_persons = (deletedPersonRows ?? []).length;
+
+    return {
+        deleted_ocm,
+        deleted_opportunities,
+        deleted_customer_members,
+        deleted_customer_persons,
+        deleted_contacts,
+        deleted_customers,
+        deleted_persons,
+    };
+}
+
 async function main() {
     const orgId = process.env.ORG_ID || DEFAULT_ORG_ID;
     const workUnitKey = process.env.WORK_UNIT_KEY || DEFAULT_WORK_UNIT_KEY;
-    const reset = process.env.ENROLL_DEMO_RESET_OPPORTUNITIES === "1";
     const supabase = createAdminClient();
 
     const { data: wu } = await supabase
@@ -263,19 +353,12 @@ async function main() {
         }
     }
 
-    if (reset) {
-        const { data: opps } = await supabase
-            .from("opportunities")
-            .select("id")
-            .eq("org_id", orgId)
-            .in("metadata->>seed_key", specs.map((s) => s.seed_key) as any);
-        const oppIds = (opps ?? []).map((r: any) => r.id).filter((x: any) => typeof x === "string");
-        if (oppIds.length) {
-            await supabase.from("opportunity_customer_members").delete().eq("org_id", orgId).in("opportunity_id", oppIds as any);
-            await supabase.from("opportunities").delete().eq("org_id", orgId).in("id", oppIds as any);
-        }
-    }
+    console.log("[enrollment-seed] deleting old demo rows…", { orgId });
+    const deleted = await deleteDemoRowsForOrg(supabase, orgId);
+    console.log("[enrollment-seed] deleted", deleted);
 
+    let seededOpportunities = 0;
+    let seededChildMembers = 0;
     for (const spec of specs) {
         const customerId = await ensureCustomer(supabase, orgId, spec.seed_key, spec.family_last);
         const guardianId = await ensurePerson(supabase, orgId, spec.seed_key, "Parent", spec.family_last, "guardian");
@@ -290,13 +373,33 @@ async function main() {
             guardianId,
             customerId
         );
+        seededOpportunities++;
         for (let i = 0; i < spec.children.length; i++) {
             const cmId = await ensureCustomerMemberChild(supabase, orgId, customerId, spec.seed_key, spec.children[i]!, i);
             await ensureOppChildJoin(supabase, orgId, oppId, cmId);
+            seededChildMembers++;
         }
         console.log("seeded", { seed_key: spec.seed_key, opportunity_id: oppId });
     }
 
+    const { data: nullPersonMembers } = await supabase
+        .from("customer_members")
+        .select("id")
+        .eq("org_id", orgId)
+        .eq("metadata->>demo_seed_package", "enrollment_pipeline_demo_v2")
+        .is("person_id", null);
+    const nullPersonCount = (nullPersonMembers ?? []).length;
+
+    console.log("[enrollment-seed] seeded_counts", {
+        orgId,
+        workUnitKey,
+        opportunities: seededOpportunities,
+        child_members: seededChildMembers,
+    });
+    console.log("[enrollment-seed] validation", { demo_customer_members_person_id_null: nullPersonCount });
+    if (nullPersonCount !== 0) {
+        throw new Error(`Validation failed: customer_members.person_id is null for ${nullPersonCount} demo rows`);
+    }
     console.log("Enrollment demo seed complete", { orgId, workUnitKey });
 }
 

@@ -44,9 +44,7 @@ import {
     type EntityDrawerFieldConfig,
 } from "@/lib/entityPresentation";
 import EntityDrawerOverview from "@/components/admin/entity/EntityDrawerOverview";
-import OpportunityLifecyclePanel from "@/components/admin/opportunity/OpportunityLifecyclePanel";
 import OpportunityRecordSectionRegistryActions from "@/components/admin/opportunity/OpportunityRecordSectionRegistryActions";
-import { OPPORTUNITY_RECORD_SECTION_LIFECYCLE } from "@/lib/admin/actions/opportunityRecordSectionKeys";
 import EntityDrawerSection from "@/components/admin/entity/EntityDrawerSection";
 import JobPricingBreakdown from "@/components/admin/JobPricingBreakdown";
 import JobRrsOverviewTab from "@/components/admin/JobRrsOverviewTab";
@@ -6473,11 +6471,35 @@ export default function AdminEntityDrawer() {
                   return m?.[1] ? `#${m[1]}` : headerSubtitleBase;
               })()
             : headerSubtitleBase;
+    const headerNextStepInline =
+        drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer && overviewData
+            ? (() => {
+                  const d = overviewData as Record<string, unknown>;
+                  const ns = (d._lifecycle_next_step as { title?: string; lines?: string[] } | undefined) ?? undefined;
+                  const byLines = (ns?.lines ?? [])
+                      .map((l) => String(l).trim())
+                      .filter(Boolean)
+                      .slice(0, 1)
+                      .join(" ");
+                  const byMeta = (() => {
+                      const md = (d.metadata ?? null) as Record<string, unknown> | null;
+                      const s = md && typeof md.next_step === "string" ? md.next_step.trim() : "";
+                      return s || null;
+                  })();
+                  return byLines || byMeta || null;
+              })()
+            : null;
+
     const headerSubtitleResolved =
         drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer ? (
             <div className="mt-0.5 flex flex-wrap items-center gap-2">
                 {workflowCompactRecordNum ? <span>{workflowCompactRecordNum}</span> : null}
                 <span className="shrink-0">{opportunityInquiryWorkflowHeaderStatus}</span>
+                {headerNextStepInline ? (
+                    <span className="rounded-full border border-alloy-stone/20 bg-white/70 px-2 py-0.5 text-[11px] font-medium text-alloy-midnight/65">
+                        Next: {headerNextStepInline}
+                    </span>
+                ) : null}
             </div>
         ) : (
             headerSubtitleBase
@@ -8644,11 +8666,6 @@ export default function AdminEntityDrawer() {
                                                                     </span>
                                                                 ) : null}
                                                             </div>
-                                                            {nextStepIsWhatsNext && nextStepText ? (
-                                                                <div className="mt-2 rounded-lg border border-alloy-stone/10 bg-white/70 px-2 py-1.5 text-[12px] font-medium text-alloy-midnight/70">
-                                                                    <span className="text-alloy-midnight/45">What’s next:</span> {nextStepText}
-                                                                </div>
-                                                            ) : null}
                                                             <div className="mt-2.5 grid grid-cols-1 gap-2.5 lg:grid-cols-2 lg:items-start lg:gap-3">
                                                                 <div className={innerCard}>
                                                                     <div className={tinyLabel}>Family & contact</div>
@@ -8774,14 +8791,7 @@ export default function AdminEntityDrawer() {
                                                                             />
                                                                         </div>
                                                                     </div>
-                                                                    {nextStepText && !nextStepIsWhatsNext ? (
-                                                                        <p className="mt-2 text-[12px] font-medium leading-snug text-alloy-midnight/75">
-                                                                            <span className="text-alloy-midnight/50">
-                                                                                {(nextStep?.title ?? "Suggested next step").trim()}:{" "}
-                                                                            </span>
-                                                                            {nextStepText}
-                                                                        </p>
-                                                                    ) : null}
+                                                                    {/* Next step is now rendered inline in the drawer header (informational). */}
                                                                 </div>
                                                             </div>
                                                             <div className="mt-2">
@@ -8999,21 +9009,7 @@ export default function AdminEntityDrawer() {
                                                 );
                                             })()}
                                         </section>
-                                        {!opportunityInquiryWorkflowDrawer ? (
-                                            <section
-                                                className="rounded-lg border border-admin-border bg-white/90 px-2.5 py-2 mb-2 shadow-sm"
-                                                data-opportunity-section-key={OPPORTUNITY_RECORD_SECTION_LIFECYCLE}
-                                            >
-                                                <OpportunityLifecyclePanel record={overviewData as Record<string, unknown>} />
-                                            </section>
-                                        ) : drawer.id ? (
-                                            <div
-                                                className="mt-2 px-0.5"
-                                                data-opportunity-section-key={OPPORTUNITY_RECORD_SECTION_LIFECYCLE}
-                                            >
-                                                <OpportunityLifecyclePanel record={overviewData as Record<string, unknown>} />
-                                            </div>
-                                        ) : null}
+                                        {/* Enrollment direction: lifecycle is not a drawer section. */}
                                     </>
                                 ) : null}
                                 {drawer.type === "opportunities" && !opportunityInquiryWorkflowDrawer ? opportunityQuoteSummaryNode : null}
