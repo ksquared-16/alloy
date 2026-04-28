@@ -105,6 +105,12 @@ export default function AdminV2WorkspaceDepartmentPage() {
         orgSlug: string | null;
     } | null>(null);
 
+    const [deptWorkUnits, setDeptWorkUnits] = useState<Array<{ id: string; name: string | null; key: string | null }> | null>(null);
+    const [deptWorkUnitsError, setDeptWorkUnitsError] = useState<string | null>(null);
+    const [deptWorkUnitSummaries, setDeptWorkUnitSummaries] = useState<Record<string, { total: number; needs_attention: number | null }>>(
+        {}
+    );
+
     const [workflowKpis, setWorkflowKpis] = useState<WorkflowKpis>(DEFAULT_WF_KPIS);
     const [workflowsSummary, setWorkflowsSummary] = useState<WorkflowSummaryRow[] | null>(null);
 
@@ -250,6 +256,64 @@ export default function AdminV2WorkspaceDepartmentPage() {
             cancelled = true;
         };
     }, [departmentId, primaryWorkUnit?.id]);
+
+    useEffect(() => {
+        if (!departmentId) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const init = workspaceDataFetchInit();
+                const route = `/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`;
+                const res = await fetch(route, init);
+                const j = (await res.json().catch(() => ({}))) as {
+                    error?: string;
+                    items?: Array<{ id: string; name?: string | null; key?: string | null }>;
+                };
+                if (cancelled) return;
+                if (!res.ok) {
+                    setDeptWorkUnits(null);
+                    setDeptWorkUnitsError(j.error ?? "Failed to load work units");
+                    return;
+                }
+                setDeptWorkUnits((j.items ?? []).map((w) => ({ id: String(w.id), name: w.name ?? null, key: w.key ?? null })));
+                setDeptWorkUnitsError(null);
+            } catch (e) {
+                if (cancelled) return;
+                setDeptWorkUnits(null);
+                setDeptWorkUnitsError(e instanceof Error ? e.message : "Failed to load work units");
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [departmentId]);
+
+    useEffect(() => {
+        const list = deptWorkUnits ?? [];
+        if (!departmentId || list.length === 0) return;
+        let cancelled = false;
+        (async () => {
+            const init = workspaceDataFetchInit();
+            const next: Record<string, { total: number; needs_attention: number | null }> = {};
+            await Promise.allSettled(
+                list.map(async (wu) => {
+                    const route = `/api/admin/work-units/${encodeURIComponent(wu.id)}/queues?limit=50`;
+                    const res = await fetch(route, init);
+                    const j = (await res.json().catch(() => ({}))) as { error?: string; queues?: V1QueueSummary[] };
+                    if (!res.ok) throw new Error(j.error ?? "Failed to load queue summaries");
+                    const queues = (j.queues ?? []) as V1QueueSummary[];
+                    const total = queues.reduce((acc, q) => acc + (typeof q.count === "number" ? q.count : 0), 0);
+                    const needsRow = queues.find((q) => (q.key ?? "").trim().toLowerCase() === "needs_attention");
+                    const needs = needsRow && typeof needsRow.count === "number" ? needsRow.count : null;
+                    next[wu.id] = { total, needs_attention: needs };
+                })
+            );
+            if (!cancelled) setDeptWorkUnitSummaries(next);
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [departmentId, deptWorkUnits]);
 
     useEffect(() => {
         if (deptKey !== "enrollment" || !departmentId || !primaryWorkUnit?.id) {
@@ -412,53 +476,53 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 </header>
                 <div className="adminv2-ws-wu-v2" data-ws-surface="work_unit">
                     <ul className="adminv2-ws-queue-list" role="list">
-                        {qs.map((q) => (
-                            <li key={`${params.sectionKey}:${q.key}`} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
-                                <Link
-                                    href={`${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(
-                                        primaryWorkUnit.id
-                                    )}?queue=${encodeURIComponent(q.key)}`}
-                                    className={`adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact ${tierCls} flex flex-col items-stretch no-underline text-inherit hover:opacity-[0.98]`}
-                                    data-ws-wu-urgency={urg}
-                                >
-                                    <div className="adminv2-ws-wu-queue-card-compact-text">
-                                        <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">
-                                            {q.label}
-                                        </div>
-                                        {q.description ? (
-                                            <div className="adminv2-ws-wu-queue-card-sub adminv2-ws-wu-queue-card-sub--compact">
-                                                {q.description}
-                                            </div>
-                                        ) : null}
-                                        <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] tabular-nums" style={{ color: "var(--d-muted)" }}>
-                                            <div>
-                                                <span className="font-medium text-alloy-midnight/75">Count</span>{" "}
-                                                <span className="text-alloy-midnight/85">{q.count ?? 0}</span>
-                                            </div>
-                                            <div className="text-right">
-                                                <span className="font-medium text-alloy-midnight/75">Value</span>{" "}
-                                                <span className="text-alloy-midnight/85">—</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="adminv2-ws-wu-queue-card-compact-aside">
-                                        {isCritical ? (
-                                            <span
-                                                className="adminv2-ws-wu-queue-count-badge adminv2-ws-wu-queue-count-badge--attention"
-                                                aria-label={`${q.count} items`}
-                                            >
-                                                {q.count}
-                                            </span>
-                                        ) : null}
-                                        <span
-                                            className={`adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open${isCritical ? " adminv2-ws-wu-queue-action-chip--attention-open" : ""}`}
-                                        >
-                                            Open queue
-                                        </span>
-                                    </div>
-                                </Link>
+                        {deptWorkUnitsError ? (
+                            <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
+                                <div className="rounded-lg border border-admin-border bg-white/50 px-3 py-2 text-xs text-alloy-ember">
+                                    Failed to load work units: {deptWorkUnitsError}
+                                </div>
                             </li>
-                        ))}
+                        ) : null}
+                        {(deptWorkUnits ?? []).map((wu) => {
+                            const s = deptWorkUnitSummaries[wu.id];
+                            const total = s ? s.total : null;
+                            const needs = s ? s.needs_attention : null;
+                            return (
+                                <li key={`wu:${wu.id}`} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
+                                    <Link
+                                        href={`${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(wu.id)}`}
+                                        className={`adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact ${tierCls} flex flex-col items-stretch no-underline text-inherit hover:opacity-[0.98]`}
+                                        data-ws-wu-urgency={urg}
+                                    >
+                                        <div className="adminv2-ws-wu-queue-card-compact-text">
+                                            <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">
+                                                {wu.name?.trim() || "Work unit"}
+                                            </div>
+                                            <div className="adminv2-ws-wu-queue-card-sub adminv2-ws-wu-queue-card-sub--compact font-mono">
+                                                {wu.key ?? ""}
+                                            </div>
+                                            <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] tabular-nums" style={{ color: "var(--d-muted)" }}>
+                                                <div>
+                                                    <span className="font-medium text-alloy-midnight/75">Total</span>{" "}
+                                                    <span className="text-alloy-midnight/85">{total ?? "—"}</span>
+                                                </div>
+                                                <div className="text-right">
+                                                    <span className="font-medium text-alloy-midnight/75">Needs attention</span>{" "}
+                                                    <span className="text-alloy-midnight/85">{needs ?? "—"}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="adminv2-ws-wu-queue-card-compact-aside">
+                                            <span
+                                                className={`adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open${isCritical ? " adminv2-ws-wu-queue-action-chip--attention-open" : ""}`}
+                                            >
+                                                Open
+                                            </span>
+                                        </div>
+                                    </Link>
+                                </li>
+                            );
+                        })}
                     </ul>
                 </div>
             </section>
