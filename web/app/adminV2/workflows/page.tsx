@@ -81,6 +81,33 @@ type WorkflowActionRunRow = {
     outputs: Record<string, unknown>;
 };
 
+type WorkflowDetailRow = {
+    id: string;
+    name: string | null;
+    enabled: boolean | null;
+    entity_type: string | null;
+    event_type: string | null;
+};
+
+type WorkflowActionDefRow = {
+    id: string;
+    workflow_id: string;
+    action_order: number;
+    action_type: string;
+    target_entity: string | null;
+    payload: Record<string, unknown>;
+};
+
+type WorkflowConditionRow = {
+    id: string;
+    workflow_id: string;
+    target_entity: string | null;
+    field_path: string | null;
+    operator: string | null;
+    value_jsonb: unknown;
+    enabled: boolean | null;
+};
+
 const WORKSPACE = "/adminV2/workspace";
 
 const DEFAULT_KPIS: WorkflowKpis = {
@@ -107,6 +134,40 @@ function statusBadgeClass(status: string, hasFailedAction?: boolean): string {
     return "bg-alloy-stone/15 text-alloy-midnight/70";
 }
 
+function summarizeWorkflowAction(a: WorkflowActionDefRow): { title: string; subtitle: string } {
+    const ty = (a.action_type ?? "").toString();
+    const target = (a.target_entity ?? "").toString();
+    const payload = a.payload && typeof a.payload === "object" ? a.payload : {};
+    const maybe = (k: string) => {
+        const v = (payload as Record<string, unknown>)[k];
+        if (v == null) return null;
+        if (typeof v === "string" && v.trim()) return v.trim();
+        if (typeof v === "number" || typeof v === "boolean") return String(v);
+        return null;
+    };
+    const bits: string[] = [];
+    const statusKey = maybe("status_key") ?? maybe("to_status_key");
+    if (statusKey) bits.push(`status → ${statusKey}`);
+    const template = maybe("template_key") ?? maybe("template");
+    if (template) bits.push(`template: ${template}`);
+    const channel = maybe("channel");
+    if (channel) bits.push(`channel: ${channel}`);
+    const url = maybe("url") ?? maybe("href");
+    if (url) bits.push(`link`);
+    const subtitle = bits.length ? bits.join(" · ") : "Configured step";
+    const title = target ? `${ty} (${target})` : ty || "step";
+    return { title, subtitle };
+}
+
+function summarizeCondition(c: WorkflowConditionRow): string {
+    const ent = (c.target_entity ?? "").trim();
+    const field = (c.field_path ?? "").trim() || "field";
+    const op = (c.operator ?? "eq").trim();
+    const v = c.value_jsonb;
+    const val = v == null ? "null" : typeof v === "string" ? JSON.stringify(v) : Array.isArray(v) ? `[${v.length} items]` : typeof v === "object" ? "…" : String(v);
+    return `${ent ? `${ent}.` : ""}${field} ${op} ${val}`;
+}
+
 export default function AdminV2WorkflowsPage() {
     const searchParams = useSearchParams();
     const router = useRouter();
@@ -121,6 +182,11 @@ export default function AdminV2WorkflowsPage() {
     const [workflowsError, setWorkflowsError] = useState<string | null>(null);
 
     const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
+    const [selectedWorkflowDetail, setSelectedWorkflowDetail] = useState<WorkflowDetailRow | null>(null);
+    const [selectedWorkflowActions, setSelectedWorkflowActions] = useState<WorkflowActionDefRow[] | null>(null);
+    const [selectedWorkflowConditions, setSelectedWorkflowConditions] = useState<WorkflowConditionRow[] | null>(null);
+    const [selectedWorkflowDetailLoading, setSelectedWorkflowDetailLoading] = useState(false);
+    const [selectedWorkflowDetailError, setSelectedWorkflowDetailError] = useState<string | null>(null);
 
     const [runs, setRuns] = useState<WorkflowRunRow[] | null>(null);
     const [runsLoading, setRunsLoading] = useState(false);
@@ -213,6 +279,46 @@ export default function AdminV2WorkflowsPage() {
             })
             .finally(() => {
                 if (!cancelled) setRunsLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [init, selectedWorkflowId]);
+
+    useEffect(() => {
+        if (!selectedWorkflowId) {
+            setSelectedWorkflowDetail(null);
+            setSelectedWorkflowActions(null);
+            setSelectedWorkflowConditions(null);
+            setSelectedWorkflowDetailError(null);
+            setSelectedWorkflowDetailLoading(false);
+            return;
+        }
+        let cancelled = false;
+        setSelectedWorkflowDetailLoading(true);
+        setSelectedWorkflowDetailError(null);
+        Promise.all([
+            fetch(`/api/admin/workflows/${encodeURIComponent(selectedWorkflowId)}`, init),
+            fetch(`/api/admin/workflows/${encodeURIComponent(selectedWorkflowId)}/actions`, init),
+            fetch(`/api/admin/workflows/${encodeURIComponent(selectedWorkflowId)}/conditions`, init),
+        ])
+            .then(async ([wfRes, aRes, cRes]) => {
+                const wfJson = await wfRes.json().catch(() => ({}));
+                const aJson = await aRes.json().catch(() => ([]));
+                const cJson = await cRes.json().catch(() => ([]));
+                if (cancelled) return;
+                if (!wfRes.ok) throw new Error(typeof wfJson?.error === "string" ? wfJson.error : "Failed to load workflow");
+                if (!aRes.ok) throw new Error(typeof (aJson as any)?.error === "string" ? (aJson as any).error : "Failed to load actions");
+                if (!cRes.ok) throw new Error(typeof (cJson as any)?.error === "string" ? (cJson as any).error : "Failed to load conditions");
+                setSelectedWorkflowDetail((wfJson as { workflow?: WorkflowDetailRow }).workflow ?? null);
+                setSelectedWorkflowActions(Array.isArray(aJson) ? (aJson as WorkflowActionDefRow[]) : []);
+                setSelectedWorkflowConditions(Array.isArray(cJson) ? (cJson as WorkflowConditionRow[]) : []);
+            })
+            .catch((e) => {
+                if (!cancelled) setSelectedWorkflowDetailError(e instanceof Error ? e.message : "Failed to load workflow");
+            })
+            .finally(() => {
+                if (!cancelled) setSelectedWorkflowDetailLoading(false);
             });
         return () => {
             cancelled = true;
@@ -417,6 +523,104 @@ export default function AdminV2WorkflowsPage() {
                         </div>
 
                         <div className="mt-3">
+                            <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                Selected workflow (what it does)
+                            </div>
+                            {selectedWorkflowDetailLoading ? (
+                                <p className="mt-1 text-sm text-alloy-midnight/60">Loading workflow…</p>
+                            ) : selectedWorkflowDetailError ? (
+                                <p className="mt-1 text-sm text-alloy-ember">{selectedWorkflowDetailError}</p>
+                            ) : selectedWorkflowDetail ? (
+                                <div className="mt-1 rounded-xl border border-alloy-stone/15 bg-white p-3">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <div className="truncate text-sm font-semibold text-alloy-midnight">
+                                                {selectedWorkflowDetail.name ?? selectedWorkflowDetail.id}
+                                            </div>
+                                            <div className="mt-0.5 text-xs text-alloy-midnight/60">
+                                                Trigger:{" "}
+                                                <span className="font-mono">{selectedWorkflowDetail.event_type ?? "—"}</span>{" "}
+                                                · Entity:{" "}
+                                                <span className="font-mono">{selectedWorkflowDetail.entity_type ?? "—"}</span>
+                                            </div>
+                                        </div>
+                                        <span
+                                            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+                                                selectedWorkflowDetail.enabled === false
+                                                    ? "bg-alloy-stone/15 text-alloy-midnight/60"
+                                                    : "bg-alloy-pine/15 text-alloy-midnight"
+                                            }`}
+                                        >
+                                            {selectedWorkflowDetail.enabled === false ? "Disabled" : "Enabled"}
+                                        </span>
+                                    </div>
+
+                                    <div className="mt-3 grid grid-cols-1 gap-3">
+                                        <div>
+                                            <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                                Conditions
+                                            </div>
+                                            {(selectedWorkflowConditions ?? []).filter((c) => c.enabled !== false).length === 0 ? (
+                                                <div className="mt-1 text-sm text-alloy-midnight/55">None.</div>
+                                            ) : (
+                                                <ul className="mt-1 space-y-1 text-sm text-alloy-midnight/80">
+                                                    {(selectedWorkflowConditions ?? [])
+                                                        .filter((c) => c.enabled !== false)
+                                                        .slice(0, 6)
+                                                        .map((c) => (
+                                                            <li key={c.id} className="font-mono text-[11px]">
+                                                                {summarizeCondition(c)}
+                                                            </li>
+                                                        ))}
+                                                </ul>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                                Steps
+                                            </div>
+                                            {(selectedWorkflowActions ?? []).length === 0 ? (
+                                                <div className="mt-1 text-sm text-alloy-midnight/55">No steps configured.</div>
+                                            ) : (
+                                                <div className="mt-1 space-y-2">
+                                                    {(selectedWorkflowActions ?? []).slice(0, 8).map((a) => {
+                                                        const s = summarizeWorkflowAction(a);
+                                                        return (
+                                                            <div key={a.id} className="rounded-lg border border-alloy-stone/15 bg-white px-3 py-2">
+                                                                <div className="text-xs font-semibold text-alloy-midnight">
+                                                                    Step {a.action_order}:{" "}
+                                                                    <span className="font-mono text-[11px]">{s.title}</span>
+                                                                </div>
+                                                                <div className="mt-0.5 text-[12px] text-alloy-midnight/60">{s.subtitle}</div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <details className="mt-3">
+                                        <summary className="cursor-pointer text-xs font-semibold text-alloy-midnight/70 hover:text-alloy-midnight">
+                                            Advanced details (raw)
+                                        </summary>
+                                        <pre className="mt-2 max-h-[240px] overflow-auto rounded-lg border border-alloy-stone/15 bg-alloy-stone/5 p-2 text-[11px] text-alloy-midnight/80">
+                                            {JSON.stringify(
+                                                {
+                                                    workflow: selectedWorkflowDetail,
+                                                    conditions: selectedWorkflowConditions ?? [],
+                                                    actions: selectedWorkflowActions ?? [],
+                                                },
+                                                null,
+                                                2
+                                            )}
+                                        </pre>
+                                    </details>
+                                </div>
+                            ) : (
+                                <p className="mt-1 text-sm text-alloy-midnight/55">Select a workflow to inspect.</p>
+                            )}
+
                             <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
                                 Recent runs (selected workflow)
                             </div>

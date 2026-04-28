@@ -34,6 +34,36 @@ import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
 const WORKSPACE_BASE = "/adminV2/workspace";
 
+type WorkflowKpis = {
+    runs_today: number;
+    runs_last_7d: number;
+    successful_last_7d: number;
+    failed_last_7d: number;
+    running_last_7d: number;
+    skipped_last_7d: number;
+    success_rate_last_7d: number | null;
+};
+
+type WorkflowSummaryRow = {
+    id: string;
+    name: string | null;
+    event_type: string | null;
+    entity_type: string | null;
+    enabled: boolean | null;
+    steps_count: number;
+    last_run: { id: string; status: string; started_at: string } | null;
+};
+
+const DEFAULT_WF_KPIS: WorkflowKpis = {
+    runs_today: 0,
+    runs_last_7d: 0,
+    successful_last_7d: 0,
+    failed_last_7d: 0,
+    running_last_7d: 0,
+    skipped_last_7d: 0,
+    success_rate_last_7d: null,
+};
+
 type V1QueueSummary = {
     key: string;
     label: string;
@@ -73,6 +103,9 @@ export default function AdminV2WorkspaceDepartmentPage() {
         orgName: string | null;
         orgSlug: string | null;
     } | null>(null);
+
+    const [workflowKpis, setWorkflowKpis] = useState<WorkflowKpis>(DEFAULT_WF_KPIS);
+    const [workflowsSummary, setWorkflowsSummary] = useState<WorkflowSummaryRow[] | null>(null);
 
     const primaryWorkUnit = useMemo(() => {
         const wus = runtime.workUnits ?? [];
@@ -140,6 +173,34 @@ export default function AdminV2WorkspaceDepartmentPage() {
             cancelled = true;
         };
     }, [debugEnabled, departmentId]);
+
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            try {
+                const init = workspaceDataFetchInit();
+                const [kRes, sRes] = await Promise.all([
+                    fetch("/api/admin/workflow-runs?list=kpis", init),
+                    fetch("/api/admin/workflows/summary", init),
+                ]);
+                const kJson = (await kRes.json().catch(() => ({}))) as Partial<WorkflowKpis>;
+                const sJson = (await sRes.json().catch(() => ({}))) as { workflows?: WorkflowSummaryRow[] };
+                if (!cancelled) {
+                    if (kRes.ok) setWorkflowKpis({ ...DEFAULT_WF_KPIS, ...kJson });
+                    if (sRes.ok) {
+                        const all = Array.isArray(sJson.workflows) ? sJson.workflows : [];
+                        const relevant = all.filter((w) => (w.entity_type ?? "").toLowerCase() === "opportunity");
+                        setWorkflowsSummary(relevant);
+                    }
+                }
+            } catch {
+                // non-fatal
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, []);
 
     useEffect(() => {
         const wus = runtime.workUnits ?? [];
@@ -517,7 +578,81 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             )}
                         </div>
                     }
-                    contextSlot={null}
+                    contextSlot={
+                        <div className="rounded-xl border border-admin-border bg-admin-surface-card px-4 py-3">
+                            <div className="flex items-center justify-between gap-3">
+                                <div>
+                                    <div className="text-sm font-semibold text-alloy-forge">Automation & Workflows</div>
+                                    <div className="text-[12px] text-alloy-forge/60">
+                                        Visibility into workflow health for Enrollment.
+                                    </div>
+                                </div>
+                                <Link href="/adminV2/workflows" className="text-sm font-semibold text-alloy-blue hover:underline">
+                                    View all
+                                </Link>
+                            </div>
+                            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                                <div className="rounded-lg border border-alloy-stone/15 bg-white px-3 py-2">
+                                    <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/50">
+                                        Runs today
+                                    </div>
+                                    <div className="mt-0.5 text-lg font-bold tabular-nums text-alloy-forge">
+                                        {workflowKpis.runs_today}
+                                    </div>
+                                </div>
+                                <div className="rounded-lg border border-alloy-stone/15 bg-white px-3 py-2">
+                                    <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/50">
+                                        Success rate (7d)
+                                    </div>
+                                    <div className="mt-0.5 text-lg font-bold tabular-nums text-alloy-forge">
+                                        {workflowKpis.success_rate_last_7d == null
+                                            ? "—"
+                                            : `${Math.round(workflowKpis.success_rate_last_7d * 100)}%`}
+                                    </div>
+                                </div>
+                                <div className="rounded-lg border border-alloy-stone/15 bg-white px-3 py-2">
+                                    <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/50">
+                                        Failures (7d)
+                                    </div>
+                                    <div className="mt-0.5 text-lg font-bold tabular-nums text-alloy-forge">
+                                        {workflowKpis.failed_last_7d}
+                                    </div>
+                                </div>
+                                <div className="rounded-lg border border-alloy-stone/15 bg-white px-3 py-2">
+                                    <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/50">
+                                        Running (7d)
+                                    </div>
+                                    <div className="mt-0.5 text-lg font-bold tabular-nums text-alloy-forge">
+                                        {workflowKpis.running_last_7d}
+                                    </div>
+                                </div>
+                            </div>
+                            {workflowsSummary?.length ? (
+                                <div className="mt-2">
+                                    <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/50">
+                                        Relevant workflows
+                                    </div>
+                                    <div className="mt-1 divide-y divide-alloy-stone/10 rounded-lg border border-alloy-stone/15 bg-white">
+                                        {workflowsSummary.slice(0, 4).map((w) => (
+                                            <div key={w.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+                                                <div className="min-w-0">
+                                                    <div className="truncate font-semibold text-alloy-forge">
+                                                        {w.name ?? w.id}
+                                                    </div>
+                                                    <div className="truncate text-[12px] text-alloy-forge/60">
+                                                        Trigger: {w.event_type ?? "—"} · Steps: {w.steps_count}
+                                                    </div>
+                                                </div>
+                                                <div className="shrink-0 text-[12px] text-alloy-forge/60">
+                                                    {w.enabled ? "Enabled" : "Disabled"}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            ) : null}
+                        </div>
+                    }
                     railSlot={
                         enrollmentDepartmentRailModel ? (
                             <ActionsBlock

@@ -127,6 +127,8 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status") ?? "";
     const workflowId = searchParams.get("workflow_id") ?? "";
     const eventType = searchParams.get("event_type") ?? "";
+    const entityType = (searchParams.get("entity_type") ?? "").trim();
+    const entityId = (searchParams.get("entity_id") ?? "").trim();
     const range = searchParams.get("range") ?? "";
     const search = (searchParams.get("search") ?? "").trim();
     const limit = Math.min(Number(searchParams.get("limit")) || 50, 100);
@@ -163,6 +165,20 @@ export async function GET(request: NextRequest) {
         }
     }
 
+    let eventIdsForEntity: string[] | null = null;
+    if (entityType && entityId) {
+        const { data: evRows } = await supabase
+            .from("workflow_events")
+            .select("id")
+            .eq("org_id", orgId)
+            .eq("entity_type", entityType)
+            .eq("entity_id", entityId);
+        eventIdsForEntity = (evRows ?? []).map((r) => (r as { id: string }).id);
+        if (eventIdsForEntity.length === 0) {
+            return NextResponse.json({ runs: [], total: 0, page, limit });
+        }
+    }
+
     let q = supabase
         .from("workflow_runs")
         .select("id, workflow_id, event_id, status, error, started_at, completed_at, event_payload", { count: "exact" })
@@ -173,6 +189,7 @@ export async function GET(request: NextRequest) {
     if (workflowId) q = q.eq("workflow_id", workflowId);
     if (fromIso) q = q.gte("started_at", fromIso);
     if (eventIdsForType && eventIdsForType.length > 0) q = q.in("event_id", eventIdsForType);
+    if (eventIdsForEntity && eventIdsForEntity.length > 0) q = q.in("event_id", eventIdsForEntity);
 
     async function enrichRuns(
         rows: {

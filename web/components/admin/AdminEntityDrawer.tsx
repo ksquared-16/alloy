@@ -1033,6 +1033,18 @@ export default function AdminEntityDrawer() {
     const [drawerTab, setDrawerTab] = useState<DrawerTabKey>("overview");
     /** Set default tab once per open; avoids resetting tab when pathname changes while drawer stays open. */
     const entityDrawerTabInitKeyRef = useRef<string>("");
+    type WorkflowRunPreviewRow = {
+        id: string;
+        workflow_id: string;
+        workflow_name: string | null;
+        status: string;
+        started_at: string;
+        completed_at: string | null;
+        has_failed_action?: boolean;
+    };
+    const [opportunityWorkflowRuns, setOpportunityWorkflowRuns] = useState<WorkflowRunPreviewRow[] | null>(null);
+    const [opportunityWorkflowRunsLoading, setOpportunityWorkflowRunsLoading] = useState(false);
+    const [opportunityWorkflowRunsError, setOpportunityWorkflowRunsError] = useState<string | null>(null);
     const [memberCustomers, setMemberCustomers] = useState<{ id: string; name: string | null }[]>([]);
     const [memberCreateSaving, setMemberCreateSaving] = useState(false);
     const [memberCreateError, setMemberCreateError] = useState<string | null>(null);
@@ -1310,6 +1322,9 @@ export default function AdminEntityDrawer() {
         setPaymentRelatedData(null);
         setRedemptionRelatedData(null);
         setPersonRelatedData(null);
+            setOpportunityWorkflowRuns(null);
+            setOpportunityWorkflowRunsLoading(false);
+            setOpportunityWorkflowRunsError(null);
             return;
         }
         const entityOpenKey = `${drawer.type}:${drawer.id}`;
@@ -1344,6 +1359,38 @@ export default function AdminEntityDrawer() {
     // pathname read only when entity identity changes (see entityDrawerTabInitKeyRef); omit from deps so tab is not reset on SPA navigation.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [drawer.type, drawer.id, drawer.jobRecordSurface]);
+
+    useEffect(() => {
+        if (drawerTab !== "activity") return;
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+        let cancelled = false;
+        (async () => {
+            try {
+                setOpportunityWorkflowRunsLoading(true);
+                setOpportunityWorkflowRunsError(null);
+                const qs = new URLSearchParams({
+                    entity_type: "opportunity",
+                    entity_id: String(drawer.id),
+                    limit: "10",
+                    range: "30d",
+                });
+                const res = await fetch(`/api/admin/workflow-runs?${qs.toString()}`, { credentials: "include" });
+                const j = (await res.json().catch(() => ({}))) as { runs?: WorkflowRunPreviewRow[]; error?: string };
+                if (!res.ok) throw new Error(j.error ?? "Failed to load workflow runs");
+                if (!cancelled) setOpportunityWorkflowRuns(Array.isArray(j.runs) ? j.runs : []);
+            } catch (e) {
+                if (!cancelled) {
+                    setOpportunityWorkflowRuns(null);
+                    setOpportunityWorkflowRunsError(e instanceof Error ? e.message : "Failed to load workflow runs");
+                }
+            } finally {
+                if (!cancelled) setOpportunityWorkflowRunsLoading(false);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [drawer.id, drawer.type, drawerTab]);
 
     useEffect(() => {
         if (!drawer.type || !drawer.id || drawer.id === "new" || !canHardDeleteEntityType(drawer.type)) {
@@ -4045,7 +4092,7 @@ export default function AdminEntityDrawer() {
     const opportunityHeaderQuickActionsNode =
         // Enrollment V1: never render legacy chrome actions (prevents flicker / incorrect actions).
         // Expected behavior: no buttons until registry resolves, then correct buttons only.
-        isOpportunityExistingView && drawer.id && useOpportunityActionRegistryHeader ? (
+        isOpportunityExistingView && drawer.id && !loading && data != null && useOpportunityActionRegistryHeader ? (
             <div
                 className={`flex flex-wrap gap-2 items-center ${
                     drawerShellVariant === "adminV2"
@@ -8370,6 +8417,47 @@ export default function AdminEntityDrawer() {
                             ) : drawer.type === "opportunities" && drawer.id && drawer.id !== "new" ? (
                                 <div className="space-y-4">
                                     <section>
+                                        <div className="flex items-center justify-between gap-3">
+                                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Workflow runs</h3>
+                                            <a href="/adminV2/workflows" className="text-sm font-semibold text-alloy-blue hover:underline">
+                                                Workflows
+                                            </a>
+                                        </div>
+                                        {opportunityWorkflowRunsLoading ? (
+                                            <p className="text-sm text-alloy-midnight/60">Loading workflow runs…</p>
+                                        ) : opportunityWorkflowRunsError ? (
+                                            <p className="text-sm text-alloy-ember">{opportunityWorkflowRunsError}</p>
+                                        ) : (opportunityWorkflowRuns?.length ?? 0) > 0 ? (
+                                            <div className="mt-2 divide-y divide-alloy-stone/10 rounded-lg border border-alloy-stone/15 bg-white">
+                                                {(opportunityWorkflowRuns ?? []).map((r) => {
+                                                    const bad = r.status === "failed" || !!r.has_failed_action;
+                                                    return (
+                                                        <a
+                                                            key={r.id}
+                                                            href={`/adminV2/workflows?run=${encodeURIComponent(r.id)}`}
+                                                            className="flex items-center justify-between gap-3 px-3 py-2 text-sm hover:bg-alloy-stone/10"
+                                                        >
+                                                            <div className="min-w-0">
+                                                                <div className="truncate font-semibold text-alloy-forge">
+                                                                    {r.workflow_name ?? r.workflow_id}
+                                                                </div>
+                                                                <div className="truncate text-[12px] text-alloy-forge/60">
+                                                                    {formatDateTime(r.started_at)} ·{" "}
+                                                                    <span className={bad ? "text-alloy-ember font-semibold" : ""}>
+                                                                        {bad ? "Failed" : r.status}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="shrink-0 text-[12px] font-semibold text-alloy-blue">View</div>
+                                                        </a>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : (
+                                            <p className="text-sm text-alloy-midnight/60">No workflow runs recorded.</p>
+                                        )}
+                                    </section>
+                                    <section>
                                         <h3 className={DRAWER_SECTION_HEADER_CLASS}>Timeline</h3>
                                         <ul className="space-y-1.5 text-sm text-alloy-forge/90">
                                             {data?.created_at != null ? <li>Created: {formatDateTime(String(data.created_at))}</li> : null}
@@ -8741,21 +8829,19 @@ export default function AdminEntityDrawer() {
                                                                         </div>
                                                                         <div>
                                                                             <div className={tinyLabel}>Tour date</div>
-                                                                            <input
-                                                                                type="date"
-                                                                                value={toDateInputValue(formData.tour_date ?? d.tour_date)}
-                                                                                onChange={(e) =>
-                                                                                    setFormData((prev) => ({
-                                                                                        ...prev,
-                                                                                        tour_date: e.target.value || null,
-                                                                                    }))
-                                                                                }
-                                                                                onBlur={() => {
-                                                                                    if (nonJobFormDirty) saveEdit();
-                                                                                }}
-                                                                                disabled={!canMutate}
-                                                                                className={fieldInput}
-                                                                            />
+                                                                            <div
+                                                                                className="mt-0.5 rounded-lg border border-alloy-stone/15 bg-white px-2 py-1.5 text-[13px] font-medium text-alloy-midnight/75 shadow-sm"
+                                                                                aria-label="Tour date (managed by actions)"
+                                                                            >
+                                                                                {(() => {
+                                                                                    const md = (d.metadata ?? null) as Record<string, unknown> | null;
+                                                                                    const s =
+                                                                                        md && typeof md.tour_date === "string" && md.tour_date.trim()
+                                                                                            ? md.tour_date.trim()
+                                                                                            : "";
+                                                                                    return s || "—";
+                                                                                })()}
+                                                                            </div>
                                                                         </div>
                                                                     </div>
                                                                     {/* Next step is now rendered inline in the drawer header (informational). */}
@@ -10920,7 +11006,11 @@ export default function AdminEntityDrawer() {
                     const d = md && typeof md.tour_date === "string" ? md.tour_date.trim() : "";
                     return d || null;
                 })()}
-                initialTourTime={null}
+                initialTourTime={(() => {
+                    const md = data && typeof data === "object" ? ((data as any).metadata ?? null) : null;
+                    const t = md && typeof md.tour_time === "string" ? md.tour_time.trim() : "";
+                    return t || null;
+                })()}
                 onSubmit={async (payload) => {
                     if (!drawer.id || drawer.id === "new" || drawer.type !== "opportunities") return;
                     const actionKey = actionFormState?.action?.key ? String(actionFormState.action.key) : "schedule_tour";
