@@ -83,6 +83,16 @@ type WorkflowActionRunRow = {
 
 const WORKSPACE = "/adminV2/workspace";
 
+const DEFAULT_KPIS: WorkflowKpis = {
+    runs_today: 0,
+    runs_last_7d: 0,
+    successful_last_7d: 0,
+    failed_last_7d: 0,
+    running_last_7d: 0,
+    skipped_last_7d: 0,
+    success_rate_last_7d: 0,
+};
+
 function fmtPct(v: number | null): string {
     if (v == null) return "—";
     return `${Math.round(v * 100)}%`;
@@ -102,7 +112,7 @@ export default function AdminV2WorkflowsPage() {
     const router = useRouter();
     const highlightRunId = (searchParams?.get("run") ?? "").trim();
 
-    const [kpis, setKpis] = useState<WorkflowKpis | null>(null);
+    const [kpis, setKpis] = useState<WorkflowKpis>(DEFAULT_KPIS);
     const [kpisLoading, setKpisLoading] = useState(false);
     const [kpisError, setKpisError] = useState<string | null>(null);
 
@@ -165,13 +175,14 @@ export default function AdminV2WorkflowsPage() {
                 if (cancelled) return;
                 if (!r.ok) {
                     setKpisError(typeof j?.error === "string" ? j.error : "Failed to load KPIs");
-                    setKpis(null);
+                    setKpis(DEFAULT_KPIS);
                     return;
                 }
-                setKpis((j as { kpis?: WorkflowKpis }).kpis ?? null);
+                setKpis((j as { kpis?: WorkflowKpis }).kpis ?? DEFAULT_KPIS);
             })
             .catch((e) => {
                 if (!cancelled) setKpisError(e instanceof Error ? e.message : "Failed to load KPIs");
+                if (!cancelled) setKpis(DEFAULT_KPIS);
             })
             .finally(() => {
                 if (!cancelled) setKpisLoading(false);
@@ -289,13 +300,13 @@ export default function AdminV2WorkflowsPage() {
             <div className="min-h-0 flex-1 space-y-4">
                 <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-7">
                     {[
-                        { k: "Runs today", v: kpis?.runs_today ?? null },
-                        { k: "Runs (7d)", v: kpis?.runs_last_7d ?? null },
-                        { k: "Successful", v: kpis?.successful_last_7d ?? null },
-                        { k: "Failed", v: kpis?.failed_last_7d ?? null },
-                        { k: "Running", v: kpis?.running_last_7d ?? null },
-                        { k: "Skipped", v: kpis?.skipped_last_7d ?? null },
-                        { k: "Success rate", v: kpis ? fmtPct(kpis.success_rate_last_7d) : "—" },
+                        { k: "Runs today", v: kpis.runs_today },
+                        { k: "Runs (7d)", v: kpis.runs_last_7d },
+                        { k: "Successful", v: kpis.successful_last_7d },
+                        { k: "Failed", v: kpis.failed_last_7d },
+                        { k: "Running", v: kpis.running_last_7d },
+                        { k: "Skipped", v: kpis.skipped_last_7d },
+                        { k: "Success rate", v: fmtPct(kpis.success_rate_last_7d) },
                     ].map((x) => (
                         <div
                             key={x.k}
@@ -306,7 +317,7 @@ export default function AdminV2WorkflowsPage() {
                                 {x.k}
                             </div>
                             <div className="mt-0.5 text-lg font-semibold text-alloy-midnight">
-                                {kpisLoading ? "…" : kpisError ? "—" : String(x.v ?? "—")}
+                                {kpisLoading ? "…" : kpisError ? String(x.v) : String(x.v)}
                             </div>
                         </div>
                     ))}

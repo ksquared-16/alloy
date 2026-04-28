@@ -165,11 +165,21 @@ export async function resolveActionsForContext(
     const list = (rows ?? []) as unknown as PlacementRow[];
     const resolved: ResolvedActionForClient[] = [];
 
+    // If an org-scoped definition exists for a key, suppress global templates for that key.
+    // This prevents "schedule_tour" global template from reappearing when org-scoped schedule_tour is filtered out.
+    const orgScopedKeys = new Set<string>();
+    for (const row of list) {
+        const d = row.action_definitions;
+        if (!d || !d.is_active) continue;
+        if (d.org_id != null && d.org_id === query.orgId) orgScopedKeys.add(d.key);
+    }
+
     for (const row of list) {
         const d = row.action_definitions;
         if (!d || !d.is_active) continue;
         if (row.org_id != null && String(row.org_id) !== query.orgId) continue;
         if (d.org_id != null && d.org_id !== query.orgId) continue;
+        if (d.org_id == null && orgScopedKeys.has(d.key)) continue;
         if (row.entity_type != null && String(row.entity_type).trim() !== "" && et != null) {
             if (normEt(row.entity_type) !== et) continue;
         }

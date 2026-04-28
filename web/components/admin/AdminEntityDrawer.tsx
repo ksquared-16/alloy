@@ -1238,7 +1238,9 @@ export default function AdminEntityDrawer() {
                 if (!res.ok) throw new Error(json.error ?? "Update failed");
                 setData((prev) => (prev ? { ...prev, ...json } : prev));
                 refetch();
-                router.refresh();
+                window.dispatchEvent(
+                    new CustomEvent("adminv2:opportunity-updated", { detail: { id: drawer.id, action_key: "patch_opportunity_quote" } })
+                );
             } catch (e) {
                 setOppQuoteActionError(e instanceof Error ? e.message : "Update failed");
             } finally {
@@ -1865,7 +1867,9 @@ export default function AdminEntityDrawer() {
                     prev && typeof prev === "object" ? { ...prev, ...(result.data as Record<string, unknown>) } : prev
                 );
                 refetch();
-                router.refresh();
+                window.dispatchEvent(
+                    new CustomEvent("adminv2:opportunity-updated", { detail: { id: drawer.id, action_key: eventKey } })
+                );
             } catch (e) {
                 setSaveError(e instanceof Error ? e.message : "Action failed");
             } finally {
@@ -4039,8 +4043,9 @@ export default function AdminEntityDrawer() {
     }, [opportunityResolvedHeaderActions]);
 
     const opportunityHeaderQuickActionsNode =
-        // Enrollment demo constraint: when action registry is available for opportunities, do not fall back to legacy chrome actions.
-        isOpportunityExistingView && drawer.id && (useOpportunityActionRegistryHeader || (!opportunityRegistryHeaderReady && hasOpportunityChromeActions)) ? (
+        // Enrollment V1: never render legacy chrome actions (prevents flicker / incorrect actions).
+        // Expected behavior: no buttons until registry resolves, then correct buttons only.
+        isOpportunityExistingView && drawer.id && useOpportunityActionRegistryHeader ? (
             <div
                 className={`flex flex-wrap gap-2 items-center ${
                     drawerShellVariant === "adminV2"
@@ -4051,84 +4056,49 @@ export default function AdminEntityDrawer() {
                 }`}
                 data-opportunity-record-actions={drawerShellVariant === "adminV2" ? "true" : undefined}
             >
-                {useOpportunityActionRegistryHeader ? (
-                    <>
-                        {(resolvedHeader?.primary ?? []).map((a) => (
-                            <button
-                                key={a.key}
-                                type="button"
-                                disabled={!canMutate || !!opportunityActionLoading}
-                                onClick={() => void handleResolvedOpportunityHeaderAction(a)}
-                                className={
-                                    opportunityInquiryWorkflowDrawer
-                                        ? "px-4 py-2 text-[12px] font-semibold bg-alloy-blue text-white rounded-full shadow-sm hover:opacity-90 disabled:opacity-50"
-                                        : "px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
-                                }
-                            >
-                                {opportunityActionLoading === a.key ? "…" : a.label}
-                            </button>
-                        ))}
-                        {(resolvedHeader?.secondary ?? []).map((a) => (
-                            <button
-                                key={a.key}
-                                type="button"
-                                disabled={!canMutate || !!opportunityActionLoading}
-                                onClick={() => void handleResolvedOpportunityHeaderAction(a)}
-                                className={
-                                    opportunityInquiryWorkflowDrawer
-                                        ? "px-4 py-2 text-[12px] font-semibold border border-alloy-stone/40 bg-white rounded-full hover:bg-alloy-stone/10 disabled:opacity-50"
-                                        : "px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30 disabled:opacity-50"
-                                }
-                            >
-                                {opportunityActionLoading === a.key ? "…" : a.label}
-                            </button>
-                        ))}
-                        {(resolvedHeader?.overflow ?? []).map((a) => (
-                            <button
-                                key={a.key}
-                                type="button"
-                                disabled={!canMutate || !!opportunityActionLoading}
-                                onClick={() => void handleResolvedOpportunityHeaderAction(a)}
-                                className="px-3 py-1.5 text-sm border border-alloy-stone/50 rounded-md hover:bg-alloy-stone/20 disabled:opacity-50"
-                            >
-                                {opportunityActionLoading === a.key ? "…" : a.label}
-                            </button>
-                        ))}
-                    </>
-                ) : (
-                    <>
-                        {opportunityChromePrimary.map((a) => (
-                            <button
-                                key={a.id}
-                                type="button"
-                                disabled={!canMutate || !!opportunityActionLoading}
-                                onClick={() => void handleOpportunityRecordChromeAction(a.event_key)}
-                                className={
-                                    opportunityInquiryWorkflowDrawer
-                                        ? "px-4 py-2 text-[12px] font-semibold bg-alloy-blue text-white rounded-full shadow-sm hover:opacity-90 disabled:opacity-50"
-                                        : "px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
-                                }
-                            >
-                                {opportunityActionLoading === a.event_key ? "…" : a.label}
-                            </button>
-                        ))}
-                        {opportunityChromeSecondary.map((a) => (
-                            <button
-                                key={a.id}
-                                type="button"
-                                disabled={!canMutate || !!opportunityActionLoading}
-                                onClick={() => void handleOpportunityRecordChromeAction(a.event_key)}
-                                className={
-                                    opportunityInquiryWorkflowDrawer
-                                        ? "px-4 py-2 text-[12px] font-semibold border border-alloy-stone/40 bg-white rounded-full hover:bg-alloy-stone/10 disabled:opacity-50"
-                                        : "px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30 disabled:opacity-50"
-                                }
-                            >
-                                {opportunityActionLoading === a.event_key ? "…" : a.label}
-                            </button>
-                        ))}
-                    </>
-                )}
+                <>
+                    {(resolvedHeader?.primary ?? []).map((a) => (
+                        <button
+                            key={a.key}
+                            type="button"
+                            disabled={!canMutate || !!opportunityActionLoading}
+                            onClick={() => void handleResolvedOpportunityHeaderAction(a)}
+                            className={
+                                opportunityInquiryWorkflowDrawer
+                                    ? "px-4 py-2 text-[12px] font-semibold bg-alloy-blue text-white rounded-full shadow-sm hover:opacity-90 disabled:opacity-50"
+                                    : "px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
+                            }
+                        >
+                            {opportunityActionLoading === a.key ? "…" : a.label}
+                        </button>
+                    ))}
+                    {(resolvedHeader?.secondary ?? []).map((a) => (
+                        <button
+                            key={a.key}
+                            type="button"
+                            disabled={!canMutate || !!opportunityActionLoading}
+                            onClick={() => void handleResolvedOpportunityHeaderAction(a)}
+                            className={
+                                opportunityInquiryWorkflowDrawer
+                                    ? "px-4 py-2 text-[12px] font-semibold border border-alloy-stone/40 bg-white rounded-full hover:bg-alloy-stone/10 disabled:opacity-50"
+                                    : "px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30 disabled:opacity-50"
+                            }
+                        >
+                            {opportunityActionLoading === a.key ? "…" : a.label}
+                        </button>
+                    ))}
+                    {(resolvedHeader?.overflow ?? []).map((a) => (
+                        <button
+                            key={a.key}
+                            type="button"
+                            disabled={!canMutate || !!opportunityActionLoading}
+                            onClick={() => void handleResolvedOpportunityHeaderAction(a)}
+                            className="px-3 py-1.5 text-sm border border-alloy-stone/50 rounded-md hover:bg-alloy-stone/20 disabled:opacity-50"
+                        >
+                            {opportunityActionLoading === a.key ? "…" : a.label}
+                        </button>
+                    ))}
+                </>
             </div>
         ) : null;
 
@@ -8807,19 +8777,19 @@ export default function AdminEntityDrawer() {
                                                                                 <div className="flex items-center gap-1.5">
                                                                                     <button
                                                                                         type="button"
-                                                                                        className={tabBtn(panel === "notes")}
-                                                                                        onClick={() => setFormData((p) => ({ ...p, _enrollment_panel: "notes" }))}
-                                                                                    >
-                                                                                        Notes
-                                                                                    </button>
-                                                                                    <button
-                                                                                        type="button"
                                                                                         className={tabBtn(panel === "communication")}
                                                                                         onClick={() =>
                                                                                             setFormData((p) => ({ ...p, _enrollment_panel: "communication" }))
                                                                                         }
                                                                                     >
                                                                                         Communication
+                                                                                    </button>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        className={tabBtn(panel === "notes")}
+                                                                                        onClick={() => setFormData((p) => ({ ...p, _enrollment_panel: "notes" }))}
+                                                                                    >
+                                                                                        Notes
                                                                                     </button>
                                                                                 </div>
                                                                                 <div className={tinyLabel}>Notes / communication</div>

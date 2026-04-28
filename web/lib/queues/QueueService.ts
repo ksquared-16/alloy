@@ -980,7 +980,8 @@ export async function getWorkUnitQueueItems(params: {
 
     const itemsBase = supabase
         .from("opportunities")
-        .select("id, name, title, status_key, customer_id, primary_person_id, primary_contact_id, work_unit_id, metadata, created_at, updated_at")
+        // Keep this payload minimal for perceived performance; enrichment fills in display slots.
+        .select("id, name, status_key, customer_id, primary_person_id, primary_contact_id, metadata, created_at, updated_at")
         .eq("org_id", params.orgId)
         .eq("work_unit_id", params.workUnitId);
 
