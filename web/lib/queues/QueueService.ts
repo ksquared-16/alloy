@@ -19,6 +19,7 @@ type OpportunityRowPreview = {
     title?: string | null;
     status_key: string | null;
     customer_id: string | null;
+    primary_person_id?: string | null;
     primary_contact_id: string | null;
     work_unit_id: string | null;
     created_at: string;
@@ -222,9 +223,11 @@ function toIso(d: Date): string {
 
 type OpportunityNeedsAttentionRow = {
     updated_at?: string | null;
+    primary_person_id?: string | null;
     primary_contact_id?: string | null;
     customer_id?: string | null;
     status_key?: string | null;
+    metadata?: Record<string, unknown> | null;
 };
 
 /** Enrollment funnel stages: stale >2d should surface in needs_attention (replaces legacy qualified/scheduled/booked). */
@@ -253,8 +256,13 @@ function opportunityNeedsAttention(row: OpportunityNeedsAttentionRow, now: Date)
     // 1) stale: updated_at < now - 3 days
     if (updatedAt.getTime() < subtractDays(now, 3).getTime()) return true;
 
-    // 2) missing data: primary_contact_id IS NULL OR customer_id IS NULL
-    if (row.primary_contact_id == null || row.customer_id == null) return true;
+    // 2) missing data (enrollment demo is person-backed; legacy data may still use primary_contact_id)
+    const pkg = row.metadata && typeof row.metadata.demo_seed_package === "string" ? String(row.metadata.demo_seed_package) : "";
+    const isDemoV2 = pkg === "enrollment_pipeline_demo_v2";
+    const hasPerson = row.primary_person_id != null && String(row.primary_person_id).trim() !== "";
+    const hasLegacyContact = row.primary_contact_id != null && String(row.primary_contact_id).trim() !== "";
+    const missingContactLike = isDemoV2 ? !hasPerson : !(hasPerson || hasLegacyContact);
+    if (missingContactLike || row.customer_id == null) return true;
 
     // 3) value/readiness: active funnel status AND updated_at < now - 2 days
     const sk = (row.status_key ?? "").trim().toLowerCase();
@@ -268,7 +276,12 @@ function opportunityNeedsAttention(row: OpportunityNeedsAttentionRow, now: Date)
 function opportunityNeedsAttentionReasonLabel(row: OpportunityNeedsAttentionRow, now: Date): string | null {
     const updatedAt = row.updated_at ? new Date(row.updated_at) : null;
     if (!updatedAt || Number.isNaN(updatedAt.getTime())) return null;
-    if (row.primary_contact_id == null || row.customer_id == null) return "Missing contact/customer";
+    const pkg = row.metadata && typeof row.metadata.demo_seed_package === "string" ? String(row.metadata.demo_seed_package) : "";
+    const isDemoV2 = pkg === "enrollment_pipeline_demo_v2";
+    const hasPerson = row.primary_person_id != null && String(row.primary_person_id).trim() !== "";
+    const hasLegacyContact = row.primary_contact_id != null && String(row.primary_contact_id).trim() !== "";
+    const missingContactLike = isDemoV2 ? !hasPerson : !(hasPerson || hasLegacyContact);
+    if (missingContactLike || row.customer_id == null) return "Missing contact/customer";
     if (updatedAt.getTime() < subtractDays(now, 3).getTime()) return "Stale > 3 days";
     const sk = (row.status_key ?? "").trim().toLowerCase();
     if (OPPORTUNITY_HIGH_VALUE_STALE_STATUS_KEY_SET.has(sk) && updatedAt.getTime() < subtractDays(now, 2).getTime()) {
@@ -298,6 +311,10 @@ async function enrichOpportunityRows(params: {
             rows
                 .filter((r) => {
                     const pid = (r as unknown as { primary_person_id?: unknown }).primary_person_id;
+                    const md = (r as unknown as { metadata?: Record<string, unknown> | null }).metadata ?? null;
+                    const pkg = md && typeof md.demo_seed_package === "string" ? String(md.demo_seed_package) : "";
+                    // Enrollment demo v2 must never use contacts.
+                    if (pkg === "enrollment_pipeline_demo_v2") return false;
                     return !(typeof pid === "string" && pid.trim());
                 })
                 .map((r) => r.primary_contact_id)
@@ -385,6 +402,10 @@ async function enrichOpportunityRows(params: {
 
         if (joinChildNames.length > 0) {
             childDisplay = joinChildNames.join(" · ");
+            const programLabel = typeof md?.program_label === "string" ? md.program_label : null;
+            const ageGroup = typeof md?.age_group === "string" ? md.age_group.trim() : null;
+            programCombined =
+                [programLabel, ageGroup].filter((x): x is string => Boolean(x && x.trim())).join(" · ").trim() || programLabel;
             desiredStart = typeof md?.desired_start_date === "string" ? md.desired_start_date : null;
             tourDate = typeof md?.tour_date === "string" ? md.tour_date : null;
         } else if (inquiryChildren.length > 0) {
@@ -491,7 +512,7 @@ async function loadOpportunityNeedsAttentionRows(params: {
 }): Promise<OpportunityRowPreview[]> {
     let q = params.supabase
         .from("opportunities")
-        .select("id, name, title, status_key, customer_id, primary_contact_id, work_unit_id, metadata, created_at, updated_at")
+        .select("id, name, title, status_key, customer_id, primary_person_id, primary_contact_id, work_unit_id, metadata, created_at, updated_at")
         .eq("org_id", params.orgId)
         .eq("work_unit_id", params.workUnitId) as any;
     const plans = params.sort.length ? params.sort : [{ column: "updated_at", ascending: true }];
@@ -783,7 +804,7 @@ export async function getWorkUnitQueueSummaries(params: {
 
         const previewQ0 = supabase
             .from("opportunities")
-            .select("id, name, title, status_key, customer_id, primary_contact_id, work_unit_id, metadata, created_at, updated_at")
+            .select("id, name, title, status_key, customer_id, primary_person_id, primary_contact_id, work_unit_id, metadata, created_at, updated_at")
             .eq("org_id", params.orgId)
             .eq("work_unit_id", params.workUnitId);
         const previewQ1 = applySortToJobQuery(applyOpsToJobQuery(previewQ0 as never, ops) as never, sort);
@@ -910,7 +931,7 @@ export async function getWorkUnitQueueItems(params: {
 
     const itemsBase = supabase
         .from("opportunities")
-        .select("id, name, title, status_key, customer_id, primary_contact_id, work_unit_id, metadata, created_at, updated_at")
+        .select("id, name, title, status_key, customer_id, primary_person_id, primary_contact_id, work_unit_id, metadata, created_at, updated_at")
         .eq("org_id", params.orgId)
         .eq("work_unit_id", params.workUnitId);
 
