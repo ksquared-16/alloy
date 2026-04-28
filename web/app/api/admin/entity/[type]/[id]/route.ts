@@ -541,6 +541,45 @@ export async function GET(
                     })
                     .filter(Boolean) as typeof inquiryChildren;
             }
+            // Final fallback: demo/seed metadata uses simple child_name fields (queue shows these).
+            if (!inquiryChildrenOut.length && oppMeta && typeof oppMeta === "object") {
+                const md = oppMeta as Record<string, unknown>;
+                const demoChild =
+                    (typeof md.demo_child_name === "string" && md.demo_child_name.trim()
+                        ? md.demo_child_name.trim()
+                        : typeof md.child_name === "string" && md.child_name.trim()
+                          ? md.child_name.trim()
+                          : null) as string | null;
+                if (demoChild) {
+                    const sid = `metadata_child:${id}:demo`;
+                    inquiryChildrenOut = [
+                        {
+                            id: sid,
+                            customer_member_id: sid,
+                            person_id: null,
+                            display_name: demoChild,
+                            dob: typeof md.child_dob === "string" ? md.child_dob : null,
+                            age: typeof md.child_age === "string" ? md.child_age : null,
+                            desired_program_type: typeof md.program_type_key === "string" ? trimOrNull(md.program_type_key) : null,
+                            desired_program_label:
+                                typeof md.program_label === "string"
+                                    ? trimOrNull(md.program_label)
+                                    : typeof md.demo_requested_program === "string"
+                                      ? trimOrNull(md.demo_requested_program)
+                                      : null,
+                            desired_schedule_type: typeof md.schedule_type_key === "string" ? trimOrNull(md.schedule_type_key) : null,
+                            desired_schedule_label: typeof md.schedule_label === "string" ? trimOrNull(md.schedule_label) : null,
+                            outcome_status_key: null,
+                            outcome_status_label: null,
+                            fit_status: null,
+                            notes: typeof md.notes === "string" ? trimOrNull(md.notes) : null,
+                            metadata: { source: "opportunity_metadata_demo_child_name" },
+                            created_at: null,
+                            updated_at: null,
+                        } as (typeof inquiryChildren)[number],
+                    ];
+                }
+            }
             out._inquiry_children = inquiryChildrenOut;
 
             // Inquiry summary from configured field_definitions in the "quote" section when present.

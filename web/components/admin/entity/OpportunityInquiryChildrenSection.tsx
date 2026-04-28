@@ -97,12 +97,16 @@ export default function OpportunityInquiryChildrenSection({
     rows,
     canEdit,
     onOpenChild,
+    onAddChild,
+    onAddSibling,
     /** When true, outer EntityDrawerSection already provides premium card chrome — avoid nested heavy cards. */
     embeddedInPremiumSection = false,
 }: {
     rows: InquiryChildRow[];
     canEdit: boolean;
     onOpenChild?: (row: Pick<InquiryChildRow, "person_id" | "customer_member_id" | "display_name">) => void;
+    onAddChild?: () => void;
+    onAddSibling?: () => void;
     embeddedInPremiumSection?: boolean;
 }) {
     const rootCol = embeddedInPremiumSection ? "min-w-0 w-full" : "md:col-span-2";
@@ -196,8 +200,20 @@ export default function OpportunityInquiryChildrenSection({
 
     if (!rows.length) {
         return (
-            <div className={`${rootCol} ${emptyBox}`}>
-                No children added to this inquiry yet.
+            <div className={`${rootCol} space-y-2`}>
+                <div className={emptyBox}>No children added to this inquiry yet.</div>
+                {onAddChild ? (
+                    <div>
+                        <button
+                            type="button"
+                            className="rounded-md bg-alloy-midnight px-3 py-1.5 text-sm font-semibold text-white hover:bg-alloy-midnight/90"
+                            onClick={onAddChild}
+                            disabled={!canEdit}
+                        >
+                            Add child
+                        </button>
+                    </div>
+                ) : null}
             </div>
         );
     }
@@ -211,6 +227,18 @@ export default function OpportunityInquiryChildrenSection({
 
     return (
         <div className={rootCol}>
+            {onAddSibling ? (
+                <div className="mb-2 flex items-center justify-end">
+                    <button
+                        type="button"
+                        className="rounded-md border border-alloy-stone/25 bg-white px-3 py-1.5 text-sm font-semibold text-alloy-midnight/90 hover:bg-alloy-stone/5"
+                        onClick={onAddSibling}
+                        disabled={!canEdit}
+                    >
+                        Add sibling
+                    </button>
+                </div>
+            ) : null}
             <div className={tableWrap}>
                 <table className="w-full min-w-[760px] text-left text-sm">
                     <thead className={theadRow}>
