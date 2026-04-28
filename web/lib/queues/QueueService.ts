@@ -221,6 +221,24 @@ function toIso(d: Date): string {
     return d.toISOString();
 }
 
+function ageLabelFromDob(dobIso: string): string | null {
+    const ms = Date.parse(dobIso);
+    if (!Number.isFinite(ms)) return null;
+    const now = new Date();
+    const dob = new Date(ms);
+    if (Number.isNaN(dob.getTime()) || dob > now) return null;
+    let years = now.getFullYear() - dob.getFullYear();
+    let months = now.getMonth() - dob.getMonth();
+    if (now.getDate() < dob.getDate()) months -= 1;
+    if (months < 0) {
+        years -= 1;
+        months += 12;
+    }
+    if (years < 0) return null;
+    if (years === 0) return `${Math.max(0, months)}mo`;
+    return months > 0 ? `${years}y ${months}mo` : `${years}y`;
+}
+
 type OpportunityNeedsAttentionRow = {
     updated_at?: string | null;
     primary_person_id?: string | null;
@@ -344,7 +362,7 @@ async function enrichOpportunityRows(params: {
         opportunityIds.length
             ? supabase
                   .from("opportunity_customer_members")
-                  .select("opportunity_id, customer_members(display_name)")
+                  .select("opportunity_id, customer_members(display_name, dob)")
                   .eq("org_id", orgId)
                   .in("opportunity_id", opportunityIds as any)
             : Promise.resolve({ data: [] as any[], error: null as any }),
@@ -366,8 +384,11 @@ async function enrichOpportunityRows(params: {
         const cm = (row as any).customer_members;
         const disp = cm && typeof cm === "object" ? String((cm as any).display_name ?? "").trim() : "";
         if (!disp) continue;
+        const dob = cm && typeof cm === "object" ? String((cm as any).dob ?? "").trim() : "";
+        const age = dob ? ageLabelFromDob(dob) : null;
+        const label = age ? `${disp} (${age})` : disp;
         const list = childNamesByOppId.get(oppId) ?? [];
-        list.push(disp);
+        list.push(label);
         childNamesByOppId.set(oppId, list);
     }
 

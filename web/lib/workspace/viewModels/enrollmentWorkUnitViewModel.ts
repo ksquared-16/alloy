@@ -128,7 +128,10 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow): CrmCompactRowSe
     const stageLabel = row._lifecycle_stage_title?.trim() || null;
     const statusLabel = (row._status_display ?? "").trim() || (row.status_key ?? "").trim() || null;
 
-    const nextStep = row._lifecycle_next_step?.title?.trim() || null;
+    const nextStep =
+        (row as { _next_step_preview?: string | null })._next_step_preview?.trim() ||
+        row._lifecycle_next_step?.title?.trim() ||
+        null;
     const lastTouchedMs =
         parseIsoMs((row as { updated_at?: string | null }).updated_at) ??
         parseIsoMs((row as { created_at?: string | null }).created_at);

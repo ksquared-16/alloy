@@ -39,6 +39,30 @@ type SeedSpec = {
     children: Array<{ first: string; last: string }>;
 };
 
+const DEMO_PROGRAMS: Array<{ program_label: string; age_group: string }> = [
+    { program_label: "Toddler (2–3)", age_group: "Ages 24–36 mo" },
+    { program_label: "Preschool (3–4)", age_group: "Ages 36–48 mo" },
+    { program_label: "Pre-K (4–5)", age_group: "Ages 48–60 mo" },
+    { program_label: "Infant (6–12 mo)", age_group: "Ages 6–12 mo" },
+    { program_label: "Young Toddler (12–24 mo)", age_group: "Ages 12–24 mo" },
+];
+
+function isoDateOnly(d: Date): string {
+    return d.toISOString().slice(0, 10);
+}
+
+function stableChildDob(seedKey: string, idx: number): string {
+    // Deterministic DOB: 2–4 years old range.
+    const base = Math.abs(`${seedKey}:${idx}`.split("").reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) | 0, 0));
+    const yearsAgo = 2 + (base % 3); // 2..4
+    const monthsAgo = base % 12;
+    const d = new Date();
+    d.setFullYear(d.getFullYear() - yearsAgo);
+    d.setMonth(Math.max(0, d.getMonth() - monthsAgo));
+    d.setDate(1 + (base % 27));
+    return isoDateOnly(d);
+}
+
 function isoDate(d: Date): string {
     return d.toISOString();
 }
@@ -103,6 +127,7 @@ async function ensurePerson(
             last_name: last,
             email: role === "guardian" ? seedEmail(orgId, seedKey) : null,
             phone: role === "guardian" ? seedPhone(orgId, seedKey) : null,
+            ...(role.startsWith("child:") ? { date_of_birth: stableChildDob(seedKey, Number(role.split(":")[1] ?? 0) || 0) } : {}),
             metadata: { seed_key: k, demo_seed_package: "enrollment_pipeline_demo_v2" },
         })
         .select("id")
@@ -153,6 +178,7 @@ async function ensureCustomerMemberChild(
             relationship: "child",
             first_name: child.first,
             last_name: child.last,
+            dob: stableChildDob(seedKey, idx),
             person_id: childPersonId,
             metadata: { seed_key: memberSeedKey, demo_seed_package: "enrollment_pipeline_demo_v2" },
         } as any)
@@ -170,7 +196,8 @@ async function ensureOpportunity(
     familyLast: string,
     statusKey: string,
     guardianPersonId: string,
-    customerId: string
+    customerId: string,
+    note: string
 ): Promise<string> {
     const { data: existing } = await supabase
         .from("opportunities")
@@ -179,6 +206,16 @@ async function ensureOpportunity(
         .eq("metadata->>seed_key", seedKey)
         .maybeSingle();
     if ((existing as any)?.id) return (existing as any).id;
+
+    const now = new Date();
+    const prog = DEMO_PROGRAMS[Math.abs(seedKey.split("").reduce((acc, ch) => (acc * 31 + ch.charCodeAt(0)) | 0, 0)) % DEMO_PROGRAMS.length]!;
+    const desiredStart = isoDateOnly(new Date(now.getTime() + (18 + (now.getDate() % 10)) * 86400000));
+    const tourEligible =
+        statusKey === "tour_scheduled" ||
+        statusKey === "tour_completed" ||
+        statusKey === "application_in_progress" ||
+        statusKey === "ready_to_enroll";
+    const tourDate = tourEligible ? isoDateOnly(new Date(now.getTime() + (2 + (now.getDate() % 6)) * 86400000)) : null;
 
     const { data: created, error } = await supabase
         .from("opportunities")
@@ -190,9 +227,26 @@ async function ensureOpportunity(
             customer_id: customerId,
             primary_person_id: guardianPersonId,
             primary_contact_id: null,
-            metadata: { seed_key: seedKey, demo_seed_package: "enrollment_pipeline_demo_v2" },
-            created_at: isoDate(new Date()),
-            updated_at: isoDate(new Date()),
+            metadata: {
+                seed_key: seedKey,
+                demo_seed_package: "enrollment_pipeline_demo_v2",
+                // Operational display fields (keep in metadata for now; identity is person-backed).
+                program_label: prog.program_label,
+                age_group: prog.age_group,
+                desired_start_date: desiredStart,
+                tour_date: tourDate,
+                notes: note,
+                next_step:
+                    statusKey === "new_inquiry"
+                        ? "Call to confirm age and preferred start window."
+                        : statusKey === "contacted"
+                          ? "Propose two tour times."
+                          : statusKey === "tour_scheduled"
+                            ? "Send tour reminder 24h ahead."
+                            : "Move to the next clear step.",
+            },
+            created_at: isoDate(now),
+            updated_at: isoDate(now),
         } as any)
         .select("id")
         .single();
@@ -371,7 +425,8 @@ async function main() {
             spec.family_last,
             spec.status_key,
             guardianId,
-            customerId
+            customerId,
+            spec.note
         );
         seededOpportunities++;
         for (let i = 0; i < spec.children.length; i++) {

@@ -160,7 +160,8 @@ function EnrollmentCrmCompactPreview({ slots }: { slots: CrmCompactRowSemanticSl
       ) : null}
       {slots.childName ? (
         <div className="adminv2-ws-enrollment-crm-preview__child" data-enrollment-crm-slot="childName">
-          <span className="adminv2-ws-enrollment-crm-preview__k">Children</span> {slots.childName}
+          <span className="adminv2-ws-enrollment-crm-preview__k">{slots.childName.includes(" · ") ? "Children" : "Child"}</span>{" "}
+          {slots.childName}
         </div>
       ) : null}
       {slots.programContext ? (
