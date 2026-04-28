@@ -1878,11 +1878,6 @@ export default function AdminEntityDrawer() {
     const handleResolvedOpportunityHeaderAction = useCallback(
         async (a: ResolvedActionForClient) => {
             if (!drawer.id || drawer.id === "new" || drawer.type !== "opportunities") return;
-            // Enrollment demo: schedule_tour must always open its action form first.
-            if (a.key === "schedule_tour") {
-                setActionFormState({ form_key: "schedule_tour", action: a });
-                return;
-            }
             if (a.action_type === "open_form") {
                 const formKey = a.payload?.form_key != null ? String(a.payload.form_key).trim() : "";
                 if (formKey) setActionFormState({ form_key: formKey, action: a });
@@ -1955,7 +1950,10 @@ export default function AdminEntityDrawer() {
                 } else {
                     refetch();
                 }
-                router.refresh();
+                // Avoid `router.refresh()` here: it remounts client providers and closes the drawer.
+                window.dispatchEvent(
+                    new CustomEvent("adminv2:opportunity-updated", { detail: { id: drawer.id, action_key: a.key } })
+                );
             } catch (e) {
                 setSaveError(e instanceof Error ? e.message : "Action failed");
             } finally {
@@ -1995,6 +1993,33 @@ export default function AdminEntityDrawer() {
             cancelled = true;
         };
     }, [drawer.type, drawer.id]);
+
+    // Keep drawer state, but refresh record + header actions when actions mutate the opportunity.
+    useEffect(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+        const onUpdated = (ev: Event) => {
+            const ce = ev as CustomEvent<{ id?: string; action_key?: string }>;
+            const id = typeof ce.detail?.id === "string" ? ce.detail.id : "";
+            if (!id || id !== drawer.id) return;
+            console.info("[drawer] opportunity updated", { id, action_key: ce.detail?.action_key ?? null });
+            refetch();
+            // Also refetch resolved header actions so conditional actions swap (schedule ↔ reschedule).
+            setOpportunityResolvedHeaderLoading(true);
+            const qs = new URLSearchParams({
+                surface: "record_header",
+                entity_type: "opportunity",
+                entity_id: drawer.id,
+            });
+            const actionsUrl = `/api/admin/actions?${qs.toString()}`;
+            dedupeAdminFetch(actionsUrl, workspaceDataFetchInit())
+                .then((r) => r.json())
+                .then((j: { actions?: ResolvedActionsBySlot }) => setOpportunityResolvedHeaderActions(j.actions ?? null))
+                .catch(() => setOpportunityResolvedHeaderActions(null))
+                .finally(() => setOpportunityResolvedHeaderLoading(false));
+        };
+        window.addEventListener("adminv2:opportunity-updated", onUpdated as EventListener);
+        return () => window.removeEventListener("adminv2:opportunity-updated", onUpdated as EventListener);
+    }, [drawer.type, drawer.id, refetch]);
 
     // If a caller opened the drawer with a surface hint, respect it once.
     useEffect(() => {
@@ -8584,7 +8609,7 @@ export default function AdminEntityDrawer() {
                                         <section
                                             className={
                                                 opportunityInquiryWorkflowDrawer
-                                                    ? "mb-5"
+                                                    ? "mb-3"
                                                     : "rounded-xl border border-admin-border bg-white/80 px-2.5 py-2 mb-2 shadow-sm"
                                             }
                                             data-opportunity-record-snapshot="true"
@@ -8672,7 +8697,7 @@ export default function AdminEntityDrawer() {
                                                                     </span>
                                                                 ) : null}
                                                             </div>
-                                                            <div className="mt-2.5 grid grid-cols-1 gap-2.5 lg:grid-cols-2 lg:items-start lg:gap-3">
+                                                            <div className="mt-2 grid grid-cols-1 gap-2 lg:grid-cols-2 lg:items-start lg:gap-3">
                                                                 <div className={innerCard}>
                                                                     <div className={tinyLabel}>Family & contact</div>
                                                                     {household ? (
@@ -8720,40 +8745,6 @@ export default function AdminEntityDrawer() {
                                                                             </span>
                                                                         ) : (
                                                                             <span className="text-alloy-midnight/45">Email —</span>
-                                                                        )}
-                                                                    </div>
-                                                                    <div className="mt-2 flex flex-wrap gap-1.5">
-                                                                        <button
-                                                                            type="button"
-                                                                            disabled
-                                                                            className="rounded-md border border-alloy-stone/25 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/40"
-                                                                            title="Coming soon"
-                                                                        >
-                                                                            Message
-                                                                        </button>
-                                                                        {commPhone ? (
-                                                                            <a
-                                                                                href={`tel:${commPhone}`}
-                                                                                className="rounded-md border border-alloy-stone/25 bg-white px-2 py-1 text-[11px] font-semibold text-alloy-midnight/75 hover:border-alloy-blue/35 hover:text-alloy-blue"
-                                                                            >
-                                                                                Call
-                                                                            </a>
-                                                                        ) : (
-                                                                            <span className="rounded-md border border-alloy-stone/15 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/35">
-                                                                                Call
-                                                                            </span>
-                                                                        )}
-                                                                        {commEmail ? (
-                                                                            <a
-                                                                                href={`mailto:${commEmail}`}
-                                                                                className="rounded-md border border-alloy-stone/25 bg-white px-2 py-1 text-[11px] font-semibold text-alloy-midnight/75 hover:border-alloy-blue/35 hover:text-alloy-blue"
-                                                                            >
-                                                                                Email
-                                                                            </a>
-                                                                        ) : (
-                                                                            <span className="rounded-md border border-alloy-stone/15 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/35">
-                                                                                Email
-                                                                            </span>
                                                                         )}
                                                                     </div>
                                                                 </div>
@@ -8812,8 +8803,7 @@ export default function AdminEntityDrawer() {
                                                                         }`;
                                                                     return (
                                                                         <div className="space-y-2">
-                                                                            <div className="flex items-center justify-between">
-                                                                                <div className={tinyLabel}>Notes / communication</div>
+                                                                            <div className="flex items-center justify-between gap-2">
                                                                                 <div className="flex items-center gap-1.5">
                                                                                     <button
                                                                                         type="button"
@@ -8832,6 +8822,7 @@ export default function AdminEntityDrawer() {
                                                                                         Communication
                                                                                     </button>
                                                                                 </div>
+                                                                                <div className={tinyLabel}>Notes / communication</div>
                                                                             </div>
 
                                                                             {panel === "notes" ? (
@@ -10952,9 +10943,18 @@ export default function AdminEntityDrawer() {
             <ScheduleTourActionFormModal
                 open={actionFormState?.form_key === "schedule_tour"}
                 onClose={() => setActionFormState(null)}
+                title={actionFormState?.action?.label ?? "Schedule tour"}
+                submitLabel={actionFormState?.action?.label ?? "Save"}
+                initialTourDate={(() => {
+                    const md = data && typeof data === "object" ? ((data as any).metadata ?? null) : null;
+                    const d = md && typeof md.tour_date === "string" ? md.tour_date.trim() : "";
+                    return d || null;
+                })()}
+                initialTourTime={null}
                 onSubmit={async (payload) => {
                     if (!drawer.id || drawer.id === "new" || drawer.type !== "opportunities") return;
-                    setOpportunityActionLoading("schedule_tour");
+                    const actionKey = actionFormState?.action?.key ? String(actionFormState.action.key) : "schedule_tour";
+                    setOpportunityActionLoading(actionKey);
                     setSaveError(null);
                     try {
                         const res = await fetch("/api/admin/actions/execute", {
@@ -10962,10 +10962,10 @@ export default function AdminEntityDrawer() {
                             credentials: "include",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({
-                                action_key: "schedule_tour",
+                                action_key: actionKey,
                                 entity_type: "opportunity",
                                 entity_id: drawer.id,
-                                context: { surface: "record_section", section_key: "opportunity_lifecycle" },
+                                context: { surface: "record_header" },
                                 payload,
                             }),
                         });
@@ -10993,10 +10993,12 @@ export default function AdminEntityDrawer() {
                         const row = er?.row;
                         if (row && typeof row === "object") {
                             setData((prev) => (prev && typeof prev === "object" ? { ...prev, ...row } : prev));
-                        } else {
-                            refetch();
                         }
-                        router.refresh();
+                        setActionFormState(null);
+                        refetch();
+                        window.dispatchEvent(
+                            new CustomEvent("adminv2:opportunity-updated", { detail: { id: drawer.id, action_key: actionKey } })
+                        );
                     } finally {
                         setOpportunityActionLoading(null);
                     }

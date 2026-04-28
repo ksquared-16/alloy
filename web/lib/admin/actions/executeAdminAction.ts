@@ -220,6 +220,33 @@ export async function executeAdminAction(
             const tourTime = merged.tour_time != null ? String(merged.tour_time).trim() : "";
             const tourAtLocal = tourDate && tourTime ? `${tourDate}T${tourTime}:00` : null;
 
+            // Enrollment v1: persist tour inputs onto the opportunity metadata for display/conditions.
+            // Canonical scheduling entities will come later; for now keep it in metadata.
+            if (table === "opportunities" && formKey === "schedule_tour" && (tourDate || tourTime)) {
+                const { data: cur, error: curErr } = await supabase
+                    .from("opportunities")
+                    .select("metadata")
+                    .eq("id", entityId)
+                    .eq("org_id", ctx.orgId)
+                    .maybeSingle();
+                if (!curErr && cur) {
+                    const md = ((cur as { metadata?: Record<string, unknown> | null }).metadata ?? null) as Record<string, unknown> | null;
+                    const nextMd: Record<string, unknown> = { ...(md && typeof md === "object" ? md : {}) };
+                    if (tourDate) nextMd.tour_date = tourDate;
+                    if (tourTime) nextMd.tour_time = tourTime;
+                    const { data: mdUpdated } = await supabase
+                        .from("opportunities")
+                        .update({ metadata: nextMd })
+                        .eq("id", entityId)
+                        .eq("org_id", ctx.orgId)
+                        .select()
+                        .single();
+                    if (mdUpdated && typeof mdUpdated === "object") {
+                        updatedRow = mdUpdated as Record<string, unknown>;
+                    }
+                }
+            }
+
             const eventPayload: Record<string, unknown> = {
                 ...(merged.event_payload && typeof merged.event_payload === "object" ? (merged.event_payload as object) : {}),
                 event_type: wf.event_type,

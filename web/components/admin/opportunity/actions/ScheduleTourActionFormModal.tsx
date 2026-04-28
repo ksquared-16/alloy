@@ -2,18 +2,41 @@ import React, { useMemo, useState } from "react";
 
 export type ScheduleTourActionFormModalProps = {
     open: boolean;
+    title?: string;
+    subtitle?: string;
+    submitLabel?: string;
+    initialTourDate?: string | null;
+    initialTourTime?: string | null;
     onClose: () => void;
     onSubmit: (payload: { tour_date: string; tour_time: string }) => Promise<void> | void;
 };
 
 export function ScheduleTourActionFormModal(props: ScheduleTourActionFormModalProps) {
-    const { open, onClose, onSubmit } = props;
-    const [tourDate, setTourDate] = useState("");
-    const [tourTime, setTourTime] = useState("");
+    const {
+        open,
+        onClose,
+        onSubmit,
+        title = "Schedule tour",
+        subtitle = "Enter the tour date and time to start the follow-up workflow.",
+        submitLabel = "Schedule tour",
+        initialTourDate = null,
+        initialTourTime = null,
+    } = props;
+    const [tourDate, setTourDate] = useState(initialTourDate ?? "");
+    const [tourTime, setTourTime] = useState(initialTourTime ?? "");
     const [submitting, setSubmitting] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     const canSubmit = useMemo(() => Boolean(tourDate && tourTime && !submitting), [tourDate, tourTime, submitting]);
+
+    // When reopening, re-hydrate from initial values (supports reschedule prefill).
+    React.useEffect(() => {
+        if (!open) return;
+        setTourDate(initialTourDate ?? "");
+        setTourTime(initialTourTime ?? "");
+        setError(null);
+        setSubmitting(false);
+    }, [open, initialTourDate, initialTourTime]);
 
     if (!open) return null;
 
@@ -24,8 +47,8 @@ export function ScheduleTourActionFormModal(props: ScheduleTourActionFormModalPr
                 onClick={(e) => e.stopPropagation()}
             >
                 <div className="border-b border-alloy-stone/15 px-5 py-4">
-                    <div className="text-base font-semibold text-alloy-midnight">Schedule tour</div>
-                    <div className="mt-0.5 text-sm text-alloy-midnight/65">Enter the tour date and time to start the follow-up workflow.</div>
+                    <div className="text-base font-semibold text-alloy-midnight">{title}</div>
+                    <div className="mt-0.5 text-sm text-alloy-midnight/65">{subtitle}</div>
                 </div>
 
                 <div className="space-y-4 px-5 py-4">
@@ -81,7 +104,7 @@ export function ScheduleTourActionFormModal(props: ScheduleTourActionFormModalPr
                                 }
                             }}
                         >
-                            {submitting ? "Scheduling…" : "Schedule tour"}
+                            {submitting ? "Saving…" : submitLabel}
                         </button>
                     </div>
                 </div>

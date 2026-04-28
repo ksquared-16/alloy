@@ -127,7 +127,10 @@ async function ensurePerson(
             last_name: last,
             email: role === "guardian" ? seedEmail(orgId, seedKey) : null,
             phone: role === "guardian" ? seedPhone(orgId, seedKey) : null,
-            ...(role.startsWith("child:") ? { date_of_birth: stableChildDob(seedKey, Number(role.split(":")[1] ?? 0) || 0) } : {}),
+            // Canonical child identity DOB lives on `persons.date_of_birth`.
+            ...(role.startsWith("child:")
+                ? { date_of_birth: stableChildDob(seedKey, Number(role.split(":")[1] ?? 0) || 0) }
+                : {}),
             metadata: { seed_key: k, demo_seed_package: "enrollment_pipeline_demo_v2" },
         })
         .select("id")
@@ -178,6 +181,7 @@ async function ensureCustomerMemberChild(
             relationship: "child",
             first_name: child.first,
             last_name: child.last,
+            // Compatibility fallback only; canonical DOB is `persons.date_of_birth`.
             dob: stableChildDob(seedKey, idx),
             person_id: childPersonId,
             metadata: { seed_key: memberSeedKey, demo_seed_package: "enrollment_pipeline_demo_v2" },

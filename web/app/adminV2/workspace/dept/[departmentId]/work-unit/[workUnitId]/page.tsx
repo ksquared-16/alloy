@@ -499,6 +499,26 @@ export default function AdminV2OpportunityWorkUnitPage() {
         []
     );
 
+    const invalidate = useCallback(
+        (opts?: { entity_type?: string; entity_id?: string; action_key?: string }) => {
+            void opts;
+            if (!workUnitId || !selectedQueueKey) return;
+            void fetchQueueItems(workUnitId, selectedQueueKey);
+        },
+        [fetchQueueItems, selectedQueueKey, workUnitId]
+    );
+
+    useEffect(() => {
+        if (!workUnitId || !selectedQueueKey) return;
+        const onUpdated = (ev: Event) => {
+            const ce = ev as CustomEvent<{ id?: string }>;
+            console.info("[adminV2] opportunity updated", { id: ce.detail?.id ?? null, selectedQueueKey });
+            void fetchQueueItems(workUnitId, selectedQueueKey);
+        };
+        window.addEventListener("adminv2:opportunity-updated", onUpdated as EventListener);
+        return () => window.removeEventListener("adminv2:opportunity-updated", onUpdated as EventListener);
+    }, [fetchQueueItems, selectedQueueKey, workUnitId]);
+
     useEffect(() => {
         if (!workUnitId || !selectedQueueKey) return;
         if (!queueSummaries || queueSummaries.length === 0) return;
@@ -864,6 +884,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         // Action forms are currently owned by the opportunity drawer (v1 scope).
                         // Right-rail actions in the enrollment work unit do not use forms yet.
                     },
+                    invalidate,
                     departmentId,
                     workUnitId: workUnit?.id ?? null,
                     context: {
@@ -925,14 +946,14 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     } else {
                         openDrawer({ type: "opportunities", id: action.itemId });
                     }
-                    router.refresh();
+                    invalidate({ entity_type: "opportunity", entity_id: action.itemId, action_key: action.actionId });
                     return;
                 }
                 if (er?.kind === "navigate" && er.href) {
                     router.push(er.href);
                     return;
                 }
-                router.refresh();
+                invalidate({ entity_type: "opportunity", entity_id: action.itemId, action_key: action.actionId });
                 return;
             }
             if (action.type === "queue.item.action" && action.actionId === "open_record") {

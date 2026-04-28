@@ -362,7 +362,7 @@ async function enrichOpportunityRows(params: {
         opportunityIds.length
             ? supabase
                   .from("opportunity_customer_members")
-                  .select("opportunity_id, customer_members(display_name, dob)")
+                  .select("opportunity_id, customer_members(display_name, dob, person_id)")
                   .eq("org_id", orgId)
                   .in("opportunity_id", opportunityIds as any)
             : Promise.resolve({ data: [] as any[], error: null as any }),
@@ -377,6 +377,31 @@ async function enrichOpportunityRows(params: {
     for (const c of (contactsRes as any).data ?? []) contactById.set(String(c.id), c);
     const customerById = new Map<string, any>();
     for (const c of (customersRes as any).data ?? []) customerById.set(String(c.id), c);
+
+    // Child identity is canonical in `persons`. Prefer `persons.date_of_birth` and only
+    // fall back to legacy/display `customer_members.dob` when needed.
+    const childPersonIds: string[] = [];
+    for (const row of (ocmsRes as any).data ?? []) {
+        const cm = (row as any).customer_members;
+        const pid = cm && typeof cm === "object" ? String((cm as any).person_id ?? "").trim() : "";
+        if (pid) childPersonIds.push(pid);
+    }
+    const uniqChildPersonIds = [...new Set(childPersonIds)];
+    const { data: childPersons } =
+        uniqChildPersonIds.length > 0
+            ? await supabase
+                  .from("persons")
+                  .select("id, date_of_birth")
+                  .eq("org_id", orgId)
+                  .in("id", uniqChildPersonIds as any)
+            : { data: [] as any[] };
+    const childDobByPersonId = new Map<string, string>();
+    for (const p of (childPersons ?? []) as any[]) {
+        const id = String(p.id ?? "").trim();
+        const dob = String(p.date_of_birth ?? "").trim();
+        if (id && dob) childDobByPersonId.set(id, dob);
+    }
+
     const childNamesByOppId = new Map<string, string[]>();
     for (const row of (ocmsRes as any).data ?? []) {
         const oppId = String((row as any).opportunity_id ?? "");
@@ -384,7 +409,10 @@ async function enrichOpportunityRows(params: {
         const cm = (row as any).customer_members;
         const disp = cm && typeof cm === "object" ? String((cm as any).display_name ?? "").trim() : "";
         if (!disp) continue;
-        const dob = cm && typeof cm === "object" ? String((cm as any).dob ?? "").trim() : "";
+        const memberDob = cm && typeof cm === "object" ? String((cm as any).dob ?? "").trim() : "";
+        const pid = cm && typeof cm === "object" ? String((cm as any).person_id ?? "").trim() : "";
+        const canonicalDob = pid ? (childDobByPersonId.get(pid) ?? "") : "";
+        const dob = canonicalDob || memberDob;
         const age = dob ? ageLabelFromDob(dob) : null;
         const label = age ? `${disp} (${age})` : disp;
         const list = childNamesByOppId.get(oppId) ?? [];

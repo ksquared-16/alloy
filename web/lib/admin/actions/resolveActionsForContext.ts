@@ -66,7 +66,8 @@ function passesPlacementScope(
 function passesConditionConfig(
     defCfg: Record<string, unknown> | null | undefined,
     placementCfg: Record<string, unknown> | null | undefined,
-    statusKey: string | null
+    statusKey: string | null,
+    metadata: Record<string, unknown> | null
 ): boolean {
     const cfg = { ...(defCfg ?? {}), ...(placementCfg ?? {}) };
     const eq = cfg.status_key_equals;
@@ -77,22 +78,40 @@ function passesConditionConfig(
     if (ne != null && String(ne).trim() !== "") {
         if ((statusKey ?? "").trim() === String(ne).trim()) return false;
     }
+
+    // v1 minimal metadata existence checks (used for Enrollment tour schedule/reschedule).
+    const exists = cfg.metadata_field_exists;
+    if (exists != null && String(exists).trim() !== "") {
+        const key = String(exists).trim();
+        const v = metadata ? metadata[key] : undefined;
+        if (v == null) return false;
+        if (typeof v === "string" && v.trim() === "") return false;
+    }
+    const missing = cfg.metadata_field_missing;
+    if (missing != null && String(missing).trim() !== "") {
+        const key = String(missing).trim();
+        const v = metadata ? metadata[key] : undefined;
+        if (v != null && !(typeof v === "string" && v.trim() === "")) return false;
+    }
     return true;
 }
 
-async function fetchOpportunityStatusKey(
+async function fetchOpportunityConditionContext(
     supabase: SupabaseClient,
     orgId: string,
     opportunityId: string
-): Promise<string | null> {
+): Promise<{ statusKey: string | null; metadata: Record<string, unknown> | null }> {
     const { data, error } = await supabase
         .from("opportunities")
-        .select("status_key")
+        .select("status_key, metadata")
         .eq("id", opportunityId)
         .eq("org_id", orgId)
         .maybeSingle();
-    if (error || !data) return null;
-    return (data as { status_key?: string | null }).status_key ?? null;
+    if (error || !data) return { statusKey: null, metadata: null };
+    const statusKey = (data as { status_key?: string | null }).status_key ?? null;
+    const metadataRaw = (data as { metadata?: Record<string, unknown> | null }).metadata ?? null;
+    const metadata = metadataRaw && typeof metadataRaw === "object" ? metadataRaw : null;
+    return { statusKey, metadata };
 }
 
 /**
@@ -109,8 +128,11 @@ export async function resolveActionsForContext(
         return out;
     }
     let statusKey: string | null = null;
+    let oppMetadata: Record<string, unknown> | null = null;
     if (et === "opportunity" && query.entityId?.trim()) {
-        statusKey = await fetchOpportunityStatusKey(supabase, query.orgId, query.entityId.trim());
+        const ctx = await fetchOpportunityConditionContext(supabase, query.orgId, query.entityId.trim());
+        statusKey = ctx.statusKey;
+        oppMetadata = ctx.metadata;
     }
 
     const { data: rows, error } = await supabase
@@ -159,7 +181,7 @@ export async function resolveActionsForContext(
             const psk = row.section_key != null ? String(row.section_key).trim() : "";
             if (!psk || psk !== recordSectionKey) continue;
         }
-        if (!passesConditionConfig(d.condition_config, row.condition_config, statusKey)) continue;
+        if (!passesConditionConfig(d.condition_config, row.condition_config, statusKey, oppMetadata)) continue;
 
         const payload = (d.payload_schema && typeof d.payload_schema === "object" ? d.payload_schema : {}) as Record<string, unknown>;
         resolved.push({
@@ -174,17 +196,29 @@ export async function resolveActionsForContext(
             workflow_id: d.workflow_id,
             _order: row.order_index,
             _slot: row.slot,
+            _scope_rank: d.org_id != null ? 2 : row.org_id != null ? 1 : 0,
         } as ResolvedActionForClient & { _order: number; _slot: string });
     }
 
-    const withMeta = resolved as (ResolvedActionForClient & { _order: number; _slot: string })[];
+    const withMeta = resolved as (ResolvedActionForClient & { _order: number; _slot: string; _scope_rank: number })[];
     withMeta.sort((a, b) => (a._order !== b._order ? a._order - b._order : a.label.localeCompare(b.label)));
 
+    // De-dupe by slot+key, preferring org-scoped definitions over global templates.
+    const chosenBySlotKey = new Map<string, (typeof withMeta)[number]>();
     for (const a of withMeta) {
+        const k = `${a._slot}::${a.key}`;
+        const prev = chosenBySlotKey.get(k);
+        if (!prev || a._scope_rank > prev._scope_rank) chosenBySlotKey.set(k, a);
+    }
+
+    for (const a of withMeta) {
+        const k = `${a._slot}::${a.key}`;
+        if (chosenBySlotKey.get(k) !== a) continue;
         const slot = a._slot as keyof ResolvedActionsBySlot;
-        const { _order: _o, _slot: _s, ...rest } = a;
+        const { _order: _o, _slot: _s, _scope_rank: _sr, ...rest } = a;
         void _o;
         void _s;
+        void _sr;
         if (out[slot]) {
             out[slot].push(rest);
         } else {

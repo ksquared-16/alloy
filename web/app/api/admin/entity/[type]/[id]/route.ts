@@ -465,7 +465,9 @@ export async function GET(
                     const m = memberMap.get(r.customer_member_id) ?? null;
                     const pid = trimOrNull(m?.person_id);
                     const p = pid ? (pmap.get(pid) ?? null) : null;
-                    const dob = m?.dob ? String(m.dob) : p?.date_of_birth ? String(p.date_of_birth) : null;
+                    // Child identity is canonical in `persons`. Prefer `persons.date_of_birth`,
+                    // and only fall back to legacy/display `customer_members.dob` when needed.
+                    const dob = p?.date_of_birth ? String(p.date_of_birth) : m?.dob ? String(m.dob) : null;
                     const age = ageFromDobIso(dob);
                     const desiredProgramType = trimOrNull(r.desired_program_type) ?? oppDefaultProgramType;
                     const desiredScheduleType = trimOrNull(r.desired_schedule_type) ?? oppDefaultScheduleType;

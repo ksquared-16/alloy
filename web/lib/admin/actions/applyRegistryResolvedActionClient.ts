@@ -18,6 +18,11 @@ export type ApplyRegistryResolvedActionHost = {
     router: { push: (href: string) => void; refresh: () => void };
     openDrawer: (opts: DrawerOpenOpts) => void;
     openForm?: (opts: { form_key: string; action: ResolvedActionForClient }) => void;
+    /**
+     * Optional invalidation hook to refresh local data without blowing away UI state.
+     * When omitted, we fall back to `router.refresh()` (legacy behavior).
+     */
+    invalidate?: (opts?: { entity_type?: string; entity_id?: string; action_key?: string }) => void;
     departmentId?: string | null;
     workUnitId?: string | null;
     /** When set, used for mutating / open_drawer actions that target the current record. */
@@ -121,7 +126,8 @@ export async function applyRegistryResolvedActionClient(
         } else {
             host.openDrawer({ type: "opportunities", id: entityId });
         }
-        host.router.refresh();
+        if (host.invalidate) host.invalidate({ entity_type: "opportunity", entity_id: entityId, action_key: a.key });
+        else host.router.refresh();
         return { ok: true, execution_result: er };
     }
     if (er?.kind === "navigate" && er.href) {
@@ -132,6 +138,7 @@ export async function applyRegistryResolvedActionClient(
         window.open(String(er.href), "_blank", "noopener,noreferrer");
         return { ok: true, execution_result: er };
     }
-    host.router.refresh();
+    if (host.invalidate) host.invalidate({ entity_type: "opportunity", entity_id: entityId, action_key: a.key });
+    else host.router.refresh();
     return { ok: true, execution_result: er };
 }
