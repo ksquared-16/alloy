@@ -27,6 +27,7 @@ import {
     formatScheduleDrawerHeaderTitle,
 } from "@/lib/adminFormatters";
 import { AssignmentStatusBadge, StatusBadge, getStatusVariant } from "@/components/admin/StatusBadge";
+import { ScheduleTourActionFormModal } from "@/components/admin/opportunity/actions/ScheduleTourActionFormModal";
 import {
     WORKFLOW_ENTITY_TYPES,
     WORKFLOW_EVENT_TYPES,
@@ -962,6 +963,10 @@ export default function AdminEntityDrawer() {
         message: string;
         workflow_run_id?: string | null;
     } | null>(null);
+    const [actionFormState, setActionFormState] = useState<{
+        form_key: string;
+        action: ResolvedActionForClient;
+    } | null>(null);
     const [collectPaymentOpen, setCollectPaymentOpen] = useState(false);
     const [collectPaymentContext, setCollectPaymentContext] = useState<AdminCollectPaymentModalContext | null>(null);
     const [collectPaymentContextRefresh, setCollectPaymentContextRefresh] = useState(0);
@@ -1872,6 +1877,11 @@ export default function AdminEntityDrawer() {
     const handleResolvedOpportunityHeaderAction = useCallback(
         async (a: ResolvedActionForClient) => {
             if (!drawer.id || drawer.id === "new" || drawer.type !== "opportunities") return;
+            if (a.action_type === "open_form") {
+                const formKey = a.payload?.form_key != null ? String(a.payload.form_key).trim() : "";
+                if (formKey) setActionFormState({ form_key: formKey, action: a });
+                return;
+            }
             if (a.action_type === "navigate") {
                 const href = a.payload?.href != null ? String(a.payload.href) : "";
                 if (href) router.push(href);
@@ -8934,6 +8944,23 @@ export default function AdminEntityDrawer() {
                                                             router.refresh();
                                                         }}
                                                         onExecutionResult={(er) => {
+                                                            if (er?.kind === "open_form" && er.form_key === "schedule_tour") {
+                                                                setActionFormState({
+                                                                    form_key: "schedule_tour",
+                                                                    action: {
+                                                                        key: "schedule_tour",
+                                                                        label: "Schedule tour",
+                                                                        description: null,
+                                                                        action_type: "open_form",
+                                                                        icon: null,
+                                                                        style: null,
+                                                                        display_style: "button",
+                                                                        payload: { form_key: "schedule_tour" },
+                                                                        workflow_id: null,
+                                                                    },
+                                                                });
+                                                                return;
+                                                            }
                                                             if (
                                                                 er?.kind === "start_workflow" &&
                                                                 typeof er.workflow_run_id === "string" &&
@@ -8967,6 +8994,23 @@ export default function AdminEntityDrawer() {
                                                         router.refresh();
                                                     }}
                                                     onExecutionResult={(er) => {
+                                                            if (er?.kind === "open_form" && er.form_key === "schedule_tour") {
+                                                                setActionFormState({
+                                                                    form_key: "schedule_tour",
+                                                                    action: {
+                                                                        key: "schedule_tour",
+                                                                        label: "Schedule tour",
+                                                                        description: null,
+                                                                        action_type: "open_form",
+                                                                        icon: null,
+                                                                        style: null,
+                                                                        display_style: "button",
+                                                                        payload: { form_key: "schedule_tour" },
+                                                                        workflow_id: null,
+                                                                    },
+                                                                });
+                                                                return;
+                                                            }
                                                         if (
                                                             er?.kind === "start_workflow" &&
                                                             typeof er.workflow_run_id === "string" &&
@@ -10914,6 +10958,59 @@ export default function AdminEntityDrawer() {
                     dispatchAfterPaymentRun(jobId, scheduleId);
                 }}
                 onPaymentOutcome={(o) => setPaymentToast(o)}
+            />
+            <ScheduleTourActionFormModal
+                open={actionFormState?.form_key === "schedule_tour"}
+                onClose={() => setActionFormState(null)}
+                onSubmit={async (payload) => {
+                    if (!drawer.id || drawer.id === "new" || drawer.type !== "opportunities") return;
+                    setOpportunityActionLoading("schedule_tour");
+                    setSaveError(null);
+                    try {
+                        const res = await fetch("/api/admin/actions/execute", {
+                            method: "POST",
+                            credentials: "include",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                action_key: "schedule_tour",
+                                entity_type: "opportunity",
+                                entity_id: drawer.id,
+                                context: { surface: "record_section", section_key: "opportunity_lifecycle" },
+                                payload,
+                            }),
+                        });
+                        const json = (await res.json().catch(() => ({}))) as {
+                            ok?: boolean;
+                            error?: string;
+                            execution_result?: Record<string, unknown> & {
+                                row?: Record<string, unknown>;
+                                kind?: string;
+                                workflow_run_id?: string;
+                            };
+                        };
+                        if (!res.ok || !json.ok) {
+                            throw new Error(json.error ?? "Action failed");
+                        }
+                        const er = json.execution_result;
+                        if (er?.kind === "start_workflow" && typeof er.workflow_run_id === "string" && er.workflow_run_id.trim()) {
+                            const rid = er.workflow_run_id.trim();
+                            setRegistryActionFeedback({
+                                type: "success",
+                                message: `Workflow run completed (${rid.slice(0, 8)}…).`,
+                                workflow_run_id: rid,
+                            });
+                        }
+                        const row = er?.row;
+                        if (row && typeof row === "object") {
+                            setData((prev) => (prev && typeof prev === "object" ? { ...prev, ...row } : prev));
+                        } else {
+                            refetch();
+                        }
+                        router.refresh();
+                    } finally {
+                        setOpportunityActionLoading(null);
+                    }
+                }}
             />
             <AdminDeleteConfirmModal
                 isOpen={deleteConfirmOpen}

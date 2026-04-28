@@ -122,6 +122,155 @@ export async function executeAdminAction(
     const merged = mergePayload(def.payload_schema, input.payload);
 
     switch (def.action_type) {
+        case "open_form": {
+            const formKey = merged.form_key != null ? String(merged.form_key).trim() : "";
+            if (!formKey) {
+                return { ok: false, correlation_id: correlationId, error: "open_form requires payload_schema.form_key", status: 400 };
+            }
+            const required =
+                Array.isArray(merged.required_fields) && merged.required_fields.every((x) => typeof x === "string")
+                    ? (merged.required_fields as string[])
+                    : [];
+            for (const k of required) {
+                const v = (merged as Record<string, unknown>)[k];
+                if (v == null || String(v).trim() === "") {
+                    return { ok: false, correlation_id: correlationId, error: `Missing required field: ${k}`, status: 400 };
+                }
+            }
+
+            const after = merged.after && typeof merged.after === "object" ? (merged.after as Record<string, unknown>) : {};
+            const afterUpdateStatusKey = after.update_status_key != null ? String(after.update_status_key).trim() : "";
+            let updatedRow: Record<string, unknown> | null = null;
+            if (afterUpdateStatusKey) {
+                if (table !== "opportunities") {
+                    return { ok: false, correlation_id: correlationId, error: "open_form.after.update_status_key supports opportunities only", status: 400 };
+                }
+                if (!(await assertRowOrg(supabase, "opportunities", entityId, ctx.orgId)).ok) {
+                    return { ok: false, correlation_id: correlationId, error: "Not found", status: 404 };
+                }
+                const chk = await assertAllowedStatusKey(supabase, ctx.orgId, "opportunities", afterUpdateStatusKey);
+                if (!chk.ok) {
+                    return { ok: false, correlation_id: correlationId, error: chk.message, status: 400 };
+                }
+                const { data: existing } = await supabase
+                    .from("opportunities")
+                    .select("status_key, customer_id, primary_contact_id")
+                    .eq("id", entityId)
+                    .eq("org_id", ctx.orgId)
+                    .maybeSingle();
+                if (!existing) {
+                    return { ok: false, correlation_id: correlationId, error: "Not found", status: 404 };
+                }
+                const oldStatusKey = (existing as { status_key?: string | null }).status_key ?? null;
+                const { data: updated, error: upErr } = await supabase
+                    .from("opportunities")
+                    .update({ status_key: afterUpdateStatusKey })
+                    .eq("id", entityId)
+                    .eq("org_id", ctx.orgId)
+                    .select()
+                    .single();
+                if (upErr || !updated) {
+                    return { ok: false, correlation_id: correlationId, error: upErr?.message ?? "Update failed", status: 400 };
+                }
+                updatedRow = updated as Record<string, unknown>;
+                const newStatusKey = (updated as { status_key?: string | null }).status_key ?? null;
+                const metadata: Record<string, unknown> = {};
+                const cust = (existing as { customer_id?: string | null }).customer_id;
+                const pc = (existing as { primary_contact_id?: string | null }).primary_contact_id;
+                if (cust != null) metadata.customer_id = cust;
+                if (pc != null) metadata.primary_contact_id = pc;
+                try {
+                    await emitStatusChangedEvent({
+                        supabase,
+                        orgId: ctx.orgId,
+                        entityType: "opportunities",
+                        entityId,
+                        oldStatusKey,
+                        newStatusKey,
+                        metadata: Object.keys(metadata).length ? metadata : undefined,
+                    });
+                } catch (e) {
+                    console.error("[executeAdminAction] emitStatusChangedEvent (open_form.after)", e);
+                }
+            }
+
+            const submitActionType = merged.submit_action_type != null ? String(merged.submit_action_type).trim() : "";
+            if (submitActionType !== "start_workflow") {
+                return { ok: false, correlation_id: correlationId, error: "open_form v1 supports submit_action_type=start_workflow only", status: 400 };
+            }
+
+            const wfId = def.workflow_id;
+            if (!wfId) {
+                return { ok: false, correlation_id: correlationId, error: "Action has no workflow_id", status: 400 };
+            }
+            if (!(await assertRowOrg(supabase, "workflows", wfId, ctx.orgId)).ok) {
+                return { ok: false, correlation_id: correlationId, error: "Workflow not found for org", status: 404 };
+            }
+            const { data: wfRow, error: wfErr } = await supabase
+                .from("workflows")
+                .select("id, event_type, entity_type")
+                .eq("id", wfId)
+                .single();
+            if (wfErr || !wfRow) {
+                return { ok: false, correlation_id: correlationId, error: "Workflow not found", status: 404 };
+            }
+            const wf = wfRow as { id: string; event_type: string; entity_type: string };
+
+            const tourDate = merged.tour_date != null ? String(merged.tour_date).trim() : "";
+            const tourTime = merged.tour_time != null ? String(merged.tour_time).trim() : "";
+            const tourAtLocal = tourDate && tourTime ? `${tourDate}T${tourTime}:00` : null;
+
+            const eventPayload: Record<string, unknown> = {
+                ...(merged.event_payload && typeof merged.event_payload === "object" ? (merged.event_payload as object) : {}),
+                event_type: wf.event_type,
+                entity_type: wf.entity_type,
+                org_id: ctx.orgId,
+                occurred_at: new Date().toISOString(),
+                opportunity: { id: entityId },
+                action_form: {
+                    form_key: formKey,
+                    tour_date: tourDate || null,
+                    tour_time: tourTime || null,
+                    tour_at_local: tourAtLocal,
+                },
+            };
+
+            let eventId: string | null = null;
+            try {
+                eventId = await emitEvent({
+                    org_id: ctx.orgId,
+                    event_type: wf.event_type,
+                    entity_type: wf.entity_type,
+                    entity_id: entityId,
+                    action_type: null,
+                    occurred_at: eventPayload.occurred_at as string,
+                    payload: eventPayload,
+                });
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                return { ok: false, correlation_id: correlationId, error: `emitEvent failed: ${msg}`, status: 500 };
+            }
+            try {
+                const run = await executeWorkflowRun(supabase, wf.id, eventPayload, {
+                    event_id: eventId,
+                    org_id: ctx.orgId,
+                });
+                return {
+                    ok: true,
+                    correlation_id: correlationId,
+                    execution_result: {
+                        kind: "start_workflow",
+                        workflow_id: wf.id,
+                        workflow_run_id: run.workflow_run_id,
+                        run_status: run.status,
+                        ...(updatedRow ? { row: updatedRow } : {}),
+                    },
+                };
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                return { ok: false, correlation_id: correlationId, error: msg, status: 500 };
+            }
+        }
         case "navigate": {
             const href = merged.href != null ? String(merged.href) : "";
             if (!href) {

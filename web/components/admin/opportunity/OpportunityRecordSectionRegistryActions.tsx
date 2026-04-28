@@ -93,6 +93,12 @@ export default function OpportunityRecordSectionRegistryActions({
                 const out = await applyRegistryResolvedActionClient(resolved, {
                     router,
                     openDrawer,
+                    openForm: ({ form_key }) => {
+                        if (form_key === "schedule_tour") {
+                            // Delegate to the drawer-level modal handler (header action handler owns state).
+                            onExecutionResult?.({ kind: "open_form", form_key });
+                        }
+                    },
                     workUnitId: null,
                     entityId: opportunityId,
                     context: {

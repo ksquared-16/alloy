@@ -17,6 +17,7 @@ type DrawerOpenOpts =
 export type ApplyRegistryResolvedActionHost = {
     router: { push: (href: string) => void; refresh: () => void };
     openDrawer: (opts: DrawerOpenOpts) => void;
+    openForm?: (opts: { form_key: string; action: ResolvedActionForClient }) => void;
     departmentId?: string | null;
     workUnitId?: string | null;
     /** When set, used for mutating / open_drawer actions that target the current record. */
@@ -32,6 +33,13 @@ export async function applyRegistryResolvedActionClient(
     a: ResolvedActionForClient,
     host: ApplyRegistryResolvedActionHost
 ): Promise<ApplyRegistryResolvedActionResult> {
+    if (a.action_type === "open_form") {
+        const formKey = a.payload?.form_key != null ? String(a.payload.form_key).trim() : "";
+        if (formKey && host.openForm) {
+            host.openForm({ form_key: formKey, action: a });
+        }
+        return { ok: true };
+    }
     if (a.action_type === "navigate") {
         const href = a.payload?.href != null ? String(a.payload.href) : "";
         if (href) host.router.push(href);

@@ -860,6 +860,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 const out = await applyRegistryResolvedActionClient(resolved, {
                     router,
                     openDrawer,
+                    openForm: () => {
+                        // Action forms are currently owned by the opportunity drawer (v1 scope).
+                        // Right-rail actions in the enrollment work unit do not use forms yet.
+                    },
                     departmentId,
                     workUnitId: workUnit?.id ?? null,
                     context: {
