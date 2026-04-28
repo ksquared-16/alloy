@@ -31,6 +31,75 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const list = searchParams.get("list");
 
+    if (list === "kpis") {
+        const supabase = createAdminClient();
+        const now = new Date();
+        const startOfToday = new Date(now);
+        startOfToday.setHours(0, 0, 0, 0);
+        const last7d = new Date(now);
+        last7d.setDate(last7d.getDate() - 7);
+
+        const rangeFroms = {
+            today: startOfToday.toISOString(),
+            last7d: last7d.toISOString(),
+        };
+
+        async function countRuns(where: { fromIso: string; status?: string }) {
+            let q = supabase
+                .from("workflow_runs")
+                .select("id", { count: "exact", head: true })
+                .eq("org_id", orgId)
+                .gte("started_at", where.fromIso);
+            if (where.status) q = q.eq("status", where.status);
+            const { count } = await q;
+            return count ?? 0;
+        }
+
+        // Use workflow_action_runs to compute "has failed action" within last 7d.
+        const { data: recentRunRows } = await supabase
+            .from("workflow_runs")
+            .select("id")
+            .eq("org_id", orgId)
+            .gte("started_at", rangeFroms.last7d)
+            .limit(2000);
+        const recentRunIds = (recentRunRows ?? []).map((r) => (r as { id: string }).id);
+        let failedActionRunIds = new Set<string>();
+        if (recentRunIds.length) {
+            const { data: failedRows } = await supabase
+                .from("workflow_action_runs")
+                .select("workflow_run_id")
+                .eq("org_id", orgId)
+                .in("workflow_run_id", recentRunIds as any)
+                .eq("status", "failed");
+            failedActionRunIds = new Set((failedRows ?? []).map((r) => String((r as { workflow_run_id: string }).workflow_run_id)));
+        }
+
+        const [runsToday, runs7d, completed7d, failed7d, running7d, skipped7d] = await Promise.all([
+            countRuns({ fromIso: rangeFroms.today }),
+            countRuns({ fromIso: rangeFroms.last7d }),
+            countRuns({ fromIso: rangeFroms.last7d, status: "completed" }),
+            countRuns({ fromIso: rangeFroms.last7d, status: "failed" }),
+            countRuns({ fromIso: rangeFroms.last7d, status: "running" }),
+            countRuns({ fromIso: rangeFroms.last7d, status: "skipped" }),
+        ]);
+
+        const failedIncludingActionFailures = Math.max(failed7d, failedActionRunIds.size);
+        const denom = completed7d + failedIncludingActionFailures;
+        const successRate = denom > 0 ? completed7d / denom : null;
+
+        return NextResponse.json({
+            kpis: {
+                runs_today: runsToday,
+                runs_last_7d: runs7d,
+                successful_last_7d: completed7d,
+                failed_last_7d: failedIncludingActionFailures,
+                running_last_7d: running7d,
+                skipped_last_7d: skipped7d,
+                success_rate_last_7d: successRate,
+            },
+        });
+    }
+
     if (list === "workflows") {
         const supabase = createAdminClient();
         const { data, error } = await supabase

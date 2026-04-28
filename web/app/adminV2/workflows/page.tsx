@@ -2,20 +2,26 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { derived } from "@/styles/tokens/colors";
 
-type WorkflowListRow = {
+type WorkflowSummaryRow = {
     id: string;
     name: string | null;
-    description: string | null;
     event_type: string | null;
     entity_type: string | null;
     enabled: boolean | null;
-    created_at?: string | null;
-    updated_at?: string | null;
+    steps_count: number;
+    last_run: {
+        id: string;
+        status: string;
+        started_at: string;
+        completed_at: string | null;
+        has_failed_action: boolean;
+    } | null;
 };
 
 type WorkflowRunRow = {
@@ -32,53 +38,117 @@ type WorkflowRunRow = {
     has_failed_action?: boolean;
 };
 
+type WorkflowKpis = {
+    runs_today: number;
+    runs_last_7d: number;
+    successful_last_7d: number;
+    failed_last_7d: number;
+    running_last_7d: number;
+    skipped_last_7d: number;
+    success_rate_last_7d: number | null;
+};
+
+type WorkflowRunDetail = {
+    id: string;
+    workflow_id: string;
+    workflow_name: string | null;
+    status: string;
+    error: string | null;
+    started_at: string;
+    completed_at: string | null;
+    event_payload: Record<string, unknown>;
+    has_failed_action: boolean;
+    event: {
+        id: string;
+        event_type: string | null;
+        entity_type: string | null;
+        entity_id: string | null;
+        occurred_at: string | null;
+        payload: Record<string, unknown>;
+    } | null;
+};
+
+type WorkflowActionRunRow = {
+    id: string;
+    workflow_run_id: string;
+    action_order: number;
+    action_type: string;
+    status: string;
+    error: string | null;
+    started_at: string;
+    completed_at: string | null;
+    inputs: Record<string, unknown>;
+    outputs: Record<string, unknown>;
+};
+
 const WORKSPACE = "/adminV2/workspace";
+
+function fmtPct(v: number | null): string {
+    if (v == null) return "—";
+    return `${Math.round(v * 100)}%`;
+}
+
+function statusBadgeClass(status: string, hasFailedAction?: boolean): string {
+    const s = (status ?? "").toLowerCase();
+    if (s === "failed" || hasFailedAction) return "bg-alloy-ember/15 text-alloy-ember";
+    if (s === "completed") return "bg-alloy-pine/15 text-alloy-midnight";
+    if (s === "running") return "bg-alloy-honey/18 text-alloy-midnight";
+    if (s === "skipped") return "bg-alloy-stone/15 text-alloy-midnight/70";
+    return "bg-alloy-stone/15 text-alloy-midnight/70";
+}
 
 export default function AdminV2WorkflowsPage() {
     const searchParams = useSearchParams();
+    const router = useRouter();
     const highlightRunId = (searchParams?.get("run") ?? "").trim();
 
-    const [workflows, setWorkflows] = useState<WorkflowListRow[] | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-    const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [kpis, setKpis] = useState<WorkflowKpis | null>(null);
+    const [kpisLoading, setKpisLoading] = useState(false);
+    const [kpisError, setKpisError] = useState<string | null>(null);
 
-    const [detail, setDetail] = useState<WorkflowListRow | null>(null);
-    const [conditions, setConditions] = useState<unknown[] | null>(null);
-    const [actions, setActions] = useState<unknown[] | null>(null);
-    const [detailLoading, setDetailLoading] = useState(false);
+    const [workflows, setWorkflows] = useState<WorkflowSummaryRow[] | null>(null);
+    const [workflowsLoading, setWorkflowsLoading] = useState(true);
+    const [workflowsError, setWorkflowsError] = useState<string | null>(null);
+
+    const [selectedWorkflowId, setSelectedWorkflowId] = useState<string | null>(null);
 
     const [runs, setRuns] = useState<WorkflowRunRow[] | null>(null);
     const [runsLoading, setRunsLoading] = useState(false);
+    const [runsError, setRunsError] = useState<string | null>(null);
+
+    const [runDetail, setRunDetail] = useState<WorkflowRunDetail | null>(null);
+    const [runActionRuns, setRunActionRuns] = useState<WorkflowActionRunRow[] | null>(null);
+    const [runDetailLoading, setRunDetailLoading] = useState(false);
+    const [runDetailError, setRunDetailError] = useState<string | null>(null);
 
     const init = useMemo(() => workspaceDataFetchInit(), []);
 
     useEffect(() => {
         let cancelled = false;
-        setLoading(true);
-        setError(null);
-        fetch("/api/admin/workflows", init)
+        setWorkflowsLoading(true);
+        setWorkflowsError(null);
+        fetch("/api/admin/workflows/summary", init)
             .then((r) => r.json().then((j) => ({ r, j })))
             .then(({ r, j }) => {
                 if (cancelled) return;
                 if (!r.ok) {
-                    setError(typeof j?.error === "string" ? j.error : "Failed to load workflows");
+                    setWorkflowsError(typeof j?.error === "string" ? j.error : "Failed to load workflows");
                     setWorkflows([]);
                     return;
                 }
-                const list = Array.isArray(j) ? (j as WorkflowListRow[]) : [];
+                const list = Array.isArray(j?.workflows) ? (j.workflows as WorkflowSummaryRow[]) : [];
                 setWorkflows(list);
-                setSelectedId((prev) => {
+                setSelectedWorkflowId((prev) => {
                     if (prev) return prev;
                     if (!list.length) return null;
                     return list.find((w) => (w.entity_type ?? "").toLowerCase() === "opportunity")?.id ?? list[0]?.id ?? null;
                 });
             })
             .catch((e) => {
-                if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load workflows");
+                if (!cancelled) setWorkflowsError(e instanceof Error ? e.message : "Failed to load workflows");
             })
             .finally(() => {
-                if (!cancelled) setLoading(false);
+                if (!cancelled) setWorkflowsLoading(false);
             });
         return () => {
             cancelled = true;
@@ -86,57 +156,49 @@ export default function AdminV2WorkflowsPage() {
     }, [init]);
 
     useEffect(() => {
-        if (!selectedId) {
-            setDetail(null);
-            setConditions(null);
-            setActions(null);
-            return;
-        }
         let cancelled = false;
-        setDetailLoading(true);
-        Promise.all([
-            fetch(`/api/admin/workflows/${encodeURIComponent(selectedId)}`, init),
-            fetch(`/api/admin/workflows/${encodeURIComponent(selectedId)}/conditions`, init),
-            fetch(`/api/admin/workflows/${encodeURIComponent(selectedId)}/actions`, init),
-        ])
-            .then(async ([dr, cr, ar]) => {
-                const dj = await dr.json().catch(() => ({}));
-                const cj = await cr.json().catch(() => ({}));
-                const aj = await ar.json().catch(() => ({}));
+        setKpisLoading(true);
+        setKpisError(null);
+        fetch("/api/admin/workflow-runs?list=kpis", init)
+            .then((r) => r.json().then((j) => ({ r, j })))
+            .then(({ r, j }) => {
                 if (cancelled) return;
-                if (!dr.ok) {
-                    setDetail(null);
-                    setConditions([]);
-                    setActions([]);
+                if (!r.ok) {
+                    setKpisError(typeof j?.error === "string" ? j.error : "Failed to load KPIs");
+                    setKpis(null);
                     return;
                 }
-                setDetail(dj as WorkflowListRow);
-                setConditions(Array.isArray(cj) ? cj : cj?.error ? [] : []);
-                setActions(Array.isArray(aj) ? aj : []);
+                setKpis((j as { kpis?: WorkflowKpis }).kpis ?? null);
+            })
+            .catch((e) => {
+                if (!cancelled) setKpisError(e instanceof Error ? e.message : "Failed to load KPIs");
             })
             .finally(() => {
-                if (!cancelled) setDetailLoading(false);
+                if (!cancelled) setKpisLoading(false);
             });
         return () => {
             cancelled = true;
         };
-    }, [init, selectedId]);
+    }, [init]);
 
     useEffect(() => {
-        if (!selectedId) {
+        if (!selectedWorkflowId) {
             setRuns(null);
             return;
         }
         let cancelled = false;
         setRunsLoading(true);
-        const q = new URLSearchParams({ workflow_id: selectedId, limit: "12" });
+        setRunsError(null);
+        const q = new URLSearchParams({ workflow_id: selectedWorkflowId, limit: "20" });
         fetch(`/api/admin/workflow-runs?${q}`, init)
             .then((r) => r.json())
-            .then((j: { runs?: WorkflowRunRow[] }) => {
-                if (!cancelled) setRuns(j.runs ?? []);
+            .then((j: { runs?: WorkflowRunRow[]; error?: string }) => {
+                if (cancelled) return;
+                if (j?.error) setRunsError(j.error);
+                setRuns(j.runs ?? []);
             })
-            .catch(() => {
-                if (!cancelled) setRuns([]);
+            .catch((e) => {
+                if (!cancelled) setRunsError(e instanceof Error ? e.message : "Failed to load runs");
             })
             .finally(() => {
                 if (!cancelled) setRunsLoading(false);
@@ -144,14 +206,44 @@ export default function AdminV2WorkflowsPage() {
         return () => {
             cancelled = true;
         };
-    }, [init, selectedId]);
+    }, [init, selectedWorkflowId]);
 
-    const opportunityWorkflows = useMemo(
-        () => (workflows ?? []).filter((w) => (w.entity_type ?? "").toLowerCase() === "opportunity"),
-        [workflows]
-    );
-
-    const displayList = opportunityWorkflows.length ? opportunityWorkflows : workflows ?? [];
+    useEffect(() => {
+        if (!highlightRunId) {
+            setRunDetail(null);
+            setRunActionRuns(null);
+            return;
+        }
+        let cancelled = false;
+        setRunDetailLoading(true);
+        setRunDetailError(null);
+        Promise.all([
+            fetch(`/api/admin/workflow-runs/${encodeURIComponent(highlightRunId)}`, init),
+            fetch(`/api/admin/workflow-runs/${encodeURIComponent(highlightRunId)}/action-runs`, init),
+        ])
+            .then(async ([rr, ar]) => {
+                const rj = await rr.json().catch(() => ({}));
+                const aj = await ar.json().catch(() => ({}));
+                if (cancelled) return;
+                if (!rr.ok) {
+                    setRunDetail(null);
+                    setRunActionRuns(null);
+                    setRunDetailError(typeof rj?.error === "string" ? rj.error : "Failed to load run");
+                    return;
+                }
+                setRunDetail((rj as { run?: WorkflowRunDetail }).run ?? null);
+                setRunActionRuns((aj as { action_runs?: WorkflowActionRunRow[] }).action_runs ?? []);
+            })
+            .catch((e) => {
+                if (!cancelled) setRunDetailError(e instanceof Error ? e.message : "Failed to load run");
+            })
+            .finally(() => {
+                if (!cancelled) setRunDetailLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [highlightRunId, init]);
 
     const onToggleEnabled = useCallback(
         async (id: string, next: boolean) => {
@@ -162,16 +254,26 @@ export default function AdminV2WorkflowsPage() {
                 body: JSON.stringify({ enabled: next }),
             });
             if (!res.ok) return;
-            const row = (await res.json().catch(() => null)) as WorkflowListRow | null;
-            setWorkflows((prev) =>
-                (prev ?? []).map((w) => (w.id === id ? { ...w, enabled: row?.enabled ?? next } : w))
-            );
-            if (selectedId === id && detail) {
-                setDetail((d) => (d && d.id === id ? { ...d, enabled: row?.enabled ?? next } : d));
-            }
+            const row = (await res.json().catch(() => null)) as { enabled?: boolean | null } | null;
+            setWorkflows((prev) => (prev ?? []).map((w) => (w.id === id ? { ...w, enabled: row?.enabled ?? next } : w)));
         },
-        [detail, selectedId]
+        []
     );
+
+    const openRun = useCallback(
+        (runId: string) => {
+            const sp = new URLSearchParams(searchParams?.toString() ?? "");
+            sp.set("run", runId);
+            router.replace(`/adminV2/workflows?${sp.toString()}`);
+        },
+        [router, searchParams]
+    );
+
+    const closeRun = useCallback(() => {
+        const sp = new URLSearchParams(searchParams?.toString() ?? "");
+        sp.delete("run");
+        router.replace(`/adminV2/workflows?${sp.toString()}`);
+    }, [router, searchParams]);
 
     return (
         <WorkspaceChrome
@@ -182,166 +284,281 @@ export default function AdminV2WorkflowsPage() {
                 { label: "Workflows" },
             ]}
             title="Workflows"
-            subtitle="Review and tune automation (Enrollment / opportunity–focused list)"
+            subtitle="Understand what automations are running (no visual canvas yet)"
         >
-            <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
-                <aside
-                    className="w-full shrink-0 rounded-xl border border-admin-border bg-white/80 p-3 shadow-sm lg:max-w-sm"
-                    style={{ borderColor: derived.border }}
-                >
-                    <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/50">Your org</div>
-                    {loading ? <p className="mt-2 text-sm text-alloy-midnight/60">Loading…</p> : null}
-                    {error ? <p className="mt-2 text-sm text-alloy-ember">{error}</p> : null}
-                    {!loading && !displayList.length ? (
-                        <p className="mt-2 text-sm text-alloy-midnight/55">No workflows yet.</p>
-                    ) : null}
-                    <ul className="mt-2 space-y-1">
-                        {displayList.map((w) => {
-                            const active = w.id === selectedId;
-                            return (
-                                <li key={w.id}>
-                                    <button
-                                        type="button"
-                                        onClick={() => setSelectedId(w.id)}
-                                        className={`flex w-full flex-col rounded-lg border px-2.5 py-2 text-left text-sm transition-colors ${
-                                            active
-                                                ? "border-alloy-pine/50 bg-alloy-pine/10"
-                                                : "border-transparent hover:bg-alloy-stone/10"
-                                        }`}
-                                    >
-                                        <span className="font-semibold text-alloy-midnight">{w.name?.trim() || w.id.slice(0, 8)}</span>
-                                        <span className="text-[11px] text-alloy-midnight/55">
-                                            {(w.event_type ?? "—") + " · " + (w.entity_type ?? "—")}
-                                        </span>
-                                        <span className="mt-1 text-[10px] font-medium uppercase tracking-wide text-alloy-midnight/45">
-                                            {w.enabled === false ? "Disabled" : "Enabled"}
-                                        </span>
-                                    </button>
-                                </li>
-                            );
-                        })}
-                    </ul>
-                </aside>
+            <div className="min-h-0 flex-1 space-y-4">
+                <section className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-7">
+                    {[
+                        { k: "Runs today", v: kpis?.runs_today ?? null },
+                        { k: "Runs (7d)", v: kpis?.runs_last_7d ?? null },
+                        { k: "Successful", v: kpis?.successful_last_7d ?? null },
+                        { k: "Failed", v: kpis?.failed_last_7d ?? null },
+                        { k: "Running", v: kpis?.running_last_7d ?? null },
+                        { k: "Skipped", v: kpis?.skipped_last_7d ?? null },
+                        { k: "Success rate", v: kpis ? fmtPct(kpis.success_rate_last_7d) : "—" },
+                    ].map((x) => (
+                        <div
+                            key={x.k}
+                            className="rounded-xl border border-admin-border bg-white/90 px-3 py-2 shadow-sm"
+                            style={{ borderColor: derived.border }}
+                        >
+                            <div className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                {x.k}
+                            </div>
+                            <div className="mt-0.5 text-lg font-semibold text-alloy-midnight">
+                                {kpisLoading ? "…" : kpisError ? "—" : String(x.v ?? "—")}
+                            </div>
+                        </div>
+                    ))}
+                </section>
+                {kpisError ? <div className="text-sm text-alloy-ember">{kpisError}</div> : null}
 
-                <main className="min-w-0 flex-1 space-y-4">
-                    {!selectedId ? (
-                        <p className="text-sm text-alloy-midnight/60">Select a workflow to inspect.</p>
-                    ) : detailLoading || !detail ? (
-                        <p className="text-sm text-alloy-midnight/60">Loading workflow…</p>
-                    ) : (
-                        <>
-                            <section
-                                className="rounded-xl border border-admin-border bg-white/90 p-4 shadow-sm"
-                                style={{ borderColor: derived.border }}
-                            >
-                                <div className="flex flex-wrap items-start justify-between gap-3">
-                                    <div>
-                                        <h2 className="text-lg font-semibold text-alloy-midnight">{detail.name?.trim() || "Workflow"}</h2>
-                                        <p className="mt-1 max-w-2xl text-sm text-alloy-midnight/70">{detail.description?.trim() || "—"}</p>
-                                    </div>
-                                    <label className="flex items-center gap-2 text-sm text-alloy-midnight/80">
-                                        <input
-                                            type="checkbox"
-                                            checked={detail.enabled !== false}
-                                            onChange={(e) => void onToggleEnabled(detail.id, e.target.checked)}
-                                        />
-                                        Enabled
-                                    </label>
-                                </div>
-                                <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
-                                    <div>
-                                        <dt className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Event type</dt>
-                                        <dd className="font-mono text-xs text-alloy-midnight/85">{detail.event_type ?? "—"}</dd>
-                                    </div>
-                                    <div>
-                                        <dt className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Entity type</dt>
-                                        <dd className="font-mono text-xs text-alloy-midnight/85">{detail.entity_type ?? "—"}</dd>
-                                    </div>
-                                    <div>
-                                        <dt className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Steps</dt>
-                                        <dd className="text-alloy-midnight/85">{actions?.length ?? 0}</dd>
-                                    </div>
-                                    <div>
-                                        <dt className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Conditions</dt>
-                                        <dd className="text-alloy-midnight/85">{conditions?.length ?? 0}</dd>
-                                    </div>
-                                </dl>
-                            </section>
+                <div className="flex min-h-0 flex-1 flex-col gap-4 lg:flex-row">
+                    <section
+                        className="min-w-0 flex-1 rounded-xl border border-admin-border bg-white/90 p-3 shadow-sm"
+                        style={{ borderColor: derived.border }}
+                    >
+                        <div className="flex items-center justify-between gap-2">
+                            <h2 className="text-sm font-semibold text-alloy-midnight">Workflows</h2>
+                            <Link href="/admin/workflows" className="text-xs font-semibold text-alloy-blue hover:underline">
+                                Legacy editor →
+                            </Link>
+                        </div>
+                        {workflowsLoading ? <p className="mt-2 text-sm text-alloy-midnight/60">Loading…</p> : null}
+                        {workflowsError ? <p className="mt-2 text-sm text-alloy-ember">{workflowsError}</p> : null}
 
-                            <section
-                                className="rounded-xl border border-admin-border bg-white/90 p-4 shadow-sm"
-                                style={{ borderColor: derived.border }}
-                            >
-                                <h3 className="text-sm font-semibold text-alloy-midnight">Conditions</h3>
-                                <pre className="mt-2 max-h-48 overflow-auto rounded-md bg-alloy-stone/10 p-2 text-[11px] text-alloy-midnight/80">
-                                    {JSON.stringify(conditions ?? [], null, 2)}
-                                </pre>
-                            </section>
-
-                            <section
-                                className="rounded-xl border border-admin-border bg-white/90 p-4 shadow-sm"
-                                style={{ borderColor: derived.border }}
-                            >
-                                <h3 className="text-sm font-semibold text-alloy-midnight">Actions (ordered)</h3>
-                                <pre className="mt-2 max-h-64 overflow-auto rounded-md bg-alloy-stone/10 p-2 text-[11px] text-alloy-midnight/80">
-                                    {JSON.stringify(actions ?? [], null, 2)}
-                                </pre>
-                                <p className="mt-2 text-[11px] text-alloy-midnight/50">
-                                    Step editing uses the classic admin API. This view is read-only review for AdminV2.
-                                </p>
-                                <Link
-                                    href={`/admin/workflows/${encodeURIComponent(detail.id)}`}
-                                    className="mt-2 inline-block text-xs font-semibold text-alloy-blue hover:underline"
-                                >
-                                    Open in legacy workflow editor →
-                                </Link>
-                            </section>
-
-                            <section
-                                className="rounded-xl border border-admin-border bg-white/90 p-4 shadow-sm"
-                                style={{ borderColor: derived.border }}
-                            >
-                                <h3 className="text-sm font-semibold text-alloy-midnight">Recent runs</h3>
-                                {runsLoading ? <p className="mt-2 text-sm text-alloy-midnight/60">Loading runs…</p> : null}
-                                {!runsLoading && runs && runs.length === 0 ? (
-                                    <p className="mt-2 text-sm text-alloy-midnight/55">No runs yet for this workflow.</p>
-                                ) : null}
-                                <ul className="mt-2 divide-y divide-alloy-stone/15">
-                                    {(runs ?? []).map((r) => {
-                                        const hi = highlightRunId && r.id === highlightRunId;
+                        <div className="mt-2 overflow-auto rounded-lg border border-alloy-stone/15">
+                            <table className="w-full min-w-[860px] text-left text-sm">
+                                <thead className="border-b border-alloy-stone/15 bg-alloy-stone/[0.04]">
+                                    <tr className="text-[11px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/55">
+                                        <th className="px-3 py-2">Workflow</th>
+                                        <th className="px-3 py-2">Enabled</th>
+                                        <th className="px-3 py-2">Entity</th>
+                                        <th className="px-3 py-2">Trigger</th>
+                                        <th className="px-3 py-2">Steps</th>
+                                        <th className="px-3 py-2">Last run</th>
+                                        <th className="px-3 py-2">Last status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {(workflows ?? []).map((w) => {
+                                        const active = w.id === selectedWorkflowId;
+                                        const last = w.last_run;
                                         return (
-                                            <li
-                                                key={r.id}
-                                                className={`py-2 text-sm ${hi ? "rounded-md bg-alloy-honey/15 px-2 -mx-2" : ""}`}
+                                            <tr
+                                                key={w.id}
+                                                className={`border-b border-alloy-stone/15 last:border-b-0 ${
+                                                    active ? "bg-alloy-pine/5" : "hover:bg-alloy-stone/[0.04]"
+                                                }`}
                                             >
-                                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                                    <span className="font-mono text-xs text-alloy-midnight/80">{r.id}</span>
-                                                    <span
-                                                        className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
-                                                            r.status === "completed"
-                                                                ? "bg-alloy-pine/15 text-alloy-midnight"
-                                                                : r.status === "failed"
-                                                                  ? "bg-alloy-ember/15 text-alloy-ember"
-                                                                  : "bg-alloy-stone/15 text-alloy-midnight/70"
-                                                        }`}
+                                                <td className="px-3 py-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setSelectedWorkflowId(w.id)}
+                                                        className="text-left font-semibold text-alloy-midnight hover:underline"
                                                     >
-                                                        {r.status}
-                                                    </span>
-                                                </div>
-                                                <div className="mt-0.5 text-[11px] text-alloy-midnight/55">
-                                                    {r.started_at}
-                                                    {r.entity_id ? ` · entity ${r.entity_id.slice(0, 8)}…` : ""}
-                                                    {r.has_failed_action ? " · action failure" : ""}
-                                                </div>
-                                                {r.error ? <p className="mt-1 text-xs text-alloy-ember">{r.error}</p> : null}
-                                            </li>
+                                                        {w.name?.trim() || w.id.slice(0, 8) + "…"}
+                                                    </button>
+                                                </td>
+                                                <td className="px-3 py-2">
+                                                    <label className="inline-flex items-center gap-2 text-sm text-alloy-midnight/80">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={w.enabled !== false}
+                                                            onChange={(e) => void onToggleEnabled(w.id, e.target.checked)}
+                                                        />
+                                                        <span className="text-xs">{w.enabled === false ? "Disabled" : "Enabled"}</span>
+                                                    </label>
+                                                </td>
+                                                <td className="px-3 py-2 font-mono text-xs text-alloy-midnight/75">
+                                                    {w.entity_type ?? "—"}
+                                                </td>
+                                                <td className="px-3 py-2 font-mono text-xs text-alloy-midnight/75">
+                                                    {w.event_type ?? "—"}
+                                                </td>
+                                                <td className="px-3 py-2 tabular-nums text-alloy-midnight/70">{w.steps_count}</td>
+                                                <td className="px-3 py-2 font-mono text-xs text-alloy-midnight/65">
+                                                    {last?.started_at ?? "—"}
+                                                </td>
+                                                <td className="px-3 py-2">
+                                                    {last ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openRun(last.id)}
+                                                            className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${statusBadgeClass(
+                                                                last.status,
+                                                                last.has_failed_action
+                                                            )}`}
+                                                            title="Open last run"
+                                                        >
+                                                            {last.status}
+                                                            {last.has_failed_action ? " · action" : ""}
+                                                        </button>
+                                                    ) : (
+                                                        <span className="text-xs text-alloy-midnight/45">—</span>
+                                                    )}
+                                                </td>
+                                            </tr>
                                         );
                                     })}
-                                </ul>
-                            </section>
-                        </>
-                    )}
-                </main>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div className="mt-3">
+                            <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                Recent runs (selected workflow)
+                            </div>
+                            {runsLoading ? <p className="mt-1 text-sm text-alloy-midnight/60">Loading…</p> : null}
+                            {runsError ? <p className="mt-1 text-sm text-alloy-ember">{runsError}</p> : null}
+                            {!runsLoading && (runs ?? []).length === 0 ? (
+                                <p className="mt-1 text-sm text-alloy-midnight/55">No runs yet.</p>
+                            ) : null}
+                            <div className="mt-1 flex flex-col gap-1.5">
+                                {(runs ?? []).slice(0, 8).map((r) => (
+                                    <button
+                                        key={r.id}
+                                        type="button"
+                                        onClick={() => openRun(r.id)}
+                                        className="flex items-center justify-between gap-2 rounded-lg border border-alloy-stone/15 bg-white px-2.5 py-2 text-left hover:bg-alloy-stone/[0.04]"
+                                    >
+                                        <span className="min-w-0 truncate font-mono text-[11px] text-alloy-midnight/80">
+                                            {r.id}
+                                        </span>
+                                        <span
+                                            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${statusBadgeClass(
+                                                r.status,
+                                                r.has_failed_action
+                                            )}`}
+                                        >
+                                            {r.status}
+                                            {r.has_failed_action ? " · action" : ""}
+                                        </span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </section>
+
+                    <aside
+                        className="w-full shrink-0 rounded-xl border border-admin-border bg-white/90 p-3 shadow-sm lg:w-[420px]"
+                        style={{ borderColor: derived.border }}
+                    >
+                        <div className="flex items-center justify-between gap-2">
+                            <h2 className="text-sm font-semibold text-alloy-midnight">Run detail</h2>
+                            {highlightRunId ? (
+                                <button
+                                    type="button"
+                                    onClick={closeRun}
+                                    className="text-xs font-semibold text-alloy-midnight/70 hover:text-alloy-midnight hover:underline"
+                                >
+                                    Close
+                                </button>
+                            ) : null}
+                        </div>
+                        {!highlightRunId ? (
+                            <p className="mt-2 text-sm text-alloy-midnight/60">
+                                Select a run to inspect (or open with <code className="text-xs">?run=&lt;id&gt;</code>).
+                            </p>
+                        ) : runDetailLoading ? (
+                            <p className="mt-2 text-sm text-alloy-midnight/60">Loading run…</p>
+                        ) : runDetailError ? (
+                            <p className="mt-2 text-sm text-alloy-ember">{runDetailError}</p>
+                        ) : !runDetail ? (
+                            <p className="mt-2 text-sm text-alloy-midnight/60">Run not found.</p>
+                        ) : (
+                            <div className="mt-2 space-y-3">
+                                <div className="rounded-lg border border-alloy-stone/15 bg-white px-3 py-2">
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <div className="min-w-0">
+                                            <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                                Workflow
+                                            </div>
+                                            <div className="truncate text-sm font-semibold text-alloy-midnight">
+                                                {runDetail.workflow_name ?? runDetail.workflow_id}
+                                            </div>
+                                        </div>
+                                        <span
+                                            className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${statusBadgeClass(
+                                                runDetail.status,
+                                                runDetail.has_failed_action
+                                            )}`}
+                                        >
+                                            {runDetail.status}
+                                            {runDetail.has_failed_action ? " · action" : ""}
+                                        </span>
+                                    </div>
+                                    <div className="mt-2 grid grid-cols-1 gap-2 text-xs text-alloy-midnight/70">
+                                        <div>
+                                            <span className="font-semibold text-alloy-midnight/70">Started</span>{" "}
+                                            <span className="font-mono">{runDetail.started_at}</span>
+                                        </div>
+                                        <div>
+                                            <span className="font-semibold text-alloy-midnight/70">Completed</span>{" "}
+                                            <span className="font-mono">{runDetail.completed_at ?? "—"}</span>
+                                        </div>
+                                        <div>
+                                            <span className="font-semibold text-alloy-midnight/70">Entity</span>{" "}
+                                            <span className="font-mono">
+                                                {runDetail.event?.entity_type ?? "—"}{" "}
+                                                {runDetail.event?.entity_id ? runDetail.event.entity_id : ""}
+                                            </span>
+                                        </div>
+                                        <div>
+                                            <span className="font-semibold text-alloy-midnight/70">Trigger</span>{" "}
+                                            <span className="font-mono">{runDetail.event?.event_type ?? "—"}</span>
+                                        </div>
+                                    </div>
+                                    {runDetail.error ? (
+                                        <div className="mt-2 rounded-md border border-alloy-ember/30 bg-alloy-ember/5 px-2 py-1 text-xs text-alloy-ember">
+                                            {runDetail.error}
+                                        </div>
+                                    ) : null}
+                                </div>
+
+                                <div>
+                                    <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                        Action steps
+                                    </div>
+                                    {(runActionRuns ?? []).length === 0 ? (
+                                        <p className="mt-1 text-sm text-alloy-midnight/55">No action runs recorded.</p>
+                                    ) : (
+                                        <div className="mt-1 space-y-2">
+                                            {(runActionRuns ?? []).map((a) => (
+                                                <div key={a.id} className="rounded-lg border border-alloy-stone/15 bg-white px-3 py-2">
+                                                    <div className="flex items-center justify-between gap-2">
+                                                        <div className="min-w-0">
+                                                            <div className="text-xs font-semibold text-alloy-midnight">
+                                                                Step {a.action_order + 1}:{" "}
+                                                                <span className="font-mono text-[11px]">{a.action_type}</span>
+                                                            </div>
+                                                            <div className="mt-0.5 font-mono text-[11px] text-alloy-midnight/55">
+                                                                {a.started_at}
+                                                                {a.completed_at ? ` → ${a.completed_at}` : ""}
+                                                            </div>
+                                                        </div>
+                                                        <span
+                                                            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${statusBadgeClass(
+                                                                a.status
+                                                            )}`}
+                                                        >
+                                                            {a.status}
+                                                        </span>
+                                                    </div>
+                                                    {a.error ? (
+                                                        <div className="mt-1 rounded-md border border-alloy-ember/30 bg-alloy-ember/5 px-2 py-1 text-xs text-alloy-ember">
+                                                            {a.error}
+                                                        </div>
+                                                    ) : null}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </aside>
+                </div>
             </div>
         </WorkspaceChrome>
     );
