@@ -65,31 +65,29 @@ export function OpportunityInquiryChildrenRegistryActions(props: {
     if (!chosen) return null;
 
     return (
-        <div className="mt-2 flex items-center justify-end">
-            <button
-                type="button"
-                disabled={!canMutate || busyKey != null}
-                onClick={async () => {
-                    if (!canMutate) return;
-                    setBusyKey(chosen.key);
-                    try {
-                        await applyRegistryResolvedActionClient(chosen, {
-                            router,
-                            openDrawer,
-                            openForm,
-                            entityId: opportunityId,
-                            context: { surface: "record_section", section_key: "inquiry_children" },
-                        });
-                    } finally {
-                        setBusyKey(null);
-                    }
-                }}
-                className="rounded-md border border-alloy-stone/25 bg-white px-3 py-1.5 text-sm font-semibold text-alloy-midnight/90 hover:bg-alloy-stone/5 disabled:opacity-50"
-                data-inquiry-children-registry-action={chosen.key}
-            >
-                {busyKey === chosen.key ? "…" : chosen.label}
-            </button>
-        </div>
+        <button
+            type="button"
+            disabled={!canMutate || busyKey != null}
+            onClick={async () => {
+                if (!canMutate) return;
+                setBusyKey(chosen.key);
+                try {
+                    await applyRegistryResolvedActionClient(chosen, {
+                        router,
+                        openDrawer,
+                        openForm,
+                        entityId: opportunityId,
+                        context: { surface: "record_section", section_key: "inquiry_children" },
+                    });
+                } finally {
+                    setBusyKey(null);
+                }
+            }}
+            className="rounded-md border border-alloy-stone/25 bg-white px-3 py-1.5 text-sm font-semibold text-alloy-midnight/90 hover:bg-alloy-stone/5 disabled:opacity-50"
+            data-inquiry-children-registry-action={chosen.key}
+        >
+            {busyKey === chosen.key ? "…" : chosen.label}
+        </button>
     );
 }
 

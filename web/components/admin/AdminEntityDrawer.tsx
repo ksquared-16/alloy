@@ -5325,36 +5325,17 @@ export default function AdminEntityDrawer() {
                       })
                     : [];
                 out.inquiry_children = (
-                    <div className="space-y-2">
-                        <OpportunityInquiryChildrenRegistryActions
-                            opportunityId={drawer.id ?? ""}
-                            childrenCount={rows.filter((r) => r.id && (r.customer_member_id || r.display_name)).length}
-                            canMutate={!!canMutate}
-                            router={router}
-                            openDrawer={openDrawer}
-                            openForm={({ form_key, action }) => {
-                                if (form_key === "add_inquiry_child") {
-                                    const mode =
-                                        action.payload?.mode != null ? String(action.payload.mode).trim() : "";
-                                    setAddInquiryChildState({ mode: mode === "add_sibling" ? "sibling" : "child" });
-                                }
-                                if (form_key === "schedule_tour") {
-                                    setActionFormState({ form_key: "schedule_tour", action });
-                                }
-                            }}
-                        />
-                        <OpportunityInquiryChildrenSection
-                            rows={rows.filter((r) => r.id && (r.customer_member_id || r.display_name))}
-                            canEdit={!!canMutate}
-                            embeddedInPremiumSection={oppCfg?.inquiry_drawer_mode === "workflow_v1"}
-                            onOpenChild={(row) => {
-                                const cm = row.customer_member_id?.trim() ?? "";
-                                if (!cm || cm.startsWith("metadata_child:")) return;
-                                if (row.person_id) openDrawer({ type: "persons", id: row.person_id });
-                                else openDrawer({ type: "customer_members", id: cm });
-                            }}
-                        />
-                    </div>
+                    <OpportunityInquiryChildrenSection
+                        rows={rows.filter((r) => r.id && (r.customer_member_id || r.display_name))}
+                        canEdit={!!canMutate}
+                        embeddedInPremiumSection={oppCfg?.inquiry_drawer_mode === "workflow_v1"}
+                        onOpenChild={(row) => {
+                            const cm = row.customer_member_id?.trim() ?? "";
+                            if (!cm || cm.startsWith("metadata_child:")) return;
+                            if (row.person_id) openDrawer({ type: "persons", id: row.person_id });
+                            else openDrawer({ type: "customer_members", id: cm });
+                        }}
+                    />
                 );
             }
             if (Object.keys(out).length === 0) return {};
@@ -5382,6 +5363,32 @@ export default function AdminEntityDrawer() {
         recordChromeOpportunity.layout,
         getStatusLabel,
     ]);
+
+    const overviewSectionHeaderRight = useMemo(() => {
+        if (!overviewData || drawer.type !== "opportunities" || (overviewData as { _create?: boolean })._create) return {};
+        const d = overviewData as Record<string, unknown>;
+        const rawKids = (d._inquiry_children as unknown[]) ?? [];
+        const nKids = Array.isArray(rawKids)
+            ? rawKids.filter((x) => x && typeof x === "object" && String((x as any).display_name ?? "").trim()).length
+            : 0;
+        return {
+            inquiry_children: (
+                <OpportunityInquiryChildrenRegistryActions
+                    opportunityId={drawer.id ?? ""}
+                    childrenCount={nKids}
+                    canMutate={!!canMutate}
+                    router={router}
+                    openDrawer={openDrawer}
+                    openForm={({ form_key, action }) => {
+                        if (form_key === "add_inquiry_child") {
+                            const mode = action.payload?.mode != null ? String(action.payload.mode).trim() : "";
+                            setAddInquiryChildState({ mode: mode === "add_sibling" ? "sibling" : "child" });
+                        }
+                    }}
+                />
+            ),
+        } as Record<string, unknown>;
+    }, [overviewData, drawer.type, drawer.id, canMutate, router, openDrawer]);
 
     const configDrivenOverviewSections = useMemo((): EntityDrawerSectionConfig[] => {
         if (!overviewData || (overviewData as { _create?: boolean })._create) return [];
@@ -6497,7 +6504,7 @@ export default function AdminEntityDrawer() {
                 <span className="shrink-0">{opportunityInquiryWorkflowHeaderStatus}</span>
                 {headerNextStepInline ? (
                     <span className="rounded-full border border-alloy-stone/20 bg-white/70 px-2 py-0.5 text-[11px] font-medium text-alloy-midnight/65">
-                        Next: {headerNextStepInline}
+                        Suggested next: {headerNextStepInline}
                     </span>
                 ) : null}
             </div>
@@ -9018,6 +9025,7 @@ export default function AdminEntityDrawer() {
                                     entityType={presentationType}
                                     data={entityDrawerOverviewData}
                                     customSectionContent={overviewCustomContent}
+                                    customSectionHeaderRight={overviewSectionHeaderRight as any}
                                     overviewSectionsOverride={configDrivenOverviewSections.length > 0 ? configDrivenOverviewSections : undefined}
                                     scheduleOverviewRows={
                                         drawer.type === "schedules"

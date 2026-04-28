@@ -51,6 +51,8 @@ interface EntityDrawerOverviewProps {
   data: Record<string, unknown> | null;
   /** Custom content for sections that have no fields (e.g. relationship links, lists). Key = section.key */
   customSectionContent?: Record<string, ReactNode>;
+  /** Optional header-right content for a given section key (e.g. registry-backed CTA). */
+  customSectionHeaderRight?: Record<string, ReactNode>;
   /** When set (e.g. for person field_definitions), use these sections instead of entity presentation config. */
   overviewSectionsOverride?: EntityDrawerSectionConfig[];
   isEditing?: boolean;
@@ -496,6 +498,7 @@ export default function EntityDrawerOverview({
   entityType,
   data,
   customSectionContent = {},
+  customSectionHeaderRight = {},
   overviewSectionsOverride,
   isEditing = false,
   formData,
@@ -881,6 +884,7 @@ export default function EntityDrawerOverview({
         const hasTopFields = section.fields && section.fields.length > 0;
         const hasFields = hasTopFields || hasSubsections;
         const customContent = customSectionContent[section.key];
+        const headerRight = customSectionHeaderRight[section.key];
 
         const gridInner = section.gridCols === 2 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1";
 
@@ -909,7 +913,7 @@ export default function EntityDrawerOverview({
         if (!hasFields && !customContent) return null;
 
         return (
-          <EntityDrawerSection key={section.key} config={section} surface={sectionSurface}>
+          <EntityDrawerSection key={section.key} config={section} surface={sectionSurface} headerRight={headerRight}>
             {children}
           </EntityDrawerSection>
         );

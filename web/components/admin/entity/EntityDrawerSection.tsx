@@ -17,6 +17,7 @@ const PREMIUM_HEADER_STATIC =
 interface EntityDrawerSectionProps {
   config: EntityDrawerSectionConfig;
   children: ReactNode;
+  headerRight?: ReactNode;
   /** Override default expanded state (e.g. from persisted layout). */
   defaultExpanded?: boolean;
   className?: string;
@@ -31,6 +32,7 @@ interface EntityDrawerSectionProps {
 export default function EntityDrawerSection({
   config,
   children,
+  headerRight,
   defaultExpanded,
   className = "",
   surface = "default",
@@ -64,12 +66,18 @@ export default function EntityDrawerSection({
           aria-expanded={expanded}
         >
           <span>{config.title}</span>
+          {headerRight ? <span className="shrink-0 normal-case tracking-normal">{headerRight}</span> : null}
           <span className="text-alloy-muted transition-opacity duration-150" aria-hidden>
             {expanded ? "−" : "+"}
           </span>
         </button>
       ) : (
-        <h3 className={isPremium ? PREMIUM_HEADER_STATIC : SECTION_HEADER_CLASS}>{config.title}</h3>
+        <div className={isPremium ? PREMIUM_HEADER_STATIC : SECTION_HEADER_CLASS}>
+          <div className="flex items-center justify-between gap-2">
+            <span>{config.title}</span>
+            {headerRight ? <span className="shrink-0 normal-case tracking-normal">{headerRight}</span> : null}
+          </div>
+        </div>
       )}
       {showContent && (
         <div
