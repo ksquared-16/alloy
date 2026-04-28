@@ -7,6 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { derived } from "@/styles/tokens/colors";
+import { formatTourDateTime } from "@/lib/enrollment/formatTourDateTime";
 
 type WorkflowSummaryRow = {
     id: string;
@@ -729,6 +730,22 @@ export default function AdminV2WorkflowsPage() {
                                             {runDetail.error}
                                         </div>
                                     ) : null}
+                                    {(() => {
+                                        const ep = runDetail.event_payload ?? {};
+                                        const af =
+                                            ep && typeof ep === "object" && (ep as any).action_form && typeof (ep as any).action_form === "object"
+                                                ? ((ep as any).action_form as Record<string, unknown>)
+                                                : null;
+                                        if (!af) return null;
+                                        const fmt = formatTourDateTime(af.tour_date, af.tour_time);
+                                        if (!fmt.hasDate) return null;
+                                        return (
+                                            <div className="mt-2 rounded-md border border-alloy-stone/20 bg-alloy-stone/5 px-2 py-1 text-xs text-alloy-midnight/70">
+                                                <span className="font-semibold text-alloy-midnight/70">Tour</span>{" "}
+                                                <span className="font-mono">{fmt.display}</span>
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
 
                                 <div>

@@ -64,6 +64,11 @@
   --ws-dept-operational-row-min-height: clamp(360px, 44vh, 620px);
 }
 
+/* Work-unit: slightly tighter vertical rhythm (keeps Automations block closer to the lane). */
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 {
+  --ws-dept-section-gap: 12px;
+}
+
 /*
  * Major workspace block rhythm (16px) — spacing lives on the follower only.
  * Inside `.adminv2-ws-dept-v2-primary-column`, use the `> * + *` rule; this class is for manual use elsewhere.

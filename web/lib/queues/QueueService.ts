@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { validateQueueDefinition, type QueueConfig, type QueueDefinitionV1, type QueueFilter } from "@/lib/config/queueDefinitionSchema";
 import type { QueueItemsResult, QueueSummary } from "@/lib/queues/types";
 import { fetchEffectiveStatusDefinitions, displayLabelsFromDefinitions } from "@/lib/admin/statusDefinitionsResolve";
+import { formatTourDateTime } from "@/lib/enrollment/formatTourDateTime";
 
 type JobRowPreview = {
     id: string;
@@ -448,6 +449,7 @@ async function enrichOpportunityRows(params: {
         let programCombined: string | null = null;
         let desiredStart: string | null = null;
         let tourDate: string | null = null;
+        let tourTime: string | null = null;
 
         if (joinChildNames.length > 0) {
             childDisplay = joinChildNames.join(" · ");
@@ -457,6 +459,7 @@ async function enrichOpportunityRows(params: {
                 [programLabel, ageGroup].filter((x): x is string => Boolean(x && x.trim())).join(" · ").trim() || programLabel;
             desiredStart = typeof md?.desired_start_date === "string" ? md.desired_start_date : null;
             tourDate = typeof md?.tour_date === "string" ? md.tour_date : null;
+            tourTime = typeof md?.tour_time === "string" ? md.tour_time : null;
         } else if (inquiryChildren.length > 0) {
             const names: string[] = [];
             const programs: string[] = [];
@@ -484,6 +487,7 @@ async function enrichOpportunityRows(params: {
                     : programsDisplay ?? (typeof md?.program_label === "string" ? md.program_label : null);
             desiredStart = typeof md?.desired_start_date === "string" ? md.desired_start_date : null;
             tourDate = typeof md?.tour_date === "string" ? md.tour_date : null;
+            tourTime = typeof md?.tour_time === "string" ? md.tour_time : null;
         } else {
             const child = typeof md?.child_name === "string" ? md.child_name : null;
             const programLabel = typeof md?.program_label === "string" ? md.program_label : null;
@@ -494,13 +498,14 @@ async function enrichOpportunityRows(params: {
             programsDisplay = programLabel;
             desiredStart = typeof md?.desired_start_date === "string" ? md.desired_start_date : null;
             tourDate = typeof md?.tour_date === "string" ? md.tour_date : null;
+            tourTime = typeof md?.tour_time === "string" ? md.tour_time : null;
         }
 
         const sk = (r.status_key ?? "").trim();
         const statusDisplay = sk ? labelByKey.get(sk) ?? sk : null;
 
         const attentionReason = opportunityNeedsAttentionReasonLabel(r, new Date());
-        const tourContext = tourDate ? `Tour: ${tourDate}` : null;
+        const tourContext = tourDate ? `Tour: ${formatTourDateTime(tourDate, tourTime).display}` : null;
 
         return {
             ...r,

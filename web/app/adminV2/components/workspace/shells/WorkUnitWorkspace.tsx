@@ -15,13 +15,15 @@ type Props = {
   headerQueuePicker?: React.ReactNode;
   /** First drill-in fetch: show a lightweight hint above queue rows. */
   queueRowsLoading?: boolean;
+  /** Optional footer content constrained to the primary column width. */
+  primaryFooterSlot?: React.ReactNode;
 };
 
 /**
  * Work unit — same shell grammar as Department (control deck, KPI strip, 75/25 split, workflows strip, command rail).
  * Main surface is a structured queue of drillable records (not department rollups). No inline AI form — shell bar only.
  */
-export default function WorkUnitWorkspace({ model, onAction, headerQueuePicker, queueRowsLoading }: Props) {
+export default function WorkUnitWorkspace({ model, onAction, headerQueuePicker, queueRowsLoading, primaryFooterSlot }: Props) {
   const wuShellStyle: CSSProperties = useMemo(
     () =>
       operationalWorkspaceShellStyle({
@@ -169,6 +171,11 @@ export default function WorkUnitWorkspace({ model, onAction, headerQueuePicker, 
             {model.workSummary ? (
               <div className="adminv2-ws-dept-v2-workflows-strip">
                 <WorkBlock work={model.workSummary} onAction={onAction} mode="summary" surface="work_unit" />
+              </div>
+            ) : null}
+            {primaryFooterSlot ? (
+              <div className="adminv2-ws-dept-v2-workflows-strip" data-ws-lane-kind="automation_workflows">
+                {primaryFooterSlot}
               </div>
             ) : null}
           </div>

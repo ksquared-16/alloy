@@ -84,7 +84,29 @@ export async function applyRegistryResolvedActionClient(
         return { ok: true };
     }
     if (a.action_type === "ui_intent") {
-        void a.payload;
+        const p = a.payload && typeof a.payload === "object" ? (a.payload as Record<string, unknown>) : {};
+        const intent = p.intent != null ? String(p.intent).trim() : "";
+        const message = p.message != null ? String(p.message).trim() : "";
+        if (intent === "review_automations") {
+            host.router.push("/adminV2/workflows");
+            return { ok: true };
+        }
+        if (intent === "create_inquiry") {
+            host.router.push("/admin/opportunities");
+            return { ok: true };
+        }
+        if (intent === "open_enrollment_pipeline") {
+            if (host.departmentId?.trim()) {
+                host.router.push(`/adminV2/workspace/dept/${encodeURIComponent(host.departmentId.trim())}`);
+            } else {
+                host.router.push("/adminV2/workspace");
+            }
+            return { ok: true };
+        }
+        if (message) {
+            window.alert(message);
+            return { ok: true };
+        }
         return { ok: true };
     }
 

@@ -9,7 +9,7 @@ type ActionDefinitionRow = {
     action_type: string;
     condition_config: unknown;
     payload_schema: unknown;
-    enabled: boolean | null;
+    is_active: boolean;
 };
 
 type ActionPlacementRow = {
@@ -18,12 +18,12 @@ type ActionPlacementRow = {
     surface: string;
     slot: string;
     entity_type: string;
-    action_key: string;
+    action_definition_id: string;
     section_key: string | null;
     department_id: string | null;
     work_unit_id: string | null;
-    sort_order: number | null;
-    enabled: boolean | null;
+    order_index: number | null;
+    is_active: boolean;
 };
 
 function pickArg(name: string): string | null {
@@ -55,30 +55,30 @@ async function main() {
     const [{ data: defs, error: defsErr }, { data: placements, error: plErr }] = await Promise.all([
         supabase
             .from("action_definitions")
-            .select("id, org_id, key, label, entity_type, action_type, condition_config, payload_schema, enabled")
+            .select("id, org_id, key, label, entity_type, action_type, condition_config, payload_schema, is_active")
             .eq("org_id", orgId),
         supabase
             .from("action_placements")
-            .select("id, org_id, surface, slot, entity_type, action_key, section_key, department_id, work_unit_id, sort_order, enabled")
+            .select("id, org_id, surface, slot, entity_type, action_definition_id, section_key, department_id, work_unit_id, order_index, is_active")
             .eq("org_id", orgId),
     ]);
 
     if (defsErr) throw new Error(defsErr.message);
     if (plErr) throw new Error(plErr.message);
 
-    const defsByKey = new Map((defs ?? []).map((d) => [String((d as any).key), d as unknown as ActionDefinitionRow]));
+    const defsById = new Map((defs ?? []).map((d) => [String((d as any).id), d as unknown as ActionDefinitionRow]));
 
     const rows = (placements ?? [])
         .map((p) => p as unknown as ActionPlacementRow)
         .sort((a, b) => {
-            const s = `${a.surface}:${a.slot}:${a.section_key ?? ""}:${a.sort_order ?? 0}:${a.action_key}`;
-            const t = `${b.surface}:${b.slot}:${b.section_key ?? ""}:${b.sort_order ?? 0}:${b.action_key}`;
+            const s = `${a.surface}:${a.slot}:${a.section_key ?? ""}:${a.order_index ?? 0}:${a.action_definition_id}`;
+            const t = `${b.surface}:${b.slot}:${b.section_key ?? ""}:${b.order_index ?? 0}:${b.action_definition_id}`;
             return s.localeCompare(t);
         })
         .map((p) => {
-            const d = defsByKey.get(p.action_key) ?? null;
+            const d = defsById.get(p.action_definition_id) ?? null;
             return {
-                key: p.action_key,
+                key: d?.key ?? null,
                 label: d?.label ?? null,
                 surface: p.surface,
                 slot: p.slot,
@@ -87,11 +87,11 @@ async function main() {
                 action_type: d?.action_type ?? null,
                 condition_config: d?.condition_config ?? null,
                 payload_schema: d?.payload_schema ?? null,
-                enabled: (d?.enabled ?? true) && (p.enabled ?? true),
+                is_active: Boolean(d?.is_active) && Boolean(p.is_active),
                 placement: {
                     department_id: p.department_id,
                     work_unit_id: p.work_unit_id,
-                    sort_order: p.sort_order,
+                    order_index: p.order_index,
                 },
             };
         });

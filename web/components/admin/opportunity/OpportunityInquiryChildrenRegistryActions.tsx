@@ -83,7 +83,7 @@ export function OpportunityInquiryChildrenRegistryActions(props: {
                     setBusyKey(null);
                 }
             }}
-            className="rounded-md border border-alloy-stone/25 bg-white px-3 py-1.5 text-sm font-semibold text-alloy-midnight/90 hover:bg-alloy-stone/5 disabled:opacity-50"
+            className="rounded-md border border-alloy-blue/30 bg-alloy-blue/5 px-3 py-1.5 text-sm font-semibold text-alloy-blue hover:bg-alloy-blue/10 hover:border-alloy-blue/45 disabled:opacity-50"
             data-inquiry-children-registry-action={chosen.key}
         >
             {busyKey === chosen.key ? "…" : chosen.label}

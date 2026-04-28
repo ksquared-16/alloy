@@ -61,6 +61,7 @@ import { mergeUnifiedStatusIntoConfigOverview } from "@/lib/admin/unifiedDrawerS
 import { recordSurfaceContextStyle } from "@/lib/visualContext";
 import OpportunityInquiryChildrenSection, { type InquiryChildRow } from "@/components/admin/entity/OpportunityInquiryChildrenSection";
 import { OpportunityInquiryChildrenRegistryActions } from "@/components/admin/opportunity/OpportunityInquiryChildrenRegistryActions";
+import { formatTourDateTime } from "@/lib/enrollment/formatTourDateTime";
 import {
     JobDrawerV2TabBar,
     JobDrawerV2SignalsStrip,
@@ -4089,6 +4090,16 @@ export default function AdminEntityDrawer() {
         return new Set([...h.primary, ...h.secondary, ...h.overflow].map((a) => a.key));
     }, [opportunityResolvedHeaderActions]);
 
+    const enrollmentDrawerEmphasizedActionKeys = useMemo(() => {
+        return new Set<string>([
+            "schedule_tour",
+            "reschedule_tour",
+            "send_paperwork_placeholder",
+            "add_to_waitlist_placeholder",
+            "convert_to_enrolled_placeholder",
+        ]);
+    }, []);
+
     const opportunityHeaderQuickActionsNode =
         // Enrollment V1: never render legacy chrome actions (prevents flicker / incorrect actions).
         // Expected behavior: no buttons until registry resolves, then correct buttons only.
@@ -4126,9 +4137,13 @@ export default function AdminEntityDrawer() {
                             disabled={!canMutate || !!opportunityActionLoading}
                             onClick={() => void handleResolvedOpportunityHeaderAction(a)}
                             className={
-                                opportunityInquiryWorkflowDrawer
-                                    ? "px-4 py-2 text-[12px] font-semibold border border-alloy-stone/40 bg-white rounded-full hover:bg-alloy-stone/10 disabled:opacity-50"
-                                    : "px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30 disabled:opacity-50"
+                                enrollmentDrawerEmphasizedActionKeys.has(a.key)
+                                    ? opportunityInquiryWorkflowDrawer
+                                        ? "px-4 py-2 text-[12px] font-semibold border border-alloy-blue/35 bg-alloy-blue/5 text-alloy-blue rounded-full hover:bg-alloy-blue/10 disabled:opacity-50"
+                                        : "px-3 py-1.5 text-sm border border-alloy-blue/35 bg-alloy-blue/5 text-alloy-blue rounded-md hover:bg-alloy-blue/10 disabled:opacity-50"
+                                    : opportunityInquiryWorkflowDrawer
+                                      ? "px-4 py-2 text-[12px] font-semibold border border-alloy-stone/40 bg-white rounded-full hover:bg-alloy-stone/10 disabled:opacity-50"
+                                      : "px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30 disabled:opacity-50"
                             }
                         >
                             {opportunityActionLoading === a.key ? "…" : a.label}
@@ -8835,11 +8850,8 @@ export default function AdminEntityDrawer() {
                                                                             >
                                                                                 {(() => {
                                                                                     const md = (d.metadata ?? null) as Record<string, unknown> | null;
-                                                                                    const s =
-                                                                                        md && typeof md.tour_date === "string" && md.tour_date.trim()
-                                                                                            ? md.tour_date.trim()
-                                                                                            : "";
-                                                                                    return s || "—";
+                                                                                    const fmt = formatTourDateTime(md?.tour_date, md?.tour_time);
+                                                                                    return fmt.display;
                                                                                 })()}
                                                                             </div>
                                                                         </div>
