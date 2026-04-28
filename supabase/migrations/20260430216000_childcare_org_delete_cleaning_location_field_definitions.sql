@@ -40,3 +40,4 @@ BEGIN
     RAISE NOTICE 'childcare_field_cleanup: deleted % field_definitions (location beds/baths/home_type/square_footage_tier) for org %', n_deleted, c_org_id;
   END IF;
 END $$;
+

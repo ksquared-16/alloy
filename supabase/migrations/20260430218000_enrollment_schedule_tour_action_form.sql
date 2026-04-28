@@ -1,10 +1,8 @@
 -- Convert per-org schedule_tour action to open_form (v1 Action Forms).
 -- The form collects tour_date + tour_time, then submits to start_workflow using existing workflow_id.
 --
--- Notes:
--- - We keep global action_definitions.schedule_tour as update_status for legacy/API consistency.
--- - Resolver prefers org-scoped definitions when present.
--- - Server execute treats open_form as "validate required fields then run submit_action_type".
+-- Important ordering:
+-- - This migration must run AFTER the workflow seed migration so workflow_id is present.
 DO $$
 DECLARE
     r RECORD;
