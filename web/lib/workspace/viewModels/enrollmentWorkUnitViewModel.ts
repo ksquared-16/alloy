@@ -14,7 +14,7 @@ type OppRow = WorkspaceOpportunityQueueRuntime["items"][number];
  * (no persons.children join, no messaging routes). Used for docs + future payload work.
  */
 export const ENROLLMENT_CRM_QUEUE_PAYLOAD_GAPS = [
-    "multi-child display prefers `metadata.inquiry_children[]` (seed/demo) or `opportunity_customer_members` resolved elsewhere; queue rows use contact + metadata enrichment",
+    "multi-child display prefers `opportunity_customer_members` (canonical) or `metadata.inquiry_children[]` (legacy seed fallback). Queue rows should be person-backed via opportunities.primary_person_id → persons.",
     "dedicated_sms_action (no SMS/comms API route wired from workspace queue)",
     "in_app_message_action (no threaded message UI route from workspace row)",
 ] as const;

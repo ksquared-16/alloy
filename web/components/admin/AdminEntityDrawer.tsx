@@ -8643,9 +8643,8 @@ export default function AdminEntityDrawer() {
                                                 const monoLink = "text-[12px] font-semibold text-alloy-blue hover:underline underline-offset-2";
                                                 const openPrimaryContactRecord = () => {
                                                     const pid = String(d.primary_person_id ?? "").trim();
-                                                    const cid = String(d.primary_contact_id ?? "").trim();
                                                     if (pid) openDrawer({ type: "persons", id: pid });
-                                                    else if (cid) openDrawer({ type: "contacts", id: cid });
+                                                    // Enrollment doctrine: do not use legacy contacts for inquiry workflow drawer.
                                                 };
 
                                                 if (opportunityInquiryWorkflowDrawer) {
