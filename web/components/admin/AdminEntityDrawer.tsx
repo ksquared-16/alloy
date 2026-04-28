@@ -62,6 +62,7 @@ import { formatVendorOptionLabel, type AdminVendorSelectOption } from "@/lib/adm
 import { mergeUnifiedStatusIntoConfigOverview } from "@/lib/admin/unifiedDrawerStatus";
 import { recordSurfaceContextStyle } from "@/lib/visualContext";
 import OpportunityInquiryChildrenSection, { type InquiryChildRow } from "@/components/admin/entity/OpportunityInquiryChildrenSection";
+import { OpportunityInquiryChildrenRegistryActions } from "@/components/admin/opportunity/OpportunityInquiryChildrenRegistryActions";
 import {
     JobDrawerV2TabBar,
     JobDrawerV2SignalsStrip,
@@ -4000,8 +4001,8 @@ export default function AdminEntityDrawer() {
         (resolvedHeader?.primary.length ?? 0) +
         (resolvedHeader?.secondary.length ?? 0) +
         (resolvedHeader?.overflow.length ?? 0);
-    const useOpportunityActionRegistryHeader =
-        !opportunityResolvedHeaderLoading && resolvedHeader != null && resolvedHeaderCount > 0;
+    const opportunityRegistryHeaderReady = !opportunityResolvedHeaderLoading && resolvedHeader != null;
+    const useOpportunityActionRegistryHeader = opportunityRegistryHeaderReady && resolvedHeaderCount > 0;
 
     const opportunityRegistryHeaderActionKeys = useMemo(() => {
         const h = opportunityResolvedHeaderActions;
@@ -4010,7 +4011,8 @@ export default function AdminEntityDrawer() {
     }, [opportunityResolvedHeaderActions]);
 
     const opportunityHeaderQuickActionsNode =
-        isOpportunityExistingView && drawer.id && (useOpportunityActionRegistryHeader || hasOpportunityChromeActions) ? (
+        // Enrollment demo constraint: when action registry is available for opportunities, do not fall back to legacy chrome actions.
+        isOpportunityExistingView && drawer.id && (useOpportunityActionRegistryHeader || (!opportunityRegistryHeaderReady && hasOpportunityChromeActions)) ? (
             <div
                 className={`flex flex-wrap gap-2 items-center ${
                     drawerShellVariant === "adminV2"
@@ -5320,19 +5322,36 @@ export default function AdminEntityDrawer() {
                       })
                     : [];
                 out.inquiry_children = (
-                    <OpportunityInquiryChildrenSection
-                        rows={rows.filter((r) => r.id && (r.customer_member_id || r.display_name))}
-                        canEdit={!!canMutate}
-                        embeddedInPremiumSection={oppCfg?.inquiry_drawer_mode === "workflow_v1"}
-                        onAddChild={() => setAddInquiryChildState({ mode: "child" })}
-                        onAddSibling={() => setAddInquiryChildState({ mode: "sibling" })}
-                        onOpenChild={(row) => {
-                            const cm = row.customer_member_id?.trim() ?? "";
-                            if (!cm || cm.startsWith("metadata_child:")) return;
-                            if (row.person_id) openDrawer({ type: "persons", id: row.person_id });
-                            else openDrawer({ type: "customer_members", id: cm });
-                        }}
-                    />
+                    <div className="space-y-2">
+                        <OpportunityInquiryChildrenRegistryActions
+                            opportunityId={drawer.id ?? ""}
+                            childrenCount={rows.filter((r) => r.id && (r.customer_member_id || r.display_name)).length}
+                            canMutate={!!canMutate}
+                            router={router}
+                            openDrawer={openDrawer}
+                            openForm={({ form_key, action }) => {
+                                if (form_key === "add_inquiry_child") {
+                                    const mode =
+                                        action.payload?.mode != null ? String(action.payload.mode).trim() : "";
+                                    setAddInquiryChildState({ mode: mode === "add_sibling" ? "sibling" : "child" });
+                                }
+                                if (form_key === "schedule_tour") {
+                                    setActionFormState({ form_key: "schedule_tour", action });
+                                }
+                            }}
+                        />
+                        <OpportunityInquiryChildrenSection
+                            rows={rows.filter((r) => r.id && (r.customer_member_id || r.display_name))}
+                            canEdit={!!canMutate}
+                            embeddedInPremiumSection={oppCfg?.inquiry_drawer_mode === "workflow_v1"}
+                            onOpenChild={(row) => {
+                                const cm = row.customer_member_id?.trim() ?? "";
+                                if (!cm || cm.startsWith("metadata_child:")) return;
+                                if (row.person_id) openDrawer({ type: "persons", id: row.person_id });
+                                else openDrawer({ type: "customer_members", id: cm });
+                            }}
+                        />
+                    </div>
                 );
             }
             if (Object.keys(out).length === 0) return {};
@@ -8758,7 +8777,7 @@ export default function AdminEntityDrawer() {
                                                             <div className="mt-2.5">
                                                                 {(() => {
                                                                     const selected = (formData as { _enrollment_panel?: string })._enrollment_panel;
-                                                                    const panel = selected === "communication" ? "communication" : "notes";
+                                                                    const panel = selected === "notes" ? "notes" : "communication";
                                                                     const tabBtn = (active: boolean) =>
                                                                         `rounded-md border px-2.5 py-1 text-[11px] font-semibold ${
                                                                             active
@@ -8976,100 +8995,13 @@ export default function AdminEntityDrawer() {
                                                 data-opportunity-section-key={OPPORTUNITY_RECORD_SECTION_LIFECYCLE}
                                             >
                                                 <OpportunityLifecyclePanel record={overviewData as Record<string, unknown>} />
-                                                {drawer.id ? (
-                                                    <OpportunityRecordSectionRegistryActions
-                                                        opportunityId={drawer.id}
-                                                        sectionKey={OPPORTUNITY_RECORD_SECTION_LIFECYCLE}
-                                                        excludeActionKeys={opportunityRegistryHeaderActionKeys}
-                                                        canMutate={!!canMutate}
-                                                        router={router}
-                                                        openDrawer={openDrawer}
-                                                        onApplied={() => {
-                                                            void refetch();
-                                                            router.refresh();
-                                                        }}
-                                                        onExecutionResult={(er) => {
-                                                            if (er?.kind === "open_form" && er.form_key === "schedule_tour") {
-                                                                setActionFormState({
-                                                                    form_key: "schedule_tour",
-                                                                    action: {
-                                                                        key: "schedule_tour",
-                                                                        label: "Schedule tour",
-                                                                        description: null,
-                                                                        action_type: "open_form",
-                                                                        icon: null,
-                                                                        style: null,
-                                                                        display_style: "button",
-                                                                        payload: { form_key: "schedule_tour" },
-                                                                        workflow_id: null,
-                                                                    },
-                                                                });
-                                                                return;
-                                                            }
-                                                            if (
-                                                                er?.kind === "start_workflow" &&
-                                                                typeof er.workflow_run_id === "string" &&
-                                                                er.workflow_run_id.trim()
-                                                            ) {
-                                                                const rid = er.workflow_run_id.trim();
-                                                                setRegistryActionFeedback({
-                                                                    type: "success",
-                                                                    message: `Workflow run completed (${rid.slice(0, 8)}…).`,
-                                                                    workflow_run_id: rid,
-                                                                });
-                                                            }
-                                                        }}
-                                                    />
-                                                ) : null}
                                             </section>
                                         ) : drawer.id ? (
                                             <div
                                                 className="mt-2 px-0.5"
                                                 data-opportunity-section-key={OPPORTUNITY_RECORD_SECTION_LIFECYCLE}
                                             >
-                                                <OpportunityRecordSectionRegistryActions
-                                                    opportunityId={drawer.id}
-                                                    sectionKey={OPPORTUNITY_RECORD_SECTION_LIFECYCLE}
-                                                    excludeActionKeys={opportunityRegistryHeaderActionKeys}
-                                                    canMutate={!!canMutate}
-                                                    router={router}
-                                                    openDrawer={openDrawer}
-                                                    onApplied={() => {
-                                                        void refetch();
-                                                        router.refresh();
-                                                    }}
-                                                    onExecutionResult={(er) => {
-                                                            if (er?.kind === "open_form" && er.form_key === "schedule_tour") {
-                                                                setActionFormState({
-                                                                    form_key: "schedule_tour",
-                                                                    action: {
-                                                                        key: "schedule_tour",
-                                                                        label: "Schedule tour",
-                                                                        description: null,
-                                                                        action_type: "open_form",
-                                                                        icon: null,
-                                                                        style: null,
-                                                                        display_style: "button",
-                                                                        payload: { form_key: "schedule_tour" },
-                                                                        workflow_id: null,
-                                                                    },
-                                                                });
-                                                                return;
-                                                            }
-                                                        if (
-                                                            er?.kind === "start_workflow" &&
-                                                            typeof er.workflow_run_id === "string" &&
-                                                            er.workflow_run_id.trim()
-                                                        ) {
-                                                            const rid = er.workflow_run_id.trim();
-                                                            setRegistryActionFeedback({
-                                                                type: "success",
-                                                                message: `Workflow run completed (${rid.slice(0, 8)}…).`,
-                                                                workflow_run_id: rid,
-                                                            });
-                                                        }
-                                                    }}
-                                                />
+                                                <OpportunityLifecyclePanel record={overviewData as Record<string, unknown>} />
                                             </div>
                                         ) : null}
                                     </>

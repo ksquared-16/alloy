@@ -23,6 +23,7 @@ type Props = {
     canMutate: boolean;
     router: RouterLike;
     openDrawer: OpenDrawerFn;
+    openForm?: (opts: { form_key: string; action: ResolvedActionForClient }) => void;
     onApplied?: () => void;
     /** Success path only — e.g. workflow_run_id for start_workflow. */
     onExecutionResult?: (executionResult: Record<string, unknown> | undefined) => void;
@@ -48,6 +49,7 @@ export default function OpportunityRecordSectionRegistryActions({
     canMutate,
     router,
     openDrawer,
+    openForm,
     onApplied,
     onExecutionResult,
 }: Props) {
@@ -93,12 +95,7 @@ export default function OpportunityRecordSectionRegistryActions({
                 const out = await applyRegistryResolvedActionClient(resolved, {
                     router,
                     openDrawer,
-                    openForm: ({ form_key }) => {
-                        if (form_key === "schedule_tour") {
-                            // Delegate to the drawer-level modal handler (header action handler owns state).
-                            onExecutionResult?.({ kind: "open_form", form_key });
-                        }
-                    },
+                    openForm,
                     workUnitId: null,
                     entityId: opportunityId,
                     context: {
@@ -114,7 +111,7 @@ export default function OpportunityRecordSectionRegistryActions({
                 setBusyKey(null);
             }
         },
-        [canMutate, opportunityId, onApplied, onExecutionResult, openDrawer, router, sectionKey]
+        [canMutate, opportunityId, onApplied, onExecutionResult, openDrawer, openForm, router, sectionKey]
     );
 
     if (loading) return null;
