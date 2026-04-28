@@ -71,15 +71,9 @@ export default function RelationshipsSettingsClient() {
                 <p className="font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45">Live data</p>
                 <p className="mt-1 max-w-3xl">
                     Inspect actual <code className="rounded bg-alloy-midnight/5 px-1 py-0.5 font-mono text-[11px]">customer_persons</code> and{" "}
-                    <code className="rounded bg-alloy-midnight/5 px-1 py-0.5 font-mono text-[11px]">person_relationships</code> rows (drawer links require the
-                    legacy admin shell).
+                    <code className="rounded bg-alloy-midnight/5 px-1 py-0.5 font-mono text-[11px]">person_relationships</code> rows (viewer coming next in
+                    AdminV2).
                 </p>
-                <Link
-                    href="/admin/system/db-relationships"
-                    className="mt-2 inline-flex font-medium text-alloy-blue hover:underline"
-                >
-                    Open DB Relationships viewer →
-                </Link>
             </section>
         </div>
     );

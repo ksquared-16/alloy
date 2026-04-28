@@ -222,11 +222,9 @@ export function buildEnrollmentWorkUnitActionsRail(): ActionsVm {
         primaries: [],
         systemActions: [
             { id: "wu_back_department", label: "Back to department", variant: "primary" },
-            { id: "wu_new_inquiry", label: "New inquiry", variant: "primary" },
         ],
         quickOperations: [
             { id: "wu_open_needs_attention", label: "Open Needs attention queue" },
-            { id: "wu_open_all_inquiries", label: "Browse all inquiries" },
             { id: "wu_manage_work_units", label: "Manage work units" },
         ],
         overflow: [{ id: "wu_workspace_root", label: "Organization workspace", variant: "secondary" }],
@@ -238,11 +236,9 @@ export function buildEnrollmentDepartmentCommandRail(): ActionsVm {
     return {
         primaries: [],
         systemActions: [
-            { id: "wu_new_inquiry", label: "New inquiry", variant: "primary" },
             { id: "dept_open_enrollment_wu", label: "Open enrollment queue", variant: "primary" },
         ],
         quickOperations: [
-            { id: "wu_open_all_inquiries", label: "Browse all inquiries" },
             { id: "wu_manage_work_units", label: "Manage work units" },
         ],
         overflow: [{ id: "wu_workspace_root", label: "Organization workspace", variant: "secondary" }],

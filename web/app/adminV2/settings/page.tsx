@@ -123,8 +123,11 @@ export default function AdminV2SettingsIndexPage() {
 
                 <Group label="Automation" accentClass="border-alloy-pine/35">
                     <SettingsTileGrid variant="two">
-                        <SettingsCard href="/adminV2/workflows" title="Workflows" accent="records">
-                            Review runs, triggers, and steps — AdminV2 control panel (read-heavy; deep edit links to classic admin).
+                        <SettingsCard href="/adminV2/workflows" title="Automations" accent="records">
+                            Review runs, triggers, and steps — AdminV2 control panel.
+                        </SettingsCard>
+                        <SettingsCard href="/adminV2/settings/actions" title="Actions" accent="records">
+                            Registry-backed buttons: definitions, placements, conditions, and “coming next” placeholders.
                         </SettingsCard>
                     </SettingsTileGrid>
                 </Group>
@@ -140,6 +143,14 @@ export default function AdminV2SettingsIndexPage() {
                             accent="vocabulary"
                         >
                             Schema per document type.
+                        </SettingsCard>
+                    </SettingsTileGrid>
+                </Group>
+
+                <Group label="Layouts" accentClass="border-alloy-pine/25">
+                    <SettingsTileGrid variant="two">
+                        <SettingsCard href="/adminV2/settings/layouts" title="Layouts" accent="records">
+                            Record layouts, drawer sections, and header/section action placement surfaces (read-only for now).
                         </SettingsCard>
                     </SettingsTileGrid>
                 </Group>

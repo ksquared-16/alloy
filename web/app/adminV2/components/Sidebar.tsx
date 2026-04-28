@@ -17,8 +17,7 @@ import {
 } from "lucide-react";
 import { neutral, brand } from "@/styles/tokens/colors";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
-import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
-import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
+// Navigation is top-level only; department/work-unit context lives in breadcrumbs.
 
 const WORKSPACE = "/adminV2/workspace";
 
@@ -55,60 +54,16 @@ export default function Sidebar({
     const onWorkspace = path === WORKSPACE || path.startsWith(`${WORKSPACE}/`);
     const onSettings = path.startsWith("/adminV2/settings");
     const onWorkflows = path.startsWith("/adminV2/workflows");
-    const onFinance = path.startsWith("/admin/financials");
-    const onOps = path.startsWith("/admin/operations");
-    const onSystem = path.startsWith("/admin/system");
-    const onCompliance = path.startsWith("/admin/system/access-control");
+    const onInquiries = path.startsWith("/adminV2/inquiries");
+    const onFinance = path.startsWith("/adminV2/finance");
+    const onOps = path.startsWith("/adminV2/operations");
+    const onSystem = path.startsWith("/adminV2/system");
+    const onCompliance = path.startsWith("/adminV2/compliance");
 
-    const [depts, setDepts] = useState<Dept[]>([]);
-    const [wus, setWus] = useState<WU[]>([]);
-    const [treeError, setTreeError] = useState<string | null>(null);
-
-    useEffect(() => {
-        if (collapsed) return;
-        if (!path.startsWith("/adminV2/workspace")) {
-            return;
-        }
-        let cancelled = false;
-        (async () => {
-            try {
-                const init = workspaceDataFetchInit();
-                const [dRes, wRes] = await Promise.all([
-                    dedupeAdminFetch("/api/admin/departments", init),
-                    dedupeAdminFetch("/api/admin/work-units", init),
-                ]);
-                const dj = (await dRes.json().catch(() => ({}))) as { items?: Dept[] };
-                const wj = (await wRes.json().catch(() => ({}))) as { items?: WU[] };
-                if (cancelled) return;
-                setTreeError(null);
-                if (dRes.ok) setDepts(dj.items ?? []);
-                else setTreeError("Departments unavailable");
-                if (wRes.ok) setWus(wj.items ?? []);
-            } catch {
-                if (!cancelled) setTreeError("Navigation data unavailable");
-            }
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, [collapsed, path]);
-
-    const deptsSorted = useMemo(() => {
-        return [...depts].sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id));
-    }, [depts]);
-
-    const wusByDept = useMemo(() => {
-        const m = new Map<string, WU[]>();
-        for (const w of wus) {
-            const k = w.department_id;
-            if (!m.has(k)) m.set(k, []);
-            m.get(k)!.push(w);
-        }
-        for (const arr of m.values()) {
-            arr.sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id));
-        }
-        return m;
-    }, [wus]);
+    const [depts] = useState<Dept[]>([]);
+    const [wus] = useState<WU[]>([]);
+    const [treeError] = useState<string | null>(null);
+    useEffect(() => {}, []);
 
     const railWidth = collapsed ? 56 : 280;
 
@@ -182,17 +137,17 @@ export default function Sidebar({
                         <GitBranch size={20} strokeWidth={1.75} />
                     </AdminV2NavLink>
                     <AdminV2NavLink
-                        href="/admin/opportunities"
+                        href="/adminV2/inquiries"
                         title="Inquiries"
                         aria-label="Inquiries"
-                        active={path.startsWith("/admin/opportunities")}
+                        active={onInquiries}
                         className="adminv2-sidebar-rail-link"
                         style={{ color: brand.primary }}
                     >
                         <ClipboardCheck size={20} strokeWidth={1.75} />
                     </AdminV2NavLink>
                     <AdminV2NavLink
-                        href="/admin/financials"
+                        href="/adminV2/finance"
                         title="Finance"
                         aria-label="Finance"
                         active={onFinance}
@@ -202,7 +157,7 @@ export default function Sidebar({
                         <DollarSign size={20} strokeWidth={1.75} />
                     </AdminV2NavLink>
                     <AdminV2NavLink
-                        href="/admin/operations/recurrence"
+                        href="/adminV2/operations"
                         title="Operations"
                         aria-label="Operations"
                         active={onOps}
@@ -212,7 +167,7 @@ export default function Sidebar({
                         <Wrench size={20} strokeWidth={1.75} />
                     </AdminV2NavLink>
                     <AdminV2NavLink
-                        href="/admin/system/access-control"
+                        href="/adminV2/compliance"
                         title="Compliance"
                         aria-label="Compliance"
                         active={onCompliance}
@@ -222,7 +177,7 @@ export default function Sidebar({
                         <ShieldCheck size={20} strokeWidth={1.75} />
                     </AdminV2NavLink>
                     <AdminV2NavLink
-                        href="/admin/system"
+                        href="/adminV2/system"
                         title="System"
                         aria-label="System"
                         active={onSystem}
@@ -270,8 +225,8 @@ export default function Sidebar({
                         </span>
                     </AdminV2NavLink>
                     <AdminV2NavLink
-                        href="/admin/opportunities"
-                        active={path.startsWith("/admin/opportunities")}
+                        href="/adminV2/inquiries"
+                        active={onInquiries}
                         className="rounded-md px-2 py-1.5 font-medium text-alloy-midnight/85 hover:bg-alloy-stone/10"
                         style={{ color: brand.primary }}
                     >
@@ -281,7 +236,7 @@ export default function Sidebar({
                         </span>
                     </AdminV2NavLink>
                     <AdminV2NavLink
-                        href="/admin/financials"
+                        href="/adminV2/finance"
                         active={onFinance}
                         className="rounded-md px-2 py-1.5 font-medium text-alloy-midnight/85 hover:bg-alloy-stone/10"
                         style={{ color: brand.primary }}
@@ -292,7 +247,7 @@ export default function Sidebar({
                         </span>
                     </AdminV2NavLink>
                     <AdminV2NavLink
-                        href="/admin/operations/recurrence"
+                        href="/adminV2/operations"
                         active={onOps}
                         className="rounded-md px-2 py-1.5 font-medium text-alloy-midnight/85 hover:bg-alloy-stone/10"
                         style={{ color: brand.primary }}
@@ -303,7 +258,7 @@ export default function Sidebar({
                         </span>
                     </AdminV2NavLink>
                     <AdminV2NavLink
-                        href="/admin/system/access-control"
+                        href="/adminV2/compliance"
                         active={onCompliance}
                         className="rounded-md px-2 py-1.5 font-medium text-alloy-midnight/85 hover:bg-alloy-stone/10"
                         style={{ color: brand.primary }}
@@ -314,7 +269,7 @@ export default function Sidebar({
                         </span>
                     </AdminV2NavLink>
                     <AdminV2NavLink
-                        href="/admin/system"
+                        href="/adminV2/system"
                         active={onSystem}
                         className="rounded-md px-2 py-1.5 font-medium text-alloy-midnight/85 hover:bg-alloy-stone/10"
                         style={{ color: brand.primary }}
@@ -325,54 +280,7 @@ export default function Sidebar({
                         </span>
                     </AdminV2NavLink>
 
-                    {path.startsWith("/adminV2/workspace") ? (
-                        <div className="flex flex-col gap-1 min-h-0 flex-1 overflow-y-auto">
-                            <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/50">Departments</div>
-                            {treeError ? <p className="text-[11px] text-amber-800">{treeError}</p> : null}
-                            {deptsSorted.length === 0 && !treeError ? (
-                                <p className="text-[11px] text-alloy-midnight/45">No departments yet.</p>
-                            ) : (
-                                <ul className="space-y-0.5 pl-0 list-none m-0">
-                                    {deptsSorted.map((d) => {
-                                        const activeDept = departmentId === d.id;
-                                        const childWus = wusByDept.get(d.id) ?? [];
-                                        return (
-                                            <li key={d.id} className="min-w-0">
-                                                <AdminV2NavLink
-                                                    href={`${WORKSPACE}/dept/${d.id}`}
-                                                    active={activeDept && !workUnitId}
-                                                    className="block truncate rounded-md px-2 py-1 font-medium text-alloy-midnight/85 hover:bg-alloy-stone/10"
-                                                    style={{ color: brand.primary }}
-                                                    title={d.name ?? d.id}
-                                                >
-                                                    {d.name?.trim() || d.id.slice(0, 8)}
-                                                </AdminV2NavLink>
-                                                {childWus.length > 0 ? (
-                                                    <ul className="mt-0.5 mb-1 ml-2 pl-2 border-l space-y-0.5 list-none" style={{ borderColor: neutral.border }}>
-                                                        {childWus.map((wu) => (
-                                                            <li key={wu.id} className="min-w-0">
-                                                                <AdminV2NavLink
-                                                                    href={`${WORKSPACE}/dept/${d.id}/work-unit/${wu.id}`}
-                                                                    active={workUnitId === wu.id}
-                                                                    className="block truncate rounded px-2 py-0.5 text-[12px] text-alloy-midnight/75 hover:bg-alloy-stone/10"
-                                                                    style={{ color: brand.primary }}
-                                                                    title={wu.name ?? wu.id}
-                                                                >
-                                                                    {wu.name?.trim() || wu.id.slice(0, 8)}
-                                                                </AdminV2NavLink>
-                                                            </li>
-                                                        ))}
-                                                    </ul>
-                                                ) : null}
-                                            </li>
-                                        );
-                                    })}
-                                </ul>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="flex-1 min-h-[8px]" />
-                    )}
+                    <div className="flex-1 min-h-[8px]" />
 
                     <div className="mt-auto pt-2 border-t" style={{ borderColor: neutral.border }}>
                         <AdminV2NavLink

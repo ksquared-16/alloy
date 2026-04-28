@@ -19,8 +19,9 @@ function resolvedToPrimaryVm(a: ResolvedActionForClient): PrimaryActionVm {
 
 function stripHardcodedShadowedByRegistry(system: PrimaryActionVm[] | undefined, registryKeys: Set<string>): PrimaryActionVm[] {
     return (system ?? []).filter((s) => {
-        if (s.id === "wu_new_inquiry" && registryKeys.has("new_inquiry")) return false;
-        if (s.id === "dept_open_enrollment_wu" && registryKeys.has("open_enrollment_work_unit")) return false;
+        // Enrollment v1: registry keys are canonical; drop legacy hardcoded IDs when registry equivalents exist.
+        if (s.id === "wu_new_inquiry" && registryKeys.has("create_inquiry")) return false;
+        if (s.id === "dept_open_enrollment_wu" && registryKeys.has("open_enrollment_pipeline")) return false;
         return true;
     });
 }

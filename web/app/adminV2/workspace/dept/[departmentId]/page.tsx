@@ -341,7 +341,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 return;
             }
             if (action.actionId === "wu_new_inquiry") {
-                window.location.href = "/admin/opportunities";
+                window.alert("Coming next: Create inquiry in AdminV2.");
                 return;
             }
             if (action.actionId === "dept_open_enrollment_wu" && primaryWorkUnit?.id) {
@@ -351,7 +351,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 return;
             }
             if (action.actionId === "wu_open_all_inquiries") {
-                window.location.href = "/admin/opportunities";
+                window.alert("Coming next: Inquiry browser in AdminV2.");
                 return;
             }
             if (action.actionId === "wu_open_needs_attention") {
@@ -365,7 +365,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 return;
             }
             if (action.actionId === "wu_manage_work_units") {
-                window.location.href = "/admin/system/work-units";
+                window.location.href = "/adminV2/settings/work-units";
                 return;
             }
             if (action.actionId === "wu_workspace_root") {

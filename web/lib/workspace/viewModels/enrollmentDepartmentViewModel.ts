@@ -311,15 +311,15 @@ export function buildEnrollmentDepartmentActionLinks(params?: {
         {
             id: "new_inquiry",
             label: "New inquiry",
-            href: primaryHref ?? "/admin/opportunities",
+            href: primaryHref ?? "/adminV2/workspace",
             variant: "primary",
         },
         {
             id: "open_all_inquiries",
             label: "Open all inquiries",
-            href: primaryHref ?? "/admin/opportunities",
+            href: primaryHref ?? "/adminV2/workspace",
             variant: "secondary",
         },
-        { id: "manage_work_units", label: "Manage work units", href: "/admin/system/work-units", variant: "secondary" },
+        { id: "manage_work_units", label: "Manage work units", href: "/adminV2/settings/work-units", variant: "secondary" },
     ];
 }

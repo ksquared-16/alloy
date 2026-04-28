@@ -438,9 +438,7 @@ export default function AdminV2WorkflowsPage() {
                     >
                         <div className="flex items-center justify-between gap-2">
                             <h2 className="text-sm font-semibold text-alloy-midnight">Workflows</h2>
-                            <Link href="/admin/workflows" className="text-xs font-semibold text-alloy-blue hover:underline">
-                                Legacy editor →
-                            </Link>
+                            <span className="text-xs font-semibold text-alloy-midnight/55">Editor coming next</span>
                         </div>
                         {workflowsLoading ? <p className="mt-2 text-sm text-alloy-midnight/60">Loading…</p> : null}
                         {workflowsError ? <p className="mt-2 text-sm text-alloy-ember">{workflowsError}</p> : null}

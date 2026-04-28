@@ -92,7 +92,7 @@ export async function applyRegistryResolvedActionClient(
             return { ok: true };
         }
         if (intent === "create_inquiry") {
-            host.router.push("/admin/opportunities");
+            window.alert("Coming next: Create inquiry in AdminV2.");
             return { ok: true };
         }
         if (intent === "open_enrollment_pipeline") {
