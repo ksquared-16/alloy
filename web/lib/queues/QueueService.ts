@@ -285,10 +285,35 @@ async function enrichOpportunityRows(params: {
     const { supabase, orgId, rows } = params;
     if (!rows.length) return [];
 
-    const contactIds = [...new Set(rows.map((r) => r.primary_contact_id).filter((x): x is string => typeof x === "string" && x.trim() !== ""))];
     const customerIds = [...new Set(rows.map((r) => r.customer_id).filter((x): x is string => typeof x === "string" && x.trim() !== ""))];
+    const personIds = [
+        ...new Set(
+            rows
+                .map((r) => (r as unknown as { primary_person_id?: unknown }).primary_person_id)
+                .filter((x): x is string => typeof x === "string" && x.trim() !== "")
+        ),
+    ];
+    const contactIds = [
+        ...new Set(
+            rows
+                .filter((r) => {
+                    const pid = (r as unknown as { primary_person_id?: unknown }).primary_person_id;
+                    return !(typeof pid === "string" && pid.trim());
+                })
+                .map((r) => r.primary_contact_id)
+                .filter((x): x is string => typeof x === "string" && x.trim() !== "")
+        ),
+    ];
+    const opportunityIds = [...new Set(rows.map((r) => r.id).filter((x): x is string => typeof x === "string" && x.trim() !== ""))];
 
-    const [contactsRes, customersRes, defs] = await Promise.all([
+    const [personsRes, contactsRes, customersRes, ocmsRes, defs] = await Promise.all([
+        personIds.length
+            ? supabase
+                  .from("persons")
+                  .select("id, first_name, last_name, email, phone")
+                  .eq("org_id", orgId)
+                  .in("id", personIds as any)
+            : Promise.resolve({ data: [] as any[], error: null as any }),
         contactIds.length
             ? supabase
                   .from("contacts")
@@ -299,28 +324,55 @@ async function enrichOpportunityRows(params: {
         customerIds.length
             ? supabase.from("customers").select("id, name").eq("org_id", orgId).in("id", customerIds as any)
             : Promise.resolve({ data: [] as any[], error: null as any }),
+        opportunityIds.length
+            ? supabase
+                  .from("opportunity_customer_members")
+                  .select("opportunity_id, customer_members(display_name)")
+                  .eq("org_id", orgId)
+                  .in("opportunity_id", opportunityIds as any)
+            : Promise.resolve({ data: [] as any[], error: null as any }),
         fetchEffectiveStatusDefinitions(supabase as any, orgId, "opportunities", { activeOnly: true }),
     ]);
 
     const labelByKey = displayLabelsFromDefinitions(defs);
 
+    const personById = new Map<string, any>();
+    for (const p of (personsRes as any).data ?? []) personById.set(String(p.id), p);
     const contactById = new Map<string, any>();
     for (const c of (contactsRes as any).data ?? []) contactById.set(String(c.id), c);
     const customerById = new Map<string, any>();
     for (const c of (customersRes as any).data ?? []) customerById.set(String(c.id), c);
+    const childNamesByOppId = new Map<string, string[]>();
+    for (const row of (ocmsRes as any).data ?? []) {
+        const oppId = String((row as any).opportunity_id ?? "");
+        if (!oppId) continue;
+        const cm = (row as any).customer_members;
+        const disp = cm && typeof cm === "object" ? String((cm as any).display_name ?? "").trim() : "";
+        if (!disp) continue;
+        const list = childNamesByOppId.get(oppId) ?? [];
+        list.push(disp);
+        childNamesByOppId.set(oppId, list);
+    }
 
     return rows.map((r) => {
+        const pid = (r as unknown as { primary_person_id?: string | null }).primary_person_id ?? null;
+        const person = pid ? personById.get(pid) : null;
         const contact = r.primary_contact_id ? contactById.get(r.primary_contact_id) : null;
         const customer = r.customer_id ? customerById.get(r.customer_id) : null;
         const contactName =
-            contact && (String(contact.first_name ?? "").trim() || String(contact.last_name ?? "").trim())
-                ? [contact.first_name, contact.last_name].filter(Boolean).join(" ").trim()
-                : null;
+            person && (String(person.first_name ?? "").trim() || String(person.last_name ?? "").trim())
+                ? [person.first_name, person.last_name].filter(Boolean).join(" ").trim()
+                : contact && (String(contact.first_name ?? "").trim() || String(contact.last_name ?? "").trim())
+                  ? [contact.first_name, contact.last_name].filter(Boolean).join(" ").trim()
+                  : null;
+        const contactEmail = (person?.email ?? contact?.email ?? null) as string | null;
+        const contactPhone = (person?.phone ?? contact?.phone ?? null) as string | null;
 
         const md = (r.metadata ?? null) as Record<string, unknown> | null;
         const notes = typeof md?.notes === "string" ? md.notes : typeof md?.demo_note === "string" ? md.demo_note : null;
         const nextStepPreview = typeof md?.next_step === "string" ? md.next_step.trim() : null;
 
+        const joinChildNames = childNamesByOppId.get(r.id) ?? [];
         const inquiryChildren = md && Array.isArray((md as { inquiry_children?: unknown }).inquiry_children)
             ? ((md as { inquiry_children: unknown[] }).inquiry_children ?? []).filter((x) => x && typeof x === "object")
             : [];
@@ -331,7 +383,11 @@ async function enrichOpportunityRows(params: {
         let desiredStart: string | null = null;
         let tourDate: string | null = null;
 
-        if (inquiryChildren.length > 0) {
+        if (joinChildNames.length > 0) {
+            childDisplay = joinChildNames.join(" · ");
+            desiredStart = typeof md?.desired_start_date === "string" ? md.desired_start_date : null;
+            tourDate = typeof md?.tour_date === "string" ? md.tour_date : null;
+        } else if (inquiryChildren.length > 0) {
             const names: string[] = [];
             const programs: string[] = [];
             for (const raw of inquiryChildren) {
@@ -381,8 +437,8 @@ async function enrichOpportunityRows(params: {
             title: r.name ?? null,
             _customer_name: customer?.name ?? null,
             _primary_contact_line: contactName ?? null,
-            _primary_phone: contact?.phone ?? null,
-            _primary_email: contact?.email ?? null,
+            _primary_phone: contactPhone ?? null,
+            _primary_email: contactEmail ?? null,
             _child_display_name: childDisplay,
             _requested_program: inquiryChildren.length > 0 ? programsDisplay ?? programCombined : programCombined,
             _desired_start_date: desiredStart,

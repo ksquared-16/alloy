@@ -1880,6 +1880,11 @@ export default function AdminEntityDrawer() {
     const handleResolvedOpportunityHeaderAction = useCallback(
         async (a: ResolvedActionForClient) => {
             if (!drawer.id || drawer.id === "new" || drawer.type !== "opportunities") return;
+            // Enrollment demo: schedule_tour must always open its action form first.
+            if (a.key === "schedule_tour") {
+                setActionFormState({ form_key: "schedule_tour", action: a });
+                return;
+            }
             if (a.action_type === "open_form") {
                 const formKey = a.payload?.form_key != null ? String(a.payload.form_key).trim() : "";
                 if (formKey) setActionFormState({ form_key: formKey, action: a });
@@ -6437,9 +6442,14 @@ export default function AdminEntityDrawer() {
                 opportunityInquiryWorkflowDrawer
               ? (() => {
                     const d = overviewData as Record<string, unknown>;
+                    const ident = (d._identity as Record<string, unknown> | null) ?? null;
+                    const household = ident && typeof ident.household === "object" ? (ident.household as Record<string, unknown>) : null;
+                    const householdLabel = household && typeof household.label === "string" ? household.label.trim() : "";
+                    const customerName = typeof (d as { _customer_name?: unknown })._customer_name === "string" ? String((d as { _customer_name: string })._customer_name).trim() : "";
                     const inquiryTitle = opportunityInquiryIdentityInquiryTitle(d);
                     const nm = String((d.name as string | undefined) ?? "").trim();
-                    const raw = inquiryTitle || nm || opportunitySingular;
+                    const base = householdLabel || customerName || inquiryTitle || nm || opportunitySingular;
+                    const raw = base.startsWith("Enrollment") ? base : `Enrollment — ${base}`;
                     return (
                         raw
                             .replace(/\bInquiry\b/gi, "")
@@ -8774,7 +8784,7 @@ export default function AdminEntityDrawer() {
                                                                     ) : null}
                                                                 </div>
                                                             </div>
-                                                            <div className="mt-2.5">
+                                                            <div className="mt-2">
                                                                 {(() => {
                                                                     const selected = (formData as { _enrollment_panel?: string })._enrollment_panel;
                                                                     const panel = selected === "notes" ? "notes" : "communication";
@@ -8785,7 +8795,7 @@ export default function AdminEntityDrawer() {
                                                                                 : "border-alloy-stone/25 bg-white text-alloy-midnight/75 hover:border-alloy-blue/35 hover:text-alloy-blue"
                                                                         }`;
                                                                     return (
-                                                                        <div className="space-y-2.5">
+                                                                        <div className="space-y-2">
                                                                             <div className="flex items-center justify-between">
                                                                                 <div className={tinyLabel}>Notes / communication</div>
                                                                                 <div className="flex items-center gap-1.5">
@@ -8852,7 +8862,7 @@ export default function AdminEntityDrawer() {
                                                                                         onBlur={() => {
                                                                                             if (nonJobFormDirty) saveEdit();
                                                                                         }}
-                                                                                        rows={4}
+                                                                                        rows={3}
                                                                                         disabled={!canMutate}
                                                                                         placeholder="Add follow-up notes…"
                                                                                         className="mt-1.5 w-full resize-none rounded-md border border-alloy-stone/20 bg-white px-2.5 py-2 text-[12px] leading-snug text-alloy-midnight/80 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
