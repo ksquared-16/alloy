@@ -23,6 +23,7 @@ import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { workspaceRouteParam } from "@/lib/workspace/workspaceRouteParam";
 import { validateQueueDefinition, type QueueDefinitionV1 } from "@/lib/config/queueDefinitionSchema";
 import { getQueueUiConfig, type QueueUiConfig, type QueueUiRowPreviewField } from "@/lib/ui-v2/queueUiConfig";
+import { UpdateStatusAddNoteModal } from "@/components/admin/opportunity/actions/UpdateStatusAddNoteModal";
 
 const WORKSPACE_BASE = "/adminV2/workspace";
 
@@ -128,6 +129,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [oq, setOq] = useState<WorkspaceOpportunityQueueRuntime | null>(null);
     const [needsAttentionWorkUnitId, setNeedsAttentionWorkUnitId] = useState<string | null>(null);
     const [opportunityQueueRowActions, setOpportunityQueueRowActions] = useState<QueueItemQuickActionVm[] | null>(null);
+    const [opportunityQueueRowResolved, setOpportunityQueueRowResolved] = useState<ResolvedActionForClient[] | null>(null);
     const [enrollmentRightRailResolved, setEnrollmentRightRailResolved] = useState<ResolvedActionForClient[] | null>(null);
     const [actionFeedback, setActionFeedback] = useState<string | null>(null);
 
@@ -143,6 +145,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
     const [workflowKpis, setWorkflowKpis] = useState<WorkflowKpis>(DEFAULT_WF_KPIS);
     const [workflowsSummary, setWorkflowsSummary] = useState<WorkflowSummaryRow[] | null>(null);
+
+    const [statusOptions, setStatusOptions] = useState<Array<{ value: string; label: string }>>([]);
+    const [updateStatusFormOpen, setUpdateStatusFormOpen] = useState(false);
+    const [updateStatusTargetId, setUpdateStatusTargetId] = useState<string | null>(null);
 
     const queueDef = useMemo<QueueDefinitionV1 | null>(() => {
         if (!workUnit?.queue_definition) return null;
@@ -329,6 +335,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         const aj = (await ar.json().catch(() => ({}))) as { actions?: ResolvedActionsBySlot };
                         if (ar.ok) {
                             const row = aj.actions?.row_inline ?? [];
+                            if (!cancelled) setOpportunityQueueRowResolved(row);
                             if (row.length) parsedQueueRowQuick = registryQuickActionsFromResolved(row);
                         }
                     } catch {
@@ -497,6 +504,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     setQueueItemsRoute(null);
                     setQueueItemsLoading(false);
                     setOpportunityQueueRowActions(null);
+                    setOpportunityQueueRowResolved(null);
                     setEnrollmentRightRailResolved(null);
                 }
             } finally {
@@ -930,6 +938,29 @@ export default function AdminV2OpportunityWorkUnitPage() {
         return m;
     }, [enrollmentRightRailResolved]);
 
+    const queueRowResolvedByKey = useMemo(() => {
+        const m = new Map<string, ResolvedActionForClient>();
+        for (const a of opportunityQueueRowResolved ?? []) m.set(a.key, a);
+        return m;
+    }, [opportunityQueueRowResolved]);
+
+    useEffect(() => {
+        if (!updateStatusFormOpen) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch("/api/admin/status-options?entity_type=opportunities", { credentials: "include" });
+                const j = (await res.json().catch(() => ({}))) as { options?: Array<{ value: string; label: string }>; error?: string };
+                if (!cancelled && res.ok) setStatusOptions(j.options ?? []);
+            } catch {
+                if (!cancelled) setStatusOptions([]);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [updateStatusFormOpen]);
+
     const onAction = useCallback(
         async (action: WorkspaceAction) => {
             if (
@@ -969,6 +1000,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 action.actionId &&
                 action.itemId
             ) {
+                const resolved = queueRowResolvedByKey.get(action.actionId);
+                if (resolved && resolved.action_type === "open_form") {
+                    const formKey =
+                        resolved.payload?.form_key != null ? String(resolved.payload.form_key).trim() : "";
+                    if (formKey === "update_status_add_note") {
+                        setUpdateStatusTargetId(action.itemId);
+                        setUpdateStatusFormOpen(true);
+                        return;
+                    }
+                }
                 const res = await fetch("/api/admin/actions/execute", {
                     method: "POST",
                     credentials: "include",
@@ -1163,6 +1204,37 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 href="/adminV2/workflows"
                             />
                         }
+                    />
+                    <UpdateStatusAddNoteModal
+                        open={updateStatusFormOpen}
+                        title="Update status"
+                        statusOptions={statusOptions}
+                        onClose={() => {
+                            setUpdateStatusFormOpen(false);
+                            setUpdateStatusTargetId(null);
+                        }}
+                        onSubmit={async (payload) => {
+                            if (!updateStatusTargetId) return;
+                            const res = await fetch("/api/admin/actions/execute", {
+                                method: "POST",
+                                credentials: "include",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    action_key: "update_status_add_note",
+                                    entity_type: "opportunity",
+                                    entity_id: updateStatusTargetId,
+                                    context: {
+                                        surface: "queue_row",
+                                        work_unit_id: workUnit?.id ?? null,
+                                        department_id: departmentId,
+                                    },
+                                    payload,
+                                }),
+                            });
+                            const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+                            if (!res.ok || !json.ok) throw new Error(json.error ?? "Update failed");
+                            invalidate({ entity_type: "opportunity", entity_id: updateStatusTargetId, action_key: "update_status_add_note" });
+                        }}
                     />
                 </>
             ) : (

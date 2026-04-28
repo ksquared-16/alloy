@@ -27,13 +27,13 @@ defs AS (
         VALUES
             -- Dept / work-unit rail (Enrollment)
             ('create_inquiry', 'Create inquiry', 'opportunity', 'ui_intent', jsonb_build_object('intent','create_inquiry')),
-            ('open_enrollment_pipeline', 'Open pipeline', 'opportunity', 'ui_intent', jsonb_build_object('intent','open_enrollment_pipeline')),
+            ('open_enrollment_pipeline', 'Open enrollment pipeline', 'opportunity', 'ui_intent', jsonb_build_object('intent','open_enrollment_pipeline')),
             ('review_automations', 'Review automations', 'opportunity', 'ui_intent', jsonb_build_object('intent','review_automations')),
 
             -- Record header (Enrollment) — placeholders (safe)
-            ('send_paperwork_placeholder', 'Send paperwork (coming next)', 'opportunity', 'ui_intent', jsonb_build_object('message','Coming next: Send paperwork.')),
-            ('add_to_waitlist_placeholder', 'Add to waitlist (coming next)', 'opportunity', 'ui_intent', jsonb_build_object('message','Coming next: Add to waitlist.')),
-            ('convert_to_enrolled_placeholder', 'Convert to enrolled (coming next)', 'opportunity', 'ui_intent', jsonb_build_object('message','Coming next: Convert to enrolled.'))
+            ('send_paperwork_placeholder', 'Send paperwork', 'opportunity', 'ui_intent', jsonb_build_object('message','Coming next: Send paperwork.')),
+            ('add_to_waitlist_placeholder', 'Add to waitlist', 'opportunity', 'ui_intent', jsonb_build_object('message','Coming next: Add to waitlist.')),
+            ('convert_to_enrolled_placeholder', 'Convert to enrolled', 'opportunity', 'ui_intent', jsonb_build_object('message','Coming next: Convert to enrolled.'))
     ) AS v(key, label, entity_type, action_type, payload_schema)
 ),
 updated_defs AS (

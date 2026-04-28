@@ -65,16 +65,18 @@ export default function EntityDrawerSection({
           }`}
           aria-expanded={expanded}
         >
-          <span>{config.title}</span>
-          {headerRight ? <span className="shrink-0 normal-case tracking-normal">{headerRight}</span> : null}
-          <span className="text-alloy-muted transition-opacity duration-150" aria-hidden>
+          <span className="flex items-center gap-2 min-w-0">
+            <span className="truncate">{config.title}</span>
+            {headerRight ? <span className="shrink-0 normal-case tracking-normal">{headerRight}</span> : null}
+          </span>
+          <span className="ml-auto text-alloy-muted transition-opacity duration-150" aria-hidden>
             {expanded ? "−" : "+"}
           </span>
         </button>
       ) : (
         <div className={isPremium ? PREMIUM_HEADER_STATIC : SECTION_HEADER_CLASS}>
-          <div className="flex items-center justify-between gap-2">
-            <span>{config.title}</span>
+          <div className="flex items-center gap-2">
+            <span className="truncate">{config.title}</span>
             {headerRight ? <span className="shrink-0 normal-case tracking-normal">{headerRight}</span> : null}
           </div>
         </div>

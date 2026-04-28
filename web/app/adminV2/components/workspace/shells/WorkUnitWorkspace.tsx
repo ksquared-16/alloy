@@ -140,13 +140,13 @@ export default function WorkUnitWorkspace({ model, onAction, headerQueuePicker, 
                     <div className="adminv2-ws-wu-lane-strip" aria-label="Lane status">
                       {statusLine ? (
                         <p className="adminv2-ws-wu-lane-strip-line">
-                          <span className="adminv2-ws-wu-lane-strip-k">Lane status</span>
+                          <span className="adminv2-ws-wu-lane-strip-k">Status</span>
                           {statusLine}
                         </p>
                       ) : null}
                       {recLine ? (
                         <p className="adminv2-ws-wu-lane-strip-line">
-                          <span className="adminv2-ws-wu-lane-strip-k">Recommended</span>
+                          <span className="adminv2-ws-wu-lane-strip-k">Suggested</span>
                           {recLine}
                         </p>
                       ) : null}

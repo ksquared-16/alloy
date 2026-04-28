@@ -195,8 +195,92 @@ export async function executeAdminAction(
             }
 
             const submitActionType = merged.submit_action_type != null ? String(merged.submit_action_type).trim() : "";
+            if (submitActionType === "update_status") {
+                if (table !== "opportunities") {
+                    return { ok: false, correlation_id: correlationId, error: "open_form submit_action_type=update_status supports opportunities only", status: 400 };
+                }
+                if (!(await assertRowOrg(supabase, "opportunities", entityId, ctx.orgId)).ok) {
+                    return { ok: false, correlation_id: correlationId, error: "Not found", status: 404 };
+                }
+                const statusKey = merged.status_key != null ? String(merged.status_key).trim() : "";
+                if (!statusKey) {
+                    return { ok: false, correlation_id: correlationId, error: "Missing required field: status_key", status: 400 };
+                }
+                const chk = await assertAllowedStatusKey(supabase, ctx.orgId, "opportunities", statusKey);
+                if (!chk.ok) {
+                    return { ok: false, correlation_id: correlationId, error: chk.message, status: 400 };
+                }
+
+                const { data: existing } = await supabase
+                    .from("opportunities")
+                    .select("status_key, customer_id, primary_contact_id, metadata")
+                    .eq("id", entityId)
+                    .eq("org_id", ctx.orgId)
+                    .maybeSingle();
+                if (!existing) {
+                    return { ok: false, correlation_id: correlationId, error: "Not found", status: 404 };
+                }
+
+                const oldStatusKey = (existing as { status_key?: string | null }).status_key ?? null;
+                const md = ((existing as { metadata?: Record<string, unknown> | null }).metadata ?? null) as Record<string, unknown> | null;
+                const nextMd: Record<string, unknown> = { ...(md && typeof md === "object" ? md : {}) };
+
+                const note = merged.note != null ? String(merged.note).trim() : "";
+                if (note) {
+                    const prev = typeof nextMd.notes === "string" ? String(nextMd.notes) : "";
+                    const ts = new Date().toISOString();
+                    const line = `[${ts}] ${note}`;
+                    nextMd.notes = prev && prev.trim() ? `${prev.trim()}\n${line}` : line;
+                }
+                const nextStep = merged.next_step != null ? String(merged.next_step).trim() : "";
+                if (nextStep) nextMd.next_step = nextStep;
+
+                const { data: updated, error: upErr } = await supabase
+                    .from("opportunities")
+                    .update({ status_key: statusKey, metadata: nextMd })
+                    .eq("id", entityId)
+                    .eq("org_id", ctx.orgId)
+                    .select()
+                    .single();
+                if (upErr || !updated) {
+                    return { ok: false, correlation_id: correlationId, error: upErr?.message ?? "Update failed", status: 400 };
+                }
+                updatedRow = updated as Record<string, unknown>;
+                const newStatusKey = (updated as { status_key?: string | null }).status_key ?? null;
+
+                const metadata: Record<string, unknown> = {};
+                const cust = (existing as { customer_id?: string | null }).customer_id;
+                const pc = (existing as { primary_contact_id?: string | null }).primary_contact_id;
+                if (cust != null) metadata.customer_id = cust;
+                if (pc != null) metadata.primary_contact_id = pc;
+                try {
+                    await emitStatusChangedEvent({
+                        supabase,
+                        orgId: ctx.orgId,
+                        entityType: "opportunities",
+                        entityId,
+                        oldStatusKey,
+                        newStatusKey,
+                        metadata: Object.keys(metadata).length ? metadata : undefined,
+                    });
+                } catch (e) {
+                    console.error("[executeAdminAction] emitStatusChangedEvent (open_form.submit:update_status)", e);
+                }
+
+                return {
+                    ok: true,
+                    correlation_id: correlationId,
+                    execution_result: { kind: "update_status", status_key: statusKey, ...(updatedRow ? { row: updatedRow } : {}) },
+                };
+            }
+
             if (submitActionType !== "start_workflow") {
-                return { ok: false, correlation_id: correlationId, error: "open_form v1 supports submit_action_type=start_workflow only", status: 400 };
+                return {
+                    ok: false,
+                    correlation_id: correlationId,
+                    error: "open_form v1 supports submit_action_type=start_workflow or update_status",
+                    status: 400,
+                };
             }
 
             const wfId = def.workflow_id;

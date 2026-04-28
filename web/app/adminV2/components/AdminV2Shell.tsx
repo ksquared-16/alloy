@@ -146,14 +146,16 @@ export default function AdminV2Shell({
             style={workspaceContentAmbientStyle}
           >
             {isWorkspaceV2Route || isSettingsRoute || isWorkflowsRoute ? <WorkspaceAmbientLayer /> : null}
-            <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden isolate pb-[200px]">
+            {/* Reserve room for the bottom AI bar so content isn't hidden behind it. */}
+            <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden isolate pb-[168px]">
               {isAiActivityRoute || isSettingsRoute || isWorkflowsRoute ? (
                 <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</main>
               ) : (
                 children
               )}
             </div>
-            <div className="absolute bottom-0 left-0 right-0 z-20 flex flex-col">
+            {/* Raise AI bar slightly so it doesn't feel glued to the viewport bottom. */}
+            <div className="absolute bottom-3 left-0 right-0 z-20 flex flex-col">
               <div className="flex w-full justify-center px-4">
                 <div className="w-full" style={{ maxWidth: COMMAND_SURFACE_MAX_W_PX }}>
                   <RecentAiActionsStrip />

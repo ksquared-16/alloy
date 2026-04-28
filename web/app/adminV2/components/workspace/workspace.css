@@ -44,7 +44,7 @@
    * Operational row: 3 lanes (throughput | attention | command) or 2 when no secondary queue.
    */
   --ws-dept-page-max-width: 1520px;
-  --ws-dept-contain-padding-x: 24px;
+  --ws-dept-contain-padding-x: 16px;
   --ws-dept-contain-padding-top: 8px;
   --ws-dept-contain-padding-bottom: 24px;
   --ws-dept-section-gap: 16px;

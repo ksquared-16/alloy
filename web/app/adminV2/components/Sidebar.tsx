@@ -2,7 +2,19 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Building2, Boxes, GitBranch, LayoutGrid, PanelLeftClose, PanelLeft, Settings } from "lucide-react";
+import {
+    Building2,
+    Boxes,
+    GitBranch,
+    LayoutGrid,
+    PanelLeftClose,
+    PanelLeft,
+    Settings,
+    DollarSign,
+    ShieldCheck,
+    Wrench,
+    ClipboardCheck,
+} from "lucide-react";
 import { neutral, brand } from "@/styles/tokens/colors";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
@@ -43,6 +55,10 @@ export default function Sidebar({
     const onWorkspace = path === WORKSPACE || path.startsWith(`${WORKSPACE}/`);
     const onSettings = path.startsWith("/adminV2/settings");
     const onWorkflows = path.startsWith("/adminV2/workflows");
+    const onFinance = path.startsWith("/admin/financials");
+    const onOps = path.startsWith("/admin/operations");
+    const onSystem = path.startsWith("/admin/system");
+    const onCompliance = path.startsWith("/admin/system/access-control");
 
     const [depts, setDepts] = useState<Dept[]>([]);
     const [wus, setWus] = useState<WU[]>([]);
@@ -157,13 +173,63 @@ export default function Sidebar({
                     <div className="flex-1 min-h-[8px]" />
                     <AdminV2NavLink
                         href="/adminV2/workflows"
-                        title="Workflows"
-                        aria-label="Workflows"
+                        title="Automations"
+                        aria-label="Automations"
                         active={onWorkflows}
                         className="adminv2-sidebar-rail-link"
                         style={{ color: brand.primary }}
                     >
                         <GitBranch size={20} strokeWidth={1.75} />
+                    </AdminV2NavLink>
+                    <AdminV2NavLink
+                        href="/admin/opportunities"
+                        title="Inquiries"
+                        aria-label="Inquiries"
+                        active={path.startsWith("/admin/opportunities")}
+                        className="adminv2-sidebar-rail-link"
+                        style={{ color: brand.primary }}
+                    >
+                        <ClipboardCheck size={20} strokeWidth={1.75} />
+                    </AdminV2NavLink>
+                    <AdminV2NavLink
+                        href="/admin/financials"
+                        title="Finance"
+                        aria-label="Finance"
+                        active={onFinance}
+                        className="adminv2-sidebar-rail-link"
+                        style={{ color: brand.primary }}
+                    >
+                        <DollarSign size={20} strokeWidth={1.75} />
+                    </AdminV2NavLink>
+                    <AdminV2NavLink
+                        href="/admin/operations/recurrence"
+                        title="Operations"
+                        aria-label="Operations"
+                        active={onOps}
+                        className="adminv2-sidebar-rail-link"
+                        style={{ color: brand.primary }}
+                    >
+                        <Wrench size={20} strokeWidth={1.75} />
+                    </AdminV2NavLink>
+                    <AdminV2NavLink
+                        href="/admin/system/access-control"
+                        title="Compliance"
+                        aria-label="Compliance"
+                        active={onCompliance}
+                        className="adminv2-sidebar-rail-link"
+                        style={{ color: brand.primary }}
+                    >
+                        <ShieldCheck size={20} strokeWidth={1.75} />
+                    </AdminV2NavLink>
+                    <AdminV2NavLink
+                        href="/admin/system"
+                        title="System"
+                        aria-label="System"
+                        active={onSystem}
+                        className="adminv2-sidebar-rail-link"
+                        style={{ color: brand.primary }}
+                    >
+                        <Settings size={20} strokeWidth={1.75} />
                     </AdminV2NavLink>
                     <AdminV2NavLink
                         href="/adminV2/settings"
@@ -187,7 +253,10 @@ export default function Sidebar({
                         className="rounded-md px-2 py-1.5 font-medium text-alloy-midnight/85 hover:bg-alloy-stone/10"
                         style={{ color: brand.primary }}
                     >
-                        Workspace
+                        <span className="inline-flex items-center gap-2">
+                            <LayoutGrid size={16} strokeWidth={1.75} />
+                            Workspace
+                        </span>
                     </AdminV2NavLink>
                     <AdminV2NavLink
                         href="/adminV2/workflows"
@@ -195,7 +264,65 @@ export default function Sidebar({
                         className="rounded-md px-2 py-1.5 font-medium text-alloy-midnight/85 hover:bg-alloy-stone/10"
                         style={{ color: brand.primary }}
                     >
-                        Workflows
+                        <span className="inline-flex items-center gap-2">
+                            <GitBranch size={16} strokeWidth={1.75} />
+                            Automations
+                        </span>
+                    </AdminV2NavLink>
+                    <AdminV2NavLink
+                        href="/admin/opportunities"
+                        active={path.startsWith("/admin/opportunities")}
+                        className="rounded-md px-2 py-1.5 font-medium text-alloy-midnight/85 hover:bg-alloy-stone/10"
+                        style={{ color: brand.primary }}
+                    >
+                        <span className="inline-flex items-center gap-2">
+                            <ClipboardCheck size={16} strokeWidth={1.75} />
+                            Inquiries
+                        </span>
+                    </AdminV2NavLink>
+                    <AdminV2NavLink
+                        href="/admin/financials"
+                        active={onFinance}
+                        className="rounded-md px-2 py-1.5 font-medium text-alloy-midnight/85 hover:bg-alloy-stone/10"
+                        style={{ color: brand.primary }}
+                    >
+                        <span className="inline-flex items-center gap-2">
+                            <DollarSign size={16} strokeWidth={1.75} />
+                            Finance
+                        </span>
+                    </AdminV2NavLink>
+                    <AdminV2NavLink
+                        href="/admin/operations/recurrence"
+                        active={onOps}
+                        className="rounded-md px-2 py-1.5 font-medium text-alloy-midnight/85 hover:bg-alloy-stone/10"
+                        style={{ color: brand.primary }}
+                    >
+                        <span className="inline-flex items-center gap-2">
+                            <Wrench size={16} strokeWidth={1.75} />
+                            Operations
+                        </span>
+                    </AdminV2NavLink>
+                    <AdminV2NavLink
+                        href="/admin/system/access-control"
+                        active={onCompliance}
+                        className="rounded-md px-2 py-1.5 font-medium text-alloy-midnight/85 hover:bg-alloy-stone/10"
+                        style={{ color: brand.primary }}
+                    >
+                        <span className="inline-flex items-center gap-2">
+                            <ShieldCheck size={16} strokeWidth={1.75} />
+                            Compliance
+                        </span>
+                    </AdminV2NavLink>
+                    <AdminV2NavLink
+                        href="/admin/system"
+                        active={onSystem}
+                        className="rounded-md px-2 py-1.5 font-medium text-alloy-midnight/85 hover:bg-alloy-stone/10"
+                        style={{ color: brand.primary }}
+                    >
+                        <span className="inline-flex items-center gap-2">
+                            <Settings size={16} strokeWidth={1.75} />
+                            System
+                        </span>
                     </AdminV2NavLink>
 
                     {path.startsWith("/adminV2/workspace") ? (
