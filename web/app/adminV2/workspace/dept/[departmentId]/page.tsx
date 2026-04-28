@@ -155,18 +155,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         setCtxDebug(null);
                     }
                 }
-                console.info("[adminV2][debug] ctx", {
-                    route,
-                    ok: res.ok,
-                    status: res.status,
-                    orgId: j.orgId ?? null,
-                    orgName: j.orgName ?? null,
-                    departmentId,
-                    workUnitId: null,
-                    error: j.error ?? null,
-                });
             } catch (e) {
-                console.warn("[adminV2][debug] ctx failed", { departmentId, error: e });
                 if (!cancelled) setCtxDebug(null);
             }
         })();
@@ -220,13 +209,6 @@ export default function AdminV2WorkspaceDepartmentPage() {
         const primary = primaryWorkUnit
             ? { id: primaryWorkUnit.id, key: primaryWorkUnit.key, name: primaryWorkUnit.name }
             : null;
-        console.info("[adminV2][dept] work units discovered", {
-            departmentId,
-            deptKey,
-            workUnits: rows,
-            primaryWorkUnit: primary,
-            primaryRoute: primary ? `${WORKSPACE_BASE}/dept/${departmentId}/work-unit/${primary.id}` : null,
-        });
     }, [departmentId, deptKey, primaryWorkUnit, runtime.workUnits]);
 
     useEffect(() => {
@@ -245,13 +227,6 @@ export default function AdminV2WorkspaceDepartmentPage() {
             try {
                 const res = await fetch(route, { credentials: "include" });
                 const j = (await res.json().catch(() => ({}))) as { error?: string; queues?: V1QueueSummary[] };
-                console.info("[adminV2][dept] v1 queues", {
-                    route,
-                    status: res.status,
-                    ok: res.ok,
-                    keys: Array.isArray(j.queues) ? (j.queues ?? []).map((q) => q.key) : [],
-                    error: j.error ?? null,
-                });
                 if (!res.ok) {
                     if (!cancelled) {
                         setV1Queues(null);
@@ -265,7 +240,6 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 }
             } catch (e) {
                 const msg = e instanceof Error ? e.message : "Failed to load queues";
-                console.warn("[adminV2][dept] v1 queues failed", { route, error: e });
                 if (!cancelled) {
                     setV1Queues(null);
                     setV1QueuesError(msg);
@@ -294,7 +268,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
         (async () => {
             try {
                 const res = await fetch(route, workspaceDataFetchInit());
-                const j = (await res.json().catch(() => ({}))) as { actions?: { right_rail?: ResolvedActionForClient[] } };
+                const j = (await res.json().catch(() => ({}))) as { actions?: { right_rail?: ResolvedActionForClient[] }; error?: string };
                 if (!cancelled && res.ok) {
                     setEnrollmentDeptRightRail(j.actions?.right_rail ?? []);
                 } else if (!cancelled) {

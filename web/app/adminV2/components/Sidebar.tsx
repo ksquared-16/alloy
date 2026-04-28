@@ -2,22 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
-import {
-    Building2,
-    Boxes,
-    GitBranch,
-    LayoutGrid,
-    PanelLeftClose,
-    PanelLeft,
-    Settings,
-    DollarSign,
-    ShieldCheck,
-    Wrench,
-    ClipboardCheck,
-} from "lucide-react";
+import { Building2, Boxes, GitBranch, LayoutGrid, PanelLeftClose, PanelLeft, Settings } from "lucide-react";
 import { neutral, brand } from "@/styles/tokens/colors";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
-// Navigation is top-level only; department/work-unit context lives in breadcrumbs.
+import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 
 const WORKSPACE = "/adminV2/workspace";
 
@@ -54,16 +43,53 @@ export default function Sidebar({
     const onWorkspace = path === WORKSPACE || path.startsWith(`${WORKSPACE}/`);
     const onSettings = path.startsWith("/adminV2/settings");
     const onWorkflows = path.startsWith("/adminV2/workflows");
-    const onInquiries = path.startsWith("/adminV2/inquiries");
-    const onFinance = path.startsWith("/adminV2/finance");
-    const onOps = path.startsWith("/adminV2/operations");
-    const onSystem = path.startsWith("/adminV2/system");
-    const onCompliance = path.startsWith("/adminV2/compliance");
 
-    const [depts] = useState<Dept[]>([]);
-    const [wus] = useState<WU[]>([]);
-    const [treeError] = useState<string | null>(null);
-    useEffect(() => {}, []);
+    const [depts, setDepts] = useState<Dept[]>([]);
+    const [wus, setWus] = useState<WU[]>([]);
+    const [treeError, setTreeError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (collapsed) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const init = workspaceDataFetchInit();
+                const [dRes, wRes] = await Promise.all([
+                    dedupeAdminFetch("/api/admin/departments", init),
+                    dedupeAdminFetch("/api/admin/work-units", init),
+                ]);
+                const dj = (await dRes.json().catch(() => ({}))) as { items?: Dept[] };
+                const wj = (await wRes.json().catch(() => ({}))) as { items?: WU[] };
+                if (cancelled) return;
+                setTreeError(null);
+                if (dRes.ok) setDepts(dj.items ?? []);
+                else setTreeError("Departments unavailable");
+                if (wRes.ok) setWus(wj.items ?? []);
+            } catch {
+                if (!cancelled) setTreeError("Navigation data unavailable");
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [collapsed]);
+
+    const deptsSorted = useMemo(() => {
+        return [...depts].sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id));
+    }, [depts]);
+
+    const wusByDept = useMemo(() => {
+        const m = new Map<string, WU[]>();
+        for (const w of wus) {
+            const k = w.department_id;
+            if (!m.has(k)) m.set(k, []);
+            m.get(k)!.push(w);
+        }
+        for (const arr of m.values()) {
+            arr.sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id));
+        }
+        return m;
+    }, [wus]);
 
     const railWidth = collapsed ? 56 : 280;
 
@@ -137,56 +163,6 @@ export default function Sidebar({
                         <GitBranch size={20} strokeWidth={1.75} />
                     </AdminV2NavLink>
                     <AdminV2NavLink
-                        href="/adminV2/inquiries"
-                        title="Inquiries"
-                        aria-label="Inquiries"
-                        active={onInquiries}
-                        className="adminv2-sidebar-rail-link"
-                        style={{ color: brand.primary }}
-                    >
-                        <ClipboardCheck size={20} strokeWidth={1.75} />
-                    </AdminV2NavLink>
-                    <AdminV2NavLink
-                        href="/adminV2/finance"
-                        title="Finance"
-                        aria-label="Finance"
-                        active={onFinance}
-                        className="adminv2-sidebar-rail-link"
-                        style={{ color: brand.primary }}
-                    >
-                        <DollarSign size={20} strokeWidth={1.75} />
-                    </AdminV2NavLink>
-                    <AdminV2NavLink
-                        href="/adminV2/operations"
-                        title="Operations"
-                        aria-label="Operations"
-                        active={onOps}
-                        className="adminv2-sidebar-rail-link"
-                        style={{ color: brand.primary }}
-                    >
-                        <Wrench size={20} strokeWidth={1.75} />
-                    </AdminV2NavLink>
-                    <AdminV2NavLink
-                        href="/adminV2/compliance"
-                        title="Compliance"
-                        aria-label="Compliance"
-                        active={onCompliance}
-                        className="adminv2-sidebar-rail-link"
-                        style={{ color: brand.primary }}
-                    >
-                        <ShieldCheck size={20} strokeWidth={1.75} />
-                    </AdminV2NavLink>
-                    <AdminV2NavLink
-                        href="/adminV2/system"
-                        title="System"
-                        aria-label="System"
-                        active={onSystem}
-                        className="adminv2-sidebar-rail-link"
-                        style={{ color: brand.primary }}
-                    >
-                        <Settings size={20} strokeWidth={1.75} />
-                    </AdminV2NavLink>
-                    <AdminV2NavLink
                         href="/adminV2/settings"
                         title="Settings"
                         aria-label="Settings"
@@ -198,8 +174,11 @@ export default function Sidebar({
                     </AdminV2NavLink>
                 </nav>
             ) : (
-                <div className="flex flex-col flex-1 min-h-0 px-2 pb-3 gap-2 text-[13px]" style={{ color: neutral.textSecondary }}>
-                    <div className="font-semibold text-[11px] uppercase tracking-wide" style={{ color: neutral.textSecondary }}>
+                <div
+                    className="flex flex-col flex-1 min-h-0 px-2 pb-3 gap-2 text-[13px] overflow-y-auto"
+                    style={{ color: neutral.textSecondary }}
+                >
+                    <div className="pt-1 font-semibold text-[11px] uppercase tracking-wide" style={{ color: neutral.textSecondary }}>
                         Navigate
                     </div>
                     <AdminV2NavLink
@@ -224,63 +203,63 @@ export default function Sidebar({
                             Automations
                         </span>
                     </AdminV2NavLink>
-                    <AdminV2NavLink
-                        href="/adminV2/inquiries"
-                        active={onInquiries}
-                        className="rounded-md px-2 py-1.5 font-medium text-alloy-midnight/85 hover:bg-alloy-stone/10"
-                        style={{ color: brand.primary }}
-                    >
-                        <span className="inline-flex items-center gap-2">
-                            <ClipboardCheck size={16} strokeWidth={1.75} />
-                            Inquiries
-                        </span>
-                    </AdminV2NavLink>
-                    <AdminV2NavLink
-                        href="/adminV2/finance"
-                        active={onFinance}
-                        className="rounded-md px-2 py-1.5 font-medium text-alloy-midnight/85 hover:bg-alloy-stone/10"
-                        style={{ color: brand.primary }}
-                    >
-                        <span className="inline-flex items-center gap-2">
-                            <DollarSign size={16} strokeWidth={1.75} />
-                            Finance
-                        </span>
-                    </AdminV2NavLink>
-                    <AdminV2NavLink
-                        href="/adminV2/operations"
-                        active={onOps}
-                        className="rounded-md px-2 py-1.5 font-medium text-alloy-midnight/85 hover:bg-alloy-stone/10"
-                        style={{ color: brand.primary }}
-                    >
-                        <span className="inline-flex items-center gap-2">
-                            <Wrench size={16} strokeWidth={1.75} />
-                            Operations
-                        </span>
-                    </AdminV2NavLink>
-                    <AdminV2NavLink
-                        href="/adminV2/compliance"
-                        active={onCompliance}
-                        className="rounded-md px-2 py-1.5 font-medium text-alloy-midnight/85 hover:bg-alloy-stone/10"
-                        style={{ color: brand.primary }}
-                    >
-                        <span className="inline-flex items-center gap-2">
-                            <ShieldCheck size={16} strokeWidth={1.75} />
-                            Compliance
-                        </span>
-                    </AdminV2NavLink>
-                    <AdminV2NavLink
-                        href="/adminV2/system"
-                        active={onSystem}
-                        className="rounded-md px-2 py-1.5 font-medium text-alloy-midnight/85 hover:bg-alloy-stone/10"
-                        style={{ color: brand.primary }}
-                    >
-                        <span className="inline-flex items-center gap-2">
-                            <Settings size={16} strokeWidth={1.75} />
-                            System
-                        </span>
-                    </AdminV2NavLink>
 
-                    <div className="flex-1 min-h-[8px]" />
+                    <div className="pt-2">
+                        <div
+                            className="mb-1 flex items-center justify-between px-2 text-[11px] font-semibold uppercase tracking-wide"
+                            style={{ color: neutral.textSecondary }}
+                        >
+                            <span>Departments</span>
+                            {treeError ? <span className="normal-case font-medium text-red-700/70">Unavailable</span> : null}
+                        </div>
+                        <div className="space-y-1">
+                            {deptsSorted.map((d) => {
+                                const name = (d.name ?? "").trim() || "Untitled department";
+                                const deptHref = `${WORKSPACE}/dept/${d.id}`;
+                                const deptActive = departmentId === d.id && !workUnitId;
+                                return (
+                                    <div key={d.id} className="space-y-1">
+                                        <AdminV2NavLink
+                                            href={deptHref}
+                                            active={deptActive}
+                                            className="rounded-md px-2 py-1.5 font-medium hover:bg-alloy-stone/10"
+                                            style={{ color: brand.primary }}
+                                            title={name}
+                                        >
+                                            <span className="inline-flex items-center gap-2">
+                                                <Building2 size={16} strokeWidth={1.75} />
+                                                <span className="truncate">{name}</span>
+                                            </span>
+                                        </AdminV2NavLink>
+                                        {(wusByDept.get(d.id) ?? []).length ? (
+                                            <div className="ml-6 space-y-1">
+                                                {(wusByDept.get(d.id) ?? []).map((wu) => {
+                                                    const wuName = (wu.name ?? "").trim() || "Untitled work unit";
+                                                    const wuHref = `${WORKSPACE}/dept/${d.id}/work-unit/${wu.id}`;
+                                                    const wuActive = departmentId === d.id && workUnitId === wu.id;
+                                                    return (
+                                                        <AdminV2NavLink
+                                                            key={wu.id}
+                                                            href={wuHref}
+                                                            active={wuActive}
+                                                            className="rounded-md px-2 py-1.5 font-medium hover:bg-alloy-stone/10"
+                                                            style={{ color: brand.primary }}
+                                                            title={wuName}
+                                                        >
+                                                            <span className="inline-flex items-center gap-2">
+                                                                <Boxes size={15} strokeWidth={1.75} />
+                                                                <span className="truncate">{wuName}</span>
+                                                            </span>
+                                                        </AdminV2NavLink>
+                                                    );
+                                                })}
+                                            </div>
+                                        ) : null}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
 
                     <div className="mt-auto pt-2 border-t" style={{ borderColor: neutral.border }}>
                         <AdminV2NavLink
@@ -289,7 +268,10 @@ export default function Sidebar({
                             className="rounded-md px-2 py-1.5 font-medium hover:bg-alloy-stone/10"
                             style={{ color: brand.primary }}
                         >
-                            Settings
+                            <span className="inline-flex items-center gap-2">
+                                <Settings size={16} strokeWidth={1.75} />
+                                Settings
+                            </span>
                         </AdminV2NavLink>
                     </div>
                 </div>
