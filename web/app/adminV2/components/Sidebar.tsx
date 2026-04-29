@@ -121,64 +121,67 @@ export default function Sidebar({
 
             {collapsed ? (
                 <nav
-                    className="flex flex-col items-stretch gap-1 px-1.5 pb-3 flex-1 min-h-0 overflow-y-auto"
+                    className="flex flex-col flex-1 min-h-0 px-1.5 pb-2"
                     aria-label="Workspace navigation"
                 >
-                    <AdminV2NavLink
-                        href={WORKSPACE}
-                        title="Workspace"
-                        aria-label="Workspace"
-                        active={path === WORKSPACE}
-                        className="adminv2-sidebar-rail-link"
-                        style={{ color: brand.primary }}
-                    >
-                        <LayoutGrid size={20} strokeWidth={1.75} />
-                    </AdminV2NavLink>
-                    {departmentId ? (
+                    <div className="flex min-h-0 flex-1 flex-col items-stretch gap-1 overflow-y-auto">
                         <AdminV2NavLink
-                            href={`${WORKSPACE}/dept/${departmentId}`}
-                            title="Department"
-                            aria-label="Department"
-                            active={Boolean(departmentId && !workUnitId)}
+                            href={WORKSPACE}
+                            title="Workspace"
+                            aria-label="Workspace"
+                            active={path === WORKSPACE}
                             className="adminv2-sidebar-rail-link"
                             style={{ color: brand.primary }}
                         >
-                            <Building2 size={20} strokeWidth={1.75} />
+                            <LayoutGrid size={20} strokeWidth={1.75} />
                         </AdminV2NavLink>
-                    ) : null}
-                    {departmentId && workUnitId ? (
+                        {departmentId ? (
+                            <AdminV2NavLink
+                                href={`${WORKSPACE}/dept/${departmentId}`}
+                                title="Department"
+                                aria-label="Department"
+                                active={Boolean(departmentId && !workUnitId)}
+                                className="adminv2-sidebar-rail-link"
+                                style={{ color: brand.primary }}
+                            >
+                                <Building2 size={20} strokeWidth={1.75} />
+                            </AdminV2NavLink>
+                        ) : null}
+                        {departmentId && workUnitId ? (
+                            <AdminV2NavLink
+                                href={`${WORKSPACE}/dept/${departmentId}/work-unit/${workUnitId}`}
+                                title="Work unit"
+                                aria-label="Work unit"
+                                active
+                                className="adminv2-sidebar-rail-link"
+                                style={{ color: brand.primary }}
+                            >
+                                <Boxes size={20} strokeWidth={1.75} />
+                            </AdminV2NavLink>
+                        ) : null}
+                    </div>
+                    <div className="mt-auto flex flex-shrink-0 flex-col items-stretch gap-1 border-t pt-1" style={{ borderColor: neutral.border }}>
                         <AdminV2NavLink
-                            href={`${WORKSPACE}/dept/${departmentId}/work-unit/${workUnitId}`}
-                            title="Work unit"
-                            aria-label="Work unit"
-                            active
+                            href="/adminV2/workflows"
+                            title="Automations"
+                            aria-label="Automations"
+                            active={onWorkflows}
                             className="adminv2-sidebar-rail-link"
                             style={{ color: brand.primary }}
                         >
-                            <Boxes size={20} strokeWidth={1.75} />
+                            <GitBranch size={20} strokeWidth={1.75} />
                         </AdminV2NavLink>
-                    ) : null}
-                    <div className="flex-1 min-h-[8px]" />
-                    <AdminV2NavLink
-                        href="/adminV2/workflows"
-                        title="Automations"
-                        aria-label="Automations"
-                        active={onWorkflows}
-                        className="adminv2-sidebar-rail-link"
-                        style={{ color: brand.primary }}
-                    >
-                        <GitBranch size={20} strokeWidth={1.75} />
-                    </AdminV2NavLink>
-                    <AdminV2NavLink
-                        href={SETTINGS_HREF}
-                        title="Settings"
-                        aria-label="Settings"
-                        active={onSettings}
-                        className="adminv2-sidebar-rail-link"
-                        style={{ color: brand.primary }}
-                    >
-                        <Settings size={20} strokeWidth={1.75} />
-                    </AdminV2NavLink>
+                        <AdminV2NavLink
+                            href={SETTINGS_HREF}
+                            title="Settings"
+                            aria-label="Settings"
+                            active={onSettings}
+                            className="adminv2-sidebar-rail-link"
+                            style={{ color: brand.primary }}
+                        >
+                            <Settings size={20} strokeWidth={1.75} />
+                        </AdminV2NavLink>
+                    </div>
                 </nav>
             ) : (
                 <div

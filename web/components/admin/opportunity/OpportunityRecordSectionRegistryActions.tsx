@@ -63,6 +63,17 @@ export default function OpportunityRecordSectionRegistryActions({
 
     useEffect(() => {
         let cancelled = false;
+        const wu = (workUnitId ?? "").trim();
+        const dept = (departmentId ?? "").trim();
+        // Scoped placements require both dimensions; avoid a first fetch without department_id then a second with it.
+        if (wu && !dept) {
+            setBySlot(null);
+            setLoading(true);
+            return () => {
+                cancelled = true;
+            };
+        }
+
         setLoading(true);
         const qs = new URLSearchParams({
             surface: "record_section",
@@ -70,8 +81,8 @@ export default function OpportunityRecordSectionRegistryActions({
             entity_id: opportunityId,
             section_key: sectionKey,
         });
-        if (departmentId) qs.set("department_id", departmentId);
-        if (workUnitId) qs.set("work_unit_id", workUnitId);
+        if (dept) qs.set("department_id", dept);
+        if (wu) qs.set("work_unit_id", wu);
         const url = `/api/admin/actions?${qs.toString()}`;
         const timingEnabled =
             process.env.NODE_ENV !== "production" ||

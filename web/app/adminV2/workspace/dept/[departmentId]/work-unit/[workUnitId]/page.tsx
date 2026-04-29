@@ -18,6 +18,7 @@ import type { QueueItemQuickActionVm, WorkUnitWorkspaceModel } from "@/lib/ui-v2
 import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
 import { buildRealOpportunityWorkUnitWorkspaceModel } from "@/lib/ui-v2/adapters/realWorkUnitFromOpportunities";
 import { mergeEnrollmentRightRailActions } from "@/lib/workspace/viewModels/enrollmentRightRailMerge";
+import { rightRailResolvedFromActionsPayload } from "@/lib/workspace/rightRailResolvedFromActionsPayload";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { workspaceRouteParam } from "@/lib/workspace/workspaceRouteParam";
 import { validateQueueDefinition, type QueueDefinitionV1 } from "@/lib/config/queueDefinitionSchema";
@@ -307,7 +308,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         const ar = rightRailSettled.value;
                         const aj = (await ar.json().catch(() => ({}))) as { actions?: ResolvedActionsBySlot; error?: string };
                         if (ar.ok) {
-                            parsedRightRail = aj.actions?.right_rail ?? [];
+                            parsedRightRail = rightRailResolvedFromActionsPayload(aj.actions);
                         }
                     } catch {
                         /* non-fatal */

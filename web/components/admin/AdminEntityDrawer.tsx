@@ -984,6 +984,8 @@ export default function AdminEntityDrawer() {
     const [relatedPeopleRefreshKey, setRelatedPeopleRefreshKey] = useState(0);
     const [opportunityQueueDefinition, setOpportunityQueueDefinition] = useState<QueueDefinitionV1 | null>(null);
     const [opportunityWorkUnitDepartmentId, setOpportunityWorkUnitDepartmentId] = useState<string | null>(null);
+    /** Fire `interactive` timing once per opportunity open (relaxed vs waiting on header fetch). */
+    const opportunityInteractiveMarkedRef = useRef<string | null>(null);
     const [addInquiryChildState, setAddInquiryChildState] = useState<{ mode: "child" | "sibling" } | null>(null);
     const [collectPaymentOpen, setCollectPaymentOpen] = useState(false);
     const [collectPaymentContext, setCollectPaymentContext] = useState<AdminCollectPaymentModalContext | null>(null);
@@ -2095,6 +2097,19 @@ export default function AdminEntityDrawer() {
                 : "";
         return wuid;
     }, [drawer.type, drawer.id, data]);
+
+    const opportunityDrawerDepartmentId = useMemo(() => {
+        const fromState = opportunityWorkUnitDepartmentId?.trim() ?? "";
+        if (fromState) return fromState;
+        if (drawer.type !== "opportunities" || !data || typeof data !== "object") return "";
+        return String((data as { _work_unit_department_id?: unknown })._work_unit_department_id ?? "").trim();
+    }, [drawer.type, opportunityWorkUnitDepartmentId, data]);
+
+    useEffect(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
+            opportunityInteractiveMarkedRef.current = null;
+        }
+    }, [drawer.type, drawer.id]);
 
     useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
@@ -4274,17 +4289,22 @@ export default function AdminEntityDrawer() {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
         if (loading) return;
         if (!data) return;
-        if (!opportunityRegistryHeaderReady) return;
+        const wuid = opportunityWorkUnitId.trim();
         const deptFromRecord =
             data && typeof data === "object"
                 ? String((data as { _work_unit_department_id?: unknown })._work_unit_department_id ?? "").trim()
                 : "";
-        if (!opportunityWorkUnitDepartmentId?.trim() && !deptFromRecord) return;
-        // Interactive when the record + resolved header actions are ready. Queue timeline may hydrate later from work_unit_fetch.
+        const deptReady = Boolean(opportunityWorkUnitDepartmentId?.trim() || deptFromRecord);
+        if (wuid && !deptReady) return;
+        const markKey = drawer.id;
+        if (opportunityInteractiveMarkedRef.current === markKey) return;
+        opportunityInteractiveMarkedRef.current = markKey;
+        // Usable once the record is present and scoped header can resolve (dept known when WU exists). Header/section action fetches may still be in flight.
         markTiming("interactive", {
             record_loaded: true,
-            header_actions_ready: true,
-            work_unit_ready: Boolean(opportunityWorkUnitDepartmentId?.trim() || deptFromRecord),
+            header_actions_resolved: opportunityRegistryHeaderReady,
+            header_actions_loading: opportunityResolvedHeaderLoading,
+            work_unit_ready: deptReady,
         });
     }, [
         timingEnabled,
@@ -4292,7 +4312,9 @@ export default function AdminEntityDrawer() {
         drawer.id,
         loading,
         data,
+        opportunityWorkUnitId,
         opportunityRegistryHeaderReady,
+        opportunityResolvedHeaderLoading,
         opportunityWorkUnitDepartmentId,
         markTiming,
     ]);
@@ -5559,7 +5581,7 @@ export default function AdminEntityDrawer() {
                         customerId={customerId}
                         canMutate={!!canMutate}
                         sectionKey="customer_booking"
-                        departmentId={opportunityWorkUnitDepartmentId}
+                        departmentId={opportunityDrawerDepartmentId || null}
                         workUnitId={String(d.work_unit_id ?? "").trim() || null}
                         router={router}
                         openDrawer={openDrawer}
@@ -9049,7 +9071,7 @@ export default function AdminEntityDrawer() {
                                                                                 record={d}
                                                                                 canMutate={!!canMutate}
                                                                                 sectionKey="family_contacts"
-                                                                                departmentId={opportunityWorkUnitDepartmentId}
+                                                                                departmentId={opportunityDrawerDepartmentId || null}
                                                                                 workUnitId={String(d.work_unit_id ?? "").trim() || null}
                                                                                 router={router}
                                                                                 openDrawer={openDrawer}
