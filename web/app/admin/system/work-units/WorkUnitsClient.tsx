@@ -92,6 +92,8 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
     const [queueItemsRoute, setQueueItemsRoute] = useState<string | null>(null);
     const [queueItemsResult, setQueueItemsResult] = useState<QueueItemsResult | null>(null);
 
+    const [statusOptionsOpp, setStatusOptionsOpp] = useState<Array<{ value: string; label: string }>>([]);
+
     const modalQueueBuckets = useMemo(() => {
         try {
             const raw = JSON.parse((modalQueueJson ?? "").trim() || "{}") as unknown;
@@ -107,6 +109,223 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
             };
         }
     }, [modalQueueJson]);
+
+    const modalQueueStatusKeysByQueueKey = useMemo(() => {
+        const out = new Map<string, string[]>();
+        if (!modalQueueBuckets.ok) return out;
+        for (const q of modalQueueBuckets.value.queues) {
+            const statusKeys: string[] = [];
+            for (const f of q.filters ?? []) {
+                if (!f || typeof f !== "object") continue;
+                const ff = f as Record<string, unknown>;
+                if (ff.type === "status" && ff.operator === "in" && Array.isArray(ff.values)) {
+                    for (const v of ff.values) if (typeof v === "string" && v.trim()) statusKeys.push(v.trim());
+                }
+            }
+            if (statusKeys.length) out.set(q.key, statusKeys);
+        }
+        return out;
+    }, [modalQueueJson, modalQueueBuckets.ok]);
+
+    type BucketSection = "pipeline" | "attention" | "internal";
+    type QueueBucketEditorRow = {
+        key: string;
+        label: string;
+        section: BucketSection;
+        status_keys: string[];
+    };
+
+    const [queueEditorEnabled, setQueueEditorEnabled] = useState(false);
+    const [queueEditorRows, setQueueEditorRows] = useState<QueueBucketEditorRow[]>([]);
+    const [queueEditorExcludedStatusKeys, setQueueEditorExcludedStatusKeys] = useState<string[]>([]);
+    const [queueEditorErrors, setQueueEditorErrors] = useState<string[]>([]);
+    const [queueEditorWarnings, setQueueEditorWarnings] = useState<string[]>([]);
+
+    useEffect(() => {
+        if (!modalOpen) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch("/api/admin/status-options?entity_type=opportunities", { credentials: "include" });
+                const json = (await res.json().catch(() => ({}))) as {
+                    options?: Array<{ status_key?: string; status_label?: string }>;
+                };
+                const opts = Array.isArray(json.options)
+                    ? json.options
+                          .map((o) => ({
+                              value: String(o.status_key ?? "").trim(),
+                              label: String(o.status_label ?? o.status_key ?? "").trim(),
+                          }))
+                          .filter((o) => o.value)
+                    : [];
+                if (!cancelled) setStatusOptionsOpp(opts);
+            } catch {
+                if (!cancelled) setStatusOptionsOpp([]);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [modalOpen]);
+
+    useEffect(() => {
+        if (!modalOpen) return;
+        if (!modalQueueBuckets.ok || modalQueueBuckets.value.entity_type !== "opportunity") {
+            setQueueEditorEnabled(false);
+            setQueueEditorRows([]);
+            setQueueEditorExcludedStatusKeys([]);
+            setQueueEditorErrors([]);
+            setQueueEditorWarnings([]);
+            return;
+        }
+
+        const def = modalQueueBuckets.value;
+        const pipelineKeys = def.ui?.sections?.find((s) => (s.tone ?? "standard") !== "critical")?.queue_keys ?? [];
+        const attentionKeys =
+            def.ui?.sections?.find((s) => (s.tone ?? "standard") === "critical")?.queue_keys ??
+            def.ui?.sections?.find((s) => s.key.toLowerCase().includes("attention"))?.queue_keys ??
+            [];
+        const pipeline = new Set(pipelineKeys);
+        const attention = new Set(attentionKeys);
+
+        const statusKeysForQueue = (filters: unknown): string[] => {
+            if (!Array.isArray(filters)) return [];
+            const out: string[] = [];
+            for (const f of filters) {
+                if (!f || typeof f !== "object") continue;
+                const ff = f as Record<string, unknown>;
+                if (ff.type === "status" && ff.operator === "in" && Array.isArray(ff.values)) {
+                    for (const v of ff.values) if (typeof v === "string" && v.trim()) out.push(v.trim());
+                }
+            }
+            return out;
+        };
+
+        const rows: QueueBucketEditorRow[] = [];
+        for (const q of def.queues) {
+            const key = String(q.key ?? "").trim();
+            const label = String(q.label ?? "").trim();
+            const section: BucketSection = attention.has(key) ? "attention" : pipeline.has(key) ? "pipeline" : "internal";
+            rows.push({
+                key,
+                label: label || key,
+                section,
+                status_keys: statusKeysForQueue(q.filters),
+            });
+        }
+        setQueueEditorRows(rows);
+        setQueueEditorExcludedStatusKeys([]);
+        setQueueEditorEnabled(true);
+    }, [modalOpen, modalQueueBuckets.ok]);
+
+    const queueEditorValidation = useMemo(() => {
+        if (!queueEditorEnabled) return { errors: [] as string[], warnings: [] as string[] };
+        const errors: string[] = [];
+        const warnings: string[] = [];
+
+        const pipelineBuckets = queueEditorRows.filter((r) => r.section === "pipeline");
+        const attentionBuckets = queueEditorRows.filter((r) => r.section === "attention");
+
+        if (pipelineBuckets.some((b) => b.key === "needs_attention")) {
+            errors.push("needs_attention must not be in the pipeline section.");
+        }
+
+        const internalWithStatus = queueEditorRows.filter((r) => r.section === "internal" && r.status_keys.length > 0);
+        if (internalWithStatus.length) {
+            warnings.push("Some internal buckets have status mappings; they will not appear in UI sections.");
+        }
+
+        const seen = new Map<string, string>();
+        for (const b of pipelineBuckets) {
+            for (const sk of b.status_keys) {
+                const prev = seen.get(sk);
+                if (prev && prev !== b.key) {
+                    errors.push(`Status ${sk} appears in multiple pipeline buckets: ${prev}, ${b.key}.`);
+                } else {
+                    seen.set(sk, b.key);
+                }
+            }
+        }
+
+        const activeStatusKeys = statusOptionsOpp.map((o) => o.value);
+        const excluded = new Set(queueEditorExcludedStatusKeys);
+        const covered = new Set<string>();
+        for (const b of pipelineBuckets) for (const sk of b.status_keys) covered.add(sk);
+        const missing = activeStatusKeys.filter((sk) => !covered.has(sk) && !excluded.has(sk));
+        if (missing.length) {
+            errors.push(`Active statuses must be mapped or excluded. Missing: ${missing.join(", ")}.`);
+        }
+
+        const needsInAttention = attentionBuckets.some((b) => b.key === "needs_attention");
+        if (queueEditorRows.some((b) => b.key === "needs_attention") && !needsInAttention) {
+            warnings.push("needs_attention is present but not assigned to the attention section.");
+        }
+
+        return { errors, warnings };
+    }, [queueEditorEnabled, queueEditorRows, queueEditorExcludedStatusKeys, statusOptionsOpp]);
+
+    useEffect(() => {
+        setQueueEditorErrors(queueEditorValidation.errors);
+        setQueueEditorWarnings(queueEditorValidation.warnings);
+    }, [queueEditorValidation.errors, queueEditorValidation.warnings]);
+
+    function buildQueueDefinitionFromEditor(): Record<string, unknown> {
+        const rows = queueEditorRows
+            .map((r) => ({
+                key: r.key.trim(),
+                label: r.label.trim() || r.key.trim(),
+                section: r.section,
+                status_keys: r.status_keys.map((s) => s.trim()).filter(Boolean),
+            }))
+            .filter((r) => r.key);
+
+        const pipelineStatusKeys = Array.from(
+            new Set(rows.filter((r) => r.section === "pipeline").flatMap((r) => r.status_keys))
+        );
+
+        const queues = rows.map((r) => ({
+            key: r.key,
+            label: r.label,
+            filters:
+                r.key === "needs_attention"
+                    ? [{ type: "exception", operator: "exists" }]
+                    : [{ type: "status", operator: "in", values: r.status_keys }],
+            sort: [{ field: "updated_at", direction: r.section === "pipeline" ? "desc" : "asc" }],
+            limit: 50,
+            priority: r.key === "needs_attention" ? "critical" : "standard",
+            display: "list",
+        }));
+
+        if (!queues.some((q) => q.key === "pipeline_total")) {
+            queues.push({
+                key: "pipeline_total",
+                label: "Pipeline total",
+                filters: [{ type: "status", operator: "in", values: pipelineStatusKeys }],
+                sort: [{ field: "updated_at", direction: "desc" }],
+                limit: 1,
+                priority: "standard",
+                display: "list",
+            });
+        }
+
+        const pipelineKeys = rows.filter((r) => r.section === "pipeline").map((r) => r.key);
+        const attentionKeys = rows.filter((r) => r.section === "attention").map((r) => r.key);
+
+        return {
+            version: 1,
+            entity_type: "opportunity",
+            ui: {
+                layout: "pipeline_with_attention",
+                primary_total_label: "Pipeline families",
+                primary_total_queue: "pipeline_total",
+                sections: [
+                    { key: "pipeline", label: "Pipeline", queue_keys: pipelineKeys },
+                    { key: "attention", label: "Needs Attention", tone: "critical", queue_keys: attentionKeys },
+                ],
+            },
+            queues,
+        };
+    }
 
     const deptNameById = useMemo(() => {
         const m = new Map<string, string>();
@@ -294,7 +513,18 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
         }
         let queueParsed: Record<string, unknown>;
         try {
-            const p = JSON.parse(modalQueueJson.trim() || "{}") as unknown;
+            let jsonText = modalQueueJson.trim() || "{}";
+            if (queueEditorEnabled) {
+                if (queueEditorErrors.length) {
+                    setModalError(queueEditorErrors[0] ?? "Queue definition validation failed.");
+                    return;
+                }
+                const built = buildQueueDefinitionFromEditor();
+                const nextJson = JSON.stringify(built, null, 2);
+                jsonText = nextJson;
+                setModalQueueJson(nextJson);
+            }
+            const p = JSON.parse(jsonText) as unknown;
             if (typeof p !== "object" || p === null || Array.isArray(p)) {
                 setModalError("Queue definition must be a JSON object.");
                 return;
@@ -528,6 +758,200 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
                                 />
                             </label>
                             <div className="rounded-lg border border-admin-border/60 bg-white/70 px-3 py-2">
+                                <div className="flex items-center justify-between gap-2">
+                                    <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/55">
+                                        Queue Definition Editor (beta)
+                                    </div>
+                                    <label className="flex items-center gap-2 text-xs text-alloy-forge/70">
+                                        <input
+                                            type="checkbox"
+                                            checked={queueEditorEnabled}
+                                            onChange={(e) => setQueueEditorEnabled(e.target.checked)}
+                                            disabled={!modalQueueBuckets.ok || modalQueueBuckets.value.entity_type !== "opportunity"}
+                                        />
+                                        Enable
+                                    </label>
+                                </div>
+                                {!modalQueueBuckets.ok ? (
+                                    <div className="mt-1 text-xs text-alloy-forge/60">
+                                        Not parseable as queue_definition v1. Fix JSON to enable the editor.
+                                    </div>
+                                ) : modalQueueBuckets.value.entity_type !== "opportunity" ? (
+                                    <div className="mt-1 text-xs text-alloy-forge/60">
+                                        Editor currently supports opportunity queues only.
+                                    </div>
+                                ) : !queueEditorEnabled ? (
+                                    <div className="mt-1 text-xs text-alloy-forge/60">
+                                        Edit buckets + status mappings with validation (still saves to JSON).
+                                    </div>
+                                ) : (
+                                    <div className="mt-3 space-y-3">
+                                        {queueEditorErrors.length ? (
+                                            <div className="rounded-md border border-red-200 bg-red-50 px-2.5 py-2 text-xs text-red-800">
+                                                <div className="font-semibold">Blocking validation error</div>
+                                                <ul className="mt-1 list-disc pl-5 space-y-0.5">
+                                                    {queueEditorErrors.map((m) => (
+                                                        <li key={`qe:${m}`}>{m}</li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        ) : null}
+                                        {queueEditorWarnings.length ? (
+                                            <div className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-900">
+                                                <div className="font-semibold">Warnings</div>
+                                                <ul className="mt-1 list-disc pl-5 space-y-0.5">
+                                                    {queueEditorWarnings.map((m) => (
+                                                        <li key={`qw:${m}`}>{m}</li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        ) : null}
+
+                                        <div className="space-y-2">
+                                            {queueEditorRows.map((r, idx) => (
+                                                <div key={`b:${idx}:${r.key}`} className="rounded-md border border-admin-border/60 bg-white px-2.5 py-2">
+                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                                        <label className="block text-xs">
+                                                            <span className="text-alloy-forge/70 font-semibold">Key</span>
+                                                            <input
+                                                                className="mt-1 w-full border border-admin-border rounded-md px-2 py-1 text-xs font-mono"
+                                                                value={r.key}
+                                                                onChange={(e) =>
+                                                                    setQueueEditorRows((prev) =>
+                                                                        prev.map((x, j) => (j === idx ? { ...x, key: e.target.value } : x))
+                                                                    )
+                                                                }
+                                                            />
+                                                        </label>
+                                                        <label className="block text-xs">
+                                                            <span className="text-alloy-forge/70 font-semibold">Label</span>
+                                                            <input
+                                                                className="mt-1 w-full border border-admin-border rounded-md px-2 py-1 text-xs"
+                                                                value={r.label}
+                                                                onChange={(e) =>
+                                                                    setQueueEditorRows((prev) =>
+                                                                        prev.map((x, j) => (j === idx ? { ...x, label: e.target.value } : x))
+                                                                    )
+                                                                }
+                                                            />
+                                                        </label>
+                                                        <label className="block text-xs">
+                                                            <span className="text-alloy-forge/70 font-semibold">Section</span>
+                                                            <select
+                                                                className="mt-1 w-full border border-admin-border rounded-md px-2 py-1 text-xs"
+                                                                value={r.section}
+                                                                onChange={(e) =>
+                                                                    setQueueEditorRows((prev) =>
+                                                                        prev.map((x, j) =>
+                                                                            j === idx ? { ...x, section: e.target.value as BucketSection } : x
+                                                                        )
+                                                                    )
+                                                                }
+                                                            >
+                                                                <option value="pipeline">Pipeline</option>
+                                                                <option value="attention">Attention</option>
+                                                                <option value="internal">Internal</option>
+                                                            </select>
+                                                        </label>
+                                                    </div>
+
+                                                    <div className="mt-2">
+                                                        <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/55">
+                                                            Status mappings
+                                                        </div>
+                                                        {statusOptionsOpp.length === 0 ? (
+                                                            <div className="mt-1 text-xs text-alloy-forge/60">No status options loaded.</div>
+                                                        ) : (
+                                                            <div className="mt-1 grid grid-cols-2 md:grid-cols-3 gap-1">
+                                                                {statusOptionsOpp.map((o) => {
+                                                                    const checked = r.status_keys.includes(o.value);
+                                                                    return (
+                                                                        <label
+                                                                            key={`${r.key}:sk:${o.value}`}
+                                                                            className="flex items-center gap-2 text-xs text-alloy-forge/75"
+                                                                        >
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={checked}
+                                                                                onChange={(e) => {
+                                                                                    const on = e.target.checked;
+                                                                                    setQueueEditorRows((prev) =>
+                                                                                        prev.map((x, j) => {
+                                                                                            if (j !== idx) return x;
+                                                                                            const next = new Set(x.status_keys);
+                                                                                            if (on) next.add(o.value);
+                                                                                            else next.delete(o.value);
+                                                                                            return { ...x, status_keys: [...next] };
+                                                                                        })
+                                                                                    );
+                                                                                }}
+                                                                            />
+                                                                            <span className="truncate">{o.label}</span>
+                                                                        </label>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    <div className="mt-2 flex items-center justify-between">
+                                                        <button
+                                                            type="button"
+                                                            className="text-xs font-semibold text-red-700"
+                                                            onClick={() => setQueueEditorRows((prev) => prev.filter((_, j) => j !== idx))}
+                                                        >
+                                                            Remove bucket
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        <button
+                                            type="button"
+                                            className="rounded-md border border-admin-border bg-white px-3 py-2 text-xs font-semibold text-alloy-forge hover:bg-alloy-stone/10"
+                                            onClick={() =>
+                                                setQueueEditorRows((prev) => [
+                                                    ...prev,
+                                                    { key: "new_bucket", label: "New bucket", section: "pipeline", status_keys: [] },
+                                                ])
+                                            }
+                                        >
+                                            Add bucket
+                                        </button>
+
+                                        <div className="rounded-md border border-admin-border/60 bg-white px-2.5 py-2">
+                                            <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/55">
+                                                Excluded statuses (intentional)
+                                            </div>
+                                            <div className="mt-1 grid grid-cols-2 md:grid-cols-3 gap-1">
+                                                {statusOptionsOpp.map((o) => {
+                                                    const checked = queueEditorExcludedStatusKeys.includes(o.value);
+                                                    return (
+                                                        <label key={`ex:${o.value}`} className="flex items-center gap-2 text-xs text-alloy-forge/75">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={checked}
+                                                                onChange={(e) => {
+                                                                    const on = e.target.checked;
+                                                                    setQueueEditorExcludedStatusKeys((prev) => {
+                                                                        const next = new Set(prev);
+                                                                        if (on) next.add(o.value);
+                                                                        else next.delete(o.value);
+                                                                        return [...next];
+                                                                    });
+                                                                }}
+                                                            />
+                                                            <span className="truncate">{o.label}</span>
+                                                        </label>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                            <div className="rounded-lg border border-admin-border/60 bg-white/70 px-3 py-2">
                                 <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/55">
                                     Queue buckets (read-only summary)
                                 </div>
@@ -610,6 +1034,15 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
                                         <p className="mt-0.5 text-xs text-alloy-forge/60">
                                             This is a read-only preview of server-evaluated queues for validating configuration (not the primary workspace UI).
                                         </p>
+                                        {queueEditorEnabled && queueEditorErrors.length ? (
+                                            <p className="mt-1 text-xs text-red-700">
+                                                Editor validation error: <span className="font-semibold">{queueEditorErrors[0]}</span>
+                                            </p>
+                                        ) : queueEditorEnabled && queueEditorWarnings.length ? (
+                                            <p className="mt-1 text-xs text-amber-800">
+                                                Editor warning: <span className="font-semibold">{queueEditorWarnings[0]}</span>
+                                            </p>
+                                        ) : null}
                                     </div>
                                     <button
                                         type="button"
@@ -652,6 +1085,14 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
                                                         {q.description ? (
                                                             <div className="mt-0.5 text-xs text-alloy-forge/70">
                                                                 {q.description}
+                                                            </div>
+                                                        ) : null}
+                                                        {modalQueueStatusKeysByQueueKey.get(q.key)?.length ? (
+                                                            <div className="mt-1 text-xs text-alloy-forge/60">
+                                                                Statuses:{" "}
+                                                                <span className="font-mono">
+                                                                    {modalQueueStatusKeysByQueueKey.get(q.key)!.join(", ")}
+                                                                </span>
                                                             </div>
                                                         ) : null}
                                                     </div>
