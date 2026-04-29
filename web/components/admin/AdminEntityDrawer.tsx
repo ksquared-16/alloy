@@ -2027,25 +2027,37 @@ export default function AdminEntityDrawer() {
         [drawer.id, drawer.type, openDrawer, refetch, router]
     );
 
+    const opportunityWorkUnitId = useMemo(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return "";
+        const wuid =
+            data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
+                ? String((data as { work_unit_id?: unknown }).work_unit_id).trim()
+                : "";
+        return wuid;
+    }, [drawer.type, drawer.id, data]);
+
     useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
             setOpportunityResolvedHeaderActions(null);
             setOpportunityResolvedHeaderLoading(false);
             return;
         }
+        const workUnitId = opportunityWorkUnitId;
+        const departmentId = opportunityWorkUnitDepartmentId?.trim() ?? "";
+        if (!workUnitId || !departmentId) {
+            setOpportunityResolvedHeaderActions(null);
+            setOpportunityResolvedHeaderLoading(false);
+            return;
+        }
         let cancelled = false;
         setOpportunityResolvedHeaderLoading(true);
-        const workUnitId =
-            data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
-                ? String((data as { work_unit_id?: unknown }).work_unit_id)
-                : "";
         const qs = new URLSearchParams({
             surface: "record_header",
             entity_type: "opportunity",
             entity_id: drawer.id,
         });
-        if (workUnitId.trim()) qs.set("work_unit_id", workUnitId.trim());
-        if (opportunityWorkUnitDepartmentId?.trim()) qs.set("department_id", opportunityWorkUnitDepartmentId.trim());
+        qs.set("work_unit_id", workUnitId);
+        qs.set("department_id", departmentId);
         const actionsUrl = `/api/admin/actions?${qs.toString()}`;
         dedupeAdminFetch(actionsUrl, workspaceDataFetchInit())
             .then((r) => r.json())
@@ -2062,7 +2074,7 @@ export default function AdminEntityDrawer() {
         return () => {
             cancelled = true;
         };
-    }, [drawer.type, drawer.id, data, opportunityWorkUnitDepartmentId]);
+    }, [drawer.type, drawer.id, opportunityWorkUnitId, opportunityWorkUnitDepartmentId]);
 
     // Keep drawer state, but refresh record + header actions when actions mutate the opportunity.
     useEffect(() => {
@@ -2074,18 +2086,17 @@ export default function AdminEntityDrawer() {
             console.info("[drawer] opportunity updated", { id, action_key: ce.detail?.action_key ?? null });
             refetch();
             // Also refetch resolved header actions so conditional actions swap (schedule ↔ reschedule).
+            const workUnitId = opportunityWorkUnitId;
+            const departmentId = opportunityWorkUnitDepartmentId?.trim() ?? "";
+            if (!workUnitId || !departmentId) return;
             setOpportunityResolvedHeaderLoading(true);
-            const workUnitId =
-                data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
-                    ? String((data as { work_unit_id?: unknown }).work_unit_id)
-                    : "";
             const qs = new URLSearchParams({
                 surface: "record_header",
                 entity_type: "opportunity",
                 entity_id: drawer.id,
             });
-            if (workUnitId.trim()) qs.set("work_unit_id", workUnitId.trim());
-            if (opportunityWorkUnitDepartmentId?.trim()) qs.set("department_id", opportunityWorkUnitDepartmentId.trim());
+            qs.set("work_unit_id", workUnitId);
+            qs.set("department_id", departmentId);
             const actionsUrl = `/api/admin/actions?${qs.toString()}`;
             dedupeAdminFetch(actionsUrl, workspaceDataFetchInit())
                 .then((r) => r.json())
@@ -2095,7 +2106,7 @@ export default function AdminEntityDrawer() {
         };
         window.addEventListener("adminv2:opportunity-updated", onUpdated as EventListener);
         return () => window.removeEventListener("adminv2:opportunity-updated", onUpdated as EventListener);
-    }, [drawer.type, drawer.id, refetch, data, opportunityWorkUnitDepartmentId]);
+    }, [drawer.type, drawer.id, refetch, opportunityWorkUnitId, opportunityWorkUnitDepartmentId]);
 
     // If a caller opened the drawer with a surface hint, respect it once.
     useEffect(() => {
@@ -4145,6 +4156,7 @@ export default function AdminEntityDrawer() {
     const hasOpportunityChromeActions = opportunityChromePrimary.length + opportunityChromeSecondary.length > 0;
 
     const resolvedHeader = opportunityResolvedHeaderActions;
+    console.log("DRAWER HEADER ACTIONS", resolvedHeader?.secondary);
     const resolvedHeaderCount =
         (resolvedHeader?.primary.length ?? 0) +
         (resolvedHeader?.secondary.length ?? 0) +
@@ -4157,16 +4169,6 @@ export default function AdminEntityDrawer() {
         if (!h) return new Set<string>();
         return new Set([...h.primary, ...h.secondary, ...h.overflow].map((a) => a.key));
     }, [opportunityResolvedHeaderActions]);
-
-    const enrollmentDrawerEmphasizedActionKeys = useMemo(() => {
-        return new Set<string>([
-            "schedule_tour",
-            "reschedule_tour",
-            "send_paperwork_placeholder",
-            "add_to_waitlist_placeholder",
-            "convert_to_enrolled_placeholder",
-        ]);
-    }, []);
 
     const opportunityHeaderQuickActionsNode =
         // Enrollment V1: never render legacy chrome actions (prevents flicker / incorrect actions).
@@ -4205,13 +4207,9 @@ export default function AdminEntityDrawer() {
                             disabled={!canMutate || !!opportunityActionLoading}
                             onClick={() => void handleResolvedOpportunityHeaderAction(a)}
                             className={
-                                enrollmentDrawerEmphasizedActionKeys.has(a.key)
-                                    ? opportunityInquiryWorkflowDrawer
-                                        ? "px-4 py-2 text-[12px] font-semibold border border-alloy-blue/35 bg-alloy-blue/5 text-alloy-blue rounded-full hover:bg-alloy-blue/10 disabled:opacity-50"
-                                        : "px-3 py-1.5 text-sm border border-alloy-blue/35 bg-alloy-blue/5 text-alloy-blue rounded-md hover:bg-alloy-blue/10 disabled:opacity-50"
-                                    : opportunityInquiryWorkflowDrawer
-                                      ? "px-4 py-2 text-[12px] font-semibold border border-alloy-stone/40 bg-white rounded-full hover:bg-alloy-stone/10 disabled:opacity-50"
-                                      : "px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30 disabled:opacity-50"
+                                opportunityInquiryWorkflowDrawer
+                                    ? "px-4 py-2 text-[12px] font-semibold border border-alloy-stone/40 bg-white rounded-full hover:bg-alloy-stone/10 disabled:opacity-50"
+                                    : "px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30 disabled:opacity-50"
                             }
                         >
                             {opportunityActionLoading === a.key ? "…" : a.label}
