@@ -4,6 +4,55 @@ import { useEffect, useMemo, useState } from "react";
 
 type StatusOption = { value: string; label: string };
 
+type TransitionRule = {
+    entity_type: string | null;
+    department_id: string | null;
+    work_unit_id: string | null;
+    action_key: string | null;
+    to_status_key: string | null;
+    required_payload_fields: string[] | null;
+    blocked: boolean | null;
+    is_active: boolean | null;
+};
+
+let transitionRulesCache: { atMs: number; items: TransitionRule[] } | null = null;
+let transitionRulesInflight: Promise<TransitionRule[]> | null = null;
+const TRANSITION_RULES_TTL_MS = 60_000;
+
+async function loadTransitionRules(signal?: AbortSignal): Promise<TransitionRule[]> {
+    const now = Date.now();
+    if (transitionRulesCache && now - transitionRulesCache.atMs < TRANSITION_RULES_TTL_MS) {
+        return transitionRulesCache.items;
+    }
+    if (transitionRulesInflight) return transitionRulesInflight;
+    transitionRulesInflight = (async () => {
+        const res = await fetch("/api/admin/status-transition-rules", { credentials: "include", signal });
+        const json = (await res.json().catch(() => ({}))) as { items?: unknown[]; rules?: unknown[] };
+        if (!res.ok) return [];
+        const raw = Array.isArray(json.items) ? json.items : Array.isArray(json.rules) ? json.rules : [];
+        const list = Array.isArray(raw) ? (raw as any[]) : [];
+        const normalized: TransitionRule[] = list
+            .map((r) => ({
+                entity_type: r?.entity_type ?? null,
+                department_id: r?.department_id ?? null,
+                work_unit_id: r?.work_unit_id ?? null,
+                action_key: r?.action_key ?? null,
+                to_status_key: r?.to_status_key ?? null,
+                required_payload_fields: Array.isArray(r?.required_payload_fields)
+                    ? (r.required_payload_fields as unknown[]).filter((x): x is string => typeof x === "string")
+                    : null,
+                blocked: r?.blocked ?? null,
+                is_active: r?.is_active ?? null,
+            }))
+            .filter((r) => r.is_active !== false);
+        transitionRulesCache = { atMs: Date.now(), items: normalized };
+        return normalized;
+    })().finally(() => {
+        transitionRulesInflight = null;
+    });
+    return transitionRulesInflight;
+}
+
 export function UpdateStatusAddNoteModal(props: {
     open: boolean;
     title?: string;
@@ -25,18 +74,7 @@ export function UpdateStatusAddNoteModal(props: {
     const [extra, setExtra] = useState<Record<string, string>>({});
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const [rules, setRules] = useState<
-        Array<{
-            entity_type: string | null;
-            department_id: string | null;
-            work_unit_id: string | null;
-            action_key: string | null;
-            to_status_key: string | null;
-            required_payload_fields: string[] | null;
-            blocked: boolean | null;
-            is_active: boolean | null;
-        }>
-    >([]);
+    const [rules, setRules] = useState<TransitionRule[]>([]);
 
     useEffect(() => {
         if (!open) return;
@@ -51,26 +89,10 @@ export function UpdateStatusAddNoteModal(props: {
     useEffect(() => {
         if (!open) return;
         let cancelled = false;
+        const ac = new AbortController();
         (async () => {
             try {
-                const res = await fetch("/api/admin/status-transition-rules", { credentials: "include" });
-                const json = (await res.json().catch(() => ({}))) as { rules?: unknown[] };
-                if (!res.ok) return;
-                const list = Array.isArray(json.rules) ? (json.rules as any[]) : [];
-                const normalized = list
-                    .map((r) => ({
-                        entity_type: r?.entity_type ?? null,
-                        department_id: r?.department_id ?? null,
-                        work_unit_id: r?.work_unit_id ?? null,
-                        action_key: r?.action_key ?? null,
-                        to_status_key: r?.to_status_key ?? null,
-                        required_payload_fields: Array.isArray(r?.required_payload_fields)
-                            ? (r.required_payload_fields as unknown[]).filter((x): x is string => typeof x === "string")
-                            : null,
-                        blocked: r?.blocked ?? null,
-                        is_active: r?.is_active ?? null,
-                    }))
-                    .filter((r) => r.is_active !== false);
+                const normalized = await loadTransitionRules(ac.signal);
                 if (!cancelled) setRules(normalized);
             } catch {
                 if (!cancelled) setRules([]);
@@ -78,6 +100,7 @@ export function UpdateStatusAddNoteModal(props: {
         })();
         return () => {
             cancelled = true;
+            ac.abort();
         };
     }, [open]);
 
@@ -87,7 +110,8 @@ export function UpdateStatusAddNoteModal(props: {
         const ctx = transitionContext ?? null;
         const matches = rules.filter((r) => {
             if (r.blocked) return false;
-            if (String(r.entity_type ?? "").trim() !== "opportunities") return false;
+            const et = String(r.entity_type ?? "").trim().toLowerCase();
+            if (et !== "opportunities" && et !== "opportunity") return false;
             if (String(r.to_status_key ?? "").trim() !== to) return false;
             if (r.department_id && (!ctx?.departmentId || r.department_id !== ctx.departmentId)) return false;
             if (r.work_unit_id && (!ctx?.workUnitId || r.work_unit_id !== ctx.workUnitId)) return false;

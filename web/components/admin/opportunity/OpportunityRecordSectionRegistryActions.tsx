@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
-import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
+import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
 
@@ -73,7 +73,7 @@ export default function OpportunityRecordSectionRegistryActions({
         if (departmentId) qs.set("department_id", departmentId);
         if (workUnitId) qs.set("work_unit_id", workUnitId);
         const url = `/api/admin/actions?${qs.toString()}`;
-        dedupeAdminFetch(url, workspaceDataFetchInit())
+        dedupeAdminFetchWithTtl(url, workspaceDataFetchInit(), 1500)
             .then((r) => r.json())
             .then((j: { actions?: ResolvedActionsBySlot }) => {
                 if (!cancelled) setBySlot(j.actions ?? null);
@@ -102,11 +102,14 @@ export default function OpportunityRecordSectionRegistryActions({
                     router,
                     openDrawer,
                     openForm,
-                    workUnitId: null,
+                    departmentId: departmentId ?? null,
+                    workUnitId: workUnitId ?? null,
                     entityId: opportunityId,
                     context: {
                         surface: "record_section",
                         section_key: sectionKey,
+                        department_id: departmentId ?? null,
+                        work_unit_id: workUnitId ?? null,
                     },
                 });
                 if (out.ok) {
@@ -117,7 +120,18 @@ export default function OpportunityRecordSectionRegistryActions({
                 setBusyKey(null);
             }
         },
-        [canMutate, opportunityId, onApplied, onExecutionResult, openDrawer, openForm, router, sectionKey]
+        [
+            canMutate,
+            departmentId,
+            opportunityId,
+            onApplied,
+            onExecutionResult,
+            openDrawer,
+            openForm,
+            router,
+            sectionKey,
+            workUnitId,
+        ]
     );
 
     if (loading) return null;

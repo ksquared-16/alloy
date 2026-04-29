@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
@@ -22,6 +22,7 @@ import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { workspaceRouteParam } from "@/lib/workspace/workspaceRouteParam";
 import { validateQueueDefinition, type QueueDefinitionV1 } from "@/lib/config/queueDefinitionSchema";
 import { getQueueUiConfig, type QueueUiConfig, type QueueUiRowPreviewField } from "@/lib/ui-v2/queueUiConfig";
+import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { UpdateStatusAddNoteModal } from "@/components/admin/opportunity/actions/UpdateStatusAddNoteModal";
 import { ContactAttemptedModal } from "@/components/admin/opportunity/actions/ContactAttemptedModal";
 
@@ -133,6 +134,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [queueItemsError, setQueueItemsError] = useState<string | null>(null);
     const [queueItemsRoute, setQueueItemsRoute] = useState<string | null>(null);
     const [queueItemsLoading, setQueueItemsLoading] = useState(false);
+    const queueItemsRequestSeq = useRef(0);
+    const queueSummariesRequestSeq = useRef(0);
 
     const [workflowKpis, setWorkflowKpis] = useState<WorkflowKpis>(DEFAULT_WF_KPIS);
     const [workflowsSummary, setWorkflowsSummary] = useState<WorkflowSummaryRow[] | null>(null);
@@ -279,8 +282,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 let parsedRightRail: ResolvedActionForClient[] = [];
                 const [queuesSettled, actionsSettled, rightRailSettled] = await Promise.allSettled([
                     fetch(queueListRoute, init),
-                    fetch(actionsListRoute, init),
-                    fetch(rightRailActionsRoute, init),
+                    dedupeAdminFetchWithTtl(actionsListRoute, init, 1500),
+                    dedupeAdminFetchWithTtl(rightRailActionsRoute, init, 1500),
                 ]);
 
                 if (actionsSettled.status === "fulfilled") {
@@ -458,6 +461,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
     const fetchQueueItems = useCallback(
         async (workUnitId: string, queueKey: string) => {
+            const seq = ++queueItemsRequestSeq.current;
             const route = `/api/admin/queues/${encodeURIComponent(workUnitId)}/${encodeURIComponent(queueKey)}?limit=20&offset=0`;
             setQueueItemsLoading(true);
             setQueueItemsError(null);
@@ -470,12 +474,14 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     if (res.status === 501) throw new Error("Queue type not supported yet");
                     throw new Error(json.error ?? "Failed to load queue items");
                 }
-                setQueueItems(json as unknown as QueueItemsResult);
+                if (seq === queueItemsRequestSeq.current) setQueueItems(json as unknown as QueueItemsResult);
             } catch (e) {
-                setQueueItems(null);
-                setQueueItemsError(e instanceof Error ? e.message : "Failed to load queue items");
+                if (seq === queueItemsRequestSeq.current) {
+                    setQueueItems(null);
+                    setQueueItemsError(e instanceof Error ? e.message : "Failed to load queue items");
+                }
             } finally {
-                setQueueItemsLoading(false);
+                if (seq === queueItemsRequestSeq.current) setQueueItemsLoading(false);
             }
         },
         []
@@ -483,6 +489,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
     const fetchQueueSummaries = useCallback(
         async (workUnitId: string) => {
+            const seq = ++queueSummariesRequestSeq.current;
             const route = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?limit=3`;
             setQueueSummariesError(null);
             setQueueSummariesRoute(route);
@@ -494,10 +501,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     throw new Error(json.error ?? "Failed to load queues");
                 }
                 const qs = (json.queues ?? []) as QueueSummary[];
-                setQueueSummaries(qs);
+                if (seq === queueSummariesRequestSeq.current) setQueueSummaries(qs);
             } catch (e) {
-                setQueueSummaries(null);
-                setQueueSummariesError(e instanceof Error ? e.message : "Failed to load queues");
+                if (seq === queueSummariesRequestSeq.current) {
+                    setQueueSummaries(null);
+                    setQueueSummariesError(e instanceof Error ? e.message : "Failed to load queues");
+                }
             }
         },
         []
@@ -507,8 +516,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         (opts?: { entity_type?: string; entity_id?: string; action_key?: string }) => {
             void opts;
             if (!workUnitId || !selectedQueueKey) return;
-            void fetchQueueItems(workUnitId, selectedQueueKey);
-            void fetchQueueSummaries(workUnitId);
+            void Promise.all([fetchQueueItems(workUnitId, selectedQueueKey), fetchQueueSummaries(workUnitId)]);
         },
         [fetchQueueItems, fetchQueueSummaries, selectedQueueKey, workUnitId]
     );
@@ -518,8 +526,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         const onUpdated = (ev: Event) => {
             const ce = ev as CustomEvent<{ id?: string }>;
             void ce;
-            void fetchQueueItems(workUnitId, selectedQueueKey);
-            void fetchQueueSummaries(workUnitId);
+            void Promise.all([fetchQueueItems(workUnitId, selectedQueueKey), fetchQueueSummaries(workUnitId)]);
         };
         window.addEventListener("adminv2:opportunity-updated", onUpdated as EventListener);
         return () => window.removeEventListener("adminv2:opportunity-updated", onUpdated as EventListener);

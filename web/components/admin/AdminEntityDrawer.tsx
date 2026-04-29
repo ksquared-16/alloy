@@ -90,7 +90,7 @@ import {
     type PaymentRowLike,
 } from "@/lib/admin/jobPaymentSummary";
 import { useRecordChromeConfig } from "@/hooks/useRecordChromeConfig";
-import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
+import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { getSectionOrderFromScheduleLayoutBlocks } from "@/lib/recordChrome/scheduleLayoutConfig";
 import { applyOverviewSectionOrder, type RecordLayoutConfigJson } from "@/lib/recordChrome/types";
@@ -2059,7 +2059,7 @@ export default function AdminEntityDrawer() {
         qs.set("work_unit_id", workUnitId);
         qs.set("department_id", departmentId);
         const actionsUrl = `/api/admin/actions?${qs.toString()}`;
-        dedupeAdminFetch(actionsUrl, workspaceDataFetchInit())
+        dedupeAdminFetchWithTtl(actionsUrl, workspaceDataFetchInit(), 1500)
             .then((r) => r.json())
             .then((j: { actions?: ResolvedActionsBySlot }) => {
                 if (cancelled) return;
@@ -2098,7 +2098,7 @@ export default function AdminEntityDrawer() {
             qs.set("work_unit_id", workUnitId);
             qs.set("department_id", departmentId);
             const actionsUrl = `/api/admin/actions?${qs.toString()}`;
-            dedupeAdminFetch(actionsUrl, workspaceDataFetchInit())
+            dedupeAdminFetchWithTtl(actionsUrl, workspaceDataFetchInit(), 1500)
                 .then((r) => r.json())
                 .then((j: { actions?: ResolvedActionsBySlot }) => setOpportunityResolvedHeaderActions(j.actions ?? null))
                 .catch(() => setOpportunityResolvedHeaderActions(null))
@@ -4156,7 +4156,6 @@ export default function AdminEntityDrawer() {
     const hasOpportunityChromeActions = opportunityChromePrimary.length + opportunityChromeSecondary.length > 0;
 
     const resolvedHeader = opportunityResolvedHeaderActions;
-    console.log("DRAWER HEADER ACTIONS", resolvedHeader?.secondary);
     const resolvedHeaderCount =
         (resolvedHeader?.primary.length ?? 0) +
         (resolvedHeader?.secondary.length ?? 0) +
@@ -4185,17 +4184,26 @@ export default function AdminEntityDrawer() {
                 data-opportunity-record-actions={drawerShellVariant === "adminV2" ? "true" : undefined}
             >
                 <>
+                    {(() => {
+                        const blueOutline = "border border-alloy-blue/30 bg-alloy-blue/5 text-alloy-blue hover:bg-alloy-blue/10 hover:border-alloy-blue/45";
+                        const primaryCls = opportunityInquiryWorkflowDrawer
+                            ? `px-4 py-2 text-[12px] font-semibold rounded-full ${blueOutline} disabled:opacity-50`
+                            : `px-3 py-1.5 text-sm font-semibold rounded-md ${blueOutline} disabled:opacity-50`;
+                        const secondaryCls = opportunityInquiryWorkflowDrawer
+                            ? `px-4 py-2 text-[12px] font-semibold rounded-full ${blueOutline} disabled:opacity-50`
+                            : `px-3 py-1.5 text-sm font-semibold rounded-md ${blueOutline} disabled:opacity-50`;
+                        const overflowCls = opportunityInquiryWorkflowDrawer
+                            ? `px-4 py-2 text-[12px] font-semibold rounded-full ${blueOutline} disabled:opacity-50`
+                            : `px-3 py-1.5 text-sm font-semibold rounded-md ${blueOutline} disabled:opacity-50`;
+                        return (
+                            <>
                     {(resolvedHeader?.primary ?? []).map((a) => (
                         <button
                             key={a.key}
                             type="button"
                             disabled={!canMutate || !!opportunityActionLoading}
                             onClick={() => void handleResolvedOpportunityHeaderAction(a)}
-                            className={
-                                opportunityInquiryWorkflowDrawer
-                                    ? "px-4 py-2 text-[12px] font-semibold bg-alloy-blue text-white rounded-full shadow-sm hover:opacity-90 disabled:opacity-50"
-                                    : "px-3 py-1.5 text-sm bg-alloy-blue text-white rounded-md hover:opacity-90 disabled:opacity-50"
-                            }
+                            className={primaryCls}
                         >
                             {opportunityActionLoading === a.key ? "…" : a.label}
                         </button>
@@ -4206,11 +4214,7 @@ export default function AdminEntityDrawer() {
                             type="button"
                             disabled={!canMutate || !!opportunityActionLoading}
                             onClick={() => void handleResolvedOpportunityHeaderAction(a)}
-                            className={
-                                opportunityInquiryWorkflowDrawer
-                                    ? "px-4 py-2 text-[12px] font-semibold border border-alloy-stone/40 bg-white rounded-full hover:bg-alloy-stone/10 disabled:opacity-50"
-                                    : "px-3 py-1.5 text-sm border border-alloy-stone/60 rounded-md hover:bg-alloy-stone/30 disabled:opacity-50"
-                            }
+                            className={secondaryCls}
                         >
                             {opportunityActionLoading === a.key ? "…" : a.label}
                         </button>
@@ -4221,11 +4225,14 @@ export default function AdminEntityDrawer() {
                             type="button"
                             disabled={!canMutate || !!opportunityActionLoading}
                             onClick={() => void handleResolvedOpportunityHeaderAction(a)}
-                            className="px-3 py-1.5 text-sm border border-alloy-stone/50 rounded-md hover:bg-alloy-stone/20 disabled:opacity-50"
+                            className={overflowCls}
                         >
                             {opportunityActionLoading === a.key ? "…" : a.label}
                         </button>
                     ))}
+                            </>
+                        );
+                    })()}
                 </>
             </div>
         ) : null;
@@ -5419,9 +5426,7 @@ export default function AdminEntityDrawer() {
                         router={router}
                         openDrawer={openDrawer}
                         openForm={({ form_key, action }) => {
-                            if (form_key === "add_related_person") {
-                                setActionFormState({ form_key, action });
-                            }
+                            setActionFormState({ form_key, action });
                         }}
                         refreshKey={relatedPeopleRefreshKey}
                     />
@@ -11330,6 +11335,11 @@ export default function AdminEntityDrawer() {
                     setOpportunityActionLoading(actionKey);
                     setSaveError(null);
                     try {
+                        const deptId = opportunityWorkUnitDepartmentId?.trim() || null;
+                        const wuid =
+                            data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
+                                ? String((data as { work_unit_id?: unknown }).work_unit_id).trim() || null
+                                : null;
                         const res = await fetch("/api/admin/actions/execute", {
                             method: "POST",
                             credentials: "include",
@@ -11338,7 +11348,12 @@ export default function AdminEntityDrawer() {
                                 action_key: actionKey,
                                 entity_type: "opportunity",
                                 entity_id: drawer.id,
-                                context: { surface: "record_section", section_key: "customer_booking" },
+                                context: {
+                                    surface: "record_section",
+                                    section_key: "customer_booking",
+                                    department_id: deptId,
+                                    work_unit_id: wuid,
+                                },
                                 payload,
                             }),
                         });

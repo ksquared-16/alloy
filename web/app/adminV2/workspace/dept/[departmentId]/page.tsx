@@ -25,6 +25,7 @@ import {
     buildEnrollmentDepartmentCommandRail,
 } from "@/lib/workspace/viewModels/enrollmentWorkUnitViewModel";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { AutomationWorkflowsBlock } from "@/app/adminV2/components/workspace/blocks/AutomationWorkflowsBlock";
 
 const WORKSPACE_BASE = "/adminV2/workspace";
@@ -200,7 +201,8 @@ export default function AdminV2WorkspaceDepartmentPage() {
             }).toString();
         (async () => {
             try {
-                const res = await fetch(route, workspaceDataFetchInit());
+                const init = workspaceDataFetchInit();
+                const res = await dedupeAdminFetchWithTtl(route, init, 1500);
                 const j = (await res.json().catch(() => ({}))) as { actions?: { right_rail?: ResolvedActionForClient[] }; error?: string };
                 if (!cancelled && res.ok) {
                     setEnrollmentDeptRightRail(j.actions?.right_rail ?? []);
