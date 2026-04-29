@@ -367,7 +367,17 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             >
                                 <div className="adminv2-ws-wu-queue-card-compact-text">
                                     <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">
-                                        {needsAttentionSummary.total} records need attention
+                                        Needs attention
+                                    </div>
+                                    <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] tabular-nums" style={{ color: "var(--d-muted)" }}>
+                                        <div>
+                                            <span className="font-medium text-alloy-midnight/75">Total</span>{" "}
+                                            <span className="text-alloy-midnight/85">{needsAttentionSummary.total}</span>
+                                        </div>
+                                        <div className="text-right">
+                                            <span className="font-medium text-alloy-midnight/75">Needs attention</span>{" "}
+                                            <span className="text-alloy-midnight/85">{needsAttentionSummary.total}</span>
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="adminv2-ws-wu-queue-card-compact-aside">
