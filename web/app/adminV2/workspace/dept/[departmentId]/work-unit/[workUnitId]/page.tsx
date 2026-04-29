@@ -23,6 +23,7 @@ import { workspaceRouteParam } from "@/lib/workspace/workspaceRouteParam";
 import { validateQueueDefinition, type QueueDefinitionV1 } from "@/lib/config/queueDefinitionSchema";
 import { getQueueUiConfig, type QueueUiConfig, type QueueUiRowPreviewField } from "@/lib/ui-v2/queueUiConfig";
 import { UpdateStatusAddNoteModal } from "@/components/admin/opportunity/actions/UpdateStatusAddNoteModal";
+import { ContactAttemptedModal } from "@/components/admin/opportunity/actions/ContactAttemptedModal";
 
 const WORKSPACE_BASE = "/adminV2/workspace";
 
@@ -139,6 +140,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [statusOptions, setStatusOptions] = useState<Array<{ value: string; label: string }>>([]);
     const [updateStatusFormOpen, setUpdateStatusFormOpen] = useState(false);
     const [updateStatusTargetId, setUpdateStatusTargetId] = useState<string | null>(null);
+    const [contactAttemptedOpen, setContactAttemptedOpen] = useState(false);
+    const [contactAttemptedTargetId, setContactAttemptedTargetId] = useState<string | null>(null);
 
     const queueDef = useMemo<QueueDefinitionV1 | null>(() => {
         if (!workUnit?.queue_definition) return null;
@@ -955,6 +958,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         setUpdateStatusFormOpen(true);
                         return;
                     }
+                    if (formKey === "contact_attempted") {
+                        setContactAttemptedTargetId(action.itemId);
+                        setContactAttemptedOpen(true);
+                        return;
+                    }
                 }
                 const res = await fetch("/api/admin/actions/execute", {
                     method: "POST",
@@ -1164,6 +1172,40 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
                             if (!res.ok || !json.ok) throw new Error(json.error ?? "Update failed");
                             invalidate({ entity_type: "opportunity", entity_id: updateStatusTargetId, action_key: "update_status_add_note" });
+                        }}
+                    />
+                    <ContactAttemptedModal
+                        open={contactAttemptedOpen}
+                        title="Log contact attempt"
+                        onClose={() => {
+                            setContactAttemptedOpen(false);
+                            setContactAttemptedTargetId(null);
+                        }}
+                        onSubmit={async (payload) => {
+                            if (!contactAttemptedTargetId) return;
+                            const res = await fetch("/api/admin/actions/execute", {
+                                method: "POST",
+                                credentials: "include",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                    action_key: "contact_attempted",
+                                    entity_type: "opportunity",
+                                    entity_id: contactAttemptedTargetId,
+                                    context: {
+                                        surface: "queue_row",
+                                        work_unit_id: workUnit?.id ?? null,
+                                        department_id: departmentId,
+                                    },
+                                    payload,
+                                }),
+                            });
+                            const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+                            if (!res.ok || !json.ok) throw new Error(json.error ?? "Update failed");
+                            invalidate({
+                                entity_type: "opportunity",
+                                entity_id: contactAttemptedTargetId,
+                                action_key: "contact_attempted",
+                            });
                         }}
                     />
                 </>

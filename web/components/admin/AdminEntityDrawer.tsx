@@ -28,6 +28,7 @@ import {
 } from "@/lib/adminFormatters";
 import { AssignmentStatusBadge, StatusBadge, getStatusVariant } from "@/components/admin/StatusBadge";
 import { ScheduleTourActionFormModal } from "@/components/admin/opportunity/actions/ScheduleTourActionFormModal";
+import { ContactAttemptedModal } from "@/components/admin/opportunity/actions/ContactAttemptedModal";
 import { AddInquiryChildModal } from "@/components/admin/opportunity/actions/AddInquiryChildModal";
 import {
     WORKFLOW_ENTITY_TYPES,
@@ -11063,6 +11064,50 @@ export default function AdminEntityDrawer() {
                             });
                         }
                         const row = er?.row;
+                        if (row && typeof row === "object") {
+                            setData((prev) => (prev && typeof prev === "object" ? { ...prev, ...row } : prev));
+                        }
+                        setActionFormState(null);
+                        refetch();
+                        window.dispatchEvent(
+                            new CustomEvent("adminv2:opportunity-updated", { detail: { id: drawer.id, action_key: actionKey } })
+                        );
+                    } finally {
+                        setOpportunityActionLoading(null);
+                    }
+                }}
+            />
+            <ContactAttemptedModal
+                open={actionFormState?.form_key === "contact_attempted"}
+                onClose={() => setActionFormState(null)}
+                title={actionFormState?.action?.label ?? "Log contact attempt"}
+                onSubmit={async (payload) => {
+                    if (!drawer.id || drawer.id === "new" || drawer.type !== "opportunities") return;
+                    const actionKey = actionFormState?.action?.key ? String(actionFormState.action.key) : "contact_attempted";
+                    setOpportunityActionLoading(actionKey);
+                    setSaveError(null);
+                    try {
+                        const res = await fetch("/api/admin/actions/execute", {
+                            method: "POST",
+                            credentials: "include",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                action_key: actionKey,
+                                entity_type: "opportunity",
+                                entity_id: drawer.id,
+                                context: { surface: "record_header" },
+                                payload,
+                            }),
+                        });
+                        const json = (await res.json().catch(() => ({}))) as {
+                            ok?: boolean;
+                            error?: string;
+                            execution_result?: Record<string, unknown> & { row?: Record<string, unknown> };
+                        };
+                        if (!res.ok || !json.ok) {
+                            throw new Error(json.error ?? "Action failed");
+                        }
+                        const row = json.execution_result?.row;
                         if (row && typeof row === "object") {
                             setData((prev) => (prev && typeof prev === "object" ? { ...prev, ...row } : prev));
                         }

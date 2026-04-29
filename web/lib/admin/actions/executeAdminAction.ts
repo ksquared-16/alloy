@@ -142,7 +142,12 @@ export async function executeAdminAction(
             const after = merged.after && typeof merged.after === "object" ? (merged.after as Record<string, unknown>) : {};
             const afterUpdateStatusKey = after.update_status_key != null ? String(after.update_status_key).trim() : "";
             let updatedRow: Record<string, unknown> | null = null;
-            if (afterUpdateStatusKey) {
+            const submitActionType = merged.submit_action_type != null ? String(merged.submit_action_type).trim() : "";
+
+            // When submit_action_type=update_status, treat `after.update_status_key` as the target status key
+            // for submission (forms often don't ask for status_key explicitly).
+            // Reserve the "after" write for workflow submission paths (e.g. schedule_tour) to avoid double updates.
+            if (afterUpdateStatusKey && submitActionType !== "update_status") {
                 if (table !== "opportunities") {
                     return { ok: false, correlation_id: correlationId, error: "open_form.after.update_status_key supports opportunities only", status: 400 };
                 }
@@ -211,8 +216,6 @@ export async function executeAdminAction(
                     console.error("[executeAdminAction] emitStatusChangedEvent (open_form.after)", e);
                 }
             }
-
-            const submitActionType = merged.submit_action_type != null ? String(merged.submit_action_type).trim() : "";
             if (submitActionType === "update_status") {
                 if (table !== "opportunities") {
                     return { ok: false, correlation_id: correlationId, error: "open_form submit_action_type=update_status supports opportunities only", status: 400 };
@@ -220,7 +223,7 @@ export async function executeAdminAction(
                 if (!(await assertRowOrg(supabase, "opportunities", entityId, ctx.orgId)).ok) {
                     return { ok: false, correlation_id: correlationId, error: "Not found", status: 404 };
                 }
-                const statusKey = merged.status_key != null ? String(merged.status_key).trim() : "";
+                const statusKey = merged.status_key != null ? String(merged.status_key).trim() : afterUpdateStatusKey;
                 if (!statusKey) {
                     return { ok: false, correlation_id: correlationId, error: "Missing required field: status_key", status: 400 };
                 }
@@ -252,6 +255,17 @@ export async function executeAdminAction(
                 }
                 const nextStep = merged.next_step != null ? String(merged.next_step).trim() : "";
                 if (nextStep) nextMd.next_step = nextStep;
+
+                if (formKey === "contact_attempted") {
+                    nextMd.last_contact_attempt_at = new Date().toISOString();
+                    const methodRaw =
+                        merged.last_contact_attempt_method != null
+                            ? String(merged.last_contact_attempt_method).trim()
+                            : merged.contact_method != null
+                              ? String(merged.contact_method).trim()
+                              : "";
+                    if (methodRaw) nextMd.last_contact_attempt_method = methodRaw;
+                }
 
                 const transition = await validateStatusTransition({
                     supabase,
