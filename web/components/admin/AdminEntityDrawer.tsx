@@ -66,6 +66,7 @@ import { recordSurfaceContextStyle } from "@/lib/visualContext";
 import OpportunityInquiryChildrenSection, { type InquiryChildRow } from "@/components/admin/entity/OpportunityInquiryChildrenSection";
 import { OpportunityInquiryChildrenRegistryActions } from "@/components/admin/opportunity/OpportunityInquiryChildrenRegistryActions";
 import { formatTourDateTime } from "@/lib/enrollment/formatTourDateTime";
+import { validateQueueDefinition, type QueueDefinitionV1, type QueueFilter } from "@/lib/config/queueDefinitionSchema";
 import {
     JobDrawerV2TabBar,
     JobDrawerV2SignalsStrip,
@@ -973,6 +974,7 @@ export default function AdminEntityDrawer() {
         action: ResolvedActionForClient;
     } | null>(null);
     const [relatedPeopleRefreshKey, setRelatedPeopleRefreshKey] = useState(0);
+    const [opportunityQueueDefinition, setOpportunityQueueDefinition] = useState<QueueDefinitionV1 | null>(null);
     const [addInquiryChildState, setAddInquiryChildState] = useState<{ mode: "child" | "sibling" } | null>(null);
     const [collectPaymentOpen, setCollectPaymentOpen] = useState(false);
     const [collectPaymentContext, setCollectPaymentContext] = useState<AdminCollectPaymentModalContext | null>(null);
@@ -2032,11 +2034,16 @@ export default function AdminEntityDrawer() {
         }
         let cancelled = false;
         setOpportunityResolvedHeaderLoading(true);
+        const workUnitId =
+            data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
+                ? String((data as { work_unit_id?: unknown }).work_unit_id)
+                : "";
         const qs = new URLSearchParams({
             surface: "record_header",
             entity_type: "opportunity",
             entity_id: drawer.id,
         });
+        if (workUnitId.trim()) qs.set("work_unit_id", workUnitId.trim());
         const actionsUrl = `/api/admin/actions?${qs.toString()}`;
         dedupeAdminFetch(actionsUrl, workspaceDataFetchInit())
             .then((r) => r.json())
@@ -2053,7 +2060,7 @@ export default function AdminEntityDrawer() {
         return () => {
             cancelled = true;
         };
-    }, [drawer.type, drawer.id]);
+    }, [drawer.type, drawer.id, data]);
 
     // Keep drawer state, but refresh record + header actions when actions mutate the opportunity.
     useEffect(() => {
@@ -2066,11 +2073,16 @@ export default function AdminEntityDrawer() {
             refetch();
             // Also refetch resolved header actions so conditional actions swap (schedule ↔ reschedule).
             setOpportunityResolvedHeaderLoading(true);
+            const workUnitId =
+                data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
+                    ? String((data as { work_unit_id?: unknown }).work_unit_id)
+                    : "";
             const qs = new URLSearchParams({
                 surface: "record_header",
                 entity_type: "opportunity",
                 entity_id: drawer.id,
             });
+            if (workUnitId.trim()) qs.set("work_unit_id", workUnitId.trim());
             const actionsUrl = `/api/admin/actions?${qs.toString()}`;
             dedupeAdminFetch(actionsUrl, workspaceDataFetchInit())
                 .then((r) => r.json())
@@ -2080,7 +2092,7 @@ export default function AdminEntityDrawer() {
         };
         window.addEventListener("adminv2:opportunity-updated", onUpdated as EventListener);
         return () => window.removeEventListener("adminv2:opportunity-updated", onUpdated as EventListener);
-    }, [drawer.type, drawer.id, refetch]);
+    }, [drawer.type, drawer.id, refetch, data]);
 
     // If a caller opened the drawer with a surface hint, respect it once.
     useEffect(() => {
@@ -2096,6 +2108,42 @@ export default function AdminEntityDrawer() {
             setOppQuoteIntakeOpen(false);
         }
     }, [drawer.type]);
+
+    // Queue definition drives the opportunity inquiry timeline (bucket grouping), not hardcoded stages.
+    useEffect(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
+            setOpportunityQueueDefinition(null);
+            return;
+        }
+        const wuid =
+            data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
+                ? String((data as { work_unit_id?: unknown }).work_unit_id).trim()
+                : "";
+        if (!wuid) {
+            setOpportunityQueueDefinition(null);
+            return;
+        }
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch(`/api/admin/work-units/${encodeURIComponent(wuid)}`, { credentials: "include" });
+                const json = (await res.json().catch(() => ({}))) as { queue_definition?: unknown };
+                if (cancelled) return;
+                const qd = (json as { queue_definition?: unknown }).queue_definition;
+                if (!qd || typeof qd !== "object") {
+                    setOpportunityQueueDefinition(null);
+                    return;
+                }
+                const parsed = validateQueueDefinition(qd);
+                setOpportunityQueueDefinition(parsed);
+            } catch {
+                if (!cancelled) setOpportunityQueueDefinition(null);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [drawer.type, drawer.id, data]);
 
     useEffect(() => {
         if (!paymentToast) return;
@@ -4767,28 +4815,6 @@ export default function AdminEntityDrawer() {
                 ),
             };
         }
-        if (drawer.type === "opportunities") {
-            const customerId = (d.customer_id as string | null | undefined) ?? null;
-            if (!customerId || !drawer.id || drawer.id === "new") return {};
-            return {
-                customer_booking: (
-                    <OpportunityHouseholdPeoplePanel
-                        opportunityId={drawer.id}
-                        customerId={customerId}
-                        canMutate={!!canMutate}
-                        sectionKey="customer_booking"
-                        router={router}
-                        openDrawer={openDrawer}
-                        openForm={({ form_key, action }) => {
-                            if (form_key === "add_related_person") {
-                                setActionFormState({ form_key, action });
-                            }
-                        }}
-                        refreshKey={relatedPeopleRefreshKey}
-                    />
-                ),
-            };
-        }
         if (drawer.type === "customer_members") {
             const linkedFromData = d._linked_contacts as Array<{ contact_id?: string; contact_name?: string | null; email?: string | null; phone?: string | null; role_label?: string | null; is_active?: boolean }> | undefined;
             const hasLinkedFromData = Array.isArray(linkedFromData) && linkedFromData.length > 0;
@@ -5371,6 +5397,25 @@ export default function AdminEntityDrawer() {
         if (drawerType === "opportunities" && overviewData && !(overviewData as { _create?: boolean })._create) {
             const oppCfg = (recordChromeOpportunity.layout?.config_json ?? null) as RecordLayoutConfigJson | null;
             const out: Record<string, React.ReactNode> = {};
+            const customerId = (d.customer_id as string | null | undefined) ?? null;
+            if (customerId && drawer.id && drawer.id !== "new") {
+                out.customer_booking = (
+                    <OpportunityHouseholdPeoplePanel
+                        opportunityId={drawer.id}
+                        customerId={customerId}
+                        canMutate={!!canMutate}
+                        sectionKey="customer_booking"
+                        router={router}
+                        openDrawer={openDrawer}
+                        openForm={({ form_key, action }) => {
+                            if (form_key === "add_related_person") {
+                                setActionFormState({ form_key, action });
+                            }
+                        }}
+                        refreshKey={relatedPeopleRefreshKey}
+                    />
+                );
+            }
             if (oppCfg?.inquiry_drawer_mode === "workflow_v1") {
                 out.inquiry_tuition = (
                     <div className="min-w-0 space-y-1.5 text-sm text-alloy-midnight/70">
@@ -6242,14 +6287,31 @@ export default function AdminEntityDrawer() {
         if (!overviewData || (overviewData as { _create?: boolean })._create) return undefined;
         const d = overviewData as Record<string, unknown>;
         const currentStatus = String(formData.status_key ?? d.status_key ?? "").trim();
-        const stages =
-            statusDefsForDrawer
-                ?.filter((s) => s.is_active !== false)
-                .slice()
-                .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0)) ?? [];
-        if (!stages.length) return undefined;
+        const qd = opportunityQueueDefinition;
+        if (!qd || qd.entity_type !== "opportunity") return undefined;
 
-        const currentIdx = currentStatus ? stages.findIndex((s) => String(s.status_key ?? "").trim() === currentStatus) : -1;
+        const queueByKey = new Map(qd.queues.map((q) => [q.key, q]));
+        const pipelineSection =
+            qd.ui?.sections?.find((s) => (s.tone ?? "standard") !== "critical") ?? qd.ui?.sections?.[0] ?? null;
+        const pipelineKeys = pipelineSection?.queue_keys ?? [];
+        const steps = pipelineKeys
+            .map((k) => queueByKey.get(k))
+            .filter((q): q is QueueDefinitionV1["queues"][number] => !!q);
+        if (steps.length === 0) return undefined;
+
+        const statusKeysForQueue = (filters: QueueFilter[]): string[] => {
+            const out: string[] = [];
+            for (const f of filters ?? []) {
+                if (f && f.type === "status" && f.operator === "in") {
+                    out.push(...(f.values ?? []));
+                }
+            }
+            return out;
+        };
+
+        const currentIdx = currentStatus
+            ? steps.findIndex((q) => statusKeysForQueue(q.filters).some((sk) => String(sk).trim() === currentStatus))
+            : -1;
 
         return (
             <div
@@ -6257,15 +6319,12 @@ export default function AdminEntityDrawer() {
                 className="rounded-xl border border-alloy-stone/15 bg-white/80 px-2.5 py-1.5 shadow-sm ring-1 ring-alloy-stone/10"
             >
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    {stages.map((s, i) => {
-                        const key = String(s.status_key ?? "").trim();
-                        const label = String(s.status_label ?? s.status_key ?? "").trim() || "—";
+                    {steps.map((q, i) => {
+                        const key = String(q.key ?? "").trim();
+                        const label = String(q.label ?? q.key ?? "").trim() || "—";
                         const completed = currentIdx >= 0 && i < currentIdx;
                         const current = currentIdx >= 0 && i === currentIdx;
                         const future = currentIdx >= 0 && i > currentIdx;
-
-                        // TODO: Once we have workflow/status history, map each stage -> first-hit timestamp and render here.
-                        const stageDateLabel: string | null = null;
 
                         const dotClass = completed
                             ? "bg-[rgb(0,162,131)] text-white"
@@ -6296,13 +6355,8 @@ export default function AdminEntityDrawer() {
                                 </div>
                                 <div className="min-w-0">
                                     <div className={`text-[11px] font-medium whitespace-nowrap ${labelClass}`}>{label}</div>
-                                    {stageDateLabel ? (
-                                        <div className="mt-0.5 text-[10px] font-medium text-alloy-midnight/45 whitespace-nowrap">
-                                            {stageDateLabel}
-                                        </div>
-                                    ) : null}
                                 </div>
-                                {i < stages.length - 1 ? (
+                                {i < steps.length - 1 ? (
                                     <span
                                         aria-hidden
                                         className={`mx-0.5 h-[2px] w-4 rounded-full ${
@@ -6316,7 +6370,7 @@ export default function AdminEntityDrawer() {
                 </div>
             </div>
         );
-    }, [opportunityInquiryWorkflowDrawer, drawer.type, overviewData, formData.status_key, statusDefsForDrawer]);
+    }, [opportunityInquiryWorkflowDrawer, drawer.type, overviewData, formData.status_key, opportunityQueueDefinition]);
 
     if (!drawer.type || !drawer.id) return null;
 
