@@ -24,6 +24,11 @@ export function AutomationWorkflowsBlock(props: {
     href?: string;
 }) {
     const { kpis, workflows, title = "Automations", href = "/adminV2/workflows" } = props;
+  const humanTrigger = (eventType: string | null): string => {
+    const key = (eventType ?? "").trim().toLowerCase();
+    if (key === "opportunity_schedule_tour_followup") return "Runs when a tour is scheduled";
+    return "Runs on configured trigger";
+  };
 
     const statCard =
         "rounded-lg border border-alloy-stone/15 bg-white px-3 py-2 shadow-sm ring-1 ring-alloy-stone/5";
@@ -31,7 +36,7 @@ export function AutomationWorkflowsBlock(props: {
     const statV = "mt-0.5 text-lg font-bold tabular-nums text-alloy-forge";
 
     return (
-        <div className="rounded-xl border border-admin-border bg-admin-surface-card px-4 py-3 shadow-sm ring-1 ring-alloy-stone/5">
+        <div className="rounded-xl border border-alloy-blue/20 bg-gradient-to-br from-white to-alloy-blue/5 px-4 py-3 shadow-sm ring-1 ring-alloy-blue/10">
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                     <div className="text-sm font-semibold text-alloy-forge">{title}</div>
@@ -72,7 +77,7 @@ export function AutomationWorkflowsBlock(props: {
                                 <div className="min-w-0">
                                     <div className="truncate font-semibold text-alloy-forge">{w.name ?? w.id}</div>
                                     <div className="truncate text-[12px] text-alloy-forge/60">
-                                        Trigger: {w.event_type ?? "—"} · Steps: {w.steps_count}
+                                        {humanTrigger(w.event_type)} · Steps: {w.steps_count}
                                     </div>
                                 </div>
                                 <span

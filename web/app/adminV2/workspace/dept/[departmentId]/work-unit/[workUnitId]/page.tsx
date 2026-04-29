@@ -17,7 +17,6 @@ import type { WorkspaceAction } from "@/lib/ui-v2/workspace-actions";
 import type { QueueItemQuickActionVm, WorkUnitWorkspaceModel } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
 import { buildRealOpportunityWorkUnitWorkspaceModel } from "@/lib/ui-v2/adapters/realWorkUnitFromOpportunities";
-import { buildEnrollmentWorkUnitActionsRail } from "@/lib/workspace/viewModels/enrollmentWorkUnitViewModel";
 import { mergeEnrollmentRightRailActions } from "@/lib/workspace/viewModels/enrollmentRightRailMerge";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { workspaceRouteParam } from "@/lib/workspace/workspaceRouteParam";
@@ -798,18 +797,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
             workSummary: null,
             actionsRail: (() => {
                 const isEnrollmentDept = (dept.key ?? "").trim().toLowerCase() === "enrollment";
-                const base = isEnrollmentDept
-                    ? buildEnrollmentWorkUnitActionsRail()
-                    : {
-                          primaries: [],
-                          systemActions: [
-                              { id: "wu_back_department", label: "← Department overview", variant: "primary" as const },
-                          ],
-                          quickOperations: [{ id: "wu_manage_work_units", label: "Configure work units" }],
-                      };
+                const emptyBase = {
+                    primaries: [],
+                    systemActions: [],
+                    quickOperations: [],
+                    overflow: [],
+                };
                 return isEnrollmentDept
-                    ? mergeEnrollmentRightRailActions(enrollmentRightRailResolved ?? [], base)
-                    : base;
+                    ? mergeEnrollmentRightRailActions(enrollmentRightRailResolved ?? [], emptyBase)
+                    : emptyBase;
             })(),
             contextRail: { title: "About", groups: [] },
         };

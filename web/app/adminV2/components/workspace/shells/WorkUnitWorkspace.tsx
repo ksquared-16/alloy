@@ -60,6 +60,11 @@ export default function WorkUnitWorkspace({ model, onAction, headerQueuePicker, 
   const recLine = li?.recommendedActionLine?.trim() ?? "";
   const hasLaneStrip = Boolean(statusLine || recLine);
   const kpiSurface = model.kpis.some((k) => k.lane === "ai") ? "work_unit" : "default";
+  const hasConfiguredActions =
+    (model.actionsRail.primaries?.length ?? 0) > 0 ||
+    (model.actionsRail.systemActions?.length ?? 0) > 0 ||
+    (model.actionsRail.quickOperations?.length ?? 0) > 0 ||
+    (model.actionsRail.overflow?.length ?? 0) > 0;
 
   return (
     <div
@@ -185,7 +190,13 @@ export default function WorkUnitWorkspace({ model, onAction, headerQueuePicker, 
               data-adminv2-workspace-command-rail
               aria-label="Decisions and actions"
             >
-              <ActionsBlock model={model.actionsRail} onAction={onAction} title="Actions" surface="work_unit" />
+              {hasConfiguredActions ? (
+                <ActionsBlock model={model.actionsRail} onAction={onAction} title="Actions" surface="work_unit" />
+              ) : (
+                <div className="rounded-lg border border-admin-border bg-admin-surface-card px-3 py-2 text-xs text-alloy-forge/65">
+                  No configured actions.
+                </div>
+              )}
             </aside>
           </div>
         </div>

@@ -17,25 +17,13 @@ function resolvedToPrimaryVm(a: ResolvedActionForClient): PrimaryActionVm {
     };
 }
 
-function stripHardcodedShadowedByRegistry(system: PrimaryActionVm[] | undefined, registryKeys: Set<string>): PrimaryActionVm[] {
-    return (system ?? []).filter((s) => {
-        // Enrollment v1: registry keys are canonical; drop legacy hardcoded IDs when registry equivalents exist.
-        if (s.id === "wu_new_inquiry" && registryKeys.has("create_inquiry")) return false;
-        if (s.id === "dept_open_enrollment_wu" && registryKeys.has("open_enrollment_pipeline")) return false;
-        return true;
-    });
-}
-
-/**
- * Prepend registry `right_rail` actions as system (command) tier rows, then hardcoded enrollment fallbacks
- * minus entries shadowed by the same registry keys.
- */
 export function mergeEnrollmentRightRailActions(registry: ResolvedActionForClient[], base: ActionsVm): ActionsVm {
     if (!registry.length) return base;
-    const keys = new Set(registry.map((r) => r.key));
     const fromRegistry = registry.map(resolvedToPrimaryVm);
     return {
         ...base,
-        systemActions: [...fromRegistry, ...stripHardcodedShadowedByRegistry(base.systemActions, keys)],
+    systemActions: [...fromRegistry],
+    quickOperations: [],
+    overflow: [],
     };
 }

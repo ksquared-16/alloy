@@ -147,7 +147,7 @@ export default function AdminV2Shell({
           >
             {isWorkspaceV2Route || isSettingsRoute || isWorkflowsRoute ? <WorkspaceAmbientLayer /> : null}
             {/* Reserve room for the bottom AI bar so content isn't hidden behind it. */}
-            <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden isolate pb-[132px]">
+            <div className="relative z-10 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden isolate pb-[96px]">
               {isAiActivityRoute || isSettingsRoute || isWorkflowsRoute ? (
                 <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">{children}</main>
               ) : (

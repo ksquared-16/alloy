@@ -44,7 +44,7 @@
    * Operational row: 3 lanes (throughput | attention | command) or 2 when no secondary queue.
    */
   --ws-dept-page-max-width: 1520px;
-  --ws-dept-contain-padding-x: 16px;
+  --ws-dept-contain-padding-x: 12px;
   --ws-dept-contain-padding-top: 8px;
   --ws-dept-contain-padding-bottom: 24px;
   --ws-dept-section-gap: 16px;
@@ -1244,6 +1244,13 @@
   align-items: stretch;
   border-top: 1px solid color-mix(in srgb, var(--d-border) 42%, transparent);
   padding-top: 1px;
+}
+
+/* Department: keep Automations visible by scrolling queue lanes internally. */
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-operational-row {
+  max-height: calc(100vh - 340px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-operational-row--triple,
