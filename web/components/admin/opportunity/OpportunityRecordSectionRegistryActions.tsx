@@ -73,7 +73,9 @@ export default function OpportunityRecordSectionRegistryActions({
         if (departmentId) qs.set("department_id", departmentId);
         if (workUnitId) qs.set("work_unit_id", workUnitId);
         const url = `/api/admin/actions?${qs.toString()}`;
-        const timingEnabled = process.env.NODE_ENV !== "production";
+        const timingEnabled =
+            process.env.NODE_ENV !== "production" ||
+            (typeof window !== "undefined" && /staging|localhost|127\.0\.0\.1/i.test(window.location.hostname));
         const t0 = timingEnabled ? performance.now() : 0;
         dedupeAdminFetchWithTtl(url, workspaceDataFetchInit(), 1500)
             .then((r) => r.json())
@@ -145,7 +147,19 @@ export default function OpportunityRecordSectionRegistryActions({
         ]
     );
 
-    if (loading) return null;
+    if (loading) {
+        return (
+            <div
+                className="mt-2 flex flex-wrap gap-2"
+                aria-busy="true"
+                aria-label="Loading section actions"
+                data-opportunity-record-section-actions-skeleton={sectionKey}
+            >
+                <div className="h-8 w-[7.5rem] animate-pulse rounded-md bg-alloy-stone/15" />
+                <div className="h-8 w-[6.5rem] animate-pulse rounded-md bg-alloy-stone/12" />
+            </div>
+        );
+    }
     const n = primary.length + secondary.length + overflow.length;
     if (n === 0) return null;
 

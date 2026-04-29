@@ -141,22 +141,81 @@ export async function GET(
             const out: Record<string, unknown> = { ...data };
             const enrichStartedAt = Date.now();
             const wuidForDept = trimOrNull((opp as { work_unit_id?: string | null }).work_unit_id);
-            if (wuidForDept) {
-                const { data: wuDeptRow } = await supabase
-                    .from("work_units")
-                    .select("department_id")
-                    .eq("id", wuidForDept)
-                    .eq("org_id", orgId)
-                    .maybeSingle();
-                out._work_unit_department_id = trimOrNull((wuDeptRow as { department_id?: string | null } | null)?.department_id ?? null);
+            const oppPipelineStageId = (opp as { pipeline_stage_id?: string | null }).pipeline_stage_id ?? null;
+            const oppPipelineId = (opp as { pipeline_id?: string | null }).pipeline_id ?? null;
+            const oppDprogId = (opp as { discount_program_id?: string | null }).discount_program_id ?? null;
+            const [
+                wuDeptRow,
+                customerRow,
+                stRow,
+                plRow,
+                dprRow,
+                vertRow,
+                locRow,
+            ] = await Promise.all([
+                wuidForDept
+                    ? supabase
+                          .from("work_units")
+                          .select("department_id")
+                          .eq("id", wuidForDept)
+                          .eq("org_id", orgId)
+                          .maybeSingle()
+                    : Promise.resolve({ data: null }),
+                opp.customer_id
+                    ? supabase.from("customers").select("name").eq("id", opp.customer_id).eq("org_id", orgId).single()
+                    : Promise.resolve({ data: null }),
+                oppPipelineStageId
+                    ? supabase.from("pipeline_stages").select("name").eq("id", oppPipelineStageId).maybeSingle()
+                    : Promise.resolve({ data: null }),
+                oppPipelineId
+                    ? supabase.from("pipelines").select("name").eq("id", oppPipelineId).maybeSingle()
+                    : Promise.resolve({ data: null }),
+                oppDprogId
+                    ? supabase.from("discount_programs").select("name").eq("id", oppDprogId).maybeSingle()
+                    : Promise.resolve({ data: null }),
+                opp.vertical_id
+                    ? supabase.from("verticals").select("name").eq("id", opp.vertical_id).maybeSingle()
+                    : Promise.resolve({ data: null }),
+                opp.location_id
+                    ? supabase
+                          .from("locations")
+                          .select("id, label, address1, city, state, postal_code")
+                          .eq("id", opp.location_id)
+                          .eq("org_id", orgId)
+                          .maybeSingle()
+                    : Promise.resolve({ data: null }),
+            ]);
+            out._work_unit_department_id = wuidForDept
+                ? trimOrNull((wuDeptRow.data as { department_id?: string | null } | null)?.department_id ?? null)
+                : null;
+            out._customer_name = (customerRow.data as { name?: string | null } | null)?.name ?? null;
+            if (oppPipelineStageId) {
+                const stName = (stRow.data as { name?: string | null } | null)?.name ?? null;
+                out._pipeline_stage_name = stName;
+                out._stage_name = stName;
             } else {
-                out._work_unit_department_id = null;
+                out._pipeline_stage_name = null;
+                out._stage_name = null;
             }
-            if (opp.customer_id) {
-                const customer = await supabase.from("customers").select("name").eq("id", opp.customer_id).eq("org_id", orgId).single();
-                out._customer_name = customer.data?.name ?? null;
+            out._pipeline_name = (plRow.data as { name?: string | null } | null)?.name ?? null;
+            out._discount_program_label = (dprRow.data as { name?: string | null } | null)?.name ?? null;
+            out._vertical_name = (vertRow.data as { name?: string | null } | null)?.name ?? null;
+            if (opp.location_id) {
+                const l = locRow.data as {
+                    label?: string | null;
+                    address1?: string | null;
+                    city?: string | null;
+                    state?: string | null;
+                    postal_code?: string | null;
+                } | null;
+                const locLabel = l ? l.label || [l.address1, l.city, l.state, l.postal_code].filter(Boolean).join(", ") || null : null;
+                out._location_name = locLabel;
+                out._location_label = locLabel;
+                out._location_id = opp.location_id;
             } else {
-                out._customer_name = null;
+                out._location_name = null;
+                out._location_label = null;
+                out._location_id = null;
             }
             // Prefer primary_person_id for display; fallback to contact
             const personDisplayName = (p: { full_name?: string | null; first_name?: string | null; last_name?: string | null } | null) =>
@@ -223,53 +282,6 @@ export async function GET(
                 out._primary_contact_name = null;
                 out._primary_person_id = null;
                 out._primary_person_name = null;
-            }
-            const oppPipelineStageId = (opp as { pipeline_stage_id?: string | null }).pipeline_stage_id ?? null;
-            if (oppPipelineStageId) {
-                const { data: stRow } = await supabase.from("pipeline_stages").select("name").eq("id", oppPipelineStageId).maybeSingle();
-                const stName = (stRow as { name?: string | null } | null)?.name ?? null;
-                out._pipeline_stage_name = stName;
-                out._stage_name = stName;
-            } else {
-                out._pipeline_stage_name = null;
-                out._stage_name = null;
-            }
-            const oppPipelineId = (opp as { pipeline_id?: string | null }).pipeline_id ?? null;
-            if (oppPipelineId) {
-                const { data: plRow } = await supabase.from("pipelines").select("name").eq("id", oppPipelineId).maybeSingle();
-                out._pipeline_name = (plRow as { name?: string | null } | null)?.name ?? null;
-            } else {
-                out._pipeline_name = null;
-            }
-            const oppDprogId = (opp as { discount_program_id?: string | null }).discount_program_id ?? null;
-            if (oppDprogId) {
-                const { data: dpr } = await supabase.from("discount_programs").select("name").eq("id", oppDprogId).maybeSingle();
-                out._discount_program_label = (dpr as { name?: string | null } | null)?.name ?? null;
-            } else {
-                out._discount_program_label = null;
-            }
-            if (opp.vertical_id) {
-                const { data: vert } = await supabase.from("verticals").select("name").eq("id", opp.vertical_id).maybeSingle();
-                out._vertical_name = (vert as { name?: string | null } | null)?.name ?? null;
-            } else {
-                out._vertical_name = null;
-            }
-            if (opp.location_id) {
-                const loc = await supabase
-                    .from("locations")
-                    .select("id, label, address1, city, state, postal_code")
-                    .eq("id", opp.location_id)
-                    .eq("org_id", orgId)
-                    .maybeSingle();
-                const l = loc.data as { label?: string | null; address1?: string | null; city?: string | null; state?: string | null; postal_code?: string | null } | null;
-                const locLabel = l ? l.label || [l.address1, l.city, l.state, l.postal_code].filter(Boolean).join(", ") || null : null;
-                out._location_name = locLabel;
-                out._location_label = locLabel;
-                out._location_id = opp.location_id;
-            } else {
-                out._location_name = null;
-                out._location_label = null;
-                out._location_id = null;
             }
             const oppOrgId = (opp as { org_id?: string }).org_id;
             const opportunityDefs = oppOrgId
@@ -486,13 +498,16 @@ export async function GET(
                     const desiredScheduleType = trimOrNull(r.desired_schedule_type) ?? oppDefaultScheduleType;
                     const memMeta = (m?.metadata ?? null) as Record<string, unknown> | null;
                     const demoProgramLabel = memMeta && typeof memMeta.demo_program_label === "string" ? trimOrNull(memMeta.demo_program_label) : null;
-                    const desiredProgramLabel =
-                        (await optionItemLabelForOrg(supabase, orgId, "childcare_program_type", desiredProgramType)) ?? demoProgramLabel;
-                    const desiredScheduleLabel = await optionItemLabelForOrg(supabase, orgId, "childcare_schedule_type", desiredScheduleType);
                     const outcomeStatusKey = trimOrNull(r.outcome_status_key);
-                    const outcomeStatusLabel = outcomeStatusKey
-                        ? await resolveStatusLabel(supabase, orgId, "opportunity_customer_members", outcomeStatusKey)
-                        : null;
+                    const [desiredProgramLabel, desiredScheduleLabel, outcomeStatusLabel] = await Promise.all([
+                        optionItemLabelForOrg(supabase, orgId, "childcare_program_type", desiredProgramType).then(
+                            (lbl) => lbl ?? demoProgramLabel
+                        ),
+                        optionItemLabelForOrg(supabase, orgId, "childcare_schedule_type", desiredScheduleType),
+                        outcomeStatusKey
+                            ? resolveStatusLabel(supabase, orgId, "opportunity_customer_members", outcomeStatusKey)
+                            : Promise.resolve(null),
+                    ]);
                     return {
                         id: r.id,
                         customer_member_id: r.customer_member_id,

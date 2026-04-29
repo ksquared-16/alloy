@@ -25,6 +25,8 @@ export type ApplyRegistryResolvedActionHost = {
     invalidate?: (opts?: { entity_type?: string; entity_id?: string; action_key?: string }) => void;
     departmentId?: string | null;
     workUnitId?: string | null;
+    /** Deep link for `view_needs_attention` (needs-attention work unit + queue). */
+    needsAttentionHref?: string | null;
     /** When set, used for mutating / open_drawer actions that target the current record. */
     entityId?: string | null;
     context: RegistryActionSurfaceContext;
@@ -96,6 +98,19 @@ export async function applyRegistryResolvedActionClient(
             return { ok: true };
         }
         if (intent === "open_enrollment_pipeline") {
+            if (host.departmentId?.trim()) {
+                host.router.push(`/adminV2/workspace/dept/${encodeURIComponent(host.departmentId.trim())}`);
+            } else {
+                host.router.push("/adminV2/workspace");
+            }
+            return { ok: true };
+        }
+        if (intent === "view_needs_attention") {
+            const href = host.needsAttentionHref?.trim();
+            if (href) {
+                host.router.push(href);
+                return { ok: true };
+            }
             if (host.departmentId?.trim()) {
                 host.router.push(`/adminV2/workspace/dept/${encodeURIComponent(host.departmentId.trim())}`);
             } else {

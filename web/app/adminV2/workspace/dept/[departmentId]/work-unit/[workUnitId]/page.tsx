@@ -919,6 +919,14 @@ export default function AdminV2OpportunityWorkUnitPage() {
         return m;
     }, [enrollmentRightRailResolved]);
 
+    const needsAttentionHref = useMemo(() => {
+        if (!departmentId) return `${WORKSPACE_BASE}`;
+        if (!needsAttentionWorkUnitId) return `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}`;
+        return `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(
+            needsAttentionWorkUnitId
+        )}?queue=needs_attention`;
+    }, [departmentId, needsAttentionWorkUnitId]);
+
     const queueRowResolvedByKey = useMemo(() => {
         const m = new Map<string, ResolvedActionForClient>();
         for (const a of opportunityQueueRowResolved ?? []) m.set(a.key, a);
@@ -965,6 +973,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     invalidate,
                     departmentId,
                     workUnitId: workUnit?.id ?? null,
+                    needsAttentionHref,
                     context: {
                         surface: "right_rail",
                         department_id: departmentId,
@@ -1119,6 +1128,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         [
             departmentId,
             enrollmentRightRailByKey,
+            needsAttentionHref,
             needsAttentionWorkUnitId,
             openDrawer,
             queueItems?.queue.entity_type,

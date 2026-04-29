@@ -978,6 +978,8 @@ export default function AdminEntityDrawer() {
     const [actionFormState, setActionFormState] = useState<{
         form_key: string;
         action: ResolvedActionForClient;
+        /** Surfaces POST /api/admin/actions/execute audit context (registry placement). */
+        executeContext?: { surface: string; section_key?: string | null };
     } | null>(null);
     const [relatedPeopleRefreshKey, setRelatedPeopleRefreshKey] = useState(0);
     const [opportunityQueueDefinition, setOpportunityQueueDefinition] = useState<QueueDefinitionV1 | null>(null);
@@ -1998,7 +2000,7 @@ export default function AdminEntityDrawer() {
             if (!drawer.id || drawer.id === "new" || drawer.type !== "opportunities") return;
             if (a.action_type === "open_form") {
                 const formKey = a.payload?.form_key != null ? String(a.payload.form_key).trim() : "";
-                if (formKey) setActionFormState({ form_key: formKey, action: a });
+                if (formKey) setActionFormState({ form_key: formKey, action: a, executeContext: { surface: "record_header" } });
                 return;
             }
             if (a.action_type === "navigate") {
@@ -5562,7 +5564,11 @@ export default function AdminEntityDrawer() {
                         router={router}
                         openDrawer={openDrawer}
                         openForm={({ form_key, action }) => {
-                            setActionFormState({ form_key, action });
+                            setActionFormState({
+                                form_key,
+                                action,
+                                executeContext: { surface: "record_section", section_key: "customer_booking" },
+                            });
                         }}
                         refreshKey={relatedPeopleRefreshKey}
                     />
@@ -9048,8 +9054,16 @@ export default function AdminEntityDrawer() {
                                                                                 router={router}
                                                                                 openDrawer={openDrawer}
                                                                                 openForm={({ form_key, action }) => {
-                                                                                    setActionFormState({ form_key, action });
+                                                                                    setActionFormState({
+                                                                                        form_key,
+                                                                                        action,
+                                                                                        executeContext: {
+                                                                                            surface: "record_section",
+                                                                                            section_key: "family_contacts",
+                                                                                        },
+                                                                                    });
                                                                                 }}
+                                                                                excludeActionKeys={opportunityRegistryHeaderActionKeys}
                                                                                 refreshKey={relatedPeopleRefreshKey}
                                                                                 onRegistryApplied={() => {
                                                                                     setRelatedPeopleRefreshKey((n) => n + 1);
@@ -11556,11 +11570,16 @@ export default function AdminEntityDrawer() {
                     setOpportunityActionLoading(actionKey);
                     setSaveError(null);
                     try {
-                        const deptId = opportunityWorkUnitDepartmentId?.trim() || null;
+                        const deptId =
+                            opportunityWorkUnitDepartmentId?.trim() ||
+                            (data && typeof data === "object"
+                                ? String((data as { _work_unit_department_id?: unknown })._work_unit_department_id ?? "").trim() || null
+                                : null);
                         const wuid =
                             data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
                                 ? String((data as { work_unit_id?: unknown }).work_unit_id).trim() || null
                                 : null;
+                        const xc = actionFormState?.executeContext;
                         const res = await fetch("/api/admin/actions/execute", {
                             method: "POST",
                             credentials: "include",
@@ -11570,8 +11589,11 @@ export default function AdminEntityDrawer() {
                                 entity_type: "opportunity",
                                 entity_id: drawer.id,
                                 context: {
-                                    surface: "record_section",
-                                    section_key: "family_contacts",
+                                    surface: xc?.surface ?? "record_section",
+                                    section_key:
+                                        xc?.surface === "record_header"
+                                            ? null
+                                            : (xc?.section_key ?? "family_contacts"),
                                     department_id: deptId,
                                     work_unit_id: wuid,
                                 },

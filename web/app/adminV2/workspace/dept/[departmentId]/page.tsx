@@ -21,9 +21,6 @@ import {
     REGISTRY_RIGHT_RAIL_ACTION_ID_PREFIX,
     mergeEnrollmentRightRailActions,
 } from "@/lib/workspace/viewModels/enrollmentRightRailMerge";
-import {
-    buildEnrollmentDepartmentCommandRail,
-} from "@/lib/workspace/viewModels/enrollmentWorkUnitViewModel";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { AutomationWorkflowsBlock } from "@/app/adminV2/components/workspace/blocks/AutomationWorkflowsBlock";
@@ -220,9 +217,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
 
     const enrollmentDepartmentRailModel = useMemo(() => {
         if (deptKey !== "enrollment") return null;
-        const baseEmpty = buildEnrollmentDepartmentCommandRail();
         return mergeEnrollmentRightRailActions(enrollmentDeptRightRail ?? [], {
-            ...baseEmpty,
             primaries: [],
             systemActions: [],
             quickOperations: [],
@@ -235,31 +230,6 @@ export default function AdminV2WorkspaceDepartmentPage() {
         for (const a of enrollmentDeptRightRail ?? []) m.set(a.key, a);
         return m;
     }, [enrollmentDeptRightRail]);
-
-    const onEnrollmentDeptRailAction = useCallback(
-        async (action: WorkspaceAction) => {
-            if (action.type !== "actions.block") return;
-            if (action.actionId.startsWith(REGISTRY_RIGHT_RAIL_ACTION_ID_PREFIX)) {
-                const key = action.actionId.slice(REGISTRY_RIGHT_RAIL_ACTION_ID_PREFIX.length);
-                const resolved = enrollmentRightRailByKey.get(key);
-                if (!resolved) return;
-                await applyRegistryResolvedActionClient(resolved, {
-                    router,
-                    openDrawer,
-                    departmentId,
-                    workUnitId: primaryWorkUnit?.id ?? null,
-                    context: {
-                        surface: "right_rail",
-                        department_id: departmentId,
-                        work_unit_id: primaryWorkUnit?.id ?? null,
-                    },
-                });
-                return;
-            }
-            window.alert("Coming next: This action is not configured yet.");
-        },
-        [departmentId, enrollmentRightRailByKey, openDrawer, primaryWorkUnit?.id, router]
-    );
 
     const kpis = useMemo(() => {
         const list = deptWorkUnits ?? [];
@@ -284,6 +254,34 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 : `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}`;
         return { total, href };
     }, [departmentId, deptWorkUnitSummaries, deptWorkUnits]);
+
+    const needsAttentionHref = needsAttentionSummary.href;
+
+    const onEnrollmentDeptRailAction = useCallback(
+        async (action: WorkspaceAction) => {
+            if (action.type !== "actions.block") return;
+            if (action.actionId.startsWith(REGISTRY_RIGHT_RAIL_ACTION_ID_PREFIX)) {
+                const key = action.actionId.slice(REGISTRY_RIGHT_RAIL_ACTION_ID_PREFIX.length);
+                const resolved = enrollmentRightRailByKey.get(key);
+                if (!resolved) return;
+                await applyRegistryResolvedActionClient(resolved, {
+                    router,
+                    openDrawer,
+                    departmentId,
+                    workUnitId: primaryWorkUnit?.id ?? null,
+                    needsAttentionHref,
+                    context: {
+                        surface: "right_rail",
+                        department_id: departmentId,
+                        work_unit_id: primaryWorkUnit?.id ?? null,
+                    },
+                });
+                return;
+            }
+            window.alert("Coming next: This action is not configured yet.");
+        },
+        [departmentId, enrollmentRightRailByKey, needsAttentionHref, openDrawer, primaryWorkUnit?.id, router]
+    );
 
     const renderWorkUnitSection = () => {
         return (
@@ -461,19 +459,20 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         />
                     }
                     railSlot={
-                        enrollmentDepartmentRailModel &&
-                        (enrollmentDeptRightRail?.length ?? 0) > 0 ? (
-                            <ActionsBlock
-                                model={enrollmentDepartmentRailModel}
-                                onAction={onEnrollmentDeptRailAction}
-                                title="Actions"
-                                surface="department"
-                            />
-                        ) : (
-                            <div className="rounded-lg border border-admin-border bg-admin-surface-card px-3 py-2 text-xs text-alloy-forge/65">
-                                No configured actions.
-                            </div>
-                        )
+                        deptKey === "enrollment" ? (
+                            (enrollmentDepartmentRailModel?.systemActions?.length ?? 0) > 0 ? (
+                                <ActionsBlock
+                                    model={enrollmentDepartmentRailModel!}
+                                    onAction={onEnrollmentDeptRailAction}
+                                    title="Actions"
+                                    surface="department"
+                                />
+                            ) : (
+                                <div className="rounded-lg border border-admin-border bg-admin-surface-card px-3 py-2 text-xs text-alloy-forge/65">
+                                    No configured actions.
+                                </div>
+                            )
+                        ) : null
                     }
                 />
             ) : (
