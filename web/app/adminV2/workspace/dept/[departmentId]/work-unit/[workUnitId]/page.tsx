@@ -481,24 +481,49 @@ export default function AdminV2OpportunityWorkUnitPage() {
         []
     );
 
+    const fetchQueueSummaries = useCallback(
+        async (workUnitId: string) => {
+            const route = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?limit=3`;
+            setQueueSummariesError(null);
+            setQueueSummariesRoute(route);
+            try {
+                const init = workspaceDataFetchInit();
+                const res = await fetch(route, init);
+                const json = (await res.json().catch(() => ({}))) as { error?: string; queues?: QueueSummary[] };
+                if (!res.ok) {
+                    throw new Error(json.error ?? "Failed to load queues");
+                }
+                const qs = (json.queues ?? []) as QueueSummary[];
+                setQueueSummaries(qs);
+            } catch (e) {
+                setQueueSummaries(null);
+                setQueueSummariesError(e instanceof Error ? e.message : "Failed to load queues");
+            }
+        },
+        []
+    );
+
     const invalidate = useCallback(
         (opts?: { entity_type?: string; entity_id?: string; action_key?: string }) => {
             void opts;
             if (!workUnitId || !selectedQueueKey) return;
             void fetchQueueItems(workUnitId, selectedQueueKey);
+            void fetchQueueSummaries(workUnitId);
         },
-        [fetchQueueItems, selectedQueueKey, workUnitId]
+        [fetchQueueItems, fetchQueueSummaries, selectedQueueKey, workUnitId]
     );
 
     useEffect(() => {
         if (!workUnitId || !selectedQueueKey) return;
         const onUpdated = (ev: Event) => {
             const ce = ev as CustomEvent<{ id?: string }>;
+            void ce;
             void fetchQueueItems(workUnitId, selectedQueueKey);
+            void fetchQueueSummaries(workUnitId);
         };
         window.addEventListener("adminv2:opportunity-updated", onUpdated as EventListener);
         return () => window.removeEventListener("adminv2:opportunity-updated", onUpdated as EventListener);
-    }, [fetchQueueItems, selectedQueueKey, workUnitId]);
+    }, [fetchQueueItems, fetchQueueSummaries, selectedQueueKey, workUnitId]);
 
     useEffect(() => {
         if (!workUnitId || !selectedQueueKey) return;
@@ -1147,6 +1172,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         open={updateStatusFormOpen}
                         title="Update status"
                         statusOptions={statusOptions}
+                        transitionContext={{
+                            entityType: "opportunities",
+                            departmentId: departmentId,
+                            workUnitId: workUnit?.id ?? null,
+                            actionKey: "update_status_add_note",
+                        }}
                         onClose={() => {
                             setUpdateStatusFormOpen(false);
                             setUpdateStatusTargetId(null);

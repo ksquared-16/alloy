@@ -18,6 +18,8 @@ type RouterLike = { push: (href: string) => void; refresh: () => void };
 type Props = {
     opportunityId: string;
     sectionKey: string;
+    departmentId?: string | null;
+    workUnitId?: string | null;
     /** Suppress keys already shown on the record header (registry). */
     excludeActionKeys?: Set<string>;
     canMutate: boolean;
@@ -45,6 +47,8 @@ function filterSlot(
 export default function OpportunityRecordSectionRegistryActions({
     opportunityId,
     sectionKey,
+    departmentId,
+    workUnitId,
     excludeActionKeys,
     canMutate,
     router,
@@ -66,6 +70,8 @@ export default function OpportunityRecordSectionRegistryActions({
             entity_id: opportunityId,
             section_key: sectionKey,
         });
+        if (departmentId) qs.set("department_id", departmentId);
+        if (workUnitId) qs.set("work_unit_id", workUnitId);
         const url = `/api/admin/actions?${qs.toString()}`;
         dedupeAdminFetch(url, workspaceDataFetchInit())
             .then((r) => r.json())
@@ -81,7 +87,7 @@ export default function OpportunityRecordSectionRegistryActions({
         return () => {
             cancelled = true;
         };
-    }, [opportunityId, sectionKey]);
+    }, [opportunityId, sectionKey, departmentId, workUnitId]);
 
     const primary = useMemo(() => filterSlot(bySlot?.primary, excludeActionKeys), [bySlot, excludeActionKeys]);
     const secondary = useMemo(() => filterSlot(bySlot?.secondary, excludeActionKeys), [bySlot, excludeActionKeys]);

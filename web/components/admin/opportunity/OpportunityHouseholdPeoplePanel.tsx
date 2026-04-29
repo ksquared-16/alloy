@@ -20,13 +20,15 @@ export function OpportunityHouseholdPeoplePanel(props: {
     customerId: string;
     canMutate: boolean;
     sectionKey: string;
+    departmentId?: string | null;
+    workUnitId?: string | null;
     router: { push: (href: string) => void; refresh: () => void };
     openDrawer: (opts: { type: AdminDrawerEntityType; id: string }) => void;
     openForm: (opts: { form_key: string; action: ResolvedActionForClient }) => void;
     /** Increment to force refresh after an action. */
     refreshKey: number;
 }) {
-    const { opportunityId, customerId, canMutate, sectionKey, router, openDrawer, openForm, refreshKey } = props;
+    const { opportunityId, customerId, canMutate, sectionKey, departmentId, workUnitId, router, openDrawer, openForm, refreshKey } = props;
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [people, setPeople] = useState<PersonRow[]>([]);
@@ -76,6 +78,8 @@ export function OpportunityHouseholdPeoplePanel(props: {
             <OpportunityRecordSectionRegistryActions
                 opportunityId={opportunityId}
                 sectionKey={sectionKey}
+                departmentId={departmentId ?? null}
+                workUnitId={workUnitId ?? null}
                 canMutate={canMutate}
                 router={router}
                 openDrawer={openDrawer}

@@ -10,23 +10,96 @@ export function UpdateStatusAddNoteModal(props: {
     statusOptions: StatusOption[];
     initialStatusKey?: string | null;
     onClose: () => void;
-    onSubmit: (payload: { status_key: string; note: string; next_step: string }) => Promise<void>;
+    transitionContext?: {
+        entityType: "opportunities";
+        departmentId: string | null;
+        workUnitId: string | null;
+        actionKey: string | null;
+    };
+    onSubmit: (payload: Record<string, string>) => Promise<void>;
 }) {
-    const { open, title = "Update status", statusOptions, initialStatusKey, onClose, onSubmit } = props;
+    const { open, title = "Update status", statusOptions, initialStatusKey, onClose, onSubmit, transitionContext } = props;
     const [statusKey, setStatusKey] = useState("");
     const [note, setNote] = useState("");
     const [nextStep, setNextStep] = useState("");
+    const [extra, setExtra] = useState<Record<string, string>>({});
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [rules, setRules] = useState<
+        Array<{
+            entity_type: string | null;
+            department_id: string | null;
+            work_unit_id: string | null;
+            action_key: string | null;
+            to_status_key: string | null;
+            required_payload_fields: string[] | null;
+            blocked: boolean | null;
+            is_active: boolean | null;
+        }>
+    >([]);
 
     useEffect(() => {
         if (!open) return;
         setStatusKey(initialStatusKey ?? "");
         setNote("");
         setNextStep("");
+        setExtra({});
         setError(null);
         setBusy(false);
     }, [open, initialStatusKey]);
+
+    useEffect(() => {
+        if (!open) return;
+        let cancelled = false;
+        (async () => {
+            try {
+                const res = await fetch("/api/admin/status-transition-rules", { credentials: "include" });
+                const json = (await res.json().catch(() => ({}))) as { rules?: unknown[] };
+                if (!res.ok) return;
+                const list = Array.isArray(json.rules) ? (json.rules as any[]) : [];
+                const normalized = list
+                    .map((r) => ({
+                        entity_type: r?.entity_type ?? null,
+                        department_id: r?.department_id ?? null,
+                        work_unit_id: r?.work_unit_id ?? null,
+                        action_key: r?.action_key ?? null,
+                        to_status_key: r?.to_status_key ?? null,
+                        required_payload_fields: Array.isArray(r?.required_payload_fields)
+                            ? (r.required_payload_fields as unknown[]).filter((x): x is string => typeof x === "string")
+                            : null,
+                        blocked: r?.blocked ?? null,
+                        is_active: r?.is_active ?? null,
+                    }))
+                    .filter((r) => r.is_active !== false);
+                if (!cancelled) setRules(normalized);
+            } catch {
+                if (!cancelled) setRules([]);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [open]);
+
+    const requiredPayloadFields = useMemo(() => {
+        const to = statusKey.trim();
+        if (!to) return [];
+        const ctx = transitionContext ?? null;
+        const matches = rules.filter((r) => {
+            if (r.blocked) return false;
+            if (String(r.entity_type ?? "").trim() !== "opportunities") return false;
+            if (String(r.to_status_key ?? "").trim() !== to) return false;
+            if (r.department_id && (!ctx?.departmentId || r.department_id !== ctx.departmentId)) return false;
+            if (r.work_unit_id && (!ctx?.workUnitId || r.work_unit_id !== ctx.workUnitId)) return false;
+            if (r.action_key && (!ctx?.actionKey || r.action_key !== ctx.actionKey)) return false;
+            return true;
+        });
+        const out: string[] = [];
+        for (const m of matches) {
+            for (const f of m.required_payload_fields ?? []) out.push(f);
+        }
+        return [...new Set(out)];
+    }, [rules, statusKey, transitionContext]);
 
     const overlay = "fixed inset-0 z-[80] bg-black/20 backdrop-blur-[1px]";
     const panel = "fixed left-1/2 top-1/2 z-[81] w-[92vw] max-w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-admin-border bg-white shadow-xl";
@@ -80,6 +153,35 @@ export function UpdateStatusAddNoteModal(props: {
                             ))}
                         </select>
                     </div>
+                    {requiredPayloadFields.length ? (
+                        <div className="rounded-lg border border-alloy-stone/20 bg-alloy-stone/5 px-3 py-2">
+                            <div className={label}>Required for this transition</div>
+                            <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                {requiredPayloadFields.map((k) => {
+                                    const v = extra[k] ?? "";
+                                    const inputType =
+                                        k.toLowerCase().includes("date") ? "date" : k.toLowerCase().includes("time") ? "time" : "text";
+                                    return (
+                                        <label key={k} className="block">
+                                            <div className="text-xs font-semibold text-alloy-midnight/70">{k}</div>
+                                            <input
+                                                type={inputType}
+                                                value={v}
+                                                disabled={busy}
+                                                onChange={(e) =>
+                                                    setExtra((prev) => ({
+                                                        ...prev,
+                                                        [k]: e.target.value,
+                                                    }))
+                                                }
+                                                className={`${input} mt-1`}
+                                            />
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    ) : null}
                     <div>
                         <div className={label}>Note</div>
                         <textarea
@@ -125,10 +227,22 @@ export function UpdateStatusAddNoteModal(props: {
                         disabled={busy || !statusKey.trim()}
                         onClick={async () => {
                             if (!statusKey.trim()) return;
+                            for (const k of requiredPayloadFields) {
+                                const v = String(extra[k] ?? "").trim();
+                                if (!v) {
+                                    setError(`Missing required field: ${k}`);
+                                    return;
+                                }
+                            }
                             setBusy(true);
                             setError(null);
                             try {
-                                await onSubmit({ status_key: statusKey.trim(), note: note.trim(), next_step: nextStep.trim() });
+                                await onSubmit({
+                                    status_key: statusKey.trim(),
+                                    note: note.trim(),
+                                    next_step: nextStep.trim(),
+                                    ...Object.fromEntries(requiredPayloadFields.map((k) => [k, String(extra[k] ?? "").trim()])),
+                                });
                                 onClose();
                             } catch (e) {
                                 setError(e instanceof Error ? e.message : "Save failed");

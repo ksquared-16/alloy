@@ -975,6 +975,7 @@ export default function AdminEntityDrawer() {
     } | null>(null);
     const [relatedPeopleRefreshKey, setRelatedPeopleRefreshKey] = useState(0);
     const [opportunityQueueDefinition, setOpportunityQueueDefinition] = useState<QueueDefinitionV1 | null>(null);
+    const [opportunityWorkUnitDepartmentId, setOpportunityWorkUnitDepartmentId] = useState<string | null>(null);
     const [addInquiryChildState, setAddInquiryChildState] = useState<{ mode: "child" | "sibling" } | null>(null);
     const [collectPaymentOpen, setCollectPaymentOpen] = useState(false);
     const [collectPaymentContext, setCollectPaymentContext] = useState<AdminCollectPaymentModalContext | null>(null);
@@ -2044,6 +2045,7 @@ export default function AdminEntityDrawer() {
             entity_id: drawer.id,
         });
         if (workUnitId.trim()) qs.set("work_unit_id", workUnitId.trim());
+        if (opportunityWorkUnitDepartmentId?.trim()) qs.set("department_id", opportunityWorkUnitDepartmentId.trim());
         const actionsUrl = `/api/admin/actions?${qs.toString()}`;
         dedupeAdminFetch(actionsUrl, workspaceDataFetchInit())
             .then((r) => r.json())
@@ -2060,7 +2062,7 @@ export default function AdminEntityDrawer() {
         return () => {
             cancelled = true;
         };
-    }, [drawer.type, drawer.id, data]);
+    }, [drawer.type, drawer.id, data, opportunityWorkUnitDepartmentId]);
 
     // Keep drawer state, but refresh record + header actions when actions mutate the opportunity.
     useEffect(() => {
@@ -2083,6 +2085,7 @@ export default function AdminEntityDrawer() {
                 entity_id: drawer.id,
             });
             if (workUnitId.trim()) qs.set("work_unit_id", workUnitId.trim());
+            if (opportunityWorkUnitDepartmentId?.trim()) qs.set("department_id", opportunityWorkUnitDepartmentId.trim());
             const actionsUrl = `/api/admin/actions?${qs.toString()}`;
             dedupeAdminFetch(actionsUrl, workspaceDataFetchInit())
                 .then((r) => r.json())
@@ -2092,7 +2095,7 @@ export default function AdminEntityDrawer() {
         };
         window.addEventListener("adminv2:opportunity-updated", onUpdated as EventListener);
         return () => window.removeEventListener("adminv2:opportunity-updated", onUpdated as EventListener);
-    }, [drawer.type, drawer.id, refetch, data]);
+    }, [drawer.type, drawer.id, refetch, data, opportunityWorkUnitDepartmentId]);
 
     // If a caller opened the drawer with a surface hint, respect it once.
     useEffect(() => {
@@ -2113,6 +2116,7 @@ export default function AdminEntityDrawer() {
     useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
             setOpportunityQueueDefinition(null);
+            setOpportunityWorkUnitDepartmentId(null);
             return;
         }
         const wuid =
@@ -2121,14 +2125,18 @@ export default function AdminEntityDrawer() {
                 : "";
         if (!wuid) {
             setOpportunityQueueDefinition(null);
+            setOpportunityWorkUnitDepartmentId(null);
             return;
         }
         let cancelled = false;
         (async () => {
             try {
                 const res = await fetch(`/api/admin/work-units/${encodeURIComponent(wuid)}`, { credentials: "include" });
-                const json = (await res.json().catch(() => ({}))) as { queue_definition?: unknown };
+                const json = (await res.json().catch(() => ({}))) as { queue_definition?: unknown; department_id?: string | null };
                 if (cancelled) return;
+                setOpportunityWorkUnitDepartmentId(
+                    typeof json.department_id === "string" && json.department_id.trim() ? json.department_id.trim() : null
+                );
                 const qd = (json as { queue_definition?: unknown }).queue_definition;
                 if (!qd || typeof qd !== "object") {
                     setOpportunityQueueDefinition(null);
@@ -2137,7 +2145,10 @@ export default function AdminEntityDrawer() {
                 const parsed = validateQueueDefinition(qd);
                 setOpportunityQueueDefinition(parsed);
             } catch {
-                if (!cancelled) setOpportunityQueueDefinition(null);
+                if (!cancelled) {
+                    setOpportunityQueueDefinition(null);
+                    setOpportunityWorkUnitDepartmentId(null);
+                }
             }
         })();
         return () => {
@@ -5405,6 +5416,8 @@ export default function AdminEntityDrawer() {
                         customerId={customerId}
                         canMutate={!!canMutate}
                         sectionKey="customer_booking"
+                        departmentId={opportunityWorkUnitDepartmentId}
+                        workUnitId={String(d.work_unit_id ?? "").trim() || null}
                         router={router}
                         openDrawer={openDrawer}
                         openForm={({ form_key, action }) => {
@@ -11256,6 +11269,15 @@ export default function AdminEntityDrawer() {
                         value: String(s.status_key ?? ""),
                         label: String(s.status_label ?? s.status_key ?? ""),
                     }))}
+                transitionContext={{
+                    entityType: "opportunities",
+                    departmentId: opportunityWorkUnitDepartmentId,
+                    workUnitId:
+                        data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
+                            ? String((data as { work_unit_id?: unknown }).work_unit_id)
+                            : null,
+                    actionKey: actionFormState?.action?.key ? String(actionFormState.action.key) : "update_status_add_note",
+                }}
                 onSubmit={async (payload) => {
                     if (!drawer.id || drawer.id === "new" || drawer.type !== "opportunities") return;
                     const actionKey = actionFormState?.action?.key ? String(actionFormState.action.key) : "update_status_add_note";

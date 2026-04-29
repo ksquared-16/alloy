@@ -569,6 +569,28 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
                                                     </div>
                                                 ))}
                                             </div>
+                                            <div className="mt-2 rounded-md border border-admin-border/50 bg-white/60 px-2.5 py-2">
+                                                <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/55">
+                                                    Status filters by bucket
+                                                </div>
+                                                <div className="mt-1 space-y-1">
+                                                    {modalQueueBuckets.value.queues.map((q) => {
+                                                        const statusFilters = (q.filters ?? [])
+                                                            .filter((f) => (f as any)?.type === "status" && (f as any)?.operator === "in")
+                                                            .flatMap((f) => (((f as any).values as unknown[]) ?? []).filter((x): x is string => typeof x === "string"));
+                                                        return (
+                                                            <div key={`sf:${q.key}`} className="text-xs text-alloy-forge/70">
+                                                                <span className="font-semibold">{q.label}</span>{" "}
+                                                                <span className="text-alloy-forge/45">({q.key})</span>
+                                                                <span className="text-alloy-forge/50"> · </span>
+                                                                <span className="font-mono text-[11px] text-alloy-midnight/55">
+                                                                    {statusFilters.length ? statusFilters.join(", ") : "—"}
+                                                                </span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 )}
