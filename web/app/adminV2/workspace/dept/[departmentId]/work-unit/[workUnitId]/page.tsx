@@ -254,12 +254,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 let shouldFallbackToLegacy = false;
                 let fallbackReason: string | null = null;
                 const queueListRoute = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?limit=3`;
+                const queueRowActionContext = {
+                    departmentId,
+                    workUnitId,
+                };
+                console.info("[adminv2] queue_row action context", queueRowActionContext);
+
                 const actionsListRoute =
                     `/api/admin/actions?` +
                     new URLSearchParams({
                         surface: "queue_row",
                         entity_type: "opportunity",
-                        work_unit_id: wu.id,
+                        work_unit_id: workUnitId,
                         department_id: departmentId,
                     }).toString();
                 const rightRailActionsRoute =
@@ -267,7 +273,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     new URLSearchParams({
                         surface: "right_rail",
                         entity_type: "opportunity",
-                        work_unit_id: wu.id,
+                        work_unit_id: workUnitId,
                         department_id: departmentId,
                     }).toString();
 

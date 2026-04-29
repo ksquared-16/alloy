@@ -271,6 +271,18 @@ export default function AdminV2WorkspaceDepartmentPage() {
         });
     }, [deptWorkUnitSummaries, deptWorkUnits]);
 
+    const needsAttentionSummary = useMemo(() => {
+        const list = deptWorkUnits ?? [];
+        const explicitNeedsAttentionWu = list.find((w) => (w.key ?? "").trim().toLowerCase() === "needs_attention") ?? null;
+        const total = Object.values(deptWorkUnitSummaries).reduce((acc, s) => acc + (s.needs_attention ?? 0), 0);
+        const targetWu = explicitNeedsAttentionWu ?? list[0] ?? null;
+        const href =
+            targetWu != null
+                ? `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(targetWu.id)}?queue=needs_attention`
+                : `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}`;
+        return { total, href };
+    }, [departmentId, deptWorkUnitSummaries, deptWorkUnits]);
+
     const renderWorkUnitSection = () => {
         return (
             <section
@@ -306,9 +318,6 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                             <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">
                                                 {wu.name?.trim() || "Work unit"}
                                             </div>
-                                            <div className="adminv2-ws-wu-queue-card-sub adminv2-ws-wu-queue-card-sub--compact font-mono">
-                                                {wu.key ?? ""}
-                                            </div>
                                             <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] tabular-nums" style={{ color: "var(--d-muted)" }}>
                                                 <div>
                                                     <span className="font-medium text-alloy-midnight/75">Total</span>{" "}
@@ -332,6 +341,33 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             );
                         })}
                     </ul>
+                </div>
+            </section>
+        );
+    };
+
+    const renderNeedsAttentionBlock = () => {
+        return (
+            <section className="adminv2-ws-dept-qsec adminv2-ws-dept-qsec--secondary adminv2-ws-dept-attention-panel" aria-label="Needs Attention">
+                <header className="adminv2-ws-queue-header">
+                    <div className="adminv2-ws-queue-title-row">
+                        <h3 className="adminv2-ws-queue-title">Needs Attention</h3>
+                    </div>
+                </header>
+                <div className="adminv2-ws-wu-v2" data-ws-surface="work_unit">
+                    <div className="rounded-lg border border-admin-border bg-white/50 px-3 py-2">
+                        <div className="text-sm font-semibold text-alloy-midnight/85">
+                            {needsAttentionSummary.total} records need attention
+                        </div>
+                        <div className="mt-2">
+                            <Link
+                                href={needsAttentionSummary.href}
+                                className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open"
+                            >
+                                Open
+                            </Link>
+                        </div>
+                    </div>
                 </div>
             </section>
         );
@@ -385,8 +421,9 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         ) : null
                     }
                     throughputSlot={
-                        <div>
+                        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
                             {renderWorkUnitSection()}
+                            {renderNeedsAttentionBlock()}
                         </div>
                     }
                     attentionSlot={null}
