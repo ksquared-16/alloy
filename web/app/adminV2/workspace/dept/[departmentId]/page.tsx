@@ -349,12 +349,12 @@ export default function AdminV2WorkspaceDepartmentPage() {
     const renderNeedsAttentionBlock = () => {
         return (
             <section
-                className="adminv2-ws-dept-qsec adminv2-ws-dept-qsec--primary adminv2-ws-dept-throughput-panel"
+                className="adminv2-ws-dept-qsec adminv2-ws-dept-qsec--secondary adminv2-ws-dept-attention-panel"
                 aria-label="Needs Attention"
             >
                 <header className="adminv2-ws-queue-header">
                     <div className="adminv2-ws-queue-title-row">
-                        <h3 className="adminv2-ws-queue-title">Needs Attention</h3>
+                        <h3 className="adminv2-ws-queue-title adminv2-ws-queue-title--section-primary-type">Needs Attention</h3>
                     </div>
                 </header>
                 <div className="adminv2-ws-wu-v2" data-ws-surface="work_unit">
@@ -362,8 +362,8 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
                             <Link
                                 href={needsAttentionSummary.href}
-                                className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-standard flex flex-col items-stretch no-underline text-inherit hover:opacity-[0.98]"
-                                data-ws-wu-urgency="standard"
+                                className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-warning flex flex-col items-stretch no-underline text-inherit hover:opacity-[0.98]"
+                                data-ws-wu-urgency="attention"
                             >
                                 <div className="adminv2-ws-wu-queue-card-compact-text">
                                     <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">

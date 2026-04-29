@@ -52,14 +52,6 @@ function passesPlacementScope(
     p: Pick<PlacementRow, "department_id" | "work_unit_id">,
     q: ResolveActionsQuery
 ): boolean {
-    console.log("PLACEMENT", {
-        placement_department_id: p.department_id,
-        placement_work_unit_id: p.work_unit_id,
-    });
-    console.log("CONTEXT", {
-        ctx_department_id: q.departmentId ?? null,
-        ctx_work_unit_id: q.workUnitId ?? null,
-    });
     if (p.department_id != null && String(p.department_id).trim() !== "") {
         const d = q.departmentId?.trim();
         if (!d || d !== p.department_id) return false;

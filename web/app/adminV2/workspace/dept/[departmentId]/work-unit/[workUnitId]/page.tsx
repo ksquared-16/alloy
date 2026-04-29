@@ -254,10 +254,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 let shouldFallbackToLegacy = false;
                 let fallbackReason: string | null = null;
                 const queueListRoute = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?limit=3`;
-                console.log("ACTION FETCH CONTEXT", {
-                    departmentId,
-                    workUnitId,
-                });
 
                 const actionsListRoute =
                     `/api/admin/actions?` +
@@ -720,6 +716,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     });
                 }
 
+                if (entity === "opportunity" && opportunityQueueRowActions?.length) {
+                    for (const qa of opportunityQueueRowActions) {
+                        quickActions.push({
+                            id: qa.id,
+                            label: qa.label,
+                            actionId: qa.id,
+                            variant: "secondary" as const,
+                            payload: qa.payload,
+                        });
+                    }
+                }
+
                 const want = (f: QueueUiRowPreviewField) => isRowPreviewFieldEnabled(previewFields, f);
 
                 const basicSubtitleParts: string[] = [];
@@ -825,6 +833,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         selectedQueueKey,
         workUnit,
         queueUi,
+        opportunityQueueRowActions,
     ]);
 
     const model = useMemo(() => {

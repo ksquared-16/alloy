@@ -3503,6 +3503,25 @@
   color: color-mix(in srgb, #5a2806 88%, var(--d-muted));
 }
 
+/* Attention lane on dept overview: keep secondary/warning shell but match primary “Work Unit Queue” title scale */
+[data-ws-surface="department"].adminv2-ws-dept-v2
+  .adminv2-ws-dept-attention-panel.adminv2-ws-dept-qsec--secondary
+  .adminv2-ws-queue-title.adminv2-ws-queue-title--section-primary-type,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2
+  .adminv2-ws-dept-attention-panel.adminv2-ws-dept-qsec--secondary
+  .adminv2-ws-queue-title.adminv2-ws-queue-title--section-primary-type,
+[data-ws-surface="record"].adminv2-ws-record-v2
+  .adminv2-ws-dept-attention-panel.adminv2-ws-dept-qsec--secondary
+  .adminv2-ws-queue-title.adminv2-ws-queue-title--section-primary-type,
+[data-ws-surface="company"].adminv2-ws-company-v2
+  .adminv2-ws-dept-attention-panel.adminv2-ws-dept-qsec--secondary
+  .adminv2-ws-queue-title.adminv2-ws-queue-title--section-primary-type {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--d-text-primary, inherit);
+}
+
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-queue-badge,
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-badge,
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-queue-badge,
