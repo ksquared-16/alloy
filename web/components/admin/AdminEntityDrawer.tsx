@@ -1281,10 +1281,13 @@ export default function AdminEntityDrawer() {
                     });
                 }
                 setData(json);
+                if (timingEnabled && drawer.type === "opportunities" && drawer.id && drawer.id !== "new") {
+                    markTiming("record_fetch_json_applied", { url });
+                }
             })
             .catch((e) => setError(e.message))
             .finally(() => setLoading(false));
-    }, [drawer.type, drawer.id, drawer.jobRecordSurface]);
+    }, [drawer.type, drawer.id, drawer.jobRecordSurface, timingEnabled, markTiming]);
 
     useEffect(() => {
         if (!timingEnabled) return;
@@ -2098,7 +2101,12 @@ export default function AdminEntityDrawer() {
             return;
         }
         const workUnitId = opportunityWorkUnitId;
-        const departmentId = opportunityWorkUnitDepartmentId?.trim() ?? "";
+        const departmentIdFromState = opportunityWorkUnitDepartmentId?.trim() ?? "";
+        const departmentIdFromRecord =
+            data && typeof data === "object"
+                ? String((data as { _work_unit_department_id?: unknown })._work_unit_department_id ?? "").trim()
+                : "";
+        const departmentId = departmentIdFromState || departmentIdFromRecord;
         if (!workUnitId || !departmentId) {
             setOpportunityResolvedHeaderActions(null);
             setOpportunityResolvedHeaderLoading(false);
@@ -2138,7 +2146,7 @@ export default function AdminEntityDrawer() {
         return () => {
             cancelled = true;
         };
-    }, [drawer.type, drawer.id, opportunityWorkUnitId, opportunityWorkUnitDepartmentId]);
+    }, [drawer.type, drawer.id, opportunityWorkUnitId, opportunityWorkUnitDepartmentId, data]);
 
     // Keep drawer state, but refresh record + header actions when actions mutate the opportunity.
     useEffect(() => {
@@ -2151,7 +2159,11 @@ export default function AdminEntityDrawer() {
             refetch();
             // Also refetch resolved header actions so conditional actions swap (schedule ↔ reschedule).
             const workUnitId = opportunityWorkUnitId;
-            const departmentId = opportunityWorkUnitDepartmentId?.trim() ?? "";
+            const departmentId =
+                opportunityWorkUnitDepartmentId?.trim() ||
+                (data && typeof data === "object"
+                    ? String((data as { _work_unit_department_id?: unknown })._work_unit_department_id ?? "").trim()
+                    : "");
             if (!workUnitId || !departmentId) return;
             setOpportunityResolvedHeaderLoading(true);
             const t0 = timingEnabled ? performance.now() : 0;
@@ -2181,7 +2193,7 @@ export default function AdminEntityDrawer() {
         };
         window.addEventListener("adminv2:opportunity-updated", onUpdated as EventListener);
         return () => window.removeEventListener("adminv2:opportunity-updated", onUpdated as EventListener);
-    }, [drawer.type, drawer.id, refetch, opportunityWorkUnitId, opportunityWorkUnitDepartmentId]);
+    }, [drawer.type, drawer.id, refetch, opportunityWorkUnitId, opportunityWorkUnitDepartmentId, data]);
 
     // If a caller opened the drawer with a surface hint, respect it once.
     useEffect(() => {
@@ -4252,13 +4264,25 @@ export default function AdminEntityDrawer() {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
         if (loading) return;
         if (!data) return;
+        markTiming("record_loading_cleared", { has_data: true });
+    }, [timingEnabled, drawer.type, drawer.id, loading, data, markTiming]);
+
+    useEffect(() => {
+        if (!timingEnabled) return;
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+        if (loading) return;
+        if (!data) return;
         if (!opportunityRegistryHeaderReady) return;
-        if (!opportunityWorkUnitDepartmentId?.trim()) return;
-        if (!opportunityQueueDefinition) return;
+        const deptFromRecord =
+            data && typeof data === "object"
+                ? String((data as { _work_unit_department_id?: unknown })._work_unit_department_id ?? "").trim()
+                : "";
+        if (!opportunityWorkUnitDepartmentId?.trim() && !deptFromRecord) return;
+        // Interactive when the record + resolved header actions are ready. Queue timeline may hydrate later from work_unit_fetch.
         markTiming("interactive", {
             record_loaded: true,
             header_actions_ready: true,
-            work_unit_ready: true,
+            work_unit_ready: Boolean(opportunityWorkUnitDepartmentId?.trim() || deptFromRecord),
         });
     }, [
         timingEnabled,
@@ -4268,7 +4292,6 @@ export default function AdminEntityDrawer() {
         data,
         opportunityRegistryHeaderReady,
         opportunityWorkUnitDepartmentId,
-        opportunityQueueDefinition,
         markTiming,
     ]);
 
@@ -5527,28 +5550,6 @@ export default function AdminEntityDrawer() {
                 !!drawer.id &&
                 drawer.id !== "new" &&
                 recordOpportunityDrawerLayoutIncludesSection(oppCfg, "family_contacts");
-            if (includeFamilyContacts && drawer.id) {
-                out.family_contacts = (
-                    <FamilyContactsPanel
-                        opportunityId={drawer.id}
-                        record={d}
-                        canMutate={!!canMutate}
-                        sectionKey="family_contacts"
-                        departmentId={opportunityWorkUnitDepartmentId}
-                        workUnitId={String(d.work_unit_id ?? "").trim() || null}
-                        router={router}
-                        openDrawer={openDrawer}
-                        openForm={({ form_key, action }) => {
-                            setActionFormState({ form_key, action });
-                        }}
-                        refreshKey={relatedPeopleRefreshKey}
-                        onRegistryApplied={() => {
-                            setRelatedPeopleRefreshKey((n) => n + 1);
-                            void refetch();
-                        }}
-                    />
-                );
-            }
             if (customerId && drawer.id && drawer.id !== "new" && !includeFamilyContacts) {
                 out.customer_booking = (
                     <OpportunityHouseholdPeoplePanel
@@ -6191,6 +6192,12 @@ export default function AdminEntityDrawer() {
             }
             overviewSections = overviewSections.filter((s) => !isOpportunityTourFollowUpSection(s));
             overviewSections = overviewSections.filter((s) => !isOpportunityWorkflowStandaloneExternalDuplicate(overviewSections, s));
+        }
+        if (
+            drawer.type === "opportunities" &&
+            recordOpportunityDrawerLayoutIncludesSection(oppDrawerCfg, "family_contacts")
+        ) {
+            overviewSections = overviewSections.filter((s) => s.key !== "family_contacts");
         }
         /** Schedule overview tab: snapshot already shows status/timing — keep property + history only (tabs hold the rest). */
         if (drawer.type === "schedules" && overviewSections.length > 0) {
@@ -9004,6 +9011,13 @@ export default function AdminEntityDrawer() {
                                                         "w-full min-w-0 rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 text-[13px] font-medium text-alloy-midnight/90 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60";
                                                     const innerCard =
                                                         "min-w-0 rounded-lg border border-alloy-stone/[0.1] bg-white/[0.97] px-2.5 py-2.5 shadow-sm ring-1 ring-alloy-stone/[0.06]";
+                                                    const familyContactsInSummary =
+                                                        !!drawer.id &&
+                                                        drawer.id !== "new" &&
+                                                        recordOpportunityDrawerLayoutIncludesSection(
+                                                            (recordChromeOpportunity.layout?.config_json ?? null) as RecordLayoutConfigJson | null,
+                                                            "family_contacts"
+                                                        );
 
                                                     return (
                                                         <div
@@ -9020,54 +9034,80 @@ export default function AdminEntityDrawer() {
                                                             </div>
                                                             <div className="mt-2 grid grid-cols-1 gap-2 lg:grid-cols-2 lg:items-start lg:gap-3">
                                                                 <div className={innerCard}>
-                                                                    <div className={tinyLabel}>Family & contact</div>
-                                                                    {household ? (
-                                                                        householdId ? (
+                                                                    <div className={tinyLabel}>Family & contacts</div>
+                                                                    {familyContactsInSummary ? (
+                                                                        <div className="mt-1">
+                                                                            <FamilyContactsPanel
+                                                                                variant="summary"
+                                                                                opportunityId={drawer.id}
+                                                                                record={d}
+                                                                                canMutate={!!canMutate}
+                                                                                sectionKey="family_contacts"
+                                                                                departmentId={opportunityWorkUnitDepartmentId}
+                                                                                workUnitId={String(d.work_unit_id ?? "").trim() || null}
+                                                                                router={router}
+                                                                                openDrawer={openDrawer}
+                                                                                openForm={({ form_key, action }) => {
+                                                                                    setActionFormState({ form_key, action });
+                                                                                }}
+                                                                                refreshKey={relatedPeopleRefreshKey}
+                                                                                onRegistryApplied={() => {
+                                                                                    setRelatedPeopleRefreshKey((n) => n + 1);
+                                                                                    void refetch();
+                                                                                }}
+                                                                            />
+                                                                        </div>
+                                                                    ) : (
+                                                                        <>
+                                                                            {household ? (
+                                                                                householdId ? (
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={() => openDrawer({ type: "customers", id: householdId })}
+                                                                                        className="mt-1 block w-full truncate text-left text-[13px] font-semibold text-alloy-blue hover:underline"
+                                                                                    >
+                                                                                        {household}
+                                                                                    </button>
+                                                                                ) : (
+                                                                                    <div className="mt-1 text-[13px] font-semibold text-alloy-midnight/85">{household}</div>
+                                                                                )
+                                                                            ) : (
+                                                                                <div className="mt-1 text-[12px] text-alloy-midnight/45">No household on file.</div>
+                                                                            )}
+                                                                            <div className={`${tinyLabel} mt-2.5`}>
+                                                                                {commRoleLabel ? `Primary contact (${commRoleLabel})` : "Primary contact"}
+                                                                            </div>
                                                                             <button
                                                                                 type="button"
-                                                                                onClick={() => openDrawer({ type: "customers", id: householdId })}
-                                                                                className="mt-1 block w-full truncate text-left text-[13px] font-semibold text-alloy-blue hover:underline"
+                                                                                onClick={openPrimaryContactRecord}
+                                                                                className="mt-0.5 block w-full truncate text-left text-[13px] font-semibold text-alloy-blue hover:underline"
                                                                             >
-                                                                                {household}
+                                                                                {commName || primaryContact || primaryPerson || "—"}
                                                                             </button>
-                                                                        ) : (
-                                                                            <div className="mt-1 text-[13px] font-semibold text-alloy-midnight/85">{household}</div>
-                                                                        )
-                                                                    ) : (
-                                                                        <div className="mt-1 text-[12px] text-alloy-midnight/45">No household on file.</div>
+                                                                            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-alloy-midnight/70">
+                                                                                {commPhone ? (
+                                                                                    <span className="tabular-nums">
+                                                                                        <span className="text-alloy-midnight/45">Phone </span>
+                                                                                        <a className={monoLink} href={`tel:${commPhone}`}>
+                                                                                            {formatPhoneUS(commPhone)}
+                                                                                        </a>
+                                                                                    </span>
+                                                                                ) : (
+                                                                                    <span className="text-alloy-midnight/45">Phone —</span>
+                                                                                )}
+                                                                                {commEmail ? (
+                                                                                    <span className="min-w-0 truncate">
+                                                                                        <span className="text-alloy-midnight/45">Email </span>
+                                                                                        <a className={monoLink} href={`mailto:${commEmail}`}>
+                                                                                            {commEmail}
+                                                                                        </a>
+                                                                                    </span>
+                                                                                ) : (
+                                                                                    <span className="text-alloy-midnight/45">Email —</span>
+                                                                                )}
+                                                                            </div>
+                                                                        </>
                                                                     )}
-                                                                    <div className={`${tinyLabel} mt-2.5`}>
-                                                                        {commRoleLabel ? `Primary contact (${commRoleLabel})` : "Primary contact"}
-                                                                    </div>
-                                                                    <button
-                                                                        type="button"
-                                                                        onClick={openPrimaryContactRecord}
-                                                                        className="mt-0.5 block w-full truncate text-left text-[13px] font-semibold text-alloy-blue hover:underline"
-                                                                    >
-                                                                        {commName || primaryContact || primaryPerson || "—"}
-                                                                    </button>
-                                                                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-alloy-midnight/70">
-                                                                        {commPhone ? (
-                                                                            <span className="tabular-nums">
-                                                                                <span className="text-alloy-midnight/45">Phone </span>
-                                                                                <a className={monoLink} href={`tel:${commPhone}`}>
-                                                                                    {formatPhoneUS(commPhone)}
-                                                                                </a>
-                                                                            </span>
-                                                                        ) : (
-                                                                            <span className="text-alloy-midnight/45">Phone —</span>
-                                                                        )}
-                                                                        {commEmail ? (
-                                                                            <span className="min-w-0 truncate">
-                                                                                <span className="text-alloy-midnight/45">Email </span>
-                                                                                <a className={monoLink} href={`mailto:${commEmail}`}>
-                                                                                    {commEmail}
-                                                                                </a>
-                                                                            </span>
-                                                                        ) : (
-                                                                            <span className="text-alloy-midnight/45">Email —</span>
-                                                                        )}
-                                                                    </div>
                                                                 </div>
                                                                 <div className={innerCard}>
                                                                     <div className={tinyLabel}>What matters now</div>

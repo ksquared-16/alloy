@@ -139,6 +139,19 @@ export async function GET(
             if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
             const opp = data as Record<string, unknown> & { status_key?: string | null; status?: string | null; customer_id?: string | null; primary_contact_id?: string | null; primary_person_id?: string | null; location_id?: string | null; quote_total?: number | null; estimated_price_cents?: number | null; monetary_value_cents?: number | null };
             const out: Record<string, unknown> = { ...data };
+            const enrichStartedAt = Date.now();
+            const wuidForDept = trimOrNull((opp as { work_unit_id?: string | null }).work_unit_id);
+            if (wuidForDept) {
+                const { data: wuDeptRow } = await supabase
+                    .from("work_units")
+                    .select("department_id")
+                    .eq("id", wuidForDept)
+                    .eq("org_id", orgId)
+                    .maybeSingle();
+                out._work_unit_department_id = trimOrNull((wuDeptRow as { department_id?: string | null } | null)?.department_id ?? null);
+            } else {
+                out._work_unit_department_id = null;
+            }
             if (opp.customer_id) {
                 const customer = await supabase.from("customers").select("name").eq("id", opp.customer_id).eq("org_id", orgId).single();
                 out._customer_name = customer.data?.name ?? null;
@@ -678,6 +691,13 @@ export async function GET(
                     section_key: "quote",
                 },
             };
+
+            if (process.env.NODE_ENV !== "production") {
+                console.info("[timing][opportunity-api]", {
+                    opportunity_id: id,
+                    enrich_ms: Date.now() - enrichStartedAt,
+                });
+            }
 
             return NextResponse.json(out);
         }

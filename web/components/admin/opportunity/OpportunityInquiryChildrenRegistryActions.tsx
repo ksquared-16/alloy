@@ -39,10 +39,21 @@ export function OpportunityInquiryChildrenRegistryActions(props: {
             section_key: "inquiry_children",
         });
         const url = `/api/admin/actions?${qs.toString()}`;
+        const timingEnabled = process.env.NODE_ENV !== "production";
+        const t0 = timingEnabled ? performance.now() : 0;
         dedupeAdminFetch(url, workspaceDataFetchInit())
             .then((r) => r.json())
             .then((j: { actions?: ResolvedActionsBySlot }) => {
                 if (!cancelled) setBySlot(j.actions ?? null);
+                if (timingEnabled) {
+                    console.info("[timing][drawer]", {
+                        key: `opportunities:${opportunityId}`,
+                        phase: "inquiry_children_record_section_actions_fetch",
+                        section_key: "inquiry_children",
+                        url,
+                        ms: Math.round((performance.now() - t0) * 10) / 10,
+                    });
+                }
             })
             .catch(() => {
                 if (!cancelled) setBySlot(null);
