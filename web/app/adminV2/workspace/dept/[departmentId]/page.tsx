@@ -348,26 +348,34 @@ export default function AdminV2WorkspaceDepartmentPage() {
 
     const renderNeedsAttentionBlock = () => {
         return (
-            <section className="adminv2-ws-dept-qsec adminv2-ws-dept-qsec--secondary adminv2-ws-dept-attention-panel" aria-label="Needs Attention">
+            <section
+                className="adminv2-ws-dept-qsec adminv2-ws-dept-qsec--primary adminv2-ws-dept-throughput-panel"
+                aria-label="Needs Attention"
+            >
                 <header className="adminv2-ws-queue-header">
                     <div className="adminv2-ws-queue-title-row">
                         <h3 className="adminv2-ws-queue-title">Needs Attention</h3>
                     </div>
                 </header>
                 <div className="adminv2-ws-wu-v2" data-ws-surface="work_unit">
-                    <div className="rounded-lg border border-admin-border bg-white/50 px-3 py-2">
-                        <div className="text-sm font-semibold text-alloy-midnight/85">
-                            {needsAttentionSummary.total} records need attention
-                        </div>
-                        <div className="mt-2">
+                    <ul className="adminv2-ws-queue-list" role="list">
+                        <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
                             <Link
                                 href={needsAttentionSummary.href}
-                                className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open"
+                                className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-standard flex flex-col items-stretch no-underline text-inherit hover:opacity-[0.98]"
+                                data-ws-wu-urgency="standard"
                             >
-                                Open
+                                <div className="adminv2-ws-wu-queue-card-compact-text">
+                                    <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">
+                                        {needsAttentionSummary.total} records need attention
+                                    </div>
+                                </div>
+                                <div className="adminv2-ws-wu-queue-card-compact-aside">
+                                    <span className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open">Open</span>
+                                </div>
                             </Link>
-                        </div>
-                    </div>
+                        </li>
+                    </ul>
                 </div>
             </section>
         );

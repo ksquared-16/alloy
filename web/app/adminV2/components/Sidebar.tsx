@@ -9,8 +9,9 @@ import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 
 const WORKSPACE = "/adminV2/workspace";
+const SETTINGS_HREF = "/adminV2/settings";
 
-type Dept = { id: string; name: string | null };
+type Dept = { id: string; name: string | null; key?: string | null };
 type WU = { id: string; name: string | null; department_id: string };
 
 function normalizeAdminPath(pathname: string): string {
@@ -41,7 +42,7 @@ export default function Sidebar({
     const path = useMemo(() => normalizeAdminPath(pathname), [pathname]);
     const { departmentId, workUnitId } = parseWorkspaceRoute(path);
     const onWorkspace = path === WORKSPACE || path.startsWith(`${WORKSPACE}/`);
-    const onSettings = path.startsWith("/adminV2/settings");
+    const onSettings = path.startsWith(SETTINGS_HREF);
     const onWorkflows = path.startsWith("/adminV2/workflows");
 
     const [depts, setDepts] = useState<Dept[]>([]);
@@ -75,7 +76,13 @@ export default function Sidebar({
     }, [collapsed]);
 
     const deptsSorted = useMemo(() => {
-        return [...depts].sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id));
+        return [...depts]
+            .filter((d) => {
+                const key = String(d.key ?? "").trim().toLowerCase();
+                const name = String(d.name ?? "").trim().toLowerCase();
+                return key !== "system" && name !== "system";
+            })
+            .sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id));
     }, [depts]);
 
     const wusByDept = useMemo(() => {
@@ -163,7 +170,7 @@ export default function Sidebar({
                         <GitBranch size={20} strokeWidth={1.75} />
                     </AdminV2NavLink>
                     <AdminV2NavLink
-                        href="/adminV2/settings"
+                        href={SETTINGS_HREF}
                         title="Settings"
                         aria-label="Settings"
                         active={onSettings}
@@ -263,7 +270,7 @@ export default function Sidebar({
 
                     <div className="mt-auto pt-2 border-t" style={{ borderColor: neutral.border }}>
                         <AdminV2NavLink
-                            href="/adminV2/settings"
+                            href={SETTINGS_HREF}
                             active={onSettings}
                             className="rounded-md px-2 py-1.5 font-medium hover:bg-alloy-stone/10"
                             style={{ color: brand.primary }}

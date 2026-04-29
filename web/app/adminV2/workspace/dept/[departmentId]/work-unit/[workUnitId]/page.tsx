@@ -254,11 +254,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 let shouldFallbackToLegacy = false;
                 let fallbackReason: string | null = null;
                 const queueListRoute = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?limit=3`;
-                const queueRowActionContext = {
+                console.log("ACTION FETCH CONTEXT", {
                     departmentId,
                     workUnitId,
-                };
-                console.info("[adminv2] queue_row action context", queueRowActionContext);
+                });
 
                 const actionsListRoute =
                     `/api/admin/actions?` +
