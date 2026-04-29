@@ -6,6 +6,7 @@ import SettingsPageHeader from "@/components/adminV2/settings/SettingsPageHeader
 import SectionCard from "@/components/admin/SectionCard";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { getQueueDefinitionStoredVersion } from "@/lib/rrs/queue/queueDefinitionV1";
+import { validateQueueDefinition } from "@/lib/config/queueDefinitionSchema";
 import type { DepartmentRow } from "../departments/DepartmentsClient";
 
 type QueueSummary = {
@@ -90,6 +91,22 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
     const [queueItemsError, setQueueItemsError] = useState<string | null>(null);
     const [queueItemsRoute, setQueueItemsRoute] = useState<string | null>(null);
     const [queueItemsResult, setQueueItemsResult] = useState<QueueItemsResult | null>(null);
+
+    const modalQueueBuckets = useMemo(() => {
+        try {
+            const raw = JSON.parse((modalQueueJson ?? "").trim() || "{}") as unknown;
+            const parsed = validateQueueDefinition(raw);
+            return {
+                ok: true as const,
+                value: parsed,
+            };
+        } catch (e) {
+            return {
+                ok: false as const,
+                error: e instanceof Error ? e.message : "Invalid queue definition",
+            };
+        }
+    }, [modalQueueJson]);
 
     const deptNameById = useMemo(() => {
         const m = new Map<string, string>();
@@ -510,6 +527,52 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
                                     onChange={(e) => setModalQueueJson(e.target.value)}
                                 />
                             </label>
+                            <div className="rounded-lg border border-admin-border/60 bg-white/70 px-3 py-2">
+                                <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/55">
+                                    Queue buckets (read-only summary)
+                                </div>
+                                {!modalQueueBuckets.ok ? (
+                                    <div className="mt-1 text-xs text-alloy-forge/60">
+                                        Not parseable as queue_definition v1. {modalQueueBuckets.error}
+                                    </div>
+                                ) : (
+                                    <div className="mt-2 space-y-2">
+                                        <div className="text-xs text-alloy-forge/70">
+                                            Entity: <span className="font-semibold">{modalQueueBuckets.value.entity_type}</span> · Queues:{" "}
+                                            <span className="font-semibold">{modalQueueBuckets.value.queues.length}</span>
+                                        </div>
+                                        {modalQueueBuckets.value.ui?.sections?.length ? (
+                                            <div className="space-y-1">
+                                                <div className="text-[11px] font-semibold text-alloy-forge/70">UI sections</div>
+                                                <div className="space-y-1">
+                                                    {modalQueueBuckets.value.ui.sections.map((s) => (
+                                                        <div key={s.key} className="text-xs text-alloy-forge/70">
+                                                            <span className="font-semibold">{s.label}</span>{" "}
+                                                            <span className="text-alloy-forge/50">({s.queue_keys.length})</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ) : null}
+                                        <div className="space-y-1">
+                                            <div className="text-[11px] font-semibold text-alloy-forge/70">Queues</div>
+                                            <div className="grid grid-cols-1 gap-1">
+                                                {modalQueueBuckets.value.queues.map((q) => (
+                                                    <div key={q.key} className="flex items-baseline justify-between gap-2 text-xs">
+                                                        <span className="min-w-0 truncate text-alloy-forge/80">
+                                                            <span className="font-semibold">{q.label}</span>{" "}
+                                                            <span className="text-alloy-forge/45">({q.key})</span>
+                                                        </span>
+                                                        <span className="shrink-0 text-alloy-forge/45">
+                                                            {q.filters.length ? `${q.filters.length} filter${q.filters.length === 1 ? "" : "s"}` : "no filters"}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                             <label className="flex items-center gap-2 text-sm">
                                 <input type="checkbox" checked={modalActive} onChange={(e) => setModalActive(e.target.checked)} />
                                 <span>Active</span>
@@ -580,9 +643,12 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
                                                 {Array.isArray(q.preview) && q.preview.length ? (
                                                     <div className="mt-2 space-y-1">
                                                         {q.preview.slice(0, 3).map((it, idx) => {
-                                                            const rec = it as any;
-                                                            const rid = typeof rec?.id === "string" ? rec.id : null;
-                                                            const title = typeof rec?.title === "string" ? rec.title : null;
+                                                            const rec =
+                                                                it && typeof it === "object" && !Array.isArray(it)
+                                                                    ? (it as Record<string, unknown>)
+                                                                    : null;
+                                                            const rid = rec && typeof rec.id === "string" ? rec.id : null;
+                                                            const title = rec && typeof rec.title === "string" ? rec.title : null;
                                                             return (
                                                                 <div key={idx} className="text-xs text-alloy-forge/70 truncate">
                                                                     {title ?? rid ?? JSON.stringify(it)}
@@ -630,9 +696,12 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
                                                 </div>
                                                 <div className="mt-3 space-y-2">
                                                     {queueItemsResult.items.slice(0, 20).map((it, idx) => {
-                                                        const rec = it as any;
-                                                        const rid = typeof rec?.id === "string" ? rec.id : null;
-                                                        const title = typeof rec?.title === "string" ? rec.title : null;
+                                                        const rec =
+                                                            it && typeof it === "object" && !Array.isArray(it)
+                                                                ? (it as Record<string, unknown>)
+                                                                : null;
+                                                        const rid = rec && typeof rec.id === "string" ? rec.id : null;
+                                                        const title = rec && typeof rec.title === "string" ? rec.title : null;
                                                         const href = rid ? entityHref(queueItemsResult.queue.entity_type, rid) : null;
                                                         return (
                                                             <div key={idx} className="flex items-center justify-between gap-3 rounded-md border border-admin-border/70 px-3 py-2">

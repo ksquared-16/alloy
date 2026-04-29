@@ -115,6 +115,9 @@ export default function AdminV2SettingsIndexPage() {
                         <SettingsCard href="/adminV2/settings/status-transition-rules" title="Status transition rules" accent="records">
                             Guardrails that block invalid status changes (server-enforced).
                         </SettingsCard>
+                        <SettingsCard href="/adminV2/settings/attention-sla-rules" title="Attention & SLA Rules" accent="records">
+                            Coming next — define deadlines/SLA rules that feed Needs Attention.
+                        </SettingsCard>
                         <SettingsCard href="/adminV2/settings/entity-labels" title="Entity labels" accent="records">
                             Display names (Family, Inquiry, etc.).
                         </SettingsCard>

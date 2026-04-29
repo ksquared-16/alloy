@@ -29,6 +29,8 @@ import {
 import { AssignmentStatusBadge, StatusBadge, getStatusVariant } from "@/components/admin/StatusBadge";
 import { ScheduleTourActionFormModal } from "@/components/admin/opportunity/actions/ScheduleTourActionFormModal";
 import { ContactAttemptedModal } from "@/components/admin/opportunity/actions/ContactAttemptedModal";
+import { UpdateStatusAddNoteModal } from "@/components/admin/opportunity/actions/UpdateStatusAddNoteModal";
+import { AddRelatedPersonModal } from "@/components/admin/opportunity/actions/AddRelatedPersonModal";
 import { AddInquiryChildModal } from "@/components/admin/opportunity/actions/AddInquiryChildModal";
 import {
     WORKFLOW_ENTITY_TYPES,
@@ -46,6 +48,7 @@ import {
 } from "@/lib/entityPresentation";
 import EntityDrawerOverview from "@/components/admin/entity/EntityDrawerOverview";
 import OpportunityRecordSectionRegistryActions from "@/components/admin/opportunity/OpportunityRecordSectionRegistryActions";
+import { OpportunityHouseholdPeoplePanel } from "@/components/admin/opportunity/OpportunityHouseholdPeoplePanel";
 import EntityDrawerSection from "@/components/admin/entity/EntityDrawerSection";
 import JobPricingBreakdown from "@/components/admin/JobPricingBreakdown";
 import JobRrsOverviewTab from "@/components/admin/JobRrsOverviewTab";
@@ -969,6 +972,7 @@ export default function AdminEntityDrawer() {
         form_key: string;
         action: ResolvedActionForClient;
     } | null>(null);
+    const [relatedPeopleRefreshKey, setRelatedPeopleRefreshKey] = useState(0);
     const [addInquiryChildState, setAddInquiryChildState] = useState<{ mode: "child" | "sibling" } | null>(null);
     const [collectPaymentOpen, setCollectPaymentOpen] = useState(false);
     const [collectPaymentContext, setCollectPaymentContext] = useState<AdminCollectPaymentModalContext | null>(null);
@@ -1964,6 +1968,10 @@ export default function AdminEntityDrawer() {
             setOpportunityActionLoading(a.key);
             setSaveError(null);
             try {
+                const workUnitId =
+                    data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
+                        ? String((data as { work_unit_id?: unknown }).work_unit_id)
+                        : null;
                 const res = await fetch("/api/admin/actions/execute", {
                     method: "POST",
                     credentials: "include",
@@ -1972,7 +1980,7 @@ export default function AdminEntityDrawer() {
                         action_key: a.key,
                         entity_type: "opportunity",
                         entity_id: drawer.id,
-                        context: { surface: "record_header" },
+                        context: { surface: "record_header", work_unit_id: workUnitId },
                     }),
                 });
                 const json = (await res.json().catch(() => ({}))) as {
@@ -4641,6 +4649,9 @@ export default function AdminEntityDrawer() {
     const overviewCustomContent = useMemo(() => {
         if (!overviewData || !drawer.type) return {};
         const d = overviewData as Record<string, unknown>;
+        // TS note: parts of this block return early for specific drawer types, which can cause
+        // control-flow narrowing weirdness in very large files. Keep a widened local copy.
+        const drawerType = drawer.type as AdminDrawerEntityType;
         if (drawer.type === "contacts") {
             const customerId = d.customer_id as string | null | undefined;
             const vendorId = d.vendor_id as string | null | undefined;
@@ -4753,6 +4764,28 @@ export default function AdminEntityDrawer() {
                             </div>
                         )}
                     </div>
+                ),
+            };
+        }
+        if (drawer.type === "opportunities") {
+            const customerId = (d.customer_id as string | null | undefined) ?? null;
+            if (!customerId || !drawer.id || drawer.id === "new") return {};
+            return {
+                customer_booking: (
+                    <OpportunityHouseholdPeoplePanel
+                        opportunityId={drawer.id}
+                        customerId={customerId}
+                        canMutate={!!canMutate}
+                        sectionKey="customer_booking"
+                        router={router}
+                        openDrawer={openDrawer}
+                        openForm={({ form_key, action }) => {
+                            if (form_key === "add_related_person") {
+                                setActionFormState({ form_key, action });
+                            }
+                        }}
+                        refreshKey={relatedPeopleRefreshKey}
+                    />
                 ),
             };
         }
@@ -5335,7 +5368,7 @@ export default function AdminEntityDrawer() {
                 job_pricing_breakdown: <JobPricingBreakdown record={jobRec} />,
             };
         }
-        if (drawer.type === "opportunities" && overviewData && !(overviewData as { _create?: boolean })._create) {
+        if (drawerType === "opportunities" && overviewData && !(overviewData as { _create?: boolean })._create) {
             const oppCfg = (recordChromeOpportunity.layout?.config_json ?? null) as RecordLayoutConfigJson | null;
             const out: Record<string, React.ReactNode> = {};
             if (oppCfg?.inquiry_drawer_mode === "workflow_v1") {
@@ -5407,6 +5440,8 @@ export default function AdminEntityDrawer() {
         data,
         entityDrawerOverviewData,
         openDrawer,
+        router,
+        relatedPeopleRefreshKey,
         memberRelatedLinks,
         memberRelatedRoles,
         formData,
@@ -8713,10 +8748,15 @@ export default function AdminEntityDrawer() {
                                                 const childRel = String(ident?.primary_child?.relationship_label ?? "").trim();
                                                 const inquiryTitle =
                                                     String(ident?.inquiry?.title ?? "").trim() || "";
-                                                const stageLabel =
-                                                    String(d._lifecycle_stage_title ?? "").trim() ||
-                                                    String(d._effective_lifecycle_stage ?? "").trim() ||
-                                                    "—";
+                                                const stageLabel = (() => {
+                                                    const sk = String(formData.status_key ?? d.status_key ?? "").trim();
+                                                    if (!sk) return "—";
+                                                    const hit = (statusDefsForDrawer ?? []).find(
+                                                        (s) => String(s.status_key ?? "").trim() === sk
+                                                    );
+                                                    const label = hit ? String(hit.status_label ?? "").trim() : "";
+                                                    return label || sk;
+                                                })();
                                                 const nextStep = d._lifecycle_next_step as { title?: string; lines?: string[] } | undefined;
                                                 const nextStepText = (nextStep?.lines ?? [])
                                                     .map((l) => String(l).trim())
@@ -8756,7 +8796,7 @@ export default function AdminEntityDrawer() {
                                                     const fieldInput =
                                                         "w-full min-w-0 rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 text-[13px] font-medium text-alloy-midnight/90 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60";
                                                     const innerCard =
-                                                        "min-w-0 rounded-lg border border-alloy-stone/[0.1] bg-white/[0.97] p-2 shadow-sm ring-1 ring-alloy-stone/[0.06]";
+                                                        "min-w-0 rounded-lg border border-alloy-stone/[0.1] bg-white/[0.97] px-2.5 py-2.5 shadow-sm ring-1 ring-alloy-stone/[0.06]";
 
                                                     return (
                                                         <div
@@ -8767,7 +8807,7 @@ export default function AdminEntityDrawer() {
                                                                 <span className={tinyLabel}>Inquiry summary</span>
                                                                 {stageLabel && stageLabel !== "—" ? (
                                                                     <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-alloy-midnight/40">
-                                                                        Pipeline · <span className="text-alloy-midnight/60">{stageLabel}</span>
+                                                                        Status · <span className="text-alloy-midnight/60">{stageLabel}</span>
                                                                     </span>
                                                                 ) : null}
                                                             </div>
@@ -8943,6 +8983,22 @@ export default function AdminEntityDrawer() {
                                                                                         placeholder="Add follow-up notes…"
                                                                                         className="mt-1.5 w-full resize-none rounded-md border border-alloy-stone/20 bg-white px-2.5 py-2 text-[12px] leading-snug text-alloy-midnight/80 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
                                                                                     />
+                                                                                    {(() => {
+                                                                                        const md =
+                                                                                            data && typeof data === "object"
+                                                                                                ? ((data as { metadata?: unknown }).metadata as Record<string, unknown> | null)
+                                                                                                : null;
+                                                                                        const raw = md && typeof md.notes === "string" ? md.notes.trim() : "";
+                                                                                        if (!raw) return null;
+                                                                                        return (
+                                                                                            <div className="mt-2.5 rounded-md border border-alloy-stone/15 bg-white px-2.5 py-2">
+                                                                                                <div className={tinyLabel}>Logged notes (from actions)</div>
+                                                                                                <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap text-[12px] leading-snug text-alloy-midnight/75">
+                                                                                                    {raw}
+                                                                                                </pre>
+                                                                                            </div>
+                                                                                        );
+                                                                                    })()}
                                                                                 </div>
                                                                             ) : (
                                                                                 <div className={innerCard}>
@@ -11030,6 +11086,10 @@ export default function AdminEntityDrawer() {
                     setOpportunityActionLoading(actionKey);
                     setSaveError(null);
                     try {
+                        const workUnitId =
+                            data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
+                                ? String((data as { work_unit_id?: unknown }).work_unit_id)
+                                : null;
                         const res = await fetch("/api/admin/actions/execute", {
                             method: "POST",
                             credentials: "include",
@@ -11038,7 +11098,7 @@ export default function AdminEntityDrawer() {
                                 action_key: actionKey,
                                 entity_type: "opportunity",
                                 entity_id: drawer.id,
-                                context: { surface: "record_header" },
+                                context: { surface: "record_header", work_unit_id: workUnitId },
                                 payload,
                             }),
                         });
@@ -11087,6 +11147,10 @@ export default function AdminEntityDrawer() {
                     setOpportunityActionLoading(actionKey);
                     setSaveError(null);
                     try {
+                        const workUnitId =
+                            data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
+                                ? String((data as { work_unit_id?: unknown }).work_unit_id)
+                                : null;
                         const res = await fetch("/api/admin/actions/execute", {
                             method: "POST",
                             credentials: "include",
@@ -11095,7 +11159,7 @@ export default function AdminEntityDrawer() {
                                 action_key: actionKey,
                                 entity_type: "opportunity",
                                 entity_id: drawer.id,
-                                context: { surface: "record_header" },
+                                context: { surface: "record_header", work_unit_id: workUnitId },
                                 payload,
                             }),
                         });
@@ -11116,6 +11180,101 @@ export default function AdminEntityDrawer() {
                         window.dispatchEvent(
                             new CustomEvent("adminv2:opportunity-updated", { detail: { id: drawer.id, action_key: actionKey } })
                         );
+                    } finally {
+                        setOpportunityActionLoading(null);
+                    }
+                }}
+            />
+            <UpdateStatusAddNoteModal
+                open={actionFormState?.form_key === "update_status_add_note"}
+                onClose={() => setActionFormState(null)}
+                title={actionFormState?.action?.label ?? "Update status"}
+                initialStatusKey={(() => {
+                    if (!data || typeof data !== "object") return null;
+                    const v = (data as { status_key?: unknown }).status_key;
+                    const s = v != null ? String(v).trim() : "";
+                    return s || null;
+                })()}
+                statusOptions={(statusDefsForDrawer ?? [])
+                    .filter((s) => s.is_active !== false)
+                    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+                    .map((s) => ({
+                        value: String(s.status_key ?? ""),
+                        label: String(s.status_label ?? s.status_key ?? ""),
+                    }))}
+                onSubmit={async (payload) => {
+                    if (!drawer.id || drawer.id === "new" || drawer.type !== "opportunities") return;
+                    const actionKey = actionFormState?.action?.key ? String(actionFormState.action.key) : "update_status_add_note";
+                    setOpportunityActionLoading(actionKey);
+                    setSaveError(null);
+                    try {
+                        const workUnitId =
+                            data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
+                                ? String((data as { work_unit_id?: unknown }).work_unit_id)
+                                : null;
+                        const res = await fetch("/api/admin/actions/execute", {
+                            method: "POST",
+                            credentials: "include",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                action_key: actionKey,
+                                entity_type: "opportunity",
+                                entity_id: drawer.id,
+                                context: { surface: "record_header", work_unit_id: workUnitId },
+                                payload,
+                            }),
+                        });
+                        const json = (await res.json().catch(() => ({}))) as {
+                            ok?: boolean;
+                            error?: string;
+                            execution_result?: Record<string, unknown> & { row?: Record<string, unknown> };
+                        };
+                        if (!res.ok || !json.ok) {
+                            throw new Error(json.error ?? "Action failed");
+                        }
+                        const row = json.execution_result?.row;
+                        if (row && typeof row === "object") {
+                            setData((prev) => (prev && typeof prev === "object" ? { ...prev, ...row } : prev));
+                        }
+                        setActionFormState(null);
+                        refetch();
+                        window.dispatchEvent(
+                            new CustomEvent("adminv2:opportunity-updated", { detail: { id: drawer.id, action_key: actionKey } })
+                        );
+                    } finally {
+                        setOpportunityActionLoading(null);
+                    }
+                }}
+            />
+            <AddRelatedPersonModal
+                open={actionFormState?.form_key === "add_related_person"}
+                onClose={() => setActionFormState(null)}
+                title={actionFormState?.action?.label ?? "Add parent/contact"}
+                onSubmit={async (payload) => {
+                    if (!drawer.id || drawer.id === "new") return;
+                    const actionKey = actionFormState?.action?.key ? String(actionFormState.action.key) : "add_related_person";
+                    setOpportunityActionLoading(actionKey);
+                    setSaveError(null);
+                    try {
+                        const res = await fetch("/api/admin/actions/execute", {
+                            method: "POST",
+                            credentials: "include",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                action_key: actionKey,
+                                entity_type: "opportunity",
+                                entity_id: drawer.id,
+                                context: { surface: "record_section", section_key: "customer_booking" },
+                                payload,
+                            }),
+                        });
+                        const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+                        if (!res.ok || !json.ok) {
+                            throw new Error(json.error ?? "Action failed");
+                        }
+                        setActionFormState(null);
+                        setRelatedPeopleRefreshKey((n) => n + 1);
+                        refetch();
                     } finally {
                         setOpportunityActionLoading(null);
                     }

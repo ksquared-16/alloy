@@ -5,6 +5,7 @@ import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
 import { validateStatusTransition } from "@/lib/admin/statusTransitionRules";
 import { emitEvent } from "@/lib/emitEvent";
+import { findOrCreatePersonInOrgWithMeta } from "@/lib/persons/findOrCreatePersonInOrg";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 
 export type ExecuteAdminActionInput = {
@@ -144,6 +145,132 @@ export async function executeAdminAction(
             let updatedRow: Record<string, unknown> | null = null;
             const submitActionType = merged.submit_action_type != null ? String(merged.submit_action_type).trim() : "";
 
+            if (formKey === "add_related_person") {
+                const firstName = merged.first_name != null ? String(merged.first_name).trim() : "";
+                const lastName = merged.last_name != null ? String(merged.last_name).trim() : "";
+                const email = merged.email != null ? String(merged.email).trim() : "";
+                const phone = merged.phone != null ? String(merged.phone).trim() : "";
+                const roleTypeRaw = merged.role_type != null ? String(merged.role_type).trim() : "";
+                const roleType = roleTypeRaw || "primary_contact";
+
+                if (!firstName || !lastName) {
+                    return { ok: false, correlation_id: correlationId, error: "Missing required field: first_name/last_name", status: 400 };
+                }
+
+                let customerId: string | null = null;
+                const entityNorm = String(entityTypeRaw).trim().toLowerCase();
+                if (entityNorm === "opportunity" || entityNorm === "opportunities") {
+                    const { data: opp } = await supabase
+                        .from("opportunities")
+                        .select("id, org_id, customer_id")
+                        .eq("id", entityId)
+                        .eq("org_id", ctx.orgId)
+                        .maybeSingle();
+                    if (!opp) {
+                        return { ok: false, correlation_id: correlationId, error: "Not found", status: 404 };
+                    }
+                    customerId = (opp as { customer_id?: string | null }).customer_id ?? null;
+                } else if (entityNorm === "customer" || entityNorm === "customers") {
+                    customerId = entityId;
+                } else {
+                    return { ok: false, correlation_id: correlationId, error: "add_related_person supports opportunity or customer entities only", status: 400 };
+                }
+
+                if (!customerId) {
+                    return { ok: false, correlation_id: correlationId, error: "Record is not linked to a household/customer yet", status: 400 };
+                }
+
+                // Create or find a person (dedupe by email/phone when provided; else insert new).
+                const foundOrCreated = await findOrCreatePersonInOrgWithMeta(supabase, {
+                    email: email || null,
+                    phone: phone || null,
+                    first_name: firstName,
+                    last_name: lastName,
+                    org_id: ctx.orgId,
+                });
+                let personId: string | null = foundOrCreated?.id ?? null;
+                if (!personId) {
+                    const { data: created, error } = await supabase
+                        .from("persons")
+                        .insert({
+                            org_id: ctx.orgId,
+                            first_name: firstName,
+                            last_name: lastName,
+                            email: email || null,
+                            phone: phone || null,
+                        })
+                        .select("id")
+                        .single();
+                    if (error || !created) {
+                        return { ok: false, correlation_id: correlationId, error: error?.message ?? "Failed to create person", status: 400 };
+                    }
+                    personId = (created as { id: string }).id;
+                }
+
+                // Link person to customer via existing relationship table.
+                const { data: existingLink } = await supabase
+                    .from("customer_persons")
+                    .select("id")
+                    .eq("org_id", ctx.orgId)
+                    .eq("customer_id", customerId)
+                    .eq("person_id", personId)
+                    .eq("role_type", roleType)
+                    .maybeSingle();
+                if (existingLink?.id) {
+                    return {
+                        ok: true,
+                        correlation_id: correlationId,
+                        execution_result: {
+                            kind: "add_related_person",
+                            customer_id: customerId,
+                            person_id: personId,
+                            customer_person_id: (existingLink as { id: string }).id,
+                            existed: true,
+                        },
+                    };
+                }
+
+                const { data: insertedLink, error: linkErr } = await supabase
+                    .from("customer_persons")
+                    .insert({
+                        org_id: ctx.orgId,
+                        customer_id: customerId,
+                        person_id: personId,
+                        role_type: roleType,
+                        is_primary: false,
+                        metadata: {},
+                    })
+                    .select("id")
+                    .single();
+                if (linkErr || !insertedLink) {
+                    if (linkErr?.code === "23505") {
+                        return {
+                            ok: true,
+                            correlation_id: correlationId,
+                            execution_result: {
+                                kind: "add_related_person",
+                                customer_id: customerId,
+                                person_id: personId,
+                                existed: true,
+                            },
+                        };
+                    }
+                    return { ok: false, correlation_id: correlationId, error: linkErr?.message ?? "Failed to link person to customer", status: 400 };
+                }
+
+                return {
+                    ok: true,
+                    correlation_id: correlationId,
+                    execution_result: {
+                        kind: "add_related_person",
+                        customer_id: customerId,
+                        person_id: personId,
+                        customer_person_id: (insertedLink as { id: string }).id,
+                        existed: false,
+                    },
+                };
+            }
+
             // When submit_action_type=update_status, treat `after.update_status_key` as the target status key
             // for submission (forms often don't ask for status_key explicitly).
             // Reserve the "after" write for workflow submission paths (e.g. schedule_tour) to avoid double updates.
@@ -160,7 +287,7 @@ export async function executeAdminAction(
                 }
                 const { data: existing } = await supabase
                     .from("opportunities")
-                    .select("status_key, customer_id, primary_contact_id, metadata")
+                    .select("status_key, customer_id, primary_contact_id, metadata, work_unit_id")
                     .eq("id", entityId)
                     .eq("org_id", ctx.orgId)
                     .maybeSingle();
@@ -169,13 +296,28 @@ export async function executeAdminAction(
                 }
                 const oldStatusKey = (existing as { status_key?: string | null }).status_key ?? null;
                 const md = ((existing as { metadata?: Record<string, unknown> | null }).metadata ?? null) as Record<string, unknown> | null;
+                const contextWorkUnitId =
+                    (input.context?.work_unit_id != null ? String(input.context.work_unit_id).trim() : "") ||
+                    ((existing as { work_unit_id?: string | null }).work_unit_id ?? "") ||
+                    null;
+                let contextDepartmentId =
+                    (input.context?.department_id != null ? String(input.context.department_id).trim() : "") || null;
+                if (!contextDepartmentId && contextWorkUnitId) {
+                    const { data: wu } = await supabase
+                        .from("work_units")
+                        .select("department_id")
+                        .eq("id", contextWorkUnitId)
+                        .eq("org_id", ctx.orgId)
+                        .maybeSingle();
+                    contextDepartmentId = (wu as { department_id?: string | null } | null)?.department_id ?? null;
+                }
                 const transition = await validateStatusTransition({
                     supabase,
                     orgId: ctx.orgId,
                     entityType: "opportunities",
                     entityId,
-                    departmentId: input.context?.department_id ?? null,
-                    workUnitId: input.context?.work_unit_id ?? null,
+                    departmentId: contextDepartmentId,
+                    workUnitId: contextWorkUnitId,
                     actionKey: actionKey,
                     fromStatusKey: oldStatusKey,
                     toStatusKey: afterUpdateStatusKey,
@@ -234,7 +376,7 @@ export async function executeAdminAction(
 
                 const { data: existing } = await supabase
                     .from("opportunities")
-                    .select("status_key, customer_id, primary_contact_id, metadata")
+                    .select("status_key, customer_id, primary_contact_id, metadata, work_unit_id")
                     .eq("id", entityId)
                     .eq("org_id", ctx.orgId)
                     .maybeSingle();
@@ -245,6 +387,21 @@ export async function executeAdminAction(
                 const oldStatusKey = (existing as { status_key?: string | null }).status_key ?? null;
                 const md = ((existing as { metadata?: Record<string, unknown> | null }).metadata ?? null) as Record<string, unknown> | null;
                 const nextMd: Record<string, unknown> = { ...(md && typeof md === "object" ? md : {}) };
+                const contextWorkUnitId =
+                    (input.context?.work_unit_id != null ? String(input.context.work_unit_id).trim() : "") ||
+                    ((existing as { work_unit_id?: string | null }).work_unit_id ?? "") ||
+                    null;
+                let contextDepartmentId =
+                    (input.context?.department_id != null ? String(input.context.department_id).trim() : "") || null;
+                if (!contextDepartmentId && contextWorkUnitId) {
+                    const { data: wu } = await supabase
+                        .from("work_units")
+                        .select("department_id")
+                        .eq("id", contextWorkUnitId)
+                        .eq("org_id", ctx.orgId)
+                        .maybeSingle();
+                    contextDepartmentId = (wu as { department_id?: string | null } | null)?.department_id ?? null;
+                }
 
                 const note = merged.note != null ? String(merged.note).trim() : "";
                 if (note) {
@@ -272,8 +429,8 @@ export async function executeAdminAction(
                     orgId: ctx.orgId,
                     entityType: "opportunities",
                     entityId,
-                    departmentId: input.context?.department_id ?? null,
-                    workUnitId: input.context?.work_unit_id ?? null,
+                    departmentId: contextDepartmentId,
+                    workUnitId: contextWorkUnitId,
                     actionKey: actionKey,
                     fromStatusKey: oldStatusKey,
                     toStatusKey: statusKey,
@@ -490,7 +647,7 @@ export async function executeAdminAction(
             }
             const { data: existing } = await supabase
                 .from("opportunities")
-                .select("status_key, customer_id, primary_contact_id, metadata")
+                .select("status_key, customer_id, primary_contact_id, metadata, work_unit_id")
                 .eq("id", entityId)
                 .eq("org_id", ctx.orgId)
                 .maybeSingle();
@@ -499,13 +656,28 @@ export async function executeAdminAction(
             }
             const oldStatusKey = (existing as { status_key?: string | null }).status_key ?? null;
             const md = ((existing as { metadata?: Record<string, unknown> | null }).metadata ?? null) as Record<string, unknown> | null;
+            const contextWorkUnitId =
+                (input.context?.work_unit_id != null ? String(input.context.work_unit_id).trim() : "") ||
+                ((existing as { work_unit_id?: string | null }).work_unit_id ?? "") ||
+                null;
+            let contextDepartmentId =
+                (input.context?.department_id != null ? String(input.context.department_id).trim() : "") || null;
+            if (!contextDepartmentId && contextWorkUnitId) {
+                const { data: wu } = await supabase
+                    .from("work_units")
+                    .select("department_id")
+                    .eq("id", contextWorkUnitId)
+                    .eq("org_id", ctx.orgId)
+                    .maybeSingle();
+                contextDepartmentId = (wu as { department_id?: string | null } | null)?.department_id ?? null;
+            }
             const transition = await validateStatusTransition({
                 supabase,
                 orgId: ctx.orgId,
                 entityType: "opportunities",
                 entityId,
-                departmentId: input.context?.department_id ?? null,
-                workUnitId: input.context?.work_unit_id ?? null,
+                departmentId: contextDepartmentId,
+                workUnitId: contextWorkUnitId,
                 actionKey: actionKey,
                 fromStatusKey: oldStatusKey,
                 toStatusKey: statusKey,

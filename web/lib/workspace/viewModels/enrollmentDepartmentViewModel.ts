@@ -97,18 +97,21 @@ export function buildEnrollmentDepartmentKpis(runtime: WorkspaceRuntimeData): KP
     const enrolled = get("enrolled");
     const lost = get("lost");
     const inquiries = Math.max(0, (k.counts?.total ?? 0) - enrolled - lost);
-    const contacted = get("contacted");
-    const toursInProgress = get("tour_scheduled") + get("tour_completed");
-    const readyToEnroll = get("ready_to_enroll");
-    const enrolledWaitlisted = enrolled + get("waitlisted");
+    const contactAttempted = get("contact_attempted");
+    const tourScheduled = get("tour_scheduled");
+    const tourCompleted = get("tour_completed");
+    const enrolling = get("enrolling");
+    const waitlisted = get("waitlisted");
+    const enrolledWaitlisted = enrolled + waitlisted;
     const pipeline =
         k.values?.openPipeline != null ? formatWorkspaceUsdGrouped(Number(k.values.openPipeline)) : "—";
 
     return [
-        { id: "en_inquiries", label: "Inquiries", value: String(inquiries), lane: "business" },
-        { id: "en_contacted", label: "Contacted", value: String(contacted), lane: "business" },
-        { id: "en_tours", label: "Tours in progress", value: String(toursInProgress), lane: "business" },
-        { id: "en_ready", label: "Ready to enroll", value: String(readyToEnroll), lane: "business" },
+        { id: "en_inquiries", label: "Active inquiries", value: String(inquiries), lane: "business" },
+        { id: "en_contact_attempted", label: "Contact attempted", value: String(contactAttempted), lane: "business" },
+        { id: "en_tour_scheduled", label: "Tours scheduled", value: String(tourScheduled), lane: "business" },
+        { id: "en_tour_completed", label: "Tours completed", value: String(tourCompleted), lane: "business" },
+        { id: "en_enrolling", label: "Enrolling", value: String(enrolling), lane: "business" },
         {
             id: "en_enrolled_wait",
             label: "Enrolled / waitlisted",
@@ -159,33 +162,33 @@ const PIPELINE_CARD_DEFS: CardDef[] = [
     },
     {
         segmentKey: "contacted",
-        stageLabel: "Contacted",
-        supportingCopy: "Conversation started; advance toward tour.",
-        count: (by) => by.get("contacted") ?? null,
+        stageLabel: "Contact Attempted",
+        supportingCopy: "A first contact attempt was logged; schedule a tour next.",
+        count: (by) => by.get("contact_attempted") ?? null,
         valueSourceQueueKeys: ["pipeline_overview"],
-        valueStatusKeys: ["contacted"],
+        valueStatusKeys: ["contact_attempted"],
         workUnitKey: "pipeline_overview",
-        linkStatusKeys: ["contacted"],
+        linkStatusKeys: ["contact_attempted"],
     },
     {
         segmentKey: "tours",
         stageLabel: "Tours in progress",
-        supportingCopy: "Tours scheduled or completed.",
-        count: (by) => (by.get("tour_scheduled") ?? 0) + (by.get("tour_completed") ?? 0),
+        supportingCopy: "Tours scheduled, completed, or no-show.",
+        count: (by) => (by.get("tour_scheduled") ?? 0) + (by.get("tour_completed") ?? 0) + (by.get("tour_no_show") ?? 0),
         valueSourceQueueKeys: ["pipeline_overview", "quoting"],
-        valueStatusKeys: ["tour_scheduled", "tour_completed"],
+        valueStatusKeys: ["tour_scheduled", "tour_completed", "tour_no_show"],
         workUnitKey: "quoting",
-        linkStatusKeys: ["tour_scheduled", "tour_completed"],
+        linkStatusKeys: ["tour_scheduled", "tour_completed", "tour_no_show"],
     },
     {
         segmentKey: "decision",
-        stageLabel: "Ready / waitlist",
-        supportingCopy: "Awaiting family decision.",
-        count: (by) => (by.get("ready_to_enroll") ?? 0) + (by.get("waitlisted") ?? 0),
+        stageLabel: "Enrolling / waitlisted",
+        supportingCopy: "Enrollment steps in progress or waitlist decision.",
+        count: (by) => (by.get("enrolling") ?? 0) + (by.get("waitlisted") ?? 0),
         valueSourceQueueKeys: ["pipeline_overview", "priced_followup"],
-        valueStatusKeys: ["ready_to_enroll", "waitlisted"],
+        valueStatusKeys: ["enrolling", "waitlisted"],
         workUnitKey: "priced_followup",
-        linkStatusKeys: ["ready_to_enroll", "waitlisted"],
+        linkStatusKeys: ["enrolling", "waitlisted"],
     },
 ];
 
