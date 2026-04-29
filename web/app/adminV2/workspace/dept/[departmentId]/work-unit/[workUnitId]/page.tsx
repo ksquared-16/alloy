@@ -451,7 +451,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         return () => {
             cancelled = true;
         };
-    }, [departmentId, searchParams, workUnitId]);
+    }, [departmentId, workUnitId]);
 
     const fetchQueueItems = useCallback(
         async (workUnitId: string, queueKey: string) => {
@@ -477,6 +477,17 @@ export default function AdminV2OpportunityWorkUnitPage() {
         },
         []
     );
+
+    useEffect(() => {
+        if (!workUnitId) return;
+        const qFromUrl = (searchParams?.get("queue") ?? "").trim();
+        if (!qFromUrl) return;
+        if (!queueSummaries || queueSummaries.length === 0) return;
+        if (!queueSummaries.some((q) => q.key === qFromUrl)) return;
+        if (qFromUrl === selectedQueueKey) return;
+        setSelectedQueueKey(qFromUrl);
+        void fetchQueueItems(workUnitId, qFromUrl);
+    }, [fetchQueueItems, queueSummaries, searchParams, selectedQueueKey, workUnitId]);
 
     const invalidate = useCallback(
         (opts?: { entity_type?: string; entity_id?: string; action_key?: string }) => {
@@ -771,7 +782,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 };
             });
 
-        const laneTitle = activeQueue?.label ?? workUnit.name ?? "Queue";
+        const laneTitle = workUnit.name ?? "Queue";
         const errorLine = queueItemsError
             ? `${queueItemsError}${queueItemsRoute ? ` · Route: ${queueItemsRoute}` : ""}`
             : undefined;
@@ -784,7 +795,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             focusLabel: dept.name ?? "Department",
             aiSummary: {
                 headline: laneTitle,
-                subline: `${dept.name ?? "Department"} · ${workUnit.name ?? "Work unit"}`,
+                subline: activeQueue?.label ? `${dept.name ?? "Department"} · ${activeQueue.label}` : `${dept.name ?? "Department"}`,
                 aiAwarenessLine: entity === "job" ? "Server-evaluated queues (previews only)." : undefined,
             },
             laneInterpretation:

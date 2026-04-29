@@ -185,9 +185,13 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
     }
     const oldestAgeLabel = oldestMs != null ? `${formatAgeCompact(Date.now() - oldestMs)} ago` : "—";
 
-    const enrollmentBaseRail = buildEnrollmentWorkUnitActionsRail();
     const actionsRail: WorkUnitWorkspaceModel["actionsRail"] = isEnrollmentDept
-        ? mergeEnrollmentRightRailActions(input.rightRailResolved ?? [], enrollmentBaseRail)
+        ? mergeEnrollmentRightRailActions(input.rightRailResolved ?? [], {
+              primaries: [],
+              systemActions: [],
+              quickOperations: [],
+              overflow: [],
+          })
         : {
               primaries: [{ id: "back_department", label: "Back to department", variant: "secondary" as const }],
               overflow: [{ id: "open_admin_opportunities", label: "All inquiries", variant: "secondary" as const }],

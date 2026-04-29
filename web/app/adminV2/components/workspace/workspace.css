@@ -2031,6 +2031,27 @@
   opacity: 1;
 }
 
+/* Dept overview: framed attention block uses same outer card geometry as throughput panel (but amber rail). */
+[data-ws-surface="department"].adminv2-ws-dept-v2
+  .adminv2-ws-dept-attention-panel.adminv2-ws-dept-attention-panel--framed.adminv2-ws-dept-qsec--secondary {
+  border-left: none;
+  padding: 12px 14px 14px;
+  margin: 8px 10px 10px 8px;
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, #bc4300 22%, var(--d-border));
+  border-left: 3px solid color-mix(in srgb, #bc4300 72%, var(--d-border));
+  border-top: 1px solid color-mix(in srgb, #bc4300 12%, transparent);
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, #ffffff 93%, var(--d-surface)) 0%,
+    color-mix(in srgb, #ffffff 86%, var(--d-panel)) 46%,
+    color-mix(in srgb, #bc4300 7%, var(--d-surface)) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 1px 3px rgba(39, 63, 82, 0.05);
+}
+
 /* Rollup attention card — mirror throughput-panel framing + tinted wash */
 [data-ws-surface="department"].adminv2-ws-dept-v2
   .adminv2-ws-dept-attention-panel.adminv2-ws-dept-rollup-lane.adminv2-ws-dept-qsec--secondary,

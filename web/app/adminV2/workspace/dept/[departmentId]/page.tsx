@@ -349,7 +349,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
     const renderNeedsAttentionBlock = () => {
         return (
             <section
-                className="adminv2-ws-dept-qsec adminv2-ws-dept-qsec--secondary adminv2-ws-dept-attention-panel"
+                className="adminv2-ws-dept-qsec adminv2-ws-dept-qsec--secondary adminv2-ws-dept-attention-panel adminv2-ws-dept-attention-panel--framed"
                 aria-label="Needs Attention"
             >
                 <header className="adminv2-ws-queue-header">
