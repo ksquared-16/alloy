@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
+import { validateStatusTransition } from "@/lib/admin/statusTransitionRules";
 import { emitEvent } from "@/lib/emitEvent";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 
@@ -154,7 +155,7 @@ export async function executeAdminAction(
                 }
                 const { data: existing } = await supabase
                     .from("opportunities")
-                    .select("status_key, customer_id, primary_contact_id")
+                    .select("status_key, customer_id, primary_contact_id, metadata")
                     .eq("id", entityId)
                     .eq("org_id", ctx.orgId)
                     .maybeSingle();
@@ -162,6 +163,23 @@ export async function executeAdminAction(
                     return { ok: false, correlation_id: correlationId, error: "Not found", status: 404 };
                 }
                 const oldStatusKey = (existing as { status_key?: string | null }).status_key ?? null;
+                const md = ((existing as { metadata?: Record<string, unknown> | null }).metadata ?? null) as Record<string, unknown> | null;
+                const transition = await validateStatusTransition({
+                    supabase,
+                    orgId: ctx.orgId,
+                    entityType: "opportunities",
+                    entityId,
+                    departmentId: input.context?.department_id ?? null,
+                    workUnitId: input.context?.work_unit_id ?? null,
+                    actionKey: actionKey,
+                    fromStatusKey: oldStatusKey,
+                    toStatusKey: afterUpdateStatusKey,
+                    currentMetadata: md,
+                    payload: merged,
+                });
+                if (!transition.ok) {
+                    return { ok: false, correlation_id: correlationId, error: transition.message, status: 400 };
+                }
                 const { data: updated, error: upErr } = await supabase
                     .from("opportunities")
                     .update({ status_key: afterUpdateStatusKey })
@@ -234,6 +252,23 @@ export async function executeAdminAction(
                 }
                 const nextStep = merged.next_step != null ? String(merged.next_step).trim() : "";
                 if (nextStep) nextMd.next_step = nextStep;
+
+                const transition = await validateStatusTransition({
+                    supabase,
+                    orgId: ctx.orgId,
+                    entityType: "opportunities",
+                    entityId,
+                    departmentId: input.context?.department_id ?? null,
+                    workUnitId: input.context?.work_unit_id ?? null,
+                    actionKey: actionKey,
+                    fromStatusKey: oldStatusKey,
+                    toStatusKey: statusKey,
+                    currentMetadata: md,
+                    payload: merged,
+                });
+                if (!transition.ok) {
+                    return { ok: false, correlation_id: correlationId, error: transition.message, status: 400 };
+                }
 
                 const { data: updated, error: upErr } = await supabase
                     .from("opportunities")
@@ -441,7 +476,7 @@ export async function executeAdminAction(
             }
             const { data: existing } = await supabase
                 .from("opportunities")
-                .select("status_key, customer_id, primary_contact_id")
+                .select("status_key, customer_id, primary_contact_id, metadata")
                 .eq("id", entityId)
                 .eq("org_id", ctx.orgId)
                 .maybeSingle();
@@ -449,6 +484,23 @@ export async function executeAdminAction(
                 return { ok: false, correlation_id: correlationId, error: "Not found", status: 404 };
             }
             const oldStatusKey = (existing as { status_key?: string | null }).status_key ?? null;
+            const md = ((existing as { metadata?: Record<string, unknown> | null }).metadata ?? null) as Record<string, unknown> | null;
+            const transition = await validateStatusTransition({
+                supabase,
+                orgId: ctx.orgId,
+                entityType: "opportunities",
+                entityId,
+                departmentId: input.context?.department_id ?? null,
+                workUnitId: input.context?.work_unit_id ?? null,
+                actionKey: actionKey,
+                fromStatusKey: oldStatusKey,
+                toStatusKey: statusKey,
+                currentMetadata: md,
+                payload: merged,
+            });
+            if (!transition.ok) {
+                return { ok: false, correlation_id: correlationId, error: transition.message, status: 400 };
+            }
             const updates: Record<string, unknown> = { status_key: statusKey };
             if (merged.lost_reason != null) {
                 updates.lost_reason = String(merged.lost_reason);

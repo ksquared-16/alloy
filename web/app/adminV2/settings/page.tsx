@@ -112,6 +112,9 @@ export default function AdminV2SettingsIndexPage() {
                         <SettingsCard href="/adminV2/settings/statuses" title="Statuses" accent="records">
                             Status keys and labels per entity type.
                         </SettingsCard>
+                        <SettingsCard href="/adminV2/settings/status-transition-rules" title="Status transition rules" accent="records">
+                            Guardrails that block invalid status changes (server-enforced).
+                        </SettingsCard>
                         <SettingsCard href="/adminV2/settings/entity-labels" title="Entity labels" accent="records">
                             Display names (Family, Inquiry, etc.).
                         </SettingsCard>

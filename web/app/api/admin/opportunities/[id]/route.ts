@@ -6,6 +6,7 @@ import { getAdminAuth, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth"
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
 import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
+import { validateStatusTransition } from "@/lib/admin/statusTransitionRules";
 import {
     mergeOpportunityQuotePricing,
     opportunityQuotePipelineActive,
@@ -68,7 +69,7 @@ export async function PATCH(
         const { data: existing } = await supabase
             .from("opportunities")
             .select(
-                "org_id, status_key, customer_id, primary_contact_id, vertical_id, metadata, quote_subtotal, quote_total, price_breakdown, discount_amount, discount_code, discount_code_id, discount_program_id, discount_validated_at, quote_is_overridden, quote_override_total, quote_override_reason, estimated_price_cents, monetary_value_cents"
+                "org_id, status_key, customer_id, primary_contact_id, vertical_id, metadata, work_unit_id, quote_subtotal, quote_total, price_breakdown, discount_amount, discount_code, discount_code_id, discount_program_id, discount_validated_at, quote_is_overridden, quote_override_total, quote_override_reason, estimated_price_cents, monetary_value_cents"
             )
             .eq("id", id)
             .eq("org_id", ctx.orgId)
@@ -80,6 +81,7 @@ export async function PATCH(
             primary_contact_id?: string | null;
             vertical_id?: string | null;
             metadata?: Record<string, unknown> | null;
+            work_unit_id?: string | null;
             quote_subtotal?: number | null;
             quote_total?: number | null;
             price_breakdown?: string | null;
@@ -170,6 +172,39 @@ export async function PATCH(
             const chk = await assertAllowedStatusKey(supabase, orgId, "opportunities", sk);
             if (!chk.ok) {
                 return NextResponse.json({ error: chk.message }, { status: 400 });
+            }
+            if (sk && typeof sk === "string" && sk.trim()) {
+                let inferredWorkUnitId: string | null = (existingRow?.work_unit_id ?? null) as string | null;
+                inferredWorkUnitId = inferredWorkUnitId != null && String(inferredWorkUnitId).trim() ? String(inferredWorkUnitId).trim() : null;
+                let inferredDepartmentId: string | null = null;
+                if (inferredWorkUnitId) {
+                    const { data: wu, error: wuErr } = await supabase
+                        .from("work_units")
+                        .select("id, department_id")
+                        .eq("id", inferredWorkUnitId)
+                        .eq("org_id", orgId)
+                        .maybeSingle();
+                    if (!wuErr && wu) {
+                        inferredWorkUnitId = (wu as { id?: string | null }).id ?? inferredWorkUnitId;
+                        inferredDepartmentId = ((wu as { department_id?: string | null }).department_id ?? null) as string | null;
+                    }
+                }
+                const transition = await validateStatusTransition({
+                    supabase,
+                    orgId,
+                    entityType: "opportunities",
+                    entityId: id,
+                    departmentId: inferredDepartmentId,
+                    workUnitId: inferredWorkUnitId,
+                    actionKey: null,
+                    fromStatusKey: oldStatusKey,
+                    toStatusKey: sk.trim(),
+                    currentMetadata: (existingRow?.metadata as Record<string, unknown> | null) ?? null,
+                    payload: body,
+                });
+                if (!transition.ok) {
+                    return NextResponse.json({ error: transition.message }, { status: 400 });
+                }
             }
         }
 
