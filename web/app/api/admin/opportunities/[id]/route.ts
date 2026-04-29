@@ -4,6 +4,7 @@ import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
 import { getAdminAuth, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
+import { emitEvent } from "@/lib/emitEvent";
 import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
 import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
 import { validateStatusTransition } from "@/lib/admin/statusTransitionRules";
@@ -239,7 +240,36 @@ export async function PATCH(
                 oldStatusKey,
                 newStatusKey,
                 metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+                actorUserId: auth.user.id,
             });
+        }
+
+        if (body.notes !== undefined && orgId) {
+            const oldNotes =
+                metadataBase.notes != null && String(metadataBase.notes).trim() !== "" ? String(metadataBase.notes) : "";
+            const newNotes =
+                metadataUpdates.notes != null && String(metadataUpdates.notes).trim() !== ""
+                    ? String(metadataUpdates.notes)
+                    : "";
+            if (oldNotes !== newNotes) {
+                const t = newNotes.trim();
+                const bodyPreview =
+                    t.length === 0 ? null : t.length <= 120 ? t : `${t.slice(0, 119)}…`;
+                try {
+                    await emitEvent({
+                        org_id: orgId,
+                        event_type: "note_added",
+                        entity_type: "opportunities",
+                        entity_id: id,
+                        payload: {
+                            body_preview: bodyPreview,
+                            actor_user_id: auth.user.id,
+                        },
+                    });
+                } catch (e) {
+                    console.error("[ADMIN_PATCH_OPPORTUNITY] note_added emit", e);
+                }
+            }
         }
 
         const auditFields = Object.keys(updates)

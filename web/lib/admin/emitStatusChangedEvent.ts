@@ -13,6 +13,8 @@ export type EmitStatusChangedEventParams = {
     oldStatusKey: string | null;
     newStatusKey: string | null;
     metadata?: Record<string, unknown>;
+    /** Staff user who performed the change (Activity Log actor). */
+    actorUserId?: string | null;
 };
 
 export type WorkflowEventRow = {
@@ -32,7 +34,7 @@ export type WorkflowEventRow = {
  * Otherwise insert workflow_events row and return it. Throws on insert failure.
  */
 export async function emitStatusChangedEvent(params: EmitStatusChangedEventParams): Promise<WorkflowEventRow | null> {
-    const { supabase, orgId, entityType, entityId, oldStatusKey, newStatusKey, metadata = {} } = params;
+    const { supabase, orgId, entityType, entityId, oldStatusKey, newStatusKey, metadata = {}, actorUserId } = params;
 
     const oldNorm = oldStatusKey == null ? null : String(oldStatusKey).trim();
     const newNorm = newStatusKey == null ? null : String(newStatusKey).trim();
@@ -47,12 +49,18 @@ export async function emitStatusChangedEvent(params: EmitStatusChangedEventParam
         changed_at: now,
         ...metadata,
     };
+    if (actorUserId != null && String(actorUserId).trim() !== "") {
+        payload.actor_user_id = String(actorUserId).trim();
+    }
+
+    const eventType =
+        String(entityType).trim().toLowerCase() === "opportunities" ? "opportunity_status_changed" : "entity_status_changed";
 
     const { data, error } = await supabase
         .from("workflow_events")
         .insert({
             org_id: orgId,
-            event_type: "entity_status_changed",
+            event_type: eventType,
             entity_type: entityType,
             entity_id: entityId,
             action_type: null,

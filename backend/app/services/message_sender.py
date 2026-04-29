@@ -11,6 +11,7 @@ import requests
 
 from ..supabase_client import _get_base_url, _get_headers
 from ..integrations.twilio_client import send_sms
+from .activity_workflow_events import emit_message_lifecycle_event
 
 logger = logging.getLogger("alloy-dispatcher")
 
@@ -101,6 +102,15 @@ def process_queued_messages(limit: int = 25, workflow_run_id: Optional[str] = No
             _update_message(base_url, headers, msg_id, patch)
             message_ids.append(str(msg_id))
             sent += 1
+            try:
+                emit_message_lifecycle_event(
+                    event_purpose="message_sent",
+                    message_row=row if isinstance(row, dict) else {},
+                    message_id=str(msg_id),
+                    body_text=body or None,
+                )
+            except Exception as emit_err:
+                logger.warning("MESSAGE_SEND_ACTIVITY_EMIT id=%s err=%s", msg_id, emit_err)
         except Exception as e:
             err_msg = str(e)[:ERROR_TRUNCATE]
             logger.warning("MESSAGE_SEND_FAIL id=%s err=%s", msg_id, err_msg)

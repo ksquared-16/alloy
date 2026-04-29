@@ -4,10 +4,13 @@ Receives POST from Twilio, stores message in public.messages, returns TwiML empt
 Configure in Twilio Messaging Service: https://api.workwithalloy.com/sms/inbound
 """
 import logging
+from typing import Optional
+
 import requests
 from fastapi import APIRouter, Request, Response
 
 from ..supabase_client import _get_base_url, _get_headers
+from ..services.activity_workflow_events import emit_message_lifecycle_event
 
 logger = logging.getLogger("alloy-dispatcher")
 
@@ -48,6 +51,23 @@ async def post_sms_inbound(request: Request) -> Response:
             logger.error("sms_inbound: messages insert failed status=%s body=%s", resp.status_code, resp.text[:500])
         else:
             logger.info("sms_inbound: stored MessageSid=%s from=%s", message_sid[-8:] if message_sid else "—", from_num[:12] if from_num else "—")
+            try:
+                data = resp.json()
+                inserted: Optional[dict] = None
+                if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
+                    inserted = data[0]
+                elif isinstance(data, dict) and data.get("id"):
+                    inserted = data
+                mid = inserted.get("id") if inserted else None
+                if mid:
+                    emit_message_lifecycle_event(
+                        event_purpose="message_received",
+                        message_row=inserted if isinstance(inserted, dict) else {},
+                        message_id=str(mid),
+                        body_text=body or None,
+                    )
+            except Exception as emit_err:
+                logger.warning("sms_inbound: activity event emit skipped %s", emit_err)
     except Exception as e:
         logger.exception("sms_inbound: Supabase insert failed %s", e)
 

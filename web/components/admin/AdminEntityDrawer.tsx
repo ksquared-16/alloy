@@ -827,6 +827,30 @@ function buildAdminEntityFetchUrl(
     return `/api/admin/entity/${encodeURIComponent(type)}/${encodeURIComponent(id)}`;
 }
 
+function summarizeOpportunityActivityEvent(eventType: string | null, payload: Record<string, unknown>): string {
+    const t = (eventType ?? "").trim();
+    if (t === "message_received") return "SMS received";
+    if (t === "message_sent") return "SMS sent";
+    if (t === "opportunity_status_changed" || t === "entity_status_changed") {
+        const o = payload.old_status_key != null ? String(payload.old_status_key) : "—";
+        const n = payload.new_status_key != null ? String(payload.new_status_key) : "—";
+        return `Status changed: ${o} → ${n}`;
+    }
+    if (t === "note_added") return "Note added";
+    if (t === "action_executed") {
+        const k = payload.action_key != null ? String(payload.action_key) : "";
+        return k ? `Action: ${k}` : "Action executed";
+    }
+    return t || "Event";
+}
+
+function activityActorLabel(payload: Record<string, unknown>): string {
+    if (payload.actor_user_id != null && String(payload.actor_user_id).trim()) return "Staff";
+    if (payload.actor === "contact") return "Contact";
+    if (payload.actor === "system") return "System";
+    return "—";
+}
+
 export default function AdminEntityDrawer() {
     const { drawer, openDrawer, closeDrawer, canGoBack, goBack, previousDrawer, stack } = useAdminDrawer();
     const { canMutate, role: adminRole } = useAdminAuth();
@@ -1061,9 +1085,21 @@ export default function AdminEntityDrawer() {
         completed_at: string | null;
         has_failed_action?: boolean;
     };
+    type OpportunityActivityEventRow = {
+        id: string;
+        occurred_at: string;
+        event_type: string | null;
+        entity_type: string | null;
+        entity_id: string | null;
+        action_type: string | null;
+        payload: Record<string, unknown>;
+    };
     const [opportunityWorkflowRuns, setOpportunityWorkflowRuns] = useState<WorkflowRunPreviewRow[] | null>(null);
     const [opportunityWorkflowRunsLoading, setOpportunityWorkflowRunsLoading] = useState(false);
     const [opportunityWorkflowRunsError, setOpportunityWorkflowRunsError] = useState<string | null>(null);
+    const [opportunityActivityEvents, setOpportunityActivityEvents] = useState<OpportunityActivityEventRow[] | null>(null);
+    const [opportunityActivityLoading, setOpportunityActivityLoading] = useState(false);
+    const [opportunityActivityError, setOpportunityActivityError] = useState<string | null>(null);
     const [memberCustomers, setMemberCustomers] = useState<{ id: string; name: string | null }[]>([]);
     const [memberCreateSaving, setMemberCreateSaving] = useState(false);
     const [memberCreateError, setMemberCreateError] = useState<string | null>(null);
@@ -1439,23 +1475,52 @@ export default function AdminEntityDrawer() {
             try {
                 setOpportunityWorkflowRunsLoading(true);
                 setOpportunityWorkflowRunsError(null);
-                const qs = new URLSearchParams({
+                setOpportunityActivityLoading(true);
+                setOpportunityActivityError(null);
+                const qsRuns = new URLSearchParams({
                     entity_type: "opportunity",
                     entity_id: String(drawer.id),
                     limit: "10",
                     range: "30d",
                 });
-                const res = await fetch(`/api/admin/workflow-runs?${qs.toString()}`, { credentials: "include" });
-                const j = (await res.json().catch(() => ({}))) as { runs?: WorkflowRunPreviewRow[]; error?: string };
-                if (!res.ok) throw new Error(j.error ?? "Failed to load workflow runs");
-                if (!cancelled) setOpportunityWorkflowRuns(Array.isArray(j.runs) ? j.runs : []);
+                const qsAct = new URLSearchParams({
+                    entity_type: "opportunities",
+                    entity_id: String(drawer.id),
+                    limit: "100",
+                });
+                const [resRuns, resAct] = await Promise.all([
+                    fetch(`/api/admin/workflow-runs?${qsRuns.toString()}`, { credentials: "include" }),
+                    fetch(`/api/admin/activity?${qsAct.toString()}`, { credentials: "include" }),
+                ]);
+                const jRuns = (await resRuns.json().catch(() => ({}))) as { runs?: WorkflowRunPreviewRow[]; error?: string };
+                const jAct = (await resAct.json().catch(() => ({}))) as {
+                    events?: OpportunityActivityEventRow[];
+                    error?: string;
+                };
+                if (!resRuns.ok && !cancelled) {
+                    setOpportunityWorkflowRuns(null);
+                    setOpportunityWorkflowRunsError(jRuns.error ?? "Failed to load workflow runs");
+                } else if (!cancelled) {
+                    setOpportunityWorkflowRuns(Array.isArray(jRuns.runs) ? jRuns.runs : []);
+                }
+                if (!resAct.ok && !cancelled) {
+                    setOpportunityActivityEvents(null);
+                    setOpportunityActivityError(jAct.error ?? "Failed to load activity");
+                } else if (!cancelled) {
+                    setOpportunityActivityEvents(Array.isArray(jAct.events) ? jAct.events : []);
+                }
             } catch (e) {
                 if (!cancelled) {
                     setOpportunityWorkflowRuns(null);
                     setOpportunityWorkflowRunsError(e instanceof Error ? e.message : "Failed to load workflow runs");
+                    setOpportunityActivityEvents(null);
+                    setOpportunityActivityError(e instanceof Error ? e.message : "Failed to load activity");
                 }
             } finally {
-                if (!cancelled) setOpportunityWorkflowRunsLoading(false);
+                if (!cancelled) {
+                    setOpportunityWorkflowRunsLoading(false);
+                    setOpportunityActivityLoading(false);
+                }
             }
         })();
         return () => {
@@ -8710,6 +8775,46 @@ export default function AdminEntityDrawer() {
                             ) : drawer.type === "opportunities" && drawer.id && drawer.id !== "new" ? (
                                 <div className="space-y-4">
                                     <section>
+                                        <h3 className={DRAWER_SECTION_HEADER_CLASS}>Activity</h3>
+                                        {opportunityActivityLoading ? (
+                                            <p className="text-sm text-alloy-midnight/60">Loading activity…</p>
+                                        ) : opportunityActivityError ? (
+                                            <p className="text-sm text-alloy-ember">{opportunityActivityError}</p>
+                                        ) : (opportunityActivityEvents?.length ?? 0) > 0 ? (
+                                            <ul className="mt-2 space-y-3">
+                                                {(opportunityActivityEvents ?? []).map((ev) => {
+                                                    const p = (ev.payload && typeof ev.payload === "object"
+                                                        ? ev.payload
+                                                        : {}) as Record<string, unknown>;
+                                                    const preview =
+                                                        p.body_preview != null && String(p.body_preview).trim()
+                                                            ? String(p.body_preview)
+                                                            : null;
+                                                    return (
+                                                        <li
+                                                            key={ev.id}
+                                                            className="rounded-lg border border-alloy-stone/15 bg-white px-3 py-2 text-sm"
+                                                        >
+                                                            <div className="font-semibold text-alloy-forge">
+                                                                {summarizeOpportunityActivityEvent(ev.event_type, p)}
+                                                            </div>
+                                                            <div className="mt-0.5 text-[12px] text-alloy-forge/65">
+                                                                {formatDateTime(ev.occurred_at)} · {activityActorLabel(p)}
+                                                            </div>
+                                                            {preview ? (
+                                                                <div className="mt-1.5 text-[13px] text-alloy-forge/85 whitespace-pre-wrap">
+                                                                    {preview}
+                                                                </div>
+                                                            ) : null}
+                                                        </li>
+                                                    );
+                                                })}
+                                            </ul>
+                                        ) : (
+                                            <p className="text-sm text-alloy-midnight/60">No workflow events yet.</p>
+                                        )}
+                                    </section>
+                                    <section>
                                         <div className="flex items-center justify-between gap-3">
                                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Workflow runs</h3>
                                             <a href="/adminV2/workflows" className="text-sm font-semibold text-alloy-blue hover:underline">
@@ -8751,13 +8856,13 @@ export default function AdminEntityDrawer() {
                                         )}
                                     </section>
                                     <section>
-                                        <h3 className={DRAWER_SECTION_HEADER_CLASS}>Timeline</h3>
+                                        <h3 className={DRAWER_SECTION_HEADER_CLASS}>Record</h3>
                                         <ul className="space-y-1.5 text-sm text-alloy-forge/90">
                                             {data?.created_at != null ? <li>Created: {formatDateTime(String(data.created_at))}</li> : null}
                                             {data?.updated_at != null ? <li>Updated: {formatDateTime(String(data.updated_at))}</li> : null}
                                         </ul>
                                         {!data?.created_at && !data?.updated_at && (
-                                            <p className="text-sm text-alloy-midnight/60">No activity recorded.</p>
+                                            <p className="text-sm text-alloy-midnight/60">No record timestamps.</p>
                                         )}
                                     </section>
                                 </div>

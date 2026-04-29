@@ -81,6 +81,45 @@ function mapEntityToTable(entityType: string): string | null {
     return null;
 }
 
+/** Canonical plural entity_type for workflow_events / Activity Log. */
+function mapEntityTypeForActivityEvent(raw: string): string | null {
+    const x = raw.trim().toLowerCase();
+    if (x === "opportunity" || x === "opportunities") return "opportunities";
+    if (x === "job" || x === "jobs") return "jobs";
+    if (x === "schedule" || x === "schedules") return "schedules";
+    if (x === "customer" || x === "customers") return "customers";
+    return null;
+}
+
+async function withActionExecutedEmit(
+    _supabase: SupabaseClient,
+    ctx: { orgId: string; userId?: string },
+    correlationId: string,
+    actionKey: string,
+    entityTypeRaw: string,
+    entityId: string,
+    execution_result: Record<string, unknown>
+): Promise<ExecuteAdminActionResult> {
+    const et = mapEntityTypeForActivityEvent(entityTypeRaw);
+    if (et) {
+        try {
+            await emitEvent({
+                org_id: ctx.orgId,
+                event_type: "action_executed",
+                entity_type: et,
+                entity_id: entityId,
+                payload: {
+                    action_key: actionKey,
+                    actor_user_id: ctx.userId ?? null,
+                },
+            });
+        } catch (e) {
+            console.error("[executeAdminAction] action_executed emit failed", e);
+        }
+    }
+    return { ok: true, correlation_id: correlationId, execution_result };
+}
+
 /**
  * Server-side action executor (v1). Does not replace domain PATCH routes — reuses org checks + status bridge.
  */
@@ -89,7 +128,6 @@ export async function executeAdminAction(
     ctx: { orgId: string; userId?: string },
     input: ExecuteAdminActionInput
 ): Promise<ExecuteAdminActionResult> {
-    void ctx.userId;
     const correlationId = randomUUID();
     const actionKey = String(input.actionKey ?? "").trim();
     const entityId = String(input.entityId ?? "").trim();
@@ -217,17 +255,13 @@ export async function executeAdminAction(
                     .eq("role_type", roleType)
                     .maybeSingle();
                 if (existingLink?.id) {
-                    return {
-                        ok: true,
-                        correlation_id: correlationId,
-                        execution_result: {
-                            kind: "add_related_person",
-                            customer_id: customerId,
-                            person_id: personId,
-                            customer_person_id: (existingLink as { id: string }).id,
-                            existed: true,
-                        },
-                    };
+                    return await withActionExecutedEmit(supabase, ctx, correlationId, actionKey, entityTypeRaw, entityId, {
+                        kind: "add_related_person",
+                        customer_id: customerId,
+                        person_id: personId,
+                        customer_person_id: (existingLink as { id: string }).id,
+                        existed: true,
+                    });
                 }
 
                 const { data: insertedLink, error: linkErr } = await supabase
@@ -244,31 +278,23 @@ export async function executeAdminAction(
                     .single();
                 if (linkErr || !insertedLink) {
                     if (linkErr?.code === "23505") {
-                        return {
-                            ok: true,
-                            correlation_id: correlationId,
-                            execution_result: {
-                                kind: "add_related_person",
-                                customer_id: customerId,
-                                person_id: personId,
-                                existed: true,
-                            },
-                        };
+                        return await withActionExecutedEmit(supabase, ctx, correlationId, actionKey, entityTypeRaw, entityId, {
+                            kind: "add_related_person",
+                            customer_id: customerId,
+                            person_id: personId,
+                            existed: true,
+                        });
                     }
                     return { ok: false, correlation_id: correlationId, error: linkErr?.message ?? "Failed to link person to customer", status: 400 };
                 }
 
-                return {
-                    ok: true,
-                    correlation_id: correlationId,
-                    execution_result: {
-                        kind: "add_related_person",
-                        customer_id: customerId,
-                        person_id: personId,
-                        customer_person_id: (insertedLink as { id: string }).id,
-                        existed: false,
-                    },
-                };
+                return await withActionExecutedEmit(supabase, ctx, correlationId, actionKey, entityTypeRaw, entityId, {
+                    kind: "add_related_person",
+                    customer_id: customerId,
+                    person_id: personId,
+                    customer_person_id: (insertedLink as { id: string }).id,
+                    existed: false,
+                });
             }
 
             if (formKey === "add_family_member") {
@@ -332,17 +358,13 @@ export async function executeAdminAction(
                     .eq("person_id", personId)
                     .maybeSingle();
                 if (existingRow?.id) {
-                    return {
-                        ok: true,
-                        correlation_id: correlationId,
-                        execution_result: {
-                            kind: "add_family_member",
-                            opportunity_id: entityId,
-                            person_id: personId,
-                            opportunity_person_id: (existingRow as { id: string }).id,
-                            existed: true,
-                        },
-                    };
+                    return await withActionExecutedEmit(supabase, ctx, correlationId, actionKey, entityTypeRaw, entityId, {
+                        kind: "add_family_member",
+                        opportunity_id: entityId,
+                        person_id: personId,
+                        opportunity_person_id: (existingRow as { id: string }).id,
+                        existed: true,
+                    });
                 }
 
                 const { data: insertedOppPerson, error: oppPersonErr } = await supabase
@@ -358,16 +380,12 @@ export async function executeAdminAction(
                     .single();
                 if (oppPersonErr || !insertedOppPerson) {
                     if (oppPersonErr?.code === "23505") {
-                        return {
-                            ok: true,
-                            correlation_id: correlationId,
-                            execution_result: {
-                                kind: "add_family_member",
-                                opportunity_id: entityId,
-                                person_id: personId,
-                                existed: true,
-                            },
-                        };
+                        return await withActionExecutedEmit(supabase, ctx, correlationId, actionKey, entityTypeRaw, entityId, {
+                            kind: "add_family_member",
+                            opportunity_id: entityId,
+                            person_id: personId,
+                            existed: true,
+                        });
                     }
                     return {
                         ok: false,
@@ -377,17 +395,13 @@ export async function executeAdminAction(
                     };
                 }
 
-                return {
-                    ok: true,
-                    correlation_id: correlationId,
-                    execution_result: {
-                        kind: "add_family_member",
-                        opportunity_id: entityId,
-                        person_id: personId,
-                        opportunity_person_id: (insertedOppPerson as { id: string }).id,
-                        existed: false,
-                    },
-                };
+                return await withActionExecutedEmit(supabase, ctx, correlationId, actionKey, entityTypeRaw, entityId, {
+                    kind: "add_family_member",
+                    opportunity_id: entityId,
+                    person_id: personId,
+                    opportunity_person_id: (insertedOppPerson as { id: string }).id,
+                    existed: false,
+                });
             }
 
             // When submit_action_type=update_status, treat `after.update_status_key` as the target status key
@@ -472,6 +486,7 @@ export async function executeAdminAction(
                         oldStatusKey,
                         newStatusKey,
                         metadata: Object.keys(metadata).length ? metadata : undefined,
+                        actorUserId: ctx.userId,
                     });
                 } catch (e) {
                     console.error("[executeAdminAction] emitStatusChangedEvent (open_form.after)", e);
@@ -587,16 +602,17 @@ export async function executeAdminAction(
                         oldStatusKey,
                         newStatusKey,
                         metadata: Object.keys(metadata).length ? metadata : undefined,
+                        actorUserId: ctx.userId,
                     });
                 } catch (e) {
                     console.error("[executeAdminAction] emitStatusChangedEvent (open_form.submit:update_status)", e);
                 }
 
-                return {
-                    ok: true,
-                    correlation_id: correlationId,
-                    execution_result: { kind: "update_status", status_key: statusKey, ...(updatedRow ? { row: updatedRow } : {}) },
-                };
+                return await withActionExecutedEmit(supabase, ctx, correlationId, actionKey, entityTypeRaw, entityId, {
+                    kind: "update_status",
+                    status_key: statusKey,
+                    ...(updatedRow ? { row: updatedRow } : {}),
+                });
             }
 
             if (submitActionType !== "start_workflow") {
@@ -691,17 +707,13 @@ export async function executeAdminAction(
                     event_id: eventId,
                     org_id: ctx.orgId,
                 });
-                return {
-                    ok: true,
-                    correlation_id: correlationId,
-                    execution_result: {
-                        kind: "start_workflow",
-                        workflow_id: wf.id,
-                        workflow_run_id: run.workflow_run_id,
-                        run_status: run.status,
-                        ...(updatedRow ? { row: updatedRow } : {}),
-                    },
-                };
+                return await withActionExecutedEmit(supabase, ctx, correlationId, actionKey, entityTypeRaw, entityId, {
+                    kind: "start_workflow",
+                    workflow_id: wf.id,
+                    workflow_run_id: run.workflow_run_id,
+                    run_status: run.status,
+                    ...(updatedRow ? { row: updatedRow } : {}),
+                });
             } catch (e) {
                 const msg = e instanceof Error ? e.message : String(e);
                 return { ok: false, correlation_id: correlationId, error: msg, status: 500 };
@@ -712,42 +724,36 @@ export async function executeAdminAction(
             if (!href) {
                 return { ok: false, correlation_id: correlationId, error: "navigate requires payload.href", status: 400 };
             }
-            return {
-                ok: true,
-                correlation_id: correlationId,
-                execution_result: { kind: "navigate", href },
-            };
+            return await withActionExecutedEmit(supabase, ctx, correlationId, actionKey, entityTypeRaw, entityId, {
+                kind: "navigate",
+                href,
+            });
         }
         case "external_link": {
             const href = merged.href != null ? String(merged.href) : "";
             if (!href) {
                 return { ok: false, correlation_id: correlationId, error: "external_link requires payload.href", status: 400 };
             }
-            return {
-                ok: true,
-                correlation_id: correlationId,
-                execution_result: { kind: "external_link", href },
-            };
+            return await withActionExecutedEmit(supabase, ctx, correlationId, actionKey, entityTypeRaw, entityId, {
+                kind: "external_link",
+                href,
+            });
         }
         case "open_drawer": {
             const drawer = merged.drawer && typeof merged.drawer === "object" ? (merged.drawer as Record<string, unknown>) : {};
             const entityType = String(drawer.entityType ?? "opportunities").trim();
             const defaultSurface = drawer.defaultSurface != null ? String(drawer.defaultSurface) : null;
-            return {
-                ok: true,
-                correlation_id: correlationId,
-                execution_result: {
-                    kind: "open_drawer",
-                    drawer: { entityType, id: entityId, defaultSurface },
-                },
-            };
+            return await withActionExecutedEmit(supabase, ctx, correlationId, actionKey, entityTypeRaw, entityId, {
+                kind: "open_drawer",
+                drawer: { entityType, id: entityId, defaultSurface },
+            });
         }
         case "ui_intent": {
-            return {
-                ok: true,
-                correlation_id: correlationId,
-                execution_result: { kind: "ui_intent", intent: merged.intent ?? merged, context: input.context ?? {} },
-            };
+            return await withActionExecutedEmit(supabase, ctx, correlationId, actionKey, entityTypeRaw, entityId, {
+                kind: "ui_intent",
+                intent: merged.intent ?? merged,
+                context: input.context ?? {},
+            });
         }
         case "update_status": {
             if (table !== "opportunities") {
@@ -835,15 +841,17 @@ export async function executeAdminAction(
                     oldStatusKey,
                     newStatusKey,
                     metadata: Object.keys(metadata).length ? metadata : undefined,
+                    actorUserId: ctx.userId,
                 });
             } catch (e) {
                 console.error("[executeAdminAction] emitStatusChangedEvent", e);
             }
-            return {
-                ok: true,
-                correlation_id: correlationId,
-                execution_result: { kind: "update_status", entity: "opportunities", id: entityId, row: updated },
-            };
+            return await withActionExecutedEmit(supabase, ctx, correlationId, actionKey, entityTypeRaw, entityId, {
+                kind: "update_status",
+                entity: "opportunities",
+                id: entityId,
+                row: updated,
+            });
         }
         case "update_field": {
             if (table !== "opportunities") {
@@ -871,11 +879,12 @@ export async function executeAdminAction(
             if (upErr || !updated) {
                 return { ok: false, correlation_id: correlationId, error: upErr?.message ?? "Update failed", status: 400 };
             }
-            return {
-                ok: true,
-                correlation_id: correlationId,
-                execution_result: { kind: "update_field", entity: "opportunities", id: entityId, row: updated },
-            };
+            return await withActionExecutedEmit(supabase, ctx, correlationId, actionKey, entityTypeRaw, entityId, {
+                kind: "update_field",
+                entity: "opportunities",
+                id: entityId,
+                row: updated,
+            });
         }
         case "start_workflow": {
             const wfId = def.workflow_id;
@@ -922,16 +931,12 @@ export async function executeAdminAction(
                     event_id: eventId,
                     org_id: ctx.orgId,
                 });
-                return {
-                    ok: true,
-                    correlation_id: correlationId,
-                    execution_result: {
-                        kind: "start_workflow",
-                        workflow_id: wf.id,
-                        workflow_run_id: run.workflow_run_id,
-                        run_status: run.status,
-                    },
-                };
+                return await withActionExecutedEmit(supabase, ctx, correlationId, actionKey, entityTypeRaw, entityId, {
+                    kind: "start_workflow",
+                    workflow_id: wf.id,
+                    workflow_run_id: run.workflow_run_id,
+                    run_status: run.status,
+                });
             } catch (e) {
                 const msg = e instanceof Error ? e.message : String(e);
                 return { ok: false, correlation_id: correlationId, error: msg, status: 500 };
