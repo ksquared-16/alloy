@@ -31,6 +31,7 @@ import { ScheduleTourActionFormModal } from "@/components/admin/opportunity/acti
 import { ContactAttemptedModal } from "@/components/admin/opportunity/actions/ContactAttemptedModal";
 import { UpdateStatusAddNoteModal } from "@/components/admin/opportunity/actions/UpdateStatusAddNoteModal";
 import { AddRelatedPersonModal } from "@/components/admin/opportunity/actions/AddRelatedPersonModal";
+import { AddFamilyMemberModal } from "@/components/admin/opportunity/actions/AddFamilyMemberModal";
 import { AddInquiryChildModal } from "@/components/admin/opportunity/actions/AddInquiryChildModal";
 import {
     WORKFLOW_ENTITY_TYPES,
@@ -49,6 +50,7 @@ import {
 import EntityDrawerOverview from "@/components/admin/entity/EntityDrawerOverview";
 import OpportunityRecordSectionRegistryActions from "@/components/admin/opportunity/OpportunityRecordSectionRegistryActions";
 import { OpportunityHouseholdPeoplePanel } from "@/components/admin/opportunity/OpportunityHouseholdPeoplePanel";
+import { FamilyContactsPanel } from "@/components/admin/opportunity/FamilyContactsPanel";
 import EntityDrawerSection from "@/components/admin/entity/EntityDrawerSection";
 import JobPricingBreakdown from "@/components/admin/JobPricingBreakdown";
 import JobRrsOverviewTab from "@/components/admin/JobRrsOverviewTab";
@@ -93,7 +95,11 @@ import { useRecordChromeConfig } from "@/hooks/useRecordChromeConfig";
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { getSectionOrderFromScheduleLayoutBlocks } from "@/lib/recordChrome/scheduleLayoutConfig";
-import { applyOverviewSectionOrder, type RecordLayoutConfigJson } from "@/lib/recordChrome/types";
+import {
+    applyOverviewSectionOrder,
+    recordOpportunityDrawerLayoutIncludesSection,
+    type RecordLayoutConfigJson,
+} from "@/lib/recordChrome/types";
 import { executeOpportunityRecordAction } from "@/lib/recordChrome/executeOpportunityRecordAction";
 import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import OpportunityQuoteIntakeSection from "@/components/admin/quoteIntake/OpportunityQuoteIntakeSection";
@@ -1214,6 +1220,30 @@ export default function AdminEntityDrawer() {
     };
     const [personRelatedData, setPersonRelatedData] = useState<PersonRelatedPayload | null>(null);
     const [personRelatedLoading, setPersonRelatedLoading] = useState(false);
+
+    const timingEnabled =
+        typeof window === "undefined"
+            ? process.env.NODE_ENV !== "production"
+            : process.env.NODE_ENV !== "production" || /staging|localhost|127\\.0\\.0\\.1/i.test(window.location.hostname);
+    const drawerTimingStartRef = useRef<{ key: string; at: number } | null>(null);
+    const drawerTimingMarksRef = useRef<Record<string, number>>({});
+
+    const markTiming = useCallback(
+        (phase: string, meta?: Record<string, unknown>) => {
+            if (!timingEnabled) return;
+            const start = drawerTimingStartRef.current;
+            if (!start) return;
+            const t = performance.now();
+            drawerTimingMarksRef.current[phase] = t;
+            console.info("[timing][drawer]", {
+                key: start.key,
+                phase,
+                ms_since_open: Math.round((t - start.at) * 10) / 10,
+                ...(meta ?? {}),
+            });
+        },
+        [timingEnabled]
+    );
     const STATUS_ENTITY_TYPES = [
         "customers",
         "contacts",
@@ -1234,15 +1264,40 @@ export default function AdminEntityDrawer() {
         const url = buildAdminEntityFetchUrl(drawer.type, drawer.id, drawer.jobRecordSurface);
         if (!url) return;
         setLoading(true);
+        const t0 = timingEnabled ? performance.now() : 0;
         fetch(url)
             .then((res) => {
                 if (!res.ok) throw new Error(res.status === 404 ? "Not found" : "Failed to load");
                 return res.json();
             })
-            .then(setData)
+            .then((json) => {
+                if (timingEnabled) {
+                    const dt = performance.now() - t0;
+                    console.info("[timing][drawer]", {
+                        key: `${drawer.type}:${drawer.id}`,
+                        phase: "record_fetch",
+                        url,
+                        ms: Math.round(dt * 10) / 10,
+                    });
+                }
+                setData(json);
+            })
             .catch((e) => setError(e.message))
             .finally(() => setLoading(false));
     }, [drawer.type, drawer.id, drawer.jobRecordSurface]);
+
+    useEffect(() => {
+        if (!timingEnabled) return;
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
+            drawerTimingStartRef.current = null;
+            drawerTimingMarksRef.current = {};
+            return;
+        }
+        const key = `${drawer.type}:${drawer.id}`;
+        drawerTimingStartRef.current = { key, at: performance.now() };
+        drawerTimingMarksRef.current = {};
+        console.info("[timing][drawer]", { key, phase: "open", ms_since_open: 0 });
+    }, [drawer.type, drawer.id, timingEnabled]);
 
     const patchOpportunityQuote = useCallback(
         async (payload: Record<string, unknown>) => {
@@ -2051,6 +2106,7 @@ export default function AdminEntityDrawer() {
         }
         let cancelled = false;
         setOpportunityResolvedHeaderLoading(true);
+        const t0 = timingEnabled ? performance.now() : 0;
         const qs = new URLSearchParams({
             surface: "record_header",
             entity_type: "opportunity",
@@ -2064,6 +2120,14 @@ export default function AdminEntityDrawer() {
             .then((j: { actions?: ResolvedActionsBySlot }) => {
                 if (cancelled) return;
                 setOpportunityResolvedHeaderActions(j.actions ?? null);
+                if (timingEnabled) {
+                    console.info("[timing][drawer]", {
+                        key: `opportunities:${drawer.id}`,
+                        phase: "record_header_actions_fetch",
+                        url: actionsUrl,
+                        ms: Math.round((performance.now() - t0) * 10) / 10,
+                    });
+                }
             })
             .catch(() => {
                 if (!cancelled) setOpportunityResolvedHeaderActions(null);
@@ -2090,6 +2154,7 @@ export default function AdminEntityDrawer() {
             const departmentId = opportunityWorkUnitDepartmentId?.trim() ?? "";
             if (!workUnitId || !departmentId) return;
             setOpportunityResolvedHeaderLoading(true);
+            const t0 = timingEnabled ? performance.now() : 0;
             const qs = new URLSearchParams({
                 surface: "record_header",
                 entity_type: "opportunity",
@@ -2100,7 +2165,17 @@ export default function AdminEntityDrawer() {
             const actionsUrl = `/api/admin/actions?${qs.toString()}`;
             dedupeAdminFetchWithTtl(actionsUrl, workspaceDataFetchInit(), 1500)
                 .then((r) => r.json())
-                .then((j: { actions?: ResolvedActionsBySlot }) => setOpportunityResolvedHeaderActions(j.actions ?? null))
+                .then((j: { actions?: ResolvedActionsBySlot }) => {
+                    setOpportunityResolvedHeaderActions(j.actions ?? null);
+                    if (timingEnabled) {
+                        console.info("[timing][drawer]", {
+                            key: `opportunities:${drawer.id}`,
+                            phase: "record_header_actions_refetch",
+                            url: actionsUrl,
+                            ms: Math.round((performance.now() - t0) * 10) / 10,
+                        });
+                    }
+                })
                 .catch(() => setOpportunityResolvedHeaderActions(null))
                 .finally(() => setOpportunityResolvedHeaderLoading(false));
         };
@@ -2142,9 +2217,18 @@ export default function AdminEntityDrawer() {
         let cancelled = false;
         (async () => {
             try {
+                const t0 = timingEnabled ? performance.now() : 0;
                 const res = await fetch(`/api/admin/work-units/${encodeURIComponent(wuid)}`, { credentials: "include" });
                 const json = (await res.json().catch(() => ({}))) as { queue_definition?: unknown; department_id?: string | null };
                 if (cancelled) return;
+                if (timingEnabled) {
+                    console.info("[timing][drawer]", {
+                        key: `opportunities:${drawer.id}`,
+                        phase: "work_unit_fetch",
+                        url: `/api/admin/work-units/${encodeURIComponent(wuid)}`,
+                        ms: Math.round((performance.now() - t0) * 10) / 10,
+                    });
+                }
                 setOpportunityWorkUnitDepartmentId(
                     typeof json.department_id === "string" && json.department_id.trim() ? json.department_id.trim() : null
                 );
@@ -4163,6 +4247,31 @@ export default function AdminEntityDrawer() {
     const opportunityRegistryHeaderReady = !opportunityResolvedHeaderLoading && resolvedHeader != null;
     const useOpportunityActionRegistryHeader = opportunityRegistryHeaderReady && resolvedHeaderCount > 0;
 
+    useEffect(() => {
+        if (!timingEnabled) return;
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+        if (loading) return;
+        if (!data) return;
+        if (!opportunityRegistryHeaderReady) return;
+        if (!opportunityWorkUnitDepartmentId?.trim()) return;
+        if (!opportunityQueueDefinition) return;
+        markTiming("interactive", {
+            record_loaded: true,
+            header_actions_ready: true,
+            work_unit_ready: true,
+        });
+    }, [
+        timingEnabled,
+        drawer.type,
+        drawer.id,
+        loading,
+        data,
+        opportunityRegistryHeaderReady,
+        opportunityWorkUnitDepartmentId,
+        opportunityQueueDefinition,
+        markTiming,
+    ]);
+
     const opportunityRegistryHeaderActionKeys = useMemo(() => {
         const h = opportunityResolvedHeaderActions;
         if (!h) return new Set<string>();
@@ -5414,7 +5523,33 @@ export default function AdminEntityDrawer() {
             const oppCfg = (recordChromeOpportunity.layout?.config_json ?? null) as RecordLayoutConfigJson | null;
             const out: Record<string, React.ReactNode> = {};
             const customerId = (d.customer_id as string | null | undefined) ?? null;
-            if (customerId && drawer.id && drawer.id !== "new") {
+            const includeFamilyContacts =
+                !!drawer.id &&
+                drawer.id !== "new" &&
+                recordOpportunityDrawerLayoutIncludesSection(oppCfg, "family_contacts");
+            if (includeFamilyContacts && drawer.id) {
+                out.family_contacts = (
+                    <FamilyContactsPanel
+                        opportunityId={drawer.id}
+                        record={d}
+                        canMutate={!!canMutate}
+                        sectionKey="family_contacts"
+                        departmentId={opportunityWorkUnitDepartmentId}
+                        workUnitId={String(d.work_unit_id ?? "").trim() || null}
+                        router={router}
+                        openDrawer={openDrawer}
+                        openForm={({ form_key, action }) => {
+                            setActionFormState({ form_key, action });
+                        }}
+                        refreshKey={relatedPeopleRefreshKey}
+                        onRegistryApplied={() => {
+                            setRelatedPeopleRefreshKey((n) => n + 1);
+                            void refetch();
+                        }}
+                    />
+                );
+            }
+            if (customerId && drawer.id && drawer.id !== "new" && !includeFamilyContacts) {
                 out.customer_booking = (
                     <OpportunityHouseholdPeoplePanel
                         opportunityId={drawer.id}
@@ -5515,6 +5650,7 @@ export default function AdminEntityDrawer() {
         isEditing,
         refetch,
         recordChromeOpportunity.layout,
+        opportunityWorkUnitDepartmentId,
         getStatusLabel,
     ]);
 
@@ -5926,12 +6062,13 @@ export default function AdminEntityDrawer() {
                 }
                 const virtuals: EntityDrawerSectionConfig[] = [];
                 for (const ws of oppLayoutJson.inquiry_workflow_sections) {
+                    const allowEmpty = ws.allow_empty === true;
                     const fields = (ws.field_keys ?? [])
                         .filter((k) => !OPPORTUNITY_INQUIRY_HEADER_BODY_FIELD_KEYS.has(k))
                         .map((k) => defByKey.get(k))
                         .filter((x): x is NonNullable<typeof x> => Boolean(x))
                         .map((fd) => mapOpportunityFieldDefToDrawerField(fd));
-                    if (!fields.length) continue;
+                    if (!fields.length && !allowEmpty) continue;
                     virtuals.push({
                         key: ws.key,
                         title: ws.title,
@@ -11351,6 +11488,50 @@ export default function AdminEntityDrawer() {
                                 context: {
                                     surface: "record_section",
                                     section_key: "customer_booking",
+                                    department_id: deptId,
+                                    work_unit_id: wuid,
+                                },
+                                payload,
+                            }),
+                        });
+                        const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+                        if (!res.ok || !json.ok) {
+                            throw new Error(json.error ?? "Action failed");
+                        }
+                        setActionFormState(null);
+                        setRelatedPeopleRefreshKey((n) => n + 1);
+                        refetch();
+                    } finally {
+                        setOpportunityActionLoading(null);
+                    }
+                }}
+            />
+            <AddFamilyMemberModal
+                open={actionFormState?.form_key === "add_family_member"}
+                onClose={() => setActionFormState(null)}
+                title={actionFormState?.action?.label ?? "Add family member"}
+                onSubmit={async (payload) => {
+                    if (!drawer.id || drawer.id === "new") return;
+                    const actionKey = actionFormState?.action?.key ? String(actionFormState.action.key) : "add_family_member";
+                    setOpportunityActionLoading(actionKey);
+                    setSaveError(null);
+                    try {
+                        const deptId = opportunityWorkUnitDepartmentId?.trim() || null;
+                        const wuid =
+                            data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
+                                ? String((data as { work_unit_id?: unknown }).work_unit_id).trim() || null
+                                : null;
+                        const res = await fetch("/api/admin/actions/execute", {
+                            method: "POST",
+                            credentials: "include",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                                action_key: actionKey,
+                                entity_type: "opportunity",
+                                entity_id: drawer.id,
+                                context: {
+                                    surface: "record_section",
+                                    section_key: "family_contacts",
                                     department_id: deptId,
                                     work_unit_id: wuid,
                                 },

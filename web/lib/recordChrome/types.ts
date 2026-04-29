@@ -42,6 +42,8 @@ export type RecordLayoutConfigJson = {
         key: string;
         title: string;
         field_keys: string[];
+        /** When true, render the section even if no field_definitions map (custom panel only). */
+        allow_empty?: boolean;
         default_expanded?: boolean;
     }[];
     /**
@@ -92,4 +94,17 @@ export function applyOverviewSectionOrder(
         if (!used.has(s.key)) out.push(s);
     }
     return out;
+}
+
+/** True when org drawer layout lists this overview section (order or inquiry workflow defs). */
+export function recordOpportunityDrawerLayoutIncludesSection(
+    cfg: RecordLayoutConfigJson | null | undefined,
+    sectionKey: string
+): boolean {
+    if (!cfg) return false;
+    const order = cfg.overview_section_order;
+    if (Array.isArray(order) && order.some((k) => k === sectionKey)) return true;
+    const ws = cfg.inquiry_workflow_sections;
+    if (Array.isArray(ws) && ws.some((s) => s?.key === sectionKey)) return true;
+    return false;
 }

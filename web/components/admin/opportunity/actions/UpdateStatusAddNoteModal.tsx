@@ -20,8 +20,16 @@ let transitionRulesInflight: Promise<TransitionRule[]> | null = null;
 const TRANSITION_RULES_TTL_MS = 60_000;
 
 async function loadTransitionRules(signal?: AbortSignal): Promise<TransitionRule[]> {
+    const timingEnabled = process.env.NODE_ENV !== "production";
+    const t0 = timingEnabled ? performance.now() : 0;
     const now = Date.now();
     if (transitionRulesCache && now - transitionRulesCache.atMs < TRANSITION_RULES_TTL_MS) {
+        if (timingEnabled) {
+            console.info("[timing][drawer]", {
+                phase: "status_transition_rules_cache_hit",
+                ms: 0,
+            });
+        }
         return transitionRulesCache.items;
     }
     if (transitionRulesInflight) return transitionRulesInflight;
@@ -46,6 +54,13 @@ async function loadTransitionRules(signal?: AbortSignal): Promise<TransitionRule
             }))
             .filter((r) => r.is_active !== false);
         transitionRulesCache = { atMs: Date.now(), items: normalized };
+        if (timingEnabled) {
+            console.info("[timing][drawer]", {
+                phase: "status_transition_rules_fetch",
+                url: "/api/admin/status-transition-rules",
+                ms: Math.round((performance.now() - t0) * 10) / 10,
+            });
+        }
         return normalized;
     })().finally(() => {
         transitionRulesInflight = null;

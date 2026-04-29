@@ -271,6 +271,125 @@ export async function executeAdminAction(
                 };
             }
 
+            if (formKey === "add_family_member") {
+                const firstName = merged.first_name != null ? String(merged.first_name).trim() : "";
+                const lastName = merged.last_name != null ? String(merged.last_name).trim() : "";
+                const email = merged.email != null ? String(merged.email).trim() : "";
+                const phone = merged.phone != null ? String(merged.phone).trim() : "";
+                const roleTypeRaw = merged.role_type != null ? String(merged.role_type).trim() : "";
+                const roleType = roleTypeRaw || "family_member";
+
+                if (!firstName || !lastName) {
+                    return { ok: false, correlation_id: correlationId, error: "Missing required field: first_name/last_name", status: 400 };
+                }
+
+                const entityNorm = String(entityTypeRaw).trim().toLowerCase();
+                if (entityNorm !== "opportunity" && entityNorm !== "opportunities") {
+                    return { ok: false, correlation_id: correlationId, error: "add_family_member supports opportunity entities only", status: 400 };
+                }
+
+                const { data: opp } = await supabase
+                    .from("opportunities")
+                    .select("id, org_id")
+                    .eq("id", entityId)
+                    .eq("org_id", ctx.orgId)
+                    .maybeSingle();
+                if (!opp) {
+                    return { ok: false, correlation_id: correlationId, error: "Not found", status: 404 };
+                }
+
+                const foundOrCreated = await findOrCreatePersonInOrgWithMeta(supabase, {
+                    email: email || null,
+                    phone: phone || null,
+                    first_name: firstName,
+                    last_name: lastName,
+                    org_id: ctx.orgId,
+                });
+                let personId: string | null = foundOrCreated?.id ?? null;
+                if (!personId) {
+                    const { data: created, error } = await supabase
+                        .from("persons")
+                        .insert({
+                            org_id: ctx.orgId,
+                            first_name: firstName,
+                            last_name: lastName,
+                            email: email || null,
+                            phone: phone || null,
+                        })
+                        .select("id")
+                        .single();
+                    if (error || !created) {
+                        return { ok: false, correlation_id: correlationId, error: error?.message ?? "Failed to create person", status: 400 };
+                    }
+                    personId = (created as { id: string }).id;
+                }
+
+                const { data: existingRow } = await supabase
+                    .from("opportunity_persons")
+                    .select("id")
+                    .eq("org_id", ctx.orgId)
+                    .eq("opportunity_id", entityId)
+                    .eq("person_id", personId)
+                    .maybeSingle();
+                if (existingRow?.id) {
+                    return {
+                        ok: true,
+                        correlation_id: correlationId,
+                        execution_result: {
+                            kind: "add_family_member",
+                            opportunity_id: entityId,
+                            person_id: personId,
+                            opportunity_person_id: (existingRow as { id: string }).id,
+                            existed: true,
+                        },
+                    };
+                }
+
+                const { data: insertedOppPerson, error: oppPersonErr } = await supabase
+                    .from("opportunity_persons")
+                    .insert({
+                        org_id: ctx.orgId,
+                        opportunity_id: entityId,
+                        person_id: personId,
+                        role_type: roleType,
+                        metadata: {},
+                    })
+                    .select("id")
+                    .single();
+                if (oppPersonErr || !insertedOppPerson) {
+                    if (oppPersonErr?.code === "23505") {
+                        return {
+                            ok: true,
+                            correlation_id: correlationId,
+                            execution_result: {
+                                kind: "add_family_member",
+                                opportunity_id: entityId,
+                                person_id: personId,
+                                existed: true,
+                            },
+                        };
+                    }
+                    return {
+                        ok: false,
+                        correlation_id: correlationId,
+                        error: oppPersonErr?.message ?? "Failed to link person to opportunity",
+                        status: 400,
+                    };
+                }
+
+                return {
+                    ok: true,
+                    correlation_id: correlationId,
+                    execution_result: {
+                        kind: "add_family_member",
+                        opportunity_id: entityId,
+                        person_id: personId,
+                        opportunity_person_id: (insertedOppPerson as { id: string }).id,
+                        existed: false,
+                    },
+                };
+            }
+
             // When submit_action_type=update_status, treat `after.update_status_key` as the target status key
             // for submission (forms often don't ask for status_key explicitly).
             // Reserve the "after" write for workflow submission paths (e.g. schedule_tour) to avoid double updates.

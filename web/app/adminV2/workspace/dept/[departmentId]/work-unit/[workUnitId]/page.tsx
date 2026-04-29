@@ -930,7 +930,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
         let cancelled = false;
         (async () => {
             try {
-                const res = await fetch("/api/admin/status-options?entity_type=opportunities", { credentials: "include" });
+                const res = await dedupeAdminFetchWithTtl(
+                    "/api/admin/status-options?entity_type=opportunities",
+                    { ...workspaceDataFetchInit(), credentials: "include" },
+                    60_000
+                );
                 const j = (await res.json().catch(() => ({}))) as { options?: Array<{ value: string; label: string }>; error?: string };
                 if (!cancelled && res.ok) setStatusOptions(j.options ?? []);
             } catch {

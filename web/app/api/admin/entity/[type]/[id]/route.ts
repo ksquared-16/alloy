@@ -584,6 +584,51 @@ export async function GET(
             }
             out._inquiry_children = inquiryChildrenOut;
 
+            {
+                const { data: opRows } = await supabase
+                    .from("opportunity_persons")
+                    .select("id, person_id, role_type, created_at")
+                    .eq("org_id", orgId)
+                    .eq("opportunity_id", id)
+                    .order("created_at", { ascending: true });
+                const personIdsForOpp = [
+                    ...new Set(((opRows ?? []) as { person_id: string }[]).map((z) => z.person_id).filter(Boolean)),
+                ] as string[];
+                const { data: opPeople } =
+                    personIdsForOpp.length > 0
+                        ? await supabase
+                              .from("persons")
+                              .select("id, first_name, last_name, full_name, email, phone")
+                              .eq("org_id", orgId)
+                              .in("id", personIdsForOpp)
+                        : { data: [] as { id: string }[] };
+                const oppPersonMap = new Map(
+                    (
+                        (opPeople ?? []) as {
+                            id: string;
+                            first_name?: string | null;
+                            last_name?: string | null;
+                            full_name?: string | null;
+                            email?: string | null;
+                            phone?: string | null;
+                        }[]
+                    ).map((p) => [p.id, p])
+                );
+                out._opportunity_persons = ((opRows ?? []) as { id: string; person_id: string; role_type?: string | null }[]).map(
+                    (r) => {
+                        const p = oppPersonMap.get(r.person_id) ?? null;
+                        return {
+                            id: r.id,
+                            person_id: r.person_id,
+                            role_type: trimOrNull(r.role_type) ?? "—",
+                            name: personDisplayName(p),
+                            phone: trimOrNull(p?.phone),
+                            email: trimOrNull(p?.email),
+                        };
+                    }
+                );
+            }
+
             // Inquiry summary from configured field_definitions in the "quote" section when present.
             const defs = (out._field_definitions as { field_key: string; label: string | null; section_key: string | null; is_visible_in_drawer?: boolean }[] | undefined) ?? [];
             const quoteDefs = defs

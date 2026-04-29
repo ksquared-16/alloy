@@ -37,12 +37,22 @@ export function OpportunityHouseholdPeoplePanel(props: {
         setLoading(true);
         setError(null);
         try {
+            const timingEnabled = process.env.NODE_ENV !== "production";
+            const t0 = timingEnabled ? performance.now() : 0;
             const res = await fetch(`/api/admin/related/customer/${encodeURIComponent(customerId)}`, {
                 credentials: "include",
             });
             const json = (await res.json().catch(() => ({}))) as { people?: PersonRow[]; error?: string };
             if (!res.ok) throw new Error(json.error ?? "Failed to load household people");
             setPeople(Array.isArray(json.people) ? json.people : []);
+            if (timingEnabled) {
+                console.info("[timing][drawer]", {
+                    key: `opportunities:${opportunityId}`,
+                    phase: "related_people_fetch",
+                    url: `/api/admin/related/customer/${encodeURIComponent(customerId)}`,
+                    ms: Math.round((performance.now() - t0) * 10) / 10,
+                });
+            }
         } catch (e) {
             setPeople([]);
             setError(e instanceof Error ? e.message : "Failed to load household people");

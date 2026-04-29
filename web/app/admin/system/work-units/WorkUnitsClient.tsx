@@ -8,6 +8,7 @@ import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { getQueueDefinitionStoredVersion } from "@/lib/rrs/queue/queueDefinitionV1";
 import { validateQueueDefinition } from "@/lib/config/queueDefinitionSchema";
 import type { DepartmentRow } from "../departments/DepartmentsClient";
+import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 
 type QueueSummary = {
     key: string;
@@ -146,7 +147,11 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
         let cancelled = false;
         (async () => {
             try {
-                const res = await fetch("/api/admin/status-options?entity_type=opportunities", { credentials: "include" });
+                const res = await dedupeAdminFetchWithTtl(
+                    "/api/admin/status-options?entity_type=opportunities",
+                    { credentials: "include" },
+                    60_000
+                );
                 const json = (await res.json().catch(() => ({}))) as {
                     options?: Array<{ status_key?: string; status_label?: string }>;
                 };

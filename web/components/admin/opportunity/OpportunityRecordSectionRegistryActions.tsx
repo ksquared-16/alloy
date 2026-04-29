@@ -73,10 +73,21 @@ export default function OpportunityRecordSectionRegistryActions({
         if (departmentId) qs.set("department_id", departmentId);
         if (workUnitId) qs.set("work_unit_id", workUnitId);
         const url = `/api/admin/actions?${qs.toString()}`;
+        const timingEnabled = process.env.NODE_ENV !== "production";
+        const t0 = timingEnabled ? performance.now() : 0;
         dedupeAdminFetchWithTtl(url, workspaceDataFetchInit(), 1500)
             .then((r) => r.json())
             .then((j: { actions?: ResolvedActionsBySlot }) => {
                 if (!cancelled) setBySlot(j.actions ?? null);
+                if (timingEnabled) {
+                    console.info("[timing][drawer]", {
+                        key: `opportunities:${opportunityId}`,
+                        phase: "record_section_actions_fetch",
+                        section_key: sectionKey,
+                        url,
+                        ms: Math.round((performance.now() - t0) * 10) / 10,
+                    });
+                }
             })
             .catch(() => {
                 if (!cancelled) setBySlot(null);
