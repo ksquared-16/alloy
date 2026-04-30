@@ -16,3 +16,17 @@ supabase/.branches/
 .venv/
 
 **/.venv/
+
+# Python
+__pycache__/
+*.pyc
+**/__pycache__/
+**/*.pyc
+
+# Node
+node_modules/
+**/node_modules/
+
+# Vercel
+.vercel/
+**/.vercel/
