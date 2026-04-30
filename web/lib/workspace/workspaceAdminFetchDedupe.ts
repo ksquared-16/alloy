@@ -1,6 +1,10 @@
 /**
  * Coalesces identical in-flight GETs so mounts that share the same URL
  * (e.g. sidebar + workspace data hook) do not double-hit the API on cold navigation.
+ *
+ * Important: callers must receive **independent clones** — the Fetch spec allows only one consumer
+ * to read each Response body stream. Returning the raw shared Response causes the second `.json()`
+ * to fail or yield `{}`, breaking department lookup ("Department not found for this organization").
  */
 const inflight = new Map<string, Promise<Response>>();
 
@@ -13,7 +17,7 @@ export function dedupeAdminFetch(input: string, init?: RequestInit): Promise<Res
         });
         inflight.set(key, p);
     }
-    return p;
+    return p.then((res) => res.clone());
 }
 
 type CachedResponse = { atMs: number; status: number; statusText: string; headers: [string, string][]; bodyText: string };
