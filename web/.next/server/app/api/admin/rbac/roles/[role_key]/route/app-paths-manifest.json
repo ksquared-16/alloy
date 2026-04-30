@@ -1,0 +1,3 @@
+{
+  "/api/admin/rbac/roles/[role_key]/route": "app/api/admin/rbac/roles/[role_key]/route.js"
+}

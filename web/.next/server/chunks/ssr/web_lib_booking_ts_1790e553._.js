@@ -1,0 +1,3 @@
+module.exports=[96107,a=>{"use strict";let b=process.env.NEXT_PUBLIC_BOOKING_PATH||"/book";function c(a){let{phone:c,email:d,firstName:e,lastName:f,estimatedPrice:g}=a,h=c.trim(),i=h.replace(/\D/g,"");10===i.length?h="+1"+i:h.startsWith("+")||(h="+"+i);let j=new URLSearchParams({phone:h,email:d.trim(),first_name:e.trim(),last_name:f.trim()});return void 0!==g&&g>0&&j.append("estimated_price",g.toFixed(2)),`${b}?${j.toString()}`}a.s(["buildBookingUrl",()=>c])}];
+
+//# sourceMappingURL=web_lib_booking_ts_1790e553._.js.map

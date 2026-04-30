@@ -1,5 +1,35 @@
 Canonical sprint document path — use everywhere (normalize references; Git or local FS may show different casing): docs/Sprints/05_2026/Communications.txt
 
+GLOBAL IMPLEMENTATION RULES
+
+- Do NOT duplicate existing functionality.
+- Do NOT replace existing tables or flows unless explicitly instructed.
+- Prefer extension over replacement during V1.
+- All new communication_* tables must coexist with existing messages/messages_outbox until migration is explicitly defined.
+- Do NOT remove or break:
+  - workflow_events
+  - existing workflowRun.ts behavior
+  - queue system
+  - KPI system
+- All new logic must integrate with existing event emission patterns.
+- If uncertain, inspect existing code before adding new structures.
+
+REQUIRED OUTPUT FOR EACH CARD:
+
+At the end of each card, Cursor must output:
+
+1. Files created/modified
+2. Supabase migrations created
+3. Environment variables required:
+   - local (.env.local)
+   - Vercel
+   - backend (Render or equivalent)
+4. External setup required:
+   - Twilio
+   - Resend
+5. What is working vs stubbed
+6. Any assumptions made
+
 Card 0 — Communications Audit / Context Intake
 Audit the current Alloy repo for any existing communications/messaging/SMS/email/in-app code.
 
@@ -164,5 +194,616 @@ Do not build full capability/scope system yet, but leave hooks.
 9. GHL
 Decision: GHL send_conversation_sms remains outside tenant communications V1 unless routed through the same communication provider abstraction and canonical message store.
 
-10. Implementation stop condition
-Do not proceed to implementation Cards 2+ until this Card 1.5 is reviewed and explicitly approved.
+10. Sender identity model
+V1 must be designed to support sender identity resolution at multiple scopes:
+1. Org-level default sender
+2. Location-level sender
+3. User-level connected sender
+
+Resolution order:
+user-level sender > location-level sender > org-level sender
+
+Implementation may start with org-level or location-level sending, but the schema and provider abstraction must not block user-level Gmail/Outlook-style sending later.
+
+User-connected email is not required for the first implementation slice, but it is a required future direction.
+
+11. Implementation stop condition
+Do not proceed to implementation Cards 2+ until this Card 1.5 is reviewed and explicitly approved AND CARD 1.6 — Decision Lock / Build Readiness is explicitly approved (see CARD 1.6 implementation gate).
+
+CARD 1.6 — Decision Lock / Build Readiness
+
+Purpose:
+Lock final decisions before implementation Cards 2+.
+
+Decisions:
+
+1. Sender identity model
+Communications must support sender identity resolution at:
+- org level
+- location level
+- user level
+
+Resolution order:
+user sender > location sender > org sender
+
+V1 implementation may start with org/location senders, but schema/provider abstraction must not block user-connected Gmail/Outlook sending later.
+
+2. Email provider
+Use Resend for V1 system/org/location outbound email unless explicitly changed.
+Gmail/Outlook user-connected sending is future provider adapter work, not first implementation slice.
+
+3. SMS provider
+Use Twilio through org/location/user-capable provider bindings.
+Do not use global TWILIO_* env vars as tenant communications source of truth.
+
+4. Secret storage
+Provider records store secret_ref only.
+No API keys/auth tokens in plaintext jsonb.
+
+5. Event naming
+Use existing message_* event names:
+- message_queued
+- message_sent
+- message_delivered
+- message_failed
+- message_received
+- message_read
+
+6. Implementation gate
+Do not proceed to Cards 2+ until this card is explicitly approved.
+
+Do not implement code, migrations, APIs, or UI.
+
+⸻
+
+IMPLEMENTATION CARDS 2–8 (post–CARD 1.6 approval)
+
+Global constraints (all cards):
+- Do NOT modify or remove public.messages or public.messages_outbox (compatibility/migration paths only; CARD 1.5).
+- Do NOT break workflow_events semantics or break existing workflowRun.ts behavior; prefer extending with adapters or parallel write-out to communication_* where the card allows.
+- Do NOT duplicate the Twilio outbound pipeline unless unavoidable; prefer extending backend/app/services/message_sender.py, backend/app/integrations/twilio_client.py, and POST /internal/messages/process in backend/app/routes/messages_sender.py (registered in backend/app/server.py).
+- Do NOT build a parallel activity system; emit message_* into workflow_events only (web/lib/emitEvent.ts pattern; compare backend/app/services/activity_workflow_events.py for SMS lifecycle today).
+- Align event names with CARD 1.6: message_queued, message_sent, message_delivered, message_failed, message_received, message_read.
+- Secret storage: secret_ref only on bindings; no plaintext API keys in jsonb (CARD 1.6).
+
+⸻
+
+CARD 2 — Communications Schema Foundation
+
+Purpose:
+Introduce communication_* tables without breaking existing messages/messages_outbox.
+
+Scope:
+Create (Supabase migration under supabase/migrations/):
+- communication_threads
+- communication_messages
+- communication_provider_bindings
+- communication_message_reads
+
+Requirements:
+- ALL tables must include org_id (NOT NULL where appropriate; threads/messages/bindings/reads org-scoped).
+- Indexes (minimum) — checklist across tables:
+  - (org_id) on threads, messages, bindings, reads as query patterns require
+  - (thread_id) on communication_messages (and FK indexes as needed)
+  - (primary_entity_type, primary_entity_id) on communication_threads (+ org_id prefix if selective)
+  - (status) on communication_messages (+ org_id/thread_id composites if needed for worker dequeue)
+  - Extra: communication_provider_bindings lookup for inbound To → binding (+ org_id)
+  - Extra: communication_message_reads (message_id), (user_id) or composite PK
+- communication_messages must support:
+  - channel: sms, email, in_app
+  - direction: inbound, outbound
+  - status lifecycle (draft → queued → … per design; align with send worker)
+  - provider + provider_message_id nullable
+  - workflow_run_id nullable (compatibility with web/lib/workflowRun.ts linkage)
+- communication_threads must support entity linking (primary_entity_type, primary_entity_id, org_id).
+- Sender scope hooks: schema must allow future user_id / location_id on bindings or threads without blocking CARD 3 (nullable columns or metadata pattern — document choice in OUTPUT).
+
+DO NOT:
+- ALTER public.messages or messages_outbox
+- Remove existing tables
+- Add app API routes in this card (schema only unless repo convention bundles RLS-only)
+
+REQUIRED OUTPUT:
+- files changed (list migration filename(s), any types/docs)
+- migrations: single migration preferred; reversible strategy note if any
+- brief schema decisions write-up (threading key columns, RLS model, why reads table shape)
+- env vars: typically none for schema-only card
+- external setup: none
+- what works vs stubbed: tables + RLS policies exist vs no application reads yet
+
+Validation:
+- supabase migration runs clean locally/CI against baseline
+- PostgREST / existing app queries unchanged; smoke test admin pages that touch messages untouched
+- RLS reviewed: org isolation pattern consistent with messages_outbox-style policies where applicable
+
+⸻
+
+CARD 3 — Provider Binding + Sender Resolution
+
+Purpose:
+Determine which provider and sender identity to use for a pending send or inbound correlation.
+
+MUST INSPECT FIRST:
+- backend/app/settings.py — existing TWILIO_* / INTERNAL_CRON_TOKEN patterns (legacy only per CARD 1.6)
+- backend/app/integrations/twilio_client.py — current send surface
+- backend/app/supabase_client.py (or equivalent) — service reads / PostgREST
+- web/.env.example or docs — INTERNAL_MESSAGES_PROCESS_URL, INTERNAL_CRON_TOKEN (paired with backend/app/routes/messages_sender.py)
+- web/ env patterns — createAdminClient vs service role usage in API routes (see web/lib/supabaseAdmin.ts)
+
+Scope:
+- Server-side resolver module(s) (suggested web/lib/communications/ or backend/app/services/communications/) that, given org_id + optional location_id + optional user_id + channel:
+  - selects active communication_provider_binding
+  - applies hierarchy: user > location > org (V1: implement org + location; stub user with explicit TODO + type-safe extension point)
+- secret_ref resolution interface only (no secret material in logs); actual secret fetch deferred to send card or platform-specific helper
+- Document binding precedence when multiple rows exist (e.g. primary flag vs effective-dated).
+
+DO NOT:
+- Send messages or HTTP to Twilio/Resend from this card
+- Introduce a second global config mechanism duplicating Supabase env
+
+REQUIRED OUTPUT:
+- files changed
+- migrations (only if resolver needs columns/indexes missed in Card 2)
+- env vars: LOCAL — none required if pure DB + code; BACKEND — document if feature flags added
+- external setup: none
+- what works vs stubbed: org+location binding resolution tested vs user-level returns “not implemented” path
+
+Validation:
+- Unit or integration fixtures: mocked bindings → correct hierarchy for org-only, location overrides org, stub user yields documented behavior
+- No regression: existing booking/workflow paths unchanged
+
+⸻
+
+CARD 4 — Message Creation + Events
+
+Purpose:
+Create rows in communication_* and emit workflow_events without sending via providers.
+
+Scope:
+- Service/helper to resolve or create communication_threads per CARD 1.5 key:
+  org_id + primary_entity_type + primary_entity_id + channel + recipient identity (normalize recipient key in code; document format e.g. E.164 / email lowercased)
+- Insert communication_messages (outbound) with status appropriate for pre-send (e.g. queued or draft — document)
+- Emit message_queued via web/lib/emitEvent.ts (createAdminClient insert to workflow_events) with payload including communication_message_id, thread_id, channel, entity pointers; entity_type/entity_id on row should align with thread primary entity for activity consumers
+- Optional thin adapter from web/lib/workflowRun.ts (create_message / send_message cases near public.messages inserts): dual-write communication_* OR feature-flagged helper — must not remove or break existing public.messages inserts or triggerInternalMessagesProcess behavior (extend only)
+
+MUST:
+- Reuse workflow_events only (no new activity table)
+- Match patterns in web/lib/emitEvent.ts and existing executeWorkflowRun logging
+
+DO NOT:
+- Call Twilio, Resend, or internal send worker
+- Modify public.messages / messages_outbox schema
+
+REQUIRED OUTPUT:
+- files changed (e.g. web/lib/communications/*, workflowRun.ts touch if any, emitEvent callers)
+- migrations: only if Card 2 missed columns
+- env vars: none unless feature flag
+- external setup: none
+- what works vs stubbed: thread resolve + insert + message_queued vs full workflow integration breadth
+
+Validation:
+- Run workflow or API path → row in communication_messages + matching thread + workflow_events row with event_type message_queued (and payload keyed per CARD 1.6)
+- /api/admin/workflow-events GET still works; workflowRun.ts executes without thrown regression on unaffected actions
+
+⸻
+
+CARD 5 — Outbound Send Pipeline
+
+Purpose:
+Deliver outbound SMS and email using bindings; extend rather than fork Twilio SMS processing.
+
+MUST INSPECT:
+- backend/app/services/message_sender.py — process_queued_messages, PostgREST read/patch pattern
+- backend/app/integrations/twilio_client.py — messaging_service_sid usage
+- backend/app/routes/messages_sender.py — POST /internal/messages/process — x-cron-token / INTERNAL_CRON_TOKEN
+- web/lib/workflowRun.ts — INTERNAL_MESSAGES_PROCESS_URL + triggerInternalMessagesProcess after enqueue (keep compatible when adding communication_* processing)
+
+CRITICAL:
+- Prefer: consumer reads communication_messages (status queued, channel sms) AND uses resolver (Card 3) + Twilio send; PATCH communication_messages; optionally keep legacy public.messages in sync ONLY via explicit compat layer if product requires — do not rip out message_sender wholesale.
+- Alternative acceptable path: message_sender invokes shared send_sms after resolving credential from binding (not global env) for tenant rows; global TWILIO_* remains for legacy Alloy Services rows only (CARD 1.6).
+- Email: new Resend adapter module (e.g. backend/app/integrations/resend_client.py or web API route worker) reading binding secret_ref; first slice may process communication_messages channel=email only.
+
+Events (after persistence):
+- message_sent, message_failed, message_delivered (delivered when webhook/callback confirms or Twilio status — document)
+
+REQUIRED OUTPUT:
+- files changed
+- migrations: if status values or webhook id columns needed
+- env vars:
+  LOCAL (web .env.local):
+  - RESEND_API_KEY=
+  - RESEND_FROM_EMAIL=
+  VERCEL:
+  - same as local for preview/prod secrets
+  BACKEND (Render or local backend .env):
+  - RESEND_API_KEY=
+  - RESEND_FROM_EMAIL=
+  - (legacy TWILIO_* only for non-tenant paths if still required)
+  - INTERNAL_CRON_TOKEN= (existing pattern for process trigger)
+  - INTERNAL_MESSAGES_PROCESS_URL or web-trigger pattern if unchanged
+- external setup (RESEND): account, domain verify, API key creation
+- what works vs stubbed: SMS via binding fully working vs email partial vs delivered event only SMS
+
+Validation:
+- Outbound SMS: communication_messages transitions queued → sent/failed; message_sent or message_failed in workflow_events
+- No duplicate SID writes to two pipelines unless documented compat
+- Cron POST /internal/messages/process still authenticates with x-cron-token
+
+⸻
+
+CARD 6 — Inbound Message Pipeline (Inbound Receive Pipeline)
+
+Purpose:
+Receive inbound SMS safely with deterministic tenant routing.
+
+MUST INSPECT:
+- backend/app/routes/sms_inbound.py — current POST /sms/inbound → Supabase POST .../messages
+- backend/app/server.py — router prefix /sms
+
+Routing (CARD 1.5 / 1.6):
+- binding_id in path (e.g. POST /sms/inbound/{binding_id}) OR verified To → communication_provider_bindings lookup
+- Explicitly forbid org inference from phone/contact similarity alone
+
+Scope:
+- Insert communication_messages inbound + resolve/create communication_threads
+- Emit message_received to workflow_events (payload includes communication_message_id, thread_id, channel, previews)
+- Migrate Twilio webhook console URL to new route while documenting legacy endpoint during transition if needed — do NOT delete legacy behavior until cutover validated
+
+DO NOT:
+- Remove old sms_inbound storage to public.messages in the same PR unless phased; prefer dual-write documented in OUTPUT if interim required (constraint: no schema removal on messages)
+
+REQUIRED OUTPUT:
+- files changed (sms_inbound.py, routes, webhook docs)
+- migrations: inbound binding lookup indexes if missing
+- env vars: Twilio webhook config is console-side; service may need SIGNING_SECRET per binding reference
+- external setup (TWILIO):
+  - webhook URL format (example: https://<BACKEND>/sms/inbound/<binding_uuid>)
+  - messaging service inbound handler points to URL
+  - phone number / Messaging Service linkage to Alloy backend
+  - Validate request signature using Twilio auth token referenced via secret_ref (document)
+- what works vs stubbed: inbound persisted + event vs optional dual-write to public.messages TBD honest status
+
+Validation:
+- Twilio test SMS → inbound row has correct org_id from binding_id or To mapping
+- Thread reused per CARD 1.5 semantics
+- message_received emitted; web/app/api/admin/activity/route.ts (GET) shows event when entity_type/entity_id match thread primary entity — compare web/app/api/admin/workflow-events/route.ts for broader listing
+
+⸻
+
+CARD 7 — Thread Read API + Drawer UI
+
+Purpose:
+Expose communications in UI for operators.
+
+Scope:
+- Next.js Route Handlers (suggested paths under web/app/api/admin/communications/):
+  - GET threads filtered by entity_type + entity_id + org context (reuse web/lib/admin/getAdminContext.ts, adminContextFailureResponse; web/lib/adminAuth.ts requireAdminOrOps)
+  - GET messages by thread_id with pagination
+- Drawer UI panel: integrate into web/components/admin/AdminEntityDrawer.tsx (activity-adjacent tab or section); follow fetch patterns mirroring activity (web/app/api/admin/activity/route.ts). If product canonicalizes adminV2 only, reuse patterns from web/app/adminV2/**/* without bypassing org checks.
+- Simple composer — only if safe and permission-gated: POST to guarded route chaining Card 4/5; otherwise omit and document stubbed
+
+DO NOT:
+- Full inbox, templates editor, bulk send, campaign builder
+
+REQUIRED OUTPUT:
+- files changed
+- migrations: usually none
+- env vars: none new beyond existing admin auth
+- external setup: none
+- what works vs stubbed: read-only thread list + messages vs composer off or behind flag
+
+Validation:
+- Messages render for opportunity/job entity (types align with normalizeEntityTypeParam patterns used elsewhere); org scoping prevents cross-tenant IDs
+- No UI regressions on drawer tabs; Lighthouse/manual smoke on adminV2 pages if touched (e.g. web/app/adminV2/**/* blocks)
+- N+1 check: thread list + message list endpoints use bounded selects (.select columns, limits), avoid per-row hydration loops
+
+⸻
+
+CARD 8 — Final Doctrine / Security / Setup Audit
+
+Purpose:
+Close the loop: doctrine, safety, runbooks.
+
+Audit checklist:
+1. org isolation — RLS/API every query scoped by ctx.org_id
+2. no global TWILIO_* as tenant SMS source of truth (CARD 1.6)
+3. no plaintext secrets in DB jsonb bindings
+4. message_* events — correct types and payloads; no orphaned emits
+5. no duplicate outbound SMS pipelines without documented rationale
+6. no parallel activity system beyond workflow_events
+7. obvious N+1/API performance pass on Card 7 routes
+8. local build — cd web && npm run lint && npm run build; backend/tests or python -m py_compile on touched modules import smoke
+
+REQUIRED OUTPUT:
+1. files changed — consolidated list across Cards 2–8
+2. migrations created — list with rollback notes
+3. APIs added — table of method/path/purpose/auth
+4. UI added — components/routes summary
+
+ENV SETUP:
+LOCAL (web/.env.local, backend/.env examples):
+- All admin + RESEND_* + INTERNAL_CRON_TOKEN + legacy TWILIO_* if still used for Alloy Services
+VERCEL / BACKEND prod:
+- Mirrors with secret names documented
+
+EXTERNAL SETUP:
+TWILIO — exact steps: Messaging Service, numbers, webhook URL binding_id, credential policy for tenants
+RESEND — exact steps: domain, API key, from address
+
+WORKING STATUS (explicit yes/no):
+- SMS send
+- SMS receive
+- Email send
+- UI threads/messages visible
+
+RISKS / FOLLOW UPS:
+- User-connected Gmail/Outlook adapter
+- GHL send_conversation_sms alignment (CARD 1.5 item 9)
+- Rate limits, caps
+- Dual-write sunset for public.messages
+
+⸻
+End implementation cards — execute only after CARD 1.6 approval; each card merges with REQUIRED OUTPUT filled in PR descriptions.
+
+⸻
+
+IMPLEMENTATION COMPLETION — Cards 2–8 (executed in one pass)
+
+CARD 2 — Schema Foundation
+- Added supabase/migrations/20260430254100_communications_v1_foundation.sql: communication_provider_bindings, communication_threads, communication_messages, communication_message_reads with org_id, indexes, RLS (org member SELECT + service_role ALL), grants.
+- Assumptions: primary_entity_id is uuid (matches workflow_events.entity_id). Thread uniqueness omits location_id (location only in message metadata).
+- Skipped: altering public.messages / messages_outbox (unchanged per constraint).
+
+CARD 3 — Provider binding + sender resolution
+- backend/app/services/communications/secret_ref.py — env:VAR, legacy_global_twilio, unconfigured (no invented vault).
+- backend/app/services/communications/binding_resolver.py — org/location precedence; user scope only if rows exist (stub).
+- Skipped: actual secret material; no Twilio/Resend calls.
+
+CARD 4 — Message creation + events
+- web/lib/communications/* (recipientKey, resolvePrimaryEntity, mirrorQueuedMessage, communicationsEnabled).
+- Opt-in dual-write from create_message when COMMUNICATION_DUAL_WRITE=1|true|yes: inserts communication_threads/messages + emitEvent message_queued; never removes legacy public.messages path.
+- Skipped: send_message mirror (would need broader recipient resolution); in_app channel mirror default treated like email key normalization fallback.
+
+CARD 5 — Outbound pipeline
+- Extended POST /internal/messages/process (backend/app/routes/messages_sender.py): legacy public.messages SMS when TWILIO_* present; skips legacy with logged warning when Twilio env missing but still processes communication_messages (enables email-only setups).
+- backend/app/services/communication_message_sender.py + communication_workflow_events.py — Twilio/Rsend/in_app path; emits message_sent, message_failed, message_delivered (SMS optimistic parity note in payload).
+- backend/app/integrations/twilio_client.py — send_sms_with_credentials binding path; legacy send_sms unchanged.
+- backend/app/integrations/resend_client.py — minimal Resend HTTP API.
+- Merged JSON response aggregates processed/sent/failed for backward-compat with workflowRun trigger parsing.
+
+CARD 6 — Inbound pipeline
+- backend/app/routes/sms_inbound.py — POST /sms/inbound/{binding_id} registered before /sms/inbound; dual-write canonical via persist_inbound_communication_sms + legacy public.messages insert + existing emit_message_lifecycle_event preserved.
+- backend/app/services/communication_inbound.py — threads by contact phone or surrogate UUID; message_received via communication_workflow_events helper.
+- Skipped: Twilio signature validation (follow-up: validate with token from secret_ref env:*).
+
+CARD 7 — Thread read API + drawer UI
+- web/app/api/admin/communications/threads/route.ts GET; web/app/api/admin/communications/threads/[threadId]/messages/route.ts GET (org scoped).
+- web/components/admin/communications/CommunicationsDrawerSection.tsx — read-only; composer stubbed per sprint.
+- web/lib/entityPresentation.ts — communications tab on opportunities + jobs; web/components/admin/AdminEntityDrawer.tsx panel + Job V2 tab allow list.
+- Skipped: full inbox, templates, bulk send.
+
+CARD 8 — Audit / outputs (this section)
+1. Files changed (high level)
+- supabase/migrations/20260430254100_communications_v1_foundation.sql
+- backend/app/routes/messages_sender.py, backend/app/routes/sms_inbound.py
+- backend/app/services/message_sender.py (unchanged logic; caller composes response)
+- backend/app/services/communication_message_sender.py, communication_inbound.py, communication_workflow_events.py
+- backend/app/services/communications/{__init__.py,secret_ref.py,binding_resolver.py}
+- backend/app/integrations/twilio_client.py, resend_client.py
+- web/lib/communications/*.ts, web/lib/workflowRun.ts, web/lib/entityPresentation.ts
+- web/app/api/admin/communications/**/*.ts
+- web/components/admin/communications/CommunicationsDrawerSection.tsx
+- web/components/admin/AdminEntityDrawer.tsx
+
+2. Migrations
+- 20260430254100_communications_v1_foundation.sql (rollback: drop tables in reverse FK order if needed).
+
+3. APIs added
+- GET /api/admin/communications/threads — admin+ops, org from getAdminContext; query entity_type, entity_id
+- GET /api/admin/communications/threads/[threadId]/messages — admin+ops, org must own thread
+
+4. UI added
+- Drawer tab “Communications” (opportunities, jobs including Job V2 modal allow list) + CommunicationsDrawerSection read-only panel.
+
+5. Env variables
+- LOCAL / VERCEL (web): COMMUNICATION_DUAL_WRITE (optional, enable canonical mirror from create_message); existing INTERNAL_MESSAGES_PROCESS_URL, INTERNAL_CRON_TOKEN
+- LOCAL / RENDER (backend): TWILIO_* (legacy pipeline), INTERNAL_CRON_TOKEN, RESEND_API_KEY, RESEND_FROM_EMAIL (Resend default from when binding config omits from_email), optional env names referenced by binding secret_ref (e.g. env:TWILIO_AUTH_TOKEN for per-tenant token)
+
+6. Twilio setup
+- Legacy: keep POST https://<BACKEND>/sms/inbound on Messaging Service for existing Alloy Services traffic.
+- Binding route: configure additional webhook URL https://<BACKEND>/sms/inbound/<binding_uuid> on the number or service used for that org; insert communication_provider_bindings row with org_id, inbound_to_e164 matching the receiving number, channel sms, provider twilio, secret_ref legacy_global_twilio OR per-tenant env:* + config twilio_account_sid/messaging_service_sid.
+
+7. Resend setup
+- Create Resend account, verify sending domain, API key in env (e.g. RESEND_API_KEY); optional binding with provider resend, secret_ref env:RESEND_API_KEY, config { "from_email", "subject" }.
+
+8. What works
+- Schema + RLS definitions in migration (apply via Supabase CLI / deploy).
+- Backend processes communication_messages queued outbound (SMS via binding or legacy_global_twilio path; email Resend; in_app marks sent).
+- Legacy public.messages pipeline unchanged when Twilio env set; cron response shape backward compatible at top level.
+- Inbound binding route stores canonical + legacy; message_received (CARD 1.6) for canonical path.
+- Admin API + drawer read threads/messages for opportunities/jobs when data exists.
+- Opt-in dual-write + message_queued when env flag set and org+entity resolvable.
+
+9. Stubbed / not done
+- Twilio request signature validation on inbound binding route.
+- User-scoped bindings (schema hooks only).
+- Real secret manager / Supabase Vault — only secret_ref conventions.
+- send_message path mirror to communication_*.
+- Composer / outbound from UI.
+- Gmail/Outlook user sender (CARD 1.6 future).
+
+10. Risks / follow-ups
+- Apply migration before runtime depends on new tables.
+- communication_messages SMS requires active binding per org; legacy_global_twilio binding row bridges Alloy Services during migration.
+- Optimistic message_delivered for SMS may not match carrier reality until status webhooks.
+- Thread entity for unknown inbound uses surrogate UUID — may not align with opportunity-centric activity until contact resolution improves.
+- GHL send_conversation_sms still separate (CARD 1.5/1.6).
+
+11. Commands run and results
+- cd web && npm run lint — EXIT 1 (many pre-existing repo issues; targeted eslint on new communications files: PASS).
+- cd web && npm run build — EXIT 0 (≈33s).
+- python3 -m py_compile (touched backend modules) — EXIT 0.
+
+⸻
+POST-CARDS-2–8 — Planning / verification roadmap (Cards 9–14)
+
+Do not implement these cards unless explicitly tasked. Cards 10–14 are specifications only unless a card is picked up independently.
+
+CARD 9 — Communications Review + Smoke Test
+
+Purpose:
+Review Cards 2–8 implementation and verify the foundation behaves as intended before deepening rollout (staging, dual-write, composer).
+
+Scope (no net-new product features during this card):
+1. Inspect all files changed across Cards 2–8 for regressions vs doctrine.
+2. Confirm no regression to existing public.messages / messages_outbox behavior (writes, cron, webhook).
+3. Confirm migration applies cleanly (first apply on env; rollback notes respected).
+4. Confirm communication_* RLS and API org scoping (ctx.org_id, service paths).
+5. Confirm COMMUNICATION_DUAL_WRITE=false leaves legacy workflow create_message paths unchanged (no canonical rows required).
+6. Confirm COMMUNICATION_DUAL_WRITE=true (when prerequisites met) yields communication_thread + communication_message + workflow_events.message_queued where resolver succeeds.
+7. Confirm GET /api/admin/communications/threads (and nested messages route) semantics for opportunities and jobs.
+8. Confirm drawer Communications tab renders safely when zero threads exist.
+9. Confirm backend import/py_compile sanity on touched modules.
+10. List blockers before enabling broader staging rollout.
+
+Rules:
+Do not build new features in this card; composer remains out of scope; do not refactor provider internals except to fix correctness bugs surfaced by review.
+
+REQUIRED OUTPUT:
+- pass/fail checklist with evidence
+- exact commands run (build, lint scope, migrate, curls, manual UI notes as applicable)
+- bugs found vs expected gaps (explicitly deferred items from Card 8)
+- recommended fixes before staging
+- suggested next numbered card(s)
+
+⸻
+
+CARD 10 — Staging Migration + RLS Verification
+
+Purpose:
+Apply and verify communications migration safely in staging.
+
+Scope:
+- Apply supabase/migrations/20260430254100_communications_v1_foundation.sql
+- Verify communication_* tables exist
+- Verify RLS behavior:
+  - normal authenticated org member can SELECT own org rows
+  - cannot SELECT other org rows
+  - anon cannot mutate rows
+  - service role / API paths can insert where expected (document which clients use service key vs user JWT)
+
+REQUIRED OUTPUT:
+- commands run (Supabase CLI, SQL, dashboards)
+- migration result (applied version, timestamps, failures)
+- RLS test SQL and condensed results per scenario above
+- blockers (mis-grants, policy gaps, JWT role quirks)
+
+DO NOT:
+- Modify provider send/receive logic in this card unless a migration/policy defect blocks apply.
+
+⸻
+
+CARD 11 — Dual-Write Rollout + Observability
+
+Purpose:
+Safely enable COMMUNICATION_DUAL_WRITE and verify canonical communication rows are created without breaking legacy messages.
+
+Scope:
+- Keep default false in all shared envs until validation passes
+- Add or confirm visibility of mirror skip reasons (logging / structured logs) where canonical mirror skips (org_id missing, unresolved primary entity, channel out of SMS/email allowance, insert failure)
+- Confirm create_message legacy path unchanged (public.messages insert + downstream triggers unchanged)
+- Enable COMMUNICATION_DUAL_WRITE only in local/staging after migration + smoke
+- Verify communication_thread + communication_message + workflow_events.message_queued when enabled and prerequisites satisfied
+
+REQUIRED OUTPUT:
+- env changes documented (exact var names / values per environment class)
+- test workflow/action used (which workflow, payload shape)
+- representative rows created (table + key columns cited)
+- skip reasons observed in logs vs expected
+- recommendation: remain enabled in staging yes/no / criteria to disable
+
+DO NOT:
+- Enable in production-wide envs prior to Cards 10 + 14 sign-off thresholds.
+
+⸻
+
+CARD 12 — Send Message Composer V1
+
+Purpose:
+Allow users to send a message from the drawer using the canonical communications path.
+
+Scope:
+- Add guarded composer to Communications tab (reuse drawer patterns + org context)
+- Support email/in_app first when SMS binding is unavailable or incomplete; UX must degrade gracefully when no channel is usable
+- Channel picker shows only bindings/channels that are available for the current org/context (consistent with resolver/binding docs)
+- POST route creates message via existing canonical service path (reuse backend/canonical layering used for outbound queued rows + events — do not invent a parallel pipe)
+- Must emit workflow_events aligned with outbound queue semantics (minimum: message_queued or approved equivalent per locked event naming doctrine)
+- Do not build full inbox, templates UX, bulk send, or AI draft in this card
+
+Permissions:
+- admin/ops allowed for V1 sender
+- Leave a permission hook keyed for communications.send (implementation may defer enforcement but surface must exist in route/guard stubs)
+
+REQUIRED OUTPUT:
+- files changed (summarized table)
+- API route(method/path/auth)
+- UI behavior bullets (states: no bindings, composing, queued, validation errors)
+- validation steps manual + automated
+
+DO NOT:
+- Replace legacy messages_outbox/workflows wholesale; coexistence rules from Cards 2–8 still apply unless an explicit deprecation card supersedes them.
+
+⸻
+
+CARD 13 — Twilio/Resend Provider Setup Runbook + Binding Seed
+
+Purpose:
+Document and create the minimum setup path for real provider testing (engineering + onboarding).
+
+Scope:
+- Define exact env vars for local, Vercel, Render/backend consumers (mapping to secret_ref where applicable)
+- Define how operational users create/update communication_provider_bindings rows safely
+- Provide SQL seed/example templates (placeholders only, no secrets) for:
+  - Resend org-level email binding
+  - Twilio org-level and location-scoped SMS binding examples where schema supports scope
+- Resend onboarding: account → domain verification → API key issuance → sanctioned sender/from identity alignment with binding config
+- Twilio onboarding: number or Messaging Service → inbound webhook URL with binding_id suffix → outbound credential mapping via secret_ref (env:…) — enumerate required identifiers (Account SID, auth token secret ref naming, Messaging Service SID in config JSON as non-secret refs only where appropriate)
+
+Constraints:
+Do not document storage of plaintext API keys/auth tokens inside jsonb; follow secret_ref doctrine from Card 1.5–1.6.
+
+REQUIRED OUTPUT:
+- setup runbook appended to this sprint doc or scoped docs/technical path + link line here
+- seed SQL snippets with placeholders (ORG_ID, BINDING_UUID, LOCATION_ID nullable, etc.)
+- env checklist tables (environment × variable × owner system)
+
+DO NOT:
+- Commit real tenant credentials or webhook signing secrets into the repo.
+
+⸻
+
+CARD 14 — Production Hardening / Security Audit
+
+Purpose:
+Enumerate blockers and safe partial rollouts before production-grade communications usage.
+
+Audit topics (explicit pass/fail or risk rating each):
+1. Twilio webhook signature verification (binding route + legacy if still exposed publicly)
+2. Resend webhook / bounce / complain handling (future path; document minimally if out of scope)
+3. secret_ref limitations and rotation story
+4. provider credential leakage risks (logs, error payloads, client-visible errors)
+5. rate limiting / send caps / abuse controls
+6. opt-out / consent / regulatory alignment (document known gaps)
+7. org/location/user sender resolution gaps vs product promises
+8. legacy public.messages / messages_outbox sunset criteria (audit only; execution is a separate program)
+
+REQUIRED OUTPUT:
+- must-fix before production (ordered)
+- safe-for-staging checklist (what can ship with mitigation)
+- deferred post-V1 items (tracked list with rationale)
+
+DO NOT:
+- Treat staging sign-off as production sign-off; keep production kill switches documented (feature flags, env toggles).
+
+⸻
+End roadmap cards Cards 9–14 — execute only when each card is explicitly approved and tasked.

@@ -9,11 +9,13 @@ import {
 } from "@/components/admin/workspace/WorkspaceRootDepartmentGrid";
 import { isGrowthSliceDepartmentKey } from "@/lib/workspace/growthSliceDepartments";
 import type { KPIVm } from "@/lib/ui-v2/workspace-types";
+import type { WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
 import {
     buildWorkspaceRootDepartmentTileRollupLine,
     buildWorkspaceRootOrgOpportunityKpis,
     type DepartmentLifecycleKpisPayload,
 } from "@/lib/workspace/viewModels/workspaceRootRollup";
+import { resolveKpisForWorkspace } from "@/lib/kpi/resolver";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { AdminV2RouteLoadingState } from "@/components/admin/workspace/AdminV2RouteLoadingState";
 
@@ -21,6 +23,7 @@ async function loadWorkspaceRollup(departments: WorkspaceRootDepartmentRow[]): P
     metrics: WorkspaceRootMetrics;
     deptTileStats: WorkspaceRootDeptTileStats;
     orgOpportunityKpis: KPIVm[];
+    growthSnapshots: Array<{ id: string; key: string; payload: DepartmentLifecycleKpisPayload | null }>;
 }> {
     const fetchInit = workspaceDataFetchInit();
     let workUnitsRes: Response | null = null;
@@ -98,7 +101,7 @@ async function loadWorkspaceRollup(departments: WorkspaceRootDepartmentRow[]): P
         workUnits: workUnitsRes?.ok && Array.isArray(wuJson.items) ? wuJson.items.length : null,
     };
 
-    return { metrics, deptTileStats, orgOpportunityKpis };
+    return { metrics, deptTileStats, orgOpportunityKpis, growthSnapshots };
 }
 
 /**
@@ -113,6 +116,8 @@ export default function AdminV2WorkspaceIndexPage() {
     const [metrics, setMetrics] = useState<WorkspaceRootMetrics | null>(null);
     const [deptTileStats, setDeptTileStats] = useState<WorkspaceRootDeptTileStats>({});
     const [orgOpportunityKpis, setOrgOpportunityKpis] = useState<KPIVm[] | null>(null);
+    /** `undefined` = use shell legacy merge; otherwise full strip from placement resolver (after successful placement fetch). */
+    const [workspaceKpiStrip, setWorkspaceKpiStrip] = useState<KPIVm[] | undefined>(undefined);
     const [metricsLoading, setMetricsLoading] = useState(true);
 
     useEffect(() => {
@@ -150,20 +155,50 @@ export default function AdminV2WorkspaceIndexPage() {
                     setMetrics({ departments: null, workUnits: null });
                     setDeptTileStats({});
                     setOrgOpportunityKpis(null);
+                    setWorkspaceKpiStrip(undefined);
                     setMetricsLoading(true);
                     void (async () => {
                         try {
-                            const { metrics: m, deptTileStats: stats, orgOpportunityKpis: roll } =
+                            const fetchInit = workspaceDataFetchInit();
+                            const { metrics: m, deptTileStats: stats, orgOpportunityKpis: roll, growthSnapshots } =
                                 await loadWorkspaceRollup(active);
+                            let placementStrip: KPIVm[] | undefined = undefined;
+                            try {
+                                const pres = await fetch(
+                                    "/api/admin/workspace-kpi-placements?surface=workspace",
+                                    fetchInit
+                                );
+                                if (pres.ok) {
+                                    const body = (await pres.json().catch(() => ({}))) as {
+                                        items?: WorkspaceKpiPlacementRow[];
+                                    };
+                                    const metricsForResolve: WorkspaceRootMetrics = {
+                                        ...m,
+                                        departments: active.length,
+                                    };
+                                    placementStrip = resolveKpisForWorkspace({
+                                        placementRows: body.items ?? [],
+                                        metrics: metricsForResolve,
+                                        growthSnapshots: growthSnapshots.map((s) => ({
+                                            departmentKey: s.key,
+                                            kpis: s.payload,
+                                        })),
+                                    }).items;
+                                }
+                            } catch {
+                                placementStrip = undefined;
+                            }
                             if (!applyResults) return;
                             setMetrics(m);
                             setDeptTileStats(stats);
                             setOrgOpportunityKpis(roll.length ? roll : null);
+                            setWorkspaceKpiStrip(placementStrip);
                         } catch {
                             if (!applyResults) return;
                             setMetrics(null);
                             setDeptTileStats({});
                             setOrgOpportunityKpis(null);
+                            setWorkspaceKpiStrip(undefined);
                         } finally {
                             if (applyResults) setMetricsLoading(false);
                         }
@@ -173,6 +208,7 @@ export default function AdminV2WorkspaceIndexPage() {
                     setMetrics(null);
                     setDeptTileStats({});
                     setOrgOpportunityKpis(null);
+                    setWorkspaceKpiStrip(undefined);
                 }
 
                 if (perfDebug) {
@@ -257,6 +293,7 @@ export default function AdminV2WorkspaceIndexPage() {
             metrics={metricsResolved}
             metricsLoading={metricsLoading}
             orgOpportunityKpis={orgOpportunityKpis}
+            workspaceKpiStrip={workspaceKpiStrip}
         />
     );
 }

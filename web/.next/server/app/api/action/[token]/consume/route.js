@@ -1,0 +1,10 @@
+var R=require("../../../../../chunks/[turbopack]_runtime.js")("server/app/api/action/[token]/consume/route.js")
+R.c("server/chunks/[root-of-the-server]__19c88ad2._.js")
+R.c("server/chunks/[root-of-the-server]__7eb9430f._.js")
+R.c("server/chunks/[root-of-the-server]__6bc5795a._.js")
+R.c("server/chunks/[root-of-the-server]__a4139519._.js")
+R.c("server/chunks/2374f_next_542235a8._.js")
+R.c("server/chunks/2374f_@supabase_supabase-js_dist_index_mjs_b9a2feee._.js")
+R.c("server/chunks/web__next-internal_server_app_api_action_[token]_consume_route_actions_0f198b68.js")
+R.m(9780)
+module.exports=R.m(9780).exports

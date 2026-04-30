@@ -1,0 +1,3 @@
+{
+  "/api/admin/opportunity-customer-members/[id]/route": "app/api/admin/opportunity-customer-members/[id]/route.js"
+}

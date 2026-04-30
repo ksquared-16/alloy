@@ -11,6 +11,7 @@ import { workspaceRouteParam } from "@/lib/workspace/workspaceRouteParam";
 import ActionsBlock from "@/app/adminV2/components/workspace/blocks/ActionsBlock";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import type { WorkspaceAction } from "@/lib/ui-v2/workspace-actions";
+import type { KPIVm } from "@/lib/ui-v2/workspace-types";
 import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
 import {
@@ -21,6 +22,9 @@ import { rightRailResolvedFromActionsPayload } from "@/lib/workspace/rightRailRe
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { AutomationWorkflowsBlock } from "@/app/adminV2/components/workspace/blocks/AutomationWorkflowsBlock";
+import { buildDefaultDepartmentKpis } from "@/lib/kpi/baseline";
+import { resolveKpisForDepartment } from "@/lib/kpi/resolver";
+import type { WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
 
 const WORKSPACE_BASE = "/adminV2/workspace";
 
@@ -89,6 +93,9 @@ export default function AdminV2WorkspaceDepartmentPage() {
     const [deptQueueSummariesLoading, setDeptQueueSummariesLoading] = useState(false);
     const [deptQueueSummariesError, setDeptQueueSummariesError] = useState<string | null>(null);
     const [deptSummariesWaitTimedOut, setDeptSummariesWaitTimedOut] = useState(false);
+
+    /** `undefined` = use baseline strip (placement fetch pending/failed); otherwise resolver output after successful placement fetch. */
+    const [deptPlacementStrip, setDeptPlacementStrip] = useState<KPIVm[] | undefined>(undefined);
 
     const [workflowKpis, setWorkflowKpis] = useState<WorkflowKpis>(DEFAULT_WF_KPIS);
     const [workflowKpisLoading, setWorkflowKpisLoading] = useState(true);
@@ -259,6 +266,45 @@ export default function AdminV2WorkspaceDepartmentPage() {
     }, [departmentId, deptWorkUnits]);
 
     useEffect(() => {
+        setDeptPlacementStrip(undefined);
+    }, [departmentId]);
+
+    useEffect(() => {
+        if (!departmentId) return;
+        let cancelled = false;
+        const init = workspaceDataFetchInit();
+        void (async () => {
+            try {
+                const res = await fetch(
+                    `/api/admin/workspace-kpi-placements?surface=department&department_id=${encodeURIComponent(departmentId)}`,
+                    init
+                );
+                if (!res.ok) {
+                    if (!cancelled) setDeptPlacementStrip(undefined);
+                    return;
+                }
+                const j = (await res.json().catch(() => ({}))) as { items?: WorkspaceKpiPlacementRow[] };
+                if (cancelled) return;
+                const wuList = deptWorkUnits ?? [];
+                const { items } = resolveKpisForDepartment({
+                    placementRows: j.items ?? [],
+                    departmentSurface: "department",
+                    deptWorkUnits: wuList,
+                    deptWorkUnitSummaries,
+                    deptQueueSummariesLoading,
+                    deptQueueSummariesError,
+                });
+                if (!cancelled) setDeptPlacementStrip(items);
+            } catch {
+                if (!cancelled) setDeptPlacementStrip(undefined);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [departmentId, deptWorkUnits, deptWorkUnitSummaries, deptQueueSummariesLoading, deptQueueSummariesError]);
+
+    useEffect(() => {
         if (!deptQueueSummariesLoading) {
             setDeptSummariesWaitTimedOut(false);
             return;
@@ -317,22 +363,20 @@ export default function AdminV2WorkspaceDepartmentPage() {
     }, [enrollmentDeptRightRail]);
 
     const kpis = useMemo(() => {
-        const list = deptWorkUnits ?? [];
-        if (!list.length) return [];
-        return list.map((wu) => {
-            const summary = deptWorkUnitSummaries[wu.id];
-            const value = deptQueueSummariesLoading
-                ? "—"
-                : deptQueueSummariesError
-                  ? "—"
-                  : summary
-                    ? String(summary.total)
-                    : "—";
-            const key = (wu.key ?? "").trim().toLowerCase();
-            const label = key === "enrollment_pipeline" || key === "pipeline_overview" ? "Active inquiries" : (wu.name?.trim() || "Work unit");
-            return { id: `wu_${wu.id}`, label, value, lane: "business" as const };
+        if (deptPlacementStrip !== undefined) return deptPlacementStrip;
+        return buildDefaultDepartmentKpis({
+            deptWorkUnits: deptWorkUnits ?? [],
+            deptWorkUnitSummaries,
+            deptQueueSummariesLoading,
+            deptQueueSummariesError,
         });
-    }, [deptQueueSummariesError, deptQueueSummariesLoading, deptWorkUnitSummaries, deptWorkUnits]);
+    }, [
+        deptPlacementStrip,
+        deptQueueSummariesError,
+        deptQueueSummariesLoading,
+        deptWorkUnitSummaries,
+        deptWorkUnits,
+    ]);
 
     const needsAttentionSummary = useMemo(() => {
         const list = deptWorkUnits ?? [];

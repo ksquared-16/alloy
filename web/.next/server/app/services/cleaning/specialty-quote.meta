@@ -1,0 +1,17 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/services/layout,_N_T_/services/cleaning/layout,_N_T_/services/cleaning/specialty-quote/layout,_N_T_/services/cleaning/specialty-quote/page,_N_T_/services/cleaning/specialty-quote"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/services/cleaning/specialty-quote/__PAGE__",
+    "/services/cleaning/specialty-quote",
+    "/services/cleaning",
+    "/services",
+    "/_index",
+    "/_head"
+  ]
+}

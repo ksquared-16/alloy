@@ -1,0 +1,10 @@
+var R=require("../../../../../../chunks/[turbopack]_runtime.js")("server/app/api/admin/departments/[departmentId]/opportunity-lifecycle-kpis/route.js")
+R.c("server/chunks/2374f_e0f4719d._.js")
+R.c("server/chunks/2374f_next_542235a8._.js")
+R.c("server/chunks/web_61511fb7._.js")
+R.c("server/chunks/[root-of-the-server]__a4139519._.js")
+R.c("server/chunks/2374f_@supabase_supabase-js_dist_index_mjs_b9a2feee._.js")
+R.c("server/chunks/[root-of-the-server]__1028da36._.js")
+R.c("server/chunks/08936_departments_[departmentId]_opportunity-lifecycle-kpis_route_actions_032b6671.js")
+R.m(62576)
+module.exports=R.m(62576).exports

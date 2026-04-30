@@ -1,0 +1,16 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/a/layout,_N_T_/a/expired/layout,_N_T_/a/expired/page,_N_T_/a/expired"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/a/expired/__PAGE__",
+    "/a/expired",
+    "/a",
+    "/_index",
+    "/_head"
+  ]
+}

@@ -1,0 +1,3 @@
+{
+  "/api/admin/workflow-events/route": "app/api/admin/workflow-events/route.js"
+}

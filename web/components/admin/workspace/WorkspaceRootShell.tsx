@@ -57,6 +57,11 @@ type Props = {
   metricsLoading: boolean;
   /** Growth-slice departments: rolled up from per-dept `opportunity-lifecycle-kpis` (same semantics as /dept). */
   orgOpportunityKpis?: KPIVm[] | null;
+  /**
+   * When set (including `[]`), replaces the default structure + pipeline KPI merge — placement-driven order from resolver.
+   * When `undefined`, the shell builds the legacy merge from `metrics` + `orgOpportunityKpis`.
+   */
+  workspaceKpiStrip?: KPIVm[] | undefined;
 };
 
 function formatInt(n: number | null | undefined): string {
@@ -85,14 +90,18 @@ export function WorkspaceRootShell({
   metrics,
   metricsLoading,
   orgOpportunityKpis,
+  workspaceKpiStrip,
 }: Props) {
   const displayName = (orgName && orgName.trim()) || "Your organization";
 
   const kpis = useMemo(() => {
+    if (workspaceKpiStrip !== undefined) {
+      return workspaceKpiStrip;
+    }
     const structure = buildStructureKpis({ metrics, metricsLoading });
     const roll = orgOpportunityKpis?.length ? orgOpportunityKpis : [];
     return [...structure, ...roll];
-  }, [metrics, metricsLoading, orgOpportunityKpis]);
+  }, [workspaceKpiStrip, metrics, metricsLoading, orgOpportunityKpis]);
 
   return (
     <WorkspaceShellLayout

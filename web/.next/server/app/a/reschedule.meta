@@ -1,0 +1,16 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/a/layout,_N_T_/a/reschedule/layout,_N_T_/a/reschedule/page,_N_T_/a/reschedule"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/a/reschedule/__PAGE__",
+    "/a/reschedule",
+    "/a",
+    "/_index",
+    "/_head"
+  ]
+}

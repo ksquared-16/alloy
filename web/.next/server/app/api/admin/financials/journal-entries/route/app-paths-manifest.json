@@ -1,0 +1,3 @@
+{
+  "/api/admin/financials/journal-entries/route": "app/api/admin/financials/journal-entries/route.js"
+}

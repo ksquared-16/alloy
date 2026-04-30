@@ -16,6 +16,7 @@ import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext";
 import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
 import EntityDocumentsSection from "@/components/admin/EntityDocumentsSection";
+import CommunicationsDrawerSection from "@/components/admin/communications/CommunicationsDrawerSection";
 import {
     formatMoneyFromCents,
     formatMoneyFromDollars,
@@ -5190,6 +5191,7 @@ export default function AdminEntityDrawer() {
         financials: "Financials",
         automation: "Automation",
         activity: "Activity",
+        communications: "Communications",
         payments: "Payments",
         documents: "Documents",
         ledger: "Ledger",
@@ -5198,7 +5200,7 @@ export default function AdminEntityDrawer() {
     /** Admin V2 job record modal: Record, Related, Activity, Financials only (no RRS/documents tabs). */
     const jobDrawerV2TabListResolved = useMemo((): DrawerTabKey[] => {
         if (!isJobRecordModalTarget || drawer.type !== "jobs") return tabList;
-        const allow = new Set<DrawerTabKey>(["overview", "related", "activity", "financials"]);
+        const allow = new Set<DrawerTabKey>(["overview", "related", "communications", "activity", "financials"]);
         return tabList.filter((t) => allow.has(t));
     }, [isJobRecordModalTarget, drawer.type, tabList]);
 
@@ -9015,6 +9017,9 @@ export default function AdminEntityDrawer() {
                                 }}
                             />
                         </div>
+                    )}
+                    {drawerTab === "communications" && drawer.id && drawer.id !== "new" && (drawer.type === "opportunities" || drawer.type === "jobs") && (
+                        <CommunicationsDrawerSection apiEntityType={drawer.type} entityId={drawer.id} />
                     )}
                     {drawerTab === "activity" && (
                         <div className={`${DRAWER_ROW_SPACING} pt-2`}>

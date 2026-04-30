@@ -1,0 +1,1189 @@
+GLOBAL IMPLEMENTATION RULES
+
+- Do NOT duplicate existing functionality.
+- Do NOT replace existing tables or flows unless explicitly instructed.
+- Prefer extension over replacement during V1.
+- All new communication_* tables must coexist with existing messages/messages_outbox until migration is explicitly defined.
+- Do NOT remove or break:
+  - workflow_events
+  - existing workflowRun.ts behavior
+  - queue system
+  - KPI system
+- All new logic must integrate with existing event emission patterns.
+- If uncertain, inspect existing code before adding new structures.
+
+
+# KPI Configuration v0 Sprint
+
+Objective:
+Make workspace KPIs configurable across org, department, and work-unit surfaces without breaking performance, queue accuracy, or the config-driven foundation.
+
+Why now:
+The workspace shell is stable: shared layout, sticky rail, exact queue counts, config-selected queue preview templates, and compact KPI/scorecard presentation. The next step is allowing operators/admins to decide which registered metrics appear, in what order, and on which surface.
+
+Important doctrine:
+- Config chooses which registered KPI appears.
+- Code owns metric definitions and calculation logic.
+- Do not allow arbitrary SQL or unvalidated calculation logic in config.
+- Preserve performance and existing contracts.
+
+--------------------------------------------------------------------------------
+CARD 0 — KPI Audit / Context Intake (COMPLETE)
+--------------------------------------------------------------------------------
+
+Status: Formal audit performed against repository (2026-04-30). Card 0.5+ unchanged below.
+Scope covered: org /adminV2/workspace, /adminV2/workspace/dept, work-unit pages, queue summaries,
+opportunity lifecycle KPIs, KPIBlock vs KpiBlock, hooks/services/adapters, performance and drift risks.
+
+Do not implement (this card is evidence-only).
+
+--- 0.A Files inspected (audit trail) ---
+
+web/app/adminV2/workspace/page.tsx
+web/components/admin/workspace/WorkspaceRootShell.tsx
+web/lib/workspace/viewModels/workspaceRootRollup.ts
+web/lib/workspace/growthSliceDepartments.ts
+web/app/adminV2/workspace/dept/[departmentId]/page.tsx
+web/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx (partial: bootstrap, queueModel/model selection, KPI wiring)
+web/app/admin/workspace/dept/[departmentId]/page.tsx
+web/components/admin/workspace/WorkspaceRenderer.tsx
+web/app/adminV2/components/workspace/blocks/KPIBlock.tsx
+web/components/admin/workspace/blocks/KpiBlock.tsx
+web/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx
+web/app/adminV2/components/workspace/shells/DepartmentWorkspace.tsx
+web/app/adminV2/components/workspace/shells/CompanyWorkspace.tsx
+web/app/adminV2/components/dashboard/KPIBand.tsx
+web/app/adminV2/components/dashboard/mockKpiData.ts
+web/app/adminV2/components/workspace/blocks/AutomationWorkflowsBlock.tsx
+web/hooks/useOperationsWorkspaceData.ts
+web/lib/workspace/workspaceDataFetch.ts
+web/lib/workspace/workspaceAdminFetchDedupe.ts
+web/lib/workspace/registry.ts
+web/lib/workspace/partitionBlocks.ts
+web/lib/workspace/types.ts (KPI / runtime slices)
+web/lib/ui-v2/workspace-types.ts (KPIVm, models)
+web/lib/workspace/viewModels/enrollmentDepartmentViewModel.ts
+web/lib/ui-v2/adapters/realWorkUnitFromJobs.ts
+web/lib/ui-v2/adapters/realWorkUnitFromOpportunities.ts
+web/lib/workspace/computeOpportunityLifecycleKpis.ts
+web/app/api/admin/departments/[departmentId]/opportunity-lifecycle-kpis/route.ts
+web/app/api/admin/departments/[departmentId]/work-unit-queue-summaries/route.ts
+web/app/api/admin/work-units/[id]/queues/route.ts (referenced from work-unit page)
+web/lib/queues/QueueService.ts (getWorkUnitQueueSummaries, shared status defs, needs_attention cap)
+web/lib/queues/types.ts
+
+--- 0.B Full inventory: KPI sources by surface ---
+
+1) Org workspace — GET /adminV2/workspace
+   • Structure strip: "Departments" and "Work units" — client-built `KPIVm[]` via `buildStructureKpis` in
+     WorkspaceRootShell.tsx from `WorkspaceRootMetrics` (departments count filled in page after departments
+     load; work units count = length of GET /api/admin/work-units `items`).
+   • Growth rollups (only departments whose `key` is in growth slice: `growth`, `enrollment` per
+     growthSliceDepartments.ts): three `KPIVm`s from `buildWorkspaceRootOrgOpportunityKpis` — "Active pipeline",
+     "Pipeline value", "Closed outcomes" — each client-aggregated from per-department snapshots.
+   • Per–growth-department data: GET /api/admin/departments/:id/opportunity-lifecycle-kpis (parallel
+     Promise.allSettled in page.tsx). Department grid sublines: `buildWorkspaceRootDepartmentTileRollupLine`
+     uses same lifecycle payload for growth-slice depts, else work-unit count from rollup.
+   • Not workspace KPI strip: AdminV2 shell `KPIBand` uses mockKpiData.ts (scope-based placeholders) —
+     separate from workspace hierarchy pages.
+
+2) Department — GET /adminV2/workspace/dept/[departmentId] (Admin V2 bridge)
+   • KPI strip is one `KPIBlock` fed by per–work-unit cells: for each work unit from GET
+     /api/admin/work-units?department_id=…, value = sum of `queue.count` across that work unit's queues from
+     GET /api/admin/departments/:departmentId/work-unit-queue-summaries?include_previews=false&count_mode=exact.
+     Labels: special-case keys `enrollment_pipeline` / `pipeline_overview` → "Active inquiries", else work unit name.
+   • "Needs Attention" panel totals use same summaries: sum of `needs_attention` queue count per work unit
+     (key match `needs_attention`) plus workflow telemetry block (AutomationWorkflowsBlock) — workflow metrics
+     are not `KPIVm` / KPIBlock.
+   • Important: this route does not call `buildEnrollmentDepartmentKpis`; it does not use the classic
+     workspace registry KPI block for the strip.
+
+3) Department — GET /admin/workspace/dept/[departmentId] (classic + WorkspaceRenderer)
+   • Layout from web/lib/workspace/registry.ts (e.g. ENROLLMENT, GROWTH include `kpi` block with state
+     `opportunity_lifecycle_pipeline`).
+   • `KpiBlock` renders lifecycle metrics from `runtime.opportunityLifecycleKpis` (loaded inside
+     useOperationsWorkspaceData).
+
+4) Work-unit — GET /adminV2/workspace/dept/…/work-unit/[workUnitId]
+   • Primary path when QueueService succeeds: `effectiveModel = queueModel ?? model` (page.tsx). `queueModel`
+     sets `kpis: []` — the compact KPI strip is empty; counts live in queue pills and `primaryQueue.countBadge`.
+   • Fallback when legacy opportunity-queue APIs are used: `model` from `buildRealOpportunityWorkUnitWorkspaceModel`
+     (realWorkUnitFromOpportunities.ts) supplies KPIs: "In queue" (oq.total), "Queue value" (sum of positive
+     quote_total over loaded items), "Oldest in queue" (client age from row timestamps), "Needs action (queue)"
+     (derived from rows; for needs_attention work unit key, equals oq.total).
+   • Jobs/schedules work-unit path (elsewhere): buildRealWorkUnitWorkspaceModel sets "Rows shown" and
+     "Sample cap" KPIs from local row count and constant cap string.
+
+5) Queue summaries (API + UI)
+   • Single work unit: GET /api/admin/work-units/:id/queues → QueueService.getWorkUnitQueueSummaries (exact head
+     counts for opportunities/jobs, optional deferred_queue_keys + partial fill).
+   • Department batch: GET /api/admin/departments/:id/work-unit-queue-summaries → getDepartmentWorkUnitQueueSummaries.
+   • UI: queue tab badges, department work-unit cards, work unit queue list — uses `count` from summaries or
+     reconciled list `total` (work-unit page reconciles list vs tab when total_omitted).
+
+6) Opportunity lifecycle KPIs (API + computation)
+   • GET /api/admin/departments/:departmentId/opportunity-lifecycle-kpis: resolves scope via work unit keyed
+     `pipeline_overview` queue_definition when present (resolveOpportunityQueueFromDefinition), else org-wide
+     opportunities; selects up to 5000 rows (status_key, quote_total); loads status definitions;
+     computeOpportunityLifecycleKpis(rows, defs); adds statusBreakdown ordered by definition sort_order.
+   • Same JSON feeds: org rollup (adminV2 workspace page), useOperationsWorkspaceData lifecycleKpis for classic
+     /admin/workspace dept.
+
+--- 0.C KPIBlock vs KpiBlock: inputs and rendering ---
+
+KPIBlock (web/app/adminV2/components/workspace/blocks/KPIBlock.tsx)
+   • Input: `kpis: KPIVm[]`, optional `maxVisible` (default 5, hard cap 5), deprecated `surface` / dualRail
+     props ignored at runtime.
+   • Behavior: `mergeKpisForOrientationStrip` — non–`lane: "ai"` first, then `lane: "ai"`, slice to cap.
+     Renders compact horizontal strip; if no items after merge, returns null (no layout gap).
+   • Consumers: WorkspaceRootShell, adminV2 dept page, WorkUnitWorkspace, CompanyWorkspace, DepartmentWorkspace,
+     RecordWorkspace.
+
+KpiBlock (web/components/admin/workspace/blocks/KpiBlock.tsx)
+   • Input: `WorkspaceKpiBlock` + optional `WorkspaceRuntimeData`.
+   • For `state: "opportunity_lifecycle_pipeline"`: reads `runtime.opportunityLifecycleKpis` (loading | error |
+     ready). Ready: builds a multi-cell embedded strip from counts, optional enrollment bucket rollups from
+     statusBreakdown, footer lines for openPipeline / pricedInMotion — not the same compact KPIVm strip as KPIBlock.
+   • Placeholder state: shows block.message in a placeholder cell.
+
+--- 0.D Data sources: endpoints, hooks, services, adapters, builders ---
+
+Endpoints (KPI-relevant)
+   • GET /api/admin/departments — org workspace department list.
+   • GET /api/admin/work-units — org workspace work unit count; dept page work unit list.
+   • GET /api/admin/work-units?department_id= — dept page.
+   • GET /api/admin/departments/:id — dept + work-unit pages.
+   • GET /api/admin/departments/:id/opportunity-lifecycle-kpis — lifecycle snapshot + breakdown.
+   • GET /api/admin/departments/:id/work-unit-queue-summaries — batched queue summaries for all WUs in dept.
+   • GET /api/admin/work-units/:id/queues — work-unit queue list + counts (+ partial deferred counts).
+   • Legacy (work-unit fallback): GET …/opportunity-queue, …/opportunity-attention-queue.
+   • useOperationsWorkspaceData also: parallel fetches to legacy opportunity queue endpoints per canonical
+     work_unit keys; GET …/opportunity-attention-preview for needs_attention when no WU; jobs/schedules APIs for ops depts.
+   • Workflow telemetry (not KPIBlock): GET /api/admin/workflow-runs?list=kpis, GET /api/admin/workflows/summary.
+
+Hooks / helpers
+   • useOperationsWorkspaceData — builds WorkspaceRuntimeData including opportunityQueues + opportunityLifecycleKpis
+     for growth/enrollment department keys.
+   • workspaceDataFetchInit — RequestInit with AbortSignal.timeout(45s) when available.
+   • dedupeAdminFetch / dedupeAdminFetchWithTtl — in-flight GET coalescing + short TTL cache for repeat mounts (e.g. actions).
+
+Services / server
+   • QueueService.getWorkUnitQueueSummaries, getDepartmentWorkUnitQueueSummaries — counts via Supabase head/exact
+     count; previews optional; shared opportunity status-definitions promise per summary request.
+
+Adapters / builders
+   • workspaceRootRollup.ts — org tile lines + org opportunity KPI rollups from lifecycle payloads.
+   • computeOpportunityLifecycleKpis — pure aggregate from rows + defs.
+   • buildRealOpportunityWorkUnitWorkspaceModel — legacy work-unit KPIVm[] from opportunity queue runtime.
+   • buildRealWorkUnitWorkspaceModel — jobs lane KPIVm[].
+   • buildEnrollmentDepartmentKpis — exported from enrollmentDepartmentViewModel.ts but **no import references
+     elsewhere in repo** (dead for current UI paths; classic dept uses KpiBlock + raw lifecycle, adminV2 dept uses queue sums).
+
+--- 0.E How each KPI is computed (classification) ---
+
+Legend: SV = server-returned numeric/value in API JSON; CV = client-only math/formatting; Q = queue summary
+        count; L = lifecycle endpoint aggregation over opportunity rows + status definitions.
+
+| Location / metric (representative) | Class |
+| Org "Departments" | CV: local array length after filter |
+| Org "Work units" | CV: length of work-units API items (null → "—" until loaded) |
+| Org growth "Active pipeline" / "Closed outcomes" | CV sum of L-derived per-dept counts |
+| Org growth "Pipeline value" | CV sum of L-derived openPipeline values; currency format client |
+| AdminV2 dept strip per work unit | CV sum of Q per work unit |
+| AdminV2 dept "Needs attention" aggregate | CV sum of Q for queue key needs_attention (per WU) |
+| Classic KpiBlock lifecycle cells | SV counts/values from L in runtime; enrollment buckets CV-sum rows of statusBreakdown |
+| Work-unit queueModel strip | No KPIVm (empty) |
+| Work-unit legacy "In queue" | SV oq.total from legacy API |
+| Work-unit legacy "Queue value" / "Oldest" / "Needs action" | CV over items in oq (partial list vs total documented in API) |
+| Jobs adapter "Rows shown" / cap | CV from rows in memory |
+| KPIBand (Admin shell) | Mock data (non-live) |
+
+Lifecycle route semantics: L uses same effective lifecycle stage resolution as presentation (computeOpportunityLifecycleKpis +
+resolveEffectiveOpportunityLifecycleStage). Row cap 5000 on the filtered query — totals can truncate if more rows match.
+
+--- 0.F Performance risks ---
+
+Over-fetching
+   • opportunity-lifecycle-kpis loads all matching rows (max 5000) per department for KPI computation.
+   • Org workspace fires one lifecycle GET per growth-slice department in parallel (N departments, not N arbitrary metrics).
+   • useOperationsWorkspaceData for growth/enrollment fetches multiple legacy queue endpoints plus lifecycle KPI in parallel.
+
+Duplicated aggregation
+   • Lifecycle KPI computation and queue exact counts both touch opportunities with filters derived from definitions;
+     no shared in-process cache between lifecycle route and QueueService across HTTP requests.
+   • Department adminV2 page: work-unit-queue-summaries batches all WUs; separate from lifecycle-kpis (different product numbers).
+
+N+1 risk
+   • Org page: N_lifecycle = number of growth/enrollment departments — bounded by org dept list, parallel.
+   • Classic hook: N_queue = fixed key list (7 queue fetches) + 1 lifecycle — parallel, not per-metric arbitrary N.
+
+Repeated client computation
+   • useMemo on kpis in shells/pages; KPIBlock useMemo for strip merge — low cost.
+   • Work-unit queueModel recomputes large vm item mapping when queue items change — not KPI-specific but hot path.
+
+Queue / KPI drift risk
+   • Lifecycle KPI scope = pipeline_overview definition when present; department strip sums per-WU queue totals — same
+     underlying entities can differ if definitions or work_unit scoping diverge.
+   • needs_attention queue summary with include_previews=false uses fetch cap 800 in QueueService — can under-count vs full set;
+     lifecycle unscoped rows can disagree with queue totals.
+   • Work-unit primary path: KPI strip empty but badges use QueueService — operators see counts only in tabs, not the same
+     cells as legacy path KPIs.
+
+--- 0.G Where KPIs depend on queue summaries ---
+
+Direct dependency (values are sums of queue `count`):
+   • adminV2 department KPIBlock (`page.tsx` kpis useMemo from deptWorkUnitSummaries).
+
+Indirect / same session:
+   • Work-unit page display counts in queue picker and countBadge from QueueService + list `total`.
+   • Org workspace does not use queue summaries for the top strip (uses lifecycle rollups + structure).
+
+SignalsBlock metrics in registry reference runtime.metrics keys populated from opportunity queue totals in
+useOperationsWorkspaceData — related to queue API totals, separate from KPIBlock strip on adminV2 dept.
+
+--- 0.H Caching, dedupe, memoization, shared aggregation ---
+
+   • workspaceAdminFetchDedupe: in-flight GET dedupe + TTL clone for repeat mounts (e.g. actions).
+   • QueueService: `sharedOpportunityStatusDefs` memoizes fetchEffectiveStatusDefinitions for one getWorkUnitQueueSummaries call.
+   • Client useMemo: kpis in WorkspaceRootShell, adminV2 dept page, queueModel/model in work-unit page, sectioned summaries.
+   • Work-unit page: queueItemsLastFetchSigRef skips redundant queue-items GET when only summary reference changes;
+     mergeQueueSummariesByKey for partial deferred counts.
+   • No HTTP cache layer documented for lifecycle-kpis or work-unit-queue-summaries beyond browser fetch defaults.
+
+--- 0.I Reusable vs fragile ---
+
+Reusable
+   • KPIVm as stable presentation DTO; KPIBlock merge/slice behavior.
+   • computeOpportunityLifecycleKpis as single place for lifecycle math.
+   • QueueService as single place for exact queue counts and preview assembly.
+   • workspaceRootRollup org aggregation pattern (growth-slice gated).
+
+Fragile
+   • Two department experiences (adminV2 bridge strip vs classic KpiBlock) with different numbers and labels.
+   • Work-unit KPI strip absent on QueueService path (`kpis: []`) vs populated legacy path — behavioral split.
+   • buildEnrollmentDepartmentKpis unused — risk of drift if reintroduced without aligning to KpiBlock/lifecycle.
+   • Reliance on magic work_unit keys (pipeline_overview, needs_attention, enrollment_pipeline) for labels and scope.
+
+--- 0.J High-level recommended direction only (post-audit) ---
+
+   • Treat "registered metrics" as explicit keys with one server-side snapshot per scope; map to KPIVm in one layer so
+     adminV2 dept strip, classic KpiBlock, and work-unit surfaces can share definitions where product intends parity.
+   • Resolve growth vs ops vs queue-only metrics in the catalog to avoid comparing lifecycle totals to per-WU queue sums
+     without documenting semantics.
+   • When adding config, prefer reusing existing batched payloads (dept batch summaries, lifecycle response) over per-KPI
+     queries; preserve QueueService contracts.
+
+--- 0.K Open questions / risks for later cards (not decided here) ---
+
+(Card 0.5 locks architecture and drift posture; items below are **product / backlog** unless superseded there.)
+
+   • Should adminV2 department KPI strip converge toward lifecycle funnel (`buildEnrollmentDepartmentKpis` / KpiBlock)
+     or remain queue-total based?
+   • Should work-unit QueueService path expose a compact KPI strip again (parity with legacy)?
+   • Org workspace: should non-growth departments ever show pipeline KPIs (currently excluded in rollup builder)?
+   • Product meaning of summing needs_attention counts across work units when multiple WUs define that queue.
+   • Whether to unify KPIBand mock shell with real workspace metrics (out of scope for workspace hierarchy but naming collision).
+
+CARD 0 ends here.
+
+--------------------------------------------------------------------------------
+CARD 0.5 — Decision Lock / Build Readiness (COMPLETE)
+--------------------------------------------------------------------------------
+
+Status: Locked for KPI Config v0 planning (2026-04-30). Informed by Card 0 audit in this doc.
+Card 1 (schema / API design) must not start until this section is **approved** by stakeholders.
+
+No code or final schema in this card — readiness gates and doctrine only.
+
+Stop condition: Do not proceed to **implementation** until Card 1 and Card 1.5 are approved separately.
+
+--- 0.5.0 Carry-over compatibility (unchanged intent) ---
+
+Registered metric catalog (reference keys only in v0):
+- Config may only reference registered metric keys.
+- Code owns calculation; config owns label, visibility, order, surface placement, display hints.
+
+Surface model (semantic): workspace | department | work_unit.
+
+Scope model: org_id required; department_id optional; work_unit_id optional.
+
+Compatibility rules:
+- Do not break KPIBlock contract (`KPIVm[]` in, compact strip out).
+- Do not break queue summaries or QueueService count semantics.
+- Do not change queue_definition shape or resolver payloads for unrelated features.
+- Do not affect actions/workflows from KPI config reads.
+
+Admin behavior:
+- V0 config is seed/migration-backed; operator UI for editing deferred.
+- Missing or invalid config falls back to today's hard-coded output (per surface).
+
+--- 0.5.1 KPI source of truth (LOCKED: layered model) ---
+
+**Decision:** Use a **layered** model — there is **no** single numeric source for all KPIs. Each **registered**
+metric (in code) declares which **computation family** it uses; config only selects among registered keys.
+
+**Computation families for v0 (code-defined, not configurable):**
+- **L — Lifecycle aggregate:** `GET …/opportunity-lifecycle-kpis` payload + `computeOpportunityLifecycleKpis`
+  semantics (scoped per route; pipeline_overview definition when present; row cap as today).
+- **Q — Queue summary aggregate:** QueueService outputs — `GET …/work-unit-queue-summaries` and/or
+  `GET …/work-units/:id/queues` (same params family as the UI that shows the badge/tab).
+- **S — Structure counts:** Department list / work-unit list lengths (org structure strip).
+- **R — Rollup helper:** Client aggregation already used at org (e.g. sum of L across growth-slice depts).
+
+**Authoritative source by route (which number wins when product asks “what is truth?”):**
+
+- `/adminV2/workspace` (org) — Departments & work units: **S**
+- `/adminV2/workspace` (org) — Growth pipeline strip (active pipeline, pipeline value, closed outcomes): **L**, then **R** for org row
+- `/adminV2/workspace/dept/[departmentId]` — Per–work-unit totals in compact strip: **Q** (batched `work-unit-queue-summaries`; sum of queue `count` per WU as today)
+- `/adminV2/workspace/dept/…/work-unit/[workUnitId]` — Tab / badge / list totals for selected queue: **Q** (QueueService path); legacy queue APIs only where QueueService is not used
+- `/admin/workspace/dept/…` (classic) — `KpiBlock` opportunity lifecycle pipeline: **L** via `runtime.opportunityLifecycleKpis`
+
+**Explicit non-goals for v0:** Forcing numeric equality between **L** totals and **Q** row sums across arbitrary
+queue keys without a registry-defined relationship.
+
+--- 0.5.2 Drift rules (LOCKED) ---
+
+1) **Queue-parity rule**  
+   Any metric registered as **queue-backed** (family **Q**) MUST be computed from the **same HTTP response
+   and parameter profile** that feeds the queue UI for that scope (e.g. same `count_mode`, `include_previews`,
+   `summary_mode`, work unit id). Producers MUST NOT re-derive that number from a second fetch with different
+   query params.
+
+2) **Lifecycle-parity rule**  
+   Any metric registered as **lifecycle-backed** (family **L**) MUST use the lifecycle endpoint + row cap /
+   scope documented in the **metric registry** (not in DB config). UI copy MUST NOT imply equality with a
+   queue-tab count unless a single registry entry explicitly documents that relationship.
+
+3) **needs_attention and caps**  
+   When QueueService applies a **bounded load** for count-only paths (e.g. needs_attention cap in Card 0 audit),
+   **queue-backed** KPIs MUST match the **same** count the **queue tab / badge** shows (including cap behavior).
+   **Locked:** Prefer **honest parity with the tab** over inventing a second uncapped KPI in v0 without a new
+   server aggregate. If product later requires uncapped exact counts, that is a **new metric + API**, not config
+   formula work.
+
+4) **Cross-family comparison**  
+   Operators may see **L** numbers on org workspace and **Q** numbers on dept strip; training/docs treat them
+   as different lenses unless a future registry links them.
+
+--- 0.5.3 Rendering contract (LOCKED intent; no refactor yet) ---
+
+- **KPIBlock** (`KPIVm[]` strip) — Compact orientation metrics on **adminV2** workspace hierarchy. **Primary**
+  config target for `/adminV2/workspace`, dept bridge, work-unit shell when a strip is populated.
+- **KpiBlock** (`WorkspaceKpiBlock` + runtime) — Classic **/admin/workspace** department layout; embedded
+  lifecycle layout. **Supported** in v0 only for selecting among **existing** lifecycle presentation keys /
+  visibility; migration to KPIBlock is **deferred**.
+- **KPIBand** (AdminV2 shell) — Dual-rail “business / AI” band using **mockKpiData** today. **Out of scope**
+  for KPI Config v0; do not wire registry here in v0.
+
+**Locked:** Config v0 **does not** require merging KpiBlock and KPIBlock into one component; it requires **one
+registry** and may have **two producers** until classic route migrates.
+
+--- 0.5.4 Performance posture (LOCKED for v0) ---
+
+**N+1 / batching:**
+- At most **one** batched dept queue summary request per adminV2 dept page load for Q-family dept strip (today's pattern).
+- At most **one** lifecycle GET per growth-slice department invoked on org load (today's parallel pattern) —
+  not one HTTP call per KPI.
+- Work-unit: reuse **existing** queue summary + items fetch boundaries; **no** additional per-metric GET in v0.
+
+**Client computation:**
+- Avoid multiple full passes over large opportunity arrays for KPI formatting; slice/map **once per payload**
+  in the producer layer (Card 1 will name modules).
+
+**Large row fetches:**
+- Lifecycle **5000-row cap** and existing QueueService query patterns remain **baseline** for v0; eliminating
+  them is **not** a KPI-config deliverable (separate performance work).
+
+**Endpoints vs shared service:**
+- **v0 MAY reuse current endpoints only** behind registry resolvers/adapters, as long as batching rules above hold.
+- A **shared server “KPI snapshot” layer** is **optional** in Card 1 design — not a prerequisite to ship v0,
+  provided duplication of aggregates stays within acceptable latency (Card 1.5 may still choose a snapshot API).
+
+--- 0.5.5 Config boundary (LOCKED doctrine) ---
+
+- **Config chooses** which registered KPI appears, order, visibility, labels/overrides, display hints, and
+  allowed surfaces/scopes **within the registry**.
+- **Code owns** metric definitions, computation family (**L** / **Q** / **S** / **R**), filters, joins,
+  aggregation, and all math.
+- **No arbitrary SQL** from config; no user-supplied query fragments.
+- **No dynamic formulas** in config (no spreadsheet expressions, no eval).
+
+--- 0.5.6 Scope boundary — v0 vs deferred (LOCKED) ---
+
+**In scope for KPI Config v0 (configuration + fallbacks):**
+- `/adminV2/workspace` org strip (**S** + **R** over **L**).
+- `/adminV2/workspace/dept/[departmentId]` compact strip (**Q**-family metrics as today).
+- `/adminV2/workspace/dept/…/work-unit/[workUnitId]` — registry may define **Q**-family strip metrics **only
+  when** values can be satisfied from **existing** queue payload without new per-metric network calls; restoring
+  parity with legacy strip where `kpis` is currently empty is **allowed as a v0 goal** in Card 1 design (not locked here as mandatory).
+
+**Explicitly deferred (not v0 deliverables unless pulled in by a later card):**
+- KPIBand real metrics / shell unification.
+- Record surface KPI config (`RecordWorkspace`) unless zero-cost reuse falls out of implementation.
+- Operator-facing **UI** to edit KPI config (seeds/migrations only in v0).
+- New computation families beyond **L** / **Q** / **S** / **R** without engineering review.
+- Uncapped needs_attention (or other) counts that **differ** from tab without new API design.
+
+**Optional v0 extension (product flag):** Classic `/admin/workspace` dept — bind config to **visibility/order**
+of lifecycle cells that **KpiBlock** already renders, without new formula surface.
+
+--- 0.5.7 Readiness checklist for Card 1 (schema / API design) ---
+
+Card 1 may begin when **all** of the following are true:
+
+- [ ] Stakeholders **approve** §0.5.1–0.5.6 (source layering, drift rules, rendering contract, performance,
+      config boundary, scope).
+- [ ] **Metric registry draft** exists (spreadsheet or doc): metric_key, computation family, allowed surfaces,
+      dependencies (which endpoint/payload), and plain-English semantics (**L** vs **Q** clearly marked).
+- [ ] **Parity matrix** drafted: for each **Q** metric, `{ surface, work_unit_id?, queue_keys, API route, key query params }`.
+- [ ] **Fallback strategy** per surface documented (match “today” output when config missing).
+- [ ] **Card 1 owner** confirms work-unit strip restoration (if any) is in or out of v0 scope for that sprint.
+
+**Unresolved items (do not block opening Card 1; resolve during Card 1 / 1.5):**
+- Final enum list of `metric_key` strings for v0 seed.
+- Yes/no: include classic `/admin/workspace` in **first** seed scope (recommended: **yes** only if low effort;
+  default **adminV2-first**).
+- Whether v0 introduces a dedicated snapshot endpoint vs adapter-only composition (performance acceptance bar
+  lives in Card 1.5).
+
+--- 0.5.8 Readiness verdict ---
+
+**Locked decisions:** Layered source of truth with **L** / **Q** / **S** / **R**; drift rules favor **tab parity**
+for **Q**; **KPIBlock** is forward path for adminV2 strips; **KpiBlock** classic path retained; **KPIBand** out of
+scope; performance batching and “reuse endpoints for v0” locked; config/calculation boundary locked; adminV2
+surfaces in scope with listed deferrals.
+
+**Recommendation (historical):** Card 1 and Card 1.5 are now drafted; see **CARD 1.5 §GO / NO-GO** for
+implementation authorization.
+
+**Implementation:** None — documentation only.
+
+--------------------------------------------------------------------------------
+CARD 1 — KPI Config Architecture (Design Only) — COMPLETE
+--------------------------------------------------------------------------------
+
+Status: Architecture for KPI Config v0. **No code, migrations, or endpoint modifications.**
+Grounded in Card 0 audit + Card 0.5 locks. **Card 1.5** still must lock storage, `metric_key` enum,
+snapshot vs adapter-only, invalid-row policy, and facet ordering details.
+
+--- 1.0 Architecture goal (one sentence) ---
+
+Org-defined **placement** (which registered metrics appear, in what order, with what labels/lanes) lives in
+**config**; **computation** is entirely **code** via a **single resolution pipeline** that reads **at most
+one batch per family per page transition** (L / Q / S / R), then maps results into `KPIVm[]` for KPIBlock or
+filtered layout for KpiBlock — **no per-metric network calls** and **no config formulas**.
+
+================================================================================
+1. KPI REGISTRY DESIGN (core)
+================================================================================
+
+--- 1.1 What the registry is ---
+
+The **KPI Registry** is a **code-first catalog** (TypeScript module or generated const object in v0). It is the
+**only** place that defines:
+- `metric_key` — stable string identifier (e.g. `org.structure.departments_count`). **Card 1.5** freezes the v0 enum.
+- `family` — one of **L | Q | S | R** (per Card 0.5). **Never** stored in DB config.
+- **Resolver binding** — which **batch payload** and which **pure function** extract a display value.
+- **Allowed surfaces** — subset of `workspace | department | work_unit`.
+- **Scope needs** — what runtime context is required (org only, department_id, work_unit_id, growth-slice only, etc.).
+
+Database **config** rows reference **`metric_key` only**; unknown keys are **skipped** with a logged warning
+(**Card 1.5**: strict fail vs skip).
+
+--- 1.2 Registry entry shape (conceptual; not a DB table) ---
+
+Each entry conceptually contains:
+
+  metric_key          stable string (namespaced e.g. org.*, dept.*, wu.*)
+  family              L | Q | S | R
+  default_label       string
+  default_format      count | currency | percent | duration | text  (maps to formatting helpers)
+  default_lane        business | ai                         (KPIVm.lane)
+  allowed_surfaces    which of workspace / department / work_unit
+  scope_rules         org_required, growth_slice_only?, facet?, etc.
+  binding             family-specific (see 1.3)
+  parity_note         plain text: L vs Q semantics for operators
+
+**No** formula, sql, or expression fields. **No** user-defined JSON paths in config — field pickers are fixed per key in code.
+
+--- 1.3 Mapping families to data sources (no arbitrary formulas) ---
+
+**L (Lifecycle)**
+- **Batch payload:** JSON from `GET /api/admin/departments/:departmentId/opportunity-lifecycle-kpis` (existing).
+- **Binding:** Each L-metric names a **single** extractor implemented in code: e.g. `counts.intake`,
+  `values.openPipeline`, a named rollup over `statusBreakdown` (same semantics as today’s KpiBlock buckets,
+  encapsulated in one function per metric key — not configurable logic).
+
+**Q (Queue summary)**
+- **Batch payloads:** Dept → `GET …/work-unit-queue-summaries` (same params as queue cards). Work-unit →
+  `GET …/work-units/:id/queues` summary array already loaded for tabs.
+- **Binding:** Small **enumerated** set of reducers in code, e.g. `sum_queue_counts`, `count_by_queue_key`,
+  `selected_tab_total` (context = selected queue key from UI). Reducers read **only** summary `count` fields —
+  no second scan of full item lists for counts.
+
+**S (Structure)**
+- **Batch payload:** Results of existing department list + work-units list calls (org page).
+- **Binding:** Fixed extractors: e.g. `active_departments.length`, `work_units.items.length`.
+
+**R (Org rollup)**
+- **Batch payload:** **Not** a separate HTTP family — output of **multiple L batches** (one per growth-slice dept)
+  already fetched for org workspace.
+- **Binding:** Fixed reducers in code (e.g. sum numeric child metrics). Registry declares **dependencies** on other
+  `metric_key`s (L outputs); resolver runs **L first**, then **R** in topological order.
+
+**Prohibition:** Config cannot blend L and Q in one metric. A “blended” number requires a **new** `metric_key` and
+**new** code-defined extractor with explicit semantics.
+
+--- 1.4 Example registry keys (illustrative; enum locked in Card 1.5) ---
+
+  org.structure.departments_count
+  org.structure.work_units_count
+  org.pipeline.active_in_motion    (R over L per growth dept)
+  org.pipeline.pipeline_value
+  org.pipeline.closed_outcomes
+  dept.wu_queue.total_by_work_unit (facet: dynamic cells from one Q batch)
+  wu.queue.active_tab_total        (Q + UI context)
+
+================================================================================
+2. KPI PLACEMENT MODEL
+================================================================================
+
+**Surfaces**
+
+- `workspace`  →  /adminV2/workspace  →  KPIBlock
+- `department` →  /adminV2/workspace/dept/[id]  →  KPIBlock
+- `work_unit`  →  /adminV2/workspace/dept/…/work-unit/[id]  →  KPIBlock when strip populated
+
+Classic `/admin/workspace/dept/…` uses **KpiBlock**; placement there is a **parallel** config stream
+(visibility/order of existing lifecycle cells) if included in v0 — **Card 1.5** yes/no.
+
+**Placement row (conceptual; DB details → Card 1.5)**
+
+- org_id (required)
+- surface — workspace | department | work_unit
+- department_id — null for org-wide; set for department-scoped rows
+- work_unit_id — optional override
+- metric_key — validated against registry
+- display_order — sort ascending
+- is_visible
+- label_override, format_override, lane_override (optional)
+- group_key — optional; reserved (v0 may ignore)
+- max_visible_strip — optional strip-level cap (**Card 1.5**)
+
+**Validation:** `surface=workspace` with non-null department_id or work_unit_id → **reject** (aligned with Card 0.5).
+
+**Scope precedence:** Finer scope wins for the same logical placement: **work_unit** row overrides **department** row
+overrides **org workspace** defaults (same `metric_key` / surface family). **Card 1.5** encodes this in DB
+constraints and seed templates.
+
+**How many KPIs**
+
+- KPIBlock hard cap (e.g. 5 visible) applies **after** resolver output + `mergeKpisForOrientationStrip`.
+- Config may define more rows; overflow hidden by cap.
+- Department facet `total_by_work_unit` may emit **N** cells (one per WU) — **Card 1.5** decides WU sort,
+  whether to cap N, or paginate (product).
+
+**Ordering / grouping**
+
+1. Load visible rows for scope; sort by `display_order`, tie-break `metric_key`.
+2. Resolve to `KPIVm[]` (§3).
+3. KPIBlock: business lane first, ai lane last, then `maxVisible` slice.
+4. `group_key` — no mandated UI in v0; lane is the only grouping.
+
+================================================================================
+3. RESOLUTION LAYER (critical)
+================================================================================
+
+**Single entrypoint (conceptual API)**
+
+  resolveKpisForSurface(input) → { items: KPIVm[]; warnings: string[] }
+
+**Input handles**
+
+- surface, orgId, optional departmentId, workUnitId, growth flags
+- **S_batch** — departments + work units list results
+- **L_map** — Map<deptId, LifecyclePayload> (filled with ≤1 GET per dept)
+- **Q_batch** — dept `work-unit-queue-summaries` **or** work-unit `queues` summary array
+- Optional UI context: selected queue key, work unit names for labels
+
+**Algorithm**
+
+1. **Load placement** from config; if none → return **baseline** `KPIVm[]` matching today’s hard-coded sets.
+2. **Validate** each `metric_key` against registry; unknown → skip + warning (**Card 1.5**: strictness).
+3. **Ensure batches:** fetch **at most one** L response per distinct dept needed; **one** Q dept batch per dept page;
+   **one** Q work-unit context per work-unit page — **never** per metric.
+4. **Extract L metrics** in **one pass** per dept payload (index statusBreakdown once if multiple L keys need it).
+5. **Build Q index** once: `Map<workUnitId, queues[]>` from Q batch.
+6. **Compute R** after L children satisfied (dependency order).
+7. **Facet expansion:** keys like `dept.wu_queue.total_by_work_unit` expand to **N** KPIVm in resolver (**one** Q batch).
+8. **Format** → string values and KPIVm `id` (stable: metric_key or metric_key + wuId for facets).
+9. Return ordered list for KPIBlock.
+
+**No scattered logic:** Pages call the resolver (or a hook wrapping it); they do not hand-roll sums per metric.
+
+================================================================================
+4. API STRATEGY (design only)
+================================================================================
+
+**Option A — Client adapter-only (recommended default for v0)**
+
+- Existing `fetch()` calls **unchanged** (per user constraint: no endpoint changes in this phase).
+- After batches settle, client invokes `resolveKpisForSurface`.
+- **Pros:** Matches Card 0.5 reuse of endpoints; no N+1.
+- **Cons:** Logic lives in client until server needs it.
+
+**Option B — Thin server KPI context endpoint (future)**
+
+- Single route that internally invokes QueueService + lifecycle once each, returns minimal JSON for resolution.
+- **Card 1.5** decides if v0 implementation uses B; design allows it without changing QueueService contracts.
+
+**Option C — Embed kpi_context in existing responses**
+
+- **Not recommended:** payload coupling and creep.
+
+**N+1 guard (all options):** ≤1 L GET per covered dept per page load; ≤1 dept Q batch; work-unit Q aligned with existing bootstrap.
+
+================================================================================
+5. DATA FLOW (end-to-end)
+================================================================================
+
+  [Placement config rows] + [Code registry]
+              |
+              v
+      +---------------+
+      |   Resolver    |  ← single pipeline; consumes S / L / Q / R batches
+      +-------+-------+
+              |
+              v
+         KPIVm[] ------> KPIBlock (adminV2)
+
+**Org page:** fetch S + L (per growth dept) → resolver → WorkspaceRootShell → KPIBlock.
+
+**Dept page:** fetch WU list + Q batch → resolver (facet expansion) → kpiSlot KPIBlock.
+
+**Work-unit page:** use existing `queueSummaries` (+ selected queue) → resolver → WorkUnitWorkspace → KPIBlock.
+
+**Classic:** `useOperationsWorkspaceData` still owns fetches; **separate mapper** applies placement to **which
+lifecycle sections/cells** KpiBlock shows (structure TBD in implementation; **no** removal of loading/error UX).
+
+ASCII:
+
+  Config → validate keys → batch ensure → extract (single pass each) → format → KPIVm[] → mergeKpisForOrientationStrip → KPIBlock
+
+================================================================================
+6. PERFORMANCE STRATEGY
+================================================================================
+
+- **Network:** Same request cardinality as today unless Card 1.5 adds Option B.
+- **CPU:** One reducer/index build per batch family; all metrics of that family read from index — **no repeated
+  full-array scans** per metric.
+- **Memoization:** Resolver output keyed on batch identity + placement hash + small UI context (e.g. selected tab).
+- **Work-unit:** KPI resolution must not force re-fetch of queue items; summaries only for Q-family counts.
+- **Lifecycle 5000-row cap:** unchanged baseline; not solved by KPI config project.
+
+================================================================================
+7. BACKWARD COMPATIBILITY
+================================================================================
+
+- **KPIBlock:** Props unchanged (`KPIVm[]`). Only data producers switch to resolver output.
+- **KpiBlock:** Lifecycle data path unchanged; config at most **filters/reorders** presentation of existing cells.
+- **Endpoints:** No contract changes in this design phase; resolver consumes current JSON.
+- **Fallback:** No config → today’s metric sets and ordering per surface (implementation verifies with tests).
+- **KPIBand:** Out of scope (Card 0.5).
+
+================================================================================
+8. RISKS / TRADEOFFS
+================================================================================
+
+- **Snapshot vs adapter:** Adapter-first; optional thin endpoint if latency wins — **Card 1.5**.
+- **L vs Q consistency:** Registry `parity_note` + training; no false equality in default labels.
+- **metric_key stability:** Namespace + deprecate; never silent rename.
+- **Facet dept strip vs many WUs:** Product may need cap/summary row — **Card 1.5**.
+- **Classic vs adminV2:** One registry, two thin mappers; drift risk — mitigate with shared parity notes.
+- **Registry in code vs DB:** **Recommended:** registry in code for v0; DB holds placement only — **Card 1.5** confirms.
+
+--- Resolved in CARD 1.5 — see that section for final locks (storage, enum, behavior, API, facets, sequence). ---
+
+--- Placement row reminder ---
+
+Final column list and constraints → **CARD 1.5 §1**.
+
+**Implementation:** None — design documentation only in Card 1; Card 1.5 adds locks only.
+
+--------------------------------------------------------------------------------
+CARD 1.5 — Implementation Readiness / Final Locks (COMPLETE)
+--------------------------------------------------------------------------------
+
+Status: Final pre-implementation decisions (2026-04-30). **No code, migrations, or endpoint changes** in this update.
+Card 2+ may begin after stakeholder sign-off below.
+
+================================================================================
+1. STORAGE MODEL (LOCKED)
+================================================================================
+
+**Where placements live**
+- **New Postgres table** owned by this feature (not reuse of a generic “config blob” table unless one already
+  matches this shape — **none required in v0**; use a dedicated table for query clarity and constraints).
+
+**Proposed table name (implementation):** `workspace_kpi_placement`  
+(Card 2 may adjust naming to match repo conventions; behavior below is fixed.)
+
+**v0 approach**
+- **DB table + SQL/TS seeds** for template org(s) and optional per-org seed in deployment docs.
+- **No** file-backed JSON as the runtime source in production — file may duplicate seeds for dev only.
+- **Registry** (metric definitions) stays **in TypeScript** (Card 1); only **placement** rows live in DB.
+
+**Required columns / shape (v0)**
+
+| Column | Type | Notes |
+| id | uuid, PK, default gen_random_uuid() | |
+| org_id | uuid (or text if org ids are text today) | required; every row tenant-scoped |
+| surface | text CHECK IN ('workspace','department','work_unit') | |
+| department_id | nullable | required when surface ∈ {department, work_unit} for scoped rows; null = org-level workspace rows |
+| work_unit_id | nullable | set only for work_unit–specific overrides |
+| metric_key | text | must match registry; validated in app |
+| display_order | int | not null; sort ascending |
+| is_visible | boolean | not null; default true |
+| label_override | text nullable | |
+| format_override | text nullable | CHECK IN ('count','currency','percent','duration','text') or null |
+| lane_override | text nullable | CHECK IN ('business','ai') or null |
+| group_key | text nullable | reserved; unused in v0 UI |
+| metadata | jsonb nullable | **display hints only** (e.g. icon id); no executable keys |
+| created_at | timestamptz | default now() |
+| updated_at | timestamptz | default now() |
+
+**Note:** Strip-level `max_visible` remains **KPIBlock prop default (5)** in v0; optional column
+`max_visible_strip` **deferred** — add only if product needs org-level cap before code change.
+
+**Uniqueness / indexing (LOCKED intent)**
+- Partial unique index so one placement per **(org_id, surface, metric_key)** within a scope bucket:
+  - **Workspace org-level:** `(org_id) WHERE surface = 'workspace' AND department_id IS NULL AND work_unit_id IS NULL`
+  - **Department scoped:** `(org_id, department_id) WHERE surface = 'department' AND department_id IS NOT NULL AND work_unit_id IS NULL`
+  - **Work-unit override:** `(org_id, work_unit_id) WHERE surface = 'work_unit' AND work_unit_id IS NOT NULL`
+- **Facet:** `dept.wu_queue.total_per_work_unit` uses **one** row per dept scope (same uniqueness as department surface);
+  resolver expands to N cells — **not** N DB rows.
+
+**Versioning**
+- **v0:** No separate config version column. **Migrations** version the schema; `updated_at` audits row edits.
+- **Deferred:** `placement_schema_version` per org or global.
+
+**Scoping rules**
+- `surface=workspace` → **must** have `department_id IS NULL AND work_unit_id IS NULL`.
+- `surface=department` → **must** have `department_id` set (specific department).
+- `surface=work_unit` → **must** have `department_id` + `work_unit_id` set (override for that WU), **or** Card 2
+  documents a simplified variant — **LOCK:** work_unit surface rows include **both** IDs for clarity.
+
+================================================================================
+2. FINAL metric_key ENUM FOR V0 (LOCKED)
+================================================================================
+
+**Convention:** lowercase snake segments; prefixes `org`, `dept`, `wu`.
+
+**S — Structure (workspace org strip only)**
+- `org.structure.departments_count`
+- `org.structure.work_units_count`
+
+**R — Org rollup (workspace org strip; reducer over L batches per growth-slice dept)**
+- `org.pipeline.active_in_motion`
+- `org.pipeline.pipeline_value_open`
+- `org.pipeline.closed_outcomes`
+
+**L — Lifecycle (not placed as standalone rows on adminV2 org strip in v0; consumed internally by R)**  
+Registry still defines L extractors for **classic** and for **R** dependencies:
+- Internal / classic mapping (same lifecycle payload):
+  - `lifecycle.counts.total` (internal key or classic column id — **implementation** maps to KpiBlock order)
+  - `lifecycle.counts.intake` … (defer exposing every cell as config in v0 for classic — **classic deferred**, see §7)
+
+**For v0 placement table, only the keys in S + R + Q + optional WU below are seedable.**
+
+**Q — Queue-backed**
+- `dept.wu_queue.total_per_work_unit` — **facet**; one placement row → N KPIVm from one Q batch.
+- `dept.queue.needs_attention_sum` — optional; sum of `needs_attention` queue counts across WUs in dept batch
+  (**deferred** unless product asks — not in current top strip; **DEFERRED**).
+
+**Work-unit (optional strip, §6)**
+- `wu.queue.selected_tab_count` — Q; must match active queue tab / reconciled total (same state as UI).
+- `wu.queue.primary_lane_total` — Q; same as effective row total for current lane when strip restored (**optional second cell**).
+
+**DEFERRED (explicit — not in v0 seed or placement validation required)**
+- `dept.queue.needs_attention_sum`
+- `org.pipeline.*` variants for non–growth-slice departments
+- `wu.legacy.*` (quote sum, oldest age, etc.) until legacy path parity is scoped
+- `enrollment.funnel.*` compact strip metrics (unused `buildEnrollmentDepartmentKpis` alignment)
+- Any **KPIBand** / shell metrics
+- Additional L granular keys as **placement** rows on classic (classic deferred)
+
+================================================================================
+3. UNKNOWN / INVALID CONFIG BEHAVIOR (LOCKED)
+================================================================================
+
+**Stale / unknown `metric_key` in DB**
+- **Skip** the row; **do not** fail the strip or page.
+- **Log:** `warn` with org_id, surface, metric_key, placement id (server) or `console.warn` in dev client resolver;
+  production: structured log / observability once per key per load max (implementation detail).
+
+**Metric valid in registry but disallowed for surface**
+- **Skip** row + same warn (e.g. Q metric on `surface=workspace`).
+
+**Empty placement after validation**
+- **Fallback** to today’s hard-coded `KPIVm[]` for that surface (Card 0 behavior) — **required** for UX parity.
+
+**Seed / build-time**
+- CI or seed script **should** validate that all seeded `metric_key` values exist in registry enum — **fail build**
+  for bad seeds (optional hardening in Card 2).
+
+================================================================================
+4. API APPROACH (LOCKED)
+================================================================================
+
+- **v0: Adapter-only** — no new REST route for KPI snapshot; existing endpoints unchanged.
+- **Thin KPI endpoint:** **Deferred** to post-v0; revisit only if measured latency or duplication justifies it.
+- **Per-KPI fetches:** **Forbidden** — zero additional HTTP per metric; batching matches Card 0 / 0.5.
+- **Endpoint contracts:** **No breaking changes** to JSON shapes of lifecycle, work-unit-queue-summaries, or
+  work-unit queues routes in KPI Config v0 work.
+
+================================================================================
+5. RENDERING PATH (LOCKED)
+================================================================================
+
+- **adminV2:** **KPIBlock** + `KPIVm[]` from resolver — **forward path** for all v0 placement.
+- **Classic /admin/workspace:** **KpiBlock** remains; **v0 does not** migrate classic to KPIBlock. Placement config
+  for classic **deferred** (§7); runtime **unchanged** by v0 story.
+- **KPIBand:** **Out of scope** for v0; no registry wiring.
+
+================================================================================
+6. WORK-UNIT KPI STRIP (LOCKED)
+================================================================================
+
+**Decision:** **OPTIONAL** for v0 — ship is acceptable with **empty strip** (current QueueService path) if schedule tight.
+
+**If implemented in Card 2, allowed metrics only:**
+- `wu.queue.selected_tab_count` (required if strip is enabled at all)
+- `wu.queue.primary_lane_total` (optional second cell; same reconciliation rules as page today)
+
+**Not allowed in v0 work-unit strip:** L-family, R, S, or legacy quote/age metrics (separate card).
+
+================================================================================
+7. CLASSIC /admin HANDLING (LOCKED)
+================================================================================
+
+**Decision:** **Defer** classic `/admin/workspace` **placement seeds and resolver wiring** to **v0.1 / follow-on**.
+v0 delivers **adminV2** + table + registry + resolver integration only. Classic keeps hard-coded KpiBlock layout.
+
+Registry MAY include future classic keys in code comments for alignment — **no DB rows required** for classic in v0.
+
+================================================================================
+8. FACET EXPANSION RULES (LOCKED)
+================================================================================
+
+**Applies to:** `dept.wu_queue.total_per_work_unit`
+
+**Sort order:** Same as `GET /api/admin/work-units?department_id=` response order (stable, deterministic for a given backend).
+
+**Cap:** **Maximum 12** expanded KPI cells per department page. Work units beyond 12 are **omitted** from the strip;
+resolver pushes warning `facet_cap_exceeded` in `warnings[]` (implementation may surface dev-only).
+
+**display_order:** Applies to the **single** facet placement row relative to **other** placement rows on that
+surface (if multiple rows exist in future); facet-internal cells follow API WU order.
+
+**Many work units / UX:** No "show more" in v0 — cap is silent in UI except possible future badge (**deferred**).
+
+================================================================================
+9. PERFORMANCE ACCEPTANCE BAR (LOCKED)
+================================================================================
+
+**Max fetch pattern (vs current main, adapter-only v0)**
+- **No additional** round-trips for KPI resolution on org, dept, or work-unit pages.
+- Org: still **one** work-units list + **N** lifecycle GETs for growth-slice depts only (N unchanged).
+- Dept: still **one** `work-unit-queue-summaries` batch (+ existing dept/WU list calls).
+- Work-unit: still **one** queue summary bootstrap (and items load unchanged).
+
+**Batching**
+- Resolver consumes **already-fetched** payloads; does not schedule new fetches.
+
+**Client CPU**
+- **At most one** indexed build per Q batch per resolution; **one** combined extract pass per L dept payload for
+  all L-dependent outputs used.
+
+**N+1**
+- **Zero** per-metric HTTP; violation = **no-go** for merge.
+
+**Measurement (Card 2 exit)**
+- Optional: compare network waterfall and Total Blocking Time vs `main` on sample org (manual or Playwright); no numeric ms SLO locked in v0.
+
+================================================================================
+10. IMPLEMENTATION SEQUENCE FOR CARD 2+ (LOCKED ORDER)
+================================================================================
+
+1. **Migration:** create `workspace_kpi_placement` + indexes (if 1.1 table name accepted).
+2. **Seeds:** template org rows for `org.*` + `dept.wu_queue.total_per_work_unit` (facet row per enrolled dept or global template).
+3. **Registry:** TypeScript module + exported `MetricKey` union matching §2 + `RECORD_KPI_REGISTRY` / `KPI_REGISTRY` pattern.
+4. **Resolver:** `resolveKpisForSurface` + unit tests (fixtures from real JSON samples).
+5. **Loaders:** thin data access for placement rows (org-scoped query by surface + dept + wu).
+6. **adminV2 integration:** `workspace/page.tsx`, `dept/[id]/page.tsx`, optional `work-unit/.../page.tsx` — replace inline KPI building with resolver output + fallback.
+7. **Smoke / regression tests:** empty table fallback, seeded order, invalid key skip, facet cap (12 WUs).
+8. **Classic:** **no** change in v0 beyond incidental shared types (if any).
+
+================================================================================
+IMPLEMENTATION CHECKLIST (copy for PR / Card 2 tracking)
+================================================================================
+
+- [ ] Migration applied (`workspace_kpi_placement` + unique indexes)
+- [ ] Seeds documented / applied for at least one org
+- [ ] `MetricKey` / registry exhaustive for §2 keys
+- [ ] Resolver: skip invalid + warn; fallback strip
+- [ ] Org adminV2 uses resolver
+- [ ] Dept adminV2 uses resolver + facet cap 12 + API WU order
+- [ ] Work-unit: strip **either** omitted **or** only §6 metrics
+- [ ] No new endpoints; no modified response contracts for existing KPI data sources
+- [ ] Tests: unit (resolver) + smoke (pages)
+- [ ] Classic /admin/workspace unchanged (layout)
+
+================================================================================
+GO / NO-GO FOR CARD 2
+================================================================================
+
+**GO:** All sections §1–§10 above are **locked**; Card 2 implementation may proceed after **explicit stakeholder
+sign-off** on this CARD 1.5 block (especially optional work-unit strip and facet cap).
+
+**NO-GO triggers:** New endpoints added for v0 without revisiting this doc; per-metric fetches; breaking
+lifecycle/queue JSON contracts; classic scope creep without v0.1 label.
+
+**Confirmation:** No application code, migrations, or endpoint changes were made — **documentation only** in
+`docs/sprints/05_2026/kpi_config.txt`.
+
+--------------------------------------------------------------------------------
+CARD 2 — Build: KPI Placement Storage + Seeds
+--------------------------------------------------------------------------------
+
+**Prerequisite:** CARD 1.5 §GO / NO-GO — stakeholder sign-off before starting Card 2.
+
+**Goal:** Create the storage foundation for configurable KPI placements. **No** UI, resolver, loader, or endpoint work.
+
+**Scope**
+
+**DDL — table `workspace_kpi_placement`** (name and types per CARD 1.5 §1 unless repo convention dictates a rename)
+
+**Columns (minimum):**
+- `id` — uuid PK, default `gen_random_uuid()` (or repo standard)
+- `org_id` — required; tenant scoping for every row
+- `surface` — text with **CHECK** ∈ `('workspace','department','work_unit')`
+- `department_id` — nullable
+- `work_unit_id` — nullable
+- `metric_key` — text, not null
+- **`sort_order`** — integer, not null — display order ascending  
+  **Reconciliation:** CARD 1.5 §1 names this **`display_order`**. **Pick one column name** in shipped DDL and amend
+  CARD 1.5 §1 in the same PR so doc and schema match (recommended: **`display_order`** if 1.5 is already cited in
+  review; alternatively rename 1.5 to `sort_order` everywhere — single naming only).
+- **`is_active`** — boolean, not null, default true — inactive rows excluded from resolution  
+  **Reconciliation:** CARD 1.5 §1 uses **`is_visible`**. Same rule: **one** concept in DDL (`is_visible` **or**
+  `is_active`) + doc updated to match.
+- **`presentation` / config jsonb** — nullable — **display hints only**; no formulas, SQL, or reducer definitions  
+  **Reconciliation:** CARD 1.5 §1 specifies **`metadata`** jsonb — prefer **`metadata`** unless both doc and 1.5 are
+  amended together.
+- `created_at`, `updated_at` — timestamptz, defaults `now()`
+
+**CHECK constraints — valid surface / scope combinations**
+- `surface = 'workspace'` ⇒ `department_id IS NULL AND work_unit_id IS NULL`
+- `surface = 'department'` ⇒ `department_id IS NOT NULL AND work_unit_id IS NULL`
+- `surface = 'work_unit'` ⇒ `department_id IS NOT NULL AND work_unit_id IS NOT NULL` (per CARD 1.5 §1)
+
+**Uniqueness — partial unique indexes (active placements)**
+
+Exclude inactive rows so soft-deactivate + re-seed stays idempotent (use final “active” column name):
+
+- Workspace org-level: unique `(org_id, metric_key)` where `surface = 'workspace'` and null scope and **active = true**
+- Department: unique `(org_id, department_id, metric_key)` where `surface = 'department'` and `work_unit_id IS NULL`
+  and active
+- Work-unit override: unique `(org_id, work_unit_id, metric_key)` where `surface = 'work_unit'` and active
+
+**Facet rule:** `dept.wu_queue.total_per_work_unit` = **one** row per department scope (not one row per WU).
+
+**Seeds — idempotent (adminV2 v0)**
+
+Use upsert / `ON CONFLICT` aligned with unique indexes so re-runs are safe.
+
+**Required seed `metric_key` values:**
+- `org.structure.departments_count` — `surface=workspace`, scope nulls
+- `org.structure.work_units_count` — `surface=workspace`, scope nulls
+- `org.pipeline.active_in_motion` — `surface=workspace`, scope nulls
+- `org.pipeline.pipeline_value_open` — `surface=workspace`, scope nulls
+- `org.pipeline.closed_outcomes` — `surface=workspace`, scope nulls
+- `dept.wu_queue.total_per_work_unit` — `surface=department`, **`department_id` set per target dept** (document fixture
+  org / dept ids for local dev)
+
+**Optional / deferred in seeds (omit unless product expands Card 2):**
+- `wu.queue.selected_tab_count`
+- `wu.queue.primary_lane_total`
+
+Set sort/display order in seeds to match today’s left-to-right read (structure → pipeline → dept facet).
+
+**Out of scope for Card 2**
+- TypeScript registry, resolver, page wiring; tests beyond migration apply sanity (optional).
+- Classic `/admin` — **untouched**.
+- Any KPI **value** endpoint.
+
+**Acceptance**
+- [ ] Supabase migration applies cleanly.
+- [ ] CHECK constraints reject invalid surface/scope rows.
+- [ ] Unique indexes prevent duplicate **active** placements per scope bucket.
+- [ ] Seeds idempotent.
+- [ ] No UI, resolver, or endpoint changes in this card’s PR.
+- [ ] Classic `/admin` untouched.
+- [ ] Column naming reconciled with CARD 1.5 §1 (`display_order`/`is_visible`/`metadata` vs alternatives).
+
+--------------------------------------------------------------------------------
+CARD 3 — Build: TypeScript KPI Registry
+--------------------------------------------------------------------------------
+
+**Goal:** Code-owned catalog — **HOW** metrics are bound; DB only chooses **WHAT** appears.
+
+**Scope**
+
+**Must include**
+- **`MetricKey`** — union/const enum: all Card 2 required seed keys + optional WU keys reserved for Card 6.
+- **`family`** — `'L' | 'Q' | 'S' | 'R'`.
+- **`allowed_surfaces`** — subset of workspace / department / work_unit.
+- **Display metadata** — default label, format, lane, optional `parity_note`.
+- **Resolver binding metadata** — fixed extractor/reducer references in code only (no config-driven reducer names).
+- **Helpers:** `isKnownMetricKey`, `getMetricDefinition`, `validateMetricForSurface`.
+- **Warnings** path compatible with **skip + warn** (CARD 1.5 §3).
+
+**Rules**
+- No formulas, SQL, eval, or arbitrary reducers from config/jsonb.
+
+**Out of scope**
+- Loader/resolver (**Card 4**); no production page import required unless covered by tests only.
+
+**Acceptance**
+- [ ] Unknown keys handled safely via `isKnownMetricKey`.
+- [ ] All Card 2 seed keys defined.
+- [ ] Surface validation matches CARD 1.5.
+- [ ] No user-visible behavior change until Card 5 (registry usable from tests only before then).
+
+--------------------------------------------------------------------------------
+CARD 4 — Build: KPI Placement Loader + Resolver
+--------------------------------------------------------------------------------
+
+**Goal:** Single path: load placements → resolve **`KPIVm[]`** — **adapter-only v0** (no new KPI value endpoint).
+
+**Scope**
+
+**Loader**
+- Query table org-scoped; filter by surface + optional `department_id` / `work_unit_id`; respect active/visible flag.
+- Sort by sort/display order, tie-break `metric_key`.
+
+**Resolver**
+- `resolveKpisForSurface(input) → { items: KPIVm[]; warnings: string[] }` (signature TBD).
+- **Input:** handles to **already-fetched** S / L_map / Q payloads only + UI context (selected queue, facet cap 12, WU API order).
+- **Empty config** ⇒ **fallback** `KPIVm[]` = today’s hard-coded strips.
+- **Invalid row** ⇒ skip + warn; **never** crash the page.
+- **Q / S / R** rules per CARD 1 and 1.5 (parity, single pass, facet expansion ≤12).
+
+**Forbidden**
+- New HTTP route that returns **computed KPI values** (snapshot API).
+- Per-metric `fetch`.
+- Changing **KPIBlock** props.
+
+**Acceptance**
+- [ ] No N+1; resolver performs no network I/O.
+- [ ] No KPI value endpoint added.
+- [ ] `kpis: KPIVm[]` contract unchanged.
+- [ ] Empty/missing config ⇒ baseline strip.
+- [ ] Invalid config resilient.
+
+--------------------------------------------------------------------------------
+CARD 5 — Build: AdminV2 Workspace KPI Integration
+--------------------------------------------------------------------------------
+
+**Goal:** Wire `/adminV2/workspace` and `/adminV2/workspace/dept/[departmentId]` to resolver output.
+
+**Scope**
+- Org page: after existing fetches, compose resolver input for `surface=workspace`, pass result to **KPIBlock**.
+- Dept page: after Q batch + WU list, resolve `surface=department` with facet; **KPIBlock** unchanged.
+
+**Must preserve**
+- Layout, **KPIBlock** usage, **queue parity** for Q metrics (Card 0.5).
+
+**Do not**
+- Touch classic `/admin`, **KPIBand**, or unrelated layout refactors.
+- Add a **KPI snapshot** endpoint. **Placement reads:** prefer integrating placement fetch with existing server/client
+  data loading so **net-new HTTP stays minimal**; if a tiny placement-only API is unavoidable, it must return **rows only**
+  (no computed metrics) — document in Card 5 PR and justify against CARD 1.5 adapter-first bar.
+
+**Acceptance**
+- [ ] Strips render; config order drives order (within lane merge + cap).
+- [ ] Queue totals unchanged vs queue UI for Q metrics.
+- [ ] No extra lifecycle/queue fetches vs pre–Card 5 baseline (placement read overhead ≤1 modest query if unavoidable).
+- [ ] Classic `/admin`, KPIBand unchanged.
+
+--------------------------------------------------------------------------------
+CARD 6 — Build: Optional Work-Unit KPI Strip
+--------------------------------------------------------------------------------
+
+**Decision gate (before coding):** stakeholder confirms **include** vs **defer** for v0.
+
+**If INCLUDED**
+- **Only** `wu.queue.selected_tab_count` and/or `wu.queue.primary_lane_total`.
+- Use **existing** work-unit queue state; **no** new API calls; **no** L/S/R on strip.
+
+**If DEFERRED**
+- Document in PR + Card 8 notes; route must **not** regress.
+
+**Acceptance**
+- [ ] No duplicate queue computation; no new endpoint.
+- [ ] Either metrics per spec **or** explicit deferral recorded.
+
+--------------------------------------------------------------------------------
+CARD 7 — Tests + Validation
+--------------------------------------------------------------------------------
+
+**Scope**
+- Migration/schema checks (as tooling allows).
+- Registry unit tests.
+- Loader tests (mocked rows).
+- Resolver fixture tests: valid config, unknown skip, empty fallback, surface mismatch, facet cap / warnings.
+- Integration or documented smoke steps; **no** classic `/admin` behavior change to validate beyond “unchanged”.
+
+**Acceptance**
+- [ ] Tests + TypeScript pass; lint if enforced.
+- [ ] No lifecycle/queue response contract changes.
+
+--------------------------------------------------------------------------------
+CARD 8 — Smoke Test + Documentation Closeout
+--------------------------------------------------------------------------------
+
+**Manual smoke**
+- [ ] `/adminV2/workspace` — strip, parity vs expectations.
+- [ ] `/adminV2/workspace/dept/[id]` — facet, ≤12 WUs, order, queue parity.
+- [ ] Work-unit route — per Card 6 outcome.
+
+**Behavior**
+- [ ] Invalid row / empty table / fallback verified.
+- [ ] Classic `/admin` spot-check — unchanged.
+
+**Doc**
+- [ ] Update **this** `kpi_config.txt` with **Implementation notes (shipped)** — date, PRs, decisions.
+- [ ] List **known deferrals:** KPIBand; classic placement (v0.1); thin KPI snapshot endpoint; snapshot service;
+  broader lifecycle/funnel placement keys; `dept.queue.needs_attention_sum`; legacy WU KPIs.
+
+**Acceptance**
+- [ ] Sprint doc matches shipped reality; no hidden architecture drift.
+
+--------------------------------------------------------------------------------
+Execution Rules (Card 2 onward)
+--------------------------------------------------------------------------------
+
+1. **Sequential execution:** Card 2 → 3 → 4 → 5 → 6 (gate) → 7 → 8. Do not start the next card until the previous
+   card’s **Acceptance** is met or a **written waiver** is recorded in PR + this doc.
+2. **Design conflict:** If code reality conflicts with CARD 1 / 1.5, **stop**; document and resolve with a doc amendment
+   before continuing.
+3. **No KPI value endpoint in v0** — no new route returning merged computed KPI values (CARD 1.5). Placement-only reads
+   should be minimized; justify any new route in PR.
+4. **No formulas or SQL in config** — jsonb = display hints only.
+5. **Classic `/admin`:** no placement/registry integration unless a **separate v0.1** card approves it.
+6. **Preserve `KPIBlock` props** (`KPIVm[]`).
+7. **Preserve queue count trust** (Card 0.5 Q parity).
+8. **Performance:** no per-metric fetch, no N+1, no redundant full reductions over the same batch (Card 4).
+
+--------------------------------------------------------------------------------

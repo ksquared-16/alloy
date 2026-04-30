@@ -1,0 +1,10 @@
+var R=require("../../../../../../chunks/[turbopack]_runtime.js")("server/app/api/admin/pricing/first-clean-prices/[id]/route.js")
+R.c("server/chunks/[root-of-the-server]__ded45f9a._.js")
+R.c("server/chunks/2374f_next_542235a8._.js")
+R.c("server/chunks/2374f_e0f4719d._.js")
+R.c("server/chunks/2374f_@supabase_supabase-js_dist_index_mjs_b9a2feee._.js")
+R.c("server/chunks/[root-of-the-server]__a4139519._.js")
+R.c("server/chunks/web_61511fb7._.js")
+R.c("server/chunks/686e4_server_app_api_admin_pricing_first-clean-prices_[id]_route_actions_bd420f7d.js")
+R.m(98426)
+module.exports=R.m(98426).exports

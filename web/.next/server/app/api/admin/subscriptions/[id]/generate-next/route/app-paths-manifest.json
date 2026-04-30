@@ -1,0 +1,3 @@
+{
+  "/api/admin/subscriptions/[id]/generate-next/route": "app/api/admin/subscriptions/[id]/generate-next/route.js"
+}

@@ -1,0 +1,10 @@
+var R=require("../../../../chunks/[turbopack]_runtime.js")("server/app/api/book-v2/quote-refine/route.js")
+R.c("server/chunks/2374f_next_dist_esm_build_templates_app-route_f1ae562f.js")
+R.c("server/chunks/2374f_e0f4719d._.js")
+R.c("server/chunks/[root-of-the-server]__ba9712c1._.js")
+R.c("server/chunks/2374f_@supabase_supabase-js_dist_index_mjs_b9a2feee._.js")
+R.c("server/chunks/[root-of-the-server]__a4139519._.js")
+R.c("server/chunks/2374f_next_542235a8._.js")
+R.c("server/chunks/web__next-internal_server_app_api_book-v2_quote-refine_route_actions_fda4c458.js")
+R.m(7652)
+module.exports=R.m(7652).exports

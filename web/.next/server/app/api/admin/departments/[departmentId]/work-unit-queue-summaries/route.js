@@ -1,0 +1,12 @@
+var R=require("../../../../../../chunks/[turbopack]_runtime.js")("server/app/api/admin/departments/[departmentId]/work-unit-queue-summaries/route.js")
+R.c("server/chunks/[root-of-the-server]__47754131._.js")
+R.c("server/chunks/web_lib_queues_QueueService_ts_bc51770d._.js")
+R.c("server/chunks/2374f_next_542235a8._.js")
+R.c("server/chunks/2374f_e0f4719d._.js")
+R.c("server/chunks/web_lib_config_queueDefinitionSchema_ts_f55c6ee1._.js")
+R.c("server/chunks/2374f_@supabase_supabase-js_dist_index_mjs_b9a2feee._.js")
+R.c("server/chunks/[root-of-the-server]__a4139519._.js")
+R.c("server/chunks/web_61511fb7._.js")
+R.c("server/chunks/08936_departments_[departmentId]_work-unit-queue-summaries_route_actions_78806da9.js")
+R.m(99143)
+module.exports=R.m(99143).exports

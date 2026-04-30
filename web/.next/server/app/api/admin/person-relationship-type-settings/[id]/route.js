@@ -1,0 +1,10 @@
+var R=require("../../../../../chunks/[turbopack]_runtime.js")("server/app/api/admin/person-relationship-type-settings/[id]/route.js")
+R.c("server/chunks/[root-of-the-server]__c30f816b._.js")
+R.c("server/chunks/web_61511fb7._.js")
+R.c("server/chunks/2374f_e0f4719d._.js")
+R.c("server/chunks/2374f_@supabase_supabase-js_dist_index_mjs_b9a2feee._.js")
+R.c("server/chunks/[root-of-the-server]__a4139519._.js")
+R.c("server/chunks/2374f_next_542235a8._.js")
+R.c("server/chunks/04ae8_app_api_admin_person-relationship-type-settings_[id]_route_actions_df2c0e9c.js")
+R.m(95133)
+module.exports=R.m(95133).exports

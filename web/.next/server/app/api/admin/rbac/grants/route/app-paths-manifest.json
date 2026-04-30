@@ -1,0 +1,3 @@
+{
+  "/api/admin/rbac/grants/route": "app/api/admin/rbac/grants/route.js"
+}

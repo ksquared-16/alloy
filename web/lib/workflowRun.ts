@@ -14,6 +14,8 @@ import { CANONICAL_SQFT_TIER_OPTIONS } from "@/lib/book-v2/loadCleaningPricingCa
 import { getByPath, renderActionLinkMetadata, renderTemplate } from "@/lib/workflowTemplate";
 import { resolveJobStatusRowByOrgAndKey } from "@/lib/admin/jobEffectiveStatusKey";
 import { resolveScheduleStatusRowByKey } from "@/lib/admin/scheduleEffectiveStatusKey";
+import { isCommunicationCanonicalDualWriteEnabled } from "@/lib/communications/communicationsEnabled";
+import { enqueueCanonicalCommunicationMirror } from "@/lib/communications/mirrorQueuedMessage";
 
 /** Standard event payload shape; all entity keys optional. Do not crash if missing. */
 export type WorkflowEventPayload = {
@@ -1732,6 +1734,29 @@ export async function executeWorkflowRun(
                     if (newMsgId) {
                         (payload as Record<string, unknown>)._last_workflow_message_id = newMsgId;
                         (payload as Record<string, unknown>)._last_workflow_message_channel = channel;
+                    }
+                    if (isCommunicationCanonicalDualWriteEnabled()) {
+                        const orgForComm = String(
+                            (payload as Record<string, unknown>).org_id ?? options?.org_id ?? ""
+                        ).trim();
+                        if (orgForComm && (channel.toLowerCase() === "sms" || channel.toLowerCase() === "email")) {
+                            void enqueueCanonicalCommunicationMirror({
+                                supabase,
+                                orgId: orgForComm,
+                                workflowRunId: runId,
+                                workflowId,
+                                channelRaw: channel,
+                                toRaw: toValue,
+                                bodyRaw: bodyText ?? "",
+                                payload,
+                                optionsOrgId: options?.org_id ?? null,
+                            }).catch((e) =>
+                                console.warn(
+                                    "[WORKFLOW_RUN] canonical communication mirror failed",
+                                    e instanceof Error ? e.message : e
+                                )
+                            );
+                        }
                     }
                     console.log("[WORKFLOW_RUN] create_message_queued", {
                         workflow_id: workflowId,

@@ -1,0 +1,3 @@
+{
+  "/api/admin/agent/v0/queue-definition/route": "app/api/admin/agent/v0/queue-definition/route.js"
+}

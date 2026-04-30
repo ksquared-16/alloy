@@ -1,0 +1,10 @@
+var R=require("../../../../chunks/[turbopack]_runtime.js")("server/app/api/action-links/consume-accept-job/route.js")
+R.c("server/chunks/[root-of-the-server]__6bc5795a._.js")
+R.c("server/chunks/[root-of-the-server]__7eb9430f._.js")
+R.c("server/chunks/[root-of-the-server]__d6a163f9._.js")
+R.c("server/chunks/2374f_@supabase_supabase-js_dist_index_mjs_b9a2feee._.js")
+R.c("server/chunks/2374f_next_542235a8._.js")
+R.c("server/chunks/[root-of-the-server]__a4139519._.js")
+R.c("server/chunks/686e4_server_app_api_action-links_consume-accept-job_route_actions_4fb21229.js")
+R.m(56504)
+module.exports=R.m(56504).exports

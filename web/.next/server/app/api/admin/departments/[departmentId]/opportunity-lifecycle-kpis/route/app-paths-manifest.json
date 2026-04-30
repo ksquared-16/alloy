@@ -1,0 +1,3 @@
+{
+  "/api/admin/departments/[departmentId]/opportunity-lifecycle-kpis/route": "app/api/admin/departments/[departmentId]/opportunity-lifecycle-kpis/route.js"
+}

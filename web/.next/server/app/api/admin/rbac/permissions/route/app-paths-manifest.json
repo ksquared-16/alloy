@@ -1,0 +1,3 @@
+{
+  "/api/admin/rbac/permissions/route": "app/api/admin/rbac/permissions/route.js"
+}
