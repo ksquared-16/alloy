@@ -103,11 +103,7 @@ import {
 import { executeOpportunityRecordAction } from "@/lib/recordChrome/executeOpportunityRecordAction";
 import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { formatActivityRelativeShort, type ActivitySignalResult } from "@/lib/admin/activitySignals";
-import {
-    getWorkflowActivityActorLabel,
-    getWorkflowActivityEventDetail,
-    getWorkflowActivityEventTitle,
-} from "@/lib/admin/opportunityActivityTimelineFormat";
+import { formatOpportunityActivityTimelineEvent } from "@/lib/admin/opportunityActivityTimelineFormat";
 import OpportunityQuoteIntakeSection from "@/components/admin/quoteIntake/OpportunityQuoteIntakeSection";
 
 function dispatchAfterPaymentRun(jobId: string, scheduleId: string | null) {
@@ -8864,22 +8860,23 @@ export default function AdminEntityDrawer() {
                                                         p.body_preview != null && String(p.body_preview).trim()
                                                             ? String(p.body_preview)
                                                             : null;
-                                                    const actTitle = getWorkflowActivityEventTitle(ev.event_type);
-                                                    const actDetail = getWorkflowActivityEventDetail(ev.event_type, p);
+                                                    const act = formatOpportunityActivityTimelineEvent({
+                                                        event_type: ev.event_type,
+                                                        payload: p,
+                                                    });
                                                     return (
                                                         <li
                                                             key={ev.id}
                                                             className="rounded-lg border border-alloy-stone/15 bg-white px-3 py-2 text-sm"
                                                         >
-                                                            <div className="font-semibold text-alloy-forge">{actTitle}</div>
-                                                            {actDetail ? (
+                                                            <div className="font-semibold text-alloy-forge">{act.title}</div>
+                                                            {act.detail ? (
                                                                 <div className="mt-0.5 text-[13px] font-normal text-alloy-forge/80">
-                                                                    {actDetail}
+                                                                    {act.detail}
                                                                 </div>
                                                             ) : null}
                                                             <div className="mt-0.5 text-[12px] text-alloy-forge/65">
-                                                                {formatDateTime(ev.occurred_at)} ·{" "}
-                                                                {getWorkflowActivityActorLabel(p, ev.event_type)}
+                                                                {formatDateTime(ev.occurred_at)} · {act.actorLabel}
                                                             </div>
                                                             {preview ? (
                                                                 <div className="mt-1.5 text-[13px] text-alloy-forge/85 whitespace-pre-wrap">

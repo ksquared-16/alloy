@@ -5,15 +5,15 @@ import {
     getWorkflowActivityActorLabel,
     getWorkflowActivityEventDetail,
     getWorkflowActivityEventTitle,
-    humanizeSnakeCaseToken,
+    humanizeOpportunitySnakeCaseToken,
 } from "@/lib/admin/opportunityActivityTimelineFormat";
 
 describe("opportunityActivityTimelineFormat", () => {
     it("humanizes configured and generic snake_case", () => {
-        expect(humanizeSnakeCaseToken("new_inquiry")).toBe("New Inquiry");
-        expect(humanizeSnakeCaseToken("contact_attempted")).toBe("Contact Attempted");
-        expect(humanizeSnakeCaseToken("tour_scheduled")).toBe("Tour Scheduled");
-        expect(humanizeSnakeCaseToken("won")).toBe("Won");
+        expect(humanizeOpportunitySnakeCaseToken("new_inquiry")).toBe("New Inquiry");
+        expect(humanizeOpportunitySnakeCaseToken("contact_attempted")).toBe("Contact Attempted");
+        expect(humanizeOpportunitySnakeCaseToken("tour_scheduled")).toBe("Tour Scheduled");
+        expect(humanizeOpportunitySnakeCaseToken("won")).toBe("Won");
     });
 
     it("titles use friendly labels", () => {
