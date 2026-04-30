@@ -142,6 +142,38 @@ export default function Drawer({
               ? { backgroundColor: neutral.background, color: neutral.textPrimary }
               : undefined;
 
+    const subtitleTypographyClass =
+        cleaningRecordModalTone
+            ? "mt-1.5 text-[13px] font-normal leading-snug"
+            : `mt-1 text-sm font-medium ${isV2 ? "" : "text-alloy-midnight/55"}`;
+
+    const subtitleStyle =
+        isV2 && headerSubtitle != null && headerSubtitle !== false
+            ? {
+                  color: derived.textSecondary,
+                  ...(cleaningRecordModalTone ? { opacity: 0.88 } : {}),
+              }
+            : undefined;
+
+    /** Rich ReactNode subtitles must not be wrapped in <p> — avoids invalid nesting (e.g. div inside p). */
+    const renderHeaderSubtitle = () => {
+        if (headerSubtitle == null || headerSubtitle === false) return null;
+        const isPlainText =
+            typeof headerSubtitle === "string" || typeof headerSubtitle === "number";
+        if (isPlainText) {
+            return (
+                <p className={subtitleTypographyClass} style={subtitleStyle}>
+                    {headerSubtitle}
+                </p>
+            );
+        }
+        return (
+            <div className={subtitleTypographyClass} style={subtitleStyle}>
+                {headerSubtitle}
+            </div>
+        );
+    };
+
     const headerBlock = (
         <>
             <div
@@ -182,25 +214,7 @@ export default function Drawer({
                         >
                             {titleContent}
                         </h2>
-                        {headerSubtitle != null && headerSubtitle !== false && (
-                            <p
-                                className={
-                                    cleaningRecordModalTone
-                                        ? "mt-1.5 text-[13px] font-normal leading-snug"
-                                        : `mt-1 text-sm font-medium ${isV2 ? "" : "text-alloy-midnight/55"}`
-                                }
-                                style={
-                                    isV2
-                                        ? {
-                                              color: derived.textSecondary,
-                                              ...(cleaningRecordModalTone ? { opacity: 0.88 } : {}),
-                                          }
-                                        : undefined
-                                }
-                            >
-                                {headerSubtitle}
-                            </p>
-                        )}
+                        {renderHeaderSubtitle()}
                     </div>
                     {headerTitleRight != null && headerTitleRight !== false ? (
                         <div className="flex shrink-0 items-start gap-3">

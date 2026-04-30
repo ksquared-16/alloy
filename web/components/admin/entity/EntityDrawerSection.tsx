@@ -9,8 +9,6 @@ const SECTION_HEADER_CLASS =
 /** Pine accent — aligned with inquiry workflow snapshot header cards. */
 const PREMIUM_SECTION =
   "rounded-lg border border-alloy-stone/20 border-l-[3px] border-l-[rgb(0,162,131)] bg-white/90 shadow-sm shadow-alloy-stone/10 ring-1 ring-alloy-stone/10 overflow-hidden";
-const PREMIUM_HEADER_BTN =
-  "flex w-full items-center justify-between gap-2 border-b border-alloy-stone/15 bg-alloy-stone/[0.05] px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.1em] text-alloy-forge/80 transition-colors duration-150 hover:bg-alloy-stone/10";
 const PREMIUM_HEADER_STATIC =
   "border-b border-alloy-stone/15 bg-alloy-stone/[0.05] px-3 py-2.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-alloy-forge/80";
 
@@ -55,24 +53,38 @@ export default function EntityDrawerSection({
       data-section-surface={surface}
     >
       {isCollapsible ? (
-        <button
-          type="button"
-          onClick={() => setExpanded((e) => !e)}
-          className={`entity-drawer-section-toggle ${
+        <div
+          className={
             isPremium
-              ? PREMIUM_HEADER_BTN
-              : `flex w-full items-center justify-between gap-2 text-left transition-colors duration-150 ${SECTION_HEADER_CLASS}`
-          }`}
-          aria-expanded={expanded}
+              ? "flex w-full min-w-0 items-stretch border-b border-alloy-stone/15 bg-alloy-stone/[0.05]"
+              : `flex w-full min-w-0 items-stretch rounded-t-md bg-alloy-stone/30 border-b border-admin-border mb-3 text-xs font-semibold uppercase tracking-wider text-alloy-forge`
+          }
         >
-          <span className="flex items-center gap-2 min-w-0">
-            <span className="truncate">{config.title}</span>
-            {headerRight ? <span className="shrink-0 normal-case tracking-normal">{headerRight}</span> : null}
-          </span>
-          <span className="ml-auto text-alloy-muted transition-opacity duration-150" aria-hidden>
-            {expanded ? "−" : "+"}
-          </span>
-        </button>
+          <button
+            type="button"
+            onClick={() => setExpanded((e) => !e)}
+            className={`entity-drawer-section-toggle flex min-h-0 min-w-0 flex-1 items-center justify-between gap-2 text-left transition-colors duration-150 ${
+              isPremium
+                ? "border-0 bg-transparent px-3 py-2.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-alloy-forge/80 hover:bg-alloy-stone/10"
+                : "border-0 bg-transparent px-3 py-2 hover:bg-alloy-stone/25"
+            }`}
+            aria-expanded={expanded}
+          >
+            <span className="min-w-0 truncate">{config.title}</span>
+            <span className="shrink-0 text-alloy-muted transition-opacity duration-150" aria-hidden>
+              {expanded ? "−" : "+"}
+            </span>
+          </button>
+          {headerRight ? (
+            <div
+              className={`flex shrink-0 items-center gap-2 self-center px-3 normal-case tracking-normal ${
+                isPremium ? "py-2.5" : "py-2"
+              }`}
+            >
+              {headerRight}
+            </div>
+          ) : null}
+        </div>
       ) : (
         <div className={isPremium ? PREMIUM_HEADER_STATIC : SECTION_HEADER_CLASS}>
           <div className="flex items-center gap-2">
