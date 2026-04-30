@@ -1,5 +1,6 @@
 "use client";
 
+import { AdminV2DrawerLoadingState } from "@/components/admin/workspace/AdminV2DrawerLoadingState";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import OpportunityRecordSectionRegistryActions from "@/components/admin/opportunity/OpportunityRecordSectionRegistryActions";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
@@ -27,8 +28,10 @@ export function OpportunityHouseholdPeoplePanel(props: {
     openForm: (opts: { form_key: string; action: ResolvedActionForClient }) => void;
     /** Increment to force refresh after an action. */
     refreshKey: number;
+    /** While `drawer_initial` is showing, avoid empty copy until full hydration may add household links. */
+    recordHydrationPending?: boolean;
 }) {
-    const { opportunityId, customerId, canMutate, sectionKey, departmentId, workUnitId, router, openDrawer, openForm, refreshKey } = props;
+    const { opportunityId, customerId, canMutate, sectionKey, departmentId, workUnitId, router, openDrawer, openForm, refreshKey, recordHydrationPending } = props;
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [people, setPeople] = useState<PersonRow[]>([]);
@@ -104,7 +107,19 @@ export function OpportunityHouseholdPeoplePanel(props: {
             ) : null}
 
             {loading ? (
-                <div className="text-sm text-alloy-forge/60">Loading…</div>
+                <AdminV2DrawerLoadingState
+                    density="inline"
+                    title="Loading household people"
+                    description="Fetching people linked to this household."
+                    className="border-0 bg-transparent px-0 py-2 shadow-none ring-0"
+                />
+            ) : rows.length === 0 && recordHydrationPending ? (
+                <AdminV2DrawerLoadingState
+                    density="inline"
+                    title="Loading household people"
+                    description="Additional links may still be merging into the full record."
+                    className="border-0 bg-transparent px-0 py-2 shadow-none ring-0"
+                />
             ) : rows.length === 0 ? (
                 <div className="text-sm text-alloy-forge/60">No linked people yet.</div>
             ) : (

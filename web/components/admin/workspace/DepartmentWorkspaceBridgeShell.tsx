@@ -2,8 +2,8 @@
 
 import type { CSSProperties, ReactNode } from "react";
 import { useMemo } from "react";
-import "@/app/adminV2/components/workspace/workspace.css";
 import { operationalWorkspaceShellStyle } from "@/lib/visualContext";
+import { WorkspaceShellLayout } from "@/components/admin/workspace/WorkspaceShellLayout";
 
 type Props = {
     /** `departments.key` — resolver fallback when defaults not wired. */
@@ -51,97 +51,81 @@ export function DepartmentWorkspaceBridgeShell({
         [departmentDefaultVisualContextKey, departmentKey, visualContextKey]
     );
 
-  const hasBrief = Boolean(briefTitle.trim());
-  const hasSignals = signalsSlot != null;
-  const hasKpis = kpiSlot != null;
-  /** KPI strip sits directly under the brief so pipeline volume reads before lane signals. */
-  const hasTopStack = hasBrief || hasKpis || hasSignals;
-  const hasControlDeck = hasTopStack;
+    const hasBrief = Boolean(briefTitle.trim());
+    const hasSignals = signalsSlot != null;
+    const hasKpis = kpiSlot != null;
+    const hasTopStack = hasBrief || hasKpis || hasSignals;
+    const hasControlDeck = hasTopStack;
     const hasAttentionLane = attentionSlot != null;
+    const hasRail = railSlot != null;
 
     return (
-        <div
-            data-ws-surface="department"
-            data-production-workspace-bridge="true"
-            className="adminv2-ws-root adminv2-ws-department adminv2-ws-dept-v2"
+        <WorkspaceShellLayout
+            surface="department"
+            rootClassName="adminv2-ws-department adminv2-ws-dept-v2"
             style={bridgeShellStyle}
-        >
-            <div className="adminv2-ws-dept-v2-contain">
-                <div className="adminv2-ws-dept-v2-page-split">
-                    <div className="adminv2-ws-dept-v2-primary-column">
-                        {hasControlDeck ? (
-                            <div className="adminv2-ws-dept-v2-control-deck">
-                                {hasTopStack ? (
-                                  <div className="adminv2-ws-dept-v2-top-stack">
+            productionWorkspaceBridge
+            showRail={hasRail}
+            railContent={hasRail ? railSlot : null}
+            railAriaLabel="Decisions and actions"
+            primaryColumn={
+                <>
+                    {hasControlDeck ? (
+                        <div className="adminv2-ws-dept-v2-control-deck">
+                            {hasTopStack ? (
+                                <div className="adminv2-ws-dept-v2-top-stack">
                                     {hasBrief ? (
-                                      <div className="adminv2-ws-dept-v2-brief">
-                                        <div className="adminv2-ws-dept-v2-brief-focus-label">Today&apos;s focus</div>
-                                        <div className="adminv2-ws-dept-v2-brief-head-row">
-                                          <h2 className="adminv2-ws-dept-v2-brief-headline">{briefTitle}</h2>
+                                        <div className="adminv2-ws-dept-v2-brief">
+                                            <div className="adminv2-ws-dept-v2-brief-focus-label">Today&apos;s focus</div>
+                                            <div className="adminv2-ws-dept-v2-brief-head-row">
+                                                <h2 className="adminv2-ws-dept-v2-brief-headline">{briefTitle}</h2>
+                                            </div>
+                                            {briefSubtitle ? (
+                                                <p
+                                                    style={{
+                                                        margin: "6px 0 0",
+                                                        fontSize: 12,
+                                                        lineHeight: 1.45,
+                                                        color: "var(--d-muted)",
+                                                    }}
+                                                >
+                                                    {briefSubtitle}
+                                                </p>
+                                            ) : null}
                                         </div>
-                                        {briefSubtitle ? (
-                                          <p
-                                            style={{
-                                              margin: "6px 0 0",
-                                              fontSize: 12,
-                                              lineHeight: 1.45,
-                                              color: "var(--d-muted)",
-                                            }}
-                                          >
-                                            {briefSubtitle}
-                                          </p>
-                                        ) : null}
-                                      </div>
                                     ) : null}
                                     {hasKpis ? <div data-workspace-zone="kpi-banner">{kpiSlot}</div> : null}
                                     {hasSignals ? <div className="adminv2-ws-dept-v2-signals">{signalsSlot}</div> : null}
-                                  </div>
-                                ) : null}
-                            </div>
-                        ) : null}
-
-                        <div
-                            className={`adminv2-ws-dept-v2-operational-row ${
-                                hasAttentionLane
-                                    ? "adminv2-ws-dept-v2-operational-row--triple"
-                                    : "adminv2-ws-dept-v2-operational-row--double"
-                            }`}
-                            aria-label="Operational lanes"
-                        >
-                            <div
-                                className="adminv2-ws-dept-v2-lane adminv2-ws-dept-v2-lane--throughput"
-                                data-ws-lane-kind="throughput"
-                            >
-                                <div className="adminv2-ws-dept-v2-lane-chrome adminv2-ws-dept-v2-lane-chrome--throughput-deck">
-                                    {throughputSlot}
-                                </div>
-                            </div>
-                            {hasAttentionLane ? (
-                                <div
-                                    className="adminv2-ws-dept-v2-lane adminv2-ws-dept-v2-lane--attention"
-                                    data-ws-lane-kind="attention"
-                                >
-                                    <div className="adminv2-ws-dept-v2-lane-chrome adminv2-ws-dept-v2-board-secondary-slot">
-                                        {attentionSlot}
-                                    </div>
                                 </div>
                             ) : null}
                         </div>
+                    ) : null}
 
-                        {contextSlot ? <div data-workspace-zone="context-lower">{contextSlot}</div> : null}
+                    <div
+                        className={`adminv2-ws-dept-v2-operational-row ${
+                            hasAttentionLane
+                                ? "adminv2-ws-dept-v2-operational-row--triple"
+                                : "adminv2-ws-dept-v2-operational-row--double"
+                        }`}
+                        aria-label="Operational lanes"
+                    >
+                        <div className="adminv2-ws-dept-v2-lane adminv2-ws-dept-v2-lane--throughput" data-ws-lane-kind="throughput">
+                            <div className="adminv2-ws-dept-v2-lane-chrome adminv2-ws-dept-v2-lane-chrome--throughput-deck">
+                                {throughputSlot}
+                            </div>
+                        </div>
+                        {hasAttentionLane ? (
+                            <div className="adminv2-ws-dept-v2-lane adminv2-ws-dept-v2-lane--attention" data-ws-lane-kind="attention">
+                                <div className="adminv2-ws-dept-v2-lane-chrome adminv2-ws-dept-v2-board-secondary-slot">
+                                    {attentionSlot}
+                                </div>
+                            </div>
+                        ) : null}
                     </div>
 
-                    <div className="adminv2-ws-dept-v2-command-column" data-adminv2-workspace-command-column>
-                        <aside
-                            className="adminv2-ws-dept-v2-rail adminv2-ws-dept-v2-rail--command-shell"
-                            data-adminv2-workspace-command-rail
-                            aria-label="Decisions and actions"
-                        >
-                            {railSlot}
-                        </aside>
-                    </div>
-                </div>
-            </div>
-        </div>
+                    {contextSlot ? <div data-workspace-zone="context-lower">{contextSlot}</div> : null}
+                </>
+            }
+        />
     );
 }

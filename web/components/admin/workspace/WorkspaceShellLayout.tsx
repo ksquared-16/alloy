@@ -1,0 +1,81 @@
+"use client";
+
+import type { CSSProperties, ReactNode } from "react";
+
+import "@/app/adminV2/components/workspace/workspace.css";
+
+export type WorkspaceShellSurface = "company" | "department" | "work_unit";
+
+export type WorkspaceShellLayoutProps = {
+  /** Maps to `[data-ws-surface]` for workspace.css selectors. */
+  surface: WorkspaceShellSurface;
+  /** Appended after `adminv2-ws-root` (e.g. `adminv2-ws-company adminv2-ws-company-v2`). */
+  rootClassName: string;
+  style?: CSSProperties;
+  workspaceRootShell?: boolean;
+  productionWorkspaceBridge?: boolean;
+  /** Breadcrumb slot inside contain, above the page split */
+  containLead?: ReactNode;
+  primaryColumn: ReactNode;
+  /** Inner rail body only; column chrome is wrapped here. Omit or pass `null` to collapse desktop rail grid. */
+  railContent?: ReactNode | null;
+  /** When set, overrides automatic `railContent != null` visibility. */
+  showRail?: boolean;
+  railAriaLabel?: string;
+};
+
+/**
+ * Shared Admin V2 workspace chrome: centered contain, primary | command grid, optional sticky rail (CSS).
+ * Collapse the command column when `railContent` is null/undefined and `showRail` is not forced true.
+ */
+export function WorkspaceShellLayout({
+  surface,
+  rootClassName,
+  style,
+  workspaceRootShell,
+  productionWorkspaceBridge,
+  containLead,
+  primaryColumn,
+  railContent,
+  showRail,
+  railAriaLabel = "Decisions and actions",
+}: WorkspaceShellLayoutProps) {
+  const hasRail = typeof showRail === "boolean" ? showRail : railContent != null;
+
+  return (
+    <div
+      data-ws-surface={surface}
+      className={`adminv2-ws-root ${rootClassName}`.trim()}
+      style={style}
+      {...(workspaceRootShell ? { "data-adminv2-workspace-root-shell": "true" } : {})}
+      {...(productionWorkspaceBridge ? { "data-production-workspace-bridge": "true" } : {})}
+    >
+      <div className="adminv2-ws-dept-v2-contain">
+        {containLead}
+        <div
+          className={
+            hasRail
+              ? "adminv2-ws-dept-v2-page-split"
+              : "adminv2-ws-dept-v2-page-split adminv2-ws-dept-v2-page-split--no-rail"
+          }
+        >
+          <div className="adminv2-ws-dept-v2-primary-column">{primaryColumn}</div>
+          {hasRail ? (
+            <div
+              className="adminv2-ws-dept-v2-command-column adminv2-ws-shell-command-column"
+              data-adminv2-workspace-command-column
+            >
+              <aside
+                className="adminv2-ws-dept-v2-rail adminv2-ws-dept-v2-rail--command-shell"
+                data-adminv2-workspace-command-rail
+                aria-label={railAriaLabel}
+              >
+                {railContent}
+              </aside>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}

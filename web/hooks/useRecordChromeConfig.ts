@@ -2,6 +2,10 @@
 
 import { useEffect, useState } from "react";
 import type { RecordActionRow, RecordLayoutRow } from "@/lib/recordChrome/types";
+import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
+import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+
+const RECORD_CHROME_TTL_MS = 1500;
 
 export type RecordChromeEntityKind = "job" | "schedule" | "opportunity";
 
@@ -27,9 +31,18 @@ export function useRecordChromeConfig(entityKind: RecordChromeEntityKind | null)
             setLoading(true);
             setError(null);
             try {
+                const init = workspaceDataFetchInit();
                 const [lRes, aRes] = await Promise.all([
-                    fetch(`/api/admin/record-layouts?entity_type=${encodeURIComponent(entityKind)}`),
-                    fetch(`/api/admin/record-actions?entity_type=${encodeURIComponent(entityKind)}`),
+                    dedupeAdminFetchWithTtl(
+                        `/api/admin/record-layouts?entity_type=${encodeURIComponent(entityKind)}`,
+                        init,
+                        RECORD_CHROME_TTL_MS
+                    ),
+                    dedupeAdminFetchWithTtl(
+                        `/api/admin/record-actions?entity_type=${encodeURIComponent(entityKind)}`,
+                        init,
+                        RECORD_CHROME_TTL_MS
+                    ),
                 ]);
                 const lJson = (await lRes.json().catch(() => ({}))) as {
                     layouts?: RecordLayoutRow[];

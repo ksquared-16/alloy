@@ -295,10 +295,11 @@ export function truncateNoteLine(text: string, maxLen: number = NOTE_LINE_MAX): 
     return `${t.slice(0, maxLen)}…`;
 }
 
-/** `{note} · {local MM/DD/YYYY h:mm AM/PM}` when a timestamp is present */
-export function formatDatedNoteLinePreview(line: string): string | null {
+/** When dated: default `{note} · {local datetime}`; with `dateFirst`, `{datetime} · {note}` (queue row scan). */
+export function formatDatedNoteLinePreview(line: string, opts?: { dateFirst?: boolean }): string | null {
     const trimmed = line.trim().replace(/\s+/g, " ");
     if (!trimmed) return null;
+    const dateFirst = Boolean(opts?.dateFirst);
 
     const bracket = parseBracketedTimestamp(trimmed);
     if (bracket) {
@@ -306,7 +307,8 @@ export function formatDatedNoteLinePreview(line: string): string | null {
         const body = bracket.rest;
         if (!body) return dateStr || null;
         const bodyShort = truncateNoteLine(body);
-        return dateStr ? `${bodyShort} · ${dateStr}` : bodyShort;
+        if (!dateStr) return bodyShort;
+        return dateFirst ? `${dateStr} · ${bodyShort}` : `${bodyShort} · ${dateStr}`;
     }
 
     const parsed = parseLineLeadingDate(trimmed);
@@ -315,7 +317,8 @@ export function formatDatedNoteLinePreview(line: string): string | null {
         const body = parsed.rest;
         if (body) {
             const bodyShort = truncateNoteLine(body);
-            return dateStr ? `${bodyShort} · ${dateStr}` : bodyShort;
+            if (!dateStr) return bodyShort;
+            return dateFirst ? `${dateStr} · ${bodyShort}` : `${bodyShort} · ${dateStr}`;
         }
         return dateStr || null;
     }
@@ -326,11 +329,14 @@ export function formatDatedNoteLinePreview(line: string): string | null {
 /**
  * Multi-line blob: choose latest dated line, then one preview line.
  */
-export function formatActivityQueueNotesBlobPreview(raw: string | null | undefined): string | null {
+export function formatActivityQueueNotesBlobPreview(
+    raw: string | null | undefined,
+    opts?: { dateFirst?: boolean }
+): string | null {
     const blob = (raw ?? "").trim();
     if (!blob) return null;
     const lines = blob.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
     const pick =
         lines.length === 0 ? blob.replace(/\s+/g, " ") : lines.length === 1 ? lines[0]! : chooseLatestDatedNoteLine(lines);
-    return formatDatedNoteLinePreview(pick);
+    return formatDatedNoteLinePreview(pick, opts);
 }

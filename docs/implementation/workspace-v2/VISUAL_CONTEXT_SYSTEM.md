@@ -44,8 +44,27 @@ Confirmed palette tokens live under `web/styles/tokens/colors.ts` (see comments 
 ## Placement rules (header, sections, drawer)
 
 - **Shells / workspace chrome:** `operationalWorkspaceShellStyle`, `mergeOperationalVisualTokens` — pass `OperationalVisualStyleInput` = `{ layer, ...OperationalVisualContext }`.
+
+### Workspace background / ambient (`/adminV2/workspace/**`)
+
+**Visual-context tokens** (`--vc-*`, header/rail accents) carry **meaning** aligned with resolver rules above. Separate from that is the optional **ambient field**: a **near-white** page ground with **sparse, low-contrast slate** texture (spec/driftwash) layered under workspace UI (`WorkspaceAmbientLayer` + scoped CSS). This should read as **subtle continuity for long operational sessions**, not as marketing or decorative filler. Tweaks there are **presentation-only** — they **do not** replace lane/department/context semantics from `resolveVisualContext`.
 - **Department / work unit pages:** supply `departmentKey`, `laneKey`, and when applicable **`visualContextKey`** so lane `needs_attention` picks up strong Amber.
 - **Record / drawer:** same resolver hints so opening a job from **Needs Attention** keeps **consistent** rails with the lane (doctrine: operational visual context inheritance on record surfaces).
+
+## Admin V2 workspace visual system (current standard)
+
+This summarizes how **palette and ambient** behave on **`/adminV2/workspace/**`** in relation to **`resolveVisualContext`** and Alloy tokens (`web/styles/tokens/colors.ts`). It is **current practice and direction**, not a locked marketing spec.
+
+| Principle | Guidance |
+|-----------|----------|
+| **Operational first** | Background and ambient treatments should **support clarity and stamina** on long shifts — continuity and light depth, **not** decorative canvas or brand illustration. |
+| **Palette discipline** | Use Alloy neutrals plus **controlled** accents in rails, hairlines, buttons, and **semantic** states — not unconstrained washes. |
+| **Bend Pine** | Prefer for **active / healthy / primary throughput** operational emphasis where the product uses the green-family lane. |
+| **Alloy Blue / Midnight** | Prefer for **system**, **workflow**, and **control** chrome (rails, procedural headers, tooling emphasis). |
+| **Amber / rust** | Reserve for **exception**, **attention**, **stale**, **risk**, or **failure-adjacent** signaling — Alloy grammar, **not** undifferentiated “everything is red”. |
+| **Exception surfaces only** | Avoid **broad red or amber fields** unless the viewport or zone is intentionally an **exception** or alert surface (e.g. needs-attention lanes), so healthy throughput stays readable. |
+
+Resolver keys and semantic mapping remain in earlier sections of this doc; **`docs/architecture/workspace-work-unit-scope-doctrine.md`** (visual system bullets) aligns with this table.
 
 ## Related
 

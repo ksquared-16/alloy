@@ -126,8 +126,13 @@ export function EntityLabelsProvider({
 
     useEffect(() => {
         if (seeded) {
-            void refreshEntityLabels();
-            return;
+            // Server already hydrated labels; avoid doubling GET /api/admin/entity-labels on mount.
+            if (typeof requestIdleCallback !== "undefined") {
+                const id = requestIdleCallback(() => void refreshEntityLabels());
+                return () => cancelIdleCallback(id);
+            }
+            const t = window.setTimeout(() => void refreshEntityLabels(), 2500);
+            return () => window.clearTimeout(t);
         }
         const cached = loadFromCache();
         if (Object.keys(cached ?? {}).length > 0) {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
-import { getAdminAuth, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth";
+import { getAdminAuth, logAdminAudit } from "@/lib/adminAuth";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 import { emitEvent } from "@/lib/emitEvent";
 import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
@@ -50,8 +50,8 @@ export async function PATCH(
     request: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
-    const forbidden = await requireAdminOrOps();
-    if (forbidden) return forbidden;
+    const auth = await getAdminAuth();
+    if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
@@ -59,8 +59,6 @@ export async function PATCH(
         const ctx = await getAdminContext();
         if (!ctx.ok) return adminContextFailureResponse(ctx);
         const body = (await request.json()) as Record<string, unknown>;
-        const auth = await getAdminAuth();
-        if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
         const supabase = createAdminClient();
         if (!(await assertRowOrg(supabase, "opportunities", id, ctx.orgId)).ok) {

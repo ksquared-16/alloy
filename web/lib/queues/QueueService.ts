@@ -1,7 +1,11 @@
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { validateQueueDefinition, type QueueConfig, type QueueDefinitionV1, type QueueFilter } from "@/lib/config/queueDefinitionSchema";
 import type { QueueItemsResult, QueueSummary } from "@/lib/queues/types";
-import { fetchEffectiveStatusDefinitions, displayLabelsFromDefinitions } from "@/lib/admin/statusDefinitionsResolve";
+import {
+    fetchEffectiveStatusDefinitions,
+    displayLabelsFromDefinitions,
+    type StatusDefinitionRow,
+} from "@/lib/admin/statusDefinitionsResolve";
 import { formatTourDateTime } from "@/lib/enrollment/formatTourDateTime";
 
 type JobRowPreview = {
@@ -309,13 +313,63 @@ function opportunityNeedsAttentionReasonLabel(row: OpportunityNeedsAttentionRow,
     return null;
 }
 
+/** Lines for CRM compact multi-child grouping (serialized as `_crm_compact_children` on queue rows). */
+type OpportunityQueueCrmChildLine = {
+    primary: string;
+    secondary: string | null;
+};
+
+/** When ≥2 canonical children exists, CRM compact renders a stacked group instead of a single merged line. */
+function buildStructuredCrmCompactChildren(joinChildNames: string[], inquiryChildren: unknown[]): OpportunityQueueCrmChildLine[] | undefined {
+    if (joinChildNames.length >= 2) {
+        return joinChildNames
+            .map((full) => {
+                const primary = full.trim();
+                return primary ? { primary, secondary: null as string | null } : null;
+            })
+            .filter((x): x is OpportunityQueueCrmChildLine => x != null);
+    }
+    const icRaw = inquiryChildren.filter((x) => x != null && typeof x === "object");
+    if (icRaw.length >= 2) {
+        const out: OpportunityQueueCrmChildLine[] = [];
+        for (const raw of icRaw) {
+            const row = raw as Record<string, unknown>;
+            const disp = typeof row.display_name === "string" ? row.display_name.trim() : "";
+            const pl =
+                typeof row.program_label === "string"
+                    ? row.program_label.trim()
+                    : typeof row.program_short === "string"
+                      ? String(row.program_short).trim()
+                      : "";
+            const ag = typeof row.age_group === "string" ? row.age_group.trim() : "";
+            const detail = [pl || null, ag || null].filter(Boolean).join(" · ") || null;
+            const primary = (disp || detail || "").trim();
+            if (!primary) continue;
+            const secondary = disp && detail ? detail : null;
+            out.push({ primary, secondary });
+        }
+        return out.length >= 2 ? out : undefined;
+    }
+    return undefined;
+}
+
 async function enrichOpportunityRows(params: {
     supabase: ReturnType<typeof createAdminClient>;
     orgId: string;
     rows: OpportunityRowPreview[];
+    /** When set, skips duplicate status definition fetch (shared across queues in one summary request). */
+    effectiveStatusDefs?: StatusDefinitionRow[];
+    /**
+     * `queue_preview`: skip enrolled-child / `opportunity_customer_members` join (drawer stays canonical).
+     * `full`: include OCM join + child DOB resolution (queue item lists).
+     */
+    enrichment?: "full" | "queue_preview";
 }): Promise<Array<Record<string, unknown>>> {
-    const { supabase, orgId, rows } = params;
+    const { supabase, orgId, rows, effectiveStatusDefs: preloadedDefs, enrichment = "full" } = params;
+    const previewLite = enrichment === "queue_preview";
     if (!rows.length) return [];
+
+    const tEnrich0 = Date.now();
 
     const customerIds = [...new Set(rows.map((r) => r.customer_id).filter((x): x is string => typeof x === "string" && x.trim() !== ""))];
     const personIds = [
@@ -342,6 +396,12 @@ async function enrichOpportunityRows(params: {
     ];
     const opportunityIds = [...new Set(rows.map((r) => r.id).filter((x): x is string => typeof x === "string" && x.trim() !== ""))];
 
+    const defsPromise =
+        preloadedDefs != null
+            ? Promise.resolve(preloadedDefs)
+            : fetchEffectiveStatusDefinitions(supabase as any, orgId, "opportunities", { activeOnly: true });
+
+    const tParallel0 = Date.now();
     const [personsRes, contactsRes, customersRes, ocmsRes, defs] = await Promise.all([
         personIds.length
             ? supabase
@@ -360,15 +420,16 @@ async function enrichOpportunityRows(params: {
         customerIds.length
             ? supabase.from("customers").select("id, name").eq("org_id", orgId).in("id", customerIds as any)
             : Promise.resolve({ data: [] as any[], error: null as any }),
-        opportunityIds.length
+        !previewLite && opportunityIds.length
             ? supabase
                 .from("opportunity_customer_members")
                 .select("opportunity_id, customer_members(display_name, dob, person_id)")
                 .eq("org_id", orgId)
                 .in("opportunity_id", opportunityIds as any)
             : Promise.resolve({ data: [] as any[], error: null as any }),
-        fetchEffectiveStatusDefinitions(supabase as any, orgId, "opportunities", { activeOnly: true }),
+        defsPromise,
     ]);
+    const parallelMainMs = Date.now() - tParallel0;
 
     const labelByKey = displayLabelsFromDefinitions(defs);
 
@@ -379,6 +440,7 @@ async function enrichOpportunityRows(params: {
     const customerById = new Map<string, any>();
     for (const c of (customersRes as any).data ?? []) customerById.set(String(c.id), c);
 
+    const tChild0 = Date.now();
     // Child identity is canonical in `persons`. Prefer `persons.date_of_birth` and only
     // fall back to legacy/display `customer_members.dob` when needed.
     const childPersonIds: string[] = [];
@@ -389,7 +451,7 @@ async function enrichOpportunityRows(params: {
     }
     const uniqChildPersonIds = [...new Set(childPersonIds)];
     const { data: childPersons } =
-        uniqChildPersonIds.length > 0
+        !previewLite && uniqChildPersonIds.length > 0
             ? await supabase
                 .from("persons")
                 .select("id, date_of_birth")
@@ -420,8 +482,10 @@ async function enrichOpportunityRows(params: {
         list.push(label);
         childNamesByOppId.set(oppId, list);
     }
+    const childResolutionMs = Date.now() - tChild0;
 
-    return rows.map((r) => {
+    const tMap0 = Date.now();
+    const mapped = rows.map((r) => {
         const pid = (r as unknown as { primary_person_id?: string | null }).primary_person_id ?? null;
         const person = pid ? personById.get(pid) : null;
         const contact = r.primary_contact_id ? contactById.get(r.primary_contact_id) : null;
@@ -507,6 +571,8 @@ async function enrichOpportunityRows(params: {
         const attentionReason = opportunityNeedsAttentionReasonLabel(r, new Date());
         const tourContext = tourDate ? `Tour: ${formatTourDateTime(tourDate, tourTime).display}` : null;
 
+        const crmCompactChildrenStructured = buildStructuredCrmCompactChildren(joinChildNames, inquiryChildren);
+
         return {
             ...r,
             title: r.name ?? null,
@@ -515,6 +581,7 @@ async function enrichOpportunityRows(params: {
             _primary_phone: contactPhone ?? null,
             _primary_email: contactEmail ?? null,
             _child_display_name: childDisplay,
+            _crm_compact_children: crmCompactChildrenStructured,
             _requested_program: inquiryChildren.length > 0 ? programsDisplay ?? programCombined : programCombined,
             _desired_start_date: desiredStart,
             _tour_context: tourContext,
@@ -524,6 +591,21 @@ async function enrichOpportunityRows(params: {
             _attention_reason_label: attentionReason,
         };
     });
+    const mapMs = Date.now() - tMap0;
+    const enrichMs = Date.now() - tEnrich0;
+    if (enrichMs > 200) {
+        console.warn("[queue-perf] enrichOpportunityRows", {
+            org_id: orgId,
+            row_count: rows.length,
+            enrichment: previewLite ? "queue_preview" : "full",
+            used_preloaded_defs: preloadedDefs != null,
+            parallel_main_ms: parallelMainMs,
+            child_resolution_ms: childResolutionMs,
+            map_ms: mapMs,
+            total_ms: enrichMs,
+        });
+    }
+    return mapped;
 }
 
 function buildOpportunityNeedsAttentionOrExpr(now: Date): string {
@@ -540,6 +622,12 @@ function buildOpportunityNeedsAttentionOrExpr(now: Date): string {
 
 /** Cap for in-memory needs_attention evaluation (avoids fragile nested `or`/`and` PostgREST URL parsing). */
 const NEEDS_ATTENTION_OPPORTUNITY_FETCH_CAP = 5000;
+
+/**
+ * When queue summaries only need counts (department cards), use a smaller cap so we do not pull 5k rows
+ * per work unit. Count may under-count if more opportunities match than this cap (same class as the 5k cap).
+ */
+const NEEDS_ATTENTION_COUNT_ONLY_FETCH_CAP = 800;
 
 function sortOpportunityRowsByPlan(rows: OpportunityRowPreview[], sort: OpportunitySortPlan[]): OpportunityRowPreview[] {
     if (!rows.length) return rows;
@@ -563,7 +651,10 @@ async function loadOpportunityNeedsAttentionRows(params: {
     workUnitId: string;
     sort: OpportunitySortPlan[];
     now: Date;
+    /** Default full cap; use {@link NEEDS_ATTENTION_COUNT_ONLY_FETCH_CAP} for count-only summaries. */
+    fetchCap?: number;
 }): Promise<OpportunityRowPreview[]> {
+    const cap = params.fetchCap ?? NEEDS_ATTENTION_OPPORTUNITY_FETCH_CAP;
     let q = params.supabase
         .from("opportunities")
         .select("id, name, title, status_key, customer_id, primary_person_id, primary_contact_id, work_unit_id, metadata, created_at, updated_at")
@@ -573,7 +664,7 @@ async function loadOpportunityNeedsAttentionRows(params: {
     for (const p of plans) {
         q = q.order(p.column, { ascending: p.ascending });
     }
-    const { data, error } = await q.limit(NEEDS_ATTENTION_OPPORTUNITY_FETCH_CAP);
+    const { data, error } = await q.limit(cap);
     if (error) {
         throw new QueueServiceError(error.message, 400, "DB_ERROR");
     }
@@ -743,35 +834,194 @@ function clampLimit(n: number, min: number, max: number): number {
     return v;
 }
 
+/** `planned` uses PostgreSQL planner estimates (faster on large tables; approximate). */
+export type QueueCountAccuracy = "exact" | "planned";
+
+function queueCountSelect(accuracy: QueueCountAccuracy | undefined): "exact" | "planned" {
+    return accuracy === "planned" ? "planned" : "exact";
+}
+
+/** How many queue tabs get real counts on first paint (`priority` mode). */
+export type QueueSummaryRequestMode = "all" | "priority" | "partial";
+
+export type WorkUnitQueueSummariesResult = {
+    queues: QueueSummary[];
+    /** Present when `summaryMode=priority`: keys still on placeholder counts. */
+    deferred_queue_keys?: string[];
+};
+
+function buildPriorityQueueKeySet(def: QueueDefinitionV1, focusKey: string | null | undefined, budget: number): Set<string> {
+    const ordered = def.queues.map((q) => q.key);
+    const set = new Set<string>();
+    if (ordered.includes("needs_attention")) set.add("needs_attention");
+    const focus = (focusKey ?? "").trim();
+    if (focus && ordered.includes(focus)) set.add(focus);
+    for (const k of ordered) {
+        if (set.size >= budget) break;
+        set.add(k);
+    }
+    return set;
+}
+
+function stubDeferredQueueSummary(q: QueueConfig, def: QueueDefinitionV1): QueueSummary {
+    const et = def.entity_type === "job" ? "job" : "opportunity";
+    return {
+        key: q.key,
+        label: q.label,
+        description: q.description,
+        entity_type: et,
+        priority: q.priority ?? "standard",
+        display: q.display ?? "list",
+        count: 0,
+        preview: [],
+        counts_deferred: true,
+    };
+}
+
+/** Bounded parallelism for queue summaries within one work unit (avoid sequential latency; cap DB pressure). */
+const QUEUE_SUMMARY_PER_DEF_CONCURRENCY = 5;
+
+async function runPool<T>(factories: Array<() => Promise<T>>, poolSize: number): Promise<T[]> {
+    const nFac = factories.length;
+    if (nFac === 0) return [];
+    const results: T[] = new Array(nFac);
+    let cursor = 0;
+    async function worker(): Promise<void> {
+        while (true) {
+            const i = cursor;
+            cursor += 1;
+            if (i >= nFac) return;
+            results[i] = await factories[i]!();
+        }
+    }
+    const workers = Math.min(Math.max(1, Math.floor(poolSize)), nFac);
+    await Promise.all(Array.from({ length: workers }, () => worker()));
+    return results;
+}
+
 export async function getWorkUnitQueueSummaries(params: {
     orgId: string;
     workUnitId: string;
     limit?: number;
-}): Promise<QueueSummary[]> {
+    /**
+     * When false, omit preview rows and skip enrichment (department KPI cards only need counts).
+     * `needs_attention` uses a smaller row cap; count may under-count if more rows match than that cap.
+     */
+    includePreviews?: boolean;
+    /** Optional label for [queue-perf] logs (e.g. department id). */
+    perfTag?: string;
+    /** Filtered queue head counts: `planned` is faster on large tables (estimate). */
+    countAccuracy?: QueueCountAccuracy;
+    /** `priority`: count hot tabs first, stub others (see deferred_queue_keys). `partial`: only count partialQueueKeys. */
+    summaryMode?: QueueSummaryRequestMode;
+    focusQueueKey?: string | null;
+    priorityBudget?: number;
+    partialQueueKeys?: Set<string>;
+}): Promise<WorkUnitQueueSummariesResult> {
+    const includePreviews = params.includePreviews !== false;
+    const countSel = queueCountSelect(params.countAccuracy);
+    const tW0 = Date.now();
+    const tDef0 = Date.now();
     const def = await loadWorkUnitQueueDefinition({ orgId: params.orgId, workUnitId: params.workUnitId });
+    const loadDefMs = Date.now() - tDef0;
     assertSupportedEntityType(def);
 
     const supabase = createAdminClient();
 
-    const out: QueueSummary[] = [];
     const previewLimit = clampLimit(params.limit ?? 3, 1, 10);
 
-    for (const q of def.queues) {
+    const summaryMode = params.summaryMode ?? "all";
+    const priorityBudget = clampLimit(params.priorityBudget ?? 6, 1, 20);
+    let activeKeySet: Set<string> | null = null;
+    let deferredQueueKeys: string[] | undefined;
+    if (summaryMode === "partial") {
+        if (!params.partialQueueKeys || params.partialQueueKeys.size === 0) {
+            return { queues: [] };
+        }
+        activeKeySet = params.partialQueueKeys;
+    } else if (summaryMode === "priority") {
+        activeKeySet = buildPriorityQueueKeySet(def, params.focusQueueKey ?? null, priorityBudget);
+        deferredQueueKeys = def.queues.map((q) => q.key).filter((k) => !activeKeySet!.has(k));
+    }
+
+    let opportunityStatusDefsPromise: Promise<StatusDefinitionRow[]> | null = null;
+    const sharedOpportunityStatusDefs = (): Promise<StatusDefinitionRow[]> => {
+        if (!opportunityStatusDefsPromise) {
+            opportunityStatusDefsPromise = fetchEffectiveStatusDefinitions(
+                supabase as any,
+                params.orgId,
+                "opportunities",
+                { activeOnly: true }
+            );
+        }
+        return opportunityStatusDefsPromise;
+    };
+
+    const perQueueMs: Array<{
+        key: string;
+        count_ms: number;
+        preview_ms: number;
+        enrich_ms: number;
+        needs_attention_load_ms: number;
+        total_ms: number;
+        rows_enriched: number;
+    } | null> = new Array(def.queues.length).fill(null);
+
+    const factories = def.queues.map((q, queueIndex) => async (): Promise<QueueSummary | null> => {
+        if (activeKeySet != null && !activeKeySet.has(q.key)) {
+            return null;
+        }
+        const qT0 = Date.now();
+        let countMs = 0;
+        let previewMs = 0;
+        let enrichMs = 0;
+        let needsAttentionLoadMs = 0;
+        let rowsEnriched = 0;
+
+        const finish = (summary: QueueSummary): QueueSummary => {
+            perQueueMs[queueIndex] = {
+                key: q.key,
+                count_ms: countMs,
+                preview_ms: previewMs,
+                enrich_ms: enrichMs,
+                needs_attention_load_ms: needsAttentionLoadMs,
+                total_ms: Date.now() - qT0,
+                rows_enriched: rowsEnriched,
+            };
+            return summary;
+        };
+
         if (def.entity_type === "job") {
             const { ops, sort } = buildJobPlan(q);
 
+            const tC0 = Date.now();
             const base = supabase
                 .from("jobs")
-                .select("id", { count: "exact", head: true })
+                .select("id", { count: countSel, head: true })
                 .eq("org_id", params.orgId)
                 .eq("work_unit_id", params.workUnitId);
 
             const countQ = applyOpsToJobQuery(base as never, ops);
             const { count, error: countErr } = await countQ;
+            countMs = Date.now() - tC0;
             if (countErr) {
                 throw new QueueServiceError(countErr.message, 400, "DB_ERROR");
             }
 
+            if (!includePreviews) {
+                return finish({
+                    key: q.key,
+                    label: q.label,
+                    description: q.description,
+                    entity_type: def.entity_type,
+                    priority: q.priority ?? "standard",
+                    display: q.display ?? "list",
+                    count: count ?? 0,
+                    preview: [],
+                });
+            }
+
+            const tP0 = Date.now();
             const previewQ0 = supabase
                 .from("jobs")
                 .select("id, title, status_key, work_unit_id, assigned_vendor_id, created_at, updated_at")
@@ -779,11 +1029,12 @@ export async function getWorkUnitQueueSummaries(params: {
                 .eq("work_unit_id", params.workUnitId);
             const previewQ1 = applySortToJobQuery(applyOpsToJobQuery(previewQ0 as never, ops) as never, sort);
             const { data: preview, error: previewErr } = await previewQ1.limit(previewLimit);
+            previewMs = Date.now() - tP0;
             if (previewErr) {
                 throw new QueueServiceError(previewErr.message, 400, "DB_ERROR");
             }
 
-            out.push({
+            return finish({
                 key: q.key,
                 label: q.label,
                 description: q.description,
@@ -793,7 +1044,6 @@ export async function getWorkUnitQueueSummaries(params: {
                 count: count ?? 0,
                 preview: (preview ?? []) as unknown[],
             });
-            continue;
         }
 
         // opportunity
@@ -805,7 +1055,7 @@ export async function getWorkUnitQueueSummaries(params: {
             sort = plan.sort;
         } catch (e) {
             if (e instanceof QueueServiceError && e.status === 501) {
-                out.push({
+                return finish({
                     key: q.key,
                     label: q.label,
                     description: q.description,
@@ -815,23 +1065,50 @@ export async function getWorkUnitQueueSummaries(params: {
                     count: 0,
                     preview: [],
                 });
-                continue;
             }
             throw e;
         }
 
         if (q.key === "needs_attention") {
             const now = new Date();
+            const tN0 = Date.now();
             const matched = await loadOpportunityNeedsAttentionRows({
                 supabase,
                 orgId: params.orgId,
                 workUnitId: params.workUnitId,
                 sort,
                 now,
+                fetchCap: includePreviews ? undefined : NEEDS_ATTENTION_COUNT_ONLY_FETCH_CAP,
             });
+            needsAttentionLoadMs = Date.now() - tN0;
+
+            if (!includePreviews) {
+                return finish({
+                    key: q.key,
+                    label: q.label,
+                    description: q.description,
+                    entity_type: def.entity_type,
+                    priority: q.priority ?? "standard",
+                    display: q.display ?? "list",
+                    count: matched.length,
+                    preview: [],
+                });
+            }
+
             const previewRows = matched.slice(0, previewLimit);
-            const preview = await enrichOpportunityRows({ supabase, orgId: params.orgId, rows: previewRows });
-            out.push({
+            rowsEnriched = previewRows.length;
+            const tE0 = Date.now();
+            const effectiveStatusDefs = await sharedOpportunityStatusDefs();
+            const preview = await enrichOpportunityRows({
+                supabase,
+                orgId: params.orgId,
+                rows: previewRows,
+                effectiveStatusDefs,
+                enrichment: "queue_preview",
+            });
+            enrichMs = Date.now() - tE0;
+
+            return finish({
                 key: q.key,
                 label: q.label,
                 description: q.description,
@@ -841,21 +1118,36 @@ export async function getWorkUnitQueueSummaries(params: {
                 count: matched.length,
                 preview: preview as unknown[],
             });
-            continue;
         }
 
+        const tC0 = Date.now();
         const base = supabase
             .from("opportunities")
-            .select("id", { count: "exact", head: true })
+            .select("id", { count: countSel, head: true })
             .eq("org_id", params.orgId)
             .eq("work_unit_id", params.workUnitId);
 
         const countQ = applyOpsToJobQuery(base as never, ops);
         const { count, error: countErr } = await countQ;
+        countMs = Date.now() - tC0;
         if (countErr) {
             throw new QueueServiceError(countErr.message, 400, "DB_ERROR");
         }
 
+        if (!includePreviews) {
+            return finish({
+                key: q.key,
+                label: q.label,
+                description: q.description,
+                entity_type: def.entity_type,
+                priority: q.priority ?? "standard",
+                display: q.display ?? "list",
+                count: count ?? 0,
+                preview: [],
+            });
+        }
+
+        const tP0 = Date.now();
         const previewQ0 = supabase
             .from("opportunities")
             .select("id, name, title, status_key, customer_id, primary_person_id, primary_contact_id, work_unit_id, metadata, created_at, updated_at")
@@ -863,13 +1155,24 @@ export async function getWorkUnitQueueSummaries(params: {
             .eq("work_unit_id", params.workUnitId);
         const previewQ1 = applySortToJobQuery(applyOpsToJobQuery(previewQ0 as never, ops) as never, sort);
         const { data: previewRaw, error: previewErr } = await previewQ1.limit(previewLimit);
+        previewMs = Date.now() - tP0;
         if (previewErr) {
             throw new QueueServiceError(previewErr.message, 400, "DB_ERROR");
         }
         const previewRows = (previewRaw ?? []) as OpportunityRowPreview[];
-        const preview = await enrichOpportunityRows({ supabase, orgId: params.orgId, rows: previewRows });
+        rowsEnriched = previewRows.length;
+        const tE0 = Date.now();
+        const effectiveStatusDefs = await sharedOpportunityStatusDefs();
+        const preview = await enrichOpportunityRows({
+            supabase,
+            orgId: params.orgId,
+            rows: previewRows,
+            effectiveStatusDefs,
+            enrichment: "queue_preview",
+        });
+        enrichMs = Date.now() - tE0;
 
-        out.push({
+        return finish({
             key: q.key,
             label: q.label,
             description: q.description,
@@ -879,9 +1182,128 @@ export async function getWorkUnitQueueSummaries(params: {
             count: count ?? 0,
             preview: preview as unknown[],
         });
+    });
+
+    const rowResults = await runPool(factories, QUEUE_SUMMARY_PER_DEF_CONCURRENCY);
+    const totalMs = Date.now() - tW0;
+    const queuesDetailed = perQueueMs.filter(Boolean);
+    const rowsEnrichedTotal = queuesDetailed.reduce((a, r) => a + (r?.rows_enriched ?? 0), 0);
+    if (totalMs > 300) {
+        console.warn("[queue-perf] getWorkUnitQueueSummaries", {
+            work_unit_id: params.workUnitId,
+            tag: params.perfTag,
+            include_previews: includePreviews,
+            count_accuracy: countSel,
+            summary_mode: summaryMode,
+            queue_count: def.queues.length,
+            load_def_ms: loadDefMs,
+            total_ms: totalMs,
+            rows_enriched_total: rowsEnrichedTotal,
+            queues: queuesDetailed,
+            deferred_queue_keys: deferredQueueKeys,
+        });
+    }
+    if (summaryMode === "partial") {
+        return { queues: rowResults.filter((x): x is QueueSummary => x != null) };
     }
 
-    return out;
+    const summaries: QueueSummary[] = def.queues.map((q, i) => {
+        const r = rowResults[i];
+        if (r) return r;
+        return stubDeferredQueueSummary(q, def);
+    });
+
+    return deferredQueueKeys?.length ? { queues: summaries, deferred_queue_keys: deferredQueueKeys } : { queues: summaries };
+}
+
+const DEPARTMENT_WU_SUMMARY_CONCURRENCY = 3;
+
+export type DepartmentWorkUnitQueueSummaryRow = {
+    id: string;
+    queues: QueueSummary[];
+    error?: string;
+};
+
+/**
+ * All queue summaries for each work unit in a department (one round trip from the browser).
+ * Per–work-unit failures are isolated so other units still return.
+ */
+export async function getDepartmentWorkUnitQueueSummaries(params: {
+    orgId: string;
+    departmentId: string;
+    /** Preview rows per queue (same semantics as GET .../queues limit). */
+    limit?: number;
+    workUnitConcurrency?: number;
+    /** When false, counts only (faster department cards). */
+    includePreviews?: boolean;
+    /** Head counts for status/filter queues: `planned` uses PostgreSQL estimates (faster). */
+    countAccuracy?: QueueCountAccuracy;
+}): Promise<{ work_units: DepartmentWorkUnitQueueSummaryRow[] }> {
+    const includePreviews = params.includePreviews !== false;
+    const countAccuracy = params.countAccuracy;
+    const supabase = createAdminClient();
+    const { data: rows, error } = await supabase
+        .from("work_units")
+        .select("id")
+        .eq("org_id", params.orgId)
+        .eq("department_id", params.departmentId)
+        .order("sort_order", { ascending: true });
+
+    if (error) {
+        throw new QueueServiceError(error.message, 400, "DB_ERROR");
+    }
+
+    const ids = (rows ?? []).map((r) => String((r as { id: string }).id ?? "").trim()).filter(Boolean);
+    const previewLimit = clampLimit(params.limit ?? 50, 1, 100);
+    const wuConc = clampLimit(params.workUnitConcurrency ?? DEPARTMENT_WU_SUMMARY_CONCURRENCY, 1, 8);
+
+    const tBatch0 = Date.now();
+    const factories = ids.map(
+        (workUnitId) => async (): Promise<DepartmentWorkUnitQueueSummaryRow> => {
+            const tWu0 = Date.now();
+            try {
+                const { queues } = await getWorkUnitQueueSummaries({
+                    orgId: params.orgId,
+                    workUnitId,
+                    limit: previewLimit,
+                    includePreviews,
+                    perfTag: `dept:${params.departmentId}`,
+                    countAccuracy,
+                });
+                const ms = Date.now() - tWu0;
+                console.warn("[queue-perf] getDepartmentWorkUnitQueueSummaries work_unit", {
+                    ms,
+                    department_id: params.departmentId,
+                    work_unit_id: workUnitId,
+                    include_previews: includePreviews,
+                    count_accuracy: countAccuracy ?? "exact",
+                    queue_count: queues.length,
+                });
+                return { id: workUnitId, queues };
+            } catch (e) {
+                const msg =
+                    e instanceof QueueServiceError
+                        ? e.message
+                        : e instanceof Error && e.message
+                          ? e.message
+                          : "Queue summaries failed";
+                return { id: workUnitId, queues: [], error: msg };
+            }
+        }
+    );
+
+    const work_units = await runPool(factories, wuConc);
+    const batchMs = Date.now() - tBatch0;
+    if (batchMs > 400) {
+        console.warn("[queue-perf] getDepartmentWorkUnitQueueSummaries batch", {
+            total_ms: batchMs,
+            department_id: params.departmentId,
+            work_unit_count: ids.length,
+            include_previews: includePreviews,
+            count_accuracy: countAccuracy ?? "exact",
+        });
+    }
+    return { work_units };
 }
 
 export async function getWorkUnitQueueItems(params: {
@@ -890,8 +1312,14 @@ export async function getWorkUnitQueueItems(params: {
     queueKey: string;
     limit?: number;
     offset?: number;
+    /** `planned` uses estimate counts (faster). Default exact. */
+    countAccuracy?: QueueCountAccuracy;
+    /** Skip COUNT query; list still returns `limit` rows. UI should fall back to tab/summary totals. */
+    omitTotalCount?: boolean;
 }): Promise<QueueItemsResult> {
+    const tSvc0 = Date.now();
     const def = await loadWorkUnitQueueDefinition({ orgId: params.orgId, workUnitId: params.workUnitId });
+    const loadDefMs = Date.now() - tSvc0;
     assertSupportedEntityType(def);
     const q = findQueueByKey(def, params.queueKey);
 
@@ -899,20 +1327,11 @@ export async function getWorkUnitQueueItems(params: {
 
     const effectiveLimit = clampLimit(params.limit ?? q.limit ?? 50, 1, 200);
     const effectiveOffset = clampLimit(params.offset ?? 0, 0, 1000000);
+    const omitTotal = params.omitTotalCount === true;
+    const countSel = omitTotal ? null : queueCountSelect(params.countAccuracy);
 
     if (def.entity_type === "job") {
         const { ops, sort } = buildJobPlan(q);
-
-        const countBase = supabase
-            .from("jobs")
-            .select("id", { count: "exact", head: true })
-            .eq("org_id", params.orgId)
-            .eq("work_unit_id", params.workUnitId);
-        const countQ = applyOpsToJobQuery(countBase as never, ops);
-        const { count, error: countErr } = await countQ;
-        if (countErr) {
-            throw new QueueServiceError(countErr.message, 400, "DB_ERROR");
-        }
 
         const itemsBase = supabase
             .from("jobs")
@@ -921,9 +1340,57 @@ export async function getWorkUnitQueueItems(params: {
             .eq("work_unit_id", params.workUnitId);
 
         const itemsQ0 = applySortToJobQuery(applyOpsToJobQuery(itemsBase as never, ops) as never, sort);
-        const { data, error } = await itemsQ0.range(effectiveOffset, effectiveOffset + effectiveLimit - 1);
+        const itemsPromise = itemsQ0.range(effectiveOffset, effectiveOffset + effectiveLimit - 1);
+
+        if (omitTotal) {
+            const { data, error } = await itemsPromise;
+            if (error) {
+                throw new QueueServiceError(error.message, 400, "DB_ERROR");
+            }
+            const ms = Date.now() - tSvc0;
+            if (ms > 250) {
+                console.warn("[queue-perf] getWorkUnitQueueItems job", { ms, load_def_ms: loadDefMs, omit_total: true, queue_key: q.key });
+            }
+            return {
+                queue: {
+                    key: q.key,
+                    label: q.label,
+                    description: q.description,
+                    entity_type: def.entity_type,
+                    priority: q.priority ?? "standard",
+                    display: q.display ?? "list",
+                },
+                items: (data ?? []) as unknown[],
+                total: 0,
+                limit: effectiveLimit,
+                offset: effectiveOffset,
+                total_omitted: true,
+            };
+        }
+
+        const countBase = supabase
+            .from("jobs")
+            .select("id", { count: countSel!, head: true })
+            .eq("org_id", params.orgId)
+            .eq("work_unit_id", params.workUnitId);
+        const countQ = applyOpsToJobQuery(countBase as never, ops);
+
+        const [{ count, error: countErr }, { data, error }] = await Promise.all([countQ, itemsPromise]);
+        if (countErr) {
+            throw new QueueServiceError(countErr.message, 400, "DB_ERROR");
+        }
         if (error) {
             throw new QueueServiceError(error.message, 400, "DB_ERROR");
+        }
+
+        const ms = Date.now() - tSvc0;
+        if (ms > 250) {
+            console.warn("[queue-perf] getWorkUnitQueueItems job", {
+                ms,
+                load_def_ms: loadDefMs,
+                queue_key: q.key,
+                count_accuracy: countSel,
+            });
         }
 
         return {
@@ -945,17 +1412,42 @@ export async function getWorkUnitQueueItems(params: {
     // opportunity
     const { ops, sort } = buildOpportunityPlan(q);
 
+    const oppStatusDefsPromise = fetchEffectiveStatusDefinitions(supabase as any, params.orgId, "opportunities", { activeOnly: true });
+
     if (params.queueKey === "needs_attention") {
         const now = new Date();
-        const matched = await loadOpportunityNeedsAttentionRows({
+        const tNa0 = Date.now();
+        const [matched, effectiveStatusDefs] = await Promise.all([
+            loadOpportunityNeedsAttentionRows({
+                supabase,
+                orgId: params.orgId,
+                workUnitId: params.workUnitId,
+                sort,
+                now,
+            }),
+            oppStatusDefsPromise,
+        ]);
+        const naLoadMs = Date.now() - tNa0;
+        const slice = matched.slice(effectiveOffset, effectiveOffset + effectiveLimit);
+        const tEn0 = Date.now();
+        const items = await enrichOpportunityRows({
             supabase,
             orgId: params.orgId,
-            workUnitId: params.workUnitId,
-            sort,
-            now,
+            rows: slice,
+            effectiveStatusDefs,
+            enrichment: "full",
         });
-        const slice = matched.slice(effectiveOffset, effectiveOffset + effectiveLimit);
-        const items = await enrichOpportunityRows({ supabase, orgId: params.orgId, rows: slice });
+        const enrichMs = Date.now() - tEn0;
+        const ms = Date.now() - tSvc0;
+        if (ms > 250) {
+            console.warn("[queue-perf] getWorkUnitQueueItems opportunity needs_attention", {
+                ms,
+                load_def_ms: loadDefMs,
+                na_load_ms: naLoadMs,
+                enrich_ms: enrichMs,
+                row_count: slice.length,
+            });
+        }
         return {
             queue: {
                 key: q.key,
@@ -972,31 +1464,97 @@ export async function getWorkUnitQueueItems(params: {
         };
     }
 
-    const countBase = supabase
-        .from("opportunities")
-        .select("id", { count: "exact", head: true })
-        .eq("org_id", params.orgId)
-        .eq("work_unit_id", params.workUnitId);
-    const countQ = applyOpsToJobQuery(countBase as never, ops);
-    const { count, error: countErr } = await countQ;
-    if (countErr) {
-        throw new QueueServiceError(countErr.message, 400, "DB_ERROR");
-    }
-
     const itemsBase = supabase
         .from("opportunities")
-        // Keep this payload minimal for perceived performance; enrichment fills in display slots.
         .select("id, name, status_key, customer_id, primary_person_id, primary_contact_id, metadata, created_at, updated_at")
         .eq("org_id", params.orgId)
         .eq("work_unit_id", params.workUnitId);
 
     const itemsQ0 = applySortToJobQuery(applyOpsToJobQuery(itemsBase as never, ops) as never, sort);
-    const { data: raw, error } = await itemsQ0.range(effectiveOffset, effectiveOffset + effectiveLimit - 1);
+    const itemsPromise = itemsQ0.range(effectiveOffset, effectiveOffset + effectiveLimit - 1);
+
+    if (omitTotal) {
+        const [{ data: raw, error }, effectiveStatusDefs] = await Promise.all([itemsPromise, oppStatusDefsPromise]);
+        if (error) {
+            throw new QueueServiceError(error.message, 400, "DB_ERROR");
+        }
+        const itemRows = (raw ?? []) as OpportunityRowPreview[];
+        const tEn0 = Date.now();
+        const items = await enrichOpportunityRows({
+            supabase,
+            orgId: params.orgId,
+            rows: itemRows,
+            effectiveStatusDefs,
+            enrichment: "full",
+        });
+        const enrichMs = Date.now() - tEn0;
+        const ms = Date.now() - tSvc0;
+        if (ms > 250) {
+            console.warn("[queue-perf] getWorkUnitQueueItems opportunity", {
+                ms,
+                load_def_ms: loadDefMs,
+                enrich_ms: enrichMs,
+                row_count: itemRows.length,
+                omit_total: true,
+                queue_key: q.key,
+               });
+        }
+        return {
+            queue: {
+                key: q.key,
+                label: q.label,
+                description: q.description,
+                entity_type: def.entity_type,
+                priority: q.priority ?? "standard",
+                display: q.display ?? "list",
+            },
+            items: items as unknown[],
+            total: 0,
+            limit: effectiveLimit,
+            offset: effectiveOffset,
+            total_omitted: true,
+        };
+    }
+
+    const countBase = supabase
+        .from("opportunities")
+        .select("id", { count: countSel!, head: true })
+        .eq("org_id", params.orgId)
+        .eq("work_unit_id", params.workUnitId);
+    const countQ = applyOpsToJobQuery(countBase as never, ops);
+
+    const [{ count, error: countErr }, { data: raw, error }, effectiveStatusDefs] = await Promise.all([
+        countQ,
+        itemsPromise,
+        oppStatusDefsPromise,
+    ]);
+    if (countErr) {
+        throw new QueueServiceError(countErr.message, 400, "DB_ERROR");
+    }
     if (error) {
         throw new QueueServiceError(error.message, 400, "DB_ERROR");
     }
     const itemRows = (raw ?? []) as OpportunityRowPreview[];
-    const items = await enrichOpportunityRows({ supabase, orgId: params.orgId, rows: itemRows });
+    const tEn0 = Date.now();
+    const items = await enrichOpportunityRows({
+        supabase,
+        orgId: params.orgId,
+        rows: itemRows,
+        effectiveStatusDefs,
+        enrichment: "full",
+    });
+    const enrichMs = Date.now() - tEn0;
+    const ms = Date.now() - tSvc0;
+    if (ms > 250) {
+        console.warn("[queue-perf] getWorkUnitQueueItems opportunity", {
+            ms,
+            load_def_ms: loadDefMs,
+            enrich_ms: enrichMs,
+            row_count: itemRows.length,
+            queue_key: q.key,
+            count_accuracy: countSel,
+        });
+    }
 
     return {
         queue: {

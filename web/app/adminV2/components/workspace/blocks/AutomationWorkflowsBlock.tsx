@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import "@/app/adminV2/components/workspace/workspace.css";
 
 export type AutomationWorkflowKpis = {
     runs_today: number;
@@ -17,84 +18,132 @@ export type AutomationWorkflowSummaryRow = {
     steps_count: number;
 };
 
+function humanTrigger(eventType: string | null): string {
+    const key = (eventType ?? "").trim().toLowerCase();
+    if (key === "opportunity_schedule_tour_followup") return "Runs when a tour is scheduled";
+    return "Runs on configured trigger";
+}
+
 export function AutomationWorkflowsBlock(props: {
     kpis: AutomationWorkflowKpis;
     workflows: AutomationWorkflowSummaryRow[] | null;
     title?: string;
     href?: string;
+    /** When true, numeric stats show placeholders until the first KPI fetch completes. */
+    kpisLoading?: boolean;
 }) {
-    const { kpis, workflows, title = "Automations", href = "/adminV2/workflows" } = props;
-  const humanTrigger = (eventType: string | null): string => {
-    const key = (eventType ?? "").trim().toLowerCase();
-    if (key === "opportunity_schedule_tour_followup") return "Runs when a tour is scheduled";
-    return "Runs on configured trigger";
-  };
+    const { kpis, workflows, title = "Automations", href = "/adminV2/workflows", kpisLoading = false } = props;
 
-    const statCard =
-        "rounded-lg border border-alloy-stone/15 bg-white px-3 py-2 shadow-sm ring-1 ring-alloy-stone/5";
-    const statK = "text-[10px] font-semibold uppercase tracking-wide text-alloy-forge/50";
-    const statV = "mt-0.5 text-lg font-bold tabular-nums text-alloy-forge";
+    const failuresHot = !kpisLoading && kpis.failed_last_7d > 0;
+    const successConcern =
+        !kpisLoading &&
+        kpis.success_rate_last_7d != null &&
+        kpis.success_rate_last_7d < 0.92 &&
+        kpis.success_rate_last_7d >= 0;
 
     return (
-        <div className="rounded-xl border border-alloy-blue/20 bg-gradient-to-br from-white to-alloy-blue/5 px-4 py-3 shadow-sm ring-1 ring-alloy-blue/10">
-            <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                    <div className="text-sm font-semibold text-alloy-forge">{title}</div>
-                    <div className="text-[12px] text-alloy-forge/60">Visibility into what’s running for Enrollment.</div>
+        <div className="adminv2-ws-automation-telemetry" data-ws-component="automation_telemetry">
+            <header className="adminv2-ws-automation-telemetry__mast">
+                <div className="adminv2-ws-automation-telemetry__mast-primary">
+                    <p className="adminv2-ws-automation-telemetry__kicker">Workflow telemetry</p>
+                    <h3 className="adminv2-ws-automation-telemetry__title">{title}</h3>
+                    <p className="adminv2-ws-automation-telemetry__subtitle">
+                        Live runs, reliability, and the workflows tied to this workspace surface.
+                    </p>
                 </div>
-                <Link href={href} className="shrink-0 text-sm font-semibold text-alloy-blue hover:underline">
+                <Link href={href} className="adminv2-ws-automation-telemetry__review">
                     Review
+                    <span aria-hidden> →</span>
                 </Link>
-            </div>
+            </header>
 
-            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                <div className={statCard}>
-                    <div className={statK}>Runs today</div>
-                    <div className={statV}>{kpis.runs_today}</div>
-                </div>
-                <div className={statCard}>
-                    <div className={statK}>Success rate (7d)</div>
-                    <div className={statV}>
-                        {kpis.success_rate_last_7d == null ? "—" : `${Math.round(kpis.success_rate_last_7d * 100)}%`}
+            <div className="adminv2-ws-automation-telemetry__groups" role="group" aria-label="Automation metrics">
+                <section className="adminv2-ws-automation-telemetry__group" aria-label="Throughput">
+                    <h4 className="adminv2-ws-automation-telemetry__group-title">Throughput</h4>
+                    <div className="adminv2-ws-automation-telemetry__group-cells">
+                        <div className="adminv2-ws-automation-telemetry__metric">
+                            <span className="adminv2-ws-automation-telemetry__metric-label">Runs today</span>
+                            <span
+                                className={`adminv2-ws-automation-telemetry__metric-value ${kpisLoading ? "adminv2-ws-automation-telemetry__metric-value--pulse" : ""}`}
+                            >
+                                {kpisLoading ? "—" : kpis.runs_today}
+                            </span>
+                        </div>
+                        <div className="adminv2-ws-automation-telemetry__metric">
+                            <span className="adminv2-ws-automation-telemetry__metric-label">Running (7d)</span>
+                            <span
+                                className={`adminv2-ws-automation-telemetry__metric-value ${kpisLoading ? "adminv2-ws-automation-telemetry__metric-value--pulse" : ""}`}
+                            >
+                                {kpisLoading ? "—" : kpis.running_last_7d}
+                            </span>
+                        </div>
                     </div>
-                </div>
-                <div className={statCard}>
-                    <div className={statK}>Failures (7d)</div>
-                    <div className={statV}>{kpis.failed_last_7d}</div>
-                </div>
-                <div className={statCard}>
-                    <div className={statK}>Running (7d)</div>
-                    <div className={statV}>{kpis.running_last_7d}</div>
-                </div>
+                </section>
+                <section className="adminv2-ws-automation-telemetry__group" aria-label="Reliability">
+                    <h4 className="adminv2-ws-automation-telemetry__group-title">Reliability</h4>
+                    <div className="adminv2-ws-automation-telemetry__group-cells">
+                        <div
+                            className={`adminv2-ws-automation-telemetry__metric ${successConcern ? "adminv2-ws-automation-telemetry__metric--watch" : ""}`}
+                            data-automation-watch={successConcern ? "true" : undefined}
+                        >
+                            <span className="adminv2-ws-automation-telemetry__metric-label">Success rate (7d)</span>
+                            <span
+                                className={`adminv2-ws-automation-telemetry__metric-value ${kpisLoading ? "adminv2-ws-automation-telemetry__metric-value--pulse" : ""}`}
+                            >
+                                {kpisLoading ? "—" : kpis.success_rate_last_7d == null ? "—" : `${Math.round(kpis.success_rate_last_7d * 100)}%`}
+                            </span>
+                        </div>
+                        <div
+                            className={`adminv2-ws-automation-telemetry__metric ${failuresHot ? "adminv2-ws-automation-telemetry__metric--attention" : ""}`}
+                            data-automation-attention={failuresHot ? "true" : undefined}
+                        >
+                            <span className="adminv2-ws-automation-telemetry__metric-label">Failures (7d)</span>
+                            <span
+                                className={`adminv2-ws-automation-telemetry__metric-value ${kpisLoading ? "adminv2-ws-automation-telemetry__metric-value--pulse" : ""}`}
+                            >
+                                {kpisLoading ? "—" : kpis.failed_last_7d}
+                            </span>
+                        </div>
+                    </div>
+                </section>
             </div>
 
             {workflows?.length ? (
-                <div className="mt-2">
-                    <div className="text-[10px] font-semibold uppercase tracking-wide text-alloy-forge/50">Relevant</div>
-                    <div className="mt-1 divide-y divide-alloy-stone/10 rounded-lg border border-alloy-stone/15 bg-white">
+                <section className="adminv2-ws-automation-telemetry__workflows" aria-label="Relevant workflows">
+                    <div className="adminv2-ws-automation-telemetry__workflows-head">
+                        <span className="adminv2-ws-automation-telemetry__workflows-kicker">In scope</span>
+                        <span className="adminv2-ws-automation-telemetry__workflows-hint">Configured for this entity</span>
+                    </div>
+                    <ul className="adminv2-ws-automation-telemetry__workflow-list" role="list">
                         {workflows.slice(0, 4).map((w) => (
-                            <div key={w.id} className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
-                                <div className="min-w-0">
-                                    <div className="truncate font-semibold text-alloy-forge">{w.name ?? w.id}</div>
-                                    <div className="truncate text-[12px] text-alloy-forge/60">
-                                        {humanTrigger(w.event_type)} · Steps: {w.steps_count}
+                            <li key={w.id} className="adminv2-ws-automation-workflow-row">
+                                <div className="adminv2-ws-automation-workflow-row__rail" aria-hidden />
+                                <div className="adminv2-ws-automation-workflow-row__body">
+                                    <div className="adminv2-ws-automation-workflow-row__name">{w.name ?? w.id}</div>
+                                    <div className="adminv2-ws-automation-workflow-row__meta">
+                                        <span className="adminv2-ws-automation-workflow-row__trigger">{humanTrigger(w.event_type)}</span>
+                                        <span className="adminv2-ws-automation-workflow-row__sep" aria-hidden>
+                                            ·
+                                        </span>
+                                        <span className="adminv2-ws-automation-workflow-row__steps">
+                                            {w.steps_count} step{w.steps_count === 1 ? "" : "s"}
+                                        </span>
                                     </div>
                                 </div>
                                 <span
-                                    className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+                                    className={
                                         w.enabled === false
-                                            ? "bg-alloy-stone/15 text-alloy-midnight/60"
-                                            : "bg-alloy-blue/10 text-alloy-blue"
-                                    }`}
+                                            ? "adminv2-ws-automation-workflow-row__chip adminv2-ws-automation-workflow-row__chip--disabled"
+                                            : "adminv2-ws-automation-workflow-row__chip adminv2-ws-automation-workflow-row__chip--enabled"
+                                    }
                                 >
-                                    {w.enabled === false ? "Disabled" : "Enabled"}
+                                    {w.enabled === false ? "Off" : "Live"}
                                 </span>
-                            </div>
+                            </li>
                         ))}
-                    </div>
-                </div>
+                    </ul>
+                </section>
             ) : null}
         </div>
     );
 }
-

@@ -33,8 +33,10 @@ export async function attachFieldDefinitionsAndValues(
     supabase: AdminClient,
     out: Record<string, unknown>,
     drawerType: string,
-    entityId: string
+    entityId: string,
+    options?: { mergeValues?: boolean }
 ): Promise<void> {
+    const mergeValues = options?.mergeValues !== false;
     const entityType = DRAWER_TYPE_TO_FIELD_ENTITY_TYPE[drawerType];
     if (!entityType) return;
     let orgId: string | null = (out.org_id as string) ?? null;
@@ -74,7 +76,7 @@ export async function attachFieldDefinitionsAndValues(
 
     const customDefs = fieldDefs.filter((d) => !d.is_system);
     const customDefIds = customDefs.map((d) => d.id);
-    if (customDefIds.length === 0) return;
+    if (customDefIds.length === 0 || !mergeValues) return;
 
     const { data: fvRows } = await supabase
         .from("field_values")

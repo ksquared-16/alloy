@@ -4,13 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
-import { useOperationsWorkspaceData } from "@/hooks/useOperationsWorkspaceData";
 import { DepartmentWorkspaceBridgeShell } from "@/components/admin/workspace/DepartmentWorkspaceBridgeShell";
 import KPIBlock from "@/app/adminV2/components/workspace/blocks/KPIBlock";
-import {
-    DepartmentRouteSkeletonBody,
-    WsRouteLoadingRibbon,
-} from "@/components/admin/workspace/workspaceRouteSkeletons";
+import { AdminV2RouteLoadingState } from "@/components/admin/workspace/AdminV2RouteLoadingState";
 import { workspaceRouteParam } from "@/lib/workspace/workspaceRouteParam";
 import ActionsBlock from "@/app/adminV2/components/workspace/blocks/ActionsBlock";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
@@ -68,48 +64,55 @@ type V1QueueSummary = {
     count: number;
 };
 
+type DeptRow = { id: string; name: string | null; key: string | null };
+
 export default function AdminV2WorkspaceDepartmentPage() {
     const params = useParams();
     const router = useRouter();
     const { openDrawer } = useAdminDrawer();
     const departmentId = workspaceRouteParam(params.departmentId);
 
-    const { dept, title, runtime, error, loading } = useOperationsWorkspaceData(departmentId);
+    const [dept, setDept] = useState<DeptRow | null>(null);
+    const [deptLoading, setDeptLoading] = useState(true);
+    const [deptError, setDeptError] = useState<string | null>(null);
 
     const deptKey = (dept?.key ?? "").trim().toLowerCase();
+    const title = useMemo(() => dept?.name?.trim() || "Department", [dept?.name]);
 
     const [enrollmentDeptRightRail, setEnrollmentDeptRightRail] = useState<ResolvedActionForClient[] | null>(null);
-
 
     const [deptWorkUnits, setDeptWorkUnits] = useState<Array<{ id: string; name: string | null; key: string | null }> | null>(null);
     const [deptWorkUnitsError, setDeptWorkUnitsError] = useState<string | null>(null);
     const [deptWorkUnitSummaries, setDeptWorkUnitSummaries] = useState<Record<string, { total: number; needs_attention: number | null }>>(
         {}
     );
+    const [deptQueueSummariesLoading, setDeptQueueSummariesLoading] = useState(false);
+    const [deptQueueSummariesError, setDeptQueueSummariesError] = useState<string | null>(null);
+    const [deptSummariesWaitTimedOut, setDeptSummariesWaitTimedOut] = useState(false);
 
     const [workflowKpis, setWorkflowKpis] = useState<WorkflowKpis>(DEFAULT_WF_KPIS);
+    const [workflowKpisLoading, setWorkflowKpisLoading] = useState(true);
     const [workflowsSummary, setWorkflowsSummary] = useState<WorkflowSummaryRow[] | null>(null);
 
     const primaryWorkUnit = useMemo(() => {
         const fromDeptList = deptWorkUnits?.[0] ?? null;
-        if (fromDeptList) return { id: fromDeptList.id } as { id: string };
-        const wus = runtime.workUnits ?? [];
-        return wus[0] ? ({ id: wus[0].id } as { id: string }) : null;
-    }, [deptWorkUnits, runtime.workUnits]);
+        return fromDeptList ? ({ id: fromDeptList.id } as { id: string }) : null;
+    }, [deptWorkUnits]);
 
     useEffect(() => {
         let cancelled = false;
+        setWorkflowKpisLoading(true);
         (async () => {
             try {
                 const init = workspaceDataFetchInit();
                 const [kRes, sRes] = await Promise.all([
                     fetch("/api/admin/workflow-runs?list=kpis", init),
-                    fetch("/api/admin/workflows/summary", init),
+                    fetch("/api/admin/workflows/summary?variant=workspace", init),
                 ]);
-                const kJson = (await kRes.json().catch(() => ({}))) as Partial<WorkflowKpis>;
+                const kBody = (await kRes.json().catch(() => ({}))) as { kpis?: Partial<WorkflowKpis> };
                 const sJson = (await sRes.json().catch(() => ({}))) as { workflows?: WorkflowSummaryRow[] };
                 if (!cancelled) {
-                    if (kRes.ok) setWorkflowKpis({ ...DEFAULT_WF_KPIS, ...kJson });
+                    if (kRes.ok && kBody.kpis) setWorkflowKpis({ ...DEFAULT_WF_KPIS, ...kBody.kpis });
                     if (sRes.ok) {
                         const all = Array.isArray(sJson.workflows) ? sJson.workflows : [];
                         const relevant = all.filter((w) => (w.entity_type ?? "").toLowerCase() === "opportunity");
@@ -118,6 +121,8 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 }
             } catch {
                 // non-fatal
+            } finally {
+                if (!cancelled) setWorkflowKpisLoading(false);
             }
         })();
         return () => {
@@ -126,29 +131,69 @@ export default function AdminV2WorkspaceDepartmentPage() {
     }, []);
 
     useEffect(() => {
-        if (!departmentId) return;
+        if (!departmentId) {
+            setDept(null);
+            setDeptWorkUnits(null);
+            setDeptWorkUnitsError(null);
+            setDeptError(null);
+            setDeptLoading(false);
+            return;
+        }
         let cancelled = false;
-        (async () => {
+        setDeptLoading(true);
+        setDeptError(null);
+        setDeptWorkUnitsError(null);
+        void (async () => {
             try {
                 const init = workspaceDataFetchInit();
-                const route = `/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`;
-                const res = await fetch(route, init);
-                const j = (await res.json().catch(() => ({}))) as {
+                const deptRoute = `/api/admin/departments/${encodeURIComponent(departmentId)}`;
+                const wuRoute = `/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`;
+                const [deptRes, wuRes] = await Promise.all([fetch(deptRoute, init), fetch(wuRoute, init)]);
+
+                const deptJson = (await deptRes.json().catch(() => ({}))) as {
+                    error?: string;
+                    id?: string;
+                    name?: string | null;
+                    key?: string | null;
+                };
+                const wuJson = (await wuRes.json().catch(() => ({}))) as {
                     error?: string;
                     items?: Array<{ id: string; name?: string | null; key?: string | null }>;
                 };
+
                 if (cancelled) return;
-                if (!res.ok) {
-                    setDeptWorkUnits(null);
-                    setDeptWorkUnitsError(j.error ?? "Failed to load work units");
-                    return;
+
+                if (!deptRes.ok) {
+                    setDept(null);
+                    setDeptError(deptJson.error ?? "Failed to load department");
+                } else if (deptJson.id) {
+                    setDept({
+                        id: String(deptJson.id),
+                        name: deptJson.name ?? null,
+                        key: deptJson.key ?? null,
+                    });
+                    setDeptError(null);
+                } else {
+                    setDept(null);
+                    setDeptError("Department not found");
                 }
-                setDeptWorkUnits((j.items ?? []).map((w) => ({ id: String(w.id), name: w.name ?? null, key: w.key ?? null })));
-                setDeptWorkUnitsError(null);
+
+                if (!wuRes.ok) {
+                    setDeptWorkUnits(null);
+                    setDeptWorkUnitsError(wuJson.error ?? "Failed to load work units");
+                } else {
+                    setDeptWorkUnits((wuJson.items ?? []).map((w) => ({ id: String(w.id), name: w.name ?? null, key: w.key ?? null })));
+                    setDeptWorkUnitsError(null);
+                }
             } catch (e) {
-                if (cancelled) return;
-                setDeptWorkUnits(null);
-                setDeptWorkUnitsError(e instanceof Error ? e.message : "Failed to load work units");
+                if (!cancelled) {
+                    setDept(null);
+                    setDeptError(e instanceof Error ? e.message : "Failed to load department");
+                    setDeptWorkUnits(null);
+                    setDeptWorkUnitsError(e instanceof Error ? e.message : "Failed to load work units");
+                }
+            } finally {
+                if (!cancelled) setDeptLoading(false);
             }
         })();
         return () => {
@@ -158,30 +203,69 @@ export default function AdminV2WorkspaceDepartmentPage() {
 
     useEffect(() => {
         const list = deptWorkUnits ?? [];
-        if (!departmentId || list.length === 0) return;
+        if (!departmentId || list.length === 0) {
+            setDeptWorkUnitSummaries({});
+            setDeptQueueSummariesLoading(false);
+            setDeptQueueSummariesError(null);
+            return;
+        }
         let cancelled = false;
-        (async () => {
-            const init = workspaceDataFetchInit();
-            const next: Record<string, { total: number; needs_attention: number | null }> = {};
-            await Promise.allSettled(
-                list.map(async (wu) => {
-                    const route = `/api/admin/work-units/${encodeURIComponent(wu.id)}/queues?limit=50`;
-                    const res = await fetch(route, init);
-                    const j = (await res.json().catch(() => ({}))) as { error?: string; queues?: V1QueueSummary[] };
-                    if (!res.ok) throw new Error(j.error ?? "Failed to load queue summaries");
-                    const queues = (j.queues ?? []) as V1QueueSummary[];
+        setDeptQueueSummariesLoading(true);
+        setDeptQueueSummariesError(null);
+        void (async () => {
+            try {
+                const init = workspaceDataFetchInit();
+                // Match work-unit queue badges: exact head counts (not PostgreSQL planned estimates).
+                const route = `/api/admin/departments/${encodeURIComponent(departmentId)}/work-unit-queue-summaries?include_previews=false&count_mode=exact`;
+                const res = await fetch(route, init);
+                const j = (await res.json().catch(() => ({}))) as {
+                    error?: string;
+                    work_units?: Array<{ id?: string; queues?: V1QueueSummary[]; error?: string }>;
+                };
+                if (cancelled) return;
+                if (!res.ok) {
+                    setDeptWorkUnitSummaries({});
+                    setDeptQueueSummariesError(j.error ?? "Failed to load queue summaries");
+                    return;
+                }
+                const next: Record<string, { total: number; needs_attention: number | null }> = {};
+                for (const row of j.work_units ?? []) {
+                    const id = typeof row.id === "string" ? row.id : "";
+                    if (!id) continue;
+                    if (row.error) {
+                        next[id] = { total: 0, needs_attention: null };
+                        continue;
+                    }
+                    const queues = (row.queues ?? []) as V1QueueSummary[];
                     const total = queues.reduce((acc, q) => acc + (typeof q.count === "number" ? q.count : 0), 0);
                     const needsRow = queues.find((q) => (q.key ?? "").trim().toLowerCase() === "needs_attention");
                     const needs = needsRow && typeof needsRow.count === "number" ? needsRow.count : null;
-                    next[wu.id] = { total, needs_attention: needs };
-                })
-            );
-            if (!cancelled) setDeptWorkUnitSummaries(next);
+                    next[id] = { total, needs_attention: needs };
+                }
+                setDeptWorkUnitSummaries(next);
+                setDeptQueueSummariesError(null);
+            } catch (e) {
+                if (!cancelled) {
+                    setDeptWorkUnitSummaries({});
+                    setDeptQueueSummariesError(e instanceof Error ? e.message : "Failed to load queue summaries");
+                }
+            } finally {
+                if (!cancelled) setDeptQueueSummariesLoading(false);
+            }
         })();
         return () => {
             cancelled = true;
         };
     }, [departmentId, deptWorkUnits]);
+
+    useEffect(() => {
+        if (!deptQueueSummariesLoading) {
+            setDeptSummariesWaitTimedOut(false);
+            return;
+        }
+        const t = window.setTimeout(() => setDeptSummariesWaitTimedOut(true), 10_000);
+        return () => clearTimeout(t);
+    }, [deptQueueSummariesLoading]);
 
     useEffect(() => {
         if (deptKey !== "enrollment" || !departmentId || !primaryWorkUnit?.id) {
@@ -237,24 +321,33 @@ export default function AdminV2WorkspaceDepartmentPage() {
         if (!list.length) return [];
         return list.map((wu) => {
             const summary = deptWorkUnitSummaries[wu.id];
-            const value = summary ? summary.total : 0;
+            const value = deptQueueSummariesLoading
+                ? "—"
+                : deptQueueSummariesError
+                  ? "—"
+                  : summary
+                    ? String(summary.total)
+                    : "—";
             const key = (wu.key ?? "").trim().toLowerCase();
             const label = key === "enrollment_pipeline" || key === "pipeline_overview" ? "Active inquiries" : (wu.name?.trim() || "Work unit");
-            return { id: `wu_${wu.id}`, label, value: String(value), lane: "business" as const };
+            return { id: `wu_${wu.id}`, label, value, lane: "business" as const };
         });
-    }, [deptWorkUnitSummaries, deptWorkUnits]);
+    }, [deptQueueSummariesError, deptQueueSummariesLoading, deptWorkUnitSummaries, deptWorkUnits]);
 
     const needsAttentionSummary = useMemo(() => {
         const list = deptWorkUnits ?? [];
         const explicitNeedsAttentionWu = list.find((w) => (w.key ?? "").trim().toLowerCase() === "needs_attention") ?? null;
-        const total = Object.values(deptWorkUnitSummaries).reduce((acc, s) => acc + (s.needs_attention ?? 0), 0);
+        const total: number | null =
+            list.length === 0 || deptQueueSummariesLoading || deptQueueSummariesError
+                ? null
+                : Object.values(deptWorkUnitSummaries).reduce((acc, s) => acc + (s.needs_attention ?? 0), 0);
         const targetWu = explicitNeedsAttentionWu ?? list[0] ?? null;
         const href =
             targetWu != null
                 ? `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(targetWu.id)}?queue=needs_attention`
                 : `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}`;
         return { total, href };
-    }, [departmentId, deptWorkUnitSummaries, deptWorkUnits]);
+    }, [departmentId, deptQueueSummariesError, deptQueueSummariesLoading, deptWorkUnitSummaries, deptWorkUnits]);
 
     const needsAttentionHref = needsAttentionSummary.href;
 
@@ -283,6 +376,11 @@ export default function AdminV2WorkspaceDepartmentPage() {
         },
         [departmentId, enrollmentRightRailByKey, needsAttentionHref, openDrawer, primaryWorkUnit?.id, router]
     );
+
+    const deptMainContentReady =
+        Boolean(dept) &&
+        (!deptQueueSummariesLoading || deptSummariesWaitTimedOut) &&
+        (deptWorkUnits !== null || Boolean(deptWorkUnitsError));
 
     const renderWorkUnitSection = () => {
         return (
@@ -373,11 +471,11 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                     <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] tabular-nums" style={{ color: "var(--d-muted)" }}>
                                         <div>
                                             <span className="font-medium text-alloy-midnight/75">Total</span>{" "}
-                                            <span className="text-alloy-midnight/85">{needsAttentionSummary.total}</span>
+                                            <span className="text-alloy-midnight/85">{needsAttentionSummary.total ?? "—"}</span>
                                         </div>
                                         <div className="text-right">
                                             <span className="font-medium text-alloy-midnight/75">Needs attention</span>{" "}
-                                            <span className="text-alloy-midnight/85">{needsAttentionSummary.total}</span>
+                                            <span className="text-alloy-midnight/85">{needsAttentionSummary.total ?? "—"}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -392,7 +490,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
         );
     };
 
-    if (loading) {
+    if (deptLoading) {
         return (
             <WorkspaceChrome
                 variant="bridge"
@@ -400,11 +498,31 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     { href: WORKSPACE_BASE, label: "Workspace" },
                     { label: "Loading…" },
                 ]}
+                title="Loading…"
+                subtitle=""
+            >
+                <AdminV2RouteLoadingState variant="department" />
+            </WorkspaceChrome>
+        );
+    }
+
+    if (dept && !deptMainContentReady) {
+        return (
+            <WorkspaceChrome
+                variant="bridge"
+                breadcrumbs={[
+                    { href: WORKSPACE_BASE, label: "Workspace" },
+                    { href: `${WORKSPACE_BASE}/dept/${departmentId}`, label: title },
+                ]}
                 title={title}
                 subtitle=""
             >
-                <WsRouteLoadingRibbon label="Loading department" />
-                <DepartmentRouteSkeletonBody />
+                <AdminV2RouteLoadingState
+                    variant="department"
+                    title="Preparing workspace"
+                    description="Loading work-unit queue summaries…"
+                    ribbonLabel="Loading summaries"
+                />
             </WorkspaceChrome>
         );
     }
@@ -419,13 +537,14 @@ export default function AdminV2WorkspaceDepartmentPage() {
             title={title}
             subtitle=""
         >
-            {error && !loading && dept ? <p className="text-sm text-amber-800 px-1">{error}</p> : null}
+            {deptWorkUnitsError && dept ? <p className="text-sm text-alloy-ember px-1">{deptWorkUnitsError}</p> : null}
+            {deptQueueSummariesError && dept ? <p className="text-sm text-alloy-ember px-1">{deptQueueSummariesError}</p> : null}
             {!dept ? (
                 <div
                     className="rounded-xl border px-4 py-10 text-center text-sm text-alloy-ember/90"
                     style={{ borderColor: "var(--d-border, rgba(39,63,82,0.14))" }}
                 >
-                    {error ??
+                    {deptError ??
                         "This department could not be loaded. Use the workspace link above to pick another department."}
                 </div>
             ) : primaryWorkUnit ? (
@@ -434,11 +553,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     briefTitle={title}
                     briefSubtitle=""
                     signalsSlot={null}
-                    kpiSlot={
-                        kpis.length ? (
-                            <KPIBlock kpis={kpis} surface="default" maxVisible={6} />
-                        ) : null
-                    }
+                    kpiSlot={kpis.length ? <KPIBlock kpis={kpis} maxVisible={5} /> : null}
                     throughputSlot={
                         <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
                             {renderWorkUnitSection()}
@@ -449,6 +564,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     contextSlot={
                         <AutomationWorkflowsBlock
                             title="Automations"
+                            kpisLoading={workflowKpisLoading}
                             kpis={{
                                 runs_today: workflowKpis.runs_today,
                                 failed_last_7d: workflowKpis.failed_last_7d,
@@ -460,19 +576,14 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         />
                     }
                     railSlot={
-                        deptKey === "enrollment" ? (
-                            (enrollmentDepartmentRailModel?.systemActions?.length ?? 0) > 0 ? (
-                                <ActionsBlock
-                                    model={enrollmentDepartmentRailModel!}
-                                    onAction={onEnrollmentDeptRailAction}
-                                    title="Actions"
-                                    surface="department"
-                                />
-                            ) : (
-                                <div className="rounded-lg border border-admin-border bg-admin-surface-card px-3 py-2 text-xs text-alloy-forge/65">
-                                    No configured actions.
-                                </div>
-                            )
+                        deptKey === "enrollment" &&
+                        (enrollmentDepartmentRailModel?.systemActions?.length ?? 0) > 0 ? (
+                            <ActionsBlock
+                                model={enrollmentDepartmentRailModel!}
+                                onAction={onEnrollmentDeptRailAction}
+                                title="Actions"
+                                surface="department"
+                            />
                         ) : null
                     }
                 />

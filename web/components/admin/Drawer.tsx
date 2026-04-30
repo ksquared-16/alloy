@@ -177,7 +177,7 @@ export default function Drawer({
     const headerBlock = (
         <>
             <div
-                className={`sticky top-0 z-10 shrink-0 ${cleaningRecordModalTone ? "border-b border-solid" : `border-b ${isV2 ? "" : "border-admin-border bg-admin-surface-card"}`}`}
+                className={`sticky top-0 ${isV2 ? "z-20" : "z-10"} shrink-0 ${cleaningRecordModalTone ? "border-b border-solid" : `border-b ${isV2 ? "" : "border-admin-border bg-admin-surface-card"}`}`}
                 style={
                     isV2
                         ? {

@@ -17,9 +17,12 @@ function normalizeKey(raw: string): string {
 
 /** GET: list departments for current org. */
 export async function GET() {
+    const t0 = Date.now();
     const ctx = await getAdminContext();
+    const ctxMs = Date.now() - t0;
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
+    const t1 = Date.now();
     const supabase = createAdminClient();
     const { data: rows, error } = await supabase
         .from("departments")
@@ -30,6 +33,17 @@ export async function GET() {
 
     if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    const dbMs = Date.now() - t1;
+    const totalMs = Date.now() - t0;
+    if (totalMs > 200) {
+        console.warn("[admin-timing] GET /api/admin/departments", {
+            total_ms: totalMs,
+            get_admin_context_ms: ctxMs,
+            query_ms: dbMs,
+            row_count: (rows ?? []).length,
+        });
     }
 
     return NextResponse.json({ items: rows ?? [] });

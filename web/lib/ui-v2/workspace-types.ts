@@ -49,10 +49,22 @@ export type QueueItemWaitStatusVm = "safe" | "approaching" | "breached";
  * Stable semantic slots for CRM-compact queue rows — config can target these keys
  * without reshaping the whole `QueueItemVm`.
  */
+export type CrmCompactChildLineVm = {
+  /** Name; may include age suffix from backend (e.g. "Alex (5y)"). */
+  primary: string;
+  /** Program slice / age-band when distinct from primary (inquiry metadata). */
+  secondary?: string | null;
+};
+
 export type CrmCompactRowSemanticSlots = {
   primaryIdentity: string;
-  /** One child name or multiple joined with ` · ` when `metadata.inquiry_children` / enrichment supplies it. */
+  /** One child name or multiple joined with ` · ` when enrichment flattens fields (single-child / legacy). */
   childName: string | null;
+  /**
+   * Structured display for **two or more** children (enrolled OCM or inquiry rows).
+   * When set with length ≥ 2, CRM compact shows a Children group; single-child uses `childName`.
+   */
+  childrenLines?: CrmCompactChildLineVm[] | null;
   stageLabel: string | null;
   statusLabel: string | null;
   nextStep: string | null;
@@ -129,6 +141,8 @@ export type QueueRollupExampleVm = {
 export type QueueVm = {
   id: string;
   title: string;
+  /** Work-unit drill list: server queue label (empty states, captions). */
+  laneQueueLabel?: string;
   countBadge?: number;
   items: QueueItemVm[];
   viewAllActionId?: string;
@@ -156,6 +170,10 @@ export type QueueVm = {
    * Use industry-native labels (e.g. Expiry · Binder for renewals).
    */
   workUnitMidlineKeys?: { left?: string; right?: string };
+  /**
+   * Work-unit lane: while true, suppress empty-state copy ("No records") — rows are still loading or tab switched.
+   */
+  rowsLoading?: boolean;
 };
 
 export type WorkStepVm = {

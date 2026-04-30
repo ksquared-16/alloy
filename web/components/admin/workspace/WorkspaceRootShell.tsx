@@ -4,7 +4,6 @@ import type { CSSProperties } from "react";
 import { useMemo } from "react";
 import Link from "next/link";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
-import "@/app/adminV2/components/workspace/workspace.css";
 import KPIBlock from "@/app/adminV2/components/workspace/blocks/KPIBlock";
 import type { KPIVm } from "@/lib/ui-v2/workspace-types";
 import {
@@ -12,6 +11,7 @@ import {
   type WorkspaceRootDepartmentRow,
   type WorkspaceRootDeptTileStats,
 } from "@/components/admin/workspace/WorkspaceRootDepartmentGrid";
+import { WorkspaceShellLayout } from "@/components/admin/workspace/WorkspaceShellLayout";
 
 const WORKSPACE_BASE = "/adminV2/workspace";
 
@@ -95,94 +95,86 @@ export function WorkspaceRootShell({
   }, [metrics, metricsLoading, orgOpportunityKpis]);
 
   return (
-    <div
-      data-ws-surface="company"
-      data-adminv2-workspace-root-shell="true"
-      className="adminv2-ws-root adminv2-ws-company adminv2-ws-company-v2"
+    <WorkspaceShellLayout
+      surface="company"
+      rootClassName="adminv2-ws-company adminv2-ws-company-v2"
       style={companyRootStyle}
-    >
-      <div className="adminv2-ws-dept-v2-contain">
+      workspaceRootShell
+      railAriaLabel="Workspace orientation"
+      showRail
+      railContent={
+        <section className="adminv2-ws-actions-rail adminv2-ws-actions-rail--dept-panel adminv2-ws-actions-rail--orientation px-3 pb-3 pt-3">
+          <h3 className="adminv2-ws-actions-rail-title">Orientation</h3>
+          <p className="adminv2-ws-workspace-orientation-lead">
+            You are at the top of the hierarchy. Use the department cards to drill into work units and queues;
+            this column stays lightweight.
+          </p>
+          <div className="adminv2-ws-workspace-orientation-meta" aria-label="Related admin surfaces">
+            <span className="adminv2-ws-workspace-orientation-meta-k">Drill path</span>
+            <span className="adminv2-ws-workspace-orientation-meta-v">Department → work unit → record</span>
+          </div>
+          <div className="adminv2-ws-actions-rail-list adminv2-ws-actions-rail-list--column mt-3">
+            <Link
+              href="/admin/opportunities"
+              className="adminv2-ws-actions-rail-secondary adminv2-ws-workspace-orientation-link text-center no-underline rounded-md font-bold text-[11px] w-full"
+            >
+              Open inquiries (classic admin)
+            </Link>
+            <Link
+              href="/admin/system/work-units"
+              className="adminv2-ws-actions-rail-secondary adminv2-ws-workspace-orientation-link text-center no-underline rounded-md font-bold text-[11px] w-full"
+            >
+              Work unit registry
+            </Link>
+          </div>
+        </section>
+      }
+      containLead={
         <nav className="text-sm text-alloy-midnight/60 flex flex-wrap items-center gap-1 pb-2" aria-label="Breadcrumb">
           <span className="text-alloy-midnight/80 font-medium">Workspace</span>
         </nav>
-
-        <div className="adminv2-ws-dept-v2-page-split">
-          <div className="adminv2-ws-dept-v2-primary-column">
-            <div className="adminv2-ws-dept-v2-control-deck">
-              <div className="adminv2-ws-dept-v2-top-stack">
-                <div className="adminv2-ws-dept-v2-brief">
-                  <div className="adminv2-ws-dept-v2-brief-focus-label">Organization workspace</div>
-                  <div className="adminv2-ws-dept-v2-brief-head-row">
-                    <h2 className="adminv2-ws-dept-v2-brief-headline">{displayName}</h2>
-                  </div>
-                  <p className="text-sm mt-2 max-w-3xl" style={{ color: derived.textSecondary, lineHeight: 1.45 }}>
-                    Pick a department to drill into work units. This root surface stays structure-only.
-                  </p>
+      }
+      primaryColumn={
+        <>
+          <div className="adminv2-ws-dept-v2-control-deck">
+            <div className="adminv2-ws-dept-v2-top-stack">
+              <div className="adminv2-ws-dept-v2-brief">
+                <div className="adminv2-ws-dept-v2-brief-focus-label">Organization workspace</div>
+                <div className="adminv2-ws-dept-v2-brief-head-row">
+                  <h2 className="adminv2-ws-dept-v2-brief-headline">{displayName}</h2>
                 </div>
-              </div>
-              <KPIBlock
-                kpis={kpis}
-                surface="default"
-                maxVisible={kpis.length ? Math.min(kpis.length, 6) : 2}
-              />
-            </div>
-
-            <section className="mt-4" aria-labelledby="ws-root-dept-heading">
-              <div className="flex flex-wrap items-end justify-between gap-2 mb-3">
-                <div>
-                  <h2 id="ws-root-dept-heading" className="text-xs font-semibold uppercase tracking-wide" style={{ color: derived.textSecondary }}>
-                    Departments
-                  </h2>
-                  <p className="text-sm mt-0.5" style={{ color: derived.textSecondary }}>
-                    Each card is a live department from your org — drill in to work units and queues.
-                  </p>
-                </div>
-              </div>
-              <WorkspaceRootDepartmentGrid
-                workspaceBasePath={WORKSPACE_BASE}
-                departments={departments}
-                deptTileStats={deptTileStats}
-                tileVariant="workspaceRoot"
-                omitOuterChrome
-              />
-            </section>
-          </div>
-
-          <div className="adminv2-ws-dept-v2-command-column" data-adminv2-workspace-command-column>
-            <aside
-              className="adminv2-ws-dept-v2-rail adminv2-ws-dept-v2-rail--command-shell"
-              data-adminv2-workspace-command-rail
-              aria-label="Workspace orientation"
-            >
-              <section className="adminv2-ws-actions-rail adminv2-ws-actions-rail--dept-panel adminv2-ws-actions-rail--orientation px-3 pb-3 pt-3">
-                <h3 className="adminv2-ws-actions-rail-title">Orientation</h3>
-                <p className="adminv2-ws-workspace-orientation-lead">
-                  You are at the top of the hierarchy. Use the department cards to drill into work units and queues;
-                  this column stays lightweight.
+                <p
+                  className="text-sm mt-2 max-w-3xl adminv2-ws-root-brief-subline"
+                  style={{ lineHeight: 1.45 }}
+                >
+                  Pick a department to drill into work units. This root surface stays structure-only.
                 </p>
-                <div className="adminv2-ws-workspace-orientation-meta" aria-label="Related admin surfaces">
-                  <span className="adminv2-ws-workspace-orientation-meta-k">Drill path</span>
-                  <span className="adminv2-ws-workspace-orientation-meta-v">Department → work unit → record</span>
-                </div>
-                <div className="adminv2-ws-actions-rail-list adminv2-ws-actions-rail-list--column mt-3">
-                  <Link
-                    href="/admin/opportunities"
-                    className="adminv2-ws-actions-rail-secondary adminv2-ws-workspace-orientation-link text-center no-underline rounded-md font-bold text-[11px] w-full"
-                  >
-                    Open inquiries (classic admin)
-                  </Link>
-                  <Link
-                    href="/admin/system/work-units"
-                    className="adminv2-ws-actions-rail-secondary adminv2-ws-workspace-orientation-link text-center no-underline rounded-md font-bold text-[11px] w-full"
-                  >
-                    Work unit registry
-                  </Link>
-                </div>
-              </section>
-            </aside>
+              </div>
+            </div>
+            <KPIBlock kpis={kpis} maxVisible={5} />
           </div>
-        </div>
-      </div>
-    </div>
+
+          <section className="adminv2-ws-root-departments-zone" aria-labelledby="ws-root-dept-heading">
+            <div className="flex flex-wrap items-end justify-between gap-2 mb-3">
+              <div>
+                <h2 id="ws-root-dept-heading" className="adminv2-ws-root-zone-kicker">
+                  Departments
+                </h2>
+                <p className="adminv2-ws-root-zone-sub">
+                  Each card is a live department from your org — drill in to work units and queues.
+                </p>
+              </div>
+            </div>
+            <WorkspaceRootDepartmentGrid
+              workspaceBasePath={WORKSPACE_BASE}
+              departments={departments}
+              deptTileStats={deptTileStats}
+              tileVariant="workspaceRoot"
+              omitOuterChrome
+            />
+          </section>
+        </>
+      }
+    />
   );
 }

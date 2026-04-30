@@ -145,11 +145,7 @@ export function WorkspaceRenderer({
                         />
                     ))}
                 </>
-            ) : (
-                <p className="text-xs px-2 py-4" style={{ color: "var(--d-muted)" }}>
-                    No actions configured for this layout.
-                </p>
-            );
+            ) : null;
 
         return (
             <div data-workspace-renderer data-department-key={layout.department_key ?? "generic"} data-presentation="department_bridge">

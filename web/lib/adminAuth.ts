@@ -5,9 +5,9 @@
  */
 
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabaseServer";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import type { User } from "@supabase/supabase-js";
+import { getCachedAuthUser } from "@/lib/admin/cachedAuthSession";
 
 const ALLOWED_ROLES = ["admin", "ops"] as const;
 export type AdminRole = (typeof ALLOWED_ROLES)[number];
@@ -23,12 +23,12 @@ export interface AdminAuthResult {
  * Returns null if not logged in or no allowed role is found.
  */
 export async function getAdminAuth(): Promise<AdminAuthResult | null> {
-    const supabase = await createClient();
-    const {
-        data: { user },
-    } = await supabase.auth.getUser();
+    const t0 = Date.now();
+    const user = await getCachedAuthUser();
+    const authUserMs = Date.now() - t0;
     if (!user?.id) return null;
 
+    const t1 = Date.now();
     const admin = createAdminClient();
 
     const { data: profile } = await admin
@@ -78,6 +78,16 @@ export async function getAdminAuth(): Promise<AdminAuthResult | null> {
     }
 
     if (!role) return null;
+
+    const profileMs = Date.now() - t1;
+    const totalMs = Date.now() - t0;
+    if (totalMs > 400) {
+        console.warn("[admin-context-perf] getAdminAuth", {
+            auth_get_user_ms: authUserMs,
+            role_resolve_ms: profileMs,
+            total_ms: totalMs,
+        });
+    }
     return { user, role };
 }
 

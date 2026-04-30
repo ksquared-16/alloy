@@ -52,6 +52,68 @@ See [implementation-gap-audit.md](./implementation-gap-audit.md) for how `depart
 
 **Terms:** [glossary.md](./glossary.md)
 
+## Presentation shell (Admin V2 — current standard)
+
+The following describes the **current** workspace **chrome** and **layout mechanics** under `/adminV2/workspace/**` after the **presentation-only** Admin V2 workspace refactor. It is the **Admin V2 workspace standard as implemented today** and the **baseline for the next iteration** — not a promise of final product design. Product iteration may revise surfaces while honoring the same backend **contracts** (queues, resolver payloads, actions, layout registry payloads).
+
+### Shared shell layout
+
+- **`WorkspaceShellLayout`** (`web/components/admin/workspace/WorkspaceShellLayout.tsx`) is the **preferred** shared pattern for **org**, **department**, and **work-unit** workspace pages. Structural columns, scroll boundaries, and rail mounting should converge here rather than one-off forks per route.
+
+### Scroll and rail behavior
+
+- **One primary workspace scroll surface** — the main operational column owns vertical scrolling (single scroll owner with explicit surface labeling / CSS variables). Avoid stacking independent scroll contexts for primary queue/control content.
+- **Desktop command/action rail** — on sufficiently wide viewports, contextual commands/actions live in a **sticky** right-hand column aligned with workspace chrome. At **narrower breakpoints** the rail **stacks below** primary content rather than pinning in a cramped side column.
+
+### Actions rail visibility
+
+- When **no** actions are resolved for the current context, **the rail collapses**. There is **no** persistent placeholder panel (no standing “No configured actions” tombstone) purely to preserve white space layout.
+
+### KPI / scorecard density
+
+- KPIs surface as a **compact orientation strip** — a shallow measurement band, not heavy nested cards. Default presentation targets **four to five visible metrics at a time** unless layout configuration explicitly warrants more density. Semantic and data sourcing rules remain in **`docs/specs/workspace-kpi-doctrine.md`**.
+
+### Ambient layer
+
+- The **background field** stays **near-white / very light neutral** with **slate-forward** ambient texture (dots/specs/sparse wash) at **low contrast**. The intent is **operational continuity** (“where am I”), not illustrative or decorative canvas. Ambient tweaks are **presentation-only** and **do not** substitute for resolver/visual-context tokens that carry operational meaning.
+
+### Contracts preserved by this refactor
+
+The shell refactor was **presentation-layer only**: **`work_units.queue_definition`** interpretation, **action inventory and resolution**, **workspace layout/registry** payloads, resolver shapes, and **HTTP API** contracts were **not** changed by swapping scroll/rail/chrome. Behavioral changes belong in resolver, configuration, or API layers—not in workspace shell CSS/layout alone.
+
+### Living code anchors
+
+| Concern | Indicative path |
+|---------|----------------|
+| Shell layout composable | `web/components/admin/workspace/WorkspaceShellLayout.tsx` |
+| Workspace route segment | `web/app/adminV2/workspace/layout.tsx`; client providers beside it |
+| App shell wiring + workspace scroll host | `web/app/adminV2/components/AdminV2Shell.tsx` |
+| Workspace ambient visuals | `web/app/adminV2/components/WorkspaceAmbientLayer.tsx`; scoped rules in `web/app/adminV2/adminV2.css`, `workspace.css` |
+
+**Implementation companion:** [`docs/implementation/workspace-v2/WORKSPACE_SYSTEM.md`](../implementation/workspace-v2/WORKSPACE_SYSTEM.md) (routes, hierarchy).
+
+### Queue row preview (Admin V2 — current standard)
+
+- **Config selects a registered template; code owns the template.** `work_units.queue_definition` (validated as QueueDefinition v1) exposes **`ui.row_preview.variant`**, **`ui.row_preview.fields`**, and **`ui.row_preview.actions`**. Only **approved** variants implemented in code (e.g. **`crm_compact`**, **`basic`**) are valid — this is **not** an arbitrary page-builder row layout.
+- **Triage vs truth:** Queue rows are for **sorting and next action** in context. The **resolver-backed record** and **drawer** remain **authoritative** for inspection and decisions when precision matters.
+- **Implementation notes:** Normalization via `getQueueUiConfig()`; work-unit page mapper builds `semanticCrmCompact` / basic subtitles from row enrichment + field gates. See [`docs/implementation/workspace-v2/WORKSPACE_SYSTEM.md`](../implementation/workspace-v2/WORKSPACE_SYSTEM.md) § Queue row preview.
+
+### Count consistency (Admin V2 — current standard)
+
+- **Authoritative operator counts use exact semantics** where the UI presents a number as **the** count for a bucket (pills, badges, headline totals tied to a queue scope). **Planned / estimated** counts (e.g. PostgreSQL planner estimates) are **not** acceptable for that role unless the UI **explicitly** frames them as approximate or non-authoritative.
+- **Same scope, same number:** Counts shown on **org / department / work-unit** workspace surfaces for the **same** queue or aggregation scope **must not contradict** each other after refresh (within normal race windows). When performance requires staged loading, prefer **empty / deferred / “…”** states over a wrong integer.
+- **Performance is real; trust comes first** for operational triage. Batch or shared queries and honest loading states beat **fast wrong** numbers on pills and KPI-style readouts.
+
+### Visual system (Admin V2 — workspace)
+
+High-level palette roles for workspace chrome (token detail: [`docs/implementation/workspace-v2/VISUAL_CONTEXT_SYSTEM.md`](../implementation/workspace-v2/VISUAL_CONTEXT_SYSTEM.md)):
+
+- **Background / ambient** supports **operational clarity** (continuity, depth, calm) — not decorative illustration.
+- **Bend Pine** — primary **healthy / active / throughput** operational state where product uses green-family emphasis.
+- **Alloy Blue / Midnight** — **system**, **workflow**, and **control** accents (rails, chrome, procedural emphasis).
+- **Amber / rust family** — **exception**, **attention**, **risk**, **stale**, or **failure-adjacent** states — **not** undifferentiated “everything is red” fields.
+- Avoid **wide red or amber washes** unless the surface is intentionally an **exception** or alert zone.
+
 ## Future AI compatibility (not implementation now)
 
 **AI operates within doctrine; it does not replace it.** Automated agents may **suggest** or **tune**:

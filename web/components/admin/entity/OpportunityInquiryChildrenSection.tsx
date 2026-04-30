@@ -1,6 +1,10 @@
 "use client";
 
+import { AdminV2DrawerLoadingState } from "@/components/admin/workspace/AdminV2DrawerLoadingState";
 import { formatDate } from "@/lib/adminFormatters";
+import { loadWorkspaceChildcareInquiryOptionSets } from "@/lib/workspace/workspaceChildcareInquiryOptionSets";
+import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
+import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 export type InquiryChildRow = {
@@ -97,12 +101,15 @@ export default function OpportunityInquiryChildrenSection({
     rows,
     canEdit,
     onOpenChild,
+    /** When true and rows are empty, show a loading shell (full inquiry payload still fetching). */
+    recordDetailPending = false,
     /** When true, outer EntityDrawerSection already provides premium card chrome — avoid nested heavy cards. */
     embeddedInPremiumSection = false,
 }: {
     rows: InquiryChildRow[];
     canEdit: boolean;
     onOpenChild?: (row: Pick<InquiryChildRow, "person_id" | "customer_member_id" | "display_name">) => void;
+    recordDetailPending?: boolean;
     embeddedInPremiumSection?: boolean;
 }) {
     const rootCol = embeddedInPremiumSection ? "min-w-0 w-full" : "md:col-span-2";
@@ -138,15 +145,24 @@ export default function OpportunityInquiryChildrenSection({
     }, [rows]);
 
     useEffect(() => {
+        if (rows.length === 0) {
+            setProgramItems([]);
+            setScheduleItems([]);
+            setStatusItems([]);
+            setLoadErr(null);
+            return undefined;
+        }
         let cancelled = false;
         async function load() {
             try {
                 setLoadErr(null);
-                const [progRes, schedRes, statusRes] = await Promise.all([
-                    fetch("/api/admin/option-sets/childcare_program_type"),
-                    fetch("/api/admin/option-sets/childcare_schedule_type"),
-                    fetch("/api/admin/status-definitions?entity_type=opportunity_customer_members"),
+                const init = workspaceDataFetchInit();
+                const [bundle, statusRes] = await Promise.all([
+                    loadWorkspaceChildcareInquiryOptionSets(init),
+                    dedupeAdminFetchWithTtl("/api/admin/status-definitions?entity_type=opportunity_customer_members", init, 1500),
                 ]);
+                const progRes = bundle.programRes;
+                const schedRes = bundle.scheduleRes;
                 const progJson = (await progRes.json().catch(() => ({}))) as { items?: OptionItem[]; error?: string };
                 const schedJson = (await schedRes.json().catch(() => ({}))) as { items?: OptionItem[]; error?: string };
                 const statusJson = (await statusRes.json().catch(() => ({}))) as { statuses?: StatusRow[]; error?: string };
@@ -166,7 +182,7 @@ export default function OpportunityInquiryChildrenSection({
         return () => {
             cancelled = true;
         };
-    }, []);
+    }, [rows.length]);
 
     const programLabelByKey = useMemo(() => new Map(programItems.map((i) => [i.item_key, i.label ?? i.item_key])), [programItems]);
     const scheduleLabelByKey = useMemo(() => new Map(scheduleItems.map((i) => [i.item_key, i.label ?? i.item_key])), [scheduleItems]);
@@ -195,6 +211,18 @@ export default function OpportunityInquiryChildrenSection({
     };
 
     if (!rows.length) {
+        if (recordDetailPending) {
+            return (
+                <div className={rootCol}>
+                    <AdminV2DrawerLoadingState
+                        density="inline"
+                        title="Loading inquiry children"
+                        description="Programs, schedules, and child rows appear after the full enrollment payload loads."
+                        className="border-alloy-stone/12 bg-alloy-stone/[0.02]"
+                    />
+                </div>
+            );
+        }
         return (
             <div className={`${rootCol} ${emptyBox}`}>No children added to this inquiry yet.</div>
         );

@@ -5,6 +5,6 @@ Concrete behavior for **Admin V2 workspace** routes, **visual context**, and **N
 | Doc | Contents |
 |-----|----------|
 | [VISUAL_CONTEXT_SYSTEM.md](./VISUAL_CONTEXT_SYSTEM.md) | Resolver, semantic keys, Alloy palette, layers, placement |
-| [WORKSPACE_SYSTEM.md](./WORKSPACE_SYSTEM.md) | Hierarchy, lanes, interaction flow |
+| [WORKSPACE_SYSTEM.md](./WORKSPACE_SYSTEM.md) | Hierarchy, lanes, **`WorkspaceShellLayout`** (scroll/sticky-or-stacking rail, empty rail collapse — current standard), **`ui.row_preview`** registered templates vs record truth, **exact count** standard for authoritative pills |
 | [NEEDS_ATTENTION_WORK_UNIT.md](./NEEDS_ATTENTION_WORK_UNIT.md) | Exception types, data flow, queue, actions |
 | [API_CONTRACTS.md](./API_CONTRACTS.md) | HTTP endpoints and job row shapes used by queues |

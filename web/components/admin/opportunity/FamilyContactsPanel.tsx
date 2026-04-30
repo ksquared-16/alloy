@@ -5,6 +5,7 @@ import OpportunityRecordSectionRegistryActions from "@/components/admin/opportun
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
 import { formatPhoneUS } from "@/lib/adminFormatters";
+import { AdminV2DrawerLoadingState } from "@/components/admin/workspace/AdminV2DrawerLoadingState";
 
 export type OpportunityPersonRow = {
     id: string;
@@ -45,6 +46,8 @@ export function FamilyContactsPanel(props: {
     onRegistryApplied: () => void;
     /** Bumps when the parent refetches opportunity payload after a successful add. */
     refreshKey: number;
+    /** While `drawer_initial` is active, avoid empty family copy until full payload arrives. */
+    recordHydrationPending?: boolean;
     /** Summary card in inquiry header vs overview body (layout-only body mount is deprecated). */
     variant?: "default" | "summary";
 }) {
@@ -61,6 +64,7 @@ export function FamilyContactsPanel(props: {
         openForm,
         onRegistryApplied,
         refreshKey,
+        recordHydrationPending = false,
         variant = "default",
     } = props;
 
@@ -169,6 +173,14 @@ export function FamilyContactsPanel(props: {
                             )}
                         </div>
                     </div>
+                ) : recordHydrationPending ? (
+                    <AdminV2DrawerLoadingState
+                        density="micro"
+                        showTrack={false}
+                        title="Loading primary contact"
+                        description="Person details arrive with the full record."
+                        className="mt-1 border-0 bg-transparent px-0 py-1 shadow-none ring-0"
+                    />
                 ) : (
                     <p className={`mt-1 ${variant === "summary" ? "text-[12px] text-alloy-midnight/55" : "text-sm text-alloy-forge/60"}`}>
                         No primary person on this opportunity.
@@ -197,9 +209,18 @@ export function FamilyContactsPanel(props: {
             />
 
             {sorted.length === 0 ? (
-                <div className={variant === "summary" ? "text-[12px] text-alloy-midnight/55" : "text-sm text-alloy-forge/60"}>
-                    No additional people linked yet.
-                </div>
+                recordHydrationPending ? (
+                    <AdminV2DrawerLoadingState
+                        density="inline"
+                        title="Loading family & opportunity people"
+                        description="Relationship rows populate after the record fully hydrates."
+                        className="border-0 bg-transparent px-0 py-2 shadow-none ring-0"
+                    />
+                ) : (
+                    <div className={variant === "summary" ? "text-[12px] text-alloy-midnight/55" : "text-sm text-alloy-forge/60"}>
+                        No additional people linked yet.
+                    </div>
+                )
             ) : (
                 <ul className={`${variant === "summary" ? "space-y-1.5" : "space-y-2.5"} list-none`}>
                     {sorted.map((r) => (

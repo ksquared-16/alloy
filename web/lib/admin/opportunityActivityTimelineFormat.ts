@@ -62,8 +62,9 @@ export function getWorkflowActivityActorLabel(payload: Record<string, unknown>, 
 export { formatQueueNoteDateTime } from "@/lib/admin/activityTimelineFormat";
 
 /** Opportunity CRM queue: composed from generic note blob formatter */
+/** Queue row: date/time before note body for triage scan. */
 export function formatOpportunityQueueNotesPreview(raw: string | null | undefined): string | null {
-    return formatActivityQueueNotesBlobPreview(raw);
+    return formatActivityQueueNotesBlobPreview(raw, { dateFirst: true });
 }
 
 /** Humanize with enrollment status key map (for callers/tests) */

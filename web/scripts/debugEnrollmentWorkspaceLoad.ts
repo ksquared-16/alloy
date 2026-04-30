@@ -243,7 +243,7 @@ async function main() {
   // 8) QueueService summaries (expected work unit)
   line();
   try {
-    const summaries = await getWorkUnitQueueSummaries({ orgId, workUnitId, limit: 3 });
+    const { queues: summaries } = await getWorkUnitQueueSummaries({ orgId, workUnitId, limit: 3 });
     pass("QueueService summaries for expected work unit", summaries.map((s) => ({ key: s.key, label: s.label, count: s.count })));
   } catch (e) {
     fail("QueueService summaries for expected work unit", e instanceof Error ? e.message : String(e));

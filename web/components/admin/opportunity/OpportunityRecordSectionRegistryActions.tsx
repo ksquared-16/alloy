@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
@@ -57,11 +57,37 @@ export default function OpportunityRecordSectionRegistryActions({
     onApplied,
     onExecutionResult,
 }: Props) {
+    const mountRef = useRef<HTMLDivElement | null>(null);
+    const [shouldLoad, setShouldLoad] = useState(false);
     const [bySlot, setBySlot] = useState<ResolvedActionsBySlot | null>(null);
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(false);
     const [busyKey, setBusyKey] = useState<string | null>(null);
 
     useEffect(() => {
+        setShouldLoad(false);
+        setBySlot(null);
+        setLoading(false);
+    }, [opportunityId, sectionKey]);
+
+    useEffect(() => {
+        const el = mountRef.current;
+        if (!el || shouldLoad) return;
+        const obs = new IntersectionObserver(
+            (entries) => {
+                const hit = entries.some((e) => e.isIntersecting);
+                if (hit) {
+                    setShouldLoad(true);
+                    obs.disconnect();
+                }
+            },
+            { root: null, rootMargin: "140px", threshold: 0 }
+        );
+        obs.observe(el);
+        return () => obs.disconnect();
+    }, [opportunityId, sectionKey, shouldLoad]);
+
+    useEffect(() => {
+        if (!shouldLoad) return;
         let cancelled = false;
         const wu = (workUnitId ?? "").trim();
         const dept = (departmentId ?? "").trim();
@@ -111,7 +137,7 @@ export default function OpportunityRecordSectionRegistryActions({
         return () => {
             cancelled = true;
         };
-    }, [opportunityId, sectionKey, departmentId, workUnitId]);
+    }, [shouldLoad, opportunityId, sectionKey, departmentId, workUnitId]);
 
     const primary = useMemo(() => filterSlot(bySlot?.primary, excludeActionKeys), [bySlot, excludeActionKeys]);
     const secondary = useMemo(() => filterSlot(bySlot?.secondary, excludeActionKeys), [bySlot, excludeActionKeys]);
@@ -158,65 +184,61 @@ export default function OpportunityRecordSectionRegistryActions({
         ]
     );
 
-    if (loading) {
-        return (
-            <div
-                className="mt-2 flex flex-wrap gap-2"
-                aria-busy="true"
-                aria-label="Loading section actions"
-                data-opportunity-record-section-actions-skeleton={sectionKey}
-            >
-                <div className="h-8 w-[7.5rem] animate-pulse rounded-md bg-alloy-stone/15" />
-                <div className="h-8 w-[6.5rem] animate-pulse rounded-md bg-alloy-stone/12" />
-            </div>
-        );
-    }
     const n = primary.length + secondary.length + overflow.length;
-    if (n === 0) return null;
-
     const primaryCls =
         "px-3 py-1.5 text-sm font-semibold rounded-md bg-alloy-blue text-white hover:opacity-90 disabled:opacity-50";
     const secondaryCls =
         "px-3 py-1.5 text-sm font-semibold rounded-md border border-alloy-stone/60 text-alloy-midnight/90 hover:bg-alloy-stone/15 disabled:opacity-50";
 
     return (
-        <div
-            className="mt-2 flex flex-wrap gap-2"
-            data-opportunity-record-section-actions={sectionKey}
-        >
-            {primary.map((a) => (
-                <button
-                    key={`${sectionKey}:p:${a.key}`}
-                    type="button"
-                    disabled={!canMutate || busyKey != null}
-                    onClick={() => void onClick(a)}
-                    className={primaryCls}
+        <div ref={mountRef} className="mt-2 min-h-[2px]" data-opportunity-record-section-actions-root={sectionKey}>
+            {!shouldLoad ? null : loading ? (
+                <div
+                    className="flex flex-wrap gap-2"
+                    aria-busy="true"
+                    aria-label="Loading section actions"
+                    data-opportunity-record-section-actions-skeleton={sectionKey}
                 >
-                    {busyKey === a.key ? "…" : a.label}
-                </button>
-            ))}
-            {secondary.map((a) => (
-                <button
-                    key={`${sectionKey}:s:${a.key}`}
-                    type="button"
-                    disabled={!canMutate || busyKey != null}
-                    onClick={() => void onClick(a)}
-                    className={secondaryCls}
-                >
-                    {busyKey === a.key ? "…" : a.label}
-                </button>
-            ))}
-            {overflow.map((a) => (
-                <button
-                    key={`${sectionKey}:o:${a.key}`}
-                    type="button"
-                    disabled={!canMutate || busyKey != null}
-                    onClick={() => void onClick(a)}
-                    className={secondaryCls}
-                >
-                    {busyKey === a.key ? "…" : a.label}
-                </button>
-            ))}
+                    <div className="h-8 w-[7.5rem] animate-pulse rounded-md bg-alloy-stone/15" />
+                    <div className="h-8 w-[6.5rem] animate-pulse rounded-md bg-alloy-stone/12" />
+                </div>
+            ) : n === 0 ? null : (
+                <div className="flex flex-wrap gap-2" data-opportunity-record-section-actions={sectionKey}>
+                    {primary.map((a) => (
+                        <button
+                            key={`${sectionKey}:p:${a.key}`}
+                            type="button"
+                            disabled={!canMutate || busyKey != null}
+                            onClick={() => void onClick(a)}
+                            className={primaryCls}
+                        >
+                            {busyKey === a.key ? "…" : a.label}
+                        </button>
+                    ))}
+                    {secondary.map((a) => (
+                        <button
+                            key={`${sectionKey}:s:${a.key}`}
+                            type="button"
+                            disabled={!canMutate || busyKey != null}
+                            onClick={() => void onClick(a)}
+                            className={secondaryCls}
+                        >
+                            {busyKey === a.key ? "…" : a.label}
+                        </button>
+                    ))}
+                    {overflow.map((a) => (
+                        <button
+                            key={`${sectionKey}:o:${a.key}`}
+                            type="button"
+                            disabled={!canMutate || busyKey != null}
+                            onClick={() => void onClick(a)}
+                            className={secondaryCls}
+                        >
+                            {busyKey === a.key ? "…" : a.label}
+                        </button>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }

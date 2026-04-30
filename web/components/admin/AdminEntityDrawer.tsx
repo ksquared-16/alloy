@@ -65,6 +65,7 @@ import { opportunityOverviewStatusBadgeLabel } from "@/lib/admin/opportunityOver
 import { formatVendorOptionLabel, type AdminVendorSelectOption } from "@/lib/admin/vendorOptionLabel";
 import { mergeUnifiedStatusIntoConfigOverview } from "@/lib/admin/unifiedDrawerStatus";
 import { recordSurfaceContextStyle } from "@/lib/visualContext";
+import { AdminV2DrawerLoadingState } from "@/components/admin/workspace/AdminV2DrawerLoadingState";
 import OpportunityInquiryChildrenSection, { type InquiryChildRow } from "@/components/admin/entity/OpportunityInquiryChildrenSection";
 import { OpportunityInquiryChildrenRegistryActions } from "@/components/admin/opportunity/OpportunityInquiryChildrenRegistryActions";
 import { formatTourDateTime } from "@/lib/enrollment/formatTourDateTime";
@@ -94,6 +95,7 @@ import {
 import { useRecordChromeConfig } from "@/hooks/useRecordChromeConfig";
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import { prefetchWorkspaceChildcareInquiryOptionSets } from "@/lib/workspace/workspaceChildcareInquiryOptionSets";
 import { getSectionOrderFromScheduleLayoutBlocks } from "@/lib/recordChrome/scheduleLayoutConfig";
 import {
     applyOverviewSectionOrder,
@@ -816,15 +818,23 @@ function JobDrawerRelationshipsSection(props: {
     );
 }
 
+/** Opportunity entity uses `surface=drawer_initial` for fast drawer chrome; `full` loads inquiry children, relationship groups, and full identity roles. */
+type OpportunityEntitySurface = "drawer_initial" | "full";
+
 function buildAdminEntityFetchUrl(
     type: AdminDrawerEntityType | null,
     id: string | null,
-    jobRecordSurface: JobRecordSurfaceParam | undefined
+    jobRecordSurface: JobRecordSurfaceParam | undefined,
+    opportunityEntitySurface?: OpportunityEntitySurface
 ): string | null {
     if (!type || !id) return null;
     if (type === "jobs" && id !== "new") {
         const surface = jobRecordSurface ?? "full";
         return `/api/admin/entity/jobs/${encodeURIComponent(id)}?surface=${encodeURIComponent(surface)}`;
+    }
+    if (type === "opportunities" && id !== "new") {
+        const s = opportunityEntitySurface ?? "drawer_initial";
+        return `/api/admin/entity/opportunities/${encodeURIComponent(id)}?surface=${encodeURIComponent(s)}`;
     }
     return `/api/admin/entity/${encodeURIComponent(type)}/${encodeURIComponent(id)}`;
 }
@@ -863,6 +873,20 @@ export default function AdminEntityDrawer() {
     const [data, setData] = useState<Record<string, unknown> | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const entityRowReady = useMemo(() => {
+        if (!drawer.type || !drawer.id || drawer.id === "new") return false;
+        if (!data || typeof data !== "object") return false;
+        if ((data as { _create?: boolean })._create) return false;
+        const rid = (data as { id?: unknown }).id;
+        return String(rid ?? "") === String(drawer.id);
+    }, [data, drawer.id, drawer.type]);
+    const opportunityRecordHydrationPending = useMemo(() => {
+        if (drawer.type !== "opportunities" || !data || typeof data !== "object") return false;
+        if ((data as { _create?: boolean })._create) return false;
+        return String((data as { _record_surface?: string })._record_surface ?? "").trim() === "drawer_initial";
+    }, [data, drawer.type]);
+    const [opportunityDrawerHydrateHighlight, setOpportunityDrawerHydrateHighlight] = useState(false);
+    const opportunityHydrationWasPendingRef = useRef(false);
     const [isEditing, setIsEditing] = useState(false);
     const [initialInlineFormSnapshot, setInitialInlineFormSnapshot] = useState<string | null>(null);
     const [formData, setFormData] = useState<Record<string, unknown>>({});
@@ -998,6 +1022,10 @@ export default function AdminEntityDrawer() {
     const [opportunityWorkUnitDepartmentId, setOpportunityWorkUnitDepartmentId] = useState<string | null>(null);
     /** Fire `interactive` timing once per opportunity open (relaxed vs waiting on header fetch). */
     const opportunityInteractiveMarkedRef = useRef<string | null>(null);
+    /** Dedupes identical `record_header` resolutions across drawer_initial → full. */
+    const opportunityHeaderResolvedSigRef = useRef<string | null>(null);
+    /** First paint time when `drawer_initial` is shown (hydration wait measurement). */
+    const oppDrawerInitialSeenAtRef = useRef<number | null>(null);
     const [addInquiryChildState, setAddInquiryChildState] = useState<{ mode: "child" | "sibling" } | null>(null);
     const [collectPaymentOpen, setCollectPaymentOpen] = useState(false);
     const [collectPaymentContext, setCollectPaymentContext] = useState<AdminCollectPaymentModalContext | null>(null);
@@ -1292,7 +1320,12 @@ export default function AdminEntityDrawer() {
     ];
     const refetch = useCallback(() => {
         if (!drawer.type || !drawer.id) return;
-        const url = buildAdminEntityFetchUrl(drawer.type, drawer.id, drawer.jobRecordSurface);
+        const url = buildAdminEntityFetchUrl(
+            drawer.type,
+            drawer.id,
+            drawer.jobRecordSurface,
+            drawer.type === "opportunities" ? "full" : undefined
+        );
         if (!url) return;
         setLoading(true);
         const t0 = timingEnabled ? performance.now() : 0;
@@ -1458,6 +1491,59 @@ export default function AdminEntityDrawer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [drawer.type, drawer.id, drawer.jobRecordSurface]);
 
+    const opportunityRecordNeedsHydrate = useMemo(() => {
+        if (drawer.type !== "opportunities" || !data || typeof data !== "object") return false;
+        return (data as { _record_surface?: string })._record_surface === "drawer_initial";
+    }, [drawer.type, data]);
+
+    useEffect(() => {
+        if (!opportunityRecordNeedsHydrate || !drawer.id || drawer.id === "new") return;
+        let cancelled = false;
+        const url = buildAdminEntityFetchUrl("opportunities", drawer.id, drawer.jobRecordSurface, "full");
+        if (!url) return;
+        const timingEnabled =
+            process.env.NODE_ENV !== "production" ||
+            (typeof window !== "undefined" && /staging|localhost|127\.0\.0\.1/i.test(window.location.hostname));
+        const t0 = timingEnabled ? performance.now() : 0;
+        fetch(url)
+            .then((res) => {
+                if (!res.ok) throw new Error("Failed to load");
+                return res.json();
+            })
+            .then((json) => {
+                if (!cancelled) {
+                    if (timingEnabled) {
+                        const now = performance.now();
+                        const pendingStart = oppDrawerInitialSeenAtRef.current;
+                        const wasVisiblyPending =
+                            typeof pendingStart === "number" && pendingStart > 0;
+                        const hydrationPendingMs =
+                            wasVisiblyPending && typeof pendingStart === "number"
+                                ? Math.round((now - pendingStart) * 10) / 10
+                                : null;
+                        console.info("[timing][drawer]", {
+                            key: `opportunities:${drawer.id}`,
+                            phase: "opportunity_full_hydration_applied",
+                            ms: Math.round((now - t0) * 10) / 10,
+                            was_visibly_pending: wasVisiblyPending,
+                            hydration_pending_ms: hydrationPendingMs,
+                        });
+                    }
+                    setData(json);
+                }
+            })
+            .catch(() => {});
+        return () => {
+            cancelled = true;
+        };
+    }, [opportunityRecordNeedsHydrate, drawer.id, drawer.jobRecordSurface]);
+
+    useEffect(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+        if (!entityRowReady) return;
+        prefetchWorkspaceChildcareInquiryOptionSets();
+    }, [drawer.type, drawer.id, entityRowReady]);
+
     useEffect(() => {
         if (drawerTab !== "activity") return;
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
@@ -1525,32 +1611,55 @@ export default function AdminEntityDrawer() {
             setOpportunityActivitySignalLoading(false);
             return;
         }
+        if (!entityRowReady) {
+            setOpportunityActivitySignal(null);
+            setOpportunityActivitySignalLoading(false);
+            return;
+        }
+        const opportunityId = drawer.id;
+        if (!opportunityId) return;
         let cancelled = false;
         setOpportunityActivitySignalLoading(true);
-        fetch(`/api/admin/opportunities/${encodeURIComponent(drawer.id)}/activity-signal`, {
-            credentials: "include",
-        })
-            .then((res) => (res.ok ? res.json() : null))
-            .then((json: ActivitySignalResult | null) => {
-                if (cancelled || !json || typeof json !== "object") {
+        const run = () => {
+            if (cancelled) return;
+            fetch(`/api/admin/opportunities/${encodeURIComponent(opportunityId)}/activity-signal`, {
+                credentials: "include",
+            })
+                .then((res) => (res.ok ? res.json() : null))
+                .then((json: ActivitySignalResult | null) => {
+                    if (cancelled || !json || typeof json !== "object") {
+                        if (!cancelled) setOpportunityActivitySignal(null);
+                        return;
+                    }
+                    setOpportunityActivitySignal(json);
+                })
+                .catch(() => {
                     if (!cancelled) setOpportunityActivitySignal(null);
-                    return;
-                }
-                setOpportunityActivitySignal(json);
-            })
-            .catch(() => {
-                if (!cancelled) setOpportunityActivitySignal(null);
-            })
-            .finally(() => {
-                if (!cancelled) setOpportunityActivitySignalLoading(false);
-            });
+                })
+                .finally(() => {
+                    if (!cancelled) setOpportunityActivitySignalLoading(false);
+                });
+        };
+        const useIdle = typeof requestIdleCallback !== "undefined";
+        const idleHandle = useIdle ? requestIdleCallback(run, { timeout: 2500 }) : 0;
+        const timeoutHandle = useIdle ? null : window.setTimeout(run, 0);
         return () => {
             cancelled = true;
+            if (useIdle && typeof cancelIdleCallback !== "undefined") {
+                cancelIdleCallback(idleHandle);
+            } else if (timeoutHandle != null) {
+                window.clearTimeout(timeoutHandle);
+            }
         };
-    }, [drawer.type, drawer.id, opportunityActivitySignalNonce]);
+    }, [drawer.type, drawer.id, entityRowReady, opportunityActivitySignalNonce]);
 
     useEffect(() => {
         if (!drawer.type || !drawer.id || drawer.id === "new" || !canHardDeleteEntityType(drawer.type)) {
+            setDeletionEligibility(null);
+            setDeletionEligibilityLoading(false);
+            return;
+        }
+        if (!entityRowReady) {
             setDeletionEligibility(null);
             setDeletionEligibilityLoading(false);
             return;
@@ -1564,7 +1673,7 @@ export default function AdminEntityDrawer() {
             })
             .catch(() => setDeletionEligibility(null))
             .finally(() => setDeletionEligibilityLoading(false));
-    }, [drawer.type, drawer.id]);
+    }, [drawer.type, drawer.id, entityRowReady]);
 
     useEffect(() => {
         if (drawer.type !== "contacts" || !drawer.id || drawer.id === "new") {
@@ -1714,16 +1823,23 @@ export default function AdminEntityDrawer() {
             setOppRefFieldSelectOptions({});
             return;
         }
+        if (!entityRowReady) {
+            setOppRefFieldSelectOptions({});
+            return;
+        }
         let cancelled = false;
         const d = data as Record<string, unknown>;
         const customerId = typeof d.customer_id === "string" && d.customer_id.trim() ? d.customer_id.trim() : null;
         const personQs = customerId ? `?customer_id=${encodeURIComponent(customerId)}` : "";
+        const init = workspaceDataFetchInit();
         (async () => {
             try {
-                const [locJ, personJ] = await Promise.all([
-                    fetch("/api/admin/location-options").then((r) => (r.ok ? r.json() : { locations: [] })),
-                    fetch(`/api/admin/person-options${personQs}`).then((r) => (r.ok ? r.json() : { persons: [] })),
+                const [locRes, personRes] = await Promise.all([
+                    dedupeAdminFetchWithTtl("/api/admin/location-options", init, 1500),
+                    dedupeAdminFetchWithTtl(`/api/admin/person-options${personQs}`, init, 1500),
                 ]);
+                const locJ = (await locRes.json().catch(() => ({}))) as { locations?: { id: string; label: string }[] };
+                const personJ = (await personRes.json().catch(() => ({}))) as { persons?: { id: string; label: string }[] };
                 if (cancelled) return;
                 const out: Record<string, { value: string; label: string }[]> = {};
                 const locOpts = ((locJ.locations ?? []) as { id: string; label: string }[]).map((x) => ({
@@ -1748,14 +1864,18 @@ export default function AdminEntityDrawer() {
                 }
                 out.primary_person_id = pOpts;
 
-                const [coJ, custJ] = await Promise.all([
+                const [coRes, custRes] = await Promise.all([
                     customerId
-                        ? fetch(`/api/admin/contact-options?customer_id=${encodeURIComponent(customerId)}`).then((r) =>
-                              r.ok ? r.json() : { contacts: [] }
+                        ? dedupeAdminFetchWithTtl(
+                              `/api/admin/contact-options?customer_id=${encodeURIComponent(customerId)}`,
+                              init,
+                              1500
                           )
-                        : Promise.resolve({ contacts: [] }),
-                    fetch("/api/admin/customer-options").then((r) => (r.ok ? r.json() : { customers: [] })),
+                        : Promise.resolve(new Response(JSON.stringify({ contacts: [] }), { status: 200 })),
+                    dedupeAdminFetchWithTtl("/api/admin/customer-options", init, 1500),
                 ]);
+                const coJ = (await coRes.json().catch(() => ({}))) as { contacts?: { id: string; label: string }[] };
+                const custJ = (await custRes.json().catch(() => ({}))) as { customers?: { id: string; name?: string | null }[] };
                 if (cancelled) return;
                 const cOpts = ((coJ.contacts ?? []) as { id: string; label: string }[]).map((x) => ({
                     value: x.id,
@@ -1787,10 +1907,14 @@ export default function AdminEntityDrawer() {
         return () => {
             cancelled = true;
         };
-    }, [drawer.type, drawer.id, data]);
+    }, [drawer.type, drawer.id, data, entityRowReady]);
 
     useEffect(() => {
         if (drawer.type !== "opportunities" || !data || (data as { _create?: boolean })._create || drawer.id === "new") {
+            setOppPipelineStageOptions([]);
+            return;
+        }
+        if (!entityRowReady) {
             setOppPipelineStageOptions([]);
             return;
         }
@@ -1800,7 +1924,12 @@ export default function AdminEntityDrawer() {
             return;
         }
         let cancelled = false;
-        fetch(`/api/admin/pipeline-stages?pipeline_id=${encodeURIComponent(pipelineId.trim())}`)
+        const init = workspaceDataFetchInit();
+        dedupeAdminFetchWithTtl(
+            `/api/admin/pipeline-stages?pipeline_id=${encodeURIComponent(pipelineId.trim())}`,
+            init,
+            1500
+        )
             .then((r) => (r.ok ? r.json() : []))
             .then((rows: { id: string; name?: string | null }[]) => {
                 if (cancelled) return;
@@ -1817,7 +1946,7 @@ export default function AdminEntityDrawer() {
         return () => {
             cancelled = true;
         };
-    }, [drawer.type, drawer.id, data]);
+    }, [drawer.type, drawer.id, data, entityRowReady]);
 
     useEffect(() => {
         if (drawer.type !== "service_offerings" || !drawer.id) {
@@ -1874,6 +2003,14 @@ export default function AdminEntityDrawer() {
             setJobPayments([]);
             return;
         }
+        if (!entityRowReady) {
+            setJobSchedules([]);
+            setJobRelatedData(null);
+            setRescheduleForm(null);
+            setJobVendorsForAssign([]);
+            setJobRelatedLoading(true);
+            return;
+        }
         setJobRelatedLoading(true);
         fetch(`/api/admin/related/job/${drawer.id}`)
             .then((res) => res.ok ? res.json() : { schedules: [], opportunity: null, messages: [], discounts: [], documents: [] })
@@ -1899,7 +2036,7 @@ export default function AdminEntityDrawer() {
             .then((res) => (res.ok ? res.json() : { vendors: [] }))
             .then((json: { vendors?: AdminVendorSelectOption[] }) => setJobVendorsForAssign(normalizeVendorOptions(json.vendors ?? [])))
             .catch(() => setJobVendorsForAssign([]));
-    }, [drawer.type, drawer.id]);
+    }, [drawer.type, drawer.id, entityRowReady]);
 
     useEffect(() => {
         if (drawer.type !== "vendors" || !drawer.id || drawer.id === "new") {
@@ -2177,44 +2314,95 @@ export default function AdminEntityDrawer() {
 
     const opportunityWorkUnitId = useMemo(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return "";
+        const ctxWu = (drawer.opportunityWorkspaceContext?.work_unit_id ?? "").trim();
+        if (ctxWu) return ctxWu;
         const wuid =
             data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
                 ? String((data as { work_unit_id?: unknown }).work_unit_id).trim()
                 : "";
         return wuid;
-    }, [drawer.type, drawer.id, data]);
+    }, [drawer.type, drawer.id, drawer.opportunityWorkspaceContext?.work_unit_id, data]);
 
     const opportunityDrawerDepartmentId = useMemo(() => {
+        const ctxDept = (drawer.opportunityWorkspaceContext?.department_id ?? "").trim();
+        if (ctxDept) return ctxDept;
         const fromState = opportunityWorkUnitDepartmentId?.trim() ?? "";
         if (fromState) return fromState;
         if (drawer.type !== "opportunities" || !data || typeof data !== "object") return "";
         return String((data as { _work_unit_department_id?: unknown })._work_unit_department_id ?? "").trim();
-    }, [drawer.type, opportunityWorkUnitDepartmentId, data]);
+    }, [drawer.type, drawer.opportunityWorkspaceContext?.department_id, opportunityWorkUnitDepartmentId, data]);
 
     useEffect(() => {
+        oppDrawerInitialSeenAtRef.current = null;
+        opportunityHydrationWasPendingRef.current = false;
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
             opportunityInteractiveMarkedRef.current = null;
+            opportunityHeaderResolvedSigRef.current = null;
         }
     }, [drawer.type, drawer.id]);
 
     useEffect(() => {
+        if (drawer.type !== "opportunities") {
+            setOpportunityDrawerHydrateHighlight(false);
+            return;
+        }
+        const was = opportunityHydrationWasPendingRef.current;
+        if (was && !opportunityRecordHydrationPending) {
+            setOpportunityDrawerHydrateHighlight(true);
+            const t = window.setTimeout(() => setOpportunityDrawerHydrateHighlight(false), 320);
+            opportunityHydrationWasPendingRef.current = false;
+            return () => window.clearTimeout(t);
+        }
+        opportunityHydrationWasPendingRef.current = opportunityRecordHydrationPending;
+        return undefined;
+    }, [drawer.type, opportunityRecordHydrationPending]);
+
+    useEffect(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+        if (entityRowReady && opportunityRecordNeedsHydrate && oppDrawerInitialSeenAtRef.current == null) {
+            oppDrawerInitialSeenAtRef.current = performance.now();
+        }
+    }, [drawer.type, drawer.id, entityRowReady, opportunityRecordNeedsHydrate]);
+
+    useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
             setOpportunityResolvedHeaderActions(null);
             setOpportunityResolvedHeaderLoading(false);
+            opportunityHeaderResolvedSigRef.current = null;
             return;
         }
-        const workUnitId = opportunityWorkUnitId;
-        const departmentIdFromState = opportunityWorkUnitDepartmentId?.trim() ?? "";
+        const ctxWu = (drawer.opportunityWorkspaceContext?.work_unit_id ?? "").trim();
+        const ctxDept = (drawer.opportunityWorkspaceContext?.department_id ?? "").trim();
         const departmentIdFromRecord =
             data && typeof data === "object"
                 ? String((data as { _work_unit_department_id?: unknown })._work_unit_department_id ?? "").trim()
                 : "";
-        const departmentId = departmentIdFromState || departmentIdFromRecord;
-        if (!workUnitId || !departmentId) {
-            setOpportunityResolvedHeaderActions(null);
+        const dataWu =
+            data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
+                ? String((data as { work_unit_id?: unknown }).work_unit_id).trim()
+                : "";
+        const workUnitId = ctxWu || dataWu;
+        const departmentId = ctxDept || (opportunityWorkUnitDepartmentId?.trim() ?? "") || departmentIdFromRecord;
+
+        if (!workUnitId) {
+            if (!entityRowReady && !ctxWu) {
+                setOpportunityResolvedHeaderLoading(false);
+                return;
+            }
             setOpportunityResolvedHeaderLoading(false);
             return;
         }
+        if (!departmentId) {
+            setOpportunityResolvedHeaderLoading(true);
+            return;
+        }
+
+        const sig = `${drawer.id}|${workUnitId}|${departmentId}`;
+        if (opportunityHeaderResolvedSigRef.current === sig) {
+            setOpportunityResolvedHeaderLoading(false);
+            return;
+        }
+
         let cancelled = false;
         setOpportunityResolvedHeaderLoading(true);
         const t0 = timingEnabled ? performance.now() : 0;
@@ -2231,6 +2419,7 @@ export default function AdminEntityDrawer() {
             .then((j: { actions?: ResolvedActionsBySlot }) => {
                 if (cancelled) return;
                 setOpportunityResolvedHeaderActions(j.actions ?? null);
+                opportunityHeaderResolvedSigRef.current = sig;
                 if (timingEnabled) {
                     console.info("[timing][drawer]", {
                         key: `opportunities:${drawer.id}`,
@@ -2249,7 +2438,17 @@ export default function AdminEntityDrawer() {
         return () => {
             cancelled = true;
         };
-    }, [drawer.type, drawer.id, opportunityWorkUnitId, opportunityWorkUnitDepartmentId, data]);
+    }, [
+        drawer.type,
+        drawer.id,
+        drawer.opportunityWorkspaceContext?.department_id,
+        drawer.opportunityWorkspaceContext?.work_unit_id,
+        entityRowReady,
+        opportunityWorkUnitId,
+        opportunityWorkUnitDepartmentId,
+        data,
+        timingEnabled,
+    ]);
 
     // Keep drawer state, but refresh record + header actions when actions mutate the opportunity.
     useEffect(() => {
@@ -2262,13 +2461,20 @@ export default function AdminEntityDrawer() {
             refetch();
             setOpportunityActivitySignalNonce((n) => n + 1);
             // Also refetch resolved header actions so conditional actions swap (schedule ↔ reschedule).
-            const workUnitId = opportunityWorkUnitId;
-            const departmentId =
-                opportunityWorkUnitDepartmentId?.trim() ||
-                (data && typeof data === "object"
+            const ctxWu = (drawer.opportunityWorkspaceContext?.work_unit_id ?? "").trim();
+            const ctxDept = (drawer.opportunityWorkspaceContext?.department_id ?? "").trim();
+            const departmentIdFromRecord =
+                data && typeof data === "object"
                     ? String((data as { _work_unit_department_id?: unknown })._work_unit_department_id ?? "").trim()
-                    : "");
+                    : "";
+            const dataWu =
+                data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
+                    ? String((data as { work_unit_id?: unknown }).work_unit_id).trim()
+                    : "";
+            const workUnitId = (ctxWu || dataWu || opportunityWorkUnitId.trim()).trim();
+            const departmentId = (ctxDept || (opportunityWorkUnitDepartmentId?.trim() ?? "") || departmentIdFromRecord).trim();
             if (!workUnitId || !departmentId) return;
+            opportunityHeaderResolvedSigRef.current = null;
             setOpportunityResolvedHeaderLoading(true);
             const t0 = timingEnabled ? performance.now() : 0;
             const qs = new URLSearchParams({
@@ -2283,6 +2489,7 @@ export default function AdminEntityDrawer() {
                 .then((r) => r.json())
                 .then((j: { actions?: ResolvedActionsBySlot }) => {
                     setOpportunityResolvedHeaderActions(j.actions ?? null);
+                    opportunityHeaderResolvedSigRef.current = `${drawer.id}|${workUnitId}|${departmentId}`;
                     if (timingEnabled) {
                         console.info("[timing][drawer]", {
                             key: `opportunities:${drawer.id}`,
@@ -2297,7 +2504,17 @@ export default function AdminEntityDrawer() {
         };
         window.addEventListener("adminv2:opportunity-updated", onUpdated as EventListener);
         return () => window.removeEventListener("adminv2:opportunity-updated", onUpdated as EventListener);
-    }, [drawer.type, drawer.id, refetch, opportunityWorkUnitId, opportunityWorkUnitDepartmentId, data]);
+    }, [
+        drawer.type,
+        drawer.id,
+        drawer.opportunityWorkspaceContext?.department_id,
+        drawer.opportunityWorkspaceContext?.work_unit_id,
+        refetch,
+        opportunityWorkUnitId,
+        opportunityWorkUnitDepartmentId,
+        data,
+        timingEnabled,
+    ]);
 
     // If a caller opened the drawer with a surface hint, respect it once.
     useEffect(() => {
@@ -2321,6 +2538,13 @@ export default function AdminEntityDrawer() {
             setOpportunityWorkUnitDepartmentId(null);
             return;
         }
+        if (!entityRowReady) {
+            if (loading) {
+                setOpportunityQueueDefinition(null);
+                setOpportunityWorkUnitDepartmentId(null);
+            }
+            return;
+        }
         const wuid =
             data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
                 ? String((data as { work_unit_id?: unknown }).work_unit_id).trim()
@@ -2331,7 +2555,7 @@ export default function AdminEntityDrawer() {
             return;
         }
         let cancelled = false;
-        (async () => {
+        const run = async () => {
             try {
                 const t0 = timingEnabled ? performance.now() : 0;
                 const res = await fetch(`/api/admin/work-units/${encodeURIComponent(wuid)}`, { credentials: "include" });
@@ -2361,11 +2585,29 @@ export default function AdminEntityDrawer() {
                     setOpportunityWorkUnitDepartmentId(null);
                 }
             }
-        })();
+        };
+        let idleHandle = 0;
+        let timeoutHandle = 0;
+        if (typeof requestIdleCallback !== "undefined") {
+            idleHandle = requestIdleCallback(
+                () => {
+                    void run();
+                },
+                { timeout: 1200 }
+            );
+        } else {
+            timeoutHandle = window.setTimeout(() => {
+                void run();
+            }, 150);
+        }
         return () => {
             cancelled = true;
+            if (idleHandle !== 0 && typeof cancelIdleCallback !== "undefined") {
+                cancelIdleCallback(idleHandle);
+            }
+            if (timeoutHandle !== 0) window.clearTimeout(timeoutHandle);
         };
-    }, [drawer.type, drawer.id, data]);
+    }, [drawer.type, drawer.id, data, entityRowReady, loading]);
 
     useEffect(() => {
         if (!paymentToast) return;
@@ -2405,7 +2647,8 @@ export default function AdminEntityDrawer() {
             setOppVerticalOptions([]);
             return;
         }
-        fetch("/api/admin/verticals")
+        const init = workspaceDataFetchInit();
+        dedupeAdminFetchWithTtl("/api/admin/verticals", init, 1500)
             .then((r) => (r.ok ? r.json() : []))
             .then((verts) => {
                 const vlist = Array.isArray(verts) ? (verts as { id: string; name?: string | null }[]) : [];
@@ -2419,7 +2662,8 @@ export default function AdminEntityDrawer() {
             setLocationTypes([]);
             return;
         }
-        fetch("/api/admin/location-types")
+        const init = workspaceDataFetchInit();
+        dedupeAdminFetchWithTtl("/api/admin/location-types", init, 1500)
             .then((r) => (r.ok ? r.json() : { location_types: [] }))
             .then((json: { location_types?: { id: string; key: string; label: string; position: number; is_active: boolean }[] }) => setLocationTypes(json.location_types ?? []))
             .catch(() => setLocationTypes([]));
@@ -2430,7 +2674,8 @@ export default function AdminEntityDrawer() {
             setLocationCustomerOptions([]);
             return;
         }
-        fetch("/api/admin/customers")
+        const init = workspaceDataFetchInit();
+        dedupeAdminFetchWithTtl("/api/admin/customers", init, 1500)
             .then((r) => (r.ok ? r.json() : []))
             .then((json: unknown) => {
                 const list = Array.isArray(json) ? json : (json as { customers?: { id: string; name?: string | null }[] }).customers ?? [];
@@ -2461,8 +2706,9 @@ export default function AdminEntityDrawer() {
 
     useEffect(() => {
         if (drawer.type !== "workflows") return;
+        const init = workspaceDataFetchInit();
         Promise.all([
-            fetch("/api/admin/status-definitions?entity_type=vendors")
+            dedupeAdminFetchWithTtl("/api/admin/status-definitions?entity_type=vendors", init, 1500)
                 .then((r) => (r.ok ? r.json() : { statuses: [] }))
                 .then((j: { statuses?: { id: string; status_key: string; status_label: string | null }[] }) =>
                     (j.statuses ?? []).map((s) => ({
@@ -2471,14 +2717,16 @@ export default function AdminEntityDrawer() {
                         label: (s.status_label?.trim() || s.status_key) as string,
                     }))
                 ),
-            fetch("/api/admin/verticals").then((r) => (r.ok ? r.json() : [])),
-        ]).then(([statuses, verts]) => {
-            setVendorStatuses(Array.isArray(statuses) ? statuses : []);
-            setWorkflowVerticals(Array.isArray(verts) ? verts : []);
-        }).catch(() => {
-            setVendorStatuses([]);
-            setWorkflowVerticals([]);
-        });
+            dedupeAdminFetchWithTtl("/api/admin/verticals", init, 1500).then((r) => (r.ok ? r.json() : [])),
+        ])
+            .then(([statuses, verts]) => {
+                setVendorStatuses(Array.isArray(statuses) ? statuses : []);
+                setWorkflowVerticals(Array.isArray(verts) ? verts : []);
+            })
+            .catch(() => {
+                setVendorStatuses([]);
+                setWorkflowVerticals([]);
+            });
     }, [drawer.type]);
 
     useEffect(() => {
@@ -2486,7 +2734,8 @@ export default function AdminEntityDrawer() {
             setMemberCustomers([]);
             return;
         }
-        fetch("/api/admin/customers")
+        const init = workspaceDataFetchInit();
+        dedupeAdminFetchWithTtl("/api/admin/customers", init, 1500)
             .then((r) => (r.ok ? r.json() : []))
             .then((json) => {
                 const list = Array.isArray(json) ? json : (json as { customers?: { id: string; name: string | null }[] }).customers ?? [];
@@ -2615,7 +2864,12 @@ export default function AdminEntityDrawer() {
         }
         setStatusDefsLoading(true);
         /** Effective defs (org + industry merge) — matches resolveStatusLabel / list badges; avoids org-only legacy gaps. */
-        fetch(`/api/admin/status-options?entity_type=${encodeURIComponent(drawer.type)}`)
+        const init = workspaceDataFetchInit();
+        dedupeAdminFetchWithTtl(
+            `/api/admin/status-options?entity_type=${encodeURIComponent(drawer.type)}`,
+            init,
+            1500
+        )
             .then((r) => (r.ok ? r.json() : { options: [] }))
             .then((json: { options?: { value: string; label: string; sort_order?: number }[] }) => {
                 const opts = json.options ?? [];
@@ -3114,13 +3368,18 @@ export default function AdminEntityDrawer() {
             setJobContactOptionsLoading(false);
             return;
         }
-        fetch("/api/admin/customer-options")
+        const init = workspaceDataFetchInit();
+        dedupeAdminFetchWithTtl("/api/admin/customer-options", init, 1500)
             .then((r) => (r.ok ? r.json() : { customers: [] }))
-            .then((j: { customers?: { id: string; name: string | null; status_key?: string | null }[] }) => setJobCustomerOptions(j.customers ?? []))
+            .then((j: { customers?: { id: string; name: string | null; status_key?: string | null }[] }) =>
+                setJobCustomerOptions(j.customers ?? [])
+            )
             .catch(() => setJobCustomerOptions([]));
-        fetch("/api/admin/service-frequency-options")
+        dedupeAdminFetchWithTtl("/api/admin/service-frequency-options", init, 1500)
             .then((r) => (r.ok ? r.json() : { frequencies: [] }))
-            .then((j: { frequencies?: { key: string; label: string; is_recurring: boolean }[] }) => setJobFrequencyOptions(j.frequencies ?? []))
+            .then((j: { frequencies?: { key: string; label: string; is_recurring: boolean }[] }) =>
+                setJobFrequencyOptions(j.frequencies ?? [])
+            )
             .catch(() => setJobFrequencyOptions([]));
     }, [drawer.type]);
 
@@ -3133,7 +3392,8 @@ export default function AdminEntityDrawer() {
             return;
         }
         setJobContactOptionsLoading(true);
-        fetch(`/api/admin/contact-options?customer_id=${encodeURIComponent(cid)}`)
+        const init = workspaceDataFetchInit();
+        dedupeAdminFetchWithTtl(`/api/admin/contact-options?customer_id=${encodeURIComponent(cid)}`, init, 1500)
             .then((r) => (r.ok ? r.json() : { contacts: [] }))
             .then((j: { contacts?: { id: string; label: string }[] }) => setJobContactOptions(j.contacts ?? []))
             .catch(() => setJobContactOptions([]))
@@ -3145,7 +3405,8 @@ export default function AdminEntityDrawer() {
             setJobLocationOptions([]);
             return;
         }
-        fetch("/api/admin/location-options")
+        const init = workspaceDataFetchInit();
+        dedupeAdminFetchWithTtl("/api/admin/location-options", init, 1500)
             .then((r) => (r.ok ? r.json() : { locations: [] }))
             .then((j: { locations?: { id: string; label: string }[] }) => setJobLocationOptions(j.locations ?? []))
             .catch(() => setJobLocationOptions([]));
@@ -3207,7 +3468,8 @@ export default function AdminEntityDrawer() {
             setJobOpportunityOptions([]);
             return;
         }
-        fetch(`/api/admin/opportunity-options?customer_id=${encodeURIComponent(cid)}`)
+        const init = workspaceDataFetchInit();
+        dedupeAdminFetchWithTtl(`/api/admin/opportunity-options?customer_id=${encodeURIComponent(cid)}`, init, 1500)
             .then((r) => (r.ok ? r.json() : { opportunities: [] }))
             .then((j: { opportunities?: { id: string; label: string }[] }) => setJobOpportunityOptions(j.opportunities ?? []))
             .catch(() => setJobOpportunityOptions([]));
@@ -3233,7 +3495,8 @@ export default function AdminEntityDrawer() {
             setJobPersonOptions([]);
             return;
         }
-        fetch(`/api/admin/person-options?customer_id=${encodeURIComponent(cid)}`)
+        const init = workspaceDataFetchInit();
+        dedupeAdminFetchWithTtl(`/api/admin/person-options?customer_id=${encodeURIComponent(cid)}`, init, 1500)
             .then((r) => (r.ok ? r.json() : { persons: [] }))
             .then((j: { persons?: { id: string; label: string }[] }) => setJobPersonOptions(j.persons ?? []))
             .catch(() => setJobPersonOptions([]));
@@ -4412,10 +4675,60 @@ export default function AdminEntityDrawer() {
         return new Set([...h.primary, ...h.secondary, ...h.overflow].map((a) => a.key));
     }, [opportunityResolvedHeaderActions]);
 
+    const opportunityDepartmentIdKnown = Boolean(
+        (opportunityWorkUnitDepartmentId?.trim() ?? "") ||
+            (data && typeof data === "object"
+                ? String((data as { _work_unit_department_id?: unknown })._work_unit_department_id ?? "").trim()
+                : "")
+    );
+    const opportunityHeaderScopePending =
+        isOpportunityExistingView &&
+        drawer.id &&
+        !loading &&
+        data != null &&
+        entityRowReady &&
+        Boolean(opportunityWorkUnitId.trim()) &&
+        !opportunityDepartmentIdKnown;
+
+    /** Reserve header action lane while scoped registry resolves (avoids empty-then-pop layout). */
+    const showOpportunityHeaderRegistrySkeleton =
+        isOpportunityExistingView &&
+        drawer.id &&
+        !loading &&
+        data != null &&
+        entityRowReady &&
+        (opportunityResolvedHeaderLoading ||
+            (opportunityInquiryWorkflowDrawer && opportunityHeaderScopePending));
+
     const opportunityHeaderQuickActionsNode =
-        // Enrollment V1: never render legacy chrome actions (prevents flicker / incorrect actions).
-        // Expected behavior: no buttons until registry resolves, then correct buttons only.
-        isOpportunityExistingView && drawer.id && !loading && data != null && useOpportunityActionRegistryHeader ? (
+        isOpportunityExistingView && drawer.id && !loading && data != null && entityRowReady
+            ? showOpportunityHeaderRegistrySkeleton
+              ? (() => {
+                    const shell =
+                        drawerShellVariant === "adminV2"
+                            ? opportunityInquiryWorkflowDrawer
+                                ? "rounded-xl border border-admin-border/45 bg-white/80 px-2.5 py-2 shadow-sm ring-1 ring-alloy-stone/10 min-h-[3.25rem]"
+                                : "rounded-lg border border-admin-border/45 bg-white/70 px-2.5 py-1.5 shadow-sm min-h-[2.75rem]"
+                            : "min-h-[2.5rem]";
+                    return (
+                        <div
+                            className={`flex flex-wrap items-center ${shell}`}
+                            aria-busy="true"
+                            aria-label="Loading header actions"
+                            data-opportunity-record-actions-skeleton="true"
+                        >
+                            <AdminV2DrawerLoadingState
+                                density="micro"
+                                showTrack={false}
+                                title="Loading actions"
+                                description="Resolving controls for this record…"
+                                className="max-w-[22rem] border-0 bg-transparent px-1 py-0.5 shadow-none ring-0"
+                            />
+                        </div>
+                    );
+                })()
+              : useOpportunityActionRegistryHeader
+                ? (
             <div
                 className={`flex flex-wrap gap-2 items-center ${
                     drawerShellVariant === "adminV2"
@@ -4478,7 +4791,9 @@ export default function AdminEntityDrawer() {
                     })()}
                 </>
             </div>
-        ) : null;
+                  )
+                : null
+            : null;
 
     const dataMatchesDrawer =
         !data ||
@@ -5672,6 +5987,7 @@ export default function AdminEntityDrawer() {
                         workUnitId={String(d.work_unit_id ?? "").trim() || null}
                         router={router}
                         openDrawer={openDrawer}
+                        recordHydrationPending={opportunityRecordHydrationPending}
                         openForm={({ form_key, action }) => {
                             setActionFormState({
                                 form_key,
@@ -5727,11 +6043,14 @@ export default function AdminEntityDrawer() {
                           };
                       })
                     : [];
+                const detailPending =
+                    String((d as { _record_surface?: string })._record_surface ?? "").trim() === "drawer_initial";
                 out.inquiry_children = (
                     <OpportunityInquiryChildrenSection
                         rows={rows.filter((r) => r.id && (r.customer_member_id || r.display_name))}
                         canEdit={!!canMutate}
                         embeddedInPremiumSection={oppCfg?.inquiry_drawer_mode === "workflow_v1"}
+                        recordDetailPending={detailPending}
                         onOpenChild={(row) => {
                             const cm = row.customer_member_id?.trim() ?? "";
                             if (!cm || cm.startsWith("metadata_child:")) return;
@@ -5767,6 +6086,8 @@ export default function AdminEntityDrawer() {
         refetch,
         recordChromeOpportunity.layout,
         opportunityWorkUnitDepartmentId,
+        opportunityDrawerDepartmentId,
+        opportunityRecordHydrationPending,
         getStatusLabel,
     ]);
 
@@ -7022,55 +7343,12 @@ export default function AdminEntityDrawer() {
             <div className="adminv2-drawer-content-enter">
             {showDrawerBodyLoading &&
                 (isOpportunityRecordModalTarget ? (
-                    <div className="space-y-4 px-1 py-2" aria-busy="true" aria-label="Loading opportunity record">
-                        <div className="flex items-center justify-between gap-3">
-                            <div className="min-w-0 flex-1">
-                                <div className="h-4 w-56 skeleton-pulse rounded bg-alloy-stone/25" />
-                                <div className="mt-2 h-3 w-40 skeleton-pulse rounded bg-alloy-stone/12" style={{ animationDelay: "70ms" }} />
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <div className="h-8 w-24 skeleton-pulse rounded-md bg-alloy-stone/10" />
-                                <div className="h-8 w-20 skeleton-pulse rounded-md bg-alloy-stone/10" style={{ animationDelay: "90ms" }} />
-                            </div>
-                        </div>
-
-                        <div className="flex gap-0.5 rounded-lg border border-admin-border bg-white p-0.5" aria-hidden>
-                            {Array.from({ length: 4 }).map((_, i) => (
-                                <div
-                                    key={i}
-                                    className="rounded-md px-3 py-2"
-                                    style={{ width: i === 0 ? 96 : 84 }}
-                                >
-                                    <div className="h-3 w-full skeleton-pulse rounded bg-alloy-stone/10" style={{ animationDelay: `${i * 40}ms` }} />
-                                </div>
-                            ))}
-                        </div>
-
-                        <div className="rounded-xl border border-admin-border bg-white/80 p-3">
-                            <div className="flex items-start justify-between gap-3">
-                                <div className="min-w-0 flex-1 space-y-2">
-                                    <div className="h-3 w-40 skeleton-pulse rounded bg-alloy-stone/15" />
-                                    <div className="h-3 w-64 skeleton-pulse rounded bg-alloy-stone/10" style={{ animationDelay: "60ms" }} />
-                                    <div className="h-3 w-52 skeleton-pulse rounded bg-alloy-stone/10" style={{ animationDelay: "120ms" }} />
-                                </div>
-                                <div className="space-y-2">
-                                    <div className="h-8 w-28 skeleton-pulse rounded-md bg-alloy-stone/10" />
-                                    <div className="h-8 w-28 skeleton-pulse rounded-md bg-alloy-stone/10" style={{ animationDelay: "80ms" }} />
-                                </div>
-                            </div>
-                        </div>
-
-                        <div className="space-y-3" aria-hidden>
-                            {Array.from({ length: 3 }).map((_, i) => (
-                                <div key={i} className="rounded-xl border border-admin-border bg-white/70 p-3">
-                                    <div className="h-3 w-32 skeleton-pulse rounded bg-alloy-stone/15" />
-                                    <div className="mt-3 space-y-2">
-                                        <div className="h-3 w-full skeleton-pulse rounded bg-alloy-stone/10" style={{ animationDelay: "40ms" }} />
-                                        <div className="h-3 w-5/6 skeleton-pulse rounded bg-alloy-stone/10" style={{ animationDelay: "90ms" }} />
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+                    <div className="px-1 py-2">
+                        <AdminV2DrawerLoadingState
+                            density="panel"
+                            title={`Loading ${opportunitySingular.toLowerCase()}`}
+                            description="Enrollment details, household context, and sections will appear in a moment — same loading pattern as workspace routes."
+                        />
                     </div>
                 ) : isJobRecordModalTarget || isScheduleRecordModalTarget ? (
                     <div
@@ -7088,7 +7366,9 @@ export default function AdminEntityDrawer() {
             {error && <p className="text-alloy-ember">Error: {error}</p>}
             {data && !loading && dataMatchesDrawer && (
                 <div
-                    className={`${isJobDrawerV2 && drawer.type === "jobs" ? "space-y-3 max-w-none" : showScheduleRecordModalV2 || showOpportunityRecordModalV2 ? "space-y-3 max-w-none" : "space-y-6"}${showOpportunityRecordModalV2 ? " pb-24 sm:pb-28" : ""}`}
+                    className={`${isJobDrawerV2 && drawer.type === "jobs" ? "space-y-3 max-w-none" : showScheduleRecordModalV2 || showOpportunityRecordModalV2 ? "space-y-3 max-w-none" : "space-y-6"}${showOpportunityRecordModalV2 ? " pb-24 sm:pb-28" : ""}${
+                        showOpportunityRecordModalV2 && opportunityDrawerHydrateHighlight ? " adminv2-opportunity-drawer-hydrate-flash" : ""
+                    }`}
                     data-adminv2-job-drawer-body={isJobDrawerV2 && drawer.type === "jobs" ? "true" : undefined}
                     data-adminv2-schedule-drawer-body={showScheduleRecordModalV2 ? "true" : undefined}
                     data-adminv2-opportunity-drawer-body={showOpportunityRecordModalV2 ? "true" : undefined}
@@ -9168,6 +9448,13 @@ export default function AdminEntityDrawer() {
                                                 const commName = String((comm as { label?: string | null } | null)?.label ?? "").trim();
                                                 const commEmail = String((comm as { email?: string | null } | null)?.email ?? "").trim();
                                                 const commPhone = String((comm as { phone?: string | null } | null)?.phone ?? "").trim();
+                                                const primaryContactLabelLine = String(commName || primaryContact || primaryPerson || "").trim();
+                                                const primaryContactNamePending =
+                                                    opportunityRecordHydrationPending && !primaryContactLabelLine;
+                                                const primaryContactChannelsPending =
+                                                    opportunityRecordHydrationPending &&
+                                                    !!primaryContactLabelLine &&
+                                                    (!commPhone || !commEmail);
                                                 const childName = String(ident?.primary_child?.display_name ?? "").trim();
                                                 const childRel = String(ident?.primary_child?.relationship_label ?? "").trim();
                                                 const inquiryTitle =
@@ -9257,6 +9544,7 @@ export default function AdminEntityDrawer() {
                                                                                 workUnitId={String(d.work_unit_id ?? "").trim() || null}
                                                                                 router={router}
                                                                                 openDrawer={openDrawer}
+                                                                                recordHydrationPending={opportunityRecordHydrationPending}
                                                                                 openForm={({ form_key, action }) => {
                                                                                     setActionFormState({
                                                                                         form_key,
@@ -9289,41 +9577,71 @@ export default function AdminEntityDrawer() {
                                                                                 ) : (
                                                                                     <div className="mt-1 text-[13px] font-semibold text-alloy-midnight/85">{household}</div>
                                                                                 )
+                                                                            ) : opportunityRecordHydrationPending ? (
+                                                                                <AdminV2DrawerLoadingState
+                                                                                    density="micro"
+                                                                                    showTrack={false}
+                                                                                    title="Loading household"
+                                                                                    description="Finishes with the full enrollment record."
+                                                                                    className="mt-1 border-0 bg-transparent px-0 py-1 shadow-none ring-0"
+                                                                                />
                                                                             ) : (
                                                                                 <div className="mt-1 text-[12px] text-alloy-midnight/45">No household on file.</div>
                                                                             )}
                                                                             <div className={`${tinyLabel} mt-2.5`}>
                                                                                 {commRoleLabel ? `Primary contact (${commRoleLabel})` : "Primary contact"}
                                                                             </div>
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={openPrimaryContactRecord}
-                                                                                className="mt-0.5 block w-full truncate text-left text-[13px] font-semibold text-alloy-blue hover:underline"
-                                                                            >
-                                                                                {commName || primaryContact || primaryPerson || "—"}
-                                                                            </button>
-                                                                            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-alloy-midnight/70">
-                                                                                {commPhone ? (
-                                                                                    <span className="tabular-nums">
-                                                                                        <span className="text-alloy-midnight/45">Phone </span>
-                                                                                        <a className={monoLink} href={`tel:${commPhone}`}>
-                                                                                            {formatPhoneUS(commPhone)}
-                                                                                        </a>
-                                                                                    </span>
-                                                                                ) : (
-                                                                                    <span className="text-alloy-midnight/45">Phone —</span>
-                                                                                )}
-                                                                                {commEmail ? (
-                                                                                    <span className="min-w-0 truncate">
-                                                                                        <span className="text-alloy-midnight/45">Email </span>
-                                                                                        <a className={monoLink} href={`mailto:${commEmail}`}>
-                                                                                            {commEmail}
-                                                                                        </a>
-                                                                                    </span>
-                                                                                ) : (
-                                                                                    <span className="text-alloy-midnight/45">Email —</span>
-                                                                                )}
-                                                                            </div>
+                                                                            {primaryContactNamePending ? (
+                                                                                <AdminV2DrawerLoadingState
+                                                                                    density="micro"
+                                                                                    showTrack={false}
+                                                                                    title="Loading primary contact"
+                                                                                    description="Name and contact details arrive with the full record."
+                                                                                    className="mt-0.5 border-0 bg-transparent px-0 py-1 shadow-none ring-0"
+                                                                                />
+                                                                            ) : (
+                                                                                <>
+                                                                                    <button
+                                                                                        type="button"
+                                                                                        onClick={openPrimaryContactRecord}
+                                                                                        className="mt-0.5 block w-full truncate text-left text-[13px] font-semibold text-alloy-blue hover:underline"
+                                                                                    >
+                                                                                        {primaryContactLabelLine || "—"}
+                                                                                    </button>
+                                                                                    {primaryContactChannelsPending ? (
+                                                                                        <AdminV2DrawerLoadingState
+                                                                                            density="micro"
+                                                                                            showTrack={false}
+                                                                                            title="Loading phone & email"
+                                                                                            description="Finishes with the full enrollment record."
+                                                                                            className="mt-1 border-0 bg-transparent px-0 py-1 shadow-none ring-0"
+                                                                                        />
+                                                                                    ) : (
+                                                                                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-alloy-midnight/70">
+                                                                                            {commPhone ? (
+                                                                                                <span className="tabular-nums">
+                                                                                                    <span className="text-alloy-midnight/45">Phone </span>
+                                                                                                    <a className={monoLink} href={`tel:${commPhone}`}>
+                                                                                                        {formatPhoneUS(commPhone)}
+                                                                                                    </a>
+                                                                                                </span>
+                                                                                            ) : (
+                                                                                                <span className="text-alloy-midnight/45">Phone —</span>
+                                                                                            )}
+                                                                                            {commEmail ? (
+                                                                                                <span className="min-w-0 truncate">
+                                                                                                    <span className="text-alloy-midnight/45">Email </span>
+                                                                                                    <a className={monoLink} href={`mailto:${commEmail}`}>
+                                                                                                        {commEmail}
+                                                                                                    </a>
+                                                                                                </span>
+                                                                                            ) : (
+                                                                                                <span className="text-alloy-midnight/45">Email —</span>
+                                                                                            )}
+                                                                                        </div>
+                                                                                    )}
+                                                                                </>
+                                                                            )}
                                                                         </>
                                                                     )}
                                                                 </div>
@@ -9468,45 +9786,57 @@ export default function AdminEntityDrawer() {
                                                                             ) : (
                                                                                 <div className={innerCard}>
                                                                                     <div className={tinyLabel}>Communication</div>
-                                                                                    <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                                                                                        <button
-                                                                                            type="button"
-                                                                                            disabled
-                                                                                            className="rounded-md border border-alloy-stone/25 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/40"
-                                                                                            title="Messaging coming soon"
-                                                                                        >
-                                                                                            Message family
-                                                                                        </button>
-                                                                                        {commPhone ? (
-                                                                                            <a
-                                                                                                href={`tel:${commPhone}`}
-                                                                                                className="rounded-md border border-alloy-stone/25 bg-white px-2 py-1 text-[11px] font-semibold text-alloy-midnight/75 hover:border-alloy-blue/35 hover:text-alloy-blue"
-                                                                                            >
-                                                                                                Call
-                                                                                            </a>
-                                                                                        ) : (
-                                                                                            <span className="rounded-md border border-alloy-stone/15 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/35">
-                                                                                                Call
-                                                                                            </span>
-                                                                                        )}
-                                                                                        {commEmail ? (
-                                                                                            <a
-                                                                                                href={`mailto:${commEmail}`}
-                                                                                                className="rounded-md border border-alloy-stone/25 bg-white px-2 py-1 text-[11px] font-semibold text-alloy-midnight/75 hover:border-alloy-blue/35 hover:text-alloy-blue"
-                                                                                            >
-                                                                                                Email
-                                                                                            </a>
-                                                                                        ) : (
-                                                                                            <span className="rounded-md border border-alloy-stone/15 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/35">
-                                                                                                Email
-                                                                                            </span>
-                                                                                        )}
-                                                                                    </div>
-                                                                                    <div className="mt-2 rounded-md border border-dashed border-alloy-stone/25 bg-white/60 px-2.5 py-2">
-                                                                                        <p className="text-[12px] font-medium text-alloy-midnight/55">
-                                                                                            Messages with this family will appear here.
-                                                                                        </p>
-                                                                                    </div>
+                                                                                    {opportunityRecordHydrationPending && (!commPhone || !commEmail) ? (
+                                                                                        <AdminV2DrawerLoadingState
+                                                                                            density="micro"
+                                                                                            showTrack={false}
+                                                                                            title="Loading contact channels"
+                                                                                            description="Call and email actions appear once the full record finishes loading."
+                                                                                            className="mt-1.5 border-0 bg-transparent px-0 py-1 shadow-none ring-0"
+                                                                                        />
+                                                                                    ) : (
+                                                                                        <>
+                                                                                            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                                                                                                <button
+                                                                                                    type="button"
+                                                                                                    disabled
+                                                                                                    className="rounded-md border border-alloy-stone/25 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/40"
+                                                                                                    title="Messaging coming soon"
+                                                                                                >
+                                                                                                    Message family
+                                                                                                </button>
+                                                                                                {commPhone ? (
+                                                                                                    <a
+                                                                                                        href={`tel:${commPhone}`}
+                                                                                                        className="rounded-md border border-alloy-stone/25 bg-white px-2 py-1 text-[11px] font-semibold text-alloy-midnight/75 hover:border-alloy-blue/35 hover:text-alloy-blue"
+                                                                                                    >
+                                                                                                        Call
+                                                                                                    </a>
+                                                                                                ) : (
+                                                                                                    <span className="rounded-md border border-alloy-stone/15 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/35">
+                                                                                                        Call
+                                                                                                    </span>
+                                                                                                )}
+                                                                                                {commEmail ? (
+                                                                                                    <a
+                                                                                                        href={`mailto:${commEmail}`}
+                                                                                                        className="rounded-md border border-alloy-stone/25 bg-white px-2 py-1 text-[11px] font-semibold text-alloy-midnight/75 hover:border-alloy-blue/35 hover:text-alloy-blue"
+                                                                                                    >
+                                                                                                        Email
+                                                                                                    </a>
+                                                                                                ) : (
+                                                                                                    <span className="rounded-md border border-alloy-stone/15 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/35">
+                                                                                                        Email
+                                                                                                    </span>
+                                                                                                )}
+                                                                                            </div>
+                                                                                            <div className="mt-2 rounded-md border border-dashed border-alloy-stone/25 bg-white/60 px-2.5 py-2">
+                                                                                                <p className="text-[12px] font-medium text-alloy-midnight/55">
+                                                                                                    Messages with this family will appear here.
+                                                                                                </p>
+                                                                                            </div>
+                                                                                        </>
+                                                                                    )}
                                                                                 </div>
                                                                             )}
                                                                         </div>
@@ -9573,22 +9903,47 @@ export default function AdminEntityDrawer() {
                                                             <div className="min-w-0">
                                                                 <div className={tinyLabel}>{commRoleLabel || ""}</div>
                                                                 <div className="rounded-lg border border-alloy-stone/25 bg-white px-2 py-1.5">
-                                                                    <div className="text-[13px] font-semibold text-alloy-midnight/85 truncate">
-                                                                        {commName || primaryContact || primaryPerson || household || "—"}
-                                                                    </div>
-                                                                    <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[12px] font-medium text-alloy-midnight/65">
-                                                                        {commPhone ? (
-                                                                            <a className={monoLink} href={`tel:${commPhone}`}>
-                                                                                {commPhone}
-                                                                            </a>
-                                                                        ) : null}
-                                                                        {commEmail ? (
-                                                                            <a className={monoLink} href={`mailto:${commEmail}`}>
-                                                                                {commEmail}
-                                                                            </a>
-                                                                        ) : null}
-                                                                        {!commPhone && !commEmail ? <span>—</span> : null}
-                                                                    </div>
+                                                                    {opportunityRecordHydrationPending &&
+                                                                    !(commName || primaryContact || primaryPerson || household).trim() ? (
+                                                                        <AdminV2DrawerLoadingState
+                                                                            density="micro"
+                                                                            showTrack={false}
+                                                                            title="Loading primary contact"
+                                                                            description="Identity details arrive with the full record."
+                                                                            className="border-0 bg-transparent px-0 py-0.5 shadow-none ring-0"
+                                                                        />
+                                                                    ) : (
+                                                                        <>
+                                                                            <div className="text-[13px] font-semibold text-alloy-midnight/85 truncate">
+                                                                                {commName || primaryContact || primaryPerson || household || "—"}
+                                                                            </div>
+                                                                            {opportunityRecordHydrationPending &&
+                                                                            !!(commName || primaryContact || primaryPerson || household).trim() &&
+                                                                            (!commPhone || !commEmail) ? (
+                                                                                <AdminV2DrawerLoadingState
+                                                                                    density="micro"
+                                                                                    showTrack={false}
+                                                                                    title="Loading phone & email"
+                                                                                    description="Finishes with the full enrollment record."
+                                                                                    className="mt-1 border-0 bg-transparent px-0 py-0.5 shadow-none ring-0"
+                                                                                />
+                                                                            ) : (
+                                                                                <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[12px] font-medium text-alloy-midnight/65">
+                                                                                    {commPhone ? (
+                                                                                        <a className={monoLink} href={`tel:${commPhone}`}>
+                                                                                            {commPhone}
+                                                                                        </a>
+                                                                                    ) : null}
+                                                                                    {commEmail ? (
+                                                                                        <a className={monoLink} href={`mailto:${commEmail}`}>
+                                                                                            {commEmail}
+                                                                                        </a>
+                                                                                    ) : null}
+                                                                                    {!commPhone && !commEmail ? <span>—</span> : null}
+                                                                                </div>
+                                                                            )}
+                                                                        </>
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         </div>

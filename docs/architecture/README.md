@@ -4,7 +4,7 @@
 
 This folder holds **current product and platform doctrine** for record rendering, relationships, overview layout, workspace vs record semantics, org/department/work-unit scope, and **configuration vs fixed platform behavior**. Treat these documents as the **canonical reference** when planning foundation work.
 
-**UI V1 and Admin V2 demo shells are not the source of truth** for the future record/workspace system; they may lag or contradict doctrine here.
+**UI V1 and legacy Admin V2 demo-only shells elsewhere are not canonical** for the full future record/workspace system; **`/adminV2/workspace/**` workspace presentation** (columns, scroll, rail) **is standardized** — see **`workspace-work-unit-scope-doctrine.md`** (Presentation shell §) — alongside resolver/config doctrine in this folder.
 
 ## Documents
 
@@ -15,7 +15,7 @@ This folder holds **current product and platform doctrine** for record rendering
 | [Record Rendering System (RRS)](./record-rendering-system-spec.md) | Resolver-shaped payloads, field sources, relationship groups, financial context, actions, edit ownership |
 | [Relationship & identity](./relationship-and-identity-doctrine.md) | Persons-first identity, layered relationships, sunset path for contacts |
 | [Overview layout](./overview-layout-doctrine.md) | Structured summary surfaces, config + layout metadata, no page builder |
-| [Workspace, work unit, scope](./workspace-work-unit-scope-doctrine.md) | Record vs execution vs coordination; queues; drawer vs full record; org/location/department |
+| [Workspace, work unit, scope](./workspace-work-unit-scope-doctrine.md) | Record vs execution vs coordination; queues; drawer vs full record; org/location/department — **includes current Admin V2 shell** (`WorkspaceShellLayout`), **registered queue preview templates**, **exact-count doctrine** for authoritative operator numbers, workspace **visual palette** roles (presentation ≠ contracts) |
 | [Implementation gap audit](./implementation-gap-audit.md) | Doctrine vs current Supabase/config/code (living document) |
 | [Configuration doctrine](./configuration-doctrine.md) | What is configurable vs system-controlled; AI guardrails (future) |
 | [Config model spec](./config-model-spec.md) | Entities, relationships, DB vs code, **current inventory audit** |

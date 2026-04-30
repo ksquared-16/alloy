@@ -1543,6 +1543,34 @@
   height: 100%;
 }
 
+/* Workspace-only: calmer field — static bloom, slate-forward specs, lighter rings */
+.adminv2-workspace-ambient-field .adminv2-workspace-ambient-bloom-dial {
+  opacity: 0.22 !important;
+  animation: none !important;
+}
+
+.adminv2-workspace-ambient-field .adminv2-company-field-drift {
+  animation: none !important;
+  opacity: 0.55 !important;
+  box-shadow:
+    0 0 0 0.5px rgba(39, 63, 82, 0.12),
+    0 0 3px rgba(39, 63, 82, 0.06) !important;
+}
+
+.adminv2-workspace-ambient-field .adminv2-ambient-ring[class*="company-field"] {
+  opacity: 0.2;
+  animation: none !important;
+}
+
+.adminv2-workspace-ambient-field .adminv2-ambient-spec-company-field-proof,
+.adminv2-workspace-ambient-field .adminv2-ambient-spec-company-field,
+.adminv2-workspace-ambient-field .adminv2-ambient-spec-company-field-soft,
+.adminv2-workspace-ambient-field .adminv2-ambient-spec-company-field-outer,
+.adminv2-workspace-ambient-field .adminv2-ambient-spec-company-field-dim {
+  background-color: rgba(39, 63, 82, 0.22) !important;
+  box-shadow: 0 0 0 0.5px rgba(39, 63, 82, 0.1) !important;
+}
+
 /* -------------------------------------------------------------------------- */
 /* AdminV2 navigation feedback (links, breadcrumbs, sidebar) */
 /* -------------------------------------------------------------------------- */

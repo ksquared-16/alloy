@@ -8,13 +8,17 @@ import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import WorkUnitWorkspace from "@/app/adminV2/components/workspace/shells/WorkUnitWorkspace";
 import { AutomationWorkflowsBlock } from "@/app/adminV2/components/workspace/blocks/AutomationWorkflowsBlock";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
-import { WorkUnitRouteSkeletonBody, WsRouteLoadingRibbon } from "@/components/admin/workspace/workspaceRouteSkeletons";
+import { AdminV2RouteLoadingState } from "@/components/admin/workspace/AdminV2RouteLoadingState";
 import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
 import { REGISTRY_RIGHT_RAIL_ACTION_ID_PREFIX } from "@/lib/workspace/viewModels/enrollmentRightRailMerge";
 import { executeOpportunityRecordAction } from "@/lib/recordChrome/executeOpportunityRecordAction";
 import type { WorkspaceAction } from "@/lib/ui-v2/workspace-actions";
-import type { QueueItemQuickActionVm, WorkUnitWorkspaceModel } from "@/lib/ui-v2/workspace-types";
+import type {
+    CrmCompactChildLineVm,
+    QueueItemQuickActionVm,
+    WorkUnitWorkspaceModel,
+} from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
 import { buildRealOpportunityWorkUnitWorkspaceModel } from "@/lib/ui-v2/adapters/realWorkUnitFromOpportunities";
 import { mergeEnrollmentRightRailActions } from "@/lib/workspace/viewModels/enrollmentRightRailMerge";
@@ -30,6 +34,15 @@ import { formatActivityRelativeShort } from "@/lib/admin/activitySignals";
 import { formatOpportunityQueueNotesPreview } from "@/lib/admin/opportunityActivityTimelineFormat";
 
 const WORKSPACE_BASE = "/adminV2/workspace";
+
+function queueParamFromWindow(): string {
+    if (typeof window === "undefined") return "";
+    try {
+        return new URL(window.location.href).searchParams.get("queue")?.trim() ?? "";
+    } catch {
+        return "";
+    }
+}
 
 function registryQuickActionsFromResolved(rowInline: { key: string; label: string; action_type: string }[]): QueueItemQuickActionVm[] {
     return rowInline.map((a) => ({
@@ -58,6 +71,7 @@ type QueueSummary = {
     display: "list" | "cards";
     count: number;
     preview: unknown[];
+    counts_deferred?: boolean;
 };
 
 type QueueItemsResult = {
@@ -73,7 +87,23 @@ type QueueItemsResult = {
     total: number;
     limit: number;
     offset: number;
+    total_omitted?: boolean;
 };
+
+function queueItemPayloadHasId(r: unknown): boolean {
+    return (
+        typeof r === "object" &&
+        r != null &&
+        typeof (r as { id?: unknown }).id === "string" &&
+        String((r as { id: string }).id).trim() !== ""
+    );
+}
+
+function mergeQueueSummariesByKey(prev: QueueSummary[], incoming: QueueSummary[]): QueueSummary[] {
+    if (!incoming.length) return prev;
+    const byKey = new Map(incoming.map((q) => [q.key, q]));
+    return prev.map((q) => byKey.get(q.key) ?? q);
+}
 
     type WorkflowKpis = {
     runs_today: number;
@@ -109,6 +139,30 @@ function isRowPreviewFieldEnabled(fields: QueueUiRowPreviewField[], f: QueueUiRo
     return fields.includes(f);
 }
 
+function parseQueueRowCrmChildren(raw: unknown): CrmCompactChildLineVm[] {
+    if (!Array.isArray(raw)) return [];
+    const out: CrmCompactChildLineVm[] = [];
+    for (const x of raw) {
+        if (x === null || typeof x !== "object") continue;
+        const o = x as Record<string, unknown>;
+        const primary =
+            typeof o.primary === "string"
+                ? o.primary.trim()
+                : typeof o.line === "string"
+                  ? o.line.trim()
+                  : "";
+        if (!primary) continue;
+        const secondary =
+            typeof o.secondary === "string"
+                ? o.secondary.trim()
+                : typeof o.detail === "string"
+                  ? o.detail.trim()
+                  : null;
+        out.push({ primary, secondary: secondary || null });
+    }
+    return out;
+}
+
 export default function AdminV2OpportunityWorkUnitPage() {
     const params = useParams();
     const departmentId = workspaceRouteParam(params.departmentId);
@@ -137,10 +191,20 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [queueItemsError, setQueueItemsError] = useState<string | null>(null);
     const [queueItemsRoute, setQueueItemsRoute] = useState<string | null>(null);
     const [queueItemsLoading, setQueueItemsLoading] = useState(false);
+    const [wuPrimaryLaneTimedOut, setWuPrimaryLaneTimedOut] = useState(false);
+    /** First primary-queue items response for this work unit (not reset on tab change — tab uses in-lane loading). */
+    const [wuBootPrimarySettled, setWuBootPrimarySettled] = useState(false);
     const queueItemsRequestSeq = useRef(0);
     const queueSummariesRequestSeq = useRef(0);
+    /**
+     * Skips redundant queue-item GETs when only `queueSummaries` reference changes (e.g. idle partial
+     * count merge) while work unit, selected tab, and omit-total semantics are unchanged — same URL as last fetch.
+     * Cleared on work-unit navigation; bypass with fetchQueueItems(..., { force: true }) for invalidation.
+     */
+    const queueItemsLastFetchSigRef = useRef<string | null>(null);
 
     const [workflowKpis, setWorkflowKpis] = useState<WorkflowKpis>(DEFAULT_WF_KPIS);
+    const [workflowKpisLoading, setWorkflowKpisLoading] = useState(true);
     const [workflowsSummary, setWorkflowsSummary] = useState<WorkflowSummaryRow[] | null>(null);
 
     const [statusOptions, setStatusOptions] = useState<Array<{ value: string; label: string }>>([]);
@@ -209,6 +273,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             setOpportunityQueueRowActions(null);
             setEnrollmentRightRailResolved(null);
             setError("Missing department or work unit in the URL.");
+            queueItemsLastFetchSigRef.current = null;
             return;
         }
 
@@ -233,6 +298,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     setQueueItemsLoading(false);
                     setOpportunityQueueRowActions(null);
                     setEnrollmentRightRailResolved(null);
+                    queueItemsLastFetchSigRef.current = null;
                 }
 
                 const [wuRes, deptRes, deptWusRes] = await Promise.all([
@@ -262,7 +328,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 let usedNewQueueApi = false;
                 let shouldFallbackToLegacy = false;
                 let fallbackReason: string | null = null;
-                const queueListRoute = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?limit=3`;
+                const qFromUrlEarly = queueParamFromWindow().trim();
+
+                const queueListRoute = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?include_previews=false&count_mode=exact&limit=3&summary_mode=initial&focus_queue=${encodeURIComponent(qFromUrlEarly)}`;
 
                 const actionsListRoute =
                     `/api/admin/actions?` +
@@ -320,7 +388,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 if (queuesSettled.status === "fulfilled") {
                     try {
                         const res = queuesSettled.value;
-                        const j = (await res.json().catch(() => ({}))) as { error?: string; queues?: QueueSummary[] };
+                        const j = (await res.json().catch(() => ({}))) as {
+                            error?: string;
+                            queues?: QueueSummary[];
+                            deferred_queue_keys?: string[];
+                        };
                         const route = queueListRoute;
                         if (res.ok) {
                             usedNewQueueApi = true;
@@ -329,7 +401,29 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 setQueueSummaries(qs);
                                 setQueueSummariesError(null);
                                 setQueueSummariesRoute(route);
-                                const qFromUrl = (searchParams?.get("queue") ?? "").trim();
+                                const dk = j.deferred_queue_keys;
+                                if (dk && dk.length) {
+                                    const fill = () => {
+                                        const fillRoute = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?include_previews=false&count_mode=exact&limit=3&summary_mode=partial&only_queue_keys=${encodeURIComponent(dk.join(","))}`;
+                                        fetch(fillRoute, init)
+                                            .then((r) => (r.ok ? r.json() : null))
+                                            .then((fj: { queues?: QueueSummary[] } | null) => {
+                                                if (cancelled || !fj?.queues?.length) return;
+                                                setQueueSummaries((prev) =>
+                                                    prev && prev.length
+                                                        ? mergeQueueSummariesByKey(prev, fj.queues as QueueSummary[])
+                                                        : prev
+                                                );
+                                            })
+                                            .catch(() => {});
+                                    };
+                                    if (typeof requestIdleCallback !== "undefined") {
+                                        requestIdleCallback(fill, { timeout: 1500 });
+                                    } else {
+                                        window.setTimeout(fill, 120);
+                                    }
+                                }
+                                const qFromUrl = queueParamFromWindow().trim();
                                 const uiOrder = (() => {
                                     try {
                                         const def = validateQueueDefinition(wu.queue_definition);
@@ -462,13 +556,96 @@ export default function AdminV2OpportunityWorkUnitPage() {
         };
     }, [departmentId, workUnitId]);
 
+    useEffect(() => {
+        const gated =
+            Boolean(workUnitId) &&
+            Boolean(selectedQueueKey) &&
+            Boolean(queueSummaries?.length) &&
+            queueItemsLoading &&
+            queueItems === null &&
+            !queueItemsError;
+        if (!gated) {
+            setWuPrimaryLaneTimedOut(false);
+            return;
+        }
+        const t = window.setTimeout(() => setWuPrimaryLaneTimedOut(true), 12_000);
+        return () => clearTimeout(t);
+    }, [workUnitId, selectedQueueKey, queueSummaries, queueItemsLoading, queueItems, queueItemsError]);
+
+    useEffect(() => {
+        setWuBootPrimarySettled(false);
+    }, [workUnitId]);
+
+    useEffect(() => {
+        if (!workUnitId) return;
+        if (loading) return;
+        const multi = Boolean(queueSummaries && queueSummaries.length > 0);
+        if (!multi) {
+            setWuBootPrimarySettled(true);
+            return;
+        }
+        if (queueSummariesError) {
+            setWuBootPrimarySettled(true);
+            return;
+        }
+        const key = selectedQueueKey ?? queueSummaries?.[0]?.key ?? null;
+        if (!key) return;
+        if (queueItemsError || wuPrimaryLaneTimedOut) {
+            setWuBootPrimarySettled(true);
+            return;
+        }
+        if (queueItems != null && String((queueItems.queue as { key?: string })?.key ?? "") === key) {
+            setWuBootPrimarySettled(true);
+        }
+    }, [
+        workUnitId,
+        loading,
+        queueSummaries,
+        queueSummariesError,
+        selectedQueueKey,
+        queueItems,
+        queueItemsError,
+        wuPrimaryLaneTimedOut,
+    ]);
+
+    /** Browser back/forward: sync selected queue with `?queue=` without re-running bootstrap. */
+    useEffect(() => {
+        if (!queueSummaries?.length) return;
+        const qFromUrl = (searchParams?.get("queue") ?? "").trim();
+        if (!qFromUrl || !queueSummaries.some((x) => x.key === qFromUrl)) return;
+        setSelectedQueueKey((prev) => (prev !== qFromUrl ? qFromUrl : prev));
+    }, [queueSummaries, searchParams]);
+
     const fetchQueueItems = useCallback(
-        async (workUnitId: string, queueKey: string) => {
+        async (
+            workUnitId: string,
+            queueKey: string,
+            summaries: QueueSummary[] | null,
+            options?: { force?: boolean }
+        ) => {
+            const tab = summaries?.find((q) => q.key === queueKey);
+            const canOmitTotal = tab != null && tab.counts_deferred !== true;
+            const fetchSig = `${workUnitId}|${queueKey}|${canOmitTotal ? "omit" : "fullcount"}`;
+            if (!options?.force && fetchSig === queueItemsLastFetchSigRef.current) {
+                return;
+            }
+            queueItemsLastFetchSigRef.current = fetchSig;
+
             const seq = ++queueItemsRequestSeq.current;
-            const route = `/api/admin/queues/${encodeURIComponent(workUnitId)}/${encodeURIComponent(queueKey)}?limit=20&offset=0`;
+            const qs = new URLSearchParams({ limit: "20", offset: "0", count_mode: "exact" });
+            if (canOmitTotal) qs.set("omit_total_count", "true");
+            const route = `/api/admin/queues/${encodeURIComponent(workUnitId)}/${encodeURIComponent(queueKey)}?${qs.toString()}`;
             setQueueItemsLoading(true);
             setQueueItemsError(null);
             setQueueItemsRoute(route);
+            setQueueItems((prev) => {
+                const pk =
+                    prev?.queue && typeof (prev.queue as { key?: string }).key === "string"
+                        ? (prev.queue as { key: string }).key
+                        : null;
+                if (pk != null && pk !== queueKey) return null;
+                return prev;
+            });
             try {
                 const init = workspaceDataFetchInit();
                 const res = await fetch(route, init);
@@ -490,46 +667,51 @@ export default function AdminV2OpportunityWorkUnitPage() {
         []
     );
 
-    const fetchQueueSummaries = useCallback(
-        async (workUnitId: string) => {
-            const seq = ++queueSummariesRequestSeq.current;
-            const route = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?limit=3`;
-            setQueueSummariesError(null);
-            setQueueSummariesRoute(route);
-            try {
-                const init = workspaceDataFetchInit();
-                const res = await fetch(route, init);
-                const json = (await res.json().catch(() => ({}))) as { error?: string; queues?: QueueSummary[] };
-                if (!res.ok) {
-                    throw new Error(json.error ?? "Failed to load queues");
-                }
-                const qs = (json.queues ?? []) as QueueSummary[];
-                if (seq === queueSummariesRequestSeq.current) setQueueSummaries(qs);
-            } catch (e) {
-                if (seq === queueSummariesRequestSeq.current) {
-                    setQueueSummaries(null);
-                    setQueueSummariesError(e instanceof Error ? e.message : "Failed to load queues");
-                }
+    const fetchQueueSummaries = useCallback(async (workUnitId: string) => {
+        const seq = ++queueSummariesRequestSeq.current;
+        const route = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?include_previews=false&count_mode=exact&limit=3`;
+        setQueueSummariesError(null);
+        setQueueSummariesRoute(route);
+        try {
+            const init = workspaceDataFetchInit();
+            const res = await fetch(route, init);
+            const json = (await res.json().catch(() => ({}))) as { error?: string; queues?: QueueSummary[] };
+            if (!res.ok) {
+                throw new Error(json.error ?? "Failed to load queues");
             }
-        },
-        []
-    );
+            const qs = (json.queues ?? []) as QueueSummary[];
+            if (seq === queueSummariesRequestSeq.current) setQueueSummaries(qs);
+        } catch (e) {
+            if (seq === queueSummariesRequestSeq.current) {
+                setQueueSummaries(null);
+                setQueueSummariesError(e instanceof Error ? e.message : "Failed to load queues");
+            }
+        }
+    }, []);
 
     const invalidate = useCallback(
         (opts?: { entity_type?: string; entity_id?: string; action_key?: string }) => {
             void opts;
             if (!workUnitId || !selectedQueueKey) return;
-            void Promise.all([fetchQueueItems(workUnitId, selectedQueueKey), fetchQueueSummaries(workUnitId)]);
+            void Promise.all([
+                fetchQueueItems(workUnitId, selectedQueueKey, queueSummaries, { force: true }),
+                fetchQueueSummaries(workUnitId),
+            ]);
         },
-        [fetchQueueItems, fetchQueueSummaries, selectedQueueKey, workUnitId]
+        [fetchQueueItems, fetchQueueSummaries, queueSummaries, selectedQueueKey, workUnitId]
     );
+
+    const queueSummariesRef = useRef(queueSummaries);
+    queueSummariesRef.current = queueSummaries;
 
     useEffect(() => {
         if (!workUnitId || !selectedQueueKey) return;
-        const onUpdated = (ev: Event) => {
-            const ce = ev as CustomEvent<{ id?: string }>;
-            void ce;
-            void Promise.all([fetchQueueItems(workUnitId, selectedQueueKey), fetchQueueSummaries(workUnitId)]);
+        const onUpdated = (_ev: Event) => {
+            const summaries = queueSummariesRef.current;
+            void Promise.all([
+                fetchQueueItems(workUnitId, selectedQueueKey, summaries, { force: true }),
+                fetchQueueSummaries(workUnitId),
+            ]);
         };
         window.addEventListener("adminv2:opportunity-updated", onUpdated as EventListener);
         return () => window.removeEventListener("adminv2:opportunity-updated", onUpdated as EventListener);
@@ -538,22 +720,23 @@ export default function AdminV2OpportunityWorkUnitPage() {
     useEffect(() => {
         if (!workUnitId || !selectedQueueKey) return;
         if (!queueSummaries || queueSummaries.length === 0) return;
-        void fetchQueueItems(workUnitId, selectedQueueKey);
+        void fetchQueueItems(workUnitId, selectedQueueKey, queueSummaries);
     }, [fetchQueueItems, queueSummaries, selectedQueueKey, workUnitId]);
 
     useEffect(() => {
         let cancelled = false;
+        setWorkflowKpisLoading(true);
         (async () => {
             try {
                 const init = workspaceDataFetchInit();
                 const [kRes, sRes] = await Promise.all([
                     fetch("/api/admin/workflow-runs?list=kpis", init),
-                    fetch("/api/admin/workflows/summary", init),
+                    fetch("/api/admin/workflows/summary?variant=workspace", init),
                 ]);
-                const kJson = (await kRes.json().catch(() => ({}))) as Partial<WorkflowKpis>;
+                const kBody = (await kRes.json().catch(() => ({}))) as { kpis?: Partial<WorkflowKpis> };
                 const sJson = (await sRes.json().catch(() => ({}))) as { workflows?: WorkflowSummaryRow[] };
                 if (!cancelled) {
-                    if (kRes.ok) setWorkflowKpis({ ...DEFAULT_WF_KPIS, ...kJson });
+                    if (kRes.ok && kBody.kpis) setWorkflowKpis({ ...DEFAULT_WF_KPIS, ...kBody.kpis });
                     if (sRes.ok) {
                         const all = Array.isArray(sJson.workflows) ? sJson.workflows : [];
                         const relevant = all.filter((w) => (w.entity_type ?? "").toLowerCase() === "opportunity");
@@ -562,6 +745,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 }
             } catch {
                 // non-fatal
+            } finally {
+                if (!cancelled) setWorkflowKpisLoading(false);
             }
         })();
         return () => {
@@ -595,8 +780,52 @@ export default function AdminV2OpportunityWorkUnitPage() {
         const activeSummary = selectedQueueKey
             ? queueSummaries.find((q) => q.key === selectedQueueKey) ?? queueSummaries[0]
             : queueSummaries[0];
+        const tabNForSelected =
+            activeSummary?.counts_deferred === true ? undefined : typeof activeSummary?.count === "number" ? activeSummary.count : undefined;
+        const reconcilePickerCountZero =
+            queueItems != null &&
+            !queueItemsError &&
+            !queueItemsLoading &&
+            selectedQueueKey &&
+            queueItems.queue.key === selectedQueueKey &&
+            (queueItems.offset ?? 0) === 0 &&
+            !(queueItems.items ?? []).some(queueItemPayloadHasId) &&
+            queueItems.total_omitted === true &&
+            typeof tabNForSelected === "number" &&
+            tabNForSelected > 0;
+
+        /** Drill-in totals / empty page — aligns selected-tab pill with list without inventing estimates. */
+        let authoritativeBadgeForSelectedTab: number | undefined = undefined;
+        if (
+            selectedQueueKey &&
+            queueItems != null &&
+            !queueItemsError &&
+            !queueItemsLoading &&
+            queueItems.queue.key === selectedQueueKey
+        ) {
+            if (queueItems.total_omitted !== true && typeof queueItems.total === "number" && Number.isFinite(queueItems.total)) {
+                authoritativeBadgeForSelectedTab = Math.max(0, Math.floor(queueItems.total));
+            } else if (
+                queueItems.total_omitted === true &&
+                (queueItems.offset ?? 0) === 0 &&
+                !(queueItems.items ?? []).some(queueItemPayloadHasId)
+            ) {
+                authoritativeBadgeForSelectedTab = 0;
+            }
+        }
+
         const pillBase =
             "inline-flex max-w-full items-center gap-1.5 rounded-full border px-2 py-0.5 text-left text-[11px] font-semibold leading-tight transition-colors";
+        function queuePillBadgeCount(q: QueueSummary): number | "…" | "—" {
+            if (q.counts_deferred) return "…";
+            if (q.key === selectedQueueKey && typeof authoritativeBadgeForSelectedTab === "number") {
+                return authoritativeBadgeForSelectedTab;
+            }
+            if (q.key === selectedQueueKey && reconcilePickerCountZero) return 0;
+            const raw = q.count as unknown;
+            const sc = typeof raw === "number" && Number.isFinite(raw) ? Math.max(0, Math.floor(raw)) : undefined;
+            return sc === undefined ? "—" : sc;
+        }
         const sections = sectionedQueueSummaries ?? [
             { key: "all", label: "Queues", tone: "standard" as const, queues: queueSummaries },
         ];
@@ -629,7 +858,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                               ? "border-alloy-honey bg-alloy-honey/12 text-alloy-forge"
                                               : "border-alloy-honey/40 bg-white/60 text-alloy-forge/85"
                                           : selected
-                                            ? "border-alloy-pine bg-alloy-stone/15 text-alloy-forge"
+                                            ? "border-alloy-blue bg-alloy-blue/[0.07] text-alloy-forge shadow-[inset_0_0_0_1px_rgba(0,69,140,0.12)]"
                                             : "border-admin-border bg-white/70 text-alloy-forge/80";
                                 return (
                                     <button
@@ -637,12 +866,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                         type="button"
                                         onClick={() => {
                                             setSelectedQueueKey(q.key);
+                                            void fetchQueueItems(workUnitId, q.key, queueSummaries, { force: true });
                                             if (typeof window !== "undefined") {
                                                 const url = new URL(window.location.href);
                                                 url.searchParams.set("queue", q.key);
-                                                router.replace(url.pathname + "?" + url.searchParams.toString());
+                                                router.replace(`${url.pathname}${url.search}`, { scroll: false });
                                             }
-                                            void fetchQueueItems(workUnitId, q.key);
                                         }}
                                         className={`${pillBase} ${ring}`}
                                         aria-pressed={selected}
@@ -653,7 +882,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                                 selected ? "bg-alloy-forge/10 text-alloy-forge" : "bg-alloy-stone/15 text-alloy-forge/70"
                                             }`}
                                         >
-                                            {q.count}
+                                            {queuePillBadgeCount(q)}
                                         </span>
                                     </button>
                                 );
@@ -673,7 +902,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
         queueSummariesRoute,
         sectionedQueueSummaries,
         selectedQueueKey,
+        queueItems,
+        queueItemsError,
+        queueItemsLoading,
         workUnitId,
+        router,
     ]);
 
     const queueModel = useMemo<WorkUnitWorkspaceModel | null>(() => {
@@ -787,6 +1020,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
                 const want = (f: QueueUiRowPreviewField) => isRowPreviewFieldEnabled(previewFields, f);
 
+                const crmChildrenParsed = parseQueueRowCrmChildren(r?._crm_compact_children);
+                const multiChildren = Boolean(want("child_name") && crmChildrenParsed.length >= 2);
+
                 const basicSubtitleParts: string[] = [];
                 if (want("status") && statusLabel) basicSubtitleParts.push(`Status: ${statusLabel}`);
                 if (want("primary_contact") && contactName) basicSubtitleParts.push(contactName);
@@ -799,12 +1035,19 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     id: rid,
                     title: familyTitle,
                     subtitle: previewCfg.variant === "basic" ? (basicSubtitleParts.filter(Boolean).join(" · ") || undefined) : undefined,
+                    urgencyTier:
+                        activeQueue?.priority === "critical"
+                            ? ("critical" as const)
+                            : activeQueue?.priority === "attention"
+                              ? ("warning" as const)
+                              : ("standard" as const),
                     quickActions,
                     semanticCrmCompact:
                         previewCfg.variant === "crm_compact"
                             ? {
                                   primaryIdentity: familyTitle,
-                                  childName: want("child_name") ? childName || null : null,
+                                  childrenLines: want("child_name") && multiChildren ? crmChildrenParsed : null,
+                                  childName: want("child_name") ? (multiChildren ? null : childName || null) : null,
                                   stageLabel: null,
                                   statusLabel: want("status") ? statusLabel || null : null,
                                   nextStep:
@@ -834,6 +1077,39 @@ export default function AdminV2OpportunityWorkUnitPage() {
             ? `${queueItemsError}${queueItemsRoute ? ` · Route: ${queueItemsRoute}` : ""}`
             : undefined;
 
+        const tabCount =
+            activeQueue?.counts_deferred === true ? undefined : typeof activeQueue?.count === "number" ? activeQueue.count : undefined;
+        const reconcileListEmptyVsTab =
+            queueItems != null &&
+            !queueItemsError &&
+            !queueItemsLoading &&
+            queueItems.queue.key === activeQueue?.key &&
+            (queueItems.offset ?? 0) === 0 &&
+            vmItems.length === 0 &&
+            queueItems.total_omitted === true &&
+            typeof tabCount === "number" &&
+            tabCount > 0;
+        const effectiveRowTotal = reconcileListEmptyVsTab
+            ? 0
+            : queueItems != null
+              ? queueItems.total_omitted === true
+                  ? tabCount
+                  : queueItems.total
+              : tabCount;
+        const rowTotalDisplay = effectiveRowTotal == null ? "—" : String(effectiveRowTotal);
+
+        const activeQueueKey = String(activeQueue?.key ?? "");
+        const queueItemsKey =
+            queueItems != null && typeof queueItems.queue === "object" && queueItems.queue != null
+                ? String((queueItems.queue as { key?: string }).key ?? "")
+                : "";
+        /** Empty list + in-flight fetch, or tab mismatch — show compact in-lane loading (no tall duplicate skeleton). */
+        const rowsLoading =
+            Boolean(queueItemsLoading) &&
+            (queueItems === null ||
+                vmItems.length === 0 ||
+                (activeQueueKey !== "" && queueItemsKey !== "" && queueItemsKey !== activeQueueKey));
+
         return {
             workspaceLevel: "work_unit",
             workUnitId: workUnit.id,
@@ -850,7 +1126,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     ? {
                           laneStatusLine: queueItemsLoading
                               ? "Loading queue items…"
-                              : `Queue: ${activeQueue?.key ?? "—"} · ${queueItems?.total ?? activeQueue?.count ?? 0} items`,
+                              : `Queue: ${activeQueue?.key ?? "—"} · ${rowTotalDisplay} items`,
                           recommendedActionLine: "Open a row to view the record in the drawer.",
                       }
                     : null,
@@ -860,10 +1136,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 id: `wu:${workUnit.id}:queue:${activeQueue?.key ?? "unknown"}`,
                 // Title lives in the shell headline + queue pills; body starts with rows only.
                 title: "",
-                countBadge: queueItems?.total ?? activeQueue?.count ?? 0,
+                laneQueueLabel: activeQueue?.label?.trim() || activeQueue?.key || undefined,
+                countBadge: effectiveRowTotal,
                 items: vmItems,
                 sortCaption: errorLine ? errorLine : undefined,
                 rollupSummary: undefined,
+                rowsLoading,
             },
             workSummary: null,
             actionsRail: (() => {
@@ -982,6 +1260,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
         };
     }, [updateStatusFormOpen]);
 
+    const opportunityWorkspaceContext = useMemo(
+        () =>
+            workUnit?.id && departmentId
+                ? { work_unit_id: workUnit.id, department_id: departmentId }
+                : null,
+        [departmentId, workUnit?.id]
+    );
+    const oppDrawerExtra = opportunityWorkspaceContext ? { opportunityWorkspaceContext } : {};
+
     const onAction = useCallback(
         async (action: WorkspaceAction) => {
             if (
@@ -1071,9 +1358,14 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 }
                 if (er?.kind === "open_drawer") {
                     if (er.drawer?.defaultSurface === "quote_intake") {
-                        openDrawer({ type: "opportunities", id: action.itemId, defaultOpportunitySurface: "quote_intake" });
+                        openDrawer({
+                            type: "opportunities",
+                            id: action.itemId,
+                            defaultOpportunitySurface: "quote_intake",
+                            ...oppDrawerExtra,
+                        });
                     } else {
-                        openDrawer({ type: "opportunities", id: action.itemId });
+                        openDrawer({ type: "opportunities", id: action.itemId, ...oppDrawerExtra });
                     }
                     invalidate({ entity_type: "opportunity", entity_id: action.itemId, action_key: action.actionId });
                     return;
@@ -1096,12 +1388,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     return;
                 }
                 if (entityType === "opportunity") {
-                    openDrawer({ type: "opportunities", id: action.itemId });
+                    openDrawer({ type: "opportunities", id: action.itemId, ...oppDrawerExtra });
                     return;
                 }
             }
             if (action.type === "queue.item.action" && action.actionId === "open_record") {
-                openDrawer({ type: "opportunities", id: action.itemId });
+                openDrawer({ type: "opportunities", id: action.itemId, ...oppDrawerExtra });
                 return;
             }
             if (action.type === "queue.item.action" && action.actionId && action.itemId) {
@@ -1113,7 +1405,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 // Map queue quick actions → opportunity record actions (event keys).
                 const eventKey = action.actionId;
                 if (eventKey === "start_quote" || eventKey === "open_quote") {
-                    openDrawer({ type: "opportunities", id: action.itemId, defaultOpportunitySurface: "quote_intake" });
+                    openDrawer({
+                        type: "opportunities",
+                        id: action.itemId,
+                        defaultOpportunitySurface: "quote_intake",
+                        ...oppDrawerExtra,
+                    });
                     return;
                 }
                 const r = await executeOpportunityRecordAction({ opportunityId: action.itemId, eventKey });
@@ -1159,6 +1456,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
             needsAttentionHref,
             needsAttentionWorkUnitId,
             openDrawer,
+            oppDrawerExtra,
+            opportunityWorkspaceContext,
             queueItems?.queue.entity_type,
             router,
             workUnit?.id,
@@ -1168,6 +1467,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const deptName = dept?.name?.trim() || "Department";
     const wuName = workUnit?.name?.trim() || "Work unit";
     const effectiveModel = queueModel ?? model;
+
+    const usingMultiQueue = Boolean(queueSummaries && queueSummaries.length > 0);
+    const wuShowPrimaryTransition =
+        !loading &&
+        !error &&
+        usingMultiQueue &&
+        !queueSummariesError &&
+        Boolean(selectedQueueKey ?? queueSummaries?.[0]?.key) &&
+        !wuBootPrimarySettled;
 
     return (
         <WorkspaceChrome
@@ -1181,10 +1489,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
             subtitle=""
         >
             {loading ? (
-                <>
-                    <WsRouteLoadingRibbon label="Loading work unit" />
-                    <WorkUnitRouteSkeletonBody />
-                </>
+                <AdminV2RouteLoadingState variant="work_unit" />
+            ) : wuShowPrimaryTransition ? (
+                <AdminV2RouteLoadingState variant="queue">
+                    {queuePicker ? <div className="min-w-0">{queuePicker}</div> : null}
+                </AdminV2RouteLoadingState>
             ) : effectiveModel ? (
                 <>
                     {actionFeedback ? (
@@ -1202,10 +1511,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         model={effectiveModel}
                         onAction={onAction}
                         headerQueuePicker={queueModel ? queuePicker : null}
-                        queueRowsLoading={queueItemsLoading && !queueItems}
                         primaryFooterSlot={
                             <AutomationWorkflowsBlock
                                 title="Automations"
+                                kpisLoading={workflowKpisLoading}
                                 kpis={{
                                     runs_today: workflowKpis.runs_today,
                                     failed_last_7d: workflowKpis.failed_last_7d,

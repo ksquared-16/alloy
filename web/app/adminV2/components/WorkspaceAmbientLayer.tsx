@@ -7,7 +7,6 @@
  * Specs stay z-0 under workspace UI (shell z-10); pointer-events none.
  */
 import { memo } from "react";
-import { derived } from "@/styles/tokens/colors";
 import {
   COMPANY_FIELD_DRIFT_FULL,
   COMPANY_FIELD_DRIFT_PERIMETER_START,
@@ -17,8 +16,8 @@ const R8 = [0, 45, 90, 135, 180, 225, 270, 315];
 const R10 = [0, 36, 72, 108, 144, 180, 216, 252, 288, 324];
 const R12 = [0, 30, 60, 90, 120, 150, 180, 210, 240, 270, 300, 330];
 
-/** Slightly higher than canvas field cap (0.78) so the same system reads on the light workspace shell */
-const WORKSPACE_COMPANY_FIELD_OPACITY = 0.9;
+/** Field texture only — specs/dots extremely subtle vs near-white slab */
+const WORKSPACE_COMPANY_FIELD_OPACITY = 0.26;
 
 function WorkspaceAmbientLayerComponent() {
   return (
@@ -28,9 +27,11 @@ function WorkspaceAmbientLayerComponent() {
         style={{ opacity: WORKSPACE_COMPANY_FIELD_OPACITY }}
       >
         <div
-          className="adminv2-ambient-bloom adminv2-ambient-bloom-company-field"
+          className="adminv2-ambient-bloom adminv2-ambient-bloom-company-field adminv2-workspace-ambient-bloom-dial"
           style={{
-            background: `radial-gradient(ellipse 108% 102% at 48% 46%, ${derived.ambientCompanyBloomLift} 0%, ${derived.ambientLifeBloomCore} 18%, transparent 58%)`,
+            /* Neutral vignette only — teal energy comes from spec dots at low weight */
+            background:
+              "radial-gradient(ellipse 110% 70% at 50% 38%, rgba(39, 63, 82, 0.04) 0%, transparent 52%)",
           }}
         />
         {COMPANY_FIELD_DRIFT_FULL.map((p, idx) => (
@@ -44,7 +45,7 @@ function WorkspaceAmbientLayerComponent() {
             style={{
               left: `${p.l}%`,
               top: `${p.t}%`,
-              backgroundColor: idx % 2 === 0 ? derived.ambientCompanySpecMid : derived.ambientCompanyParticleCore,
+              backgroundColor: idx % 2 === 0 ? "rgba(39, 63, 82, 0.2)" : "rgba(39, 63, 82, 0.12)",
               animationDelay: `${idx * 0.22}s`,
             }}
           />

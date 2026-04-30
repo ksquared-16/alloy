@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
     const list = searchParams.get("list");
 
     if (list === "kpis") {
+        const t0 = Date.now();
         const supabase = createAdminClient();
         const now = new Date();
         const startOfToday = new Date(now);
@@ -44,25 +45,45 @@ export async function GET(request: NextRequest) {
             last7d: last7d.toISOString(),
         };
 
-        async function countRuns(where: { fromIso: string; status?: string }) {
-            let q = supabase
-                .from("workflow_runs")
-                .select("id", { count: "exact", head: true })
-                .eq("org_id", orgId)
-                .gte("started_at", where.fromIso);
-            if (where.status) q = q.eq("status", where.status);
-            const { count } = await q;
-            return count ?? 0;
-        }
+        /** Bounded scan for dashboard KPIs (avoids 6× exact COUNT on large `workflow_runs`). */
+        const KPI_SAMPLE_LIMIT = 12_000;
 
-        // Use workflow_action_runs to compute "has failed action" within last 7d.
-        const { data: recentRunRows } = await supabase
+        const tFetch = Date.now();
+        const { data: runSample, error: sampleErr } = await supabase
             .from("workflow_runs")
-            .select("id")
+            .select("id, status, started_at")
             .eq("org_id", orgId)
             .gte("started_at", rangeFroms.last7d)
-            .limit(2000);
-        const recentRunIds = (recentRunRows ?? []).map((r) => (r as { id: string }).id);
+            .order("started_at", { ascending: false })
+            .limit(KPI_SAMPLE_LIMIT);
+        const fetchSampleMs = Date.now() - tFetch;
+
+        if (sampleErr) {
+            return NextResponse.json({ error: sampleErr.message }, { status: 500 });
+        }
+
+        const rows = (runSample ?? []) as { id: string; status?: string; started_at?: string }[];
+        const sampleCapped = rows.length >= KPI_SAMPLE_LIMIT;
+        let runs7d = 0;
+        let completed7d = 0;
+        let failed7d = 0;
+        let running7d = 0;
+        let skipped7d = 0;
+        let runsToday = 0;
+        const todayIso = rangeFroms.today;
+        for (const r of rows) {
+            runs7d += 1;
+            const st = String(r.status ?? "");
+            if (st === "completed") completed7d += 1;
+            else if (st === "failed") failed7d += 1;
+            else if (st === "running") running7d += 1;
+            else if (st === "skipped") skipped7d += 1;
+            const sa = r.started_at ? String(r.started_at) : "";
+            if (sa >= todayIso) runsToday += 1;
+        }
+
+        const recentRunIds = rows.map((r) => r.id);
+        const tFail = Date.now();
         let failedActionRunIds = new Set<string>();
         if (recentRunIds.length) {
             const { data: failedRows } = await supabase
@@ -73,19 +94,22 @@ export async function GET(request: NextRequest) {
                 .eq("status", "failed");
             failedActionRunIds = new Set((failedRows ?? []).map((r) => String((r as { workflow_run_id: string }).workflow_run_id)));
         }
-
-        const [runsToday, runs7d, completed7d, failed7d, running7d, skipped7d] = await Promise.all([
-            countRuns({ fromIso: rangeFroms.today }),
-            countRuns({ fromIso: rangeFroms.last7d }),
-            countRuns({ fromIso: rangeFroms.last7d, status: "completed" }),
-            countRuns({ fromIso: rangeFroms.last7d, status: "failed" }),
-            countRuns({ fromIso: rangeFroms.last7d, status: "running" }),
-            countRuns({ fromIso: rangeFroms.last7d, status: "skipped" }),
-        ]);
+        const failedActionsMs = Date.now() - tFail;
 
         const failedIncludingActionFailures = Math.max(failed7d, failedActionRunIds.size);
         const denom = completed7d + failedIncludingActionFailures;
         const successRate = denom > 0 ? completed7d / denom : null;
+
+        const totalMs = Date.now() - t0;
+        if (totalMs > 300) {
+            console.warn("[admin-timing] GET /api/admin/workflow-runs list=kpis", {
+                total_ms: totalMs,
+                fetch_sample_ms: fetchSampleMs,
+                failed_actions_ms: failedActionsMs,
+                sample_rows: rows.length,
+                sample_capped: sampleCapped,
+            });
+        }
 
         return NextResponse.json({
             kpis: {

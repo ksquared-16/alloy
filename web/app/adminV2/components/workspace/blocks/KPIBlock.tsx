@@ -1,102 +1,59 @@
 "use client";
 
+import { useMemo } from "react";
 import type { KPIVm } from "@/lib/ui-v2/workspace-types";
+
+/** Default orientation band capacity (compact scorecard target). */
+const KPI_ORIENTATION_MAX = 5;
 
 type Props = {
   kpis: KPIVm[];
-  /** Spec: 4–6 in top band max */
+  /** Caps visible metrics — default aligns with orientation band (~4–5). */
   maxVisible?: number;
+  /** @deprecated Presentation is unified single strip; lanes are ordered business then ai. Kept for call-site compat. */
   surface?: "default" | "department" | "company" | "work_unit" | "record";
-  /** When `surface` uses the dual strip, override default "Business metrics" / "AI metrics" headings. */
+  /** @deprecated Unused in unified compact strip — kept so existing call sites compile. */
   dualRailHeadings?: { business?: string; secondary?: string };
 };
 
-const KPI_DEPT_PER_RAIL = 3;
-
-function KpiCells({ items, minCells = KPI_DEPT_PER_RAIL }: { items: KPIVm[]; minCells?: number }) {
-  const shown = items.slice(0, minCells);
-  const placeholders = Math.max(0, minCells - shown.length);
-
-  if (shown.length === 0 && placeholders === 0) {
-    return (
-      <div className="adminv2-ws-dept-v2-kpi-empty" aria-hidden>
-        —
-      </div>
-    );
-  }
-
-  return (
-    <div className="adminv2-ws-kpi-strip adminv2-ws-kpi-strip--dept-embedded" role="list">
-      {shown.map((k) => (
-        <div
-          key={k.id}
-          className={[
-            "adminv2-ws-kpi-cell",
-            k.tone && k.tone !== "neutral" ? `adminv2-ws-kpi-cell--tone-${k.tone}` : "",
-          ]
-            .filter(Boolean)
-            .join(" ")}
-          role="listitem"
-        >
-          <span className="adminv2-ws-kpi-label">{k.label}</span>
-          <span className="adminv2-ws-kpi-value">
-            {k.value}
-            {k.unit ? <span className="adminv2-ws-kpi-unit">{k.unit}</span> : null}
-          </span>
-          {k.aiSummary ? <span className="adminv2-ws-kpi-ai">{k.aiSummary}</span> : null}
-        </div>
-      ))}
-      {Array.from({ length: placeholders }).map((_, i) => (
-        <div key={`kpi-ph-${i}`} className="adminv2-ws-kpi-cell adminv2-ws-kpi-cell--placeholder" aria-hidden>
-          <span className="adminv2-ws-kpi-label"> </span>
-          <span className="adminv2-ws-kpi-value adminv2-ws-kpi-value--placeholder">—</span>
-        </div>
-      ))}
-    </div>
-  );
+/**
+ * Normalize metrics to a steady left-to-right read: business-lane KPIs first, then `lane: "ai"`, capped at `maxVisible`.
+ */
+function mergeKpisForOrientationStrip(kpis: KPIVm[], maxVisible: number): KPIVm[] {
+  const cap = Math.max(0, Math.min(maxVisible, KPI_ORIENTATION_MAX));
+  const business = kpis.filter((k) => (k.lane ?? "business") !== "ai");
+  const ai = kpis.filter((k) => k.lane === "ai");
+  return [...business, ...ai].slice(0, cap);
 }
 
 export default function KPIBlock({
   kpis,
-  maxVisible = 6,
-  surface = "default",
-  dualRailHeadings,
+  maxVisible = KPI_ORIENTATION_MAX,
+  surface: _surface,
+  dualRailHeadings: _dualRailHeadings,
 }: Props) {
-  const items = kpis.slice(0, maxVisible);
+  void _surface;
+  void _dualRailHeadings;
+
+  const items = useMemo(() => mergeKpisForOrientationStrip(kpis, maxVisible), [kpis, maxVisible]);
+
   if (items.length === 0) return null;
 
-  if (surface === "department" || surface === "company" || surface === "work_unit" || surface === "record") {
-    const business = items.filter((k) => (k.lane ?? "business") === "business").slice(0, KPI_DEPT_PER_RAIL);
-    const ai = items.filter((k) => k.lane === "ai").slice(0, KPI_DEPT_PER_RAIL);
-    const businessHeading = dualRailHeadings?.business ?? "Business metrics";
-    const secondaryHeading = dualRailHeadings?.secondary ?? "AI metrics";
-
-    return (
-      <div className="adminv2-ws-dept-v2-kpi-measurement-strip" role="group" aria-label="Key metrics">
-        <div className="adminv2-ws-dept-v2-kpi-dual">
-          <div className="adminv2-ws-dept-v2-kpi-rail adminv2-ws-dept-v2-kpi-rail--business">
-            <div className="adminv2-ws-dept-v2-kpi-rail-heading">{businessHeading}</div>
-            <KpiCells items={business} minCells={KPI_DEPT_PER_RAIL} />
-          </div>
-          <div className="adminv2-ws-dept-v2-kpi-rail adminv2-ws-dept-v2-kpi-rail--ai">
-            <div className="adminv2-ws-dept-v2-kpi-rail-heading">{secondaryHeading}</div>
-            <KpiCells items={ai} minCells={KPI_DEPT_PER_RAIL} />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="adminv2-ws-kpi-root-band" role="group" aria-label="Key metrics">
-      <div className="adminv2-ws-kpi-strip adminv2-ws-kpi-strip--single-band" role="list">
+    <div
+      className="adminv2-ws-kpi-root-band adminv2-ws-kpi-root-band--compact"
+      role="group"
+      aria-label="Key metrics"
+    >
+      <div className="adminv2-ws-kpi-strip adminv2-ws-kpi-strip--orientation" role="list">
         {items.map((k) => (
           <div
             key={k.id}
             className={[
               "adminv2-ws-kpi-cell",
-              "adminv2-ws-kpi-cell--single-band",
+              "adminv2-ws-kpi-cell--orientation",
               k.tone && k.tone !== "neutral" ? `adminv2-ws-kpi-cell--tone-${k.tone}` : "",
+              k.lane === "ai" ? "adminv2-ws-kpi-cell--lane-ai" : "",
             ]
               .filter(Boolean)
               .join(" ")}

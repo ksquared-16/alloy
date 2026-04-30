@@ -1,0 +1,168 @@
+Canonical sprint document path — use everywhere (normalize references; Git or local FS may show different casing): docs/Sprints/05_2026/Communications.txt
+
+Card 0 — Communications Audit / Context Intake
+Audit the current Alloy repo for any existing communications/messaging/SMS/email/in-app code.
+
+Context:
+- Twilio may already exist, but it was set up for Alloy Services and should be treated as a one-off integration, not the final multi-tenant communications model.
+- Communications must align with Alloy doctrine:
+  - org-scoped
+  - entity-linked
+  - event-driven
+  - action/workflow-compatible
+  - no tenant data leakage
+- Messages should eventually support SMS, email, in-app, media attachments, AI-drafted messages, and approval workflows.
+
+Audit:
+1. Find existing messaging-related tables, APIs, services, env vars, Twilio usage, SMS routes, webhook routes, and UI entry points.
+2. Identify what is reusable vs one-off.
+3. Identify current gaps for multi-tenant provider configuration.
+4. Identify where communication events should be emitted.
+5. Identify where message actions should surface in adminV2.
+6. Do not implement anything.
+
+Output:
+- inventory
+- reusable pieces
+- one-off pieces to avoid
+- risks
+- recommended Communications V1 architecture
+
+CARD 0.5 — Prerequisites / Decisions Gate
+
+Purpose:
+Before implementation, explicitly define decisions and prerequisites so work is not executed blindly.
+
+1. Provider strategy
+- Existing Twilio is one-off / Alloy Services only.
+- Do not assume global Twilio credentials are the future.
+- Tenant-specific provider configuration is required.
+- SMS V1 may support Twilio, but only through org-scoped provider accounts (not deployment-wide secrets as the sole model).
+- Email provider is undecided for V1; evaluate simple transactional options such as Resend, Postmark, or SendGrid in Card 1 and record the choice here once approved.
+
+2. Canonical storage decision
+- Existing public.messages lacks org_id and is not sufficient as-is for multi-tenant communications.
+- Decision required: evolve public.messages (e.g., add org_id, threading, tighten RLS) versus introduce a new communications schema/table family.
+- Duplicate source-of-truth between messages and messages_outbox must be resolved; define one canonical store (and demote or retire the other to audit/replay-only if needed).
+
+3. Tenant isolation
+- All messages must be org-scoped at rest and in APIs.
+- Inbound messages must resolve org_id deterministically (explicit routing or verified mapping—not guesswork across tenants).
+- No cross-tenant sends, reads, or provider leakage (credentials, webhook handling, queues, logs).
+
+4. Event / action model
+- Messages must emit canonical events (queued, sent, received, failed, read as applicable).
+- Send message is a system/admin action compatible with Alloy actions/workflows; design must tie into that model.
+- Do not build a parallel activity system.
+- Communications events feed workflow_events and the activity timeline (same stream consumers use today).
+
+5. Permissions
+- Define V1 rule for who may send versus read versus configure providers (org roles / explicit permission keys).
+- Note a future capability/scope model if V1 stays coarse (e.g., department/work-unit scoped messaging later).
+- Daily send caps, rate limits, and abuse controls are future; capture as non-goals or follow-ups unless explicitly in scope.
+
+6. Future north star
+- Photo/media upload.
+- Media assigned to child/person/entity.
+- AI-drafted messages tied to media/context.
+- Human approval step before send.
+- Message sent; events/workflows/activity updated accordingly.
+
+7. Explicit stop condition
+- After Card 1 (Communications Design / Architecture Proposal), stop again for review.
+- Do not proceed to implementation Cards 2+ until Card 0.5 prerequisites and Card 1 design outputs are explicitly approved AND CARD 1.5 (Final Decisions Before Implementation) is reviewed and explicitly approved.
+
+Design Communications V1 before implementation.
+
+Goal:
+Create the foundation for entity-linked, multi-tenant communications in Alloy.
+
+Required capabilities:
+- Send and receive messages
+- Support channels: sms, email, in_app
+- Multi-tenant provider configuration
+- Per-org/provider account setup
+- Per-user read/unread
+- Permission hook for who can communicate
+- Entity-linked threads
+- Events emitted for sent/received/read/failed
+- Action-compatible send_message behavior
+- Future support for attachments/media and AI-generated drafts
+
+Important provider context:
+- Existing Twilio setup is one-off for Alloy Services and should not be assumed as global.
+- V1 should support tenant-specific provider configuration.
+- Email provider is undecided; propose a simple early provider approach.
+
+Design must include:
+1. Schema proposal
+2. Provider abstraction
+3. API surface
+4. Event model
+5. UI surfaces
+6. Permission model v1
+7. Future AI/media/draft workflow path
+
+Constraints:
+- Do not build full external Gmail/Outlook inbox sync in V1.
+- Do not hardcode Twilio credentials globally.
+- Do not bypass events/workflows.
+- Do not create a parallel activity system.
+- Do not implement yet.
+
+Output:
+- recommended design
+- explicit assumptions
+- what to build now vs later
+- risks / open decisions
+
+CARD 1.5 — Final Decisions Before Implementation
+
+Record decisions and open confirmations here. Do not proceed to implementation Cards 2+ until this card is reviewed and explicitly approved.
+
+1. Canonical storage
+Decision: Use new communication_* tables as the future canonical model.
+Legacy public.messages and messages_outbox are compatibility/migration paths only.
+
+2. SMS provider
+Decision: V1 supports Twilio through org-scoped communication_provider_bindings.
+Do not use global TWILIO_* env vars for tenant communications except legacy/Alloy Services paths.
+
+3. Email provider
+Decision needed before implementation:
+Recommend Resend for V1 unless we choose Postmark.
+Do not implement SendGrid unless explicitly approved.
+
+4. Inbound routing
+Decision: V1 inbound SMS must route deterministically by binding_id or verified To number → provider binding.
+Do not rely on phone/contact heuristics to infer org.
+
+5. Threading
+Decision: V1 thread should resolve by:
+org_id + primary_entity_type + primary_entity_id + channel + recipient identity
+unless explicitly creating a new thread.
+Do not create random new threads for every message.
+
+6. Event naming
+Decision needed:
+Use message_* event names if continuing existing semantics.
+Alternative: communication_message_* for clearer namespace.
+Pick one before migration.
+
+7. Provider secret storage
+Decision needed before code:
+Define whether V1 stores secret_ref only, and where actual secrets live:
+- environment-managed lookup
+- Supabase Vault
+- another secret manager
+Do not store provider API keys or auth tokens in plaintext jsonb.
+
+8. Permissions
+Decision: V1 may start with admin/ops + communications.send/read/configure checks.
+Do not build full capability/scope system yet, but leave hooks.
+
+9. GHL
+Decision: GHL send_conversation_sms remains outside tenant communications V1 unless routed through the same communication provider abstraction and canonical message store.
+
+10. Implementation stop condition
+Do not proceed to implementation Cards 2+ until this Card 1.5 is reviewed and explicitly approved.

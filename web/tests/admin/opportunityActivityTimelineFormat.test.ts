@@ -49,12 +49,12 @@ describe("opportunityActivityTimelineFormat", () => {
         expect(getWorkflowActivityActorLabel({ actor: "system" }, null)).toBe("System");
     });
 
-    it("queue note picks latest dated line and formats date (note · MM/DD/YYYY h:mm A, local tz)", () => {
+    it("queue note picks latest dated line and formats date (datetime · note, local tz)", () => {
         const raw = `2025-06-10 First note\n2026-06-20 Second note wins`;
         const out = formatOpportunityQueueNotesPreview(raw);
         const wantDate = formatQueueNoteDateTime(Date.parse("2026-06-20"));
         expect(out).toBeTruthy();
-        expect(out).toBe(`Second note wins · ${wantDate}`);
+        expect(out).toBe(`${wantDate} · Second note wins`);
         expect(wantDate).toMatch(/\d{1,2}\/\d{1,2}\/\d{4}/);
     });
 
@@ -62,7 +62,7 @@ describe("opportunityActivityTimelineFormat", () => {
         const raw = "[2026-04-29T21:15:05Z] Tried to contact via phone today";
         const out = formatOpportunityQueueNotesPreview(raw);
         const wantDate = formatQueueNoteDateTime(Date.parse("2026-04-29T21:15:05Z"));
-        expect(out).toBe(`Tried to contact via phone today · ${wantDate}`);
+        expect(out).toBe(`${wantDate} · Tried to contact via phone today`);
     });
 
     it("queue note uses last line when undated", () => {

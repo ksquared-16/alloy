@@ -28,6 +28,25 @@ function parseLimitOffset(searchParams: URLSearchParams): { limit?: number; offs
     return { limit, offset };
 }
 
+function parseQueueItemsCountOptions(searchParams: URLSearchParams): {
+    countAccuracy: import("@/lib/queues/QueueService").QueueCountAccuracy | undefined;
+    omitTotalCount: boolean;
+} {
+    const countRaw = (searchParams.get("count_mode") ?? "").trim().toLowerCase();
+    const omitTotalCount =
+        searchParams.get("omit_total_count") === "true" || countRaw === "omit" || countRaw === "none";
+    if (omitTotalCount) {
+        return { countAccuracy: undefined, omitTotalCount: true };
+    }
+    if (!countRaw || countRaw === "exact") {
+        return { countAccuracy: undefined, omitTotalCount: false };
+    }
+    if (countRaw === "planned") {
+        return { countAccuracy: "planned", omitTotalCount: false };
+    }
+    throw new QueueServiceError("count_mode must be exact, planned, or omit", 400, "VALIDATION_FAILED");
+}
+
 /** GET — Queue items drill-in for a work unit queue. */
 export async function GET(
     request: NextRequest,
@@ -43,12 +62,15 @@ export async function GET(
     const t0 = Date.now();
     try {
         const { limit, offset } = parseLimitOffset(request.nextUrl.searchParams);
+        const { countAccuracy, omitTotalCount } = parseQueueItemsCountOptions(request.nextUrl.searchParams);
         const result = await getWorkUnitQueueItems({
             orgId: ctx.orgId,
             workUnitId,
             queueKey,
             limit,
             offset,
+            countAccuracy,
+            omitTotalCount,
         });
         const ms = Date.now() - t0;
         if (ms > 200) {
@@ -56,6 +78,7 @@ export async function GET(
                 ms,
                 work_unit_id: workUnitId,
                 queue_key: queueKey,
+                count_mode: omitTotalCount ? "omit" : countAccuracy ?? "exact",
             });
         }
         return NextResponse.json(result);

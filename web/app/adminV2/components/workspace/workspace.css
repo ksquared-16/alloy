@@ -50,18 +50,18 @@
   --ws-dept-section-gap: 16px;
   --ws-dept-top-band-padding-x: 14px;
   --ws-dept-top-band-padding-y: 3px;
-  /* Solid-ish panel fill (ambient stays in page margins; panels read as light material) */
-  --ws-dept-surface-solid: color-mix(in srgb, #ffffff 93%, var(--d-surface));
-  --ws-dept-surface-raised: color-mix(in srgb, #ffffff 90%, var(--d-panel));
+  /* Solid-ish panel fill — near-white cool neutral (not pure #fff); hierarchy vs page ground */
+  --ws-dept-surface-solid: color-mix(in srgb, #f7f9fb 94%, var(--d-surface));
+  --ws-dept-surface-raised: color-mix(in srgb, #f5f8fa 93%, var(--d-panel));
   --ws-dept-workbench-gutter: 20px;
   --ws-dept-workbench-board-fr: 66;
   --ws-dept-workbench-rail-fr: 34;
   --ws-dept-queue-row-min-height: 50px;
   /* Primary throughput list scroll cap — taller when operational row is taller */
-  --ws-dept-primary-queue-list-max-height: min(44vh, 380px);
-  --ws-dept-secondary-queue-list-max-height: min(44vh, 380px);
-  /* Operational row: primary surface — throughput, attention, command share more vertical room */
-  --ws-dept-operational-row-min-height: clamp(360px, 44vh, 620px);
+  --ws-dept-primary-queue-list-max-height: none;
+  --ws-dept-secondary-queue-list-max-height: none;
+  /* Operational row heights follow content — primary workspace scroll owns vertical overflow */
+  --ws-dept-operational-row-min-height: 0;
 }
 
 /* Work-unit: slightly tighter vertical rhythm (keeps Automations block closer to the lane). */
@@ -105,6 +105,14 @@
   grid-template-columns: minmax(0, 3fr) minmax(220px, 1fr);
   column-gap: var(--ws-dept-workbench-gutter);
   align-items: stretch;
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-page-split.adminv2-ws-dept-v2-page-split--no-rail,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-page-split.adminv2-ws-dept-v2-page-split--no-rail,
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-page-split.adminv2-ws-dept-v2-page-split--no-rail,
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-page-split.adminv2-ws-dept-v2-page-split--no-rail {
+  grid-template-columns: minmax(0, 1fr);
+  column-gap: 0;
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-primary-column,
@@ -155,18 +163,110 @@
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-control-deck,
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-control-deck {
   flex-shrink: 0;
-  border: 1px solid color-mix(in srgb, var(--d-border) 88%, transparent);
-  border-right: 3px solid var(--vc-header-rail-accent, color-mix(in srgb, var(--d-border) 70%, transparent));
-  border-radius: 10px;
-  background: linear-gradient(180deg,
-      #ffffff 0%,
-      color-mix(in srgb, #ffffff 98%, var(--d-surface)) 100%);
-  box-shadow:
-    var(--d-kpi-band-shadow),
-    0 1px 3px rgba(39, 63, 82, 0.06),
-    inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  border: 1px solid color-mix(in srgb, var(--d-border) 72%, transparent);
+  border-right: 2px solid var(--vc-header-rail-accent, color-mix(in srgb, var(--d-border) 58%, transparent));
+  border-radius: 8px;
+  background: var(--ws-dept-surface-solid);
+  box-shadow: 0 1px 1px rgba(39, 63, 82, 0.03);
   overflow: hidden;
   z-index: 1;
+}
+
+/* Department + work unit — slightly warmer deck surface vs flat gray slab */
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-control-deck,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck {
+  background: linear-gradient(164deg,
+      color-mix(in srgb, #ffffff 98%, var(--d-pine)) 0%,
+      var(--ws-dept-surface-solid) 45%,
+      color-mix(in srgb, var(--d-surface) 94%, var(--vc-label-accent, var(--d-pine))) 100%);
+}
+
+/* Premium operational bands — Alloy hairlines / soft washes (workspace root · bridge · work unit · automations mast) */
+[data-adminv2-workspace-root-shell="true"][data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-control-deck {
+  border: 1px solid color-mix(in srgb, var(--d-brand) 14%, var(--d-border));
+  border-left-width: 3px;
+  border-left-color: color-mix(in srgb, var(--d-brand) 42%, var(--d-border));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 1px 5px rgba(39, 63, 82, 0.05);
+  background: linear-gradient(169deg,
+      color-mix(in srgb, #ffffff 94%, var(--d-brand)) 0%,
+      var(--ws-dept-surface-solid) 54%,
+      color-mix(in srgb, var(--d-pine) 6%, var(--d-surface)) 100%);
+}
+
+[data-adminv2-workspace-root-shell="true"][data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack:not(:last-child) {
+  border-bottom-color: color-mix(in srgb, var(--d-brand) 14%, var(--d-border));
+  background: linear-gradient(180deg,
+      color-mix(in srgb, #ffffff 99%, var(--d-brand)) 0%,
+      transparent 75%);
+}
+
+[data-adminv2-workspace-root-shell="true"][data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-brief-focus-label {
+  color: color-mix(in srgb, var(--d-muted) 32%, var(--d-brand));
+  letter-spacing: 0.13em;
+}
+
+[data-production-workspace-bridge="true"][data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-control-deck {
+  border-left-width: 3px;
+  border-left-color: color-mix(in srgb, var(--d-brand) 30%, color-mix(in srgb, var(--d-pine) 46%, var(--d-border)));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 6px rgba(39, 63, 82, 0.045);
+}
+
+[data-production-workspace-bridge="true"][data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack:not(:last-child) {
+  border-bottom-color: color-mix(in srgb, var(--d-brand) 12%, color-mix(in srgb, var(--d-border) 55%, transparent));
+  background: linear-gradient(180deg,
+      color-mix(in srgb, #ffffff 98%, var(--d-brand)) 0%,
+      transparent 72%);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck {
+  border-left-width: 3px;
+  border-left-color: color-mix(in srgb, var(--d-brand) 24%, color-mix(in srgb, var(--d-pine) 52%, var(--d-border)));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 1px 5px rgba(39, 63, 82, 0.042);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-top-stack:not(:last-child) {
+  border-bottom-color: color-mix(in srgb, var(--d-brand) 11%, color-mix(in srgb, var(--d-pine) 12%, var(--d-border)));
+  background: linear-gradient(180deg,
+      color-mix(in srgb, #ffffff 98%, var(--d-brand)) 0%,
+      transparent 74%);
+}
+
+.adminv2-ws-root-departments-zone {
+  margin-top: 1rem;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--d-brand) 12%, var(--d-border));
+}
+
+.adminv2-ws-root-departments-zone .adminv2-ws-root-zone-kicker {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--d-muted) 28%, var(--d-brand));
+}
+
+.adminv2-ws-root-departments-zone .adminv2-ws-root-zone-sub {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.42;
+  color: color-mix(in srgb, var(--d-muted) 55%, var(--d-text-primary, #273f52));
+  max-width: 44rem;
+}
+
+.adminv2-ws-root-brief-subline {
+  margin-top: 8px !important;
+  max-width: 44rem;
+  padding-left: 1px;
+  border-left: 2px solid color-mix(in srgb, var(--d-brand) 22%, transparent);
+  padding-inline-start: 10px !important;
+  color: color-mix(in srgb, var(--d-muted) 38%, var(--d-text-primary, #273f52)) !important;
 }
 
 /* A — Headline first, then signals full-width */
@@ -233,6 +333,11 @@
   text-transform: uppercase;
   color: color-mix(in srgb, var(--vc-label-accent, var(--d-pine)) 58%, var(--d-muted));
   margin: 0 0 1px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-brief-kicker {
+  color: color-mix(in srgb, var(--d-muted) 38%, var(--d-brand));
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--d-brand) 18%, transparent);
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-brief-focus-label,
@@ -426,12 +531,32 @@
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-signal-card[data-severity="warning"],
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-signal-card[data-severity="warning"],
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-signal-card[data-severity="warning"],
-[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-signal-card[data-severity="warning"],
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-signal-card[data-severity="warning"] {
+  border-left-width: 3px;
+  border-left-color: color-mix(in srgb, var(--d-admin-amber) 78%, #bc4300);
+  border-color: color-mix(in srgb, #bc4300 16%, var(--d-border));
+  box-shadow:
+    inset 3px 0 0 color-mix(in srgb, var(--d-admin-amber) 22%, transparent),
+    0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-signal-card[data-severity="critical"],
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-signal-card[data-severity="critical"],
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-signal-card[data-severity="critical"],
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-signal-card[data-severity="critical"] {
-  border-left: 2px solid #bc4300;
+  border-left-width: 3px;
+  border-left-color: #bc4300;
+  border-color: color-mix(in srgb, #bc4300 22%, var(--d-border));
+  box-shadow:
+    inset 3px 0 0 color-mix(in srgb, #bc4300 18%, transparent),
+    0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-signal-card[data-severity="critical"] .adminv2-ws-signal-title,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-signal-card[data-severity="critical"] .adminv2-ws-signal-title,
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-signal-card[data-severity="critical"] .adminv2-ws-signal-title,
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-signal-card[data-severity="critical"] .adminv2-ws-signal-title {
+  color: color-mix(in srgb, #5c2000 42%, var(--d-text-primary, inherit));
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-signal-card .adminv2-ws-signal-label,
@@ -559,9 +684,12 @@
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-kpi-measurement-strip,
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-kpi-measurement-strip {
   border: none;
-  padding: 10px 14px 7px;
-  margin-top: 2px;
-  background: color-mix(in srgb, #ffffff 35%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--d-border) 48%, transparent);
+  border-radius: 0;
+  padding: 8px 16px 7px;
+  margin-top: 0;
+  background: color-mix(in srgb, #ffffff 94%, var(--d-surface));
+  box-shadow: none;
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-kpi-measurement-strip .adminv2-ws-dept-v2-kpi-dual,
@@ -761,6 +889,11 @@
   justify-content: center;
   align-items: stretch;
   box-shadow: none;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-kpi-rail .adminv2-ws-kpi-cell {
+  border-top-color: color-mix(in srgb, var(--d-brand) 24%, color-mix(in srgb, var(--d-pine) 36%, var(--d-border)));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--d-brand) 6%, transparent);
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-kpi-rail--ai .adminv2-ws-kpi-cell,
@@ -964,10 +1097,144 @@
   font-size: 13px;
 }
 
-/* KPI — single elevated band (org root + department bridge + work unit when one strip) */
-[data-ws-surface="department"].adminv2-ws-dept-v2 [data-workspace-zone="kpi-banner"] .adminv2-ws-kpi-root-band,
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2 [data-workspace-zone="kpi-banner"] .adminv2-ws-kpi-root-band,
-[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-kpi-root-band {
+/* Compact orientation KPI band — horizontal read, subdued chrome */
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-kpi-root-band--compact,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-kpi-root-band--compact,
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-kpi-root-band--compact,
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-kpi-root-band--compact {
+  margin-top: 0;
+  padding: 5px 12px 7px;
+  border-radius: 0;
+  border: none;
+  border-top: 1px solid color-mix(in srgb, var(--d-border) 44%, transparent);
+  background: color-mix(in srgb, #ffffff 97%, var(--d-surface));
+  box-shadow: none;
+}
+
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-kpi-root-band--compact {
+  border-radius: 0 0 8px 8px;
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 [data-workspace-zone="kpi-banner"] .adminv2-ws-kpi-root-band--compact,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 [data-workspace-zone="kpi-banner"] .adminv2-ws-kpi-root-band--compact {
+  border-radius: 0;
+  margin-top: 0;
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-kpi-strip--orientation,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-kpi-strip--orientation,
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-kpi-strip--orientation,
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-kpi-strip--orientation {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0;
+  row-gap: 4px;
+  column-gap: 0;
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-kpi-cell--orientation,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-kpi-cell--orientation,
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-kpi-cell--orientation,
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-kpi-cell--orientation {
+  flex: 1 1 108px;
+  min-width: 92px;
+  max-width: 180px;
+  min-height: 0;
+  padding: 2px 10px 4px;
+  border-radius: 0;
+  border: none;
+  border-left: 1px solid color-mix(in srgb, var(--d-border) 42%, transparent);
+  background: transparent;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-kpi-cell--orientation:first-child,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-kpi-cell--orientation:first-child,
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-kpi-cell--orientation:first-child,
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-kpi-cell--orientation:first-child {
+  border-left: none;
+  padding-left: 2px;
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-kpi-cell--orientation.adminv2-ws-kpi-cell--lane-ai,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-kpi-cell--orientation.adminv2-ws-kpi-cell--lane-ai,
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-kpi-cell--orientation.adminv2-ws-kpi-cell--lane-ai,
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-kpi-cell--orientation.adminv2-ws-kpi-cell--lane-ai {
+  border-left-color: color-mix(in srgb, var(--d-border) 42%, transparent);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--d-brand) 30%, transparent);
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-kpi-cell--orientation .adminv2-ws-kpi-label,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-kpi-cell--orientation .adminv2-ws-kpi-label,
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-kpi-cell--orientation .adminv2-ws-kpi-label,
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-kpi-cell--orientation .adminv2-ws-kpi-label {
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--d-muted) 65%, var(--d-pine));
+  margin-bottom: 0;
+  line-height: 1.15;
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-kpi-cell--orientation.adminv2-ws-kpi-cell--lane-ai .adminv2-ws-kpi-label,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-kpi-cell--orientation.adminv2-ws-kpi-cell--lane-ai .adminv2-ws-kpi-label,
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-kpi-cell--orientation.adminv2-ws-kpi-cell--lane-ai .adminv2-ws-kpi-label,
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-kpi-cell--orientation.adminv2-ws-kpi-cell--lane-ai .adminv2-ws-kpi-label {
+  color: color-mix(in srgb, var(--d-muted) 55%, var(--d-brand));
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-kpi-cell--orientation .adminv2-ws-kpi-value,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-kpi-cell--orientation .adminv2-ws-kpi-value,
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-kpi-cell--orientation .adminv2-ws-kpi-value,
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-kpi-cell--orientation .adminv2-ws-kpi-value {
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  color: var(--d-text-primary);
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-kpi-cell--orientation.adminv2-ws-kpi-cell--lane-ai .adminv2-ws-kpi-value,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-kpi-cell--orientation.adminv2-ws-kpi-cell--lane-ai .adminv2-ws-kpi-value,
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-kpi-cell--orientation.adminv2-ws-kpi-cell--lane-ai .adminv2-ws-kpi-value,
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-kpi-cell--orientation.adminv2-ws-kpi-cell--lane-ai .adminv2-ws-kpi-value {
+  color: color-mix(in srgb, var(--d-brand) 78%, var(--d-text-primary));
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-kpi-cell--orientation.adminv2-ws-kpi-cell--placeholder,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-kpi-cell--orientation.adminv2-ws-kpi-cell--placeholder,
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-kpi-cell--orientation.adminv2-ws-kpi-cell--placeholder,
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-kpi-cell--orientation.adminv2-ws-kpi-cell--placeholder {
+  min-height: 44px;
+  border-style: dashed;
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-kpi-cell--orientation.adminv2-ws-kpi-cell--placeholder .adminv2-ws-kpi-value--placeholder,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-kpi-cell--orientation.adminv2-ws-kpi-cell--placeholder .adminv2-ws-kpi-value--placeholder,
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-kpi-cell--orientation.adminv2-ws-kpi-cell--placeholder .adminv2-ws-kpi-value--placeholder,
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-kpi-cell--orientation.adminv2-ws-kpi-cell--placeholder .adminv2-ws-kpi-value--placeholder {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* KPI — single elevated band (legacy / non-compact loaders only) */
+[data-ws-surface="department"].adminv2-ws-dept-v2 [data-workspace-zone="kpi-banner"] .adminv2-ws-kpi-root-band:not(.adminv2-ws-kpi-root-band--compact),
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 [data-workspace-zone="kpi-banner"] .adminv2-ws-kpi-root-band:not(.adminv2-ws-kpi-root-band--compact),
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-kpi-root-band:not(.adminv2-ws-kpi-root-band--compact) {
   margin-top: 2px;
   padding: 10px 14px 12px;
   border-radius: 10px;
@@ -1057,21 +1324,6 @@
   margin-top: 1px;
 }
 
-/* KPI — measurement strip: slightly richer deck readout */
-[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-kpi-measurement-strip,
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-kpi-measurement-strip,
-[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-control-deck .adminv2-ws-dept-v2-kpi-measurement-strip {
-  border-radius: 10px;
-  border: 1px solid color-mix(in srgb, var(--d-border) 72%, transparent);
-  padding: 12px 16px 10px;
-  margin-top: 4px;
-  background: linear-gradient(180deg,
-      color-mix(in srgb, var(--d-kpi-tint) 28%, transparent) 0%,
-      color-mix(in srgb, #ffffff 40%, transparent) 55%,
-      color-mix(in srgb, var(--d-kpi-ai-tint) 12%, transparent) 100%);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, #ffffff 55%, transparent), var(--d-kpi-band-shadow, 0 8px 22px rgba(39, 63, 82, 0.06));
-}
-
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-kpi-measurement-strip .adminv2-ws-dept-v2-kpi-rail .adminv2-ws-kpi-value,
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-kpi-measurement-strip .adminv2-ws-dept-v2-kpi-rail .adminv2-ws-kpi-value,
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-kpi-measurement-strip .adminv2-ws-dept-v2-kpi-rail .adminv2-ws-kpi-value {
@@ -1114,8 +1366,13 @@
 
 /* Needs attention — same compact queue record grammar as pipeline; exception tint */
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-wu-queue-card--attention {
-  border-left-color: color-mix(in srgb, var(--d-admin-amber, #d97706) 62%, var(--d-border));
+  border-left-width: 3px;
+  border-left-color: color-mix(in srgb, #bc4300 48%, color-mix(in srgb, var(--d-admin-amber, #d97706) 55%, var(--d-border)));
+  border-color: color-mix(in srgb, #bc4300 12%, var(--d-border));
   background: color-mix(in srgb, var(--d-admin-amber, #d97706) 7%, var(--d-surface));
+  box-shadow:
+    0 1px 2px rgba(39, 63, 82, 0.04),
+    inset 2px 0 0 color-mix(in srgb, #bc4300 14%, transparent);
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-wu-queue-action-chip--attention-open {
@@ -1229,6 +1486,22 @@
   overflow: visible;
 }
 
+/* Sticky workspace command rail — scrollport is `.adminv2-workspace-scroll-surface`; stacks below breakpoint in media query bundle */
+@media (min-width: 1001px) {
+
+  [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-shell-command-column[data-adminv2-workspace-command-column],
+  [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-shell-command-column[data-adminv2-workspace-command-column],
+  [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-shell-command-column[data-adminv2-workspace-command-column],
+  [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-shell-command-column[data-adminv2-workspace-command-column] {
+    position: sticky;
+    top: var(--ws-rail-sticky-top, 10px);
+    align-self: flex-start;
+    max-height: calc(100vh - var(--ws-rail-sticky-top, 10px) - var(--ws-shell-bottom-safe, 120px));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
 /* Operational row: throughput | attention (command is separate column) */
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-operational-row,
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-operational-row,
@@ -1241,13 +1514,6 @@
   align-items: stretch;
   border-top: 1px solid color-mix(in srgb, var(--d-border) 42%, transparent);
   padding-top: 1px;
-}
-
-/* Department: keep Automations visible by scrolling queue lanes internally. */
-[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-operational-row {
-  max-height: calc(100vh - 340px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-operational-row--triple,
@@ -1263,6 +1529,11 @@
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-operational-row--double,
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-operational-row--double {
   grid-template-columns: minmax(0, 1fr);
+}
+
+/* Work unit — lane height follows queue content; avoid stretching empty/loading states to the viewport */
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-operational-row {
+  align-items: start;
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-lane--attention--hidden,
@@ -1294,19 +1565,21 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  border: 1px solid color-mix(in srgb, var(--d-pine) 16%, var(--d-border));
-  border-left: 3px solid var(--d-pine);
-  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--d-border) 76%, transparent);
+  border-left: 2px solid color-mix(in srgb, var(--d-pine) 42%, var(--d-border));
+  border-radius: 8px;
   overflow: hidden;
-  padding: 4px 6px 6px 4px;
-  background-color: var(--ws-dept-surface-raised);
-  background-image: linear-gradient(165deg,
-      color-mix(in srgb, #ffffff 93%, var(--d-surface)) 0%,
-      color-mix(in srgb, #ffffff 86%, var(--d-panel)) 46%,
-      color-mix(in srgb, var(--d-pine) 7%, var(--d-surface)) 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.88),
-    0 1px 5px rgba(39, 63, 82, 0.05);
+  padding: 2px 4px 4px;
+  background-color: #fafcfd;
+  background-image: none;
+  box-shadow: 0 1px 2px rgba(39, 63, 82, 0.04);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-lane-chrome--throughput-deck {
+  flex: 0 1 auto;
+  align-self: stretch;
+  border-left-color: color-mix(in srgb, var(--d-brand) 32%, color-mix(in srgb, var(--d-pine) 38%, var(--d-border)));
+  background-color: color-mix(in srgb, var(--d-brand) 2.5%, #fafcfd);
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-lane-chrome.adminv2-ws-dept-v2-board-secondary-slot,
@@ -1525,6 +1798,23 @@
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-workflows-toolbar-metric--success .adminv2-ws-dept-workflows-toolbar-metric-value,
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-workflows-toolbar-metric--success .adminv2-ws-dept-workflows-toolbar-metric-value {
   color: var(--d-brand);
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-workflows-toolbar-metric--failures,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-workflows-toolbar-metric--failures,
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-workflows-toolbar-metric--failures,
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-workflows-toolbar-metric--failures {
+  padding-left: 7px;
+  margin-left: 2px;
+  border-left: 2px solid color-mix(in srgb, #bc4300 55%, transparent);
+  border-radius: 3px 0 0 3px;
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-workflows-toolbar-metric--failures .adminv2-ws-dept-workflows-toolbar-metric-label,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-workflows-toolbar-metric--failures .adminv2-ws-dept-workflows-toolbar-metric-label,
+[data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-workflows-toolbar-metric--failures .adminv2-ws-dept-workflows-toolbar-metric-label,
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-workflows-toolbar-metric--failures .adminv2-ws-dept-workflows-toolbar-metric-label {
+  color: color-mix(in srgb, #92400e 35%, var(--d-muted));
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-workflows-toolbar-metric--failures .adminv2-ws-dept-workflows-toolbar-metric-value,
@@ -1791,6 +2081,21 @@
   transform-origin: top center;
 }
 
+/* Opportunity drawer: one-shot soft emphasis when full hydration replaces `drawer_initial`. */
+@keyframes adminv2-opportunity-hydrate-flash {
+  0% {
+    opacity: 0.92;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+.adminv2-opportunity-drawer-hydrate-flash {
+  animation: adminv2-opportunity-hydrate-flash 260ms ease-out both;
+}
+
 @keyframes ws-loading-spin {
   to {
     transform: rotate(360deg);
@@ -1861,6 +2166,51 @@
 
   100% {
     transform: translateX(320%);
+  }
+}
+
+/* Unified route loading card — sliding highlight (pairs with AdminV2RouteLoadingState). */
+.adminv2-route-loading-track {
+  position: relative;
+  overflow: hidden;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--d-muted, #6b7280) 14%, transparent);
+  height: 6px;
+  width: 100%;
+  max-width: 12rem;
+}
+
+.adminv2-route-loading-track__bar {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 42%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--d-accent, #00a283) 50%, transparent),
+    transparent
+  );
+  animation: adminv2-route-loading-track-slide 1.2s ease-in-out infinite;
+}
+
+@keyframes adminv2-route-loading-track-slide {
+  0% {
+    transform: translateX(-115%);
+  }
+
+  100% {
+    transform: translateX(310%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .adminv2-route-loading-track__bar {
+    animation: none;
+    left: 0;
+    right: 0;
+    width: 100%;
+    opacity: 0.45;
   }
 }
 
@@ -2011,25 +2361,26 @@
   opacity: 1;
 }
 
-/* Dept overview: framed attention block uses same outer card geometry as throughput panel (but amber rail). */
+/* Dept overview: framed attention — exception rail, minimal warm fill (reserve amber for badges/text). */
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-attention-panel.adminv2-ws-dept-attention-panel--framed.adminv2-ws-dept-qsec--secondary {
   border-left: none;
   padding: 12px 14px 14px;
   margin: 8px 10px 10px 8px;
   border-radius: 9px;
-  border: 1px solid color-mix(in srgb, #bc4300 22%, var(--d-border));
-  border-left: 3px solid color-mix(in srgb, #bc4300 72%, var(--d-border));
-  border-top: 1px solid color-mix(in srgb, #bc4300 12%, transparent);
+  border: 1px solid color-mix(in srgb, #bc4300 14%, var(--d-border));
+  border-left: 4px solid color-mix(in srgb, #bc4300 72%, var(--d-border));
+  border-top: 1px solid color-mix(in srgb, var(--d-text-primary) 6%, transparent);
   background: linear-gradient(165deg,
-      color-mix(in srgb, #ffffff 93%, var(--d-surface)) 0%,
-      color-mix(in srgb, #ffffff 86%, var(--d-panel)) 46%,
-      color-mix(in srgb, #bc4300 7%, var(--d-surface)) 100%);
+      #ffffff 0%,
+      color-mix(in srgb, #ffffff 92%, var(--d-panel-quiet)) 50%,
+      color-mix(in srgb, #8c4524 3.8%, var(--d-surface)) 100%);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.82),
-    0 1px 3px rgba(39, 63, 82, 0.05);
+    0 1px 3px rgba(39, 63, 82, 0.05),
+    inset 0 0 0 1px color-mix(in srgb, #bc4300 6%, transparent);
 }
 
-/* Rollup attention card — mirror throughput-panel framing + tinted wash */
+/* Rollup attention card — cooler shell; semantic weight on rail + type, not full amber panel */
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-attention-panel.adminv2-ws-dept-rollup-lane.adminv2-ws-dept-qsec--secondary,
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-attention-panel.adminv2-ws-dept-rollup-lane.adminv2-ws-dept-qsec--secondary,
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-attention-panel.adminv2-ws-dept-rollup-lane.adminv2-ws-dept-qsec--secondary,
@@ -2037,12 +2388,13 @@
   padding: 12px 14px 14px;
   margin: 8px 10px 10px 8px;
   border-radius: 9px;
-  border: 1px solid color-mix(in srgb, #bc4300 22%, var(--d-border));
-  border-left: 3px solid color-mix(in srgb, #bc4300 72%, var(--d-border));
+  border: 1px solid color-mix(in srgb, var(--d-text-primary) 14%, var(--d-border));
+  border-left: 3px solid color-mix(in srgb, #8c4524 82%, var(--d-border));
+  border-top: 1px solid color-mix(in srgb, var(--d-text-primary) 6%, transparent);
   background: linear-gradient(165deg,
-      color-mix(in srgb, #ffffff 93%, var(--d-surface)) 0%,
-      color-mix(in srgb, #ffffff 86%, var(--d-panel)) 46%,
-      color-mix(in srgb, #bc4300 7%, var(--d-surface)) 100%);
+      #ffffff 0%,
+      color-mix(in srgb, #ffffff 92%, var(--d-panel-quiet)) 50%,
+      color-mix(in srgb, #8c4524 3.8%, var(--d-surface)) 100%);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.82),
     0 1px 3px rgba(39, 63, 82, 0.05);
@@ -2140,8 +2492,8 @@
   gap: 8px;
   flex: 1;
   min-height: 0;
-  max-height: var(--ws-dept-secondary-queue-list-max-height);
-  overflow: auto;
+  max-height: none;
+  overflow: visible;
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-attention-card,
@@ -2615,6 +2967,9 @@
   [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-command-column {
     border-top: 1px solid color-mix(in srgb, var(--d-border) 70%, transparent);
     padding-top: var(--ws-dept-section-gap);
+    position: static;
+    max-height: none;
+    overflow-y: visible;
   }
 
   [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-operational-row,
@@ -3544,7 +3899,7 @@
   display: flex;
   flex-direction: column;
   gap: 0;
-  overflow: auto;
+  overflow: visible;
   min-height: 0;
   border-radius: 4px;
 }
@@ -3554,9 +3909,8 @@
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-qsec--primary .adminv2-ws-queue-list:not(.adminv2-ws-throughput-queue-list),
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-qsec--primary .adminv2-ws-queue-list:not(.adminv2-ws-throughput-queue-list) {
   flex: 0 1 auto;
-  max-height: var(--ws-dept-primary-queue-list-max-height);
-  border: 1px solid color-mix(in srgb, var(--d-pine) 24%, var(--d-border));
-  background: color-mix(in srgb, var(--d-surface) 30%, transparent);
+  border: 1px solid color-mix(in srgb, var(--d-border) 65%, transparent);
+  background: #ffffff;
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-qsec--secondary .adminv2-ws-queue-list,
@@ -3564,10 +3918,9 @@
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-qsec--secondary .adminv2-ws-queue-list,
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-qsec--secondary .adminv2-ws-queue-list {
   flex: 0 1 auto;
-  max-height: var(--ws-dept-secondary-queue-list-max-height);
-  border: 1px dashed color-mix(in srgb, #bc4300 30%, var(--d-border));
-  background: color-mix(in srgb, var(--d-surface) 16%, transparent);
-  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, #bc4300 18%, var(--d-border));
+  background: color-mix(in srgb, #ffffff 94%, var(--d-surface));
+  border-radius: 4px;
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-queue-row,
@@ -3598,7 +3951,7 @@
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-row:hover,
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-queue-row:hover,
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-queue-row:hover {
-  background: color-mix(in srgb, var(--d-brand) 5%, var(--d-panel));
+  background: color-mix(in srgb, var(--d-pine) 4%, var(--d-panel));
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-qsec--secondary .adminv2-ws-queue-row:hover,
@@ -4777,9 +5130,26 @@
 /* Team / Finance / Systems — quieter, more white, still interactive */
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-company-dept-tile[data-ws-company-dept-tone="neutral"] {
   background: linear-gradient(168deg,
-      color-mix(in srgb, #273f52 1.2%, #ffffff) 0%,
-      color-mix(in srgb, #ffffff 97%, var(--d-surface)) 100%);
-  border-left-color: color-mix(in srgb, var(--d-border) 78%, transparent);
+      color-mix(in srgb, var(--vc-label-accent, var(--d-pine)) 2.4%, #ffffff) 0%,
+      color-mix(in srgb, #ffffff 96%, var(--d-surface)) 58%,
+      color-mix(in srgb, #ffffff 91%, var(--d-panel-quiet)) 100%);
+  border-left-color: color-mix(in srgb, var(--vc-label-accent, var(--d-pine)) 22%, var(--d-border));
+}
+
+/* Primary-row departments — stronger intentional accent (operations / growth pillar) */
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-company-dept-tile[data-ws-company-dept-tier="primary"] {
+  box-shadow:
+    0 1px 2px rgba(39, 63, 82, 0.06),
+    0 0 0 1px color-mix(in srgb, var(--vc-label-accent, var(--d-pine)) 8%, transparent),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-company-dept-tile[data-ws-company-dept-tier="primary"]:hover {
+  border-color: color-mix(in srgb, var(--vc-label-accent, var(--d-pine)) 22%, var(--d-border));
+}
+
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-company-dept-tile[data-ws-company-dept-tone="neutral"][data-ws-company-dept-tier="secondary"] {
+  opacity: 0.97;
 }
 
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-company-dept-tile:hover {
@@ -4805,7 +5175,7 @@
 }
 
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-company-dept-tile[data-ws-company-dept-tone="neutral"]:hover {
-  border-left-color: color-mix(in srgb, #273f52 28%, var(--d-border));
+  border-left-color: color-mix(in srgb, var(--vc-label-accent, var(--d-pine)) 38%, var(--d-border));
 }
 
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-company-dept-tile:focus-visible {
@@ -4818,6 +5188,12 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 10px;
+}
+
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-company-dept-tile--workspace-root .adminv2-ws-company-dept-tile-head {
+  padding-bottom: 8px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid color-mix(in srgb, var(--d-brand) 12%, var(--d-border));
 }
 
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-company-dept-tile-name {
@@ -4990,11 +5366,6 @@
   }
 }
 
-/* --- Work unit — lane queue (structured cards, not rollup / not dense table) --- */
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2 {
-  --ws-dept-primary-queue-list-max-height: min(52vh, 520px);
-}
-
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-shell.adminv2-ws-dept-qsec--primary {
   border-bottom: none;
   padding-bottom: 6px;
@@ -5007,9 +5378,9 @@
   font-variant-numeric: tabular-nums;
   padding: 3px 9px;
   border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--d-pine) 28%, var(--d-border));
-  color: color-mix(in srgb, var(--d-pine) 55%, var(--d-muted));
-  background: color-mix(in srgb, var(--d-pine) 8%, var(--d-surface));
+  border: 1px solid color-mix(in srgb, var(--d-brand) 16%, color-mix(in srgb, var(--d-pine) 22%, var(--d-border)));
+  color: color-mix(in srgb, var(--d-muted) 42%, color-mix(in srgb, var(--d-brand) 18%, var(--d-text-primary, #273f52)));
+  background: color-mix(in srgb, var(--d-brand) 6%, color-mix(in srgb, var(--d-pine) 6%, var(--d-surface)));
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-summary {
@@ -5034,15 +5405,25 @@
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-list {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  padding: 1px 2px 3px;
+  gap: 6px;
+  padding: 6px 8px 8px;
   list-style: none;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--d-brand) 12%, color-mix(in srgb, var(--vc-label-accent, var(--d-pine)) 12%, var(--d-border)));
+  background: linear-gradient(180deg,
+      color-mix(in srgb, #ffffff 96%, var(--d-brand)) 0%,
+      color-mix(in srgb, #ffffff 97%, var(--d-surface)) 100%);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-list:has(> .adminv2-ws-wu-queue-empty-wrap:only-child) {
+  gap: 0;
+  padding: 4px 6px 6px;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-item-wrap {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 6px;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-section-label {
@@ -5063,36 +5444,53 @@
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card {
-  border-radius: 5px;
-  border: 1px solid color-mix(in srgb, var(--d-border) 82%, transparent);
-  background: color-mix(in srgb, #ffffff 96%, var(--d-surface));
-  box-shadow: none;
-  padding: 3px 5px 4px;
-  border-left-width: 2px;
-  border-left-color: color-mix(in srgb, var(--d-pine) 35%, var(--d-border));
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--vc-label-accent, var(--d-pine)) 18%, var(--d-border));
+  background: linear-gradient(172deg,
+      #ffffff 0%,
+      color-mix(in srgb, var(--vc-section-panel-wash, color-mix(in srgb, var(--d-pine) 7%, var(--d-surface))) 55%, #ffffff) 100%);
+  box-shadow:
+    0 1px 2px rgba(39, 63, 82, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  padding: 3px 6px 4px;
+  border-left-width: 1px;
+  border-left-color: color-mix(in srgb, var(--d-pine) 28%, var(--d-border));
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card--tier-critical {
-  border-left-color: color-mix(in srgb, #8c3300 72%, var(--d-border));
-  background: color-mix(in srgb, #bc4300 4.5%, var(--d-surface));
+  border-left-width: 3px;
+  border-left-color: color-mix(in srgb, #8c3300 88%, var(--d-border));
+  border-color: color-mix(in srgb, #bc4300 20%, var(--d-border));
+  background: linear-gradient(172deg,
+      color-mix(in srgb, #ffffff 96%, #bc4300) 0%,
+      color-mix(in srgb, var(--vc-section-panel-wash, var(--d-surface)) 82%, #bc4300) 100%);
+  box-shadow:
+    0 1px 2px rgba(39, 63, 82, 0.04),
+    inset 3px 0 0 color-mix(in srgb, #bc4300 20%, transparent);
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card--tier-warning {
-  border-left-color: color-mix(in srgb, #bc4300 45%, var(--d-border));
+  border-left-width: 3px;
+  border-left-color: color-mix(in srgb, #bc4300 58%, var(--d-border));
+  border-color: color-mix(in srgb, #bc4300 14%, var(--d-border));
+  box-shadow:
+    0 1px 2px rgba(39, 63, 82, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    inset 3px 0 0 color-mix(in srgb, var(--d-admin-amber) 28%, transparent);
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card--tier-standard {
-  border-left-color: color-mix(in srgb, var(--d-pine) 42%, var(--d-border));
+  border-left-color: color-mix(in srgb, var(--d-brand) 20%, color-mix(in srgb, var(--d-pine) 34%, var(--d-border)));
 }
 
 /* Work unit — inbox-style row: exactly two text lines + value + Open */
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card--compact {
   display: flex;
   flex-direction: row;
-  align-items: flex-start;
+  align-items: stretch;
   justify-content: space-between;
-  gap: 8px;
-  padding: 4px 6px 5px;
+  gap: 10px;
+  padding: 6px 9px 6px;
   min-height: 0;
 }
 
@@ -5104,82 +5502,315 @@
   gap: 1px;
 }
 
-/* CRM-compact semantic row — slots map 1:1 to `CrmCompactRowSemanticSlots` for config. */
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-enrollment-crm-preview {
+/*
+ * CRM-compact queue preview — zone layout (legacy class `adminv2-ws-enrollment-crm-preview` kept on root for tooling).
+ */
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-enrollment-crm-preview.adminv2-ws-crm-queue-preview {
   flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
   padding-right: 2px;
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-enrollment-crm-preview__identity {
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__body {
+  display: grid;
+  grid-template-columns: minmax(0, min(38%, 9.75rem)) minmax(10rem, 1fr);
+  gap: 8px 12px;
+  align-items: start;
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__body--identity-only {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__zone--left {
+  min-width: 0;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__zone--middle {
+  min-width: 0;
+  padding-left: 8px;
+  border-left: 1px solid color-mix(in srgb, var(--d-brand) 14%, color-mix(in srgb, var(--d-border) 88%, transparent));
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+@media (max-width: 720px) {
+  [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__zone--middle {
+    padding-left: 0;
+    border-left: none;
+    padding-top: 4px;
+    border-top: 1px solid color-mix(in srgb, var(--d-border) 35%, transparent);
+  }
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-empty-panel {
+  border-radius: 6px;
+  border: 1px dashed color-mix(in srgb, var(--d-border) 55%, transparent);
+  border-left: 2px solid color-mix(in srgb, var(--d-brand) 28%, var(--d-border));
+  background: linear-gradient(90deg,
+      color-mix(in srgb, var(--d-brand) 5%, var(--d-surface)) 0%,
+      color-mix(in srgb, var(--d-panel-quiet) 55%, var(--d-surface)) 100%);
+  padding: 8px 10px 8px 11px;
+  text-align: left;
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--d-admin-amber) 4%, transparent);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-empty-title {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 780;
+  letter-spacing: -0.02em;
+  color: var(--d-text-primary, #273f52);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-empty-queue {
+  margin: 4px 0 0;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.35;
+  color: color-mix(in srgb, var(--d-muted) 62%, color-mix(in srgb, var(--d-brand) 22%, var(--d-text-primary, #273f52)));
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-empty-wrap {
+  list-style: none;
+  margin: 0;
+  padding: 2px 0 0;
+  align-self: stretch;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 6px;
+  min-width: 0;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__title {
   font-size: 11px;
   font-weight: 800;
   line-height: 1.22;
   letter-spacing: -0.02em;
   color: var(--d-text-primary, #273f52);
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-enrollment-crm-preview__child {
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__status-pill {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 5px;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--vc-label-accent, var(--d-pine)) 38%, var(--d-border));
+  background: color-mix(in srgb, var(--vc-label-accent, var(--d-pine)) 14%, var(--d-surface));
+  color: color-mix(in srgb, var(--d-text-primary) 88%, var(--vc-label-accent, var(--d-pine)));
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__status-pill--urgency-warning {
+  border-color: color-mix(in srgb, #bc4300 52%, var(--d-border));
+  background: color-mix(in srgb, #bc4300 7%, var(--d-surface));
+  color: color-mix(in srgb, #4a2100 70%, var(--d-text-primary, #273f52));
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--d-admin-amber) 42%, transparent);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__status-pill--urgency-critical {
+  border-color: color-mix(in srgb, #8c3300 58%, transparent);
+  background: color-mix(in srgb, #bc4300 9%, var(--d-surface));
+  color: color-mix(in srgb, #3d1700 75%, var(--d-text-primary, #273f52));
+  box-shadow: inset 3px 0 0 color-mix(in srgb, #bc4300 38%, transparent);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__next-strip {
+  margin-top: 3px;
+  padding: 4px 6px 5px;
+  border-radius: 4px;
+  border: 1px solid color-mix(in srgb, var(--vc-label-accent, var(--d-pine)) 28%, var(--d-border));
+  border-left-width: 2px;
+  border-left-color: var(--vc-label-accent, color-mix(in srgb, var(--d-pine) 82%, transparent));
+  background: color-mix(in srgb, var(--vc-section-panel-wash, color-mix(in srgb, var(--d-pine) 7%, var(--d-surface))) 80%, transparent);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__next-value {
+  display: block;
   font-size: 10px;
-  font-weight: 600;
+  font-weight: 750;
+  line-height: 1.35;
+  letter-spacing: -0.015em;
+  color: var(--d-text-primary, #273f52);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__next-caption {
+  display: block;
+  margin-top: 2px;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1.25;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--d-muted) 72%, transparent);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__commercial {
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.015em;
+  color: color-mix(in srgb, var(--d-muted) 28%, var(--d-text-primary, #273f52));
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__attention {
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.35;
+  color: color-mix(in srgb, #8c3300 72%, var(--d-text-primary, #273f52));
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-preview-stale {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  margin-top: 3px;
+  padding: 2px 5px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-preview-stale--high {
+  border: 1px solid color-mix(in srgb, #8c3300 35%, transparent);
+  background: color-mix(in srgb, #8c3300 8%, transparent);
+  color: color-mix(in srgb, #8c3300 92%, var(--d-text-primary, #273f52));
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-preview-stale--medium {
+  border: 1px solid color-mix(in srgb, #f59e0b 42%, transparent);
+  background: color-mix(in srgb, #f59e0b 12%, transparent);
+  color: #78350f;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-preview-stale--low {
+  border: 1px solid color-mix(in srgb, var(--d-border) 55%, transparent);
+  background: color-mix(in srgb, var(--d-muted) 6%, transparent);
   color: color-mix(in srgb, var(--d-muted) 35%, var(--d-text-primary, #273f52));
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-enrollment-crm-preview__stage {
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
   font-size: 10px;
-  font-weight: 600;
-  line-height: 1.25;
-  color: color-mix(in srgb, var(--d-muted) 45%, var(--d-text-primary, #273f52));
+  line-height: 1.32;
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-enrollment-crm-preview__ops {
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__group--children-stack {
+  padding: 4px 0 2px;
+  margin-top: 1px;
+  border-top: 1px solid color-mix(in srgb, var(--d-border) 55%, transparent);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__children-mini {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.25em 0.35em;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__child-mini {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+  padding: 3px 0 3px 8px;
+  border-left: 2px solid color-mix(in srgb, var(--d-brand) 15%, transparent);
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.28;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__child-mini--more {
+  border-left-color: color-mix(in srgb, var(--d-muted) 28%, transparent);
+  font-weight: 650;
+  color: color-mix(in srgb, var(--d-muted) 42%, transparent);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__child-mini-primary {
+  font-weight: 670;
+  color: color-mix(in srgb, var(--d-muted) 14%, var(--d-text-primary, #273f52));
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__child-mini-secondary {
+  margin-top: 1px;
+  font-size: 9px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--d-muted) 54%, transparent);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__gk {
+  font-weight: 670;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+  font-size: 8px;
+  color: color-mix(in srgb, var(--d-muted) 58%, transparent);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__gv {
+  font-size: 10px;
+  font-weight: 650;
+  color: color-mix(in srgb, var(--d-muted) 18%, var(--d-text-primary, #273f52));
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__footer {
+  margin-top: 2px;
+  padding-top: 4px;
+  border-top: 1px solid color-mix(in srgb, var(--d-border) 42%, transparent);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__footer--stress .adminv2-ws-crm-queue-preview__footer-notes .adminv2-ws-crm-queue-preview__gv {
+  font-style: italic;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__footer-notes {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
   font-size: 10px;
   line-height: 1.35;
-  color: color-mix(in srgb, var(--d-muted) 50%, var(--d-text-primary, #273f52));
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-enrollment-crm-preview__k {
-  font-weight: 700;
-  margin-right: 0.15em;
-}
-
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-enrollment-crm-preview__sep {
-  color: color-mix(in srgb, var(--d-muted) 55%, transparent);
-  font-weight: 800;
-}
-
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-enrollment-crm-preview__care,
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-enrollment-crm-preview__tour,
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-enrollment-crm-preview__contact {
-  font-size: 10px;
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__footer-activity {
+  font-size: 9px;
   font-weight: 600;
-  line-height: 1.3;
-  color: color-mix(in srgb, var(--d-muted) 42%, var(--d-text-primary, #273f52));
-}
-
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-enrollment-crm-preview__attention {
-  font-size: 10px;
-  font-weight: 700;
-  color: color-mix(in srgb, #8c3300 75%, var(--d-text-primary, #273f52));
-}
-
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-enrollment-crm-preview__note {
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 1.3;
-  color: color-mix(in srgb, var(--d-muted) 42%, var(--d-text-primary, #273f52));
-  font-style: normal;
-}
-
-[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-enrollment-crm-preview__note--stress {
-  font-style: italic;
+  line-height: 1.35;
+  color: color-mix(in srgb, var(--d-muted) 48%, transparent);
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card-title--compact {
@@ -5306,15 +5937,44 @@
   border-radius: 6px;
   width: 100%;
   text-align: center;
+  border: 1px solid color-mix(in srgb, var(--d-brand) 18%, color-mix(in srgb, var(--d-border) 86%, transparent));
+  background: linear-gradient(180deg,
+      color-mix(in srgb, var(--d-surface) 90%, var(--d-brand)) 0%,
+      color-mix(in srgb, var(--d-panel-quiet) 74%, transparent) 100%);
+  color: color-mix(in srgb, var(--d-muted) 24%, color-mix(in srgb, var(--d-text-primary, #273f52) 88%, var(--d-brand)));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.65),
+    inset 0 0 0 1px color-mix(in srgb, var(--d-brand) 4%, transparent);
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease,
+    color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-enrollment-crm-row .adminv2-ws-wu-queue-action-chip.adminv2-ws-wu-queue-action-chip--quiet:hover {
+  border-color: color-mix(in srgb, var(--d-brand) 42%, var(--d-border));
+  background: linear-gradient(180deg,
+      color-mix(in srgb, var(--d-surface) 84%, var(--d-brand)) 0%,
+      color-mix(in srgb, var(--d-panel-quiet) 72%, transparent) 100%);
+  color: color-mix(in srgb, var(--d-muted) 14%, var(--d-text-primary, #273f52));
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-enrollment-crm-row .adminv2-ws-wu-queue-action-chip.adminv2-ws-wu-queue-action-chip--quiet:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--d-brand) 48%, transparent);
+  outline-offset: 1px;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-enrollment-crm-row .adminv2-ws-wu-queue-action-chip.adminv2-ws-wu-queue-action-chip--open {
-  min-height: 28px;
-  padding: 4px 10px;
+  min-height: 30px;
+  padding: 5px 10px;
   font-size: 10px;
+  font-weight: 780;
   border-radius: 6px;
   width: 100%;
   text-align: center;
+  border: 1px solid color-mix(in srgb, var(--vc-label-accent, var(--d-pine)) 38%, var(--d-border));
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--vc-label-accent, var(--d-pine)) 12%, transparent);
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card-tags {
@@ -5389,14 +6049,37 @@
   font-weight: 650;
   letter-spacing: 0.01em;
   text-transform: none;
-  border-radius: 4px;
-  border: 1px solid color-mix(in srgb, var(--d-border) 58%, transparent);
-  background: color-mix(in srgb, var(--d-panel-quiet) 28%, transparent);
-  color: color-mix(in srgb, var(--d-muted) 22%, var(--d-text-primary, #273f52));
+  border-radius: 5px;
+  border: 1px solid color-mix(in srgb, var(--d-brand) 16%, color-mix(in srgb, var(--d-border) 90%, transparent));
+  background: linear-gradient(180deg,
+      color-mix(in srgb, var(--d-surface) 90%, var(--d-brand)) 0%,
+      color-mix(in srgb, var(--d-panel-quiet) 74%, transparent) 100%);
+  color: color-mix(in srgb, var(--d-muted) 24%, color-mix(in srgb, var(--d-text-primary, #273f52) 90%, var(--d-brand)));
   flex: 0 0 auto;
   white-space: nowrap;
   line-height: 1.15;
   overflow: visible;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.65),
+    inset 0 0 0 1px color-mix(in srgb, var(--d-brand) 3%, transparent);
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease,
+    color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-action-chip--quiet:hover {
+  border-color: color-mix(in srgb, var(--d-brand) 38%, var(--d-border));
+  background: linear-gradient(180deg,
+      color-mix(in srgb, var(--d-surface) 82%, var(--d-brand)) 0%,
+      color-mix(in srgb, var(--d-panel-quiet) 72%, transparent) 100%);
+  color: color-mix(in srgb, var(--d-muted) 12%, var(--d-text-primary, #273f52));
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-action-chip--quiet:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--d-brand) 45%, transparent);
+  outline-offset: 1px;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-value--compact {
@@ -5677,13 +6360,16 @@
   font-weight: 650;
   letter-spacing: 0.01em;
   text-transform: none;
-  border-radius: 4px;
-  border: 1px solid color-mix(in srgb, var(--d-border) 58%, transparent);
-  background: color-mix(in srgb, var(--d-panel-quiet) 28%, transparent);
-  color: color-mix(in srgb, var(--d-muted) 22%, var(--d-text-primary, #273f52));
+  border-radius: 5px;
+  border: 1px solid color-mix(in srgb, var(--vc-label-accent, var(--d-pine)) 34%, var(--d-border));
+  background: linear-gradient(180deg,
+      color-mix(in srgb, var(--d-surface) 88%, var(--vc-label-accent, var(--d-pine))) 0%,
+      color-mix(in srgb, var(--d-panel-quiet) 72%, transparent) 100%);
+  color: color-mix(in srgb, var(--d-muted) 28%, var(--d-text-primary, #273f52));
   white-space: nowrap;
   line-height: 1.15;
   overflow: visible;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-action-chip.adminv2-ws-wu-queue-action-chip--open {
@@ -5710,8 +6396,10 @@
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-action-chip--quiet:hover {
-  border-color: color-mix(in srgb, var(--d-border) 72%, transparent);
-  background: color-mix(in srgb, var(--d-panel-quiet) 42%, transparent);
+  border-color: color-mix(in srgb, var(--vc-label-accent, var(--d-pine)) 52%, var(--d-border));
+  background: linear-gradient(180deg,
+      color-mix(in srgb, var(--d-surface) 82%, var(--vc-label-accent, var(--d-pine))) 0%,
+      color-mix(in srgb, var(--d-panel-quiet) 68%, transparent) 100%);
   color: color-mix(in srgb, var(--d-muted) 12%, var(--d-text-primary, #273f52));
 }
 
@@ -6381,6 +7069,328 @@
 [data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2-top]>p:first-of-type {
   color: color-mix(in srgb, rgba(39, 63, 82, 0.58) 72%, var(--vc-label-accent, rgba(39, 63, 82, 0.2)) 28%) !important;
   letter-spacing: 0.13em !important;
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 [data-workspace-zone="context-lower"] {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--d-brand) 15%, var(--d-border));
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-workflows-strip[data-ws-lane-kind="automation_workflows"] {
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--d-brand) 14%, var(--d-border));
+}
+
+/* -------------------------------------------------------------------------- */
+/* Automation telemetry — AutomationWorkflowsBlock (dept context + WU footer)   */
+/* -------------------------------------------------------------------------- */
+[data-ws-surface="department"].adminv2-ws-dept-v2 [data-workspace-zone="context-lower"] .adminv2-ws-automation-telemetry,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-workflows-strip[data-ws-lane-kind="automation_workflows"] .adminv2-ws-automation-telemetry {
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--d-brand) 22%, var(--d-border));
+  border-left: 3px solid color-mix(in srgb, var(--d-brand) 55%, var(--d-border));
+  background: linear-gradient(165deg,
+      color-mix(in srgb, #ffffff 97%, var(--d-brand)) 0%,
+      color-mix(in srgb, var(--d-surface) 91%, var(--d-panel-quiet)) 52%,
+      color-mix(in srgb, var(--d-brand) 3.5%, var(--d-surface)) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 1px 3px rgba(39, 63, 82, 0.05);
+  padding: 12px 14px 14px 13px;
+}
+
+.adminv2-ws-automation-telemetry__mast {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 12px;
+  padding: 0 0 10px 16px;
+  border-bottom: none;
+  border-left: 2px solid color-mix(in srgb, var(--d-brand) 28%, transparent);
+  background: linear-gradient(180deg,
+      color-mix(in srgb, #ffffff 94%, var(--d-brand)) 0%,
+      transparent 92%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    0 1px 0 color-mix(in srgb, var(--d-brand) 14%, var(--d-border));
+}
+
+.adminv2-ws-automation-telemetry__kicker {
+  margin: 0 0 4px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--d-muted) 28%, var(--d-brand));
+}
+
+.adminv2-ws-automation-telemetry__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.18;
+  color: color-mix(in srgb, var(--d-text-primary, #18273a) 88%, var(--d-brand));
+}
+
+.adminv2-ws-automation-telemetry__subtitle {
+  margin: 4px 0 0;
+  max-width: 40rem;
+  font-size: 11px;
+  line-height: 1.4;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--d-muted) 55%, var(--d-text-primary, #273f52));
+}
+
+.adminv2-ws-automation-telemetry__review {
+  flex-shrink: 0;
+  align-self: center;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 6px 11px;
+  border-radius: 6px;
+  text-decoration: none;
+  color: #fff;
+  background: color-mix(in srgb, var(--d-brand) 94%, #0f2744);
+  border: 1px solid color-mix(in srgb, var(--d-brand) 40%, var(--d-border));
+  box-shadow: 0 1px 2px rgba(0, 40, 92, 0.12);
+}
+
+.adminv2-ws-automation-telemetry__review:hover {
+  filter: brightness(1.04);
+}
+
+.adminv2-ws-automation-telemetry__review:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--d-brand) 42%, transparent);
+  outline-offset: 2px;
+}
+
+.adminv2-ws-automation-telemetry__groups {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+@media (min-width: 520px) {
+  .adminv2-ws-automation-telemetry__groups {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+}
+
+.adminv2-ws-automation-telemetry__group {
+  margin: 0;
+  padding: 8px 10px 10px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--d-border) 88%, transparent);
+  background: color-mix(in srgb, var(--d-panel-quiet) 18%, #ffffff);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.88);
+}
+
+.adminv2-ws-automation-telemetry__group-title {
+  margin: 0 0 8px;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--d-muted) 35%, var(--d-brand));
+}
+
+.adminv2-ws-automation-telemetry__group-cells {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.adminv2-ws-automation-telemetry__metric {
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--d-brand) 10%, var(--d-border));
+  background: linear-gradient(180deg,
+      color-mix(in srgb, #ffffff 94%, var(--d-brand)) 0%,
+      color-mix(in srgb, var(--d-surface) 96%, var(--d-brand)) 100%);
+}
+
+.adminv2-ws-automation-telemetry__metric--attention {
+  border-color: color-mix(in srgb, #bc4300 38%, var(--d-border));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, #bc4300 8%, transparent),
+    inset 2px 0 0 color-mix(in srgb, #bc4300 22%, transparent);
+}
+
+.adminv2-ws-automation-telemetry__metric--watch {
+  border-color: color-mix(in srgb, var(--d-admin-amber) 42%, var(--d-border));
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--d-admin-amber) 10%, transparent),
+    inset 2px 0 0 color-mix(in srgb, var(--d-admin-amber) 24%, transparent);
+}
+
+.adminv2-ws-automation-telemetry__metric-label {
+  display: block;
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--d-muted) 55%, var(--d-text-primary, #273f52));
+}
+
+.adminv2-ws-automation-telemetry__metric-value {
+  display: block;
+  margin-top: 4px;
+  font-size: 19px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+  color: color-mix(in srgb, var(--d-text-primary, #273f52) 70%, var(--d-brand));
+}
+
+.adminv2-ws-automation-telemetry__metric--attention .adminv2-ws-automation-telemetry__metric-value {
+  color: color-mix(in srgb, #7c2d00 45%, var(--d-text-primary, #273f52));
+}
+
+.adminv2-ws-automation-telemetry__metric-value--pulse {
+  animation: adminv2-ws-automation-pulse 1.15s ease-in-out infinite;
+}
+
+@keyframes adminv2-ws-automation-pulse {
+  0%, 100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.65;
+  }
+}
+
+.adminv2-ws-automation-telemetry__workflows {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--d-brand) 12%, var(--d-border));
+}
+
+.adminv2-ws-automation-telemetry__workflows-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  margin: 0 0 8px;
+}
+
+.adminv2-ws-automation-telemetry__workflows-kicker {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--d-muted) 22%, var(--d-brand));
+}
+
+.adminv2-ws-automation-telemetry__workflows-hint {
+  font-size: 10px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--d-muted) 72%, transparent);
+}
+
+.adminv2-ws-automation-telemetry__workflow-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.adminv2-ws-automation-workflow-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  min-width: 0;
+  padding: 0;
+  border-radius: 7px;
+  border: 1px solid color-mix(in srgb, var(--d-brand) 12%, var(--d-border));
+  background: linear-gradient(90deg,
+      color-mix(in srgb, var(--d-brand) 5%, #ffffff) 0%,
+      color-mix(in srgb, #ffffff 98%, var(--d-surface)) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.92);
+}
+
+.adminv2-ws-automation-workflow-row__rail {
+  width: 3px;
+  flex-shrink: 0;
+  border-radius: 7px 0 0 7px;
+  background: linear-gradient(180deg,
+      color-mix(in srgb, var(--d-brand) 55%, transparent) 0%,
+      color-mix(in srgb, var(--d-pine) 28%, transparent) 100%);
+}
+
+.adminv2-ws-automation-workflow-row__body {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  justify-content: center;
+}
+
+.adminv2-ws-automation-workflow-row__name {
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.22;
+  color: var(--d-text-primary, #18273a);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adminv2-ws-automation-workflow-row__meta {
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: color-mix(in srgb, var(--d-muted) 58%, var(--d-text-primary, #273f52));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adminv2-ws-automation-workflow-row__sep {
+  margin: 0 0.3em;
+  color: color-mix(in srgb, var(--d-muted) 70%, transparent);
+}
+
+.adminv2-ws-automation-workflow-row__chip {
+  flex-shrink: 0;
+  align-self: center;
+  margin-right: 8px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border: 1px solid transparent;
+}
+
+.adminv2-ws-automation-workflow-row__chip--enabled {
+  border-color: color-mix(in srgb, var(--d-brand) 32%, var(--d-border));
+  color: color-mix(in srgb, var(--d-brand) 12%, var(--d-text-primary, #273f52));
+  background: linear-gradient(180deg,
+      color-mix(in srgb, #ffffff 90%, var(--d-brand)) 0%,
+      color-mix(in srgb, var(--d-pine) 14%, color-mix(in srgb, #ffffff 96%, var(--d-brand))) 100%);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--d-pine) 8%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--d-pine) 6%, transparent);
+}
+
+.adminv2-ws-automation-workflow-row__chip--disabled {
+  border-color: color-mix(in srgb, var(--d-muted) 35%, var(--d-border));
+  color: color-mix(in srgb, var(--d-muted) 22%, var(--d-text-primary, #273f52));
+  background: color-mix(in srgb, var(--d-panel-quiet) 40%, var(--d-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--d-border) 60%, transparent);
 }
 
 /* -------------------------------------------------------------------------- */

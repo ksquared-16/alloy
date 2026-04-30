@@ -34,7 +34,9 @@ describe("Queue API routes (thin wrappers)", () => {
                     this.code = c;
                 }
             },
-            getWorkUnitQueueSummaries: vi.fn(async () => [{ key: "all", label: "All", entity_type: "job", priority: "standard", display: "list", count: 0, preview: [] }]),
+            getWorkUnitQueueSummaries: vi.fn(async () => ({
+                queues: [{ key: "all", label: "All", entity_type: "job", priority: "standard", display: "list", count: 0, preview: [] }],
+            })),
         }));
         const { GET } = await import("@/app/api/admin/work-units/[id]/queues/route");
 

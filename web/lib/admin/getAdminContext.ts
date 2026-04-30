@@ -4,9 +4,9 @@
  */
 
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabaseServer";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { fetchPrimaryAdminOpsMembershipForUser } from "@/lib/admin/primaryAdminOpsOrg";
+import { getCachedAuthUserId } from "@/lib/admin/cachedAuthSession";
 
 export type AdminContextSuccess = {
     ok: true;
@@ -28,33 +28,34 @@ export type AdminContextResult = AdminContextSuccess | AdminContextFailure;
  */
 export async function getAdminContext(): Promise<AdminContextResult> {
     try {
-        const supabaseAuth = await createClient();
-
-        /** Prefer getClaims(): verifies JWT locally (JWKS) when asymmetric keys are used — avoids a blocking GET /user on every admin API call. */
-        const claimsRes = await supabaseAuth.auth.getClaims();
-        let userId: string | null = null;
-        if (!claimsRes.error && claimsRes.data?.claims) {
-            const sub = (claimsRes.data.claims as { sub?: unknown }).sub;
-            if (typeof sub === "string" && sub.length > 0) {
-                userId = sub;
-            }
-        }
+        const t0 = Date.now();
+        const userId = await getCachedAuthUserId();
+        const authMs = Date.now() - t0;
         if (!userId) {
-            const { data: authData, error: userErr } = await supabaseAuth.auth.getUser();
-            if (userErr) {
-                console.error("[getAdminContext] auth.getUser error:", userErr);
-            }
-            const uid = authData?.user?.id;
-            if (!uid) {
-                return { ok: false, status: 401 };
-            }
-            userId = uid;
+            return { ok: false, status: 401 };
         }
 
+        const t1 = Date.now();
         const admin = createAdminClient();
         const membership = await fetchPrimaryAdminOpsMembershipForUser(admin, userId);
+        const membershipMs = Date.now() - t1;
         if (!membership) {
+            if (authMs + membershipMs > 400) {
+                console.warn("[admin-context-perf] getAdminContext (no membership)", {
+                    auth_claims_or_user_ms: authMs,
+                    membership_ms: membershipMs,
+                });
+            }
             return { ok: false, status: 403 };
+        }
+
+        const totalMs = Date.now() - t0;
+        if (totalMs > 400) {
+            console.warn("[admin-context-perf] getAdminContext", {
+                auth_claims_or_user_ms: authMs,
+                user_roles_membership_ms: membershipMs,
+                total_ms: totalMs,
+            });
         }
 
         return {

@@ -44,6 +44,9 @@ export type JobPrefill = {
 /** Resolver surface for job entity GET (`?surface=`). Only applied when type === "jobs". */
 export type JobRecordSurfaceParam = "drawer" | "overview" | "full";
 
+/** When opening an opportunity from the AdminV2 queue, lane scope primes `record_header` actions in parallel with `drawer_initial`. */
+export type OpportunityWorkspaceContext = { work_unit_id: string; department_id: string };
+
 interface AdminDrawerState {
     type: AdminDrawerEntityType | null;
     id: string | null;
@@ -63,6 +66,8 @@ interface AdminDrawerState {
     operationalVisualContext?: OperationalVisualContext;
     /** Optional opportunity workflow surface hint (e.g. open quote intake). */
     defaultOpportunitySurface?: "quote_intake";
+    /** Optional queue/work-unit scope for opportunity drawer header actions (see `OpportunityWorkspaceContext`). */
+    opportunityWorkspaceContext?: OpportunityWorkspaceContext | null;
 }
 
 export type DrawerStackItem = {
@@ -76,6 +81,7 @@ export type DrawerStackItem = {
     jobRecordSurface?: JobRecordSurfaceParam;
     operationalVisualContext?: OperationalVisualContext;
     defaultOpportunitySurface?: "quote_intake";
+    opportunityWorkspaceContext?: OpportunityWorkspaceContext | null;
 };
 
 interface AdminDrawerContextValue {
@@ -96,6 +102,7 @@ interface AdminDrawerContextValue {
         jobRecordSurface?: JobRecordSurfaceParam;
         operationalVisualContext?: OperationalVisualContext;
         defaultOpportunitySurface?: "quote_intake";
+        opportunityWorkspaceContext?: OpportunityWorkspaceContext | null;
     }) => void;
     goBack: () => void;
     closeDrawer: () => void;
@@ -125,6 +132,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
             jobRecordSurface?: JobRecordSurfaceParam;
             operationalVisualContext?: OperationalVisualContext;
             defaultOpportunitySurface?: "quote_intake";
+            opportunityWorkspaceContext?: OpportunityWorkspaceContext | null;
         }) => {
             setDrawer((prev) => {
                 const prevType = prev.type;
@@ -143,6 +151,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                             jobRecordSurface: prev.jobRecordSurface,
                             operationalVisualContext: prev.operationalVisualContext,
                             defaultOpportunitySurface: prev.defaultOpportunitySurface,
+                            opportunityWorkspaceContext: prev.opportunityWorkspaceContext,
                         },
                     ]);
                 }
@@ -157,6 +166,8 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                     jobRecordSurface: params.type === "jobs" ? params.jobRecordSurface : undefined,
                     operationalVisualContext: params.operationalVisualContext,
                     defaultOpportunitySurface: params.defaultOpportunitySurface,
+                    opportunityWorkspaceContext:
+                        params.type === "opportunities" ? params.opportunityWorkspaceContext ?? null : null,
                 };
             });
         },
@@ -179,6 +190,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                     jobRecordSurface: item.jobRecordSurface,
                     operationalVisualContext: item.operationalVisualContext,
                     defaultOpportunitySurface: item.defaultOpportunitySurface,
+                    opportunityWorkspaceContext: item.opportunityWorkspaceContext,
                 });
             }
             return next;

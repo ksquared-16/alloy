@@ -134,105 +134,176 @@ function queueQuickActionDispatchId(qa: QueueItemQuickActionVm): string {
   return qa.id;
 }
 
-/** CRM-compact preview — renders only from `CrmCompactRowSemanticSlots` (config-driven). */
-function EnrollmentCrmCompactPreview({ slots }: { slots: CrmCompactRowSemanticSlots }) {
+/** Primary "Open" first for CRM action column scan hierarchy. */
+function orderedQueueQuickActions(actions: QueueItemQuickActionVm[] | undefined): QueueItemQuickActionVm[] {
+  if (!actions?.length) return [];
+  const openIdx = actions.findIndex((qa) => queueQuickActionDispatchId(qa) === "open_record");
+  if (openIdx <= 0) return actions;
+  const next = actions.slice();
+  const [open] = next.splice(openIdx, 1);
+  return [open!, ...next];
+}
+
+/**
+ * CRM-compact queue preview — render-only layout from `CrmCompactRowSemanticSlots`.
+ * Zones: identity+status+next | structured middle | footer note/activity preview (registry fields optional).
+ */
+function CrmCompactQueuePreview({
+  slots,
+  urgencyTier = "standard",
+}: {
+  slots: CrmCompactRowSemanticSlots;
+  urgencyTier?: QueueItemVm["urgencyTier"];
+}) {
   const stageStatus =
     slots.stageLabel && slots.statusLabel && slots.stageLabel !== slots.statusLabel
       ? `${slots.stageLabel} · ${slots.statusLabel}`
       : slots.stageLabel || slots.statusLabel || null;
-  const showOpsLine = Boolean(slots.nextStep || slots.lastActivity);
   const noteStress = Boolean(slots.attentionReason?.trim());
 
-  const staleClass =
+  const staleTone =
     slots.activityStale?.severity === "high"
-      ? "border border-alloy-ember/35 bg-alloy-ember/10 text-alloy-ember font-semibold"
+      ? "adminv2-ws-queue-preview-stale adminv2-ws-queue-preview-stale--high"
       : slots.activityStale?.severity === "medium"
-        ? "border border-amber-300/80 bg-amber-50 text-amber-950 font-semibold"
-        : "border border-alloy-stone/25 bg-alloy-stone/15 text-alloy-forge/80 font-medium";
+        ? "adminv2-ws-queue-preview-stale adminv2-ws-queue-preview-stale--medium"
+        : "adminv2-ws-queue-preview-stale adminv2-ws-queue-preview-stale--low";
+
+  const timingParts: string[] = [];
+  if (slots.ageContext?.trim()) timingParts.push(slots.ageContext.trim());
+  if (slots.tourContext?.trim()) {
+    const t = slots.tourContext.trim();
+    timingParts.push(t.startsWith("Tour:") ? t : `Tour: ${t}`);
+  }
+  const timingLine = timingParts.length ? timingParts.join(" · ") : null;
+
+  const childLines = slots.childrenLines ?? [];
+  const multiChild = childLines.length >= 2;
+  const visibleChildren = childLines.slice(0, 4);
+  const childOverflow = Math.max(0, childLines.length - visibleChildren.length);
+
+  const hasNextStrip = Boolean(slots.nextStep?.trim());
+  const hasMiddle =
+    Boolean(slots.contactSnippet?.trim()) ||
+    Boolean(!multiChild && slots.childName?.trim()) ||
+    multiChild ||
+    Boolean(slots.programContext?.trim()) ||
+    Boolean(slots.roomContext?.trim()) ||
+    Boolean(timingLine);
+
+  const bodyClass =
+    `adminv2-ws-crm-queue-preview__body${hasMiddle ? "" : " adminv2-ws-crm-queue-preview__body--identity-only"}`;
+
+  const hasFooter = Boolean(slots.familyNote?.trim() || slots.lastActivity?.trim());
+
+  const commercial = slots.commercialValue?.trim() ?? "";
 
   return (
-    <div className="adminv2-ws-wu-queue-card-compact-text adminv2-ws-enrollment-crm-preview">
-      <div className="adminv2-ws-enrollment-crm-preview__identity" data-enrollment-crm-slot="primaryIdentity">
-        <span className="adminv2-ws-enrollment-crm-preview__k">Family</span> {slots.primaryIdentity}
+    <div
+      className="adminv2-ws-crm-queue-preview adminv2-ws-enrollment-crm-preview"
+      data-queue-preview="crm_compact"
+    >
+      <div className={bodyClass}>
+        <div className="adminv2-ws-crm-queue-preview__zone adminv2-ws-crm-queue-preview__zone--left">
+          <div className="adminv2-ws-crm-queue-preview__title-row">
+            <span className="adminv2-ws-crm-queue-preview__title" title={slots.primaryIdentity}>
+              {slots.primaryIdentity}
+            </span>
+            {stageStatus ? (
+              <span
+                className={`adminv2-ws-crm-queue-preview__status-pill adminv2-ws-crm-queue-preview__status-pill--urgency-${urgencyTier}`}
+              >
+                {stageStatus}
+              </span>
+            ) : null}
+          </div>
+          {hasNextStrip ? (
+            <div className="adminv2-ws-crm-queue-preview__next-strip" aria-label="Next step">
+              <span className="adminv2-ws-crm-queue-preview__next-value">{slots.nextStep!.trim()}</span>
+              <span className="adminv2-ws-crm-queue-preview__next-caption">Next step</span>
+            </div>
+          ) : null}
+          {commercial ? (
+            <div className="adminv2-ws-crm-queue-preview__commercial">{commercial}</div>
+          ) : null}
+          {slots.attentionReason?.trim() ? (
+            <div className="adminv2-ws-crm-queue-preview__attention">{slots.attentionReason.trim()}</div>
+          ) : null}
+          {slots.activityStale ? <span className={staleTone}>{slots.activityStale.label}</span> : null}
+        </div>
+
+        {hasMiddle ? (
+          <div className="adminv2-ws-crm-queue-preview__zone adminv2-ws-crm-queue-preview__zone--middle">
+            {slots.contactSnippet?.trim() ? (
+              <div className="adminv2-ws-crm-queue-preview__group">
+                <span className="adminv2-ws-crm-queue-preview__gv">{slots.contactSnippet.trim()}</span>
+                <span className="adminv2-ws-crm-queue-preview__gk">Contact</span>
+              </div>
+            ) : null}
+            {multiChild ? (
+              <div className="adminv2-ws-crm-queue-preview__group adminv2-ws-crm-queue-preview__group--children-stack">
+                <span className="adminv2-ws-crm-queue-preview__gk">Children</span>
+                <ul className="adminv2-ws-crm-queue-preview__children-mini" role="list">
+                  {visibleChildren.map((c, idx) => (
+                    <li key={idx} className="adminv2-ws-crm-queue-preview__child-mini">
+                      <span className="adminv2-ws-crm-queue-preview__child-mini-primary">{c.primary}</span>
+                      {c.secondary?.trim() ? (
+                        <span className="adminv2-ws-crm-queue-preview__child-mini-secondary">{c.secondary.trim()}</span>
+                      ) : null}
+                    </li>
+                  ))}
+                  {childOverflow > 0 ? (
+                    <li className="adminv2-ws-crm-queue-preview__child-mini adminv2-ws-crm-queue-preview__child-mini--more">
+                      +{childOverflow} more
+                    </li>
+                  ) : null}
+                </ul>
+              </div>
+            ) : slots.childName?.trim() ? (
+              <div className="adminv2-ws-crm-queue-preview__group">
+                <span className="adminv2-ws-crm-queue-preview__gv">{slots.childName.trim()}</span>
+                <span className="adminv2-ws-crm-queue-preview__gk">
+                  {slots.childName.includes(" · ") ? "Children" : "Child"}
+                </span>
+              </div>
+            ) : null}
+            {slots.programContext?.trim() ? (
+              <div className="adminv2-ws-crm-queue-preview__group">
+                <span className="adminv2-ws-crm-queue-preview__gv">{slots.programContext.trim()}</span>
+                <span className="adminv2-ws-crm-queue-preview__gk">Programs</span>
+              </div>
+            ) : null}
+            {slots.roomContext?.trim() ? (
+              <div className="adminv2-ws-crm-queue-preview__group">
+                <span className="adminv2-ws-crm-queue-preview__gv">{slots.roomContext.trim()}</span>
+                <span className="adminv2-ws-crm-queue-preview__gk">Room</span>
+              </div>
+            ) : null}
+            {timingLine ? (
+              <div className="adminv2-ws-crm-queue-preview__group">
+                <span className="adminv2-ws-crm-queue-preview__gv">{timingLine}</span>
+                <span className="adminv2-ws-crm-queue-preview__gk">Timing</span>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
-      {stageStatus ? (
-        <div className="adminv2-ws-enrollment-crm-preview__stage" data-enrollment-crm-slot="stageStatus">
-          <span className="adminv2-ws-enrollment-crm-preview__k">Status</span> {stageStatus}
-        </div>
-      ) : null}
-      {slots.contactSnippet ? (
-        <div className="adminv2-ws-enrollment-crm-preview__contact" data-enrollment-crm-slot="contactSnippet">
-          <span className="adminv2-ws-enrollment-crm-preview__k">Contact</span> {slots.contactSnippet}
-        </div>
-      ) : null}
-      {slots.childName ? (
-        <div className="adminv2-ws-enrollment-crm-preview__child" data-enrollment-crm-slot="childName">
-          <span className="adminv2-ws-enrollment-crm-preview__k">{slots.childName.includes(" · ") ? "Children" : "Child"}</span>{" "}
-          {slots.childName}
-        </div>
-      ) : null}
-      {slots.programContext ? (
-        <div className="adminv2-ws-enrollment-crm-preview__care" data-enrollment-crm-slot="programs">
-          <span className="adminv2-ws-enrollment-crm-preview__k">Programs</span> {slots.programContext}
-        </div>
-      ) : null}
-      {slots.roomContext ? (
-        <div className="adminv2-ws-enrollment-crm-preview__care" data-enrollment-crm-slot="roomContext">
-          <span className="adminv2-ws-enrollment-crm-preview__k">Room</span> {slots.roomContext}
-        </div>
-      ) : null}
-      {slots.ageContext ? (
-        <div className="adminv2-ws-enrollment-crm-preview__care" data-enrollment-crm-slot="startDate">
-          <span className="adminv2-ws-enrollment-crm-preview__k">Start</span> {slots.ageContext}
-        </div>
-      ) : null}
-      {slots.tourContext ? (
-        <div className="adminv2-ws-enrollment-crm-preview__tour" data-enrollment-crm-slot="tourContext">
-          {slots.tourContext.startsWith("Tour:") ? slots.tourContext : <>Tour: {slots.tourContext}</>}
-        </div>
-      ) : null}
-      {slots.attentionReason ? (
-        <div className="adminv2-ws-enrollment-crm-preview__attention" data-enrollment-crm-slot="attentionReason">
-          {slots.attentionReason}
-        </div>
-      ) : null}
-      {slots.activityStale ? (
-        <div className="mt-1" data-enrollment-crm-slot="activityStale">
-          <span
-            className={`inline-flex max-w-full items-center rounded-md px-1.5 py-0.5 text-[10px] leading-tight ${staleClass}`}
-          >
-            {slots.activityStale.label}
-          </span>
-        </div>
-      ) : null}
-      {slots.familyNote ? (
+
+      {hasFooter ? (
         <div
           className={
             noteStress
-              ? "adminv2-ws-enrollment-crm-preview__note adminv2-ws-enrollment-crm-preview__note--stress"
-              : "adminv2-ws-enrollment-crm-preview__note"
+              ? "adminv2-ws-crm-queue-preview__footer adminv2-ws-crm-queue-preview__footer--stress"
+              : "adminv2-ws-crm-queue-preview__footer"
           }
-          data-enrollment-crm-slot="familyNote"
         >
-          <span className="adminv2-ws-enrollment-crm-preview__k">Notes</span> {slots.familyNote}
-        </div>
-      ) : null}
-      {showOpsLine ? (
-        <div className="adminv2-ws-enrollment-crm-preview__ops" data-enrollment-crm-slot="nextLast">
-          {slots.nextStep ? (
-            <span data-enrollment-crm-slot="nextStep">
-              <span className="adminv2-ws-enrollment-crm-preview__k">Next step</span> {slots.nextStep}
-            </span>
+          {slots.familyNote?.trim() ? (
+            <div className="adminv2-ws-crm-queue-preview__footer-notes">
+              <span className="adminv2-ws-crm-queue-preview__gv">{slots.familyNote.trim()}</span>
+              <span className="adminv2-ws-crm-queue-preview__gk">Notes</span>
+            </div>
           ) : null}
-          {slots.nextStep && slots.lastActivity ? (
-            <span className="adminv2-ws-enrollment-crm-preview__sep" aria-hidden>
-              ·
-            </span>
-          ) : null}
-          {slots.lastActivity ? (
-            <span data-enrollment-crm-slot="lastActivity">
-              <span className="adminv2-ws-enrollment-crm-preview__k">Last</span> {slots.lastActivity}
-            </span>
+          {slots.lastActivity?.trim() ? (
+            <div className="adminv2-ws-crm-queue-preview__footer-activity">{slots.lastActivity.trim()}</div>
           ) : null}
         </div>
       ) : null}
@@ -279,12 +350,32 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
         </p>
       ) : null}
       <ul className="adminv2-ws-queue-list adminv2-ws-wu-queue-list" role="list">
+        {queue.rowsLoading && queue.items.length === 0 ? (
+          <li className="adminv2-ws-wu-queue-empty-wrap" role="status" aria-busy="true" aria-label="Loading queue rows">
+            <div className="adminv2-ws-wu-queue-empty-panel">
+              <p className="adminv2-ws-wu-queue-empty-title">Loading…</p>
+              {queue.laneQueueLabel?.trim() ? (
+                <p className="adminv2-ws-wu-queue-empty-queue text-alloy-forge/55">{queue.laneQueueLabel.trim()}</p>
+              ) : null}
+            </div>
+          </li>
+        ) : !queue.rowsLoading && queue.items.length === 0 ? (
+          <li className="adminv2-ws-wu-queue-empty-wrap" role="status">
+            <div className="adminv2-ws-wu-queue-empty-panel">
+              <p className="adminv2-ws-wu-queue-empty-title">No records</p>
+              {queue.laneQueueLabel?.trim() ? (
+                <p className="adminv2-ws-wu-queue-empty-queue">{queue.laneQueueLabel.trim()}</p>
+              ) : null}
+            </div>
+          </li>
+        ) : null}
         {queue.items.map((item) => {
           const sectionKey = workUnitSectionKey(item);
           const showGroup = sectionKey && sectionKey !== lastSectionKey;
           if (sectionKey) lastSectionKey = sectionKey;
 
           const tier = item.urgencyTier ?? "standard";
+          const rowQuickActions = orderedQueueQuickActions(item.quickActions);
           const crm = item.semanticCrmCompact;
           const valueShown = (crm?.commercialValue ?? item.valueLabel)?.trim() ?? "";
           const hasValue = Boolean(valueShown);
@@ -336,12 +427,12 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
                 {crm ? (
                   <div className="adminv2-ws-enrollment-crm-row adminv2-ws-enrollment-crm-row--split" data-enrollment-row-layout="split_actions">
                     <div className="adminv2-ws-enrollment-crm-row__content">
-                      <EnrollmentCrmCompactPreview slots={crm} />
+                      <CrmCompactQueuePreview slots={crm} urgencyTier={tier} />
                     </div>
-                    {item.quickActions?.length ? (
+                    {rowQuickActions.length ? (
                       <div className="adminv2-ws-enrollment-crm-row__actions" role="group" aria-label="Actions">
                         <div className="adminv2-ws-enrollment-crm-row__action-stack">
-                          {item.quickActions.map((qa) => {
+                          {rowQuickActions.map((qa) => {
                             const dispatchId = queueQuickActionDispatchId(qa);
                             const isOpen = dispatchId === "open_record";
                             return (
@@ -437,44 +528,54 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
                       </span>
                     ) : null}
                     <div className="adminv2-ws-wu-queue-card-compact-cta-row">
-                      {item.quickActions?.length ? (
+                      {rowQuickActions.length ? (
                         <div className="adminv2-ws-wu-queue-card-quick-actions" role="group" aria-label="Quick actions">
-                          {item.quickActions.map((qa) => (
-                            <button
-                              key={`${item.id}-qa-${qa.id}`}
-                              type="button"
-                              className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--quiet"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onAction({
-                                  type: "queue.item.action",
-                                  queueId: queue.id,
-                                  itemId: item.id,
-                                  actionId: qa.id,
-                                  payload: qa.payload,
-                                });
-                              }}
-                            >
-                              {qa.label}
-                            </button>
-                          ))}
+                          {rowQuickActions.map((qa) => {
+                            const qaDispatchId = queueQuickActionDispatchId(qa);
+                            const isOpenQa = qaDispatchId === "open_record";
+                            return (
+                              <button
+                                key={`${item.id}-qa-${qa.id}`}
+                                type="button"
+                                className={
+                                  isOpenQa
+                                    ? "adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open"
+                                    : "adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--quiet"
+                                }
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onAction({
+                                    type: "queue.item.action",
+                                    queueId: queue.id,
+                                    itemId: item.id,
+                                    actionId: qaDispatchId,
+                                    payload: qa.payload,
+                                  });
+                                }}
+                              >
+                                {qa.label}
+                              </button>
+                            );
+                          })}
                         </div>
                       ) : null}
-                      <button
-                        type="button"
-                        className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onAction({
-                            type: "queue.item.action",
-                            queueId: queue.id,
-                            itemId: item.id,
-                            actionId: "open_record",
-                          });
-                        }}
-                      >
-                        Open
-                      </button>
+                      {rowQuickActions.some((qa) => queueQuickActionDispatchId(qa) === "open_record") ? null : (
+                        <button
+                          type="button"
+                          className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onAction({
+                              type: "queue.item.action",
+                              queueId: queue.id,
+                              itemId: item.id,
+                              actionId: "open_record",
+                            });
+                          }}
+                        >
+                          Open
+                        </button>
+                      )}
                     </div>
                   </div>
                 ) : null}

@@ -1,5 +1,6 @@
 import type {
     ActionsVm,
+    CrmCompactChildLineVm,
     CrmCompactRowSemanticSlots,
     QueueItemQuickActionVm,
     QueueItemVm,
@@ -15,7 +16,7 @@ type OppRow = WorkspaceOpportunityQueueRuntime["items"][number];
  * (no persons.children join, no messaging routes). Used for docs + future payload work.
  */
 export const ENROLLMENT_CRM_QUEUE_PAYLOAD_GAPS = [
-    "multi-child display prefers `opportunity_customer_members` (canonical) or `metadata.inquiry_children[]` (legacy seed fallback). Queue rows should be person-backed via opportunities.primary_person_id → persons.",
+    "structured multi-child CRM rows use `_crm_compact_children[]` (+ optional `_child_display_name` for single-child fallback) from queue enrichment.",
     "dedicated_sms_action (no SMS/comms API route wired from workspace queue)",
     "in_app_message_action (no threaded message UI route from workspace row)",
 ] as const;
@@ -104,6 +105,31 @@ function laneQuickActionsForAttentionRow(row: OppRow, workUnitKey: string): Queu
     return opportunityQuickActionsForLane(workUnitKey);
 }
 
+function parseCrmChildrenFromStructuredRow(row: OppRow): CrmCompactChildLineVm[] {
+    const raw = (row as { _crm_compact_children?: unknown })._crm_compact_children;
+    if (!Array.isArray(raw)) return [];
+    const out: CrmCompactChildLineVm[] = [];
+    for (const x of raw) {
+        if (x === null || typeof x !== "object") continue;
+        const o = x as Record<string, unknown>;
+        const primary =
+            typeof o.primary === "string"
+                ? o.primary.trim()
+                : typeof o.line === "string"
+                  ? o.line.trim()
+                  : "";
+        if (!primary) continue;
+        const secondary =
+            typeof o.secondary === "string"
+                ? o.secondary.trim()
+                : typeof o.detail === "string"
+                  ? o.detail.trim()
+                  : null;
+        out.push({ primary, secondary: secondary || null });
+    }
+    return out;
+}
+
 function crmContactQuickActions(row: OppRow): QueueItemQuickActionVm[] {
     const cap = enrollmentCrmContactCapabilityForRow(row);
     const email = (row as { _primary_email?: string | null })._primary_email?.trim();
@@ -124,7 +150,10 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow): CrmCompactRowSe
     const titleBase = (row.name ?? "").trim();
     const primaryIdentity = customer || titleBase || row.id.slice(-8);
 
-    const childName = (row as { _child_display_name?: string | null })._child_display_name?.trim() || null;
+    const structuredChildren = parseCrmChildrenFromStructuredRow(row);
+    const multiChild = structuredChildren.length >= 2;
+    const childNameFlat = (row as { _child_display_name?: string | null })._child_display_name?.trim() || null;
+    const childName = multiChild ? null : childNameFlat;
 
     const stageLabel = row._lifecycle_stage_title?.trim() || null;
     const statusLabel = (row._status_display ?? "").trim() || (row.status_key ?? "").trim() || null;
@@ -185,6 +214,7 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow): CrmCompactRowSe
     return {
         primaryIdentity,
         childName,
+        childrenLines: multiChild ? structuredChildren : null,
         stageLabel,
         statusLabel,
         nextStep,

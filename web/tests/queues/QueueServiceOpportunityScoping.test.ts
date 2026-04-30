@@ -20,23 +20,37 @@ describe("QueueService opportunity scoping", () => {
     it("constrains opportunity queries by work_unit_id", async () => {
         const eqCalls: Array<{ col: string; val: unknown }> = [];
 
-        const chain: any = {
-            select: () => chain,
-            eq: (col: string, val: unknown) => {
+        /** Terminal `await` on Postgrest builders (count head, status_definitions list, etc.). */
+        function makeGenericQueryable(resolve: () => Record<string, unknown>) {
+            const c: any = {};
+            let mode: "default" | "count_head" = "default";
+            c.select = (_cols?: unknown, opts?: unknown) => {
+                if (opts && typeof opts === "object" && "head" in opts && (opts as { head?: boolean }).head) {
+                    mode = "count_head";
+                }
+                return c;
+            };
+            c.eq = (col: string, val: unknown) => {
                 eqCalls.push({ col, val });
-                return chain;
-            },
-            in: () => chain,
-            is: () => chain,
-            gt: () => chain,
-            gte: () => chain,
-            lt: () => chain,
-            or: () => chain,
-            order: () => chain,
-            range: async () => ({ data: [], error: null }),
-        };
-
-        const mockFrom = vi.fn((_table: string) => chain);
+                return c;
+            };
+            c.in = () => c;
+            c.is = () => c;
+            c.gt = () => c;
+            c.gte = () => c;
+            c.lt = () => c;
+            c.or = () => c;
+            c.order = () => c;
+            c.range = async () => ({ data: [], error: null });
+            c.maybeSingle = async () => ({ data: null, error: null });
+            c.single = async () => ({ data: null, error: null });
+            c.then = (onFulfilled?: (v: unknown) => unknown, onRejected?: (e: unknown) => unknown) => {
+                const payload = mode === "count_head" ? { count: 0, error: null } : resolve();
+                mode = "default";
+                return Promise.resolve(payload).then(onFulfilled as any, onRejected as any);
+            };
+            return c;
+        }
 
         // loadWorkUnitQueueDefinition call
         const mockWuSelect = vi.fn(() => ({
@@ -61,7 +75,37 @@ describe("QueueService opportunity scoping", () => {
         const supabase: any = {
             from: (table: string) => {
                 if (table === "work_units") return { select: mockWuSelect };
-                return mockFrom(table);
+                if (table === "orgs") {
+                    return {
+                        select: () => ({
+                            eq: () => ({
+                                maybeSingle: async () => ({ data: { industry_id: null }, error: null }),
+                            }),
+                        }),
+                    };
+                }
+                if (table === "industries") {
+                    return {
+                        select: () => ({
+                            eq: () => ({
+                                maybeSingle: async () => ({ data: null, error: null }),
+                            }),
+                        }),
+                    };
+                }
+                if (table === "status_definitions") {
+                    const c: any = {
+                        select: () => c,
+                        eq: () => c,
+                        in: () => c,
+                        is: () => c,
+                        order: () => c,
+                    };
+                    c.then = (fn: (v: unknown) => unknown) => Promise.resolve({ data: [], error: null }).then(fn as any);
+                    return c;
+                }
+                if (table === "opportunities") return makeGenericQueryable(() => ({ data: [], error: null }));
+                return makeGenericQueryable(() => ({ data: [], error: null }));
             },
         };
 

@@ -17,11 +17,14 @@ function normalizeKey(raw: string): string {
 
 /** GET: list work units for current org. Optional ?department_id= */
 export async function GET(request: NextRequest) {
+    const t0 = Date.now();
     const ctx = await getAdminContext();
+    const ctxMs = Date.now() - t0;
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
     const departmentId = new URL(request.url).searchParams.get("department_id")?.trim() || null;
 
+    const t1 = Date.now();
     const supabase = createAdminClient();
     let q = supabase
         .from("work_units")
@@ -48,6 +51,18 @@ export async function GET(request: NextRequest) {
             );
         }
         return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    const dbMs = Date.now() - t1;
+    const totalMs = Date.now() - t0;
+    if (totalMs > 200) {
+        console.warn("[admin-timing] GET /api/admin/work-units", {
+            total_ms: totalMs,
+            get_admin_context_ms: ctxMs,
+            query_ms: dbMs,
+            department_id: departmentId,
+            row_count: (rows ?? []).length,
+        });
     }
 
     return NextResponse.json({ items: rows ?? [] });

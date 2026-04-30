@@ -15,12 +15,14 @@ import {
     fetchEffectiveStatusDefinitions,
     inferDocumentStatusFromStored,
     resolveStatusLabel,
+    displayLabelsFromDefinitions,
+    resolveDisplayFromLabelMap,
 } from "@/lib/admin/statusDefinitionsResolve";
 import { normalizeDocumentRow } from "@/lib/admin/normalizeDocumentRow";
 import { formatFrequencyLabel } from "@/lib/adminFormatters";
 import { isUuidLike } from "@/lib/admin/overviewRelationshipLabels";
 import { getPaymentAllocationRollup } from "@/lib/admin/jobPaymentBalances";
-import { optionItemLabelForOrg } from "@/lib/admin/optionItemLabelForOrg";
+import { optionItemLabelForOrg, batchOptionItemLabelsForOrg, optionLabelFromBatchMap } from "@/lib/admin/optionItemLabelForOrg";
 import { hydrateVendorDisplayStub } from "@/lib/admin/hydrateVendorDisplayStub";
 import { resolveJobRecord } from "@/lib/rrs/entities/job";
 import { resolveRecordSurfaceParam } from "@/lib/rrs/surfaces";
@@ -140,6 +142,10 @@ export async function GET(
             const opp = data as Record<string, unknown> & { status_key?: string | null; status?: string | null; customer_id?: string | null; primary_contact_id?: string | null; primary_person_id?: string | null; location_id?: string | null; quote_total?: number | null; estimated_price_cents?: number | null; monetary_value_cents?: number | null };
             const out: Record<string, unknown> = { ...data };
             const enrichStartedAt = Date.now();
+            const enrichPhaseMs: Record<string, number> = {};
+            const markPhase = (key: string) => {
+                enrichPhaseMs[key] = Date.now() - enrichStartedAt;
+            };
             const wuidForDept = trimOrNull((opp as { work_unit_id?: string | null }).work_unit_id);
             const oppPipelineStageId = (opp as { pipeline_stage_id?: string | null }).pipeline_stage_id ?? null;
             const oppPipelineId = (opp as { pipeline_id?: string | null }).pipeline_id ?? null;
@@ -185,6 +191,7 @@ export async function GET(
                           .maybeSingle()
                     : Promise.resolve({ data: null }),
             ]);
+            markPhase("after_parallel_context_lookups");
             out._work_unit_department_id = wuidForDept
                 ? trimOrNull((wuDeptRow.data as { department_id?: string | null } | null)?.department_id ?? null)
                 : null;
@@ -283,10 +290,12 @@ export async function GET(
                 out._primary_person_id = null;
                 out._primary_person_name = null;
             }
+            markPhase("after_primary_person_contact");
             const oppOrgId = (opp as { org_id?: string }).org_id;
             const opportunityDefs = oppOrgId
                 ? await fetchEffectiveStatusDefinitions(supabase, oppOrgId, "opportunities", { activeOnly: true })
                 : [];
+            const oppStatusLabelByKey = displayLabelsFromDefinitions(opportunityDefs);
             const oppLegacyStatus = (opp as { status?: string | null }).status;
             const oppSkRaw =
                 opp.status_key != null && String(opp.status_key).trim() !== ""
@@ -304,7 +313,7 @@ export async function GET(
                 if (ci?.status_label != null && String(ci.status_label).trim() !== "") {
                     oppStatusDisplay = String(ci.status_label).trim();
                 } else {
-                    oppStatusDisplay = await resolveStatusLabel(supabase, oppOrgId, "opportunities", oppSkRaw);
+                    oppStatusDisplay = resolveDisplayFromLabelMap(oppStatusLabelByKey, oppSkRaw, null);
                 }
             } else {
                 oppStatusDisplay = oppSkRaw;
@@ -346,8 +355,58 @@ export async function GET(
                     defs: opportunityDefs,
                 })
             );
-            await attachFieldDefinitionsAndValues(supabase, out, "opportunities", id);
+            markPhase("after_status_defs_and_financial");
+            const drawerInitial = request.nextUrl.searchParams.get("surface")?.trim().toLowerCase() === "drawer_initial";
+            await attachFieldDefinitionsAndValues(supabase, out, "opportunities", id, { mergeValues: !drawerInitial });
+            markPhase("after_field_definitions_values");
+            if (drawerInitial) {
+                markPhase("drawer_initial_skip_rel_inquiry_persons");
+                out._inquiry_children = [];
+                out._opportunity_persons = [];
+                out._record_surface = "drawer_initial";
+                const inquiryTitleEarly = trimOrNull(out.name) ?? trimOrNull(out.title) ?? "—";
+                out._identity = {
+                    household:
+                        typeof opp.customer_id === "string" && opp.customer_id.trim()
+                            ? { id: opp.customer_id.trim(), label: trimOrNull(out._customer_name) ?? "—" }
+                            : null,
+                    primary_person: opp.primary_person_id
+                        ? {
+                              id: String(opp.primary_person_id),
+                              label: trimOrNull(out._primary_person_name) ?? "—",
+                              email: trimOrNull(out._primary_person_email),
+                              phone: trimOrNull(out._primary_person_phone),
+                              role_key: null,
+                              role_label: null,
+                          }
+                        : null,
+                    primary_contact: opp.primary_contact_id
+                        ? {
+                              id: String(opp.primary_contact_id),
+                              label: trimOrNull(out._primary_contact_name) ?? "—",
+                              email: trimOrNull(out._primary_contact_email),
+                              phone: trimOrNull(out._primary_contact_phone),
+                              role_key: null,
+                              role_label: null,
+                          }
+                        : null,
+                    primary_child: null,
+                    inquiry: { title: inquiryTitleEarly, lines: [], section_key: "quote" },
+                };
+                markPhase("after_identity_block");
+                if (process.env.NODE_ENV !== "production") {
+                    console.info("[timing][opportunity-api]", {
+                        opportunity_id: id,
+                        enrich_ms: Date.now() - enrichStartedAt,
+                        enrich_phases_ms: enrichPhaseMs,
+                        surface: "drawer_initial",
+                    });
+                }
+                return NextResponse.json(out);
+            }
+
             await attachDirectFkRelationshipDisplays(supabase, orgId, "opportunities", out);
+            markPhase("after_relationship_displays");
 
             const oppMeta = (opp.metadata ?? null) as Record<string, unknown> | null;
             const metaDesired = oppMeta && typeof oppMeta.desired_start_date === "string" ? oppMeta.desired_start_date.trim() : "";
@@ -485,50 +544,57 @@ export async function GET(
                 ((personRows ?? []) as { id: string; first_name?: string | null; last_name?: string | null; full_name?: string | null; date_of_birth?: string | null }[]).map((p) => [p.id, p])
             );
 
-            const inquiryChildren = await Promise.all(
-                jrows.map(async (r) => {
-                    const m = memberMap.get(r.customer_member_id) ?? null;
-                    const pid = trimOrNull(m?.person_id);
-                    const p = pid ? (pmap.get(pid) ?? null) : null;
-                    // Child identity is canonical in `persons`. Prefer `persons.date_of_birth`,
-                    // and only fall back to legacy/display `customer_members.dob` when needed.
-                    const dob = p?.date_of_birth ? String(p.date_of_birth) : m?.dob ? String(m.dob) : null;
-                    const age = ageFromDobIso(dob);
-                    const desiredProgramType = trimOrNull(r.desired_program_type) ?? oppDefaultProgramType;
-                    const desiredScheduleType = trimOrNull(r.desired_schedule_type) ?? oppDefaultScheduleType;
-                    const memMeta = (m?.metadata ?? null) as Record<string, unknown> | null;
-                    const demoProgramLabel = memMeta && typeof memMeta.demo_program_label === "string" ? trimOrNull(memMeta.demo_program_label) : null;
-                    const outcomeStatusKey = trimOrNull(r.outcome_status_key);
-                    const [desiredProgramLabel, desiredScheduleLabel, outcomeStatusLabel] = await Promise.all([
-                        optionItemLabelForOrg(supabase, orgId, "childcare_program_type", desiredProgramType).then(
-                            (lbl) => lbl ?? demoProgramLabel
-                        ),
-                        optionItemLabelForOrg(supabase, orgId, "childcare_schedule_type", desiredScheduleType),
-                        outcomeStatusKey
-                            ? resolveStatusLabel(supabase, orgId, "opportunity_customer_members", outcomeStatusKey)
-                            : Promise.resolve(null),
-                    ]);
-                    return {
-                        id: r.id,
-                        customer_member_id: r.customer_member_id,
-                        person_id: pid,
-                        display_name: m?.display_name ?? (pid ? personDisplayName(p) : null) ?? r.customer_member_id.slice(0, 8) + "…",
-                        dob,
-                        age: age ? age.label : null,
-                        desired_program_type: desiredProgramType,
-                        desired_program_label: desiredProgramLabel,
-                        desired_schedule_type: desiredScheduleType,
-                        desired_schedule_label: desiredScheduleLabel,
-                        outcome_status_key: outcomeStatusKey,
-                        outcome_status_label: outcomeStatusLabel,
-                        fit_status: trimOrNull(r.fit_status),
-                        notes: trimOrNull(r.notes),
-                        metadata: (r.metadata as Record<string, unknown>) ?? null,
-                        created_at: r.created_at ?? null,
-                        updated_at: r.updated_at ?? null,
-                    };
-                })
-            );
+            const tInquiry0 = Date.now();
+            const ocmMemberStatusDefs = await fetchEffectiveStatusDefinitions(supabase, orgId, "opportunity_customer_members", {
+                activeOnly: true,
+            });
+            const ocmStatusLabelByKey = displayLabelsFromDefinitions(ocmMemberStatusDefs);
+            const optionPairs: { setKey: string; itemKey: string }[] = [];
+            for (const r of jrows) {
+                const desiredProgramType = trimOrNull(r.desired_program_type) ?? oppDefaultProgramType;
+                const desiredScheduleType = trimOrNull(r.desired_schedule_type) ?? oppDefaultScheduleType;
+                if (desiredProgramType) optionPairs.push({ setKey: "childcare_program_type", itemKey: desiredProgramType });
+                if (desiredScheduleType) optionPairs.push({ setKey: "childcare_schedule_type", itemKey: desiredScheduleType });
+            }
+            const optionLabelMap = await batchOptionItemLabelsForOrg(supabase, orgId, optionPairs);
+            const inquiryBatchMs = Date.now() - tInquiry0;
+
+            const inquiryChildren = jrows.map((r) => {
+                const m = memberMap.get(r.customer_member_id) ?? null;
+                const pid = trimOrNull(m?.person_id);
+                const p = pid ? (pmap.get(pid) ?? null) : null;
+                const dob = p?.date_of_birth ? String(p.date_of_birth) : m?.dob ? String(m.dob) : null;
+                const age = ageFromDobIso(dob);
+                const desiredProgramType = trimOrNull(r.desired_program_type) ?? oppDefaultProgramType;
+                const desiredScheduleType = trimOrNull(r.desired_schedule_type) ?? oppDefaultScheduleType;
+                const memMeta = (m?.metadata ?? null) as Record<string, unknown> | null;
+                const demoProgramLabel = memMeta && typeof memMeta.demo_program_label === "string" ? trimOrNull(memMeta.demo_program_label) : null;
+                const outcomeStatusKey = trimOrNull(r.outcome_status_key);
+                const rawProgLabel = optionLabelFromBatchMap(optionLabelMap, "childcare_program_type", desiredProgramType);
+                const desiredProgramLabel = rawProgLabel ?? demoProgramLabel;
+                const desiredScheduleLabel = optionLabelFromBatchMap(optionLabelMap, "childcare_schedule_type", desiredScheduleType);
+                const outcomeStatusLabel = outcomeStatusKey ? resolveDisplayFromLabelMap(ocmStatusLabelByKey, outcomeStatusKey, null) : null;
+                return {
+                    id: r.id,
+                    customer_member_id: r.customer_member_id,
+                    person_id: pid,
+                    display_name: m?.display_name ?? (pid ? personDisplayName(p) : null) ?? r.customer_member_id.slice(0, 8) + "…",
+                    dob,
+                    age: age ? age.label : null,
+                    desired_program_type: desiredProgramType,
+                    desired_program_label: desiredProgramLabel,
+                    desired_schedule_type: desiredScheduleType,
+                    desired_schedule_label: desiredScheduleLabel,
+                    outcome_status_key: outcomeStatusKey,
+                    outcome_status_label: outcomeStatusLabel,
+                    fit_status: trimOrNull(r.fit_status),
+                    notes: trimOrNull(r.notes),
+                    metadata: (r.metadata as Record<string, unknown>) ?? null,
+                    created_at: r.created_at ?? null,
+                    updated_at: r.updated_at ?? null,
+                };
+            });
+            enrichPhaseMs.inquiry_children_batch_ms = inquiryBatchMs;
             let inquiryChildrenOut = inquiryChildren;
             if (!inquiryChildrenOut.length && oppMeta && Array.isArray(oppMeta.inquiry_children)) {
                 const mdKids = oppMeta.inquiry_children as unknown[];
@@ -611,6 +677,7 @@ export async function GET(
                 }
             }
             out._inquiry_children = inquiryChildrenOut;
+            markPhase("after_inquiry_children_resolved");
 
             {
                 const { data: opRows } = await supabase
@@ -656,6 +723,7 @@ export async function GET(
                     }
                 );
             }
+            markPhase("after_opportunity_persons");
 
             // Inquiry summary from configured field_definitions in the "quote" section when present.
             const defs = (out._field_definitions as { field_key: string; label: string | null; section_key: string | null; is_visible_in_drawer?: boolean }[] | undefined) ?? [];
@@ -707,10 +775,14 @@ export async function GET(
                 },
             };
 
+            markPhase("after_identity_block");
             if (process.env.NODE_ENV !== "production") {
                 console.info("[timing][opportunity-api]", {
                     opportunity_id: id,
                     enrich_ms: Date.now() - enrichStartedAt,
+                    enrich_phases_ms: enrichPhaseMs,
+                    inquiry_batch_ms: enrichPhaseMs.inquiry_children_batch_ms,
+                    surface: "full",
                 });
             }
 

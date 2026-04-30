@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
-import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
+import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
 import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
@@ -41,7 +41,7 @@ export function OpportunityInquiryChildrenRegistryActions(props: {
         const url = `/api/admin/actions?${qs.toString()}`;
         const timingEnabled = process.env.NODE_ENV !== "production";
         const t0 = timingEnabled ? performance.now() : 0;
-        dedupeAdminFetch(url, workspaceDataFetchInit())
+        dedupeAdminFetchWithTtl(url, workspaceDataFetchInit(), 1500)
             .then((r) => r.json())
             .then((j: { actions?: ResolvedActionsBySlot }) => {
                 if (!cancelled) setBySlot(j.actions ?? null);
@@ -72,7 +72,16 @@ export function OpportunityInquiryChildrenRegistryActions(props: {
         return all.find((a) => a.key === want) ?? null;
     }, [bySlot, childrenCount]);
 
-    if (loading) return null;
+    if (loading) {
+        return (
+            <div
+                className="h-9 w-[10.5rem] animate-pulse rounded-md bg-alloy-stone/12"
+                aria-busy="true"
+                aria-label="Loading inquiry actions"
+                data-inquiry-children-registry-action-skeleton="true"
+            />
+        );
+    }
     if (!chosen) return null;
 
     return (

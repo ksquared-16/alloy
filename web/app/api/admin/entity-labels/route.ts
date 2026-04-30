@@ -6,7 +6,9 @@ import { resolveEntityLabelsForOrg } from "@/lib/admin/entityLabelsResolve";
 
 /** GET: effective labels for org (industry defaults + overrides). Admin + ops can read. */
 export async function GET() {
+    const t0 = Date.now();
     const ctx = await getAdminContext();
+    const ctxMs = Date.now() - t0;
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
@@ -14,8 +16,20 @@ export async function GET() {
         );
     }
 
+    const t1 = Date.now();
     const supabase = createAdminClient();
     const payload = await resolveEntityLabelsForOrg(supabase, ctx.orgId);
+    const resolveMs = Date.now() - t1;
+    const totalMs = Date.now() - t0;
+    if (totalMs > 200) {
+        console.warn("[entity-labels-perf] GET /api/admin/entity-labels", {
+            total_ms: totalMs,
+            get_admin_context_ms: ctxMs,
+            resolve_entity_labels_ms: resolveMs,
+            org_id: ctx.orgId,
+            effective_count: payload.effective?.length ?? 0,
+        });
+    }
 
     return NextResponse.json(payload);
 }

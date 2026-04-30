@@ -42,15 +42,13 @@ function getDepartmentName(key: DepartmentKey): string {
  */
 const DEBUG_EXAGGERATE_WORKSPACE_AMBIENT = false;
 
-/** Production ambient (subtle) — re-enable when DEBUG_EXAGGERATE_WORKSPACE_AMBIENT is false */
+/** Production ambient — cool near-white slab + restrained slate/indigo wash (ambient dots stay very subtle separately). */
 const workspaceContentAmbientStyleProduction: CSSProperties = {
-  backgroundColor: neutral.background,
-  /* Align with canvas field vocabulary; slightly stronger blooms so company-field specs read as one system */
+  backgroundColor: "#f6f9fb",
   backgroundImage: `
-    radial-gradient(ellipse 100% 64% at 50% -6%, ${derived.ambientLifeBloomCore} 0%, ${derived.ambientLifeBloomMid} 32%, transparent 54%),
-    radial-gradient(ellipse 72% 48% at 92% 16%, ${derived.ambientLifeBloomMid} 0%, ${derived.ambientLifeBloomEdge} 38%, transparent 48%),
-    linear-gradient(180deg, ${derived.canvasFieldWash} 0%, transparent 40%),
-    linear-gradient(180deg, transparent 52%, ${derived.canvasFieldDepth} 100%)
+    linear-gradient(180deg, rgba(36, 59, 86, 0.022) 0%, transparent 30%),
+    linear-gradient(180deg, transparent 74%, rgba(39, 63, 82, 0.03) 100%),
+    linear-gradient(135deg, rgba(33, 56, 88, 0.014) 0%, transparent 42%)
   `,
 };
 

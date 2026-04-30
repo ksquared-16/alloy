@@ -14,7 +14,17 @@ export type EntityLabelsPayload = {
  * Same merge as GET /api/admin/entity-labels — industry defaults + org overrides.
  */
 export async function resolveEntityLabelsForOrg(supabase: SupabaseClient, orgId: string): Promise<EntityLabelsPayload> {
+    const t0 = Date.now();
+    const phases: Record<string, number> = {};
+    let prev = t0;
+    const mark = (name: string) => {
+        const now = Date.now();
+        phases[name] = now - prev;
+        prev = now;
+    };
+
     const { data: orgRow } = await supabase.from("orgs").select("industry_id").eq("id", orgId).maybeSingle();
+    mark("org_industry_lookup_ms");
 
     const industryId = (orgRow as { industry_id?: string } | null)?.industry_id ?? null;
 
@@ -48,6 +58,7 @@ export async function resolveEntityLabelsForOrg(supabase: SupabaseClient, orgId:
             };
         }
     }
+    mark("industry_resolve_ms");
 
     const defaults: EntityLabelRow[] = [];
     if (defaultIndustryId) {
@@ -66,12 +77,14 @@ export async function resolveEntityLabelsForOrg(supabase: SupabaseClient, orgId:
             }
         }
     }
+    mark("industry_defaults_ms");
 
     const { data: overrideRows } = await supabase
         .from("entity_labels")
         .select("entity_type, singular, plural")
         .eq("org_id", orgId)
         .order("entity_type", { ascending: true });
+    mark("org_overrides_ms");
 
     const overrides: EntityLabelRow[] = (overrideRows ?? []).map((r) => ({
         entity_type: (r as { entity_type: string }).entity_type,
@@ -90,6 +103,18 @@ export async function resolveEntityLabelsForOrg(supabase: SupabaseClient, orgId:
             plural: ov?.plural ?? d.plural,
         };
     });
+
+    mark("merge_effective_ms");
+    const totalMs = Date.now() - t0;
+    if (totalMs > 200) {
+        console.warn("[entity-labels-perf] resolveEntityLabelsForOrg", {
+            org_id: orgId,
+            total_ms: totalMs,
+            ...phases,
+            defaults_rows: defaults.length,
+            overrides_rows: overrides.length,
+        });
+    }
 
     return {
         org_industry_id: industryId,
