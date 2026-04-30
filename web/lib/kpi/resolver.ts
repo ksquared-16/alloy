@@ -5,8 +5,8 @@ import {
     type DepartmentLifecycleKpisPayload,
 } from "@/lib/workspace/viewModels/workspaceRootRollup";
 import { buildDefaultDepartmentKpis, buildDefaultWorkspaceKpis, type DeptWorkUnitRow } from "@/lib/kpi/baseline";
-import { getMetricDefinition, isKnownMetricKey, validateMetricForSurface, type MetricKey } from "@/lib/kpi/registry";
-import type { ResolveKpisResult, WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
+import { getMetricDefinition, isKnownMetricKey, validateMetricForSurface } from "@/lib/kpi/registry";
+import type { MetricKey, ResolveKpisResult, WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
 
 const FACET_MAX_WORK_UNITS = 12;
 
@@ -151,7 +151,7 @@ export function resolveKpisForDepartment(params: {
         }
         if (mk === "dept.wu_queue.total_per_work_unit") {
             const list = params.deptWorkUnits;
-            let slice = list.slice(0, FACET_MAX_WORK_UNITS);
+            const slice = list.slice(0, FACET_MAX_WORK_UNITS);
             if (list.length > FACET_MAX_WORK_UNITS) {
                 warnings.push("facet_cap_exceeded");
             }

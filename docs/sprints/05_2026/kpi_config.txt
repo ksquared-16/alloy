@@ -972,15 +972,11 @@ CARD 2 — Build: KPI Placement Storage + Seeds
 - `work_unit_id` — nullable
 - `metric_key` — text, not null
 - **`sort_order`** — integer, not null — display order ascending  
-  **Reconciliation:** CARD 1.5 §1 names this **`display_order`**. **Pick one column name** in shipped DDL and amend
-  CARD 1.5 §1 in the same PR so doc and schema match (recommended: **`display_order`** if 1.5 is already cited in
-  review; alternatively rename 1.5 to `sort_order` everywhere — single naming only).
+  **Reconciliation:** Shipped DDL and API use **`display_order`**. CARD 1.5 §1 names this **`display_order`** — **aligned**.
 - **`is_active`** — boolean, not null, default true — inactive rows excluded from resolution  
-  **Reconciliation:** CARD 1.5 §1 uses **`is_visible`**. Same rule: **one** concept in DDL (`is_visible` **or**
-  `is_active`) + doc updated to match.
+  **Reconciliation:** Shipped DDL and API use **`is_visible`**. **Aligned** (partial unique indexes and queries filter `is_visible = true`).
 - **`presentation` / config jsonb** — nullable — **display hints only**; no formulas, SQL, or reducer definitions  
-  **Reconciliation:** CARD 1.5 §1 specifies **`metadata`** jsonb — prefer **`metadata`** unless both doc and 1.5 are
-  amended together.
+  **Reconciliation:** Shipped column is **`metadata`** jsonb `NOT NULL DEFAULT '{}'` — **aligned** with CARD 1.5 §1.
 - `created_at`, `updated_at` — timestamptz, defaults `now()`
 
 **CHECK constraints — valid surface / scope combinations**
@@ -1185,5 +1181,31 @@ Execution Rules (Card 2 onward)
 6. **Preserve `KPIBlock` props** (`KPIVm[]`).
 7. **Preserve queue count trust** (Card 0.5 Q parity).
 8. **Performance:** no per-metric fetch, no N+1, no redundant full reductions over the same batch (Card 4).
+
+================================================================================
+Implementation notes (shipped) — 2026-04-30
+================================================================================
+
+**Migration:** `supabase/migrations/20260501193000_workspace_kpi_placement.sql` — table `workspace_kpi_placement` with `display_order`, `is_visible`, `metadata` (jsonb), partial unique indexes, RLS, childcare idempotent seeds (workspace org metrics + `dept.wu_queue.total_per_work_unit` per enrollment department).
+
+**Placement API (rows only):** `GET /api/admin/workspace-kpi-placements` — query params `surface`, optional `department_id`, `work_unit_id`; org-scoped via admin context; returns `{ items: WorkspaceKpiPlacementRow[] }`. No computed KPI values.
+
+**Registry / resolver:** `web/lib/kpi/` — `registry.ts`, `baseline.ts`, `resolver.ts` (`resolveKpisForWorkspace`, `resolveKpisForDepartment`), `types.ts`, `index.ts`. Facet cap 12 for `dept.wu_queue.total_per_work_unit` with `facet_cap_exceeded` warning.
+
+**adminV2:** `web/app/adminV2/workspace/page.tsx` loads placements after existing rollup and passes `workspaceKpiStrip` into `WorkspaceRootShell` when the placement fetch succeeds; otherwise legacy structure + pipeline merge. `web/app/adminV2/workspace/dept/[departmentId]/page.tsx` resolves department surface KPIs from placements with the same queue summary inputs as before (`exact` head counts). `KPIBlock` props unchanged.
+
+**Card 6:** **Deferred** — work-unit surface strip (`wu.queue.*`) not wired in v0; work-unit route behavior unchanged. Revisit under Card 6 gate when product requests it.
+
+**Tests:** `web/tests/kpi/kpiResolver.test.ts` (Vitest). Commands: `npm run test -- tests/kpi/kpiResolver.test.ts`; `npm exec tsc --noEmit` (pass). Full-repo `npm run lint` still reports many pre-existing issues; targeted ESLint on changed KPI files passes.
+
+**Manual smoke (operator):**
+- `/adminV2/workspace` — KPI strip matches seeded order when placements exist; matches legacy strip if placement API fails.
+- `/adminV2/workspace/dept/[id]` — facet totals match work-unit queue cards (same `work-unit-queue-summaries` source); ≤12 WUs on strip with cap warning in resolver only (dev could log).
+- Work-unit route — unchanged (Card 6 deferred).
+- Classic `/admin` — not modified.
+
+**Known deferrals (v0.1+):** KPIBand / classic placement; thin KPI snapshot endpoint; snapshot service; broader lifecycle funnel keys; `dept.queue.needs_attention_sum`; work-unit strip metrics (`wu.queue.selected_tab_count`, `wu.queue.primary_lane_total`).
+
+**Risks before commit:** Seeded placements apply only to orgs matching childcare seed migration; other orgs get resolver **baseline** until rows exist. Department facet `KPIVm.id` uses `dept.wu_queue.total_per_work_unit:{wuId}` when placements resolve (baseline used `wu_{id}`) — cosmetic unless consumers key off `id`.
 
 --------------------------------------------------------------------------------
