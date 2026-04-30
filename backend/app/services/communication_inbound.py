@@ -34,12 +34,12 @@ def recipient_key_normalize_sms(raw: str) -> str:
     return n or ""
 
 
-def _contacts_by_phone_org(
+def _persons_by_phone_org(
     base_url: str, headers: Dict[str, str], org_id: str, phone_normalized: str
 ) -> List[Dict[str, Any]]:
     if not phone_normalized:
         return []
-    url = f"{base_url}/contacts"
+    url = f"{base_url}/persons"
     params = {"org_id": f"eq.{org_id}", "phone": f"eq.{phone_normalized}", "select": "id", "limit": "5"}
     try:
         r = requests.get(url, headers=headers, params=params, timeout=15)
@@ -51,19 +51,19 @@ def _contacts_by_phone_org(
         return []
 
 
-def resolve_entity_for_inbound_contact(
+def resolve_primary_entity_for_inbound_sms(
     base_url: str, headers: Dict[str, str], org_id: str, from_phone: str
 ) -> Tuple[str, str]:
     """
-    Returns (entity_type, entity_id) anchored to contacts if possible; otherwise deterministic surrogate UUID.
+    CARD 15 — threading anchor: persons.id when phone matches in org (no contacts table).
+    Otherwise deterministic surrogate UUID (external SMS identity → communications_unknown).
     """
     norm = recipient_key_normalize_sms(from_phone)
-    rows = _contacts_by_phone_org(base_url, headers, org_id, norm)
-    if rows:
-        cid = str(rows[0].get("id"))
-        return "contacts", cid
+    persons = _persons_by_phone_org(base_url, headers, org_id, norm)
+    if persons:
+        pid = str(persons[0].get("id"))
+        return "persons", pid
     if not norm:
-        # Last resort anchor on org deterministic key (still valid UUID path for workflow_events)
         return "communications_unknown", surrogate_inbound_entity_id(org_id, "__missing_phone__")
     return "communications_unknown", surrogate_inbound_entity_id(org_id, norm)
 
@@ -135,7 +135,7 @@ def persist_inbound_communication_sms(
 ) -> Optional[Dict[str, Any]]:
     """
     Insert inbound communication_messages + workflow event message_received.
-    primary_entity_hint optional (entity_type, entity_id); else derived via contact/org phone.
+    primary_entity_hint optional (entity_type, entity_id); else derived via CARD 15 person-phone or surrogate anchor.
     """
     if not _UUID_RE.match(org_id):
         return None
@@ -147,9 +147,9 @@ def persist_inbound_communication_sms(
         entity_type = str(et_raw).strip()
         entity_id = str(eid_raw).strip()
         if not entity_type or not _UUID_RE.match(entity_id):
-            entity_type, entity_id = resolve_entity_for_inbound_contact(base_url, headers, org_id, from_num)
+            entity_type, entity_id = resolve_primary_entity_for_inbound_sms(base_url, headers, org_id, from_num)
     else:
-        entity_type, entity_id = resolve_entity_for_inbound_contact(base_url, headers, org_id, from_num)
+        entity_type, entity_id = resolve_primary_entity_for_inbound_sms(base_url, headers, org_id, from_num)
 
     rkey = recipient_key_normalize_sms(from_num)
     thread_id = _row_exists_or_create_thread(

@@ -15,7 +15,7 @@ from ..integrations.resend_client import default_from_email, send_resend_email
 from ..integrations.twilio_client import send_sms, send_sms_with_credentials
 from ..supabase_client import _get_base_url, _get_headers
 from .communication_workflow_events import emit_for_communication_message
-from .communications.binding_resolver import resolve_outbound_binding
+from .communications.binding_resolver import find_binding_by_id, resolve_outbound_binding
 from .communications.secret_ref import (
     is_legacy_global_twilio_binding,
     resolve_secret_plaintext,
@@ -132,13 +132,22 @@ def process_communication_messages(
             )
             continue
 
-        binding = resolve_outbound_binding(
-            base_url,
-            headers,
-            org_id=org_id,
-            channel=channel if channel in ("sms", "email") else "sms",
-            location_id=location_id_str,
-        )
+        binding: Optional[Dict[str, Any]] = None
+        bound_on_row = row.get("communication_provider_binding_id")
+        if bound_on_row and channel in ("sms", "email"):
+            cand = find_binding_by_id(base_url, headers, str(bound_on_row))
+            if cand and str(cand.get("org_id") or "") == org_id and (
+                str(cand.get("channel") or "").strip().lower() == channel
+            ):
+                binding = cand
+        if binding is None:
+            binding = resolve_outbound_binding(
+                base_url,
+                headers,
+                org_id=org_id,
+                channel=channel if channel in ("sms", "email") else "sms",
+                location_id=location_id_str,
+            )
 
         bound_id = str(binding.get("id")) if isinstance(binding, dict) and binding.get("id") else None
         cfg = binding.get("config") if isinstance(binding, dict) and isinstance(binding.get("config"), dict) else {}

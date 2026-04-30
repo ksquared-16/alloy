@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { formatDateTime } from "@/lib/adminFormatters";
 
 type ThreadRow = {
@@ -26,7 +26,18 @@ interface CommunicationsDrawerSectionProps {
     entityId: string;
 }
 
-/** Read-only canonical communications (CARD 7). Composer stubbed intentionally. */
+type BindingApiRow = {
+    id: string;
+    channel?: string | null;
+    display_label?: string | null | undefined;
+};
+
+type BindingsPayload = {
+    bindings?: BindingApiRow[];
+    channels_available?: string[];
+    selectable_by_channel?: { sms?: unknown[]; email?: unknown[] };
+};
+
 export default function CommunicationsDrawerSection({ apiEntityType, entityId }: CommunicationsDrawerSectionProps) {
     const [threads, setThreads] = useState<ThreadRow[]>([]);
     const [thrErr, setThrErr] = useState<string | null>(null);
@@ -36,6 +47,17 @@ export default function CommunicationsDrawerSection({ apiEntityType, entityId }:
     const [msgs, setMsgs] = useState<MsgRow[]>([]);
     const [msgErr, setMsgErr] = useState<string | null>(null);
     const [loadingMsgs, setLoadingMsgs] = useState(false);
+
+    const [bindErr, setBindErr] = useState<string | null>(null);
+    const [bindingsPayload, setBindingsPayload] = useState<BindingsPayload | null>(null);
+    const [loadingBindings, setLoadingBindings] = useState(true);
+
+    const [channel, setChannel] = useState<string>("in_app");
+    const [bindingId, setBindingId] = useState<string>("");
+    const [to, setTo] = useState("");
+    const [composerBody, setComposerBody] = useState("");
+    const [sendErr, setSendErr] = useState<string | null>(null);
+    const [sending, setSending] = useState(false);
 
     const loadThreads = useCallback(async () => {
         setLoadingThreads(true);
@@ -49,11 +71,14 @@ export default function CommunicationsDrawerSection({ apiEntityType, entityId }:
                 ? (j as { threads: ThreadRow[] }).threads
                 : [];
             setThreads(t);
-            if (t[0]?.id) setSelectedId(t[0].id);
-            else setSelectedId(null);
+            setSelectedId((prev) => {
+                if (prev && t.some((x) => x.id === prev)) return prev;
+                return t[0]?.id ?? null;
+            });
         } catch (e) {
             setThrErr(e instanceof Error ? e.message : "Failed to load threads");
             setThreads([]);
+            setSelectedId(null);
         } finally {
             setLoadingThreads(false);
         }
@@ -62,6 +87,48 @@ export default function CommunicationsDrawerSection({ apiEntityType, entityId }:
     useEffect(() => {
         void loadThreads();
     }, [loadThreads]);
+
+    const loadBindings = useCallback(async () => {
+        setLoadingBindings(true);
+        setBindErr(null);
+        try {
+            const r = await fetch(`/api/admin/communications/bindings`, { credentials: "include" });
+            const j = (await r.json().catch(() => ({}))) as BindingsPayload & { error?: string };
+            if (!r.ok) throw new Error(j.error ?? `HTTP ${r.status}`);
+            setBindingsPayload(j);
+            const avail = Array.isArray(j.channels_available) ? j.channels_available : [];
+            if (avail.includes("in_app")) setChannel("in_app");
+            else if (avail.includes("email")) setChannel("email");
+            else if (avail.includes("sms")) setChannel("sms");
+            else setChannel(avail[0] ?? "in_app");
+        } catch (e) {
+            setBindErr(e instanceof Error ? e.message : "Failed to load bindings");
+            setBindingsPayload(null);
+        } finally {
+            setLoadingBindings(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        void loadBindings();
+    }, [loadBindings]);
+
+    const selectableForChannel = useMemo(() => {
+        const bp = bindingsPayload?.selectable_by_channel;
+        if (!bp) return [] as BindingApiRow[];
+        if (channel === "sms" && Array.isArray(bp.sms)) return bp.sms as BindingApiRow[];
+        if (channel === "email" && Array.isArray(bp.email)) return bp.email as BindingApiRow[];
+        return [];
+    }, [bindingsPayload, channel]);
+
+    useEffect(() => {
+        if (channel === "sms" || channel === "email") {
+            const firstId = selectableForChannel[0]?.id;
+            setBindingId((prev) =>
+                selectableForChannel.some((b) => b.id === prev) ? prev : (typeof firstId === "string" ? firstId : "")
+            );
+        } else setBindingId("");
+    }, [channel, selectableForChannel]);
 
     const loadMsgs = useCallback(async (tid: string) => {
         setLoadingMsgs(true);
@@ -87,14 +154,129 @@ export default function CommunicationsDrawerSection({ apiEntityType, entityId }:
         else setMsgs([]);
     }, [selectedId, loadMsgs]);
 
+    const channelsAvailable = bindingsPayload?.channels_available ?? [];
+
+    const sendOutbound = async () => {
+        setSendErr(null);
+        setSending(true);
+        try {
+            const payload: Record<string, unknown> = {
+                entity_type: apiEntityType,
+                entity_id: entityId,
+                channel,
+                body: composerBody,
+            };
+            if (channel === "sms" || channel === "email") payload.to = to;
+            if (bindingId.trim()) payload.binding_id = bindingId.trim();
+
+            const r = await fetch("/api/admin/communications/send", {
+                method: "POST",
+                credentials: "include",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            });
+            const j = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error((j as { error?: string }).error ?? `HTTP ${r.status}`);
+            setComposerBody("");
+            setTo("");
+            await loadThreads();
+        } catch (e) {
+            setSendErr(e instanceof Error ? e.message : "Send failed");
+        } finally {
+            setSending(false);
+        }
+    };
+
     return (
         <div className="space-y-4 pt-2">
             <div>
                 <h3 className="text-[13px] font-semibold uppercase tracking-wide text-alloy-forge/90">Communications</h3>
                 <p className="mt-1 text-sm text-alloy-midnight/65">
-                    Canonical SMS / email / in-app threads (read-only listing). Compose / templates are not in scope for
-                    this slice.
+                    Canonical SMS / email / in-app threads. Sends enqueue on the canonical path and emit{" "}
+                    <code className="text-[11px]">message_queued</code>; delivery relies on bindings + backend process.
+                    Future: granular <span className="text-[11px]">communications.send</span> permission hook.
                 </p>
+            </div>
+
+            <div className="rounded-lg border border-alloy-stone/20 bg-alloy-stone/5 p-3">
+                <h4 className="text-[12px] font-semibold uppercase tracking-wide text-alloy-forge/80">Send message</h4>
+                {loadingBindings ? (
+                    <p className="mt-2 text-sm text-alloy-midnight/55">Loading channel options…</p>
+                ) : bindErr ? (
+                    <p className="mt-2 text-sm text-alloy-ember">{bindErr}</p>
+                ) : channelsAvailable.length === 0 ? (
+                    <p className="mt-2 text-sm text-alloy-midnight/65">
+                        No outbound channels detected. Confirm migration applied and seeds from the provider setup runbook
+                        completed.
+                    </p>
+                ) : (
+                    <div className="mt-3 space-y-3">
+                        <label className="block text-[12px] font-medium text-alloy-forge">
+                            Channel
+                            <select
+                                className="mt-1 block w-full max-w-xs rounded-md border border-alloy-stone/35 bg-white px-2 py-1.5 text-sm"
+                                value={channel}
+                                onChange={(e) => setChannel(e.target.value)}
+                            >
+                                {channelsAvailable.map((ch) => (
+                                    <option key={ch} value={ch}>
+                                        {ch.replace("_", " ")}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                        {(channel === "sms" || channel === "email") && selectableForChannel.length > 1 ? (
+                            <label className="block text-[12px] font-medium text-alloy-forge">
+                                Sender binding
+                                <select
+                                    className="mt-1 block w-full max-w-md rounded-md border border-alloy-stone/35 bg-white px-2 py-1.5 text-sm"
+                                    value={bindingId}
+                                    onChange={(e) => setBindingId(e.target.value)}
+                                >
+                                    {selectableForChannel.map((b) => (
+                                        <option key={b.id} value={b.id}>
+                                            {(b.display_label || b.channel || "binding") +
+                                                ` (${b.id.slice(0, 8)}…)`}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                        ) : null}
+                        {channel !== "in_app" ? (
+                            <label className="block text-[12px] font-medium text-alloy-forge">
+                                To
+                                <input
+                                    type="text"
+                                    className="mt-1 block w-full rounded-md border border-alloy-stone/35 bg-white px-2 py-1.5 text-sm"
+                                    placeholder={channel === "sms" ? "+1… phone" : "email…"}
+                                    value={to}
+                                    onChange={(e) => setTo(e.target.value)}
+                                />
+                            </label>
+                        ) : (
+                            <p className="text-[11px] text-alloy-midnight/55">
+                                In-app uses internal queued delivery — no SMS/email provider binding required for enqueue.
+                            </p>
+                        )}
+                        <label className="block text-[12px] font-medium text-alloy-forge">
+                            Body
+                            <textarea
+                                className="mt-1 min-h-[88px] w-full rounded-md border border-alloy-stone/35 bg-white px-2 py-1.5 text-sm"
+                                value={composerBody}
+                                onChange={(e) => setComposerBody(e.target.value)}
+                            />
+                        </label>
+                        {sendErr ? <p className="text-sm text-alloy-ember">{sendErr}</p> : null}
+                        <button
+                            type="button"
+                            onClick={() => void sendOutbound()}
+                            disabled={sending || !composerBody.trim()}
+                            className="rounded-md border border-alloy-midnight bg-alloy-midnight px-3 py-1.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                            {sending ? "Sending…" : "Send"}
+                        </button>
+                    </div>
+                )}
             </div>
 
             {loadingThreads ? (
@@ -102,7 +284,7 @@ export default function CommunicationsDrawerSection({ apiEntityType, entityId }:
             ) : thrErr ? (
                 <p className="text-sm text-alloy-ember">{thrErr}</p>
             ) : threads.length === 0 ? (
-                <p className="text-sm text-alloy-midnight/60">No communication threads for this record yet.</p>
+                <p className="text-sm text-alloy-midnight/60">No threads for this record yet — send above to create one.</p>
             ) : (
                 <div className="flex flex-col gap-3 sm:flex-row">
                     <div className="sm:w-44 shrink-0 space-y-1">

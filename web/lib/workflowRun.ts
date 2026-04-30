@@ -16,6 +16,7 @@ import { resolveJobStatusRowByOrgAndKey } from "@/lib/admin/jobEffectiveStatusKe
 import { resolveScheduleStatusRowByKey } from "@/lib/admin/scheduleEffectiveStatusKey";
 import { isCommunicationCanonicalDualWriteEnabled } from "@/lib/communications/communicationsEnabled";
 import { enqueueCanonicalCommunicationMirror } from "@/lib/communications/mirrorQueuedMessage";
+import { logCommDualWrite, orgIdTail } from "@/lib/communications/mirrorObservation";
 
 /** Standard event payload shape; all entity keys optional. Do not crash if missing. */
 export type WorkflowEventPayload = {
@@ -24,6 +25,7 @@ export type WorkflowEventPayload = {
     org_id?: string | null;
     customer?: Record<string, unknown> | null;
     contact?: Record<string, unknown> | null;
+    person?: Record<string, unknown> | null;
     opportunity?: Record<string, unknown> | null;
     job?: Record<string, unknown> | null;
     schedule?: Record<string, unknown> | null;
@@ -1464,7 +1466,7 @@ function validateWorkflowEventMatch(
 
 /**
  * Execute a workflow run: insert run row, evaluate conditions, execute actions.
- * Event payload should include event_type, occurred_at, org_id, and entity keys (customer, contact, job, schedule, opportunity, vendor) when available.
+ * Event payload should include event_type, occurred_at, org_id, and entity keys (customer, contact, job, schedule, opportunity, vendor, person) when available.
  * Optional options.event_id and options.org_id are set on the workflow_runs row when provided (e.g. from canonical event layer).
  */
 export async function executeWorkflowRun(
@@ -1479,6 +1481,7 @@ export async function executeWorkflowRun(
         org_id: (eventPayload.org_id as string) ?? null,
         customer: (eventPayload.customer as Record<string, unknown>) ?? null,
         contact: (eventPayload.contact as Record<string, unknown>) ?? null,
+        person: (eventPayload.person as Record<string, unknown>) ?? null,
         opportunity: (eventPayload.opportunity as Record<string, unknown>) ?? null,
         job: (eventPayload.job as Record<string, unknown>) ?? null,
         schedule: (eventPayload.schedule as Record<string, unknown>) ?? null,
@@ -1739,7 +1742,43 @@ export async function executeWorkflowRun(
                         const orgForComm = String(
                             (payload as Record<string, unknown>).org_id ?? options?.org_id ?? ""
                         ).trim();
-                        if (orgForComm && (channel.toLowerCase() === "sms" || channel.toLowerCase() === "email")) {
+                        const chanLower = channel.toLowerCase();
+                        if (!orgForComm) {
+                            logCommDualWrite({
+                                phase: "skip_create_message_mirror",
+                                reason: "no_org_id",
+                                workflow_run_id: runId,
+                                workflow_id: workflowId,
+                                channel,
+                                org_id_tail: null,
+                            });
+                        } else if (chanLower !== "sms" && chanLower !== "email") {
+                            logCommDualWrite({
+                                phase: "skip_create_message_mirror",
+                                reason: "channel_not_mirrored",
+                                workflow_run_id: runId,
+                                workflow_id: workflowId,
+                                channel,
+                                org_id_tail: orgIdTail(orgForComm),
+                            });
+                        } else {
+                            let mirrorPayload: Record<string, unknown> = payload as Record<string, unknown>;
+                            if (
+                                personIdForMeta &&
+                                (mirrorPayload.person == null ||
+                                    typeof mirrorPayload.person !== "object" ||
+                                    !String((mirrorPayload.person as Record<string, unknown>).id ?? "").trim())
+                            ) {
+                                mirrorPayload = {
+                                    ...mirrorPayload,
+                                    person: {
+                                        ...(typeof mirrorPayload.person === "object"
+                                            ? (mirrorPayload.person as Record<string, unknown>)
+                                            : {}),
+                                        id: personIdForMeta,
+                                    },
+                                };
+                            }
                             void enqueueCanonicalCommunicationMirror({
                                 supabase,
                                 orgId: orgForComm,
@@ -1748,7 +1787,7 @@ export async function executeWorkflowRun(
                                 channelRaw: channel,
                                 toRaw: toValue,
                                 bodyRaw: bodyText ?? "",
-                                payload,
+                                payload: mirrorPayload,
                                 optionsOrgId: options?.org_id ?? null,
                             }).catch((e) =>
                                 console.warn(

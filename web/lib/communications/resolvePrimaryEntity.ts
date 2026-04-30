@@ -1,6 +1,6 @@
 import type { WorkflowEventPayload } from "@/lib/workflowRun";
 
-/** Pick primary_entity for CARD 1.5 threading from enriched workflow payload. */
+/** Pick primary_entity for CARD 1.5 threading + CARD 15 mirror (persons-first; contacts excluded). */
 export function resolvePrimaryEntityFromWorkflowPayload(
     payload: Record<string, unknown>
 ): { entityType: string; entityId: string } | null {
@@ -28,13 +28,13 @@ export function resolvePrimaryEntityFromWorkflowPayload(
             : null;
     if (cust) return { entityType: "customers", entityId: cust };
 
-    const contact =
-        typeof payload.contact === "object" &&
-        payload.contact &&
-        typeof (payload.contact as Record<string, unknown>).id === "string"
-            ? ((payload.contact as Record<string, unknown>).id as string)
+    const person =
+        typeof payload.person === "object" &&
+        payload.person &&
+        typeof (payload.person as Record<string, unknown>).id === "string"
+            ? ((payload.person as Record<string, unknown>).id as string)
             : null;
-    if (contact) return { entityType: "contacts", entityId: contact };
+    if (person) return { entityType: "persons", entityId: person };
 
     const et = payload.entity_type != null ? String(payload.entity_type).trim() : "";
     const ei = payload.entity_id != null ? String(payload.entity_id).trim() : "";
