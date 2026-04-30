@@ -102,6 +102,25 @@ export function formatDateTime(value: string | number | Date | null | undefined)
     }).format(d as Date);
 }
 
+/**
+ * MM/DD/YYYY h:mm AM/PM in the **runtime default timezone** (browser local on the client).
+ * Prefer for UI that should reflect the viewer's local wall clock. Not for UTC-stable SSR hydration.
+ */
+export function formatDateTimeLocal(value: string | number | Date | null | undefined): string {
+    if (value === null || value === undefined) return "-";
+    const d = typeof value === "object" ? value : new Date(value);
+    if (Number.isNaN((d as Date).getTime())) return "-";
+    const s = new Intl.DateTimeFormat("en-US", {
+        month: "2-digit",
+        day: "2-digit",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+    }).format(d as Date);
+    return s.replace(",", "").replace(/\s+/g, " ").trim();
+}
+
 /** Recurrence unit values for dropdowns (stored lowercase). */
 export const RECURRENCE_UNIT_OPTIONS = [
     { value: "day", label: "Day" },

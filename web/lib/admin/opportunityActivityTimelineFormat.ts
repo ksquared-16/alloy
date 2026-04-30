@@ -3,6 +3,8 @@
  * Does not alter workflow_events payloads or event_type values.
  */
 
+import { formatDateTimeLocal } from "@/lib/adminFormatters";
+
 const SNAKE_MANUAL: Record<string, string> = {
     new_inquiry: "New Inquiry",
     contact_attempted: "Contact Attempted",
@@ -145,52 +147,65 @@ export function getWorkflowActivityActorLabel(payload: Record<string, unknown>, 
 
 const NOTE_LINE_MAX = 120;
 
+/** MM/DD/YYYY h:mm AM/PM in the viewer's local timezone (browser default). */
+export function formatQueueNoteDateTime(ms: number): string {
+    const d = new Date(ms);
+    if (!Number.isFinite(d.getTime())) return "";
+    const s = formatDateTimeLocal(d);
+    return s === "-" ? "" : s;
+}
+
+/** `[2026-04-29T21:15:05Z] Note text` → timestamp + remainder */
+function tryParseBracketedTimestamp(line: string): { rest: string; ms: number } | null {
+    const trimmed = line.trim();
+    const m = trimmed.match(/^\[([^\]]+)\]\s*([\s\S]*)$/);
+    if (!m) return null;
+    const ts = m[1].trim();
+    const ms = Date.parse(ts);
+    if (!Number.isFinite(ms)) return null;
+    return { rest: m[2].trim().replace(/\s+/g, " "), ms };
+}
+
 function tryParseLineLeadingDate(line: string): { rest: string; ms: number } | null {
     const trimmed = line.trim();
-    // ISO date at start
     const iso = trimmed.match(
-        /^(\d{4}-\d{2}-\d{2})(?:[T\s]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:\d{2})?)?/
+        /^(\d{4}-\d{2}-\d{2})(?:[T\s]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z|[+-]\d{2}:?\d{2})?)?/
     );
     if (iso) {
         const ms = Date.parse(iso[0]);
         if (Number.isFinite(ms)) {
-            const rest = trimmed.slice(iso[0].length).replace(/^\s*[—\-:|\t]+\s*/, "").trim();
+            const rest = trimmed.slice(iso[0].length).replace(/^\s*[—\-:|\t]+\s*/, "").trim().replace(/\s+/g, " ");
             return { rest, ms };
         }
     }
     const us = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})\b/);
     if (us) {
-        const m = Number(us[1]);
-        const d = Number(us[2]);
+        const month = Number(us[1]);
+        const day = Number(us[2]);
         let y = Number(us[3]);
         if (y < 100) y += 2000;
-        const ms = new Date(y, m - 1, d).getTime();
+        const ms = Date.UTC(y, month - 1, day, 0, 0, 0, 0);
         if (Number.isFinite(ms)) {
-            const rest = trimmed.slice(us[0].length).replace(/^\s*[—\-:|\t]+\s*/, "").trim();
+            const rest = trimmed.slice(us[0].length).replace(/^\s*[—\-:|\t]+\s*/, "").trim().replace(/\s+/g, " ");
             return { rest, ms };
         }
     }
     return null;
 }
 
-function formatNoteDisplayDate(ms: number): string {
-    const d = new Date(ms);
-    if (!Number.isFinite(d.getTime())) return "";
-    return new Intl.DateTimeFormat(undefined, {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-        timeZone: "UTC",
-    }).format(d);
+function extractNoteLineTimestampMs(line: string): number | null {
+    const b = tryParseBracketedTimestamp(line);
+    if (b) return b.ms;
+    const p = tryParseLineLeadingDate(line);
+    return p ? p.ms : null;
 }
 
 function pickLatestNoteLine(lines: string[]): string {
     type Scored = { line: string; ms: number | null };
-    const scored: Scored[] = lines.map((line) => {
-        const parsed = tryParseLineLeadingDate(line);
-        if (parsed) return { line, ms: parsed.ms };
-        return { line, ms: null };
-    });
+    const scored: Scored[] = lines.map((line) => ({
+        line,
+        ms: extractNoteLineTimestampMs(line),
+    }));
     const dated = scored.filter((s): s is Scored & { ms: number } => s.ms != null);
     if (dated.length) {
         dated.sort((a, b) => b.ms - a.ms);
@@ -199,15 +214,31 @@ function pickLatestNoteLine(lines: string[]): string {
     return lines[lines.length - 1]!;
 }
 
+/** Display: `{note_text} · {MM/DD/YYYY h:mm A}` (label "Notes" is prefixed in UI). */
 function formatSingleNoteLineForDisplay(line: string): string | null {
     const trimmed = line.trim().replace(/\s+/g, " ");
     if (!trimmed) return null;
-    const parsed = tryParseLineLeadingDate(trimmed);
-    if (parsed && parsed.rest) {
-        const dateLabel = formatNoteDisplayDate(parsed.ms);
-        const body = parsed.rest.length > NOTE_LINE_MAX ? `${parsed.rest.slice(0, NOTE_LINE_MAX)}…` : parsed.rest;
-        return dateLabel ? `${dateLabel} · ${body}` : body;
+
+    const bracket = tryParseBracketedTimestamp(trimmed);
+    if (bracket) {
+        const dateStr = formatQueueNoteDateTime(bracket.ms);
+        const body = bracket.rest;
+        if (!body) return dateStr || null;
+        const bodyShort = body.length > NOTE_LINE_MAX ? `${body.slice(0, NOTE_LINE_MAX)}…` : body;
+        return dateStr ? `${bodyShort} · ${dateStr}` : bodyShort;
     }
+
+    const parsed = tryParseLineLeadingDate(trimmed);
+    if (parsed) {
+        const dateStr = formatQueueNoteDateTime(parsed.ms);
+        const body = parsed.rest;
+        if (body) {
+            const bodyShort = body.length > NOTE_LINE_MAX ? `${body.slice(0, NOTE_LINE_MAX)}…` : body;
+            return dateStr ? `${bodyShort} · ${dateStr}` : bodyShort;
+        }
+        return dateStr || null;
+    }
+
     return trimmed.length > NOTE_LINE_MAX ? `${trimmed.slice(0, NOTE_LINE_MAX)}…` : trimmed;
 }
 
