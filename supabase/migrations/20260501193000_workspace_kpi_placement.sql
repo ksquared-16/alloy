@@ -101,7 +101,6 @@ WITH childcare_orgs AS (
     FROM public.orgs o
     JOIN public.industries i ON i.id = o.industry_id
     WHERE i.key = 'childcare'::text
-      AND o.deleted_at IS NULL
 )
 INSERT INTO public.workspace_kpi_placement (
     org_id,
@@ -147,7 +146,6 @@ WITH childcare_orgs AS (
     FROM public.orgs o
     JOIN public.industries i ON i.id = o.industry_id
     WHERE i.key = 'childcare'::text
-      AND o.deleted_at IS NULL
 )
 INSERT INTO public.workspace_kpi_placement (
     org_id,
