@@ -345,27 +345,27 @@ async function enrichOpportunityRows(params: {
     const [personsRes, contactsRes, customersRes, ocmsRes, defs] = await Promise.all([
         personIds.length
             ? supabase
-                  .from("persons")
-                  .select("id, first_name, last_name, email, phone")
-                  .eq("org_id", orgId)
-                  .in("id", personIds as any)
+                .from("persons")
+                .select("id, first_name, last_name, email, phone")
+                .eq("org_id", orgId)
+                .in("id", personIds as any)
             : Promise.resolve({ data: [] as any[], error: null as any }),
         contactIds.length
             ? supabase
-                  .from("contacts")
-                  .select("id, first_name, last_name, email, phone, customer_id")
-                  .eq("org_id", orgId)
-                  .in("id", contactIds as any)
+                .from("contacts")
+                .select("id, first_name, last_name, email, phone, customer_id")
+                .eq("org_id", orgId)
+                .in("id", contactIds as any)
             : Promise.resolve({ data: [] as any[], error: null as any }),
         customerIds.length
             ? supabase.from("customers").select("id, name").eq("org_id", orgId).in("id", customerIds as any)
             : Promise.resolve({ data: [] as any[], error: null as any }),
         opportunityIds.length
             ? supabase
-                  .from("opportunity_customer_members")
-                  .select("opportunity_id, customer_members(display_name, dob, person_id)")
-                  .eq("org_id", orgId)
-                  .in("opportunity_id", opportunityIds as any)
+                .from("opportunity_customer_members")
+                .select("opportunity_id, customer_members(display_name, dob, person_id)")
+                .eq("org_id", orgId)
+                .in("opportunity_id", opportunityIds as any)
             : Promise.resolve({ data: [] as any[], error: null as any }),
         fetchEffectiveStatusDefinitions(supabase as any, orgId, "opportunities", { activeOnly: true }),
     ]);
@@ -391,10 +391,10 @@ async function enrichOpportunityRows(params: {
     const { data: childPersons } =
         uniqChildPersonIds.length > 0
             ? await supabase
-                  .from("persons")
-                  .select("id, date_of_birth")
-                  .eq("org_id", orgId)
-                  .in("id", uniqChildPersonIds as any)
+                .from("persons")
+                .select("id, date_of_birth")
+                .eq("org_id", orgId)
+                .in("id", uniqChildPersonIds as any)
             : { data: [] as any[] };
     const childDobByPersonId = new Map<string, string>();
     for (const p of (childPersons ?? []) as any[]) {
@@ -430,8 +430,8 @@ async function enrichOpportunityRows(params: {
             person && (String(person.first_name ?? "").trim() || String(person.last_name ?? "").trim())
                 ? [person.first_name, person.last_name].filter(Boolean).join(" ").trim()
                 : contact && (String(contact.first_name ?? "").trim() || String(contact.last_name ?? "").trim())
-                  ? [contact.first_name, contact.last_name].filter(Boolean).join(" ").trim()
-                  : null;
+                    ? [contact.first_name, contact.last_name].filter(Boolean).join(" ").trim()
+                    : null;
         const contactEmail = (person?.email ?? contact?.email ?? null) as string | null;
         const contactPhone = (person?.phone ?? contact?.phone ?? null) as string | null;
 
@@ -471,8 +471,8 @@ async function enrichOpportunityRows(params: {
                     typeof row.program_label === "string"
                         ? row.program_label.trim()
                         : typeof row.program_short === "string"
-                          ? String(row.program_short).trim()
-                          : "";
+                            ? String(row.program_short).trim()
+                            : "";
                 if (pl) programs.push(pl);
             }
             childDisplay = names.length ? names.join(" · ") : typeof md?.child_name === "string" ? md.child_name : null;

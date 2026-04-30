@@ -5,8 +5,8 @@ This document describes how admin authentication and role-based access work for 
 ## Overview
 
 - **Login Page**: `/login` – Email/password via Supabase Auth
-- **Admin Portal**: `/admin/*` – Protected by session + role in `public.user_profiles`
-- **Protection**: Middleware requires a valid session; server layout requires a `user_profiles` row with role `admin` or `ops`
+- **Admin Portal**: `/admin/*`, `/adminV2/*` (and `/admin/v2/*` rewrite) – Protected by session + role (`user_profiles`, `user_roles`, or `app_users`)
+- **Protection**: Middleware requires a valid Supabase session on admin routes; server layout requires an allowed role (`admin` or `ops`)
 - **Unauthorized**: Users without a valid profile or allowed role are redirected to `/unauthorized`
 
 ## Roles (V1)
@@ -36,7 +36,7 @@ values ('<auth.users.id>', 'admin');
 
 ### Required
 
-- **`SUPABASE_URL`** (or `NEXT_PUBLIC_SUPABASE_URL`) – Supabase project URL
+- **`SUPABASE_URL`** (optional if `NEXT_PUBLIC_SUPABASE_URL` is set) – Same project URL; server-only clients fall back to `NEXT_PUBLIC_SUPABASE_URL`
 - **`SUPABASE_ANON_KEY`** (or `NEXT_PUBLIC_SUPABASE_ANON_KEY`) – Supabase anon/public key (for auth)
 - **`SUPABASE_SERVICE_ROLE_KEY`** – Used server-side for admin API and reading `user_profiles` (do not expose to client)
 
@@ -46,7 +46,7 @@ values ('<auth.users.id>', 'admin');
 
 ## How It Works
 
-1. **Middleware** (`web/middleware.ts`): For `/admin/*`, checks for a valid Supabase session. If no user → redirect to `/login`.
+1. **Middleware** (`web/middleware.ts`): For `/admin*` and `/adminV2*`, checks for a valid Supabase session. If no user → redirect to `/login`.
 2. **Admin layout** (`web/app/admin/layout.tsx`): Calls `getAdminAuth()` (user + `user_profiles.role`). If no profile or role not in `admin`/`ops` → redirect to `/unauthorized`.
 3. **API mutations**: POST/PATCH/DELETE on admin routes (e.g. `/api/admin/discounts`, `/api/admin/verticals`) use `requireAdmin()` and return 403 if role is not `admin`. GET routes allow both `admin` and `ops`.
 4. **UI**: `AdminAuthContext` exposes `canMutate` (true only for `admin`). Create/edit buttons are hidden for `ops`; drawers show read-only forms for `ops`.

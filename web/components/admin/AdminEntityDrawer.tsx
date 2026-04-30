@@ -102,6 +102,12 @@ import {
 } from "@/lib/recordChrome/types";
 import { executeOpportunityRecordAction } from "@/lib/recordChrome/executeOpportunityRecordAction";
 import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
+import { formatActivityRelativeShort, type ActivitySignalResult } from "@/lib/admin/activitySignals";
+import {
+    getWorkflowActivityActorLabel,
+    getWorkflowActivityEventDetail,
+    getWorkflowActivityEventTitle,
+} from "@/lib/admin/opportunityActivityTimelineFormat";
 import OpportunityQuoteIntakeSection from "@/components/admin/quoteIntake/OpportunityQuoteIntakeSection";
 
 function dispatchAfterPaymentRun(jobId: string, scheduleId: string | null) {
@@ -827,28 +833,14 @@ function buildAdminEntityFetchUrl(
     return `/api/admin/entity/${encodeURIComponent(type)}/${encodeURIComponent(id)}`;
 }
 
-function summarizeOpportunityActivityEvent(eventType: string | null, payload: Record<string, unknown>): string {
-    const t = (eventType ?? "").trim();
-    if (t === "message_received") return "SMS received";
-    if (t === "message_sent") return "SMS sent";
-    if (t === "opportunity_status_changed" || t === "entity_status_changed") {
-        const o = payload.old_status_key != null ? String(payload.old_status_key) : "—";
-        const n = payload.new_status_key != null ? String(payload.new_status_key) : "—";
-        return `Status changed: ${o} → ${n}`;
+function opportunityActivityStaleBadgeClass(severity: "low" | "medium" | "high"): string {
+    if (severity === "high") {
+        return "border border-alloy-ember/35 bg-alloy-ember/10 text-alloy-ember font-semibold";
     }
-    if (t === "note_added") return "Note added";
-    if (t === "action_executed") {
-        const k = payload.action_key != null ? String(payload.action_key) : "";
-        return k ? `Action: ${k}` : "Action executed";
+    if (severity === "medium") {
+        return "border border-amber-300/80 bg-amber-50 text-amber-950 font-semibold";
     }
-    return t || "Event";
-}
-
-function activityActorLabel(payload: Record<string, unknown>): string {
-    if (payload.actor_user_id != null && String(payload.actor_user_id).trim()) return "Staff";
-    if (payload.actor === "contact") return "Contact";
-    if (payload.actor === "system") return "System";
-    return "—";
+    return "border border-alloy-stone/25 bg-alloy-stone/15 text-alloy-forge/80 font-medium";
 }
 
 export default function AdminEntityDrawer() {
@@ -1100,6 +1092,9 @@ export default function AdminEntityDrawer() {
     const [opportunityActivityEvents, setOpportunityActivityEvents] = useState<OpportunityActivityEventRow[] | null>(null);
     const [opportunityActivityLoading, setOpportunityActivityLoading] = useState(false);
     const [opportunityActivityError, setOpportunityActivityError] = useState<string | null>(null);
+    const [opportunityActivitySignal, setOpportunityActivitySignal] = useState<ActivitySignalResult | null>(null);
+    const [opportunityActivitySignalLoading, setOpportunityActivitySignalLoading] = useState(false);
+    const [opportunityActivitySignalNonce, setOpportunityActivitySignalNonce] = useState(0);
     const [memberCustomers, setMemberCustomers] = useState<{ id: string; name: string | null }[]>([]);
     const [memberCreateSaving, setMemberCreateSaving] = useState(false);
     const [memberCreateError, setMemberCreateError] = useState<string | null>(null);
@@ -1527,6 +1522,36 @@ export default function AdminEntityDrawer() {
             cancelled = true;
         };
     }, [drawer.id, drawer.type, drawerTab]);
+
+    useEffect(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
+            setOpportunityActivitySignal(null);
+            setOpportunityActivitySignalLoading(false);
+            return;
+        }
+        let cancelled = false;
+        setOpportunityActivitySignalLoading(true);
+        fetch(`/api/admin/opportunities/${encodeURIComponent(drawer.id)}/activity-signal`, {
+            credentials: "include",
+        })
+            .then((res) => (res.ok ? res.json() : null))
+            .then((json: ActivitySignalResult | null) => {
+                if (cancelled || !json || typeof json !== "object") {
+                    if (!cancelled) setOpportunityActivitySignal(null);
+                    return;
+                }
+                setOpportunityActivitySignal(json);
+            })
+            .catch(() => {
+                if (!cancelled) setOpportunityActivitySignal(null);
+            })
+            .finally(() => {
+                if (!cancelled) setOpportunityActivitySignalLoading(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [drawer.type, drawer.id, opportunityActivitySignalNonce]);
 
     useEffect(() => {
         if (!drawer.type || !drawer.id || drawer.id === "new" || !canHardDeleteEntityType(drawer.type)) {
@@ -2239,6 +2264,7 @@ export default function AdminEntityDrawer() {
             if (!id || id !== drawer.id) return;
             console.info("[drawer] opportunity updated", { id, action_key: ce.detail?.action_key ?? null });
             refetch();
+            setOpportunityActivitySignalNonce((n) => n + 1);
             // Also refetch resolved header actions so conditional actions swap (schedule ↔ reschedule).
             const workUnitId = opportunityWorkUnitId;
             const departmentId =
@@ -6625,6 +6651,46 @@ export default function AdminEntityDrawer() {
         );
     }, [opportunityInquiryWorkflowDrawer, drawer.type, overviewData, formData.status_key, opportunityQueueDefinition]);
 
+    const opportunityActivityHeaderLine = useMemo(() => {
+        if (drawer.type !== "opportunities") return null;
+        if (!overviewData || (overviewData as { _create?: boolean })._create) return null;
+        if (opportunityActivitySignalLoading) {
+            return (
+                <span className="text-[11px] text-alloy-midnight/40" aria-busy="true">
+                    Last activity: …
+                </span>
+            );
+        }
+        const sig = opportunityActivitySignal;
+        const nowMs = Date.now();
+        const stale = sig?.stale_signal ?? null;
+        const hasActivity = Boolean(sig?.last_activity_at && String(sig.last_activity_at).trim());
+        const rel = hasActivity && sig?.last_activity_at ? formatActivityRelativeShort(sig.last_activity_at, nowMs) : null;
+        const summary = (sig?.last_activity_summary ?? "").trim();
+        const detail =
+            summary && rel ? `${summary} · ${rel}` : summary || rel || (hasActivity ? "Activity" : null);
+
+        return (
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-snug text-alloy-midnight/55">
+                <span className="min-w-0">
+                    <span className="font-medium text-alloy-midnight/45">Last activity:</span>{" "}
+                    {detail ? (
+                        <span className="text-alloy-midnight/70">{detail}</span>
+                    ) : (
+                        <span className="text-alloy-midnight/45">No activity yet</span>
+                    )}
+                </span>
+                {stale ? (
+                    <span
+                        className={`inline-flex max-w-full shrink-0 items-center rounded-md px-1.5 py-0.5 text-[10px] leading-tight ${opportunityActivityStaleBadgeClass(stale.severity)}`}
+                    >
+                        {stale.label}
+                    </span>
+                ) : null}
+            </div>
+        );
+    }, [drawer.type, overviewData, opportunityActivitySignal, opportunityActivitySignalLoading]);
+
     if (!drawer.type || !drawer.id) return null;
 
     const drawerStatusBadge = overviewData && !loading && !(overviewData as { _create?: boolean })?._create ? (
@@ -6899,14 +6965,22 @@ export default function AdminEntityDrawer() {
 
     const headerSubtitleResolved =
         drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer ? (
-            <div className="mt-0.5 flex flex-wrap items-center gap-2">
-                {workflowCompactRecordNum ? <span>{workflowCompactRecordNum}</span> : null}
-                <span className="shrink-0">{opportunityInquiryWorkflowHeaderStatus}</span>
-                {headerNextStepInline ? (
-                    <span className="rounded-full border border-alloy-stone/20 bg-white/70 px-2 py-0.5 text-[11px] font-medium text-alloy-midnight/65">
-                        Suggested next: {headerNextStepInline}
-                    </span>
-                ) : null}
+            <div className="mt-0.5 space-y-1.5">
+                <div className="flex flex-wrap items-center gap-2">
+                    {workflowCompactRecordNum ? <span>{workflowCompactRecordNum}</span> : null}
+                    <span className="shrink-0">{opportunityInquiryWorkflowHeaderStatus}</span>
+                    {headerNextStepInline ? (
+                        <span className="rounded-full border border-alloy-stone/20 bg-white/70 px-2 py-0.5 text-[11px] font-medium text-alloy-midnight/65">
+                            Suggested next: {headerNextStepInline}
+                        </span>
+                    ) : null}
+                </div>
+                {opportunityActivityHeaderLine}
+            </div>
+        ) : drawer.type === "opportunities" && !opportunityInquiryWorkflowDrawer ? (
+            <div className="mt-0.5 space-y-1.5">
+                {headerSubtitleBase ? <div>{headerSubtitleBase}</div> : null}
+                {opportunityActivityHeaderLine}
             </div>
         ) : (
             headerSubtitleBase
@@ -8790,16 +8864,22 @@ export default function AdminEntityDrawer() {
                                                         p.body_preview != null && String(p.body_preview).trim()
                                                             ? String(p.body_preview)
                                                             : null;
+                                                    const actTitle = getWorkflowActivityEventTitle(ev.event_type);
+                                                    const actDetail = getWorkflowActivityEventDetail(ev.event_type, p);
                                                     return (
                                                         <li
                                                             key={ev.id}
                                                             className="rounded-lg border border-alloy-stone/15 bg-white px-3 py-2 text-sm"
                                                         >
-                                                            <div className="font-semibold text-alloy-forge">
-                                                                {summarizeOpportunityActivityEvent(ev.event_type, p)}
-                                                            </div>
+                                                            <div className="font-semibold text-alloy-forge">{actTitle}</div>
+                                                            {actDetail ? (
+                                                                <div className="mt-0.5 text-[13px] font-normal text-alloy-forge/80">
+                                                                    {actDetail}
+                                                                </div>
+                                                            ) : null}
                                                             <div className="mt-0.5 text-[12px] text-alloy-forge/65">
-                                                                {formatDateTime(ev.occurred_at)} · {activityActorLabel(p)}
+                                                                {formatDateTime(ev.occurred_at)} ·{" "}
+                                                                {getWorkflowActivityActorLabel(p, ev.event_type)}
                                                             </div>
                                                             {preview ? (
                                                                 <div className="mt-1.5 text-[13px] text-alloy-forge/85 whitespace-pre-wrap">

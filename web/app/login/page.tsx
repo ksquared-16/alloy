@@ -1,9 +1,31 @@
 "use client";
 
-import { useState, FormEvent, Suspense } from "react";
+import { useState, FormEvent, Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabaseClient";
+import { getPublicSupabaseAuthDebug } from "@/lib/supabase/publicAuthEnv";
 import PrimaryButton from "@/components/PrimaryButton";
+
+/** Dev-only: safe Supabase connectivity hints (hostname + booleans only). */
+function DevSupabaseAuthPanel() {
+  const d = getPublicSupabaseAuthDebug();
+  return (
+    <div
+      className="mb-4 rounded-md border border-alloy-stone/40 bg-alloy-stone/20 px-3 py-2 text-left text-[11px] leading-relaxed text-alloy-midnight/80 font-mono"
+      data-testid="login-supabase-env-debug"
+    >
+      <div className="mb-1 font-sans font-semibold text-alloy-midnight">Dev: Supabase connectivity</div>
+      <div>NEXT_PUBLIC_SUPABASE_URL defined: {d.urlDefined ? "yes" : "no"}</div>
+      <div>Hostname: {d.hostname ?? "(none — check URL)"}</div>
+      <div>URL parses: {d.urlParseError ? `no (${d.urlParseError})` : d.urlDefined ? "yes" : "n/a"}</div>
+      <div>NEXT_PUBLIC_SUPABASE_ANON_KEY defined: {d.anonKeyDefined ? "yes" : "no"}</div>
+      <div className="mt-1 break-all">
+        Password sign-in expects:{" "}
+        {d.hostname ? `POST https://${d.hostname}${d.expectedAuthTokenPath}` : "(set URL to see)"}
+      </div>
+    </div>
+  );
+}
 
 function LoginForm() {
   const router = useRouter();
@@ -12,6 +34,21 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const isDev = process.env.NODE_ENV === "development";
+
+  useEffect(() => {
+    if (!isDev) return;
+    const d = getPublicSupabaseAuthDebug();
+    console.info("[login] Supabase public auth env (hostname only)", {
+      NEXT_PUBLIC_SUPABASE_URL_defined: d.urlDefined,
+      supabase_hostname: d.hostname ?? "(unset or unparsable)",
+      NEXT_PUBLIC_SUPABASE_ANON_KEY_defined: d.anonKeyDefined,
+      url_parse_error: d.urlParseError,
+      scheme: d.scheme,
+      password_sign_in_path: d.expectedAuthTokenPath,
+      expected_fetch_host: d.hostname ? `POST https://${d.hostname}${d.expectedAuthTokenPath}` : null,
+    });
+  }, [isDev]);
 
   const errorParam = searchParams?.get("error");
 
@@ -51,7 +88,15 @@ function LoginForm() {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       if (message.includes("NEXT_PUBLIC_SUPABASE")) {
-        setError("Configuration error: Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
+        setError(
+          message.startsWith("Missing ")
+            ? "Configuration error: Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY"
+            : message
+        );
+      } else if (message === "Failed to fetch") {
+        setError(
+          "Could not reach Supabase (network). Confirm NEXT_PUBLIC_SUPABASE_URL is your real https://…supabase.co URL, restart `next dev` after editing .env.local, and check extensions/VPN are not blocking requests to *.supabase.co."
+        );
       } else {
         setError(message || "An unexpected error occurred. Please try again.");
       }
@@ -72,6 +117,8 @@ function LoginForm() {
             {error || initialError}
           </div>
         )}
+
+        {isDev ? <DevSupabaseAuthPanel /> : null}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

@@ -4,6 +4,7 @@ import type {
     QueueItemQuickActionVm,
     QueueItemVm,
 } from "@/lib/ui-v2/workspace-types";
+import { formatOpportunityQueueNotesPreview } from "@/lib/admin/opportunityActivityTimelineFormat";
 import { formatWorkspaceUsdGrouped } from "@/lib/ui-v2/formatWorkspaceCurrency";
 import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
 
@@ -173,7 +174,7 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow): CrmCompactRowSe
         null;
 
     const attentionReason = (row as { _attention_reason_label?: string | null })._attention_reason_label?.trim() || null;
-    const familyNote = (row as { _notes_preview?: string | null })._notes_preview?.trim() || null;
+    const familyNote = formatOpportunityQueueNotesPreview((row as { _notes_preview?: string | null })._notes_preview);
 
     const staleSig = (row as { stale_signal?: { label: string; severity: "low" | "medium" | "high" } | null }).stale_signal;
     const activityStale =

@@ -27,6 +27,7 @@ import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedu
 import { UpdateStatusAddNoteModal } from "@/components/admin/opportunity/actions/UpdateStatusAddNoteModal";
 import { ContactAttemptedModal } from "@/components/admin/opportunity/actions/ContactAttemptedModal";
 import { formatActivityRelativeShort } from "@/lib/admin/activitySignals";
+import { formatOpportunityQueueNotesPreview } from "@/lib/admin/opportunityActivityTimelineFormat";
 
 const WORKSPACE_BASE = "/adminV2/workspace";
 
@@ -719,7 +720,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 const desiredStart =
                     typeof r?._desired_start_date === "string" ? r._desired_start_date.trim() : "";
                 const tourCtx = typeof r?._tour_context === "string" ? r._tour_context.trim() : "";
-                const note = typeof r?._notes_preview === "string" ? r._notes_preview.trim() : "";
+                const note =
+                    formatOpportunityQueueNotesPreview(
+                        typeof r?._notes_preview === "string" ? r._notes_preview : null
+                    ) ?? "";
                 const attentionReason =
                     typeof r?._attention_reason_label === "string" ? r._attention_reason_label.trim() : "";
 

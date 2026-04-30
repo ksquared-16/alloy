@@ -4,9 +4,14 @@
  */
 
 const getSupabaseUrl = (): string => {
-  const url = process.env.SUPABASE_URL;
+  const url =
+    (process.env.SUPABASE_URL?.trim() ||
+      process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()) ??
+    "";
   if (!url) {
-    throw new Error("SUPABASE_URL environment variable is not set");
+    throw new Error(
+      "Supabase URL is not set. Set SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL."
+    );
   }
   return url;
 };
