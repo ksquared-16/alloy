@@ -1,27 +1,18 @@
 # env files
 .env
+.env.*
+!.env.example
+!.env.local.example
 **/.env
-
-# python
-__pycache__/
-*.pyc
-
-# node
-node_modules/
-.next/
-.vercel
-.env*.local
-
-# local-only
-.env.local
-.vercel/
-
-__pycache__/
-*.pyc
-backend/.env
-web/.env.local
+**/.env.*
+!**/.env.example
+!**/.env.local.example
 
 supabase/.temp/
 supabase/.branches/
 supabase/.temp/
 supabase/.branches/
+
+.venv/
+
+**/.venv/
