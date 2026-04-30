@@ -806,4 +806,79 @@ DO NOT:
 - Treat staging sign-off as production sign-off; keep production kill switches documented (feature flags, env toggles).
 
 ⸻
-End roadmap cards Cards 9–14 — execute only when each card is explicitly approved and tasked.
+
+CARD 15 — Kill Contacts from Forward Logic
+
+Purpose:
+Ensure contacts are completely removed from all new communications logic and decision paths, while preserving legacy compatibility temporarily.
+
+⸻
+
+Rules (NON-NEGOTIABLE)
+
+1. No new code may depend on contacts for communications threading or canonical writes
+    * No new queries using contact_id
+    * No new joins on contacts
+    * No new API inputs requiring contacts for outbound/inbound canonical paths
+2. Communications identity must be:
+    * person_id if exists (entity type `persons`, id = persons.id)
+    * else external identity (SMS phone / email / deterministic surrogate UUID)
+3. Thread model MUST support persons OR external recipient; MUST NOT require contact_id as anchor
+4. Inbound SMS MUST NOT rely on contact matching; allowed: binding→org resolution; persons.phone lookup in org; else surrogate `communications_unknown` UUID.
+5. Outbound canonical: never anchor dual-write mirror from payload.contact — use person (or opp/job/customer per resolver order).
+
+⸻
+
+Allowed (temporary)
+
+* Legacy `public.messages.contact_id` on create_message
+* payload.contact in broader workflow/templates outside canonical entity resolver for communications
+* GET threads normalization `contact` ↔ `contacts` for passive reads of historically keyed threads only
+
+⸻
+
+DO NOT
+
+* Delete contacts table
+* Break legacy create_message inserts
+* Migrate historical communication_* rows in this card
+
+⸻
+End roadmap cards Cards 9–15 — execute only when each card is explicitly approved and tasked.
+
+⸻
+
+IMPLEMENTATION COMPLETION — Cards 10–15 (execution summary)
+
+CARD 10 — Staging Migration + RLS Verification
+- Added docs/implementation/communications/card10-migration-rls-verification.md (apply steps + blockers checklist).
+- Added docs/implementation/communications/verify_rls_communications.sql (inspect policies / table sanity).
+- Local/staging migration apply remains an environment step (`supabase db push` or Dashboard SQL).
+
+CARD 11 — Dual-Write Rollout + Observability
+- Added web/lib/communications/mirrorObservation.ts — structured logs with prefix [COMM_DUAL_WRITE] (grep-friendly JSON lines).
+- web/lib/workflowRun.ts logs skip reasons when COMMUNICATION_DUAL_WRITE is true: no_org_id, channel_not_mirrored; mirrorQueuedMessage logs mirror_skipped outcomes.
+- Refactored canonical enqueue into web/lib/communications/canonicalOutboundEnqueue.ts; mirror delegates there.
+
+CARD 12 — Send Message Composer V1
+- GET web/app/api/admin/communications/bindings/route.ts — org-scoped bindings (no secrets); composerChannels derives channels_available.
+- POST web/app/api/admin/communications/send/route.ts — admin/ops, assertRowOrg for opportunities/jobs, canonical enqueue + message_queued; best-effort triggerBackendMessagesQueue.
+- Supporting: composerChannels.ts, communicationPermissions.ts (communications.send stub), triggerBackendMessagesQueue.ts.
+- web/components/admin/communications/communicationsDrawerSection.tsx — composer UX.
+- backend/app/services/communication_message_sender.py — honors communication_messages.communication_provider_binding_id when org+channel match; else resolver.
+
+CARD 13 — Provider setup runbook + placeholders
+- docs/implementation/communications/provider-setup-runbook.md
+- docs/implementation/communications/seed_bindings_placeholder.sql
+
+CARD 14 — Production hardening artifact
+- docs/implementation/communications/card14-production-security-audit.md
+
+CARD 15 — Kill contacts from forward communications logic (execution summary)
+- Contact usage inventory:
+  - **Removed:** `web/lib/communications/resolvePrimaryEntity.ts` — no branch on `payload.contact` for threading; added `payload.person` → `persons`.
+  - **Removed:** `backend/app/services/communication_inbound.py` — inbound SMS no longer queries `contacts`; uses `persons` by org + normalized phone (`resolve_primary_entity_for_inbound_sms`), then surrogate UUID.
+  - **Dual-write shim:** `web/lib/workflowRun.ts` `create_message` — when `person.id` is resolved from template payload, merges minimal `person { id }` into mirror-only payload before `enqueueCanonicalCommunicationMirror` so person-based threading works without `contact`.
+  - **Legacy allowed:** `create_message` still writes `contact_id` to `public.messages` unchanged; workflows still load vendor-scoped contacts for unrelated send_message semantics.
+  - **Passive API:** `/api/admin/communications/threads` still normalizes `contact` ↔ `contacts` for reading legacy-backed threads only; composer/send remain opportunities/jobs only.
+- Confirmation: Canonical thread/message creation paths do not invoke contacts queries or `contact_id` anchors; inbound never matches contacts table.
