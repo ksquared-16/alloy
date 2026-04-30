@@ -40,11 +40,23 @@ function defaultOpportunityQueueItemVm(row: WorkspaceOpportunityQueueRuntime["it
     const reason = (row as { _attention_reason?: string | null })._attention_reason?.trim() || null;
 
     const nextStep = row._lifecycle_next_step?.title?.trim() || "";
-    const lastTouchedMs =
-        parseIsoMs((row as { updated_at?: string | null }).updated_at) ??
-        parseIsoMs((row as { created_at?: string | null }).created_at);
-    const lastActivityLabel =
-        lastTouchedMs != null ? `${formatAgeCompact(Date.now() - lastTouchedMs)} ago` : "";
+    const wfAt = (row as { last_activity_at?: string | null }).last_activity_at;
+    const wfSummary = (row as { last_activity_summary?: string | null }).last_activity_summary?.trim() || null;
+    let lastActivityLabel: string | null = null;
+    if (wfAt) {
+        const wfMs = parseIsoMs(wfAt);
+        if (wfMs != null) {
+            const rel = `${formatAgeCompact(Date.now() - wfMs)} ago`;
+            lastActivityLabel = wfSummary ? `${rel} · ${wfSummary}` : rel;
+        }
+    }
+    if (!lastActivityLabel) {
+        const lastTouchedMs =
+            parseIsoMs((row as { updated_at?: string | null }).updated_at) ??
+            parseIsoMs((row as { created_at?: string | null }).created_at);
+        lastActivityLabel =
+            lastTouchedMs != null ? `${formatAgeCompact(Date.now() - lastTouchedMs)} ago` : "";
+    }
 
     const quickActions =
         workUnitKey.trim().toLowerCase() === "needs_attention" && reason
@@ -93,6 +105,10 @@ function defaultOpportunityQueueItemVm(row: WorkspaceOpportunityQueueRuntime["it
                   ];
               })();
 
+    const stale = (row as { stale_signal?: { label: string; severity: "low" | "medium" | "high" } | null }).stale_signal;
+    const tags =
+        stale && String(stale.label ?? "").trim() ? [String(stale.label).trim()] : undefined;
+
     const item: QueueItemVm = {
         id: row.id,
         title,
@@ -103,6 +119,7 @@ function defaultOpportunityQueueItemVm(row: WorkspaceOpportunityQueueRuntime["it
             ...(reasonLabel ? [{ label: "Reason", value: reasonLabel }] : []),
             ...(lastActivityLabel ? [{ label: "Last activity", value: lastActivityLabel }] : []),
         ],
+        ...(tags ? { tags } : {}),
         quickActions,
         urgencyTier: workUnitKey.trim().toLowerCase() === "priced_followup" ? "warning" : "standard",
     };

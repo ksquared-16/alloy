@@ -270,6 +270,16 @@ export type WorkspaceOpportunityQueueRuntime = {
         _age_band?: string | null;
         /** Optional seed / extension: child display name for CRM row (not a DB join). */
         _child_display_name?: string | null;
+        /* Activity Signals V1 — derived server-side from workflow_events + metadata.activity_signal_rules */
+        last_activity_at?: string | null;
+        last_activity_type?: string | null;
+        last_activity_summary?: string | null;
+        stale_signal?: {
+            key: string;
+            label: string;
+            severity: "low" | "medium" | "high";
+            threshold_minutes: number;
+        } | null;
     }>;
 };
 

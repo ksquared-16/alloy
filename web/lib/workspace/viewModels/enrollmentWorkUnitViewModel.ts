@@ -132,11 +132,23 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow): CrmCompactRowSe
         (row as { _next_step_preview?: string | null })._next_step_preview?.trim() ||
         row._lifecycle_next_step?.title?.trim() ||
         null;
-    const lastTouchedMs =
-        parseIsoMs((row as { updated_at?: string | null }).updated_at) ??
-        parseIsoMs((row as { created_at?: string | null }).created_at);
-    const lastActivity =
-        lastTouchedMs != null ? `${formatAgeCompact(Date.now() - lastTouchedMs)} ago` : null;
+    const wfAt = (row as { last_activity_at?: string | null }).last_activity_at;
+    const wfSummary = (row as { last_activity_summary?: string | null }).last_activity_summary?.trim() || null;
+    let lastActivity: string | null = null;
+    if (wfAt) {
+        const ms = parseIsoMs(wfAt);
+        if (ms != null) {
+            const rel = `${formatAgeCompact(Date.now() - ms)} ago`;
+            lastActivity = wfSummary ? `${rel} · ${wfSummary}` : rel;
+        }
+    }
+    if (!lastActivity) {
+        const lastTouchedMs =
+            parseIsoMs((row as { updated_at?: string | null }).updated_at) ??
+            parseIsoMs((row as { created_at?: string | null }).created_at);
+        lastActivity =
+            lastTouchedMs != null ? `${formatAgeCompact(Date.now() - lastTouchedMs)} ago` : null;
+    }
 
     const commercialValue =
         row.quote_total != null && Number.isFinite(Number(row.quote_total)) && Number(row.quote_total) > 0
@@ -163,6 +175,12 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow): CrmCompactRowSe
     const attentionReason = (row as { _attention_reason_label?: string | null })._attention_reason_label?.trim() || null;
     const familyNote = (row as { _notes_preview?: string | null })._notes_preview?.trim() || null;
 
+    const staleSig = (row as { stale_signal?: { label: string; severity: "low" | "medium" | "high" } | null }).stale_signal;
+    const activityStale =
+        staleSig && String(staleSig.label ?? "").trim()
+            ? { label: String(staleSig.label).trim(), severity: staleSig.severity }
+            : null;
+
     return {
         primaryIdentity,
         childName,
@@ -178,6 +196,7 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow): CrmCompactRowSe
         tourContext: tourCtx,
         attentionReason,
         familyNote,
+        activityStale,
     };
 }
 

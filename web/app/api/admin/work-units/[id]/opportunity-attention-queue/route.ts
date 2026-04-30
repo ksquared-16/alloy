@@ -7,6 +7,7 @@ import {
     parseOpportunityAttentionRuleConfigV1FromMetadata,
 } from "@/lib/workspace/opportunityAttentionRules";
 import { buildOpportunityAttentionQueueItems } from "@/lib/workspace/buildOpportunityAttentionQueueItems";
+import { enrichOpportunityQueueRowsWithActivitySignals } from "@/lib/admin/activitySignals";
 
 /**
  * GET — Needs Attention queue for opportunity work units.
@@ -53,11 +54,37 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
             orgId: ctx.orgId,
             rules,
         });
+
+        const deptId = (wu as { department_id?: string | null }).department_id;
+        let departmentMetadata: unknown | null = null;
+        if (deptId) {
+            const { data: deptRow } = await supabase
+                .from("departments")
+                .select("metadata")
+                .eq("id", deptId)
+                .eq("org_id", ctx.orgId)
+                .maybeSingle();
+            departmentMetadata = (deptRow as { metadata?: unknown } | null)?.metadata ?? null;
+        }
+
+        let itemsOut = items;
+        try {
+            itemsOut = await enrichOpportunityQueueRowsWithActivitySignals({
+                supabase,
+                orgId: ctx.orgId,
+                rows: items,
+                workUnitMetadata: (wu as { metadata?: unknown }).metadata,
+                departmentMetadata,
+            });
+        } catch {
+            itemsOut = items;
+        }
+
         return NextResponse.json({
             work_unit_id: workUnitId,
             work_unit_key: "needs_attention",
-            total: items.length,
-            items,
+            total: itemsOut.length,
+            items: itemsOut,
             rules: resolvedRules,
         });
     } catch (e) {

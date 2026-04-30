@@ -66,6 +66,8 @@ export type CrmCompactRowSemanticSlots = {
   tourContext: string | null;
   attentionReason: string | null;
   familyNote: string | null;
+  /** Activity Signals V1 — config-driven stale hint (workflow_events + metadata). */
+  activityStale?: { label: string; severity: "low" | "medium" | "high" } | null;
 };
 
 export type QueueItemVm = {

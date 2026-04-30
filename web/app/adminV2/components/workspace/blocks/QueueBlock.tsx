@@ -143,6 +143,13 @@ function EnrollmentCrmCompactPreview({ slots }: { slots: CrmCompactRowSemanticSl
   const showOpsLine = Boolean(slots.nextStep || slots.lastActivity);
   const noteStress = Boolean(slots.attentionReason?.trim());
 
+  const staleClass =
+    slots.activityStale?.severity === "high"
+      ? "border border-alloy-ember/35 bg-alloy-ember/10 text-alloy-ember font-semibold"
+      : slots.activityStale?.severity === "medium"
+        ? "border border-amber-300/80 bg-amber-50 text-amber-950 font-semibold"
+        : "border border-alloy-stone/25 bg-alloy-stone/15 text-alloy-forge/80 font-medium";
+
   return (
     <div className="adminv2-ws-wu-queue-card-compact-text adminv2-ws-enrollment-crm-preview">
       <div className="adminv2-ws-enrollment-crm-preview__identity" data-enrollment-crm-slot="primaryIdentity">
@@ -187,6 +194,15 @@ function EnrollmentCrmCompactPreview({ slots }: { slots: CrmCompactRowSemanticSl
       {slots.attentionReason ? (
         <div className="adminv2-ws-enrollment-crm-preview__attention" data-enrollment-crm-slot="attentionReason">
           {slots.attentionReason}
+        </div>
+      ) : null}
+      {slots.activityStale ? (
+        <div className="mt-1" data-enrollment-crm-slot="activityStale">
+          <span
+            className={`inline-flex max-w-full items-center rounded-md px-1.5 py-0.5 text-[10px] leading-tight ${staleClass}`}
+          >
+            {slots.activityStale.label}
+          </span>
         </div>
       ) : null}
       {slots.familyNote ? (

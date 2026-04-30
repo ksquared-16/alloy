@@ -71,7 +71,32 @@ function OpportunityQueueInlinePreview({
                 const stageTitle = (row as { _lifecycle_stage_title?: string | null })._lifecycle_stage_title?.trim();
                 const statusLabel = (row as { _status_display?: string | null })._status_display?.trim();
                 const reason = (row as { _attention_reason_label?: string | null })._attention_reason_label?.trim();
-                const sub = [row._customer_name?.trim(), stageTitle ?? statusLabel ?? row.status_key?.trim(), price, reason]
+                const wfAt = (row as { last_activity_at?: string | null }).last_activity_at;
+                const wfSummary = (row as { last_activity_summary?: string | null }).last_activity_summary?.trim();
+                const stale = (row as { stale_signal?: { label: string; severity: string } | null }).stale_signal;
+                let activityBit: string | null = null;
+                if (wfAt) {
+                    const t = Date.parse(wfAt);
+                    if (Number.isFinite(t)) {
+                        const diffMs = Date.now() - t;
+                        const m = Math.floor(diffMs / 60000);
+                        const h = Math.floor(m / 60);
+                        const d = Math.floor(h / 24);
+                        const rel = d > 0 ? `${d}d ago` : h > 0 ? `${h}h ago` : m > 0 ? `${m}m ago` : "just now";
+                        activityBit = wfSummary ? `${rel} · ${wfSummary}` : rel;
+                    }
+                }
+                const staleBit = stale?.label?.trim()
+                    ? `[${stale.severity}] ${stale.label.trim()}`
+                    : null;
+                const sub = [
+                    row._customer_name?.trim(),
+                    stageTitle ?? statusLabel ?? row.status_key?.trim(),
+                    price,
+                    reason,
+                    activityBit,
+                    staleBit,
+                ]
                     .filter(Boolean)
                     .join(" · ");
                 return (

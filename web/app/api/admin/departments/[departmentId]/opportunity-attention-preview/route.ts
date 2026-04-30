@@ -4,6 +4,7 @@ import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
 import { DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1 } from "@/lib/workspace/opportunityAttentionRules";
 import { buildOpportunityAttentionQueueItems } from "@/lib/workspace/buildOpportunityAttentionQueueItems";
+import { enrichOpportunityQueueRowsWithActivitySignals } from "@/lib/admin/activitySignals";
 
 /**
  * GET — Org-wide opportunity attention preview for a department when the `needs_attention` work unit
@@ -28,11 +29,33 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
             orgId: ctx.orgId,
             rules: DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1,
         });
+
+        const { data: deptRow } = await supabase
+            .from("departments")
+            .select("metadata")
+            .eq("id", departmentId)
+            .eq("org_id", ctx.orgId)
+            .maybeSingle();
+        const departmentMetadata = (deptRow as { metadata?: unknown } | null)?.metadata ?? null;
+
+        let itemsOut = items;
+        try {
+            itemsOut = await enrichOpportunityQueueRowsWithActivitySignals({
+                supabase,
+                orgId: ctx.orgId,
+                rows: items,
+                workUnitMetadata: null,
+                departmentMetadata,
+            });
+        } catch {
+            itemsOut = items;
+        }
+
         return NextResponse.json({
             department_id: departmentId,
             work_unit_key: "needs_attention",
-            total: items.length,
-            items,
+            total: itemsOut.length,
+            items: itemsOut,
             rules,
             source: "department_attention_preview",
         });

@@ -26,6 +26,7 @@ import { getQueueUiConfig, type QueueUiConfig, type QueueUiRowPreviewField } fro
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { UpdateStatusAddNoteModal } from "@/components/admin/opportunity/actions/UpdateStatusAddNoteModal";
 import { ContactAttemptedModal } from "@/components/admin/opportunity/actions/ContactAttemptedModal";
+import { formatActivityRelativeShort } from "@/lib/admin/activitySignals";
 
 const WORKSPACE_BASE = "/adminV2/workspace";
 
@@ -722,6 +723,22 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 const attentionReason =
                     typeof r?._attention_reason_label === "string" ? r._attention_reason_label.trim() : "";
 
+                const wfAt = typeof r?.last_activity_at === "string" && r.last_activity_at.trim() ? r.last_activity_at.trim() : null;
+                const wfSummary =
+                    typeof r?.last_activity_summary === "string" && r.last_activity_summary.trim()
+                        ? r.last_activity_summary.trim()
+                        : null;
+                let activityLastLine: string | null = null;
+                if (wfAt) {
+                    const rel = formatActivityRelativeShort(wfAt, Date.now());
+                    if (rel) activityLastLine = wfSummary ? `${rel} · ${wfSummary}` : rel;
+                }
+                const staleSig = r?.stale_signal as { label?: string; severity?: "low" | "medium" | "high" } | null | undefined;
+                const activityStale =
+                    staleSig && typeof staleSig.label === "string" && staleSig.label.trim()
+                        ? { label: staleSig.label.trim(), severity: staleSig.severity ?? "low" }
+                        : null;
+
                 const quickActions: Array<{
                     id: string;
                     label: string;
@@ -790,7 +807,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                       typeof r?._next_step_preview === "string" && r._next_step_preview.trim()
                                           ? r._next_step_preview.trim()
                                           : null,
-                                  lastActivity: null,
+                                  lastActivity: activityLastLine,
                                   commercialValue: null,
                                   contactSnippet:
                                       [want("primary_contact") ? contactName : "", want("phone") ? phone : "", want("email") ? email : ""]
@@ -802,6 +819,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                   tourContext: want("tour_date") ? tourCtx || null : null,
                                   attentionReason: attentionReason || null,
                                   familyNote: note || null,
+                                  activityStale,
                               }
                             : undefined,
                 };
@@ -883,6 +901,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                   .filter(Boolean)
             : [];
         const attentionReason = (searchParams?.get("attention_reason") ?? "").trim();
+        const activitySignalKey = (searchParams?.get("activity_signal_key") ?? "").trim();
 
         const filteredItems = rawItems.filter((it) => {
             if (statusKeys.length) {
@@ -892,6 +911,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
             if (attentionReason) {
                 const rl = String((it as { _attention_reason_label?: string | null })._attention_reason_label ?? "").trim();
                 if (rl !== attentionReason) return false;
+            }
+            if (activitySignalKey) {
+                const k = String((it as { stale_signal?: { key?: string | null } | null }).stale_signal?.key ?? "").trim();
+                if (k !== activitySignalKey) return false;
             }
             return true;
         });
