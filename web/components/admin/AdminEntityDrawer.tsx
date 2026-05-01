@@ -9712,8 +9712,13 @@ export default function AdminEntityDrawer() {
                                                             </div>
                                                             <div className="mt-2">
                                                                 {(() => {
-                                                                    const selected = (formData as { _enrollment_panel?: string })._enrollment_panel;
-                                                                    const panel = selected === "notes" ? "notes" : "communication";
+                                                                    const raw = (formData as { _enrollment_panel?: string })._enrollment_panel?.trim();
+                                                                    const panel =
+                                                                        raw === "notes"
+                                                                            ? "notes"
+                                                                            : raw === "communication"
+                                                                              ? "communication"
+                                                                              : null;
                                                                     const tabBtn = (active: boolean) =>
                                                                         `rounded-md border px-2.5 py-1 text-[11px] font-semibold ${
                                                                             active
@@ -9810,17 +9815,21 @@ export default function AdminEntityDrawer() {
                                                                                         );
                                                                                     })()}
                                                                                 </div>
-                                                                            ) : drawer.id && drawer.id !== "new" ? (
+                                                                            ) : panel === "communication" && drawer.id && drawer.id !== "new" ? (
                                                                                 <div className={innerCard}>
                                                                                     <CommunicationsDrawerSection
                                                                                         key={drawer.id}
                                                                                         embedded
                                                                                         apiEntityType="opportunities"
                                                                                         entityId={drawer.id}
-                                                                                        active={panel === "communication"}
+                                                                                        active
                                                                                     />
                                                                                 </div>
-                                                                            ) : null}
+                                                                            ) : (
+                                                                                <p className="px-0.5 py-2 text-[11px] leading-snug text-alloy-midnight/55">
+                                                                                    Choose Communication or Notes.
+                                                                                </p>
+                                                                            )}
                                                                         </div>
                                                                     );
                                                                 })()}

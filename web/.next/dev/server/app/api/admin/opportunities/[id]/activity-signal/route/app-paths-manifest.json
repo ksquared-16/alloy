@@ -1,0 +1,3 @@
+{
+  "/api/admin/opportunities/[id]/activity-signal/route": "app/api/admin/opportunities/[id]/activity-signal/route.js"
+}

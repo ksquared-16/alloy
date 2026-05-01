@@ -1,7 +1,7 @@
 {
   "pages": {},
   "app": {
-    "[project]/web/app/admin/schedules/[id]/page": [
+    "[project]/app/admin/schedules/[id]/page": [
       "static/media/c875c6f5d3e977ac-s.p.80fc2c9e.woff2",
       "static/media/a218039a3287bcfd-s.p.4a23d71b.woff2",
       "static/media/8e6fa89aa22d24ec-s.p.3aec397d.woff2",

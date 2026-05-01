@@ -99,7 +99,7 @@
         "transform": "lodash/{{member}}"
       }
     },
-    "outputFileTracingRoot": "/Users/Kelly/Alloy",
+    "outputFileTracingRoot": "/Users/Kelly/Alloy/web",
     "cacheComponents": false,
     "cacheLife": {
       "default": {
@@ -289,7 +289,7 @@
     "bundlePagesRouterDependencies": false,
     "configFileName": "next.config.ts",
     "turbopack": {
-      "root": "/Users/Kelly/Alloy"
+      "root": "/Users/Kelly/Alloy/web"
     },
     "distDirRoot": ".next",
     "_originalRewrites": {
@@ -316,7 +316,7 @@
     }
   },
   "appDir": "/Users/Kelly/Alloy/web",
-  "relativeAppDir": "web",
+  "relativeAppDir": "",
   "files": [
     ".next/routes-manifest.json",
     ".next/server/pages-manifest.json",

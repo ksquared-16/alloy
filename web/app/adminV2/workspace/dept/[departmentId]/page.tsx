@@ -463,7 +463,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             <li key={`wu:${wu.id}`} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
                                 <Link
                                     href={`${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(wu.id)}`}
-                                    className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-standard flex flex-col items-stretch no-underline text-inherit hover:opacity-[0.98]"
+                                    className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-standard no-underline text-inherit hover:opacity-[0.98]"
                                     data-ws-wu-urgency="standard"
                                 >
                                     <div className="adminv2-ws-wu-queue-card-compact-text">
@@ -471,7 +471,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                             {wu.name?.trim() || "Work unit"}
                                         </div>
                                         <div
-                                            className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] tabular-nums"
+                                            className="adminv2-ws-paired-oper-queue-meta mt-2 grid grid-cols-2 gap-x-3 gap-y-1 tabular-nums"
                                             style={{ color: "var(--d-muted)" }}
                                         >
                                             <div>
@@ -479,7 +479,9 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                                 <span className="text-alloy-midnight/85">{total ?? "—"}</span>
                                             </div>
                                             <div className="text-right">
-                                                <span className="font-medium text-alloy-midnight/75">Needs attention</span>{" "}
+                                                <span className="font-medium text-alloy-midnight/75 whitespace-nowrap">
+                                                    Needs attention
+                                                </span>{" "}
                                                 <span className="text-alloy-midnight/85">{needs ?? "—"}</span>
                                             </div>
                                         </div>
@@ -505,7 +507,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
                         <Link
                             href={needsAttentionSummary.href}
-                            className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-warning flex flex-col items-stretch no-underline text-inherit hover:opacity-[0.98]"
+                            className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-warning no-underline text-inherit hover:opacity-[0.98]"
                             data-ws-wu-urgency="attention"
                         >
                             <div className="adminv2-ws-wu-queue-card-compact-text">
@@ -513,7 +515,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                     Needs attention
                                 </div>
                                 <div
-                                    className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] tabular-nums"
+                                    className="adminv2-ws-paired-oper-queue-meta mt-2 grid grid-cols-2 gap-x-3 gap-y-1 tabular-nums"
                                     style={{ color: "var(--d-muted)" }}
                                 >
                                     <div>
@@ -521,7 +523,9 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                         <span className="text-alloy-midnight/85">{needsAttentionSummary.total ?? "—"}</span>
                                     </div>
                                     <div className="text-right">
-                                        <span className="font-medium text-alloy-midnight/75">Needs attention</span>{" "}
+                                        <span className="font-medium text-alloy-midnight/75 whitespace-nowrap">
+                                            Needs attention
+                                        </span>{" "}
                                         <span className="text-alloy-midnight/85">{needsAttentionSummary.total ?? "—"}</span>
                                     </div>
                                 </div>
@@ -585,18 +589,23 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     throughputSlot={throughputPairedPanels}
                     attentionSlot={null}
                     contextSlot={
-                        <AutomationWorkflowsBlock
-                            title="Automations"
-                            kpisLoading={workflowKpisLoading}
-                            kpis={{
-                                runs_today: workflowKpis.runs_today,
-                                failed_last_7d: workflowKpis.failed_last_7d,
-                                running_last_7d: workflowKpis.running_last_7d,
-                                success_rate_last_7d: workflowKpis.success_rate_last_7d,
-                            }}
-                            workflows={workflowsSummary}
-                            href="/adminV2/workflows"
-                        />
+                        <div
+                            className="adminv2-ws-dept-v2-workflows-strip"
+                            data-ws-lane-kind="automation_workflows"
+                        >
+                            <AutomationWorkflowsBlock
+                                title="Automations"
+                                kpisLoading={workflowKpisLoading}
+                                kpis={{
+                                    runs_today: workflowKpis.runs_today,
+                                    failed_last_7d: workflowKpis.failed_last_7d,
+                                    running_last_7d: workflowKpis.running_last_7d,
+                                    success_rate_last_7d: workflowKpis.success_rate_last_7d,
+                                }}
+                                workflows={workflowsSummary}
+                                href="/adminV2/workflows"
+                            />
+                        </div>
                     }
                     railSlot={
                         deptKey === "enrollment" &&

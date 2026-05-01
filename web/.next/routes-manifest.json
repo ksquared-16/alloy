@@ -1442,6 +1442,12 @@
       "namedRegex": "^/adminV2/settings/fields(?:/)?$"
     },
     {
+      "page": "/adminV2/settings/kpis",
+      "regex": "^/adminV2/settings/kpis(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/adminV2/settings/kpis(?:/)?$"
+    },
+    {
       "page": "/adminV2/settings/layouts",
       "regex": "^/adminV2/settings/layouts(?:/)?$",
       "routeKeys": {},
@@ -1572,6 +1578,24 @@
       "regex": "^/api/admin/agent/v2/field\\-visibility(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/api/admin/agent/v2/field\\-visibility(?:/)?$"
+    },
+    {
+      "page": "/api/admin/communications/bindings",
+      "regex": "^/api/admin/communications/bindings(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/communications/bindings(?:/)?$"
+    },
+    {
+      "page": "/api/admin/communications/drawer-recipients",
+      "regex": "^/api/admin/communications/drawer\\-recipients(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/communications/drawer\\-recipients(?:/)?$"
+    },
+    {
+      "page": "/api/admin/communications/send",
+      "regex": "^/api/admin/communications/send(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/communications/send(?:/)?$"
     },
     {
       "page": "/api/admin/communications/threads",
@@ -2088,6 +2112,12 @@
       "regex": "^/api/admin/workflows/summary(?:/)?$",
       "routeKeys": {},
       "namedRegex": "^/api/admin/workflows/summary(?:/)?$"
+    },
+    {
+      "page": "/api/admin/workspace-kpi-placements",
+      "regex": "^/api/admin/workspace\\-kpi\\-placements(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/admin/workspace\\-kpi\\-placements(?:/)?$"
     },
     {
       "page": "/api/book-v2/availability",

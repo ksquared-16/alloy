@@ -37,10 +37,13 @@ import { UpdateStatusAddNoteModal } from "@/components/admin/opportunity/actions
 import { ContactAttemptedModal } from "@/components/admin/opportunity/actions/ContactAttemptedModal";
 import { formatActivityRelativeShort } from "@/lib/admin/activitySignals";
 import { formatOpportunityQueueNotesPreview } from "@/lib/admin/opportunityActivityTimelineFormat";
+import { WorkUnitLifecycleCoveragePanel } from "@/components/admin/workspace/WorkUnitLifecycleCoveragePanel";
 import {
     computeUnmappedOverflowCount,
+    computeWorkUnitLifecycleCoverage,
     findAllRecordsQueueKey,
     isRowUnmappedForThroughput,
+    queueHasStatusFilters,
     reorderSectionsWithAllRecordsFirst,
     shouldSuppressWorkUnitKpiStrip,
     statusKeysCoveredByThroughputQueues,
@@ -110,6 +113,11 @@ function queueItemPayloadHasId(r: unknown): boolean {
         typeof (r as { id?: unknown }).id === "string" &&
         String((r as { id: string }).id).trim() !== ""
     );
+}
+
+/** Queue definitions may carry admin-only notes tagged "(internal)" — hide from the work-unit header. */
+function isOperatorFacingQueueSummaryDescription(description: string): boolean {
+    return !/\(internal\)/i.test(description.trim());
 }
 
 function mergeQueueSummariesByKey(prev: QueueSummary[], incoming: QueueSummary[]): QueueSummary[] {
@@ -299,6 +307,25 @@ export default function AdminV2OpportunityWorkUnitPage() {
         if (!throughput.length) return null;
         return throughput[throughput.length - 1]!.key;
     }, [queueUi]);
+
+    const hasLifecycleThroughput = useMemo(() => {
+        if (!queueDef || !allRecordsQueueKey) return false;
+        return queueDef.queues.some(
+            (q) =>
+                q.key !== allRecordsQueueKey &&
+                q.key.trim().toLowerCase() !== "needs_attention" &&
+                queueHasStatusFilters(q)
+        );
+    }, [queueDef, allRecordsQueueKey]);
+
+    const lifecycleCoverage = useMemo(() => {
+        if (!queueDef || !queueSummaries) return null;
+        return computeWorkUnitLifecycleCoverage({
+            summaries: queueSummaries,
+            def: queueDef,
+            allRecordsQueueKey,
+        });
+    }, [queueDef, queueSummaries, allRecordsQueueKey]);
 
     const unmappedOnly = (searchParams?.get("unmapped") ?? "").trim() === "1";
 
@@ -998,7 +1025,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         </div>
                     ))}
                 </div>
-                {activeSummary?.description?.trim() ? (
+                {activeSummary?.description?.trim() && isOperatorFacingQueueSummaryDescription(activeSummary.description) ? (
                     <p className="m-0 text-[11px] leading-snug text-alloy-forge/60 line-clamp-2">{activeSummary.description.trim()}</p>
                 ) : null}
             </div>
@@ -1306,6 +1333,42 @@ export default function AdminV2OpportunityWorkUnitPage() {
         allRecordsQueueKey,
         coveredThroughputStatusKeys,
         unmappedPillCount,
+    ]);
+
+    const showOtherBucketPill =
+        typeof unmappedPillCount === "number" &&
+        unmappedPillCount > 0 &&
+        Boolean(allRecordsQueueKey) &&
+        Boolean(otherPillSectionKey);
+
+    const headerQueuePickerSlot = useMemo(() => {
+        if (!queueModel) return null;
+        return (
+            <div className="min-w-0">
+                {queuePicker}
+                <WorkUnitLifecycleCoveragePanel
+                    hasLifecycleThroughput={hasLifecycleThroughput}
+                    showOtherPill={showOtherBucketPill}
+                    coverage={lifecycleCoverage}
+                    allRecordsQueueKey={allRecordsQueueKey}
+                    selectedQueueKey={selectedQueueKey}
+                    queueItems={queueItems?.items}
+                    queueItemsLoading={queueItemsLoading}
+                    coveredStatusKeys={coveredThroughputStatusKeys}
+                />
+            </div>
+        );
+    }, [
+        queueModel,
+        queuePicker,
+        hasLifecycleThroughput,
+        showOtherBucketPill,
+        lifecycleCoverage,
+        allRecordsQueueKey,
+        selectedQueueKey,
+        queueItems?.items,
+        queueItemsLoading,
+        coveredThroughputStatusKeys,
     ]);
 
     const model = useMemo(() => {
@@ -1732,7 +1795,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 <AdminV2RouteLoadingState variant="work_unit" />
             ) : wuShowPrimaryTransition ? (
                 <AdminV2RouteLoadingState variant="queue">
-                    {queuePicker ? <div className="min-w-0">{queuePicker}</div> : null}
+                    {headerQueuePickerSlot}
                 </AdminV2RouteLoadingState>
             ) : effectiveModel ? (
                 <>
@@ -1750,7 +1813,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     <WorkUnitWorkspace
                         model={effectiveModel}
                         onAction={onAction}
-                        headerQueuePicker={queueModel ? queuePicker : null}
+                        headerQueuePicker={headerQueuePickerSlot}
                         primaryFooterSlot={
                             <AutomationWorkflowsBlock
                                 title="Automations"

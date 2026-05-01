@@ -848,6 +848,15 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
   type __Unused = __Check
 }
 
+// Validate ../../app/adminV2/settings/kpis/page.tsx
+{
+  type __IsExpected<Specific extends AppPageConfig<"/adminV2/settings/kpis">> = Specific
+  const handler = {} as typeof import("../../app/adminV2/settings/kpis/page.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
 // Validate ../../app/adminV2/settings/layouts/page.tsx
 {
   type __IsExpected<Specific extends AppPageConfig<"/adminV2/settings/layouts">> = Specific
@@ -1383,6 +1392,33 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
 {
   type __IsExpected<Specific extends RouteHandlerConfig<"/api/admin/agent/v2/field-visibility">> = Specific
   const handler = {} as typeof import("../../app/api/admin/agent/v2/field-visibility/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../app/api/admin/communications/bindings/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/admin/communications/bindings">> = Specific
+  const handler = {} as typeof import("../../app/api/admin/communications/bindings/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../app/api/admin/communications/drawer-recipients/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/admin/communications/drawer-recipients">> = Specific
+  const handler = {} as typeof import("../../app/api/admin/communications/drawer-recipients/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../app/api/admin/communications/send/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/admin/communications/send">> = Specific
+  const handler = {} as typeof import("../../app/api/admin/communications/send/route.js")
   type __Check = __IsExpected<typeof handler>
   // @ts-ignore
   type __Unused = __Check
@@ -2985,6 +3021,15 @@ type RouteHandlerConfig<Route extends AppRouteHandlerRoutes = AppRouteHandlerRou
 {
   type __IsExpected<Specific extends RouteHandlerConfig<"/api/admin/workflows/summary">> = Specific
   const handler = {} as typeof import("../../app/api/admin/workflows/summary/route.js")
+  type __Check = __IsExpected<typeof handler>
+  // @ts-ignore
+  type __Unused = __Check
+}
+
+// Validate ../../app/api/admin/workspace-kpi-placements/route.ts
+{
+  type __IsExpected<Specific extends RouteHandlerConfig<"/api/admin/workspace-kpi-placements">> = Specific
+  const handler = {} as typeof import("../../app/api/admin/workspace-kpi-placements/route.js")
   type __Check = __IsExpected<typeof handler>
   // @ts-ignore
   type __Unused = __Check

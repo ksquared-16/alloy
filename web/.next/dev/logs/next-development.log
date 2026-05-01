@@ -1,0 +1,337 @@
+[00:00:00.836] Server  WARN     ⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+[00:00:00.944] Server  LOG      ✓ Ready in 766ms
+[00:00:09.422] Server  LOG      ○ Compiling /adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId] ...
+[00:00:14.842] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:00:15.970] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:00:18.029] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:00:18.139] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:00:18.362] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:00:19.417] Server  WARN    [admin-timing] GET /api/admin/work-units {}
+[00:00:19.567] Server  WARN    [entity-labels-perf] resolveEntityLabelsForOrg {}
+[00:00:19.567] Server  WARN    [entity-labels-perf] GET /api/admin/entity-labels {}
+[00:00:19.950] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:00:20.048] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:00:20.454] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:00:20.830] Server  WARN    [admin-timing] GET /api/admin/workflows/summary variant=workspace {}
+[00:00:20.962] Server  WARN    [admin-timing] GET /api/admin/workflow-runs list=kpis {}
+[00:00:21.065] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:00:21.142] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:00:21.764] Server  WARN    [admin-timing] GET /api/admin/actions {}
+[00:00:21.860] Server  WARN    [admin-timing] GET /api/admin/actions {}
+[00:00:22.395] Server  WARN    [queue-perf] getWorkUnitQueueSummaries {}
+[00:00:22.396] Server  WARN    [admin-timing] GET /api/admin/work-units/[id]/queues {}
+[00:00:24.559] Server  WARN    [queue-perf] getWorkUnitQueueSummaries {}
+[00:00:24.559] Server  WARN    [admin-timing] GET /api/admin/work-units/[id]/queues {}
+[00:00:26.932] Server  WARN    [queue-perf] enrichOpportunityRows {}
+[00:00:26.932] Server  WARN    [queue-perf] getWorkUnitQueueItems opportunity {}
+[00:00:26.933] Server  WARN    [admin-timing] GET /api/admin/queues/[workUnitId]/[queueKey] {}
+[00:00:53.647] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:00:53.681] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:00:54.400] Server  WARN    [admin-timing] GET /api/admin/work-units {}
+[00:00:54.431] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:00:54.603] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:00:55.177] Server  WARN    [admin-timing] GET /api/admin/workflows/summary variant=workspace {}
+[00:00:55.308] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:00:56.035] Server  WARN    [admin-timing] GET /api/admin/workflow-runs list=kpis {}
+[00:00:56.049] Server  WARN    [admin-timing] GET /api/admin/work-units {}
+[00:00:56.995] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:00:57.606] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:00:57.907] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:00:58.439] Server  WARN    [admin-timing] GET /api/admin/workflows/summary variant=workspace {}
+[00:00:58.995] Server  WARN    [admin-timing] GET /api/admin/workflow-runs list=kpis {}
+[00:01:00.175] Server  WARN    [queue-perf] getWorkUnitQueueSummaries {}
+[00:01:00.176] Server  WARN    [queue-perf] getDepartmentWorkUnitQueueSummaries work_unit {}
+[00:01:00.176] Server  WARN    [queue-perf] getDepartmentWorkUnitQueueSummaries batch {}
+[00:01:00.177] Server  WARN    [admin-timing] GET /api/admin/departments/[id]/work-unit-queue-summaries {}
+[00:01:38.352] Server  LOG      ✓ Compiled in 114ms
+[00:01:39.119] Server  LOG      ✓ Compiled in 94ms
+[00:01:50.338] Server  LOG      ✓ Compiled in 159ms
+[00:01:51.247] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:01:51.629] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:01:51.631] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:01:52.290] Server  LOG      ✓ Compiled in 153ms
+[00:01:52.360] Server  WARN    [admin-timing] GET /api/admin/work-units {}
+[00:01:52.637] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:01:52.737] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:01:52.904] Server  LOG      ✓ Compiled in 145ms
+[00:01:53.095] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:01:53.683] Server  LOG      ✓ Compiled in 308ms
+[00:01:53.912] Server  WARN    [admin-timing] GET /api/admin/workflows/summary variant=workspace {}
+[00:01:53.962] Server  WARN    [admin-timing] GET /api/admin/workflow-runs list=kpis {}
+[00:01:54.310] Server  WARN    [queue-perf] getWorkUnitQueueSummaries {}
+[00:01:54.311] Server  WARN    [admin-timing] GET /api/admin/work-units/[id]/queues {}
+[00:01:54.320] Server  WARN    [admin-timing] GET /api/admin/work-units {}
+[00:01:54.532] Server  LOG      ✓ Compiled in 503ms
+[00:01:55.032] Server  LOG      ✓ Compiled in 140ms
+[00:01:55.340] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:01:55.366] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:01:55.727] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:01:55.830] Server  LOG      ✓ Compiled in 138ms
+[00:01:56.092] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:01:56.425] Server  LOG      ✓ Compiled in 127ms
+[00:01:56.494] Server  WARN    [queue-perf] getWorkUnitQueueSummaries {}
+[00:01:56.494] Server  WARN    [admin-timing] GET /api/admin/work-units/[id]/queues {}
+[00:01:56.839] Server  WARN    [admin-timing] GET /api/admin/workflow-runs list=kpis {}
+[00:01:57.034] Server  LOG      ✓ Compiled in 148ms
+[00:01:57.171] Server  WARN    [admin-timing] GET /api/admin/workflows/summary variant=workspace {}
+[00:01:57.997] Server  WARN    [queue-perf] getWorkUnitQueueSummaries {}
+[00:01:57.997] Server  WARN    [admin-timing] GET /api/admin/work-units/[id]/queues {}
+[00:02:00.612] Server  WARN    [queue-perf] enrichOpportunityRows {}
+[00:02:00.613] Server  WARN    [queue-perf] getWorkUnitQueueItems opportunity {}
+[00:02:00.613] Server  WARN    [admin-timing] GET /api/admin/queues/[workUnitId]/[queueKey] {}
+[00:02:17.917] Server  LOG      ✓ Compiled in 154ms
+[00:02:18.442] Server  LOG      ✓ Compiled in 73ms
+[00:02:19.155] Server  LOG      ✓ Compiled in 83ms
+[00:02:19.262] Browser ERROR   ./components/admin/communications/CommunicationsDrawerSection.tsx:455:22
+Parsing ecmascript source code failed
+  453 |                             ) : null}
+  454 |                         </li>
+> 455 |                     ))}
+      |                      ^
+  456 |                 </ul>
+  457 |             )}
+  458 |         </div>
+
+Expected '</', got ')'
+
+Import traces:
+  Client Component Browser:
+    ./components/admin/communications/CommunicationsDrawerSection.tsx [Client Component Browser]
+    ./components/admin/AdminEntityDrawer.tsx [Client Component Browser]
+    ./app/adminV2/workspace/AdminV2WorkspaceClientProviders.tsx [Client Component Browser]
+    ./app/adminV2/workspace/AdminV2WorkspaceClientProviders.tsx [Server Component]
+    ./app/adminV2/workspace/layout.tsx [Server Component]
+
+  Client Component SSR:
+    ./components/admin/communications/CommunicationsDrawerSection.tsx [Client Component SSR]
+    ./components/admin/AdminEntityDrawer.tsx [Client Component SSR]
+    ./app/adminV2/workspace/AdminV2WorkspaceClientProviders.tsx [Client Component SSR]
+    ./app/adminV2/workspace/AdminV2WorkspaceClientProviders.tsx [Server Component]
+    ./app/adminV2/workspace/layout.tsx [Server Component]
+[00:02:19.767] Server  LOG      ✓ Compiled in 86ms
+[00:02:20.347] Server  LOG      ✓ Compiled in 78ms
+[00:02:31.875] Server  LOG      ✓ Compiled in 192ms
+[00:02:32.322] Server  LOG      ✓ Compiled in 312ms
+[00:02:32.425] Browser ERROR   ./components/admin/communications/CommunicationsDrawerSection.tsx:70:1
+Parsing ecmascript source code failed
+  68 |
+  69 | /** Canonical threads + messages + queued email composer (Cards 16–17). */
+> 70 | }: CommunicationsDrawerSectionProps) {
+     | ^
+  71 |     const [embeddedSectionOpen, setEmbeddedSectionOpen] = useState(!embedded);
+  72 |     const [threads, setThreads] = useState<ThreadRow[]>([]);
+  73 |     const [thrErr, setThrErr] = useState<string | null>(null);
+
+Expression expected
+
+Import traces:
+  Client Component Browser:
+    ./components/admin/communications/CommunicationsDrawerSection.tsx [Client Component Browser]
+    ./components/admin/AdminEntityDrawer.tsx [Client Component Browser]
+    ./app/adminV2/workspace/AdminV2WorkspaceClientProviders.tsx [Client Component Browser]
+    ./app/adminV2/workspace/AdminV2WorkspaceClientProviders.tsx [Server Component]
+    ./app/adminV2/workspace/layout.tsx [Server Component]
+
+  Client Component SSR:
+    ./components/admin/communications/CommunicationsDrawerSection.tsx [Client Component SSR]
+    ./components/admin/AdminEntityDrawer.tsx [Client Component SSR]
+    ./app/adminV2/workspace/AdminV2WorkspaceClientProviders.tsx [Client Component SSR]
+    ./app/adminV2/workspace/AdminV2WorkspaceClientProviders.tsx [Server Component]
+    ./app/adminV2/workspace/layout.tsx [Server Component]
+[00:02:36.249] Server  LOG      ✓ Compiled in 110ms
+[00:02:42.838] Server  LOG      ✓ Compiled in 1028ms
+[00:04:06.276] Browser INFO    [timing][drawer] {"key":"opportunities:c7928cd3-9f1f-4286-a3c5-5de40f0ad8a5","ms_since_open":0,"phase":"open"}
+[00:04:07.604] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:04:07.935] Browser INFO    [timing][drawer] {"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms_since_open":0,"phase":"open"}
+[00:04:08.004] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:04:09.111] Server  WARN    [admin-timing] GET /api/admin/actions {}
+[00:04:09.330] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:04:10.390] Server  WARN    [admin-timing] GET /api/admin/actions {}
+[00:04:10.499] Browser INFO    [timing][drawer] {"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms":2563.5,"phase":"record_header_actions_fetch","url":"/api/admin/actions?surface=record_header&entity_type=opportunity&entity_id=fe5d9838-967b-4111-9ddf-df5390b9c1fc&work_unit_id=5ba90557-876d-4450-9c28-36beac6e83be&department_id=04958a78-32ca-4091-bcd3-4bbaef3fee4b"}
+[00:04:11.476] Server  INFO    [timing][opportunity-api] {}
+[00:04:11.606] Browser INFO    [timing][drawer] {"has_data":true,"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms_since_open":3670.6,"phase":"record_loading_cleared"}
+[00:04:11.606] Browser INFO    [timing][drawer] {"header_actions_loading":false,"header_actions_resolved":true,"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms_since_open":3670.8,"phase":"interactive","record_loaded":true,"work_unit_ready":true}
+[00:04:11.725] Server  INFO    [timing][opportunity-api] {}
+[00:04:11.876] Browser INFO    [timing][drawer] {"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","phase":"family_contacts_panel_mount","section_key":"family_contacts","variant":"summary"}
+[00:04:11.876] Browser INFO    [timing][drawer] {"has_data":true,"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms_since_open":3940.6,"phase":"record_loading_cleared"}
+[00:04:11.876] Browser INFO    [timing][drawer] {"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","phase":"family_contacts_panel_mount","section_key":"family_contacts","variant":"summary"}
+[00:04:13.516] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:04:14.455] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:04:14.612] Server  WARN    [admin-timing] GET /api/admin/actions {}
+[00:04:14.718] Browser INFO    [timing][drawer] {"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms":2842.2,"phase":"inquiry_children_record_section_actions_fetch","section_key":"inquiry_children","url":"/api/admin/actions?surface=record_section&entity_type=opportunity&entity_id=fe5d9838-967b-4111-9ddf-df5390b9c1fc&section_key=inquiry_children"}
+[00:04:14.718] Browser INFO    [timing][drawer] {"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms":2843.5,"phase":"inquiry_children_record_section_actions_fetch","section_key":"inquiry_children","url":"/api/admin/actions?surface=record_section&entity_type=opportunity&entity_id=fe5d9838-967b-4111-9ddf-df5390b9c1fc&section_key=inquiry_children"}
+[00:04:15.496] Server  WARN    [admin-timing] GET /api/admin/actions {}
+[00:04:15.637] Browser INFO    [timing][drawer] {"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms":3592,"phase":"work_unit_fetch","url":"/api/admin/work-units/5ba90557-876d-4450-9c28-36beac6e83be"}
+[00:04:15.637] Browser INFO    [timing][drawer] {"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms":3690.3,"phase":"record_section_actions_fetch","section_key":"family_contacts","url":"/api/admin/actions?surface=record_section&entity_type=opportunity&entity_id=fe5d9838-967b-4111-9ddf-df5390b9c1fc&section_key=family_contacts&department_id=04958a78-32ca-4091-bcd3-4bbaef3fee4b&work_unit_id=5ba90557-876d-4450-9c28-36beac6e83be"}
+[00:04:20.084] Server  INFO    [timing][opportunity-api] {}
+[00:04:20.266] Browser INFO    [timing][drawer] {"hydration_pending_ms":8313.5,"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms":8584.2,"phase":"opportunity_full_hydration_applied","was_visibly_pending":true}
+[00:04:20.266] Browser INFO    [timing][drawer] {"has_data":true,"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms_since_open":12331.2,"phase":"record_loading_cleared"}
+[00:04:20.421] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:04:21.007] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:04:22.748] Browser INFO    [timing][drawer] {"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms":2430.1,"phase":"work_unit_fetch","url":"/api/admin/work-units/5ba90557-876d-4450-9c28-36beac6e83be"}
+[00:05:35.371] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:05:35.580] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:05:35.686] Server  WARN    [admin-timing] GET /api/admin/work-units {}
+[00:05:36.326] Server  WARN    [admin-timing] GET /api/admin/workflows/summary variant=workspace {}
+[00:05:36.445] Server  WARN    [admin-timing] GET /api/admin/workflow-runs list=kpis {}
+[00:05:37.097] Server  WARN    [admin-timing] GET /api/admin/work-units {}
+[00:05:37.777] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:05:37.842] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:05:38.853] Server  WARN    [admin-timing] GET /api/admin/workflows/summary variant=workspace {}
+[00:05:38.925] Server  WARN    [admin-timing] GET /api/admin/workflow-runs list=kpis {}
+[00:05:38.927] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:05:40.015] Server  WARN    [queue-perf] getWorkUnitQueueSummaries {}
+[00:05:40.017] Server  WARN    [queue-perf] getDepartmentWorkUnitQueueSummaries work_unit {}
+[00:05:40.017] Server  WARN    [queue-perf] getDepartmentWorkUnitQueueSummaries batch {}
+[00:05:40.018] Server  WARN    [admin-timing] GET /api/admin/departments/[id]/work-unit-queue-summaries {}
+[00:06:38.707] Server  LOG      ✓ Compiled in 306ms
+[00:06:40.539] Server  LOG      ✓ Compiled in 259ms
+[00:06:41.795] Server  LOG      ✓ Compiled in 157ms
+[00:06:47.287] Server  LOG      ✓ Compiled in 152ms
+[00:06:48.567] Server  LOG      ✓ Compiled in 214ms
+[00:07:16.090] Server  LOG      ✓ Compiled in 160ms
+[00:07:19.096] Server  LOG      ✓ Compiled in 136ms
+[00:07:19.229] Server  WARN    [admin-timing] GET /api/admin/work-units {}
+[00:07:19.247] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:07:19.565] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:07:20.290] Server  WARN    [admin-timing] GET /api/admin/workflows/summary variant=workspace {}
+[00:07:20.613] Server  WARN    [admin-timing] GET /api/admin/workflow-runs list=kpis {}
+[00:07:21.012] Server  WARN    [admin-timing] GET /api/admin/work-units {}
+[00:07:21.018] Server  WARN    [queue-perf] getWorkUnitQueueSummaries {}
+[00:07:21.019] Server  WARN    [admin-timing] GET /api/admin/work-units/[id]/queues {}
+[00:07:21.277] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:07:21.439] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:07:22.040] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:07:22.049] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:07:22.754] Server  WARN    [admin-timing] GET /api/admin/workflows/summary variant=workspace {}
+[00:07:23.090] Server  WARN    [admin-timing] GET /api/admin/workflow-runs list=kpis {}
+[00:07:23.145] Server  WARN    [queue-perf] getWorkUnitQueueSummaries {}
+[00:07:23.145] Server  WARN    [admin-timing] GET /api/admin/work-units/[id]/queues {}
+[00:07:25.377] Server  WARN    [queue-perf] getWorkUnitQueueSummaries {}
+[00:07:25.377] Server  WARN    [admin-timing] GET /api/admin/work-units/[id]/queues {}
+[00:07:27.023] Server  WARN    [queue-perf] enrichOpportunityRows {}
+[00:07:27.023] Server  WARN    [queue-perf] getWorkUnitQueueItems opportunity {}
+[00:07:27.024] Server  WARN    [admin-timing] GET /api/admin/queues/[workUnitId]/[queueKey] {}
+[00:07:28.104] Server  LOG      ✓ Compiled in 104ms
+[00:07:28.984] Server  LOG      ✓ Compiled in 87ms
+[00:07:31.590] Server  LOG      ✓ Compiled in 143ms
+[00:07:33.219] Server  LOG      ✓ Compiled in 89ms
+[00:07:38.046] Server  LOG      ✓ Compiled in 574ms
+[00:07:54.783] Server  LOG      ✓ Compiled in 752ms
+[00:09:16.107] Browser INFO    [timing][drawer] {"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms_since_open":0,"phase":"open"}
+[00:09:17.246] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:09:17.248] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:09:17.249] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:09:17.265] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:09:18.389] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:09:19.579] Browser INFO    [timing][drawer] {"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms":3471.7,"phase":"record_header_actions_fetch","url":"/api/admin/actions?surface=record_header&entity_type=opportunity&entity_id=fe5d9838-967b-4111-9ddf-df5390b9c1fc&work_unit_id=5ba90557-876d-4450-9c28-36beac6e83be&department_id=04958a78-32ca-4091-bcd3-4bbaef3fee4b"}
+[00:09:20.780] Server  INFO    [timing][opportunity-api] {}
+[00:09:20.928] Browser INFO    [timing][drawer] {"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","phase":"family_contacts_panel_mount","section_key":"family_contacts","variant":"summary"}
+[00:09:20.928] Browser INFO    [timing][drawer] {"has_data":true,"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms_since_open":4822.2,"phase":"record_loading_cleared"}
+[00:09:20.928] Browser INFO    [timing][drawer] {"header_actions_loading":false,"header_actions_resolved":true,"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms_since_open":4822.3,"phase":"interactive","record_loaded":true,"work_unit_ready":true}
+[00:09:20.928] Browser INFO    [timing][drawer] {"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","phase":"family_contacts_panel_mount","section_key":"family_contacts","variant":"summary"}
+[00:09:22.278] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:09:22.300] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:09:22.309] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:09:23.495] Browser INFO    [timing][drawer] {"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms":2566.6,"phase":"inquiry_children_record_section_actions_fetch","section_key":"inquiry_children","url":"/api/admin/actions?surface=record_section&entity_type=opportunity&entity_id=fe5d9838-967b-4111-9ddf-df5390b9c1fc&section_key=inquiry_children"}
+[00:09:23.495] Browser INFO    [timing][drawer] {"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms":2568.5,"phase":"inquiry_children_record_section_actions_fetch","section_key":"inquiry_children","url":"/api/admin/actions?surface=record_section&entity_type=opportunity&entity_id=fe5d9838-967b-4111-9ddf-df5390b9c1fc&section_key=inquiry_children"}
+[00:09:24.448] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:09:24.575] Browser INFO    [timing][drawer] {"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms":3586.4,"phase":"work_unit_fetch","url":"/api/admin/work-units/5ba90557-876d-4450-9c28-36beac6e83be"}
+[00:09:25.511] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:09:25.652] Browser INFO    [timing][drawer] {"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms":4682.6,"phase":"record_section_actions_fetch","section_key":"family_contacts","url":"/api/admin/actions?surface=record_section&entity_type=opportunity&entity_id=fe5d9838-967b-4111-9ddf-df5390b9c1fc&section_key=family_contacts&department_id=04958a78-32ca-4091-bcd3-4bbaef3fee4b&work_unit_id=5ba90557-876d-4450-9c28-36beac6e83be"}
+[00:09:25.908] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:09:27.864] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:09:29.467] Server  INFO    [timing][opportunity-api] {}
+[00:09:29.638] Browser INFO    [timing][drawer] {"hydration_pending_ms":8643.8,"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms":8644.5,"phase":"opportunity_full_hydration_applied","was_visibly_pending":true}
+[00:09:29.638] Browser INFO    [timing][drawer] {"has_data":true,"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms_since_open":13531.1,"phase":"record_loading_cleared"}
+[00:09:30.797] Browser INFO    [timing][drawer] {"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms":1123.5,"phase":"work_unit_fetch","url":"/api/admin/work-units/5ba90557-876d-4450-9c28-36beac6e83be"}
+[00:09:33.467] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:09:33.469] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:09:35.624] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:09:35.627] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:09:37.790] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:09:38.112] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:09:39.952] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:09:40.234] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:09:42.327] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:09:43.397] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:09:45.965] Server  WARN    [admin-timing] GET /api/admin/work-units {}
+[00:09:45.975] Server  WARN    [entity-labels-perf] resolveEntityLabelsForOrg {}
+[00:09:45.976] Server  WARN    [entity-labels-perf] GET /api/admin/entity-labels {}
+[00:09:45.999] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:09:46.331] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:09:46.739] Server  WARN    [admin-timing] GET /api/admin/workflows/summary variant=workspace {}
+[00:09:47.402] Server  WARN    [admin-timing] GET /api/admin/workflow-runs list=kpis {}
+[00:09:47.405] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:09:47.782] Server  WARN    [queue-perf] getWorkUnitQueueSummaries {}
+[00:09:47.784] Server  WARN    [admin-timing] GET /api/admin/work-units/[id]/queues {}
+[00:09:47.798] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:09:48.517] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:09:50.763] Server  WARN    [queue-perf] getWorkUnitQueueSummaries {}
+[00:09:50.763] Server  WARN    [admin-timing] GET /api/admin/work-units/[id]/queues {}
+[00:09:52.507] Server  WARN    [queue-perf] enrichOpportunityRows {}
+[00:09:52.508] Server  WARN    [queue-perf] getWorkUnitQueueItems opportunity {}
+[00:09:52.508] Server  WARN    [admin-timing] GET /api/admin/queues/[workUnitId]/[queueKey] {}
+[00:09:56.382] Browser INFO    [timing][drawer] {"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms_since_open":0,"phase":"open"}
+[00:09:58.074] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:09:59.251] Browser INFO    [timing][drawer] {"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms":2867.5,"phase":"record_header_actions_fetch","url":"/api/admin/actions?surface=record_header&entity_type=opportunity&entity_id=fe5d9838-967b-4111-9ddf-df5390b9c1fc&work_unit_id=5ba90557-876d-4450-9c28-36beac6e83be&department_id=04958a78-32ca-4091-bcd3-4bbaef3fee4b"}
+[00:10:00.600] Server  INFO    [timing][opportunity-api] {}
+[00:10:00.759] Browser INFO    [timing][drawer] {"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","phase":"family_contacts_panel_mount","section_key":"family_contacts","variant":"summary"}
+[00:10:00.759] Browser INFO    [timing][drawer] {"has_data":true,"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms_since_open":4362,"phase":"record_loading_cleared"}
+[00:10:00.759] Browser INFO    [timing][drawer] {"header_actions_loading":false,"header_actions_resolved":true,"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms_since_open":4362.1,"phase":"interactive","record_loaded":true,"work_unit_ready":true}
+[00:10:00.759] Browser INFO    [timing][drawer] {"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","phase":"family_contacts_panel_mount","section_key":"family_contacts","variant":"summary"}
+[00:10:01.493] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:10:01.530] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:10:01.540] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:10:02.248] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:10:03.350] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:10:03.434] Browser INFO    [timing][drawer] {"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms":2689.6,"phase":"inquiry_children_record_section_actions_fetch","section_key":"inquiry_children","url":"/api/admin/actions?surface=record_section&entity_type=opportunity&entity_id=fe5d9838-967b-4111-9ddf-df5390b9c1fc&section_key=inquiry_children"}
+[00:10:03.434] Browser INFO    [timing][drawer] {"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms":2691.2,"phase":"inquiry_children_record_section_actions_fetch","section_key":"inquiry_children","url":"/api/admin/actions?surface=record_section&entity_type=opportunity&entity_id=fe5d9838-967b-4111-9ddf-df5390b9c1fc&section_key=inquiry_children"}
+[00:10:03.891] Browser INFO    [timing][drawer] {"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms":3080.6,"phase":"work_unit_fetch","url":"/api/admin/work-units/5ba90557-876d-4450-9c28-36beac6e83be"}
+[00:10:04.523] Browser INFO    [timing][drawer] {"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms":3713.8,"phase":"record_section_actions_fetch","section_key":"family_contacts","url":"/api/admin/actions?surface=record_section&entity_type=opportunity&entity_id=fe5d9838-967b-4111-9ddf-df5390b9c1fc&section_key=family_contacts&department_id=04958a78-32ca-4091-bcd3-4bbaef3fee4b&work_unit_id=5ba90557-876d-4450-9c28-36beac6e83be"}
+[00:10:09.549] Server  INFO    [timing][opportunity-api] {}
+[00:10:09.715] Browser INFO    [timing][drawer] {"hydration_pending_ms":8910.4,"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms":8910.9,"phase":"opportunity_full_hydration_applied","was_visibly_pending":true}
+[00:10:09.715] Browser INFO    [timing][drawer] {"has_data":true,"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms_since_open":13333.5,"phase":"record_loading_cleared"}
+[00:10:11.220] Browser INFO    [timing][drawer] {"key":"opportunities:fe5d9838-967b-4111-9ddf-df5390b9c1fc","ms":1466.8,"phase":"work_unit_fetch","url":"/api/admin/work-units/5ba90557-876d-4450-9c28-36beac6e83be"}
+[00:10:12.840] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:10:12.854] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:10:15.021] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:10:15.033] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:10:17.219] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:10:20.132] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:10:20.143] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:10:20.847] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:10:20.871] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:10:22.650] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:10:22.653] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:10:24.827] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:12:04.432] Server  LOG      ✓ Compiled in 246ms
+[00:12:05.657] Server  LOG      ✓ Compiled in 187ms
+[00:12:10.318] Server  LOG      ✓ Compiled in 321ms
+[00:12:28.087] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:12:29.167] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:12:31.305] Server  WARN    [admin-timing] GET /api/admin/work-units {}
+[00:12:31.949] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:12:31.953] Server  WARN    [entity-labels-perf] resolveEntityLabelsForOrg {}
+[00:12:31.953] Server  WARN    [entity-labels-perf] GET /api/admin/entity-labels {}
+[00:12:31.981] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:12:32.686] Server  WARN    [admin-timing] GET /api/admin/workflows/summary variant=workspace {}
+[00:12:32.729] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:12:33.031] Server  WARN    [admin-timing] GET /api/admin/workflow-runs list=kpis {}
+[00:12:33.109] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:12:33.119] Server  WARN    [queue-perf] getWorkUnitQueueSummaries {}
+[00:12:33.119] Server  WARN    [admin-timing] GET /api/admin/work-units/[id]/queues {}
+[00:12:33.806] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:12:35.963] Server  WARN    [queue-perf] getWorkUnitQueueSummaries {}
+[00:12:35.964] Server  WARN    [admin-timing] GET /api/admin/work-units/[id]/queues {}
+[00:12:38.118] Server  WARN    [queue-perf] enrichOpportunityRows {}
+[00:12:38.118] Server  WARN    [queue-perf] getWorkUnitQueueItems opportunity {}
+[00:12:38.119] Server  WARN    [admin-timing] GET /api/admin/queues/[workUnitId]/[queueKey] {}
+[00:12:45.781] Browser INFO    [timing][drawer] {"key":"opportunities:2f8fa3e8-86b7-4ee2-bcce-cd1d11e13c74","ms_since_open":0,"phase":"open"}
+[00:12:47.841] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:12:48.899] Server  WARN    [admin-timing] GET /api/admin/actions {}
+[00:12:50.019] Server  INFO    [timing][opportunity-api] {}
+[00:14:21.628] Server  LOG      ✓ Compiled in 409ms
+[00:14:22.426] Server  LOG      ✓ Compiled in 156ms
+[00:14:22.966] Server  LOG      ✓ Compiled in 204ms
+[00:15:44.339] Server  LOG      ✓ Compiled in 261ms

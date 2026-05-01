@@ -1,3 +1,0 @@
-module.exports=[93695,(a,b,c)=>{b.exports=a.x("next/dist/shared/lib/no-fallback-error.external.js",()=>require("next/dist/shared/lib/no-fallback-error.external.js"))},98556,a=>{a.n(a.i(74762))},21752,a=>{a.n(a.i(12632))},24128,a=>{a.n(a.i(89664))},8532,a=>{a.n(a.i(62647))},50918,a=>{a.n(a.i(58781))},54682,a=>{a.n(a.i(63472))},2479,a=>{"use strict";a.i(18918);var b=a.i(57112),c=a.i(36056);async function d(){let a=await (0,c.createClient)(),{data:{user:d}}=await a.auth.getUser();d||(0,b.redirect)("/login"),(0,b.redirect)("/admin/dashboard")}a.s(["default",()=>d,"dynamic",0,"force-dynamic"])}];
-
-//# sourceMappingURL=%5Broot-of-the-server%5D__7823918c._.js.map

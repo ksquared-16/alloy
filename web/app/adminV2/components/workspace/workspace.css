@@ -64,10 +64,14 @@
   --ws-dept-operational-row-min-height: 0;
 }
 
-/* Work-unit: slightly tighter vertical rhythm (keeps Automations block closer to the lane). */
+/* Work-unit surface: tighter vertical rhythm. Queue list max-height applies only on full work-unit route shell (`.adminv2-ws-work-unit`) so embedded department queues inherit `none`. */
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 {
   --ws-dept-section-gap: 12px;
-  --ws-dept-primary-queue-list-max-height: min(52vh, calc(100vh - 15.5rem));
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit.adminv2-ws-wu-v2 {
+  /* +15% vs prior cap so more rows fit; pushes Automations section down on typical layouts */
+  --ws-dept-primary-queue-list-max-height: min(calc(44vh * 1.15), calc((100vh - 18.5rem) * 1.15));
 }
 
 /* Paired operational panels — shared grid + rhythm (department throughput | needs attention; reusable elsewhere) */
@@ -99,15 +103,113 @@
   border-bottom-color: color-mix(in srgb, #bc4300 22%, var(--d-border));
 }
 
-.adminv2-ws-paired-oper-panel__body .adminv2-ws-wu-queue-card--compact {
-  min-height: 4.5rem;
-  align-items: center;
+/*
+ * Department paired panels: compact horizontal queue cards (same grammar as work-unit lane).
+ * Do not use `data-ws-surface="work_unit"` on the panel body (surface tokens); scope styles here instead.
+ */
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-paired-oper-panel__body .adminv2-ws-wu-queue-card {
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, var(--vc-label-accent, var(--d-pine)) 18%, var(--d-border));
+  background: linear-gradient(172deg,
+      #ffffff 0%,
+      color-mix(in srgb, var(--vc-section-panel-wash, color-mix(in srgb, var(--d-pine) 7%, var(--d-surface))) 55%, #ffffff) 100%);
+  box-shadow:
+    0 1px 2px rgba(39, 63, 82, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  padding: 3px 6px 4px;
+  border-left-width: 1px;
+  border-left-color: color-mix(in srgb, var(--d-pine) 28%, var(--d-border));
 }
 
-.adminv2-ws-paired-oper-panel__body .adminv2-ws-wu-queue-card-compact-aside {
-  align-self: center;
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-paired-oper-panel__body .adminv2-ws-wu-queue-card--tier-standard {
+  border-left-color: color-mix(in srgb, var(--d-brand) 20%, color-mix(in srgb, var(--d-pine) 34%, var(--d-border)));
 }
 
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-paired-oper-panel__body .adminv2-ws-wu-queue-card--tier-warning {
+  border-left-width: 3px;
+  border-left-color: color-mix(in srgb, #bc4300 58%, var(--d-border));
+  border-color: color-mix(in srgb, #bc4300 14%, var(--d-border));
+  box-shadow:
+    0 1px 2px rgba(39, 63, 82, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    inset 3px 0 0 color-mix(in srgb, var(--d-admin-amber) 28%, transparent);
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-paired-oper-panel__body .adminv2-ws-wu-queue-card--compact {
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 9px 6px;
+  min-height: 0;
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-paired-oper-panel__body .adminv2-ws-wu-queue-card-compact-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  align-items: stretch;
+  text-align: left;
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-paired-oper-panel__body .adminv2-ws-wu-queue-card-title--compact {
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.22;
+  letter-spacing: -0.02em;
+  align-self: flex-start;
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-paired-oper-panel__body .adminv2-ws-wu-queue-card-compact-aside {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+  min-width: 5.25rem;
+  max-width: min(40%, 12.75rem);
+  align-self: stretch;
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-paired-oper-panel__body .adminv2-ws-wu-queue-action-chip--open {
+  min-height: 26px;
+  padding: 2px 9px;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+  border-radius: 5px;
+  border: 1px solid color-mix(in srgb, var(--d-pine) 55%, var(--d-border));
+  background: color-mix(in srgb, var(--d-pine) 92%, #0f172a);
+  color: #fff;
+  box-shadow: 0 1px 0 color-mix(in srgb, #ffffff 28%, transparent);
+  line-height: 1.12;
+  white-space: nowrap;
+}
+
+/*
+ * Typography — department paired panels only (Work Unit Queue / Needs Attention).
+ * Titles ~+11%, meta ~+14%, micro CTA ~+6%; line-height nudged for readability without height growth.
+ */
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-paired-oper-panel .adminv2-ws-queue-title {
+  font-size: 15.5px;
+  line-height: 1.22;
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-paired-oper-panel__body .adminv2-ws-wu-queue-card-title--compact {
+  font-size: 12px;
+  line-height: 1.26;
+  letter-spacing: -0.018em;
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-paired-oper-panel__body .adminv2-ws-paired-oper-queue-meta {
+  font-size: 12.5px;
+  line-height: 1.34;
+}
 
 /*
  * Major workspace block rhythm (16px) — spacing lives on the follower only.
@@ -421,6 +523,14 @@
   color: var(--d-pine);
 }
 
+/* Work-unit route: main lane title reads as page headline; kicker stays small via `.adminv2-ws-dept-v2-brief-kicker`. */
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-brief-headline {
+  font-size: 19.5px;
+  font-weight: 800;
+  line-height: 1.14;
+  letter-spacing: -0.028em;
+}
+
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-brief-headline--placeholder,
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-brief-headline--placeholder,
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-brief-headline--placeholder,
@@ -428,6 +538,11 @@
   font-size: 14px;
   font-weight: 700;
   color: color-mix(in srgb, var(--d-muted) 55%, var(--d-pine));
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-brief-headline--placeholder {
+  font-size: 15px;
+  font-weight: 700;
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-brief-subline,
@@ -1668,6 +1783,20 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.82),
     0 1px 4px rgba(39, 63, 82, 0.05),
     0 -1px 0 color-mix(in srgb, var(--d-border) 38%, transparent);
+}
+
+/* Work-unit: separate queue card from workflows / automations so the strip header does not read clipped */
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-operational-row + .adminv2-ws-dept-v2-workflows-strip {
+  margin-top: 14px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-workflows-strip + .adminv2-ws-dept-v2-workflows-strip {
+  margin-top: 12px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-workflows-toolbar {
+  margin-top: 2px;
+  padding-top: 5px;
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-workflows-panel,
@@ -5378,6 +5507,35 @@
   color: var(--d-muted);
 }
 
+/*
+ * Workspace index (/adminV2/workspace) — department tiles only: balanced type scale
+ * (titles ~+12%, meta/supporting ~+15%, badge/signal micro ~+9%; no grid/padding changes).
+ */
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-company-dept-tile--workspace-root .adminv2-ws-company-dept-tile-name {
+  font-size: 14.5px;
+  line-height: 1.23;
+}
+
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-company-dept-tile--workspace-root .adminv2-ws-company-dept-tile-badge {
+  font-size: 12px;
+  line-height: 1.15;
+}
+
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-company-dept-tile--workspace-root .adminv2-ws-company-dept-tile-desc {
+  font-size: 11.5px;
+  line-height: 1.34;
+}
+
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-company-dept-tile--workspace-root .adminv2-ws-company-dept-tile-signal {
+  font-size: 12.5px;
+  line-height: 1.28;
+}
+
+[data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-company-dept-tile--workspace-root .adminv2-ws-company-dept-tile-empty {
+  font-size: 11.5px;
+  line-height: 1.3;
+}
+
 /* Company — signal context: single scannable line */
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-signals .adminv2-ws-signal-desc {
   display: block;
@@ -5709,8 +5867,8 @@
   font-size: 9px;
   font-weight: 700;
   line-height: 1.25;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  text-transform: none;
+  letter-spacing: -0.01em;
   padding: 2px 5px;
   border-radius: 4px;
   border: 1px solid color-mix(in srgb, var(--vc-label-accent, var(--d-pine)) 38%, var(--d-border));
@@ -6499,7 +6657,261 @@
   color: color-mix(in srgb, var(--d-muted) 12%, var(--d-text-primary, #273f52));
 }
 
-/* Work unit — tight lane status strip above queue (operator note, not a card) */
+/*
+ * Work-unit route only (`.adminv2-ws-work-unit` shell): record-card typography + list cap coexists with Automations.
+ * Next-step strip is slightly quieter than title/contact/body; other card copy one notch up vs previous pass.
+ */
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-count-badge {
+  font-size: 13px;
+  line-height: 1.16;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-summary {
+  font-size: 12px;
+  line-height: 1.38;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-sort-caption {
+  font-size: 9.5px;
+  line-height: 1.3;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-section-label {
+  font-size: 9.5px;
+  line-height: 1.3;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-section-label--rich {
+  font-size: 10.5px;
+  line-height: 1.34;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-empty-title {
+  font-size: 13px;
+  line-height: 1.28;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-empty-queue {
+  font-size: 12px;
+  line-height: 1.36;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__title {
+  font-size: 13.5px;
+  line-height: 1.27;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__status-pill {
+  font-size: 11px;
+  line-height: 1.28;
+}
+
+/* Next-step: ~6–7% smaller than prior pass so it sits under family/status/contact hierarchy */
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__next-strip {
+  padding: 2px 4px 3px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__next-value {
+  font-size: 10.7px;
+  line-height: 1.32;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__next-caption {
+  font-size: 8.5px;
+  line-height: 1.26;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__commercial {
+  font-size: 12px;
+  line-height: 1.36;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__attention {
+  font-size: 12px;
+  line-height: 1.38;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-queue-preview-stale {
+  font-size: 10.5px;
+  line-height: 1.3;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__group {
+  font-size: 12px;
+  line-height: 1.36;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__child-mini {
+  font-size: 12px;
+  line-height: 1.34;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__child-mini-secondary {
+  font-size: 10.5px;
+  line-height: 1.32;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__gk {
+  font-size: 9.5px;
+  line-height: 1.32;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__gv {
+  font-size: 12px;
+  line-height: 1.36;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__footer-notes {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__footer-activity {
+  font-size: 10.5px;
+  line-height: 1.38;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-card-title--compact {
+  font-size: 13px;
+  line-height: 1.28;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-card-sub--compact {
+  font-size: 12px;
+  line-height: 1.28;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-card-compact-aside>.adminv2-ws-wu-queue-value--compact {
+  font-size: 10.5px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-enrollment-crm-row .adminv2-ws-wu-queue-action-chip.adminv2-ws-wu-queue-action-chip--quiet {
+  min-height: 24px;
+  font-size: 11.5px;
+  line-height: 1.18;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-enrollment-crm-row .adminv2-ws-wu-queue-action-chip.adminv2-ws-wu-queue-action-chip--open {
+  min-height: 28px;
+  font-size: 11.5px;
+  line-height: 1.15;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-value--compact {
+  font-size: 10.5px;
+  line-height: 1.26;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-card-title {
+  font-size: 14px;
+  line-height: 1.22;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-value {
+  font-size: 12px;
+  line-height: 1.26;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-card-sub {
+  font-size: 12px;
+  line-height: 1.34;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-open-record {
+  font-size: 9.5px;
+  line-height: 1.26;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-midline-k {
+  font-size: 8.5px;
+  line-height: 1.28;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-midline-v {
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-wait-text {
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-tag {
+  font-size: 10.5px;
+  line-height: 1.24;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-meta-row dt {
+  font-size: 8.5px;
+  line-height: 1.3;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-meta-row dd {
+  font-size: 13px;
+  line-height: 1.26;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-action-chip {
+  min-height: 23px;
+  font-size: 10.5px;
+  line-height: 1.18;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-action-chip.adminv2-ws-wu-queue-action-chip--quiet {
+  min-height: 23px;
+  font-size: 10.5px;
+  line-height: 1.18;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-action-chip.adminv2-ws-wu-queue-action-chip--open {
+  min-height: 25px;
+  font-size: 10.5px;
+  line-height: 1.12;
+}
+
+/* Full work-unit route: ~10% denser queue rows (list + card + CRM stack vs embedded shells) */
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-list {
+  gap: 5px;
+  padding: 5px 7px 7px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-item-wrap {
+  gap: 5px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-card--compact {
+  padding: 5px 8px 5px;
+  gap: 9px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview {
+  gap: 3px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__body {
+  gap: 7px 10px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__zone--middle {
+  gap: 2px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__title-row {
+  gap: 3px 5px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-enrollment-crm-row {
+  gap: 7px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-enrollment-crm-row--split {
+  gap: 9px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-enrollment-crm-row__actions {
+  gap: 5px;
+}
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-lane-strip {
   padding: 3px 6px 4px;
   margin: 0 0 2px;
@@ -7167,16 +7579,32 @@
   letter-spacing: 0.13em !important;
 }
 
-[data-ws-surface="department"].adminv2-ws-dept-v2 [data-workspace-zone="context-lower"] {
-  margin-top: 4px;
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-operational-row + [data-workspace-zone="context-lower"] {
+  margin-top: 14px;
+}
+
+/* Context lower without automations strip (e.g. renderer ContextBlock) — keep band divider on wrapper */
+[data-ws-surface="department"].adminv2-ws-dept-v2 [data-workspace-zone="context-lower"]:not(:has(.adminv2-ws-dept-v2-workflows-strip[data-ws-lane-kind="automation_workflows"])) {
   padding-top: 12px;
   border-top: 1px solid color-mix(in srgb, var(--d-brand) 15%, var(--d-border));
 }
 
+[data-ws-surface="department"].adminv2-ws-dept-v2 [data-workspace-zone="context-lower"]:has(.adminv2-ws-dept-v2-workflows-strip[data-ws-lane-kind="automation_workflows"]) {
+  padding-top: 0;
+  border-top: none;
+}
+
+/*
+ * Automations / workflow telemetry strip — same wrapper + rhythm on department (context-lower) and work-unit footer.
+ */
+[data-ws-surface="department"].adminv2-ws-dept-v2 [data-workspace-zone="context-lower"] .adminv2-ws-dept-v2-workflows-strip[data-ws-lane-kind="automation_workflows"],
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-workflows-strip[data-ws-lane-kind="automation_workflows"] {
-  margin-top: 4px;
-  padding-top: 10px;
-  border-top: 1px solid color-mix(in srgb, var(--d-brand) 14%, var(--d-border));
+  padding-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--d-brand) 15%, var(--d-border));
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-operational-row + .adminv2-ws-dept-v2-workflows-strip[data-ws-lane-kind="automation_workflows"] {
+  margin-top: 14px;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -7194,7 +7622,12 @@
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.9),
     0 1px 3px rgba(39, 63, 82, 0.05);
-  padding: 12px 14px 14px 13px;
+  padding: 18px 14px 14px 13px;
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 [data-workspace-zone="context-lower"] .adminv2-ws-dept-v2-workflows-strip[data-ws-lane-kind="automation_workflows"] .adminv2-ws-automation-telemetry__mast,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-workflows-strip[data-ws-lane-kind="automation_workflows"] .adminv2-ws-automation-telemetry__mast {
+  padding-top: 8px;
 }
 
 .adminv2-ws-automation-telemetry__mast {
@@ -7203,7 +7636,8 @@
   justify-content: space-between;
   gap: 12px;
   margin: 0 0 12px;
-  padding: 0 0 10px 16px;
+  /* Inset Review CTA from card edge — right was 0 and read flush */
+  padding: 0 14px 10px 16px;
   border-bottom: none;
   border-left: 2px solid color-mix(in srgb, var(--d-brand) 28%, transparent);
   background: linear-gradient(180deg,
@@ -7211,6 +7645,7 @@
       transparent 92%);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.88),
+    0 -1px 0 color-mix(in srgb, var(--d-brand) 14%, var(--d-border)),
     0 1px 0 color-mix(in srgb, var(--d-brand) 14%, var(--d-border));
 }
 
@@ -7246,17 +7681,20 @@
   align-self: center;
   font-size: 12px;
   font-weight: 700;
-  padding: 6px 11px;
+  padding: 6px 12px;
   border-radius: 6px;
   text-decoration: none;
   color: #fff;
   background: color-mix(in srgb, var(--d-brand) 94%, #0f2744);
-  border: 1px solid color-mix(in srgb, var(--d-brand) 40%, var(--d-border));
-  box-shadow: 0 1px 2px rgba(0, 40, 92, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 1px 2px rgba(0, 40, 92, 0.18);
 }
 
 .adminv2-ws-automation-telemetry__review:hover {
   filter: brightness(1.04);
+  border-color: rgba(255, 255, 255, 0.34);
 }
 
 .adminv2-ws-automation-telemetry__review:focus-visible {

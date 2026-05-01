@@ -144,6 +144,19 @@ function orderedQueueQuickActions(actions: QueueItemQuickActionVm[] | undefined)
   return [open!, ...next];
 }
 
+/** Sentence-case each segment (split on middot) — work-unit status pill is no longer all-caps in CSS. */
+function formatWorkUnitQueueStatusPill(raw: string): string {
+  return raw
+    .split(/\s*·\s*/)
+    .map((seg) => {
+      const t = seg.trim();
+      if (!t) return t;
+      const lower = t.toLowerCase();
+      return lower.charAt(0).toUpperCase() + lower.slice(1);
+    })
+    .join(" · ");
+}
+
 /**
  * CRM-compact queue preview — render-only layout from `CrmCompactRowSemanticSlots`.
  * Zones: identity+status+next | structured middle | footer note/activity preview (registry fields optional).
@@ -212,7 +225,7 @@ function CrmCompactQueuePreview({
               <span
                 className={`adminv2-ws-crm-queue-preview__status-pill adminv2-ws-crm-queue-preview__status-pill--urgency-${urgencyTier}`}
               >
-                {stageStatus}
+                {formatWorkUnitQueueStatusPill(stageStatus)}
               </span>
             ) : null}
           </div>

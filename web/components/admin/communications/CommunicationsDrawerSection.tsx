@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { formatDateTime } from "@/lib/adminFormatters";
+import { formatDateTimeLocal } from "@/lib/adminFormatters";
 
 type ThreadRow = {
     id: string;
@@ -17,6 +17,7 @@ type MsgRow = {
     status?: string | null;
     body?: string | null;
     created_at?: string | null;
+    sent_at?: string | null;
     from_address?: string | null;
     to_address?: string | null;
 };
@@ -44,10 +45,26 @@ export interface CommunicationsDrawerSectionProps {
     className?: string;
 }
 
-const EMBEDDED_TITLE_CLASS =
-    "text-[10px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/45 border-b border-alloy-stone/12 pb-1.5 mb-2";
-
 const COMPOSER_LABEL = "mb-1 text-[8px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45";
+
+/** Map POST /communications/send notes to concise operator copy (honest vs optimistic). */
+function userFriendlySendNote(processNote: string): string {
+    const n = processNote.trim().toLowerCase();
+    if (!n) return "Email queued for delivery.";
+    if (
+        n.includes("unset") ||
+        n.includes("queued until cron") ||
+        n.includes("stays queued")
+    )
+        return "Email queued for delivery.";
+    if (n.includes("dispatched") || n.includes("backend process trigger")) return "Email sent.";
+    return "Email queued for delivery.";
+}
+
+function communicationMessageInstant(m: MsgRow): string | null | undefined {
+    const s = m.sent_at ?? m.created_at ?? null;
+    return s && String(s).trim() ? s : null;
+}
 
 /** Canonical threads + messages + queued email composer (Cards 16–17). */
 export default function CommunicationsDrawerSection({
@@ -55,7 +72,6 @@ export default function CommunicationsDrawerSection({
     entityId,
     active = true,
     embedded = true,
-    embeddedHeaderMode = "full",
     className = "",
 }: CommunicationsDrawerSectionProps) {
     const [threads, setThreads] = useState<ThreadRow[]>([]);
@@ -110,6 +126,18 @@ export default function CommunicationsDrawerSection({
         setSendOkNote(null);
     }, [entityId, apiEntityType]);
 
+    /** When parent hides Communication (`active` false), drop thread detail state (no polling; next open is clean). */
+    useEffect(() => {
+        if (active) return;
+        setThreadSpaceExpanded(false);
+        setSelectedId(null);
+        setMsgs([]);
+        setMsgErr(null);
+    }, [active]);
+
+    /** Fetches run only while `active`. */
+    const dataLayerActive = active;
+
     /** When recipients load, default selection = suggested primary or first row. */
     useEffect(() => {
         if (!recipients.length) {
@@ -156,12 +184,12 @@ export default function CommunicationsDrawerSection({
     }, [apiEntityType, entityId, embedded]);
 
     useEffect(() => {
-        if (!active) return;
+        if (!dataLayerActive) return;
         void loadThreads();
-    }, [active, loadThreads]);
+    }, [dataLayerActive, loadThreads]);
 
     useEffect(() => {
-        if (!active || !showEmailComposerChrome || !composerEntity) return;
+        if (!dataLayerActive || !showEmailComposerChrome || !composerEntity) return;
 
         let cancelled = false;
         (async () => {
@@ -183,10 +211,10 @@ export default function CommunicationsDrawerSection({
         return () => {
             cancelled = true;
         };
-    }, [active, showEmailComposerChrome, composerEntity]);
+    }, [dataLayerActive, showEmailComposerChrome, composerEntity]);
 
     useEffect(() => {
-        if (!active || !showEmailComposerChrome || !composerEntity || loadingBindings || !emailOutboundReady) {
+        if (!dataLayerActive || !showEmailComposerChrome || !composerEntity || loadingBindings || !emailOutboundReady) {
             setRecipients([]);
             setRecipientsErr(null);
             setLoadingRecipients(false);
@@ -220,7 +248,7 @@ export default function CommunicationsDrawerSection({
             cancelled = true;
         };
     }, [
-        active,
+        dataLayerActive,
         showEmailComposerChrome,
         composerEntity,
         entityId,
@@ -249,14 +277,14 @@ export default function CommunicationsDrawerSection({
     const fetchMessages = embedded ? threadSpaceExpanded : true;
 
     useEffect(() => {
-        if (!active) return;
+        if (!dataLayerActive) return;
         if (!fetchMessages || !selectedId) {
             setMsgs([]);
             setMsgErr(null);
             return;
         }
         void loadMsgs(selectedId);
-    }, [active, fetchMessages, selectedId, loadMsgs]);
+    }, [dataLayerActive, fetchMessages, selectedId, loadMsgs]);
 
     const toggleRecipient = (personId: string) => {
         setSelectedRecipientIds((prev) => {
@@ -297,7 +325,8 @@ export default function CommunicationsDrawerSection({
                         ? String((j as { process_trigger_attempted_note: string }).process_trigger_attempted_note)
                         : "";
             }
-            setSendOkNote(lastNote ? `Queued. ${lastNote}` : "Queued for delivery (worker picks up outbound rows).");
+            setSendOkNote(userFriendlySendNote(lastNote));
+            setComposerSubject("");
             setComposerBody("");
             await loadThreads();
             const refetchMsgs = (!embedded || threadSpaceExpanded) && selectedId;
@@ -311,22 +340,15 @@ export default function CommunicationsDrawerSection({
 
     if (!active) return null;
 
-    const headerTitle =
-        embedded && embeddedHeaderMode === "description_only" ? null : embedded ? (
-            <h3 className={EMBEDDED_TITLE_CLASS}>Communications</h3>
-        ) : (
-            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Communications</h3>
-        );
+    const headerTitle = !embedded ? (
+        <h3 className={DRAWER_SECTION_HEADER_CLASS}>Communications</h3>
+    ) : null;
 
-    const description = embedded ? (
-        <p className="text-[12px] leading-snug text-alloy-midnight/65 mb-2">
-            Canonical threads are read-only here; outbound email queues through the backend (no SMS in drawer composer yet).
-        </p>
-    ) : (
+    const description = !embedded ? (
         <p className="text-sm text-alloy-midnight/65 -mt-2 mb-3">
             Canonical SMS, email, and in-app threads for this record (read-only).
         </p>
-    );
+    ) : null;
 
     const threadList = (variant: "compact" | "full") => (
         <div className={variant === "compact" ? "space-y-1.5" : "sm:w-44 shrink-0 space-y-1"}>
@@ -341,7 +363,7 @@ export default function CommunicationsDrawerSection({
                             {t.recipient_key ? t.recipient_key : "—"}
                             {t.updated_at ? (
                                 <span className="ml-1.5 tabular-nums text-[11px] text-alloy-midnight/45">
-                                    · {formatDateTime(t.updated_at)}
+                                    · {formatDateTimeLocal(t.updated_at)}
                                 </span>
                             ) : null}
                         </span>
@@ -379,13 +401,17 @@ export default function CommunicationsDrawerSection({
                 <p className="text-sm text-alloy-midnight/60">No messages in this thread.</p>
             ) : (
                 <ul className="space-y-2">
-                    {msgs.map((m) => (
-                        <li key={m.id} className="rounded-md border border-alloy-stone/10 bg-alloy-stone/5 px-2.5 py-2 text-sm">
+                    {msgs.map((m) => {
+                        const msgWhen = communicationMessageInstant(m);
+                        return (
+                            <li key={m.id} className="rounded-md border border-alloy-stone/10 bg-alloy-stone/5 px-2.5 py-2 text-sm">
                             <div className="flex flex-wrap items-baseline justify-between gap-2 text-[12px] text-alloy-forge/70">
                                 <span className="font-semibold capitalize text-alloy-forge">
                                     {m.direction} · {m.channel ?? "—"} · {m.status ?? "—"}
                                 </span>
-                                <span>{m.created_at ? formatDateTime(m.created_at) : ""}</span>
+                                <span className="tabular-nums text-[11px]">
+                                    {msgWhen ? formatDateTimeLocal(msgWhen) : ""}
+                                </span>
                             </div>
                             {(m.from_address || m.to_address) && (
                                 <div className="mt-1 text-[12px] text-alloy-forge/65">
@@ -398,7 +424,8 @@ export default function CommunicationsDrawerSection({
                                 <div className="mt-1.5 whitespace-pre-wrap text-[13px] text-alloy-forge/90">{m.body}</div>
                             ) : null}
                         </li>
-                    ))}
+                        );
+                    })}
                 </ul>
             )}
         </div>
