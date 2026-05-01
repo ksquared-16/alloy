@@ -1379,7 +1379,126 @@ literals — they are **instances** of templates + parameters.
 | **17** | Governance + AI suggestions | Audit log, proposal-only AI flow |
 
 **This document:** Card 10 is **design-only** until stakeholders sign off; **do not implement** templates or
-`metric_definition` tables until Card 11 is opened with explicit acceptance criteria.
+`metric_definition` tables until the **template-registry** build cards in §10.10 are opened with explicit acceptance criteria.
+
+================================================================================
+§11 — Operational signal KPI layer (DESIGN ONLY; NO IMPLEMENTATION YET)
+================================================================================
+
+**Intent:** Move KPIs from **generic counts** (“how many rows”) toward **operational signals** (“what requires
+attention, what is stuck, what moved”) using **existing** Alloy primitives — **no** BI stack, **no** arbitrary SQL or
+user formulas, **no** change to **`KPIBlock`** contract or **`workspace_kpi_placement`** shape: new capability is
+**registry keys + resolver wiring + batched data** only (same placement UX picks which signal appears).
+
+**Doctrine**
+- A **signal** is a **code-defined** interpretation of system state (queues, lifecycle buckets, workflow telemetry,
+  timestamps, status rules) with a **stable `metric_key`** and **documented reducer**.
+- Signals **reuse** the batching rules from Card 1.5 / Card 4 (one payload class → many metrics; no per-metric HTTP).
+- Card 10 **templates** remain a future way to **parameterize** signals; this card names **concrete signal metrics**
+  first so product can prioritize **value** before template UX.
+
+================================================================================
+§11.1 Signal categories and catalog (per-signal)
+================================================================================
+
+Legend: **Safe-now** = can be produced from APIs/payloads that already exist with bounded extra aggregation in the
+resolver or an existing batch route. **Later** = needs new read model, SLA engine, transition log, or cross-entity SQL
+behind a **single** batched query (still not BI). **Batch** = must be computed in one server pass per surface session,
+not N fetches.
+
+---
+
+**A. Attention signals**
+
+| Signal | Proposed `metric_key` | Computation (bounded) | Data source | Safe-now / Later | Batch |
+|--------|------------------------|------------------------|-------------|------------------|-------|
+| Needs attention (aggregate) | `signal.attention.needs_attention_sum` | Integer **sum** of `needs_attention` queue **head counts** over scoped work units (same keys as QueueService / `work-unit-queue-summaries`, `count_mode=exact`). | Queue batch summaries | **Dept:** safe-now (sum over WUs in dept). **Workspace:** safe-now if org-wide WU list + one batch per dept or existing multi-dept batch is extended **without** new per-metric routes. | Yes — reuse Q batch |
+| Stale in stage | `signal.attention.stale_in_stage_count` | Count entities whose **current status** + **last_activity_at** (or equivalent) exceeds org **threshold** from code or future SLA table. | Status + row timestamps | **Later** — needs consistent “activity clock” and threshold config (Attention/SLA Card path). | Yes |
+| Missing required action | `signal.attention.missing_required_action_count` | Count rows matching **registry-defined** “required action not satisfied” (e.g. field empty, status guard). | Field defs + status rules | **Later** — needs rule registry + evaluation in batch. | Yes |
+
+---
+
+**B. Flow signals**
+
+| Signal | Proposed `metric_key` | Computation | Data source | Safe-now / Later | Batch |
+|--------|------------------------|-------------|-------------|------------------|-------|
+| New in period | `signal.flow.new_records_7d` | Count **created** in rolling window (`created_at` or entity-specific) within scope. | Entity table / read API | **Later** — single parameterized query or snapshot; not in queue JSON today. | Yes |
+| Moved stage | `signal.flow.stage_moves_7d` | Count **status transitions** in window (from→to optional). | Transition / audit log | **Later** — needs durable transition stream. | Yes |
+| Conversion (funnel) | `signal.flow.conversion_stage_a_to_b_30d` | Count entities hitting **B** after **A** in window (Card 10 template alignment). | Events or materialized funnel | **Later** | Yes |
+
+---
+
+**C. Risk signals**
+
+| Signal | Proposed `metric_key` | Computation | Data source | Safe-now / Later | Batch |
+|--------|------------------------|-------------|-------------|------------------|-------|
+| Aging in stage | `signal.risk.avg_age_in_status_days` or `signal.risk.max_age_in_status_days` | Avg or max **days since** `entered_status_at` (or inferred) for rows in scoped statuses. | Status + timestamps | **Later** | Yes |
+| High value stuck | `signal.risk.high_value_stuck_count` | Rows with **value > threshold** AND attention/stale predicate. | Pricing + queue + rules | **Later** | Yes |
+| SLA breach | `signal.risk.sla_breach_count` | Rows violating Attention & SLA rules (see sprint deferrals). | SLA rule engine | **Later** (ties to attention-sla-rules) | Yes |
+
+---
+
+**D. Operational signals**
+
+| Signal | Proposed `metric_key` | Computation | Data source | Safe-now / Later | Batch |
+|--------|------------------------|-------------|-------------|------------------|-------|
+| Unassigned | `signal.ops.unassigned_count` | Count rows with **no assignee** in scope. | Entity query | **Later** | Yes |
+| Scheduled today | `signal.ops.scheduled_today_count` | Count jobs/schedules with **date = today** in org TZ. | Jobs/schedules | **Later** | Yes |
+| Queue total (per lane) | `dept.wu_queue.total_per_work_unit` (existing facet) | Sum of queue counts per WU — **structural** ops signal. | Queue summaries | **Safe-now** | Yes |
+| Pipeline in motion / value / closed (existing) | `org.pipeline.*` | Lifecycle-derived rollups — **flow-adjacent** signals already shipped. | `opportunity-lifecycle-kpis` | **Safe-now** | Yes |
+| Workflow failures / runs | `signal.ops.workflow_failed_7d`, `signal.ops.workflow_runs_today` | Integers from workflow KPI payload (same semantics as `AutomationWorkflowsBlock`). | `/api/admin/workflow-runs?list=kpis` (or equivalent) | **Safe-now** at **workspace** if workspace page **already** or **willing to** reuse that batch in resolver input | Yes |
+
+================================================================================
+§11.2 Naming convention for new keys
+================================================================================
+
+- Prefix **`signal.<category>.<snake_case_name>`** for new operational metrics (categories: `attention`, `flow`,
+  `risk`, `ops`).  
+- Keep **existing** keys (`org.structure.*`, `org.pipeline.*`, `dept.wu_queue.*`) for backward compatibility; new
+  signals **compose beside** them in registry + resolver.  
+- Each key remains **code-registered** (TS `MetricKey` union growth) — **not** operator-invented strings.
+
+================================================================================
+§11.3 High-impact signals to implement first (5–8; all “safe-now” or near)
+================================================================================
+
+Prioritize **visible operational value** without new BI. Recommended **immediate** set:
+
+1. **`signal.attention.needs_attention_sum` (department surface)** — Sum `needs_attention` counts across work units in
+   the department from **existing** `work-unit-queue-summaries`; matches the “Needs Attention” panel mental model.  
+2. **`signal.attention.needs_attention_sum` (workspace surface)** — Same sum **across all active departments’ work units**
+   in **one** batched resolver input (extend rollup to pass pre-aggregated Q snapshot or one multi-dept API — design in
+   implementation card; still **no** per-metric fetch).  
+3. **`org.pipeline.active_in_motion` / `pipeline_value_open` / `closed_outcomes`** — Treat explicitly as **flow
+   signals** in copy/docs; already implemented — no schema change, possibly relabel in UI via `label_override`.  
+4. **`dept.wu_queue.total_per_work_unit`** — Already the primary **operational throughput** signal per WU; keep as
+   first-class in signal narrative.  
+5. **`signal.ops.workflow_failed_7d`** — Surface workflow failure count on **organization workspace** strip using the
+   **same** KPI source as automations block (single extra field in rollup payload if not already loaded).  
+6. **`signal.ops.workflow_runs_today`** — Pair with (5) for “system health” at a glance.  
+7. **`signal.attention.needs_attention_max_work_unit`** (optional) — Label of work unit with **max** needs_attention
+   (tie-break by id); computation is **O(WUs)** on existing batch — high UX value, still bounded.  
+8. **`signal.ops.active_work_units_count`** (optional) — Count of work units with **any** queue activity or non-zero
+   total — derived from same Q batch as (1) — reinforces “where work lives.”
+
+**Deferred explicitly:** `stale_in_stage`, `missing_required_action`, all **§11.1 Flow/Risk** rows not listed above until
+Attention/SLA and transition infrastructure exist.
+
+================================================================================
+§11.4 Interaction with Card 10
+================================================================================
+
+- Card 10 **templates** will eventually **reference** signal reducers by `template_key` (e.g. `queue_needs_attention_sum`).  
+- Card 11 **metric_keys** are the **first concrete instances**; migrating them into templates is a **refactor**, not a
+  product behavior change.
+
+================================================================================
+§11.5 Non-goals
+================================================================================
+
+- Ad hoc filtering, cross-tenant benchmarks, or exploratory charts.  
+- User-defined thresholds in v1 for risk signals (thresholds stay **code** or **admin settings** with validation).  
+- Replacing `KPIBlock` or placement CRUD.
 
 --------------------------------------------------------------------------------
 Execution Rules (Card 2 onward)
@@ -1398,6 +1517,9 @@ Execution Rules (Card 2 onward)
 8. **Performance:** no per-metric fetch, no N+1, no redundant full reductions over the same batch (Card 4).
 9. **Card 10** is **design documentation only** until explicit Card 11+ kickoff; it does not authorize new SQL,
    formula engines, or BI-style dashboards.
+10. **§11 (operational signals)** is **design documentation only** — `signal.*` metrics require explicit implementation
+    cards; no new aggregators without batching discipline (Card 4). Renumbering of build cards in §10.10 is unchanged
+    (template Card 11 there ≠ this §11 annex).
 
 ================================================================================
 Implementation notes (shipped) — 2026-04-30
@@ -1428,6 +1550,10 @@ Implementation notes (shipped) — 2026-04-30
 **Deferrals (Card 9):** Bulk reorder UX; `lane_override` / `format_override` editing; ops read-only listing for `list=org`; hard delete endpoint.
 
 **CARD 10 (design):** See **CARD 10 — Flexible Metric Definition Architecture** (before Execution Rules): template-based metrics with guardrailed parameters across verticals — **not** arbitrary SQL/formulas/BI; proposed Cards 11–17 for implementation.
+
+**§11 signals (design):** **Operational signal KPI catalog** (annex before Execution Rules) — attention / flow / risk / ops
+signals, proposed `signal.*` keys; 5–8 **safe-now** candidates; **no implementation** in this doc. Distinct from §10.10
+**build Card 11** (metric template registry).
 
 **Risks before commit:** Seeded placements apply only to orgs matching childcare seed migration; other orgs get resolver **baseline** until rows exist. Department facet `KPIVm.id` uses `dept.wu_queue.total_per_work_unit:{wuId}` when placements resolve (baseline used `wu_{id}`) — cosmetic unless consumers key off `id`.
 
