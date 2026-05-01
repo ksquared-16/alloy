@@ -22,7 +22,30 @@
 - Render: `RESEND_API_KEY`, `SUPABASE_*`, `INTERNAL_CRON_TOKEN` set
 - `COMMUNICATION_DUAL_WRITE` unset/false on web
 
-## Safest enqueue: SQL (no repo secrets)
+## Preferred path — Card 18 (drawer composer)
+
+Validate **UI → POST enqueue → worker → Resend** without relying on raw SQL enqueue.
+
+1. Staging admin: open a real **opportunity** or **job** with at least one **person** (linked per Card 16 rules) that has email.
+2. Confirm org has an **active** Resend binding (`channels_available` includes `email` via `GET /api/admin/communications/bindings` — same gate the composer uses).
+3. In drawer **overview** Communications block: enter body text, verify recipient checklist matches person-first list (`GET /api/admin/communications/drawer-recipients?entity_type=…&entity_id=…`).
+4. Click **Send**. Expect `200` from `POST /api/admin/communications/send` with `communication_message_id` (browser network tab — do not paste tokens).
+5. Trigger worker (same as below):
+
+```bash
+curl -sS -X POST "https://REPLACE_WITH_RENDER_STAGING_ORIGIN/internal/messages/process" \
+  -H "Content-Type: application/json" \
+  -H "x-cron-token: REPLACE_WITH_INTERNAL_CRON_TOKEN" \
+  -d '{"limit": 10}'
+```
+
+6. Re-verify `communication_messages` and inbox per sections below.
+
+**Evidence:** queued row originates from composer (`metadata`/audit may include `source: drawer_composer` and `recipient_person_id` where implemented).
+
+---
+
+## Alternate enqueue: SQL (no repo secrets)
 
 Use:** `scripts/dev/communications-resend-smoke-enqueue.sql`**
 

@@ -882,3 +882,208 @@ CARD 15 — Kill contacts from forward communications logic (execution summary)
   - **Legacy allowed:** `create_message` still writes `contact_id` to `public.messages` unchanged; workflows still load vendor-scoped contacts for unrelated send_message semantics.
   - **Passive API:** `/api/admin/communications/threads` still normalizes `contact` ↔ `contacts` for reading legacy-backed threads only; composer/send remain opportunities/jobs only.
 - Confirmation: Canonical thread/message creation paths do not invoke contacts queries or `contact_id` anchors; inbound never matches contacts table.
+
+⸻
+
+IMPLEMENTATION ROADMAP — Cards 16–20 (drawer-level email composer; execute only when tasked)
+
+Do not implement these cards unless explicitly approved. Cards define scope, constraints, and REQUIRED OUTPUT for implementers.
+
+⸻
+
+CARD 16 — Drawer Composer Recipient Resolution
+
+Purpose:
+Before adding a composer, define how the drawer determines valid recipients from the current record.
+
+Rules (NON-NEGOTIABLE):
+- Use **persons** as canonical identity for recipient selection and labeling.
+- Do **NOT** use contacts as primary identity for composer recipients (no contact-first logic, no contact_id as composer anchor).
+- No blind send-to-all; user must confirm selected recipient(s) explicitly (checklist per Card 17).
+- For **opportunities**:
+  - **Default selected recipient** = primary linked **person** with a non-empty email (per record identity / enrollment doctrine already on the opportunity snapshot — e.g. primary person from `_identity` / `primary_person_id`, not `primary_contact`).
+  - **Available recipients** = all **persons linked to the opportunity** (or customer/household expansion as product defines) who have email; **exclude** persons without email from selectable list.
+  - **Other persons with email** tied to the opportunity context (e.g. secondary household members, inquiry children resolved to `persons`) are **available but not selected by default**.
+- For **jobs**:
+  - **Default selected recipient** = primary customer/person with email when the job record exposes a resolvable primary **person** + email (prefer same patterns as job drawer customer/person fields; must not default from `contacts`).
+  - **Available recipients** = all **job-related persons with email** (e.g. primary person, customer-linked persons, household members as surfaced by existing job/opportunity APIs — exact join list to be confirmed in implementation from org-scoped entity GETs, not ad-hoc contacts).
+- If **no eligible person with email** exists:
+  - Disable email send in composer.
+  - Show clear UI copy (e.g. “No person with email on this record — add or link a person with email to send.”).
+- Threading for outbound must align with **person** (or external email key per Card 1.5/15) when creating canonical rows; do not thread on `contacts.id`.
+
+Pre-implementation discovery (REQUIRED before Card 17):
+1. Inspect drawer data sources for opportunities and jobs (`AdminEntityDrawer`, record overview / `entityDrawerOverviewData`, enrollment snapshot, job record panels, related people APIs).
+2. Confirm which **existing** API payloads already return `person_id`, email, and role labels vs which require a thin **read-only** aggregator route (prefer reusing entity GET + known nested shapes; avoid new contacts endpoints for composer).
+3. Document normalization: email trim, lowercase match for dedupe, duplicate person id handling.
+
+Edge cases (must be specified in implementation notes):
+- Opportunity with only phone, no person email → email channel disabled.
+- Same email on multiple persons → show distinct rows by **person id**, dedupe selection by person, not only by email string.
+- Primary person missing email but another linked person has email → default selection falls to first policy (e.g. first linked person with email in stable sort order — document order).
+- Jobs without customer/person hydration → disabled send + message.
+- Permissions: if user cannot read person PII, omit from list or gate (align with existing admin drawer rules).
+
+REQUIRED OUTPUT (when this card is executed):
+- Table: **files inspected** (paths).
+- **Recipient source confirmed**: which fields/APIs supply the list (exact route or `entity GET` shape).
+- **Exact API/data source used** for opportunities vs jobs (no hand-waving).
+- **Edge cases** resolved (bullets with behavior decided).
+- Wireframe or bullet UI spec for checklist + default highlight (no Figma required).
+
+DO NOT (in this card):
+- Build the composer UI.
+- Add contacts-based recipient APIs.
+- Enable dual-write.
+
+⸻
+
+CARD 17 — Drawer Email Composer MVP
+
+Purpose:
+Add a minimal email composer inside the **embedded Communications section** of the drawer overview (opportunities/jobs), reusing existing layout — not a separate Communications tab.
+
+Scope:
+- **textarea** for body (plain text for MVP).
+- **Recipient checklist** sourced from **Card 16** (person-first; multi-select only if product confirms; default one primary selection, additional optional checkboxes — document in Card 16 output).
+- **Email channel only** (hide SMS; no channel picker unless email binding missing — then disable + explanation).
+- **Send** button; **disabled** while request in flight or when no recipient / no binding / invalid state.
+- **No templates**, **no SMS**, **no AI draft**.
+- After successful enqueue: refresh threads/list and optionally messages for expanded thread (**no polling loops**; single refetch triggered by mutation success).
+
+Behavior:
+- **POST** existing canonical **`/api/admin/communications/send`** (or successor documented in repo) — create **queued** `communication_*` rows only; **never** call Resend from the browser.
+- Rely on **backend worker** + `INTERNAL_MESSAGES_PROCESS_URL` / cron as today.
+- **`COMMUNICATION_DUAL_WRITE` remains false** — no canonical mirror toggles introduced by this card.
+- Preserve **lazy loading**: do not fetch threads until Communications subsection is active/expanded per existing drawer doctrine; avoid N+1 and avoid global client state.
+
+Constraints:
+- No dual-write unless a later explicit card enables it org-wide.
+- No new provider architecture beyond Resend binding + existing sender.
+- No contacts as primary identity (Card 15/16 preserved).
+- No layout redesign of the drawer chrome; fit inside embedded Communications card.
+
+Permissions:
+- Reuse **`communications.send`** / admin-or-ops guards consistent with **`POST …/communications/send`**; surface disabled composer when forbidden.
+
+REQUIRED OUTPUT (when this card is executed):
+- Files changed (table summary).
+- API: method/path/payload/example response.
+- UI states (no binding, no email on persons, composing, queued, error).
+- Manual test notes + `npm run build` (web).
+
+DO NOT:
+- Implement templates or bulk send.
+- Add SMS composer in this card.
+- Redesign Opportunity/Job drawer tabs beyond embedding.
+
+⸻
+
+CARD 18 — Composer Send Smoke Test
+
+Purpose:
+Validate UI → queued `communication_messages` → worker → Resend → recipient inbox **on staging**.
+
+Scope:
+- Staging environment only.
+- Real **verified** Resend binding for staging org (`communication_provider_bindings` active, `secret_ref` env-backed).
+- Send to **one** selected **test person email** (or approved staging inbox); not production customers.
+- After send: manually or via cron **trigger worker** `POST /internal/messages/process` with `x-cron-token`.
+- Verify in DB: `communication_messages.status`, `provider`, `provider_message_id`, `error`.
+- Verify email received (inbox/screenshot acceptable for sprint evidence).
+
+Procedure alignment:
+- May extend **`docs/implementation/communications/resend-outbound-smoke-test.md`** and **`scripts/dev/communications-resend-smoke-enqueue.sql`** paradigms, but preferred path for this card is **composer-initiated** queue row (not raw SQL enqueue) to prove UI + API integration.
+
+REQUIRED OUTPUT (when this card is executed):
+- **Commands run** (curl for worker if applicable, no secrets pasted into sprint doc — reference env names only).
+- **DB rows checked** (queries + abbreviated results).
+- **Result** pass/fail.
+- **Bugs/fixes** filed or patched with PR refs.
+
+DO NOT:
+- Run production sends.
+- Commit secrets or real tokens into the repo.
+
+⸻
+
+CARD 19 — Template Planning / Non-Implementation
+
+Purpose:
+Define future **template** support without implementing code in this sprint.
+
+Design principles (targets for a later epic):
+- Templates are **org-scoped**, optionally **location-scoped** (align with communications binding scopes).
+- Templates can be attached to **record types** (opportunity/job/person) and **workflow actions** (send_message variants).
+- **Variables** interpolated from opportunity/job/person (and stable metadata) context — list variable catalog before build.
+- **Human preview/edit** mandatory before send (draft layer).
+- **Later**: AI-generated draft plugs into same **draft + preview** layer; no separate send pipe.
+
+DELIVERABLES (documentation only):
+- Short **template lifecycle** sketch (create → preview → send).
+- Risks (PII in templates, variable injection abuse, versioning).
+- Explicit **no implementation** in current sprint — link to CARD 17 completion as prerequisite.
+
+⸻
+
+CARD 19.5 — Bulk Messaging Planning / Non-Implementation
+
+Purpose:
+Account for **bulk messaging** explicitly without implementing drawer composer bulk features.
+
+Representative future use cases (examples only):
+- Director emails **all parents** (org-wide audience).
+- Director emails all parents at **one location**.
+- Director emails families with children in a **specific room/classroom**.
+- Finance emails families with **balances**.
+- Enrollment emails families in a **pipeline/status bucket**.
+
+Design principles:
+- **Bulk messaging is OUT OF SCOPE** for record-level composer MVP (Card 17).
+- Bulk UX should live in a **global / header messaging surface**, **department/work-unit scoped action**, or **campaign workspace** — **not** hidden inside a single opportunity/job drawer composer.
+- **Audience selection must be query/config-driven** (saved filters, RBAC-checked queries), never ad hoc blind export.
+- **Preview recipients** before send (count + sample + full list export for ops auditing).
+- **Dedupe recipients** by person id (and email normalization as secondary guard).
+- **Permissions, consent, opt-outs, send caps** must be enforced before any bulk ship (document gaps).
+- Later: auditable **`communication_batch`** (or equivalent) records linking many `communication_messages` rows; architecture TBD — **individual `communication_messages` per recipient remains** canon.
+- **BCC pitfalls**: must not expose recipient lists to each other (use transactional per-recipient or provider patterns that preserve privacy).
+
+REQUIRED OUTPUT (planning artifact only):
+- **Future architecture notes** (diagram or bullets).
+- **Required tables/models later** (e.g. batch header, audience snapshot, template link) — proposals, not migrations.
+- **Risks** (spam complaints, GDPR/CAN-SPAM posture, accidental cross-org leakage).
+- **Explicit non-goal** for **current sprint**: no bulk send UI, no CSV upload in drawer, no multi-record fan-out from drawer composer “Send.”
+
+DO NOT implement in this card.
+
+⸻
+
+CARD 20 — Communications Sprint Completion Audit
+
+Purpose:
+Close the sprint with an auditable checklist of communications capabilities and remaining risk.
+
+Audit checklist:
+- Backend **canonical email send** works (staging path: binding + worker + Resend).
+- **Drawer composer** works (enqueue + worker + refresh per Card 17).
+- **Recipient selection** works and matches **person-first** rules (Cards 15–16).
+- **No contact-first dependency** introduced in new paths (grep / review evidence).
+- **Dual-write remains off** unless **intentionally** enabled per org/env with documented sign-off (`COMMUNICATION_DUAL_WRITE`).
+- **Provider bindings** safe (no secrets in `config` jsonb, `secret_ref` doctrine upheld).
+- **Performance** acceptable (drawer Communications embed: bounded thread fetch, no message N+1, no polling).
+
+Remaining blockers (explicitly list status):
+- **Twilio** SMS outbound/inbound completeness vs staging/production.
+- **Inbound SMS** (binding route, legacy coexistence).
+- **Templates** (Card 19).
+- **AI drafts** (future).
+- **Production security** (Card 14 items still open vs mitigated).
+
+REQUIRED OUTPUT:
+- **Final status**: production-ready vs staging-only per capability.
+- **Files changed** (last-mile PR summary or appendix reference).
+- **Tests run** (build, lint scope, staging smoke refs).
+- **Recommended next sprint** (ordered priorities).
+
+⸻
+End roadmap Cards 16–20 — execute only when each card is explicitly approved and tasked.

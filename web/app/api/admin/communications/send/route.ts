@@ -13,6 +13,10 @@ import {
     assertCommunicationsSendAllowed,
 } from "@/lib/communications/communicationPermissions";
 import { enqueueCanonicalOutboundMessage } from "@/lib/communications/canonicalOutboundEnqueue";
+import {
+    assertRecipientPersonEligibleForDrawerEmail,
+    getPersonEmailOrNull,
+} from "@/lib/communications/drawerEmailRecipients";
 import { normalizeRecipientKeyEmail, normalizeRecipientKeySms } from "@/lib/communications/recipientKey";
 import { triggerBackendMessagesQueue } from "@/lib/communications/triggerBackendMessagesQueue";
 
@@ -84,9 +88,11 @@ export async function POST(request: NextRequest) {
     const entityType = normalizeEntityTypeParam(String(body.entity_type ?? ""));
     const entityId = String(body.entity_id ?? "").trim();
     const channel = normalizeChannel(String(body.channel ?? ""));
-    const toRaw = String(body.to ?? body.to_address ?? "").trim();
+    const toRawInput = String(body.to ?? body.to_address ?? "").trim();
+    let toRaw = toRawInput;
     const textRaw = String(body.body ?? "").trim();
     const bindingIdOpt = typeof body.binding_id === "string" ? body.binding_id.trim() : "";
+    const recipientPersonIdRaw = typeof body.recipient_person_id === "string" ? body.recipient_person_id.trim() : "";
 
     if (!entityType || (entityType !== "opportunities" && entityType !== "jobs")) {
         return NextResponse.json({ error: "entity_type must be opportunities or jobs" }, { status: 400 });
@@ -99,6 +105,27 @@ export async function POST(request: NextRequest) {
     const table = entityType === "jobs" ? "jobs" : "opportunities";
     if (!(await assertRowOrg(supabase, table, entityId, ctx.orgId)).ok) {
         return NextResponse.json({ error: "Entity not found" }, { status: 404 });
+    }
+
+    if (channel === "email" && recipientPersonIdRaw && UUID_RE.test(recipientPersonIdRaw)) {
+        const elig = await assertRecipientPersonEligibleForDrawerEmail(
+            supabase,
+            ctx.orgId,
+            entityType,
+            entityId,
+            recipientPersonIdRaw
+        );
+        if (!elig) {
+            return NextResponse.json(
+                { error: "recipient_person_id is not an eligible person-with-email for this record" },
+                { status: 400 }
+            );
+        }
+        const em = await getPersonEmailOrNull(supabase, ctx.orgId, recipientPersonIdRaw);
+        if (!em) {
+            return NextResponse.json({ error: "Recipient person has no usable email" }, { status: 400 });
+        }
+        toRaw = em;
     }
 
     const { data: rows, error: bindErr } = await supabase
@@ -154,6 +181,7 @@ export async function POST(request: NextRequest) {
     const meta: Record<string, unknown> = {
         source: "drawer_composer",
         ...(bindingIdOpt && UUID_RE.test(bindingIdOpt) ? { requested_binding_id: bindingIdOpt } : {}),
+        ...(recipientPersonIdRaw && UUID_RE.test(recipientPersonIdRaw) ? { recipient_person_id: recipientPersonIdRaw } : {}),
     };
 
     const res = await enqueueCanonicalOutboundMessage({
