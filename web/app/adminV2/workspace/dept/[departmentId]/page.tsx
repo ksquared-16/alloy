@@ -277,17 +277,21 @@ export default function AdminV2WorkspaceDepartmentPage() {
             try {
                 const res = await fetch(
                     `/api/admin/workspace-kpi-placements?surface=department&department_id=${encodeURIComponent(departmentId)}`,
-                    init
+                    { ...(init ?? {}), cache: "no-store" }
                 );
                 if (!res.ok) {
                     if (!cancelled) setDeptPlacementStrip(undefined);
                     return;
                 }
-                const j = (await res.json().catch(() => ({}))) as { items?: WorkspaceKpiPlacementRow[] };
+                const j = (await res.json().catch(() => ({}))) as {
+                    items?: WorkspaceKpiPlacementRow[];
+                    scope_has_placements?: boolean;
+                };
                 if (cancelled) return;
                 const wuList = deptWorkUnits ?? [];
                 const { items } = resolveKpisForDepartment({
                     placementRows: j.items ?? [],
+                    scopeHasPlacementRows: j.scope_has_placements === true,
                     departmentSurface: "department",
                     deptWorkUnits: wuList,
                     deptWorkUnitSummaries,
