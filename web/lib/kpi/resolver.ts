@@ -57,7 +57,13 @@ function sortPlacements(rows: WorkspaceKpiPlacementRow[]): WorkspaceKpiPlacement
 }
 
 export function resolveKpisForWorkspace(params: {
+    /** Visible rows only (from API). */
     placementRows: WorkspaceKpiPlacementRow[];
+    /**
+     * True if any `workspace_kpi_placement` row exists for this org + workspace surface (including hidden).
+     * When false and `placementRows` is empty → use baseline. When true and no visible rows → empty strip (explicit hide-all).
+     */
+    scopeHasPlacementRows: boolean;
     metrics: WorkspaceRootMetrics | null;
     growthSnapshots: Array<{ departmentKey: string; kpis: DepartmentLifecycleKpisPayload | null }>;
 }): ResolveKpisResult {
@@ -66,7 +72,10 @@ export function resolveKpisForWorkspace(params: {
     const baseline = () => buildDefaultWorkspaceKpis(params.metrics, params.growthSnapshots);
 
     if (visible.length === 0) {
-        return { items: baseline(), warnings };
+        if (!params.scopeHasPlacementRows) {
+            return { items: baseline(), warnings };
+        }
+        return { items: [], warnings };
     }
 
     const orgPipeline = buildWorkspaceRootOrgOpportunityKpis(params.growthSnapshots);
@@ -110,13 +119,21 @@ export function resolveKpisForWorkspace(params: {
     }
 
     if (items.length === 0) {
-        return { items: baseline(), warnings };
+        if (!params.scopeHasPlacementRows) {
+            return { items: baseline(), warnings };
+        }
+        return { items: [], warnings };
     }
     return { items, warnings };
 }
 
 export function resolveKpisForDepartment(params: {
     placementRows: WorkspaceKpiPlacementRow[];
+    /**
+     * True if any placement row exists for org + department surface + department_id (including hidden).
+     * False + no visible rows → baseline; true + no visible rows → empty strip.
+     */
+    scopeHasPlacementRows: boolean;
     departmentSurface: "department";
     deptWorkUnits: DeptWorkUnitRow[];
     deptWorkUnitSummaries: Record<string, { total: number; needs_attention: number | null }>;
@@ -134,7 +151,10 @@ export function resolveKpisForDepartment(params: {
 
     const visible = params.placementRows.filter((r) => r.is_visible !== false);
     if (visible.length === 0) {
-        return { items: baseline(), warnings };
+        if (!params.scopeHasPlacementRows) {
+            return { items: baseline(), warnings };
+        }
+        return { items: [], warnings };
     }
 
     const items: KPIVm[] = [];
@@ -181,7 +201,10 @@ export function resolveKpisForDepartment(params: {
     }
 
     if (items.length === 0) {
-        return { items: baseline(), warnings };
+        if (!params.scopeHasPlacementRows) {
+            return { items: baseline(), warnings };
+        }
+        return { items: [], warnings };
     }
     return { items, warnings };
 }

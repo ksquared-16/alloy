@@ -164,13 +164,14 @@ export default function AdminV2WorkspaceIndexPage() {
                                 await loadWorkspaceRollup(active);
                             let placementStrip: KPIVm[] | undefined = undefined;
                             try {
-                                const pres = await fetch(
-                                    "/api/admin/workspace-kpi-placements?surface=workspace",
-                                    fetchInit
-                                );
+                                const pres = await fetch("/api/admin/workspace-kpi-placements?surface=workspace", {
+                                    ...(fetchInit ?? {}),
+                                    cache: "no-store",
+                                });
                                 if (pres.ok) {
                                     const body = (await pres.json().catch(() => ({}))) as {
                                         items?: WorkspaceKpiPlacementRow[];
+                                        scope_has_placements?: boolean;
                                     };
                                     const metricsForResolve: WorkspaceRootMetrics = {
                                         ...m,
@@ -178,6 +179,7 @@ export default function AdminV2WorkspaceIndexPage() {
                                     };
                                     placementStrip = resolveKpisForWorkspace({
                                         placementRows: body.items ?? [],
+                                        scopeHasPlacementRows: body.scope_has_placements === true,
                                         metrics: metricsForResolve,
                                         growthSnapshots: growthSnapshots.map((s) => ({
                                             departmentKey: s.key,

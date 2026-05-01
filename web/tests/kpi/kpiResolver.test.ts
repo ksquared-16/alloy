@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
 import { isKnownMetricKey, validateMetricForSurface } from "@/lib/kpi/registry";
-import { buildDefaultWorkspaceKpis } from "@/lib/kpi/baseline";
+import { buildDefaultWorkspaceKpis, buildDefaultDepartmentKpis } from "@/lib/kpi/baseline";
 import { resolveKpisForDepartment, resolveKpisForWorkspace } from "@/lib/kpi/resolver";
 import type { DepartmentLifecycleKpisPayload } from "@/lib/workspace/viewModels/workspaceRootRollup";
 
@@ -40,15 +40,27 @@ describe("kpi registry", () => {
 describe("resolveKpisForWorkspace", () => {
     const growthSnapshots: Array<{ departmentKey: string; kpis: DepartmentLifecycleKpisPayload | null }> = [];
 
-    it("falls back to baseline when placements empty", () => {
+    it("falls back to baseline when no placements exist for scope", () => {
         const metrics = { departments: 3, workUnits: 7 };
         const { items, warnings } = resolveKpisForWorkspace({
             placementRows: [],
+            scopeHasPlacementRows: false,
             metrics,
             growthSnapshots,
         });
         expect(warnings).toEqual([]);
         expect(items).toEqual(buildDefaultWorkspaceKpis(metrics, growthSnapshots));
+    });
+
+    it("returns empty strip when placements exist but all hidden", () => {
+        const { items, warnings } = resolveKpisForWorkspace({
+            placementRows: [],
+            scopeHasPlacementRows: true,
+            metrics: { departments: 1, workUnits: 2 },
+            growthSnapshots,
+        });
+        expect(warnings).toEqual([]);
+        expect(items).toEqual([]);
     });
 
     it("orders by display_order and skips unknown keys with warnings", () => {
@@ -71,6 +83,7 @@ describe("resolveKpisForWorkspace", () => {
         ];
         const { items, warnings } = resolveKpisForWorkspace({
             placementRows: rows,
+            scopeHasPlacementRows: true,
             metrics: { departments: 2, workUnits: 4 },
             growthSnapshots,
         });
@@ -78,7 +91,7 @@ describe("resolveKpisForWorkspace", () => {
         expect(items.map((k) => k.id)).toEqual(["org.structure.departments_count", "org.structure.work_units_count"]);
     });
 
-    it("warns on surface mismatch and still returns baseline when nothing resolves", () => {
+    it("with configured scope, invalid visible rows resolve to empty strip — no baseline", () => {
         const rows: WorkspaceKpiPlacementRow[] = [
             placement({
                 surface: "workspace",
@@ -89,11 +102,12 @@ describe("resolveKpisForWorkspace", () => {
         const metrics = { departments: 1, workUnits: 1 };
         const { items, warnings } = resolveKpisForWorkspace({
             placementRows: rows,
+            scopeHasPlacementRows: true,
             metrics,
             growthSnapshots,
         });
         expect(warnings.some((w) => w.startsWith("surface_mismatch:"))).toBe(true);
-        expect(items).toEqual(buildDefaultWorkspaceKpis(metrics, growthSnapshots));
+        expect(items).toEqual([]);
     });
 });
 
@@ -116,6 +130,7 @@ describe("resolveKpisForDepartment", () => {
 
         const { items, warnings } = resolveKpisForDepartment({
             placementRows: rows,
+            scopeHasPlacementRows: true,
             departmentSurface: "department",
             deptWorkUnits: workUnits,
             deptWorkUnitSummaries: summaries,
@@ -140,6 +155,7 @@ describe("resolveKpisForDepartment", () => {
         const workUnits = [wu(0)];
         const { items } = resolveKpisForDepartment({
             placementRows: rows,
+            scopeHasPlacementRows: true,
             departmentSurface: "department",
             deptWorkUnits: workUnits,
             deptWorkUnitSummaries: { "wu-0": { total: 5, needs_attention: 1 } },
@@ -147,5 +163,40 @@ describe("resolveKpisForDepartment", () => {
             deptQueueSummariesError: null,
         });
         expect(items[0]?.value).toBe("—");
+    });
+
+    it("no visible rows but scope configured → empty, not baseline", () => {
+        const workUnits = [wu(0)];
+        const { items } = resolveKpisForDepartment({
+            placementRows: [],
+            scopeHasPlacementRows: true,
+            departmentSurface: "department",
+            deptWorkUnits: workUnits,
+            deptWorkUnitSummaries: { "wu-0": { total: 3, needs_attention: null } },
+            deptQueueSummariesLoading: false,
+            deptQueueSummariesError: null,
+        });
+        expect(items).toEqual([]);
+    });
+
+    it("no placement config → baseline facet strip", () => {
+        const workUnits = [wu(0)];
+        const { items } = resolveKpisForDepartment({
+            placementRows: [],
+            scopeHasPlacementRows: false,
+            departmentSurface: "department",
+            deptWorkUnits: workUnits,
+            deptWorkUnitSummaries: { "wu-0": { total: 3, needs_attention: null } },
+            deptQueueSummariesLoading: false,
+            deptQueueSummariesError: null,
+        });
+        expect(items).toEqual(
+            buildDefaultDepartmentKpis({
+                deptWorkUnits: workUnits,
+                deptWorkUnitSummaries: { "wu-0": { total: 3, needs_attention: null } },
+                deptQueueSummariesLoading: false,
+                deptQueueSummariesError: null,
+            })
+        );
     });
 });

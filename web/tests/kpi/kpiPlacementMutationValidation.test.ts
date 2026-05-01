@@ -39,6 +39,17 @@ describe("validatePlacementCreateBody", () => {
             })
         ).toThrow(PlacementValidationError);
     });
+
+    it("rejects work_unit surface until work-unit KPI runtime ships", () => {
+        expect(() =>
+            validatePlacementCreateBody({
+                surface: "work_unit",
+                metric_key: "wu.queue.selected_tab_count",
+                department_id: "00000000-0000-0000-0000-0000000000de",
+                work_unit_id: "00000000-0000-0000-0000-0000000000wu",
+            })
+        ).toThrow(PlacementValidationError);
+    });
 });
 
 describe("validatePlacementPatchBody", () => {

@@ -20,6 +20,9 @@ type WuRow = { id: string; name: string | null; department_id: string; key: stri
 
 const SURFACE_ORDER: KpiSurface[] = ["workspace", "department", "work_unit"];
 
+/** Work unit KPI strip is not rendered in AdminV2 yet (Card 6) — do not offer new placements for it. */
+const ADD_PLACEMENT_SURFACES: KpiSurface[] = ["workspace", "department"];
+
 function sortPlacements(items: WorkspaceKpiPlacementRow[]): WorkspaceKpiPlacementRow[] {
     const rank = (s: string) => SURFACE_ORDER.indexOf(s as KpiSurface);
     return [...items].sort((a, b) => {
@@ -64,12 +67,12 @@ export default function KpiPlacementsSettingsClient() {
 
     const [addSurface, setAddSurface] = useState<KpiSurface>("workspace");
     const [addDeptId, setAddDeptId] = useState("");
-    const [addWuId, setAddWuId] = useState("");
     const [addMetricKey, setAddMetricKey] = useState<MetricKey | "">("");
     const [addDisplayOrder, setAddDisplayOrder] = useState(0);
     const [addLabel, setAddLabel] = useState("");
     const [addBusy, setAddBusy] = useState(false);
     const [addError, setAddError] = useState<string | null>(null);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
 
     const reload = useCallback(async () => {
         const init = workspaceDataFetchInit();
@@ -166,8 +169,6 @@ export default function KpiPlacementsSettingsClient() {
 
     const metricsForAddSurface = useMemo(() => listMetricDefinitions().filter((d) => d.allowedSurfaces.includes(addSurface)), [addSurface]);
 
-    const workUnitsForAddDept = useMemo(() => workUnits.filter((w) => w.department_id === addDeptId), [workUnits, addDeptId]);
-
     const rowDirty = useCallback(
         (row: WorkspaceKpiPlacementRow) => {
             const d = draftById[row.id];
@@ -188,7 +189,7 @@ export default function KpiPlacementsSettingsClient() {
         setSavingId(row.id);
         try {
             const init: RequestInit = {
-                ...workspaceDataFetchInit(),
+                ...(workspaceDataFetchInit() ?? {}),
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -197,6 +198,7 @@ export default function KpiPlacementsSettingsClient() {
                     display_order: d.display_order,
                     label_override: d.label_override.trim() ? d.label_override.trim() : null,
                 }),
+                cache: "no-store",
             };
             const res = await fetch("/api/admin/workspace-kpi-placements", init);
             const j = (await res.json().catch(() => ({}))) as { error?: string };
@@ -223,10 +225,6 @@ export default function KpiPlacementsSettingsClient() {
             setAddError("Select a department");
             return;
         }
-        if (addSurface === "work_unit" && (!addDeptId || !addWuId)) {
-            setAddError("Select department and work unit");
-            return;
-        }
         setAddBusy(true);
         try {
             const body: Record<string, unknown> = {
@@ -235,14 +233,14 @@ export default function KpiPlacementsSettingsClient() {
                 display_order: addDisplayOrder,
                 label_override: addLabel.trim() ? addLabel.trim() : null,
             };
-            if (addSurface === "department" || addSurface === "work_unit") body.department_id = addDeptId;
-            if (addSurface === "work_unit") body.work_unit_id = addWuId;
+            if (addSurface === "department") body.department_id = addDeptId;
 
             const init: RequestInit = {
-                ...workspaceDataFetchInit(),
+                ...(workspaceDataFetchInit() ?? {}),
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(body),
+                cache: "no-store",
             };
             const res = await fetch("/api/admin/workspace-kpi-placements", init);
             const j = (await res.json().catch(() => ({}))) as { error?: string };
@@ -255,6 +253,36 @@ export default function KpiPlacementsSettingsClient() {
             setAddError(e instanceof Error ? e.message : "Create failed");
         } finally {
             setAddBusy(false);
+        }
+    };
+
+    const removePlacement = async (row: WorkspaceKpiPlacementRow) => {
+        if (
+            !window.confirm(
+                "Remove this KPI placement? The row will be deleted (not just hidden). You can add it again later."
+            )
+        ) {
+            return;
+        }
+        setSaveError(null);
+        setDeletingId(row.id);
+        try {
+            const init: RequestInit = {
+                ...(workspaceDataFetchInit() ?? {}),
+                method: "DELETE",
+                cache: "no-store",
+            };
+            const res = await fetch(
+                `/api/admin/workspace-kpi-placements?id=${encodeURIComponent(row.id)}`,
+                init
+            );
+            const j = (await res.json().catch(() => ({}))) as { error?: string };
+            if (!res.ok) throw new Error(j.error ?? "Remove failed");
+            await reload();
+        } catch (e) {
+            setSaveError(e instanceof Error ? e.message : "Remove failed");
+        } finally {
+            setDeletingId(null);
         }
     };
 
@@ -285,6 +313,11 @@ export default function KpiPlacementsSettingsClient() {
                 <p className="mt-2 text-[11px] text-alloy-midnight/50">
                     Registry keys and surfaces are enforced server-side. You cannot add formulas or SQL.
                 </p>
+                <p className="mt-2 rounded-md border border-alloy-forge/15 bg-alloy-midnight/[0.02] px-2.5 py-2 text-[11px] leading-snug text-alloy-midnight/65">
+                    <strong className="font-medium text-alloy-midnight/80">Limited catalog (v0):</strong> only approved KPI
+                    metrics from the product registry are available. Broader, template-based metric definitions are planned
+                    in <strong className="font-medium">Card 10+</strong> — this screen does not add arbitrary metrics.
+                </p>
             </header>
 
             {saveError ? (
@@ -298,6 +331,13 @@ export default function KpiPlacementsSettingsClient() {
                         <h2 id={`kpi-surface-${surface}`} className="text-sm font-semibold text-alloy-midnight">
                             {surfaceTitle(surface)}
                         </h2>
+                        {surface === "work_unit" ? (
+                            <p className="text-[11px] leading-snug text-amber-900/85 bg-amber-50/90 border border-amber-200/80 rounded-md px-2.5 py-2">
+                                <strong className="font-medium">Not on work unit UI yet</strong> — AdminV2 work-unit KPI
+                                strip is deferred (Card 6). Rows here have <em>no effect</em> on the work-unit page until
+                                runtime ships. Use <strong>Remove</strong> to delete legacy rows, or leave them hidden.
+                            </p>
+                        ) : null}
 
                         <div className="overflow-x-auto rounded-lg border border-alloy-forge/12 bg-white/40">
                             <table className="min-w-[720px] w-full text-left text-xs">
@@ -312,13 +352,17 @@ export default function KpiPlacementsSettingsClient() {
                                         <th className="px-3 py-2 font-medium">Allowed surfaces</th>
                                         <th className="px-3 py-2 font-medium">Unit</th>
                                         <th className="px-3 py-2 font-medium">Default label</th>
-                                        {canMutate ? <th className="px-3 py-2 font-medium w-[96px]"> </th> : null}
+                                        {canMutate ? (
+                                            <th className="px-3 py-2 font-medium text-left" colSpan={2}>
+                                                Actions
+                                            </th>
+                                        ) : null}
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {rows.length === 0 ? (
                                         <tr>
-                                            <td colSpan={canMutate ? 10 : 9} className="px-3 py-6 text-center text-alloy-midnight/50">
+                                            <td colSpan={canMutate ? 11 : 9} className="px-3 py-6 text-center text-alloy-midnight/50">
                                                 No rows yet for this surface.
                                             </td>
                                         </tr>
@@ -411,16 +455,28 @@ export default function KpiPlacementsSettingsClient() {
                                                     </td>
                                                     <td className="px-3 py-2 text-alloy-midnight/75">{def?.defaultLabel ?? "—"}</td>
                                                     {canMutate ? (
-                                                        <td className="px-3 py-2">
-                                                            <button
-                                                                type="button"
-                                                                className="rounded-md border border-alloy-forge/20 bg-white px-2 py-1 text-[11px] font-medium text-alloy-midnight hover:bg-alloy-midnight/[0.04] disabled:opacity-40"
-                                                                disabled={!rowDirty(row) || savingId === row.id}
-                                                                onClick={() => void saveRow(row)}
-                                                            >
-                                                                {savingId === row.id ? "…" : "Save"}
-                                                            </button>
-                                                        </td>
+                                                        <>
+                                                            <td className="px-3 py-2">
+                                                                <button
+                                                                    type="button"
+                                                                    className="rounded-md border border-alloy-forge/20 bg-white px-2 py-1 text-[11px] font-medium text-alloy-midnight hover:bg-alloy-midnight/[0.04] disabled:opacity-40"
+                                                                    disabled={!rowDirty(row) || savingId === row.id}
+                                                                    onClick={() => void saveRow(row)}
+                                                                >
+                                                                    {savingId === row.id ? "…" : "Save"}
+                                                                </button>
+                                                            </td>
+                                                            <td className="px-3 py-2">
+                                                                <button
+                                                                    type="button"
+                                                                    className="rounded-md border border-alloy-ember/35 bg-white px-2 py-1 text-[11px] font-medium text-alloy-ember hover:bg-alloy-ember/5 disabled:opacity-40"
+                                                                    disabled={deletingId === row.id || savingId === row.id}
+                                                                    onClick={() => void removePlacement(row)}
+                                                                >
+                                                                    {deletingId === row.id ? "…" : "Remove"}
+                                                                </button>
+                                                            </td>
+                                                        </>
                                                     ) : null}
                                                 </tr>
                                             );
@@ -449,18 +505,17 @@ export default function KpiPlacementsSettingsClient() {
                                         const s = e.target.value as KpiSurface;
                                         setAddSurface(s);
                                         setAddDeptId("");
-                                        setAddWuId("");
                                         setAddMetricKey("");
                                     }}
                                 >
-                                    {SURFACE_ORDER.map((s) => (
+                                    {ADD_PLACEMENT_SURFACES.map((s) => (
                                         <option key={s} value={s}>
                                             {surfaceTitle(s)}
                                         </option>
                                     ))}
                                 </select>
                             </label>
-                            {(addSurface === "department" || addSurface === "work_unit") && (
+                            {addSurface === "department" && (
                                 <label className="flex flex-col gap-0.5 text-[10px] text-alloy-midnight/55">
                                     Department
                                     <select
@@ -468,31 +523,12 @@ export default function KpiPlacementsSettingsClient() {
                                         value={addDeptId}
                                         onChange={(e) => {
                                             setAddDeptId(e.target.value);
-                                            setAddWuId("");
                                         }}
                                     >
                                         <option value="">Select…</option>
                                         {departments.map((d) => (
                                             <option key={d.id} value={d.id}>
                                                 {d.name?.trim() || d.key || d.id}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </label>
-                            )}
-                            {addSurface === "work_unit" && (
-                                <label className="flex flex-col gap-0.5 text-[10px] text-alloy-midnight/55">
-                                    Work unit
-                                    <select
-                                        className="min-w-[10rem] rounded border border-alloy-forge/20 bg-white px-2 py-1 text-xs"
-                                        value={addWuId}
-                                        onChange={(e) => setAddWuId(e.target.value)}
-                                        disabled={!addDeptId}
-                                    >
-                                        <option value="">Select…</option>
-                                        {workUnitsForAddDept.map((w) => (
-                                            <option key={w.id} value={w.id}>
-                                                {w.name?.trim() || w.key || w.id}
                                             </option>
                                         ))}
                                     </select>

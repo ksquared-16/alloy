@@ -92,6 +92,13 @@ export function validatePlacementCreateBody(body: PlacementCreateInput): {
     const work_unit_id = normalizeUuid(body.work_unit_id ?? null);
     assertScope(surface, department_id, work_unit_id);
 
+    if (surface === "work_unit") {
+        throw new PlacementValidationError(
+            400,
+            "Work unit KPI placements are not rendered in AdminV2 yet (Card 6 deferred). Remove existing work-unit rows in Settings or wait for a future release."
+        );
+    }
+
     const display_order =
         typeof body.display_order === "number" && Number.isFinite(body.display_order)
             ? Math.trunc(body.display_order)

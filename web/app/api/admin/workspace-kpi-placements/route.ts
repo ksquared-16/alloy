@@ -66,6 +66,13 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = createAdminClient();
+
+    let countBuilder = supabase
+        .from("workspace_kpi_placement")
+        .select("id", { count: "exact", head: true })
+        .eq("org_id", ctx.orgId)
+        .eq("surface", surface);
+
     let q = supabase
         .from("workspace_kpi_placement")
         .select(SELECT_COLS)
@@ -77,20 +84,27 @@ export async function GET(request: NextRequest) {
 
     if (surface === "workspace") {
         q = q.is("department_id", null).is("work_unit_id", null);
+        countBuilder = countBuilder.is("department_id", null).is("work_unit_id", null);
     } else if (surface === "department") {
         q = q.eq("department_id", departmentId).is("work_unit_id", null);
+        countBuilder = countBuilder.eq("department_id", departmentId).is("work_unit_id", null);
     } else {
         q = q.eq("department_id", departmentId).eq("work_unit_id", workUnitId);
+        countBuilder = countBuilder.eq("department_id", departmentId).eq("work_unit_id", workUnitId);
     }
 
-    const { data, error } = await q;
+    const [{ data, error }, countRes] = await Promise.all([q, countBuilder]);
 
     if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
+    if (countRes.error) {
+        return NextResponse.json({ error: countRes.error.message }, { status: 500 });
+    }
 
     const items = (data ?? []) as WorkspaceKpiPlacementRow[];
-    return NextResponse.json({ items });
+    const scopeHasPlacementRows = (countRes.count ?? 0) > 0;
+    return NextResponse.json({ items, scope_has_placements: scopeHasPlacementRows });
 }
 
 /** Create placement from registry metric keys only; **admin only**. */
@@ -121,22 +135,8 @@ export async function POST(request: NextRequest) {
     const supabase = createAdminClient();
 
     const deptOk = await assertRowOrg(supabase, "departments", parsed.department_id ?? "", ctx.orgId);
-    if (parsed.surface === "department" || parsed.surface === "work_unit") {
+    if (parsed.surface === "department") {
         if (!deptOk.ok) return NextResponse.json({ error: "Department not found" }, { status: 404 });
-    }
-
-    if (parsed.surface === "work_unit" && parsed.work_unit_id && parsed.department_id) {
-        const wuOk = await assertRowOrg(supabase, "work_units", parsed.work_unit_id, ctx.orgId);
-        if (!wuOk.ok) return NextResponse.json({ error: "Work unit not found" }, { status: 404 });
-        const { data: wuRow, error: wuErr } = await supabase
-            .from("work_units")
-            .select("department_id")
-            .eq("id", parsed.work_unit_id)
-            .eq("org_id", ctx.orgId)
-            .maybeSingle();
-        if (wuErr || !wuRow || String(wuRow.department_id) !== parsed.department_id) {
-            return NextResponse.json({ error: "Work unit does not belong to the selected department" }, { status: 400 });
-        }
     }
 
     const insertRow = {
@@ -236,4 +236,39 @@ export async function PATCH(request: NextRequest) {
     }
 
     return NextResponse.json({ item: updated as WorkspaceKpiPlacementRow });
+}
+
+/**
+ * Hard-delete a placement row (frees unique partial-index slot for a new visible row). **Admin only**.
+ */
+export async function DELETE(request: NextRequest) {
+    const ctx = await getAdminContext();
+    if (!ctx.ok) return adminContextFailureResponse(ctx);
+    if (ctx.role !== "admin") {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const id = request.nextUrl.searchParams.get("id")?.trim() ?? "";
+    if (!id) {
+        return NextResponse.json({ error: "id query parameter required" }, { status: 400 });
+    }
+
+    const supabase = createAdminClient();
+    const { data: existing, error: exErr } = await supabase
+        .from("workspace_kpi_placement")
+        .select("id")
+        .eq("id", id)
+        .eq("org_id", ctx.orgId)
+        .maybeSingle();
+
+    if (exErr) return NextResponse.json({ error: exErr.message }, { status: 500 });
+    if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+    const { error: delErr } = await supabase.from("workspace_kpi_placement").delete().eq("id", id).eq("org_id", ctx.orgId);
+
+    if (delErr) {
+        return NextResponse.json({ error: delErr.message }, { status: 500 });
+    }
+
+    return NextResponse.json({ ok: true });
 }
