@@ -3112,6 +3112,52 @@
   padding-bottom: 4px;
 }
 
+/*
+ * Paired panels (two columns in one throughput lane): revert rollup-only “flattened” primary shell so
+ * throughput matches the framed attention sibling — same margin, padding, rail, and card top edge.
+ */
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-lane-chrome--throughput-deck .adminv2-ws-paired-oper-grid,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-lane-chrome--throughput-deck .adminv2-ws-paired-oper-grid {
+  min-width: 0;
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2
+  .adminv2-ws-dept-v2-lane-chrome--throughput-deck
+  .adminv2-ws-paired-oper-grid
+  .adminv2-ws-paired-oper-panel.adminv2-ws-dept-throughput-panel.adminv2-ws-dept-qsec--primary,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2
+  .adminv2-ws-dept-v2-lane-chrome--throughput-deck
+  .adminv2-ws-paired-oper-grid
+  .adminv2-ws-paired-oper-panel.adminv2-ws-dept-throughput-panel.adminv2-ws-dept-qsec--primary {
+  margin: 0;
+  padding: 12px 14px 14px;
+  border-left: 3px solid var(--vc-section-rail, var(--d-pine));
+  border-radius: 9px;
+  border: 1px solid color-mix(in srgb, var(--vc-section-rail, var(--d-pine)) 28%, var(--d-border));
+  border-left: 3px solid var(--vc-section-rail, var(--d-pine));
+  border-top: 1px solid color-mix(in srgb, var(--vc-label-accent, var(--d-pine)) 12%, transparent);
+  background: linear-gradient(
+    165deg,
+    color-mix(in srgb, #ffffff 93%, var(--d-surface)) 0%,
+    color-mix(in srgb, #ffffff 86%, var(--d-panel)) 46%,
+    var(--vc-section-panel-wash, color-mix(in srgb, var(--d-pine) 7%, var(--d-surface))) 100%
+  );
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    0 1px 3px rgba(39, 63, 82, 0.05);
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2
+  .adminv2-ws-dept-v2-lane-chrome--throughput-deck
+  .adminv2-ws-paired-oper-grid
+  .adminv2-ws-paired-oper-panel.adminv2-ws-dept-attention-panel--framed.adminv2-ws-dept-qsec--secondary,
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2
+  .adminv2-ws-dept-v2-lane-chrome--throughput-deck
+  .adminv2-ws-paired-oper-grid
+  .adminv2-ws-paired-oper-panel.adminv2-ws-dept-attention-panel--framed.adminv2-ws-dept-qsec--secondary {
+  margin: 0;
+}
+
 /* Record workspace — body: core column ± interaction column */
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-body-root {
   flex: 1 1 auto;

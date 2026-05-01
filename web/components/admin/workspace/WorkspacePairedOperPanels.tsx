@@ -45,7 +45,7 @@ export function WorkspacePairedOperPanel({ tone, ariaLabel, title, titleClassNam
                     </h3>
                 </div>
             </header>
-            <div className="adminv2-ws-paired-oper-panel__body adminv2-ws-wu-v2 min-h-0 flex-1" data-ws-surface="work_unit">
+            <div className="adminv2-ws-paired-oper-panel__body adminv2-ws-wu-v2 min-h-0 flex-1">
                 {children}
             </div>
         </section>

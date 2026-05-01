@@ -48,57 +48,56 @@ export function WorkUnitLifecycleCoveragePanel({
     if (!hasLifecycleThroughput) return null;
 
     const unmappedN = coverage?.unmappedCount;
-    const showGapWarning =
+    const hasUnmappedFromSummaries =
         coverage?.isComplete === true && typeof unmappedN === "number" && unmappedN > 0 && coverage.allRecordsCount != null;
 
+    const showPanel = showOtherPill || !coverage?.isComplete || hasUnmappedFromSummaries;
+
+    if (!showPanel) return null;
+
     return (
-        <div className="mt-2 min-w-0 space-y-2 rounded-md border border-admin-border/80 bg-white/40 px-2 py-2 text-[11px] leading-snug text-alloy-forge/80">
+        <div className="mt-1.5 min-w-0 border-t border-admin-border/35 pt-2 text-[11px] leading-snug text-alloy-forge/72">
             {showOtherPill ? (
                 <p className="m-0 text-alloy-forge/75">
-                    <span className="font-semibold text-alloy-forge">Other</span> — records in this work unit whose status is not
-                    mapped to any lifecycle/stage bucket in <span className="font-medium">queue_definition</span>. This is a{" "}
-                    <span className="font-medium">coverage</span> signal, not a separate queue.
+                    <span className="font-semibold text-alloy-forge">Other</span> — records in this work unit whose status is
+                    not mapped to any lifecycle/stage bucket in <span className="font-medium">queue_definition</span>. This is
+                    a <span className="font-medium">coverage</span> signal, not a separate queue.
                 </p>
             ) : null}
 
-            {showGapWarning ? (
-                <div
-                    className="rounded border border-alloy-honey/35 bg-alloy-honey/[0.07] px-2 py-1.5 text-alloy-forge"
-                    role="status"
-                >
-                    <p className="m-0 font-semibold text-alloy-forge">Coverage gap</p>
-                    <p className="mt-1 mb-0 text-alloy-forge/85">
-                        {unmappedN} record{unmappedN === 1 ? "" : "s"} in the all-records lane fall outside your stage/status
-                        filters. Fix in{" "}
-                        <a href={SETTINGS_WORK_UNITS_HREF} className="font-semibold text-alloy-blue hover:underline">
-                            Settings → Work units
-                        </a>{" "}
-                        (queue filters) and/or{" "}
-                        <a href={SETTINGS_STATUSES_HREF} className="font-semibold text-alloy-blue hover:underline">
-                            Settings → Statuses
-                        </a>{" "}
-                        — not a UI bug.
-                    </p>
-                </div>
-            ) : null}
-
             {!coverage?.isComplete && hasLifecycleThroughput ? (
-                <p className="m-0 text-alloy-forge/55">Loading queue counts… coverage check unavailable until summaries settle.</p>
+                <p className="m-0 mt-1.5 text-alloy-forge/55">Loading queue counts… coverage check unavailable until summaries settle.</p>
             ) : null}
 
-            <div className="border-t border-admin-border/60 pt-2">
+            <div className={showOtherPill || hasUnmappedFromSummaries ? "mt-2 border-t border-admin-border/25 pt-2" : ""}>
                 <button
                     type="button"
-                    className="flex w-full items-center justify-between gap-2 text-left font-semibold text-alloy-forge/70 hover:text-alloy-forge"
+                    className="flex w-full items-center justify-between gap-2 text-left text-[11px] font-medium text-alloy-forge/60 hover:text-alloy-forge/85"
                     onClick={() => setDiagOpen((o) => !o)}
                     aria-expanded={diagOpen}
                 >
-                    <span>Admin diagnostics — unmapped sample</span>
-                    <span className="tabular-nums text-alloy-forge/50">{diagOpen ? "−" : "+"}</span>
+                    <span>Admin / diagnostics</span>
+                    <span className="tabular-nums text-alloy-forge/45">{diagOpen ? "−" : "+"}</span>
                 </button>
                 {diagOpen ? (
-                    <div className="mt-2 space-y-2 text-alloy-forge/85">
-                        <p className="m-0 text-[10px] text-alloy-forge/55">
+                    <div className="mt-2 space-y-2 text-alloy-forge/80">
+                        {hasUnmappedFromSummaries ? (
+                            <p className="m-0 text-[10px] leading-snug text-alloy-forge/58">
+                                Summaries show{" "}
+                                <span className="tabular-nums font-medium text-alloy-forge/72">{unmappedN}</span> record
+                                {unmappedN === 1 ? "" : "s"} in the all-records lane outside mapped stage/status filters — a
+                                configuration/data topic, not a UI fault. Adjust in{" "}
+                                <a href={SETTINGS_WORK_UNITS_HREF} className="font-medium text-alloy-blue hover:underline">
+                                    Settings → Work units
+                                </a>{" "}
+                                and/or{" "}
+                                <a href={SETTINGS_STATUSES_HREF} className="font-medium text-alloy-blue hover:underline">
+                                    Settings → Statuses
+                                </a>
+                                .
+                            </p>
+                        ) : null}
+                        <p className="m-0 text-[10px] text-alloy-forge/52">
                             Sample from the{" "}
                             {onAllLane
                                 ? "current page of the all-records lane"
@@ -106,11 +105,11 @@ export function WorkUnitLifecycleCoveragePanel({
                             .{queueItemsLoading ? " Loading…" : ""}
                         </p>
                         {diagnostic.samples.length === 0 && !queueItemsLoading ? (
-                            <p className="m-0 text-alloy-forge/60">No unmapped rows in this sample.</p>
+                            <p className="m-0 text-alloy-forge/58">No unmapped rows in this sample.</p>
                         ) : null}
                         {Object.keys(diagnostic.statusKeyCounts).length > 0 ? (
                             <div>
-                                <p className="m-0 mb-1 text-[10px] font-semibold uppercase tracking-wide text-alloy-forge/50">
+                                <p className="m-0 mb-1 text-[10px] font-semibold uppercase tracking-wide text-alloy-forge/48">
                                     Unmapped status keys (this sample)
                                 </p>
                                 <ul className="m-0 list-none space-y-0.5 p-0">
@@ -157,7 +156,7 @@ export function WorkUnitLifecycleCoveragePanel({
                             </div>
                         ) : null}
                         {diagnostic.truncated ? (
-                            <p className="m-0 text-[10px] text-alloy-forge/55">Table truncated for display; not all rows shown.</p>
+                            <p className="m-0 text-[10px] text-alloy-forge/52">Table truncated for display; not all rows shown.</p>
                         ) : null}
                     </div>
                 ) : null}

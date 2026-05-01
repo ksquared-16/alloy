@@ -3,10 +3,15 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import {
+    WorkspacePairedOperPanel,
+    WorkspacePairedOperPanelsGrid,
+} from "@/components/admin/workspace/WorkspacePairedOperPanels";
 import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import { DepartmentWorkspaceBridgeShell } from "@/components/admin/workspace/DepartmentWorkspaceBridgeShell";
 import KPIBlock from "@/app/adminV2/components/workspace/blocks/KPIBlock";
 import { AdminV2RouteLoadingState } from "@/components/admin/workspace/AdminV2RouteLoadingState";
+import { WsRouteLoadingRibbon } from "@/components/admin/workspace/workspaceRouteSkeletons";
 import { workspaceRouteParam } from "@/lib/workspace/workspaceRouteParam";
 import ActionsBlock from "@/app/adminV2/components/workspace/blocks/ActionsBlock";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
@@ -437,118 +442,99 @@ export default function AdminV2WorkspaceDepartmentPage() {
         [departmentId, enrollmentRightRailByKey, needsAttentionHref, openDrawer, primaryWorkUnit?.id, router]
     );
 
-    const deptMainContentReady =
-        Boolean(dept) &&
-        (!deptQueueSummariesLoading || deptSummariesWaitTimedOut) &&
-        (deptWorkUnits !== null || Boolean(deptWorkUnitsError));
+    const deptSummariesRibbonPending = deptQueueSummariesLoading && !deptSummariesWaitTimedOut;
 
-    const renderWorkUnitSection = () => {
-        return (
-            <section
-                className="adminv2-ws-dept-qsec adminv2-ws-dept-qsec--primary adminv2-ws-dept-throughput-panel flex h-full min-h-0 min-w-0 flex-col"
-                aria-label="Work Unit Queue"
-            >
-                <header className="adminv2-ws-queue-header shrink-0">
-                    <div className="adminv2-ws-queue-title-row">
-                        <h3 className="adminv2-ws-queue-title">Work Unit Queue</h3>
-                    </div>
-                </header>
-                <div className="adminv2-ws-wu-v2 min-h-0 flex-1" data-ws-surface="work_unit">
-                    <ul className="adminv2-ws-queue-list" role="list">
-                        {deptWorkUnitsError ? (
-                            <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
-                                <div className="rounded-lg border border-admin-border bg-white/50 px-3 py-2 text-xs text-alloy-ember">
-                                    Failed to load work units: {deptWorkUnitsError}
-                                </div>
-                            </li>
-                        ) : null}
-                        {(deptWorkUnits ?? []).map((wu) => {
-                            const s = deptWorkUnitSummaries[wu.id];
-                            const total = s ? s.total : null;
-                            const needs = s ? s.needs_attention : null;
-                            return (
-                                <li key={`wu:${wu.id}`} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
-                                    <Link
-                                        href={`${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(wu.id)}`}
-                                        className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-standard flex flex-col items-stretch no-underline text-inherit hover:opacity-[0.98]"
-                                        data-ws-wu-urgency="standard"
-                                    >
-                                        <div className="adminv2-ws-wu-queue-card-compact-text">
-                                            <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">
-                                                {wu.name?.trim() || "Work unit"}
-                                            </div>
-                                            <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] tabular-nums" style={{ color: "var(--d-muted)" }}>
-                                                <div>
-                                                    <span className="font-medium text-alloy-midnight/75">Total</span>{" "}
-                                                    <span className="text-alloy-midnight/85">{total ?? "—"}</span>
-                                                </div>
-                                                <div className="text-right">
-                                                    <span className="font-medium text-alloy-midnight/75">Needs attention</span>{" "}
-                                                    <span className="text-alloy-midnight/85">{needs ?? "—"}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="adminv2-ws-wu-queue-card-compact-aside">
-                                            <span
-                                                className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open"
-                                            >
-                                                Open
-                                            </span>
-                                        </div>
-                                    </Link>
-                                </li>
-                            );
-                        })}
-                    </ul>
-                </div>
-            </section>
-        );
-    };
-
-    const renderNeedsAttentionBlock = () => {
-        return (
-            <section
-                className="adminv2-ws-dept-qsec adminv2-ws-dept-qsec--secondary adminv2-ws-dept-attention-panel adminv2-ws-dept-attention-panel--framed flex h-full min-h-0 min-w-0 flex-col"
-                aria-label="Needs Attention"
-            >
-                <header className="adminv2-ws-queue-header shrink-0">
-                    <div className="adminv2-ws-queue-title-row">
-                        <h3 className="adminv2-ws-queue-title adminv2-ws-queue-title--section-primary-type">Needs Attention</h3>
-                    </div>
-                </header>
-                <div className="adminv2-ws-wu-v2 min-h-0 flex-1" data-ws-surface="work_unit">
-                    <ul className="adminv2-ws-queue-list" role="list">
+    const throughputPairedPanels = (
+        <WorkspacePairedOperPanelsGrid>
+            <WorkspacePairedOperPanel tone="throughput" ariaLabel="Work Unit Queue" title="Work Unit Queue">
+                <ul className="adminv2-ws-queue-list" role="list">
+                    {deptWorkUnitsError ? (
                         <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
-                            <Link
-                                href={needsAttentionSummary.href}
-                                className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-warning flex flex-col items-stretch no-underline text-inherit hover:opacity-[0.98]"
-                                data-ws-wu-urgency="attention"
-                            >
-                                <div className="adminv2-ws-wu-queue-card-compact-text">
-                                    <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">
-                                        Needs attention
-                                    </div>
-                                    <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] tabular-nums" style={{ color: "var(--d-muted)" }}>
-                                        <div>
-                                            <span className="font-medium text-alloy-midnight/75">Total</span>{" "}
-                                            <span className="text-alloy-midnight/85">{needsAttentionSummary.total ?? "—"}</span>
-                                        </div>
-                                        <div className="text-right">
-                                            <span className="font-medium text-alloy-midnight/75">Needs attention</span>{" "}
-                                            <span className="text-alloy-midnight/85">{needsAttentionSummary.total ?? "—"}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="adminv2-ws-wu-queue-card-compact-aside">
-                                    <span className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open">Open</span>
-                                </div>
-                            </Link>
+                            <div className="rounded-lg border border-admin-border bg-white/50 px-3 py-2 text-xs text-alloy-ember">
+                                Failed to load work units: {deptWorkUnitsError}
+                            </div>
                         </li>
-                    </ul>
-                </div>
-            </section>
-        );
-    };
+                    ) : null}
+                    {(deptWorkUnits ?? []).map((wu) => {
+                        const s = deptWorkUnitSummaries[wu.id];
+                        const total = s ? s.total : null;
+                        const needs = s ? s.needs_attention : null;
+                        return (
+                            <li key={`wu:${wu.id}`} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
+                                <Link
+                                    href={`${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(wu.id)}`}
+                                    className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-standard flex flex-col items-stretch no-underline text-inherit hover:opacity-[0.98]"
+                                    data-ws-wu-urgency="standard"
+                                >
+                                    <div className="adminv2-ws-wu-queue-card-compact-text">
+                                        <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">
+                                            {wu.name?.trim() || "Work unit"}
+                                        </div>
+                                        <div
+                                            className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] tabular-nums"
+                                            style={{ color: "var(--d-muted)" }}
+                                        >
+                                            <div>
+                                                <span className="font-medium text-alloy-midnight/75">Total</span>{" "}
+                                                <span className="text-alloy-midnight/85">{total ?? "—"}</span>
+                                            </div>
+                                            <div className="text-right">
+                                                <span className="font-medium text-alloy-midnight/75">Needs attention</span>{" "}
+                                                <span className="text-alloy-midnight/85">{needs ?? "—"}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="adminv2-ws-wu-queue-card-compact-aside">
+                                        <span className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open">
+                                            Open
+                                        </span>
+                                    </div>
+                                </Link>
+                            </li>
+                        );
+                    })}
+                </ul>
+            </WorkspacePairedOperPanel>
+            <WorkspacePairedOperPanel
+                tone="attention"
+                ariaLabel="Needs Attention"
+                title="Needs Attention"
+                titleClassName="adminv2-ws-queue-title--section-primary-type"
+            >
+                <ul className="adminv2-ws-queue-list" role="list">
+                    <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
+                        <Link
+                            href={needsAttentionSummary.href}
+                            className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-warning flex flex-col items-stretch no-underline text-inherit hover:opacity-[0.98]"
+                            data-ws-wu-urgency="attention"
+                        >
+                            <div className="adminv2-ws-wu-queue-card-compact-text">
+                                <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">
+                                    Needs attention
+                                </div>
+                                <div
+                                    className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] tabular-nums"
+                                    style={{ color: "var(--d-muted)" }}
+                                >
+                                    <div>
+                                        <span className="font-medium text-alloy-midnight/75">Total</span>{" "}
+                                        <span className="text-alloy-midnight/85">{needsAttentionSummary.total ?? "—"}</span>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="font-medium text-alloy-midnight/75">Needs attention</span>{" "}
+                                        <span className="text-alloy-midnight/85">{needsAttentionSummary.total ?? "—"}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="adminv2-ws-wu-queue-card-compact-aside">
+                                <span className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open">Open</span>
+                            </div>
+                        </Link>
+                    </li>
+                </ul>
+            </WorkspacePairedOperPanel>
+        </WorkspacePairedOperPanelsGrid>
+    );
 
     if (deptLoading) {
         return (
@@ -566,27 +552,6 @@ export default function AdminV2WorkspaceDepartmentPage() {
         );
     }
 
-    if (dept && !deptMainContentReady) {
-        return (
-            <WorkspaceChrome
-                variant="bridge"
-                breadcrumbs={[
-                    { href: WORKSPACE_BASE, label: "Workspace" },
-                    { href: `${WORKSPACE_BASE}/dept/${departmentId}`, label: title },
-                ]}
-                title={title}
-                subtitle=""
-            >
-                <AdminV2RouteLoadingState
-                    variant="department"
-                    title="Preparing workspace"
-                    description="Loading work-unit queue summaries…"
-                    ribbonLabel="Loading summaries"
-                />
-            </WorkspaceChrome>
-        );
-    }
-
     return (
         <WorkspaceChrome
             variant="bridge"
@@ -597,6 +562,9 @@ export default function AdminV2WorkspaceDepartmentPage() {
             title={title}
             subtitle=""
         >
+            {dept && primaryWorkUnit && deptSummariesRibbonPending ? (
+                <WsRouteLoadingRibbon label="Loading queue summaries" />
+            ) : null}
             {deptWorkUnitsError && dept ? <p className="text-sm text-alloy-ember px-1">{deptWorkUnitsError}</p> : null}
             {deptQueueSummariesError && dept ? <p className="text-sm text-alloy-ember px-1">{deptQueueSummariesError}</p> : null}
             {!dept ? (
@@ -614,12 +582,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     briefSubtitle=""
                     signalsSlot={null}
                     kpiSlot={kpis.length ? <KPIBlock kpis={kpis} maxVisible={5} /> : null}
-                    throughputSlot={
-                        <div className="grid grid-cols-1 items-stretch gap-3 xl:grid-cols-2">
-                            {renderWorkUnitSection()}
-                            {renderNeedsAttentionBlock()}
-                        </div>
-                    }
+                    throughputSlot={throughputPairedPanels}
                     attentionSlot={null}
                     contextSlot={
                         <AutomationWorkflowsBlock
