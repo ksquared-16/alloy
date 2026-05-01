@@ -5,6 +5,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { emitEvent } from "@/lib/emitEvent";
+import { resolveOutboundEmailSubject } from "@/lib/communications/emailSubject";
 import { normalizeRecipientKeyEmail, normalizeRecipientKeySms } from "@/lib/communications/recipientKey";
 
 async function upsertCommunicationThread(params: {
@@ -81,6 +82,7 @@ async function insertCommunicationMessageRow(params: {
     channel: "sms" | "email" | "in_app";
     direction: "outbound";
     body: string;
+    subject?: string | null;
     workflow_run_id: string | null;
     metadata: Record<string, unknown>;
     to_address: string | null;
@@ -97,6 +99,9 @@ async function insertCommunicationMessageRow(params: {
         metadata: params.metadata,
         to_address: params.to_address,
     };
+    if (params.channel === "email") {
+        insertPayload.subject = params.subject ?? null;
+    }
     if (params.communication_provider_binding_id) {
         insertPayload.communication_provider_binding_id = params.communication_provider_binding_id;
     }
@@ -124,6 +129,8 @@ export async function enqueueCanonicalOutboundMessage(params: {
     channelRaw: string;
     toRaw: string;
     bodyRaw: string;
+    /** Only used when channel resolves to email; empty/omitted yields entity-based defaults. */
+    emailSubjectRaw?: string | null;
     workflowRunId?: string | null;
     metadata: Record<string, unknown>;
     contextLocationId?: string | null;
@@ -165,6 +172,9 @@ export async function enqueueCanonicalOutboundMessage(params: {
     const bindRaw = params.communicationProviderBindingId != null ? String(params.communicationProviderBindingId).trim() : "";
     const bindingUuid = /^[0-9a-f-]{36}$/i.test(bindRaw) ? bindRaw : null;
 
+    const emailSubjectResolved =
+        mc === "email" ? resolveOutboundEmailSubject(params.primaryEntityType, params.emailSubjectRaw ?? null) : null;
+
     const { messageId: mid, error } = await insertCommunicationMessageRow({
         supabase: params.supabase,
         org_id: orgIdTrim,
@@ -172,6 +182,7 @@ export async function enqueueCanonicalOutboundMessage(params: {
         channel: mc,
         direction: "outbound",
         body: params.bodyRaw,
+        subject: emailSubjectResolved,
         workflow_run_id: workflowRunUuid,
         metadata: meta,
         to_address: params.toRaw?.trim() || null,

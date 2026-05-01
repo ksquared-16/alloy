@@ -81,6 +81,7 @@ export default function CommunicationsDrawerSection({
     const [recipientsErr, setRecipientsErr] = useState<string | null>(null);
     const [loadingRecipients, setLoadingRecipients] = useState(false);
     const [selectedRecipientIds, setSelectedRecipientIds] = useState<Set<string>>(() => new Set());
+    const [composerSubject, setComposerSubject] = useState("");
     const [composerBody, setComposerBody] = useState("");
     const [sendBusy, setSendBusy] = useState(false);
     const [sendErr, setSendErr] = useState<string | null>(null);
@@ -103,6 +104,7 @@ export default function CommunicationsDrawerSection({
         setRecipients([]);
         setRecipientsErr(null);
         setSelectedRecipientIds(new Set());
+        setComposerSubject("");
         setComposerBody("");
         setSendErr(null);
         setSendOkNote(null);
@@ -281,6 +283,7 @@ export default function CommunicationsDrawerSection({
                         entity_type: composerEntity,
                         entity_id: entityId,
                         channel: "email",
+                        subject: composerSubject.trim(),
                         body: composerBody.trim(),
                         recipient_person_id: personId,
                     }),
@@ -452,6 +455,19 @@ export default function CommunicationsDrawerSection({
                                 </label>
                             ))}
                         </div>
+                        <label className="block space-y-0.5">
+                            <span className="block text-[11px] font-medium text-alloy-midnight/75">Subject</span>
+                                <input
+                                    type="text"
+                                    value={composerSubject}
+                                    onChange={(e) => setComposerSubject(e.target.value)}
+                                    disabled={sendBusy}
+                                    placeholder="Optional — sensible default if empty"
+                                    className="w-full rounded-md border border-alloy-stone/20 bg-white px-2 py-1 text-[12px] text-alloy-midnight/85 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
+                                    aria-label="Subject"
+                                    autoComplete="off"
+                                />
+                        </label>
                         <textarea
                             value={composerBody}
                             onChange={(e) => setComposerBody(e.target.value)}

@@ -53,6 +53,22 @@ def _get_thread(base_url: str, headers: Dict[str, str], thread_id: str) -> Optio
     return None
 
 
+def _resolve_outbound_email_subject(row: Dict[str, Any], cfg: Dict[str, Any], entity_type_raw: Any) -> str:
+    """Prefer persisted message subject, then binding config default, then entity-based defaults."""
+    col = str(row.get("subject") or "").strip()
+    if col:
+        return col
+    bind_sub = str(cfg.get("subject") or "").strip()
+    if bind_sub:
+        return bind_sub
+    et = str(entity_type_raw or "").strip().lower()
+    if et == "opportunities":
+        return "Update regarding your inquiry"
+    if et == "jobs":
+        return "Update regarding your service"
+    return "Message from Alloy"
+
+
 def process_communication_messages(
     limit: int = 25,
     workflow_run_id: Optional[str] = None,
@@ -232,7 +248,7 @@ def process_communication_messages(
                 if not api_key_plain:
                     raise RuntimeError("RESEND_API_KEY not configured")
 
-                subject = str(cfg.get("subject") or "Message from Alloy").strip()
+                subject = _resolve_outbound_email_subject(row, cfg, entity_type)
                 from_email_cfg = str(cfg.get("from_email") or "").strip()
                 from_email = from_email_cfg or default_from_email()
                 res = send_resend_email(

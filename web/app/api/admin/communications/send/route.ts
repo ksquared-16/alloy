@@ -91,6 +91,8 @@ export async function POST(request: NextRequest) {
     const toRawInput = String(body.to ?? body.to_address ?? "").trim();
     let toRaw = toRawInput;
     const textRaw = String(body.body ?? "").trim();
+    const subjectRawEmail =
+        channel === "email" && typeof body.subject === "string" ? body.subject : undefined;
     const bindingIdOpt = typeof body.binding_id === "string" ? body.binding_id.trim() : "";
     const recipientPersonIdRaw = typeof body.recipient_person_id === "string" ? body.recipient_person_id.trim() : "";
 
@@ -192,6 +194,7 @@ export async function POST(request: NextRequest) {
         channelRaw: channel,
         toRaw,
         bodyRaw: textRaw,
+        ...(channel === "email" ? { emailSubjectRaw: subjectRawEmail ?? "" } : {}),
         workflowRunId: null,
         metadata: meta,
         contextLocationId: locId,
