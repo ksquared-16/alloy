@@ -1188,7 +1188,7 @@ Implementation notes (shipped) — 2026-04-30
 
 **Migration:** `supabase/migrations/20260501193000_workspace_kpi_placement.sql` — table `workspace_kpi_placement` with `display_order`, `is_visible`, `metadata` (jsonb), partial unique indexes, RLS, childcare idempotent seeds (workspace org metrics + `dept.wu_queue.total_per_work_unit` per enrollment department).
 
-**Placement API (rows only):** `GET /api/admin/workspace-kpi-placements` — query params `surface`, optional `department_id`, `work_unit_id`; org-scoped via admin context; returns `{ items: WorkspaceKpiPlacementRow[] }`. No computed KPI values.
+**Placement API (rows only):** `GET /api/admin/workspace-kpi-placements` — `list=org` (admin-only, all rows visible+hidden) for Settings; otherwise `surface` + optional `work_unit_id` / `department_id` for strips (visible only). `POST` / `PATCH` (admin-only) for create/update. No computed KPI values.
 
 **Registry / resolver:** `web/lib/kpi/` — `registry.ts`, `baseline.ts`, `resolver.ts` (`resolveKpisForWorkspace`, `resolveKpisForDepartment`), `types.ts`, `index.ts`. Facet cap 12 for `dept.wu_queue.total_per_work_unit` with `facet_cap_exceeded` warning.
 
@@ -1196,7 +1196,7 @@ Implementation notes (shipped) — 2026-04-30
 
 **Card 6:** **Deferred** — work-unit surface strip (`wu.queue.*`) not wired in v0; work-unit route behavior unchanged. Revisit under Card 6 gate when product requests it.
 
-**Tests:** `web/tests/kpi/kpiResolver.test.ts` (Vitest). Commands: `npm run test -- tests/kpi/kpiResolver.test.ts`; `npm exec tsc --noEmit` (pass). Full-repo `npm run lint` still reports many pre-existing issues; targeted ESLint on changed KPI files passes.
+**Tests:** `web/tests/kpi/kpiResolver.test.ts`, `web/tests/kpi/kpiPlacementMutationValidation.test.ts` (Vitest). Commands: `npm run test -- tests/kpi/`; `npm exec tsc --noEmit` (pass). Full-repo `npm run lint` still reports many pre-existing issues; targeted ESLint on changed KPI files passes.
 
 **Manual smoke (operator):**
 - `/adminV2/workspace` — KPI strip matches seeded order when placements exist; matches legacy strip if placement API fails.
@@ -1205,6 +1205,10 @@ Implementation notes (shipped) — 2026-04-30
 - Classic `/admin` — not modified.
 
 **Known deferrals (v0.1+):** KPIBand / classic placement; thin KPI snapshot endpoint; snapshot service; broader lifecycle funnel keys; `dept.queue.needs_attention_sum`; work-unit strip metrics (`wu.queue.selected_tab_count`, `wu.queue.primary_lane_total`).
+
+**Card 9 — Settings UI (AdminV2):** Route `/adminV2/settings/kpis` — `KpiPlacementsSettingsClient` loads all placement rows via `GET /api/admin/workspace-kpi-placements?list=org` (**admin role only**). Tables grouped by surface (workspace / department / work unit) with registry columns (`family`, allowed surfaces, default-format as “unit”, default label). Edits: `is_visible`, `display_order`, `label_override` via `PATCH` (soft-hide; no row delete API). Add placement via `POST` with metric chosen only from registry keys; server validates scope + `validateMetricForSurface`. No `metadata` JSON editing. Mutations **admin-only**; existing `GET ?surface=…` for workspace strips unchanged (visible rows only). `KPIBlock` unchanged.
+
+**Deferrals (Card 9):** Bulk reorder UX; `lane_override` / `format_override` editing; ops read-only listing for `list=org`; hard delete endpoint.
 
 **Risks before commit:** Seeded placements apply only to orgs matching childcare seed migration; other orgs get resolver **baseline** until rows exist. Department facet `KPIVm.id` uses `dept.wu_queue.total_per_work_unit:{wuId}` when placements resolve (baseline used `wu_{id}`) — cosmetic unless consumers key off `id`.
 

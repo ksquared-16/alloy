@@ -72,6 +72,11 @@ function crumbsForPath(path: string): Crumb[] {
         return base;
     }
 
+    if (tail === "/kpis" || tail.startsWith("/kpis/")) {
+        base.push({ label: "Workspace KPIs", href: null });
+        return base;
+    }
+
     if (tail === "/work-units" || tail.startsWith("/work-units/")) {
         base.push({ label: "Work units", href: null });
         return base;

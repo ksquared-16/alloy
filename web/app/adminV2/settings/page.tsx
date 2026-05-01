@@ -91,12 +91,15 @@ export default function AdminV2SettingsIndexPage() {
 
             <div className="space-y-4">
                 <Group label="Organization" accentClass="border-slate-400/40">
-                    <SettingsTileGrid variant="two">
+                    <SettingsTileGrid variant="four">
                         <SettingsCard href="/adminV2/settings/departments" title="Departments" accent="organization">
                             Departments and workspace hierarchy.
                         </SettingsCard>
                         <SettingsCard href="/adminV2/settings/work-units" title="Work units" accent="organization">
                             Queues and work-unit definitions.
+                        </SettingsCard>
+                        <SettingsCard href="/adminV2/settings/kpis" title="Workspace KPIs" accent="organization">
+                            Visibility and order for registry metrics on AdminV2 workspace surfaces.
                         </SettingsCard>
                     </SettingsTileGrid>
                 </Group>

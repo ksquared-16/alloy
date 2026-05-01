@@ -80,3 +80,26 @@ export function getMetricDefinition(key: MetricKey): MetricDefinition {
 export function validateMetricForSurface(key: MetricKey, surface: KpiSurface): boolean {
     return getMetricDefinition(key).allowedSurfaces.includes(surface);
 }
+
+/** Registry catalog for settings UI and placement creation allowlists. */
+export function listMetricDefinitions(): readonly MetricDefinition[] {
+    return Object.freeze(Object.values(DEFINITIONS));
+}
+
+/** Human-readable “unit” line for settings (maps `defaultFormat`, not a separate DB field). */
+export function metricFormatUnitLabel(format: MetricDefinition["defaultFormat"]): string {
+    switch (format) {
+        case "count":
+            return "Count";
+        case "currency":
+            return "Currency";
+        case "percent":
+            return "Percent";
+        case "duration":
+            return "Duration";
+        case "text":
+            return "Text";
+        default:
+            return "—";
+    }
+}
