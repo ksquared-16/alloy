@@ -426,6 +426,15 @@ function buildJobDrawerV2OverviewSections(): EntityDrawerSectionConfig[] {
             locked: true,
         },
         {
+            key: "communications_canonical_embed",
+            title: "Communication",
+            defaultExpanded: false,
+            collapsible: true,
+            gridCols: 1,
+            fields: [],
+            locked: true,
+        },
+        {
             key: "internal_notes_record_v2",
             title: "Internal notes & record details",
             defaultExpanded: false,
@@ -5200,7 +5209,7 @@ export default function AdminEntityDrawer() {
     /** Admin V2 job record modal: Record, Related, Activity, Financials only (no RRS/documents tabs). */
     const jobDrawerV2TabListResolved = useMemo((): DrawerTabKey[] => {
         if (!isJobRecordModalTarget || drawer.type !== "jobs") return tabList;
-        const allow = new Set<DrawerTabKey>(["overview", "related", "communications", "activity", "financials"]);
+        const allow = new Set<DrawerTabKey>(["overview", "related", "activity", "financials"]);
         return tabList.filter((t) => allow.has(t));
     }, [isJobRecordModalTarget, drawer.type, tabList]);
 
@@ -5235,6 +5244,13 @@ export default function AdminEntityDrawer() {
             setDrawerTab("overview");
         }
     }, [isJobRecordModalTarget, drawer.type, drawerTab]);
+
+    /** Communications tab removed — threads live in Overview; migrate stale selection. */
+    useEffect(() => {
+        if ((drawer.type === "opportunities" || drawer.type === "jobs") && drawerTab === "communications") {
+            setDrawerTab("overview");
+        }
+    }, [drawer.type, drawerTab]);
 
     useEffect(() => {
         if (drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer && drawerTab === "related") {
@@ -5968,6 +5984,15 @@ export default function AdminEntityDrawer() {
             const jobRec = entityDrawerOverviewData as Record<string, unknown>;
             return {
                 job_pricing_breakdown: <JobPricingBreakdown record={jobRec} />,
+                communications_canonical_embed: (
+                    <CommunicationsDrawerSection
+                        embedded
+                        embeddedHeaderMode="description_only"
+                        apiEntityType="jobs"
+                        entityId={drawer.id}
+                        active
+                    />
+                ),
             };
         }
         if (drawerType === "opportunities" && overviewData && !(overviewData as { _create?: boolean })._create) {
@@ -9018,9 +9043,6 @@ export default function AdminEntityDrawer() {
                             />
                         </div>
                     )}
-                    {drawerTab === "communications" && drawer.id && drawer.id !== "new" && (drawer.type === "opportunities" || drawer.type === "jobs") && (
-                        <CommunicationsDrawerSection apiEntityType={drawer.type} entityId={drawer.id} />
-                    )}
                     {drawerTab === "activity" && (
                         <div className={`${DRAWER_ROW_SPACING} pt-2`}>
                             {drawer.type === "payments" && drawer.id ? (
@@ -9788,62 +9810,17 @@ export default function AdminEntityDrawer() {
                                                                                         );
                                                                                     })()}
                                                                                 </div>
-                                                                            ) : (
+                                                                            ) : drawer.id && drawer.id !== "new" ? (
                                                                                 <div className={innerCard}>
-                                                                                    <div className={tinyLabel}>Communication</div>
-                                                                                    {opportunityRecordHydrationPending && (!commPhone || !commEmail) ? (
-                                                                                        <AdminV2DrawerLoadingState
-                                                                                            density="micro"
-                                                                                            showTrack={false}
-                                                                                            title="Loading contact channels"
-                                                                                            description="Call and email actions appear once the full record finishes loading."
-                                                                                            className="mt-1.5 border-0 bg-transparent px-0 py-1 shadow-none ring-0"
-                                                                                        />
-                                                                                    ) : (
-                                                                                        <>
-                                                                                            <div className="mt-1.5 flex flex-wrap items-center gap-2">
-                                                                                                <button
-                                                                                                    type="button"
-                                                                                                    disabled
-                                                                                                    className="rounded-md border border-alloy-stone/25 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/40"
-                                                                                                    title="Messaging coming soon"
-                                                                                                >
-                                                                                                    Message family
-                                                                                                </button>
-                                                                                                {commPhone ? (
-                                                                                                    <a
-                                                                                                        href={`tel:${commPhone}`}
-                                                                                                        className="rounded-md border border-alloy-stone/25 bg-white px-2 py-1 text-[11px] font-semibold text-alloy-midnight/75 hover:border-alloy-blue/35 hover:text-alloy-blue"
-                                                                                                    >
-                                                                                                        Call
-                                                                                                    </a>
-                                                                                                ) : (
-                                                                                                    <span className="rounded-md border border-alloy-stone/15 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/35">
-                                                                                                        Call
-                                                                                                    </span>
-                                                                                                )}
-                                                                                                {commEmail ? (
-                                                                                                    <a
-                                                                                                        href={`mailto:${commEmail}`}
-                                                                                                        className="rounded-md border border-alloy-stone/25 bg-white px-2 py-1 text-[11px] font-semibold text-alloy-midnight/75 hover:border-alloy-blue/35 hover:text-alloy-blue"
-                                                                                                    >
-                                                                                                        Email
-                                                                                                    </a>
-                                                                                                ) : (
-                                                                                                    <span className="rounded-md border border-alloy-stone/15 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/35">
-                                                                                                        Email
-                                                                                                    </span>
-                                                                                                )}
-                                                                                            </div>
-                                                                                            <div className="mt-2 rounded-md border border-dashed border-alloy-stone/25 bg-white/60 px-2.5 py-2">
-                                                                                                <p className="text-[12px] font-medium text-alloy-midnight/55">
-                                                                                                    Messages with this family will appear here.
-                                                                                                </p>
-                                                                                            </div>
-                                                                                        </>
-                                                                                    )}
+                                                                                    <CommunicationsDrawerSection
+                                                                                        key={drawer.id}
+                                                                                        embedded
+                                                                                        apiEntityType="opportunities"
+                                                                                        entityId={drawer.id}
+                                                                                        active={panel === "communication"}
+                                                                                    />
                                                                                 </div>
-                                                                            )}
+                                                                            ) : null}
                                                                         </div>
                                                                     );
                                                                 })()}
@@ -9988,6 +9965,21 @@ export default function AdminEntityDrawer() {
                                     onOpenDrawer={(type, id) => openDrawer({ type: type as AdminDrawerEntityType, id })}
                                     sectionSurface={opportunityInquiryWorkflowDrawer ? "premium" : "default"}
                                 />
+                                {drawer.type === "opportunities" &&
+                                    !opportunityInquiryWorkflowDrawer &&
+                                    drawer.id &&
+                                    drawer.id !== "new" &&
+                                    !(overviewData as { _create?: boolean })?._create && (
+                                        <div className="mb-4 rounded-xl border border-admin-border bg-white/80 px-2.5 py-2.5 shadow-sm">
+                                            <CommunicationsDrawerSection
+                                                key={drawer.id}
+                                                embedded
+                                                apiEntityType="opportunities"
+                                                entityId={drawer.id}
+                                                active
+                                            />
+                                        </div>
+                                    )}
                             </>
                         )
                     )}

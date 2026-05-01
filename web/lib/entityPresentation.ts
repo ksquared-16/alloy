@@ -470,7 +470,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
       defaultSort: { key: "_updated", direction: "desc" },
     },
     drawer: {
-      tabs: ["overview", "related", "communications", "activity", "documents"],
+      tabs: ["overview", "related", "activity", "documents"],
       headerFields: [],
       layoutMode: 2,
       overviewSections: [
@@ -623,7 +623,7 @@ const ENTITY_PRESENTATION_REGISTRY: Record<EntityPresentationType, EntityPresent
       defaultSort: { key: "_updated", direction: "desc" },
     },
     drawer: {
-      tabs: ["overview", "rrs_overview", "related", "communications", "activity", "documents", "financials"],
+      tabs: ["overview", "rrs_overview", "related", "activity", "documents", "financials"],
       headerFields: [],
       layoutMode: 2,
       overviewSections: [

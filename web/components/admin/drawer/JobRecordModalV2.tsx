@@ -53,6 +53,7 @@ export const JOB_RECORD_MODAL_V2_SECTION_GRID = {
     /** Subsections (Plan / Totals) — 2 columns balances density vs. scanability. */
     pricing: 2,
     people_places_v2: 2,
+    communications_canonical_embed: 1,
     internal_notes_record_v2: 1,
 } as const satisfies Record<string, 1 | 2>;
 
@@ -119,6 +120,15 @@ function buildJobRecordModalV2OverviewSections(): EntityDrawerSectionConfig[] {
             collapsible: true,
             gridCols: g.people_places_v2,
             fields: peoplePlacesFields,
+            locked: true,
+        },
+        {
+            key: "communications_canonical_embed",
+            title: "Communication",
+            defaultExpanded: false,
+            collapsible: true,
+            gridCols: g.communications_canonical_embed,
+            fields: [],
             locked: true,
         },
         {
