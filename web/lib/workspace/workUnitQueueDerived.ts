@@ -1,6 +1,6 @@
 import type { QueueDefinitionV1, QueueConfig } from "@/lib/config/queueDefinitionSchema";
 import type { QueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
-import { partitionQueueUiSections } from "@/lib/ui-v2/queueUiConfig";
+import { getQueueUiConfig, partitionQueueUiSections } from "@/lib/ui-v2/queueUiConfig";
 
 export const WORK_UNIT_OTHER_PILL_KEY = "__derived_other__" as const;
 
@@ -48,8 +48,27 @@ export function statusKeysCoveredByThroughputQueues(def: QueueDefinitionV1, allR
 export type QueueSummaryLike = { key: string; count: number; counts_deferred?: boolean };
 
 /**
- * When the all-records lane count exceeds the sum of throughput lane heads (excluding all + needs_attention),
- * the remainder is treated as unmapped / not covered by stage pills — still in scope for the work unit.
+ * Single source of truth for department cards + work-unit "All" — count of the primary / all-records lane only
+ * (not the sum of every queue tab, which double-counts overlapping lanes).
+ */
+export function workUnitScopeTotalFromSummaries(
+    def: QueueDefinitionV1,
+    summaries: QueueSummaryLike[]
+): { queueKey: string | null; total: number | null } {
+    const ui = getQueueUiConfig(def);
+    const queueKey = findAllRecordsQueueKey(def, ui);
+    if (!queueKey) return { queueKey: null, total: null };
+    const row = summaries.find((s) => s.key === queueKey);
+    if (!row || row.counts_deferred === true || typeof row.count !== "number") {
+        return { queueKey, total: null };
+    }
+    return { queueKey, total: Math.max(0, Math.floor(row.count)) };
+}
+
+/**
+ * When the all-records lane count exceeds the sum of **lifecycle/status** throughput lanes (all-lane and
+ * needs_attention excluded), the remainder is unmapped for stage pills. Non-status lanes (e.g. date slices)
+ * are not part of the reconciliation `All = Σ(stage buckets) + Other`. Needs Attention is a separate overlay.
  */
 export function computeUnmappedOverflowCount(params: {
     summaries: QueueSummaryLike[] | null;
@@ -63,20 +82,17 @@ export function computeUnmappedOverflowCount(params: {
     if (!allRow || allRow.counts_deferred === true || typeof allRow.count !== "number") return null;
 
     const allCount = Math.max(0, Math.floor(allRow.count));
-    const partKeys = new Set(
-        def.queues
-            .map((q) => q.key)
-            .filter((k) => k !== allRecordsQueueKey && k.trim().toLowerCase() !== "needs_attention")
-    );
 
-    let sumParts = 0;
-    for (const k of partKeys) {
-        const row = summaries.find((s) => s.key === k);
+    let sumStatusLanes = 0;
+    for (const q of def.queues) {
+        if (q.key === allRecordsQueueKey || q.key.trim().toLowerCase() === "needs_attention") continue;
+        if (!queueHasStatusFilters(q)) continue;
+        const row = summaries.find((s) => s.key === q.key);
         if (!row || row.counts_deferred === true || typeof row.count !== "number") return null;
-        sumParts += Math.max(0, Math.floor(row.count));
+        sumStatusLanes += Math.max(0, Math.floor(row.count));
     }
 
-    return Math.max(0, allCount - sumParts);
+    return Math.max(0, allCount - sumStatusLanes);
 }
 
 /**

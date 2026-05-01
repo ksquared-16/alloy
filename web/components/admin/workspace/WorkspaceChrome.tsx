@@ -37,7 +37,7 @@ export function WorkspaceChrome({
 
     const outer =
         variant === "bridge"
-            ? "w-full max-w-none mx-0 px-0 pt-2 pb-0 space-y-4"
+            ? "w-full max-w-none mx-0 px-0 pt-1 pb-0 space-y-2"
             : "max-w-6xl mx-auto px-4 py-6 space-y-6";
 
     return (

@@ -67,6 +67,8 @@
 /* Work-unit: slightly tighter vertical rhythm (keeps Automations block closer to the lane). */
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 {
   --ws-dept-section-gap: 12px;
+  /* Capped queue list — internal scroll so header + rail stay in view */
+  --ws-dept-primary-queue-list-max-height: min(52vh, calc(100vh - 15.5rem));
 }
 
 /*
@@ -223,6 +225,9 @@
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-control-deck {
+  position: sticky;
+  top: 0;
+  z-index: 4;
   border-left-width: 3px;
   border-left-color: color-mix(in srgb, var(--d-brand) 24%, color-mix(in srgb, var(--d-pine) 52%, var(--d-border)));
   box-shadow:
@@ -3765,6 +3770,23 @@
   border-bottom-color: color-mix(in srgb, #bc4300 22%, var(--d-border));
 }
 
+/* Department — paired Work Unit Queue | Needs Attention: match header band + row rhythm */
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-throughput-panel > .adminv2-ws-queue-header,
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-attention-panel.adminv2-ws-dept-qsec--secondary > .adminv2-ws-queue-header {
+  min-height: 2.75rem;
+  margin-bottom: 6px;
+  padding-bottom: 5px;
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 [data-ws-surface="work_unit"] .adminv2-ws-wu-queue-card--compact {
+  min-height: 4.5rem;
+  align-items: center;
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 [data-ws-surface="work_unit"] .adminv2-ws-wu-queue-card-compact-aside {
+  align-self: center;
+}
+
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-qsec--secondary .adminv2-ws-queue-toolbar,
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-qsec--secondary .adminv2-ws-queue-toolbar,
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-qsec--secondary .adminv2-ws-queue-toolbar,
@@ -5492,6 +5514,13 @@
   gap: 10px;
   padding: 6px 9px 6px;
   min-height: 0;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-list.adminv2-ws-queue-list {
+  max-height: var(--ws-dept-primary-queue-list-max-height);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card-compact-text {

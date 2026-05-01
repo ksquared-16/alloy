@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { validateQueueDefinition, type QueueConfig, type QueueDefinitionV1, type QueueFilter } from "@/lib/config/queueDefinitionSchema";
 import type { QueueItemsResult, QueueSummary } from "@/lib/queues/types";
+import { workUnitScopeTotalFromSummaries } from "@/lib/workspace/workUnitQueueDerived";
 import {
     fetchEffectiveStatusDefinitions,
     displayLabelsFromDefinitions,
@@ -848,6 +849,12 @@ export type WorkUnitQueueSummariesResult = {
     queues: QueueSummary[];
     /** Present when `summaryMode=priority`: keys still on placeholder counts. */
     deferred_queue_keys?: string[];
+    /**
+     * Count for the all-records / primary scope lane only (same as work-unit landing and department "Total").
+     * Null when that lane is deferred or missing from this payload.
+     */
+    work_unit_scope_total?: number | null;
+    work_unit_scope_queue_key?: string | null;
 };
 
 function buildPriorityQueueKeySet(def: QueueDefinitionV1, focusKey: string | null | undefined, budget: number): Set<string> {
@@ -1213,7 +1220,12 @@ export async function getWorkUnitQueueSummaries(params: {
         return stubDeferredQueueSummary(q, def);
     });
 
-    return deferredQueueKeys?.length ? { queues: summaries, deferred_queue_keys: deferredQueueKeys } : { queues: summaries };
+    const scopeMeta = workUnitScopeTotalFromSummaries(def, summaries);
+    const scopePayload = {
+        work_unit_scope_total: scopeMeta.total,
+        work_unit_scope_queue_key: scopeMeta.queueKey,
+    };
+    return deferredQueueKeys?.length ? { queues: summaries, deferred_queue_keys: deferredQueueKeys, ...scopePayload } : { queues: summaries, ...scopePayload };
 }
 
 const DEPARTMENT_WU_SUMMARY_CONCURRENCY = 3;
@@ -1221,6 +1233,9 @@ const DEPARTMENT_WU_SUMMARY_CONCURRENCY = 3;
 export type DepartmentWorkUnitQueueSummaryRow = {
     id: string;
     queues: QueueSummary[];
+    /** All-records / primary lane count — not a sum of all tabs. */
+    work_unit_scope_total?: number | null;
+    work_unit_scope_queue_key?: string | null;
     error?: string;
 };
 
@@ -1262,7 +1277,7 @@ export async function getDepartmentWorkUnitQueueSummaries(params: {
         (workUnitId) => async (): Promise<DepartmentWorkUnitQueueSummaryRow> => {
             const tWu0 = Date.now();
             try {
-                const { queues } = await getWorkUnitQueueSummaries({
+                const { queues, work_unit_scope_total, work_unit_scope_queue_key } = await getWorkUnitQueueSummaries({
                     orgId: params.orgId,
                     workUnitId,
                     limit: previewLimit,
@@ -1279,7 +1294,12 @@ export async function getDepartmentWorkUnitQueueSummaries(params: {
                     count_accuracy: countAccuracy ?? "exact",
                     queue_count: queues.length,
                 });
-                return { id: workUnitId, queues };
+                return {
+                    id: workUnitId,
+                    queues,
+                    work_unit_scope_total: work_unit_scope_total ?? null,
+                    work_unit_scope_queue_key: work_unit_scope_queue_key ?? null,
+                };
             } catch (e) {
                 const msg =
                     e instanceof QueueServiceError

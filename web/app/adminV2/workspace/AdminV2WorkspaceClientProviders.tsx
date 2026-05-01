@@ -45,7 +45,10 @@ export default function AdminV2WorkspaceClientProviders({
           <WorkspaceOrgProvider orgName={orgName}>
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               <AdminDrawerProvider>
-                <div className="adminv2-workspace-scroll-surface min-h-0 flex-1 overflow-auto p-6" style={workspaceScrollStyle}>
+                <div
+                    className="adminv2-workspace-scroll-surface min-h-0 flex-1 overflow-auto px-4 py-3 sm:px-5"
+                    style={workspaceScrollStyle}
+                >
                   {children}
                 </div>
                 <AdminEntityDrawer />

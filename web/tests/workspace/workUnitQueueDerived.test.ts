@@ -7,6 +7,7 @@ import {
     isRowUnmappedForThroughput,
     shouldSuppressWorkUnitKpiStrip,
     statusKeysCoveredByThroughputQueues,
+    workUnitScopeTotalFromSummaries,
 } from "@/lib/workspace/workUnitQueueDerived";
 
 function enrollmentLikeDef(): QueueDefinitionV1 {
@@ -72,6 +73,58 @@ describe("workUnitQueueDerived", () => {
             ],
         });
         expect(n).toBe(3);
+    });
+
+    it("computeUnmappedOverflowCount ignores non-status lanes (e.g. date slices)", () => {
+        const def = validateQueueDefinition({
+            version: 1,
+            entity_type: "opportunity",
+            queues: [
+                {
+                    key: "all_open",
+                    label: "All",
+                    filters: [{ type: "field" as const, field_key: "closed", operator: "eq" as const, value: false }],
+                },
+                { key: "stage_a", label: "Stage A", filters: [{ type: "status", operator: "in", values: ["a"] }] },
+                {
+                    key: "tours_today",
+                    label: "Tours today",
+                    filters: [{ type: "date" as const, field: "tour_date", operator: "today" as const }],
+                },
+                {
+                    key: "needs_attention",
+                    label: "Needs attention",
+                    filters: [{ type: "exception", operator: "exists", exception_types: ["needs_attention"] }],
+                },
+            ],
+            ui: {
+                primary_total_queue: "all_open",
+                sections: [{ key: "throughput", label: "Pipeline", queue_keys: ["all_open", "stage_a", "tours_today"] }],
+            },
+        });
+        const n = computeUnmappedOverflowCount({
+            def,
+            allRecordsQueueKey: "all_open",
+            summaries: [
+                { key: "all_open", count: 10 },
+                { key: "stage_a", count: 4 },
+                { key: "tours_today", count: 99 },
+                { key: "needs_attention", count: 1 },
+            ],
+        });
+        expect(n).toBe(6);
+    });
+
+    it("workUnitScopeTotalFromSummaries returns primary lane count only", () => {
+        const def = enrollmentLikeDef();
+        const { queueKey, total } = workUnitScopeTotalFromSummaries(def, [
+            { key: "all_open", count: 4 },
+            { key: "stage_a", count: 3 },
+            { key: "stage_b", count: 2 },
+            { key: "needs_attention", count: 1 },
+        ]);
+        expect(queueKey).toBe("all_open");
+        expect(total).toBe(4);
     });
 
     it("shouldSuppressWorkUnitKpiStrip is true for pipeline_with_attention layout", () => {

@@ -227,7 +227,13 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 const res = await fetch(route, init);
                 const j = (await res.json().catch(() => ({}))) as {
                     error?: string;
-                    work_units?: Array<{ id?: string; queues?: V1QueueSummary[]; error?: string }>;
+                    work_units?: Array<{
+                        id?: string;
+                        queues?: V1QueueSummary[];
+                        error?: string;
+                        work_unit_scope_total?: number | null;
+                        work_unit_scope_queue_key?: string | null;
+                    }>;
                 };
                 if (cancelled) return;
                 if (!res.ok) {
@@ -244,7 +250,13 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         continue;
                     }
                     const queues = (row.queues ?? []) as V1QueueSummary[];
-                    const total = queues.reduce((acc, q) => acc + (typeof q.count === "number" ? q.count : 0), 0);
+                    /** Match work-unit "All" lane — do not sum tabs (overlapping lanes double-count). */
+                    const legacySumAllQueues = () =>
+                        queues.reduce((acc, q) => acc + (typeof q.count === "number" ? q.count : 0), 0);
+                    const total =
+                        typeof row.work_unit_scope_total === "number" && Number.isFinite(row.work_unit_scope_total)
+                            ? Math.max(0, Math.floor(row.work_unit_scope_total))
+                            : legacySumAllQueues();
                     const needsRow = queues.find((q) => (q.key ?? "").trim().toLowerCase() === "needs_attention");
                     const needs = needsRow && typeof needsRow.count === "number" ? needsRow.count : null;
                     next[id] = { total, needs_attention: needs };
