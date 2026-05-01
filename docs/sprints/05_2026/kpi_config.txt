@@ -1167,6 +1167,221 @@ CARD 8 — Smoke Test + Documentation Closeout
 - [ ] Sprint doc matches shipped reality; no hidden architecture drift.
 
 --------------------------------------------------------------------------------
+CARD 10 — Flexible Metric Definition Architecture (DESIGN ONLY; NO IMPLEMENTATION YET)
+--------------------------------------------------------------------------------
+
+**Status:** Architecture / product-technical design (2026-05-01). Supersedes the assumption that a **small fixed
+`MetricKey` union** is sufficient long-term; does **not** replace Card 9 placement UX or the v0 registry — it defines
+the **next layer** so KPIs can be useful across verticals **without** becoming a BI product.
+
+**North-star**
+- More flexible than a hand-maintained list of CRM-only keys.
+- **Not** arbitrary SQL, **not** user-authored formulas, **not** a full dashboard builder.
+
+**Doctrine (unchanged, extended)**
+- **Code owns** templates, allowed parameter shapes, reducers, and batch strategy.
+- **Org config owns** choosing a **template** and **parameter values** drawn only from **approved catalogs**
+  (status definitions, queue keys, field allowlists, time-window enums, entity types).
+- **Placement** (surface, order, visibility, labels) stays a thin layer on top of **resolved metric definitions**.
+
+================================================================================
+§10.1 Boundary: flexible KPI config vs BI
+================================================================================
+
+| In scope (Alloy KPI layer) | Out of scope (BI / analytics product) |
+|----------------------------|----------------------------------------|
+| Finite set of **metric templates** with **typed parameters** | Ad-hoc dimensions, user-defined cohorts, arbitrary drill paths |
+| Aggregations expressible as **approved primitives** (count, sum, avg, queue head counts, lifecycle buckets, bounded aging) | Free-text or visual formula builders |
+| Parameters binding to **registry-backed** entities, fields, statuses, queues | Join paths or filters invented at runtime |
+| **Batched** execution per surface session (no per-metric N+1) | Exploratory query engines, materialized warehouse slices |
+| Same **trust bar** as today for queue-backed numbers where applicable | Reconciliation against external warehouses |
+
+**Rule of thumb:** If an operator can describe a metric as “template X with parameters (A, B, C) from dropdowns,”
+it belongs here. If they need “anything COUNT(*) WHERE …” it does not.
+
+================================================================================
+§10.2 Recommended architecture (conceptual)
+================================================================================
+
+**Three layers (logical; physical storage can merge later)**
+
+1. **`metric_template` (code-owned, versioned)**  
+   - Stable identifier: `template_key` (e.g. `count_by_status`, `queue_count`, `sum_money_filtered`,
+     `lifecycle_bucket_sum`, `aging_in_status`, `conversion_status_pair`, `needs_attention_exception_count`).  
+   - **Entity applicability:** primary `entity_type` (e.g. `opportunity`, `job`, `payment`, `customer_member`) and
+     optional vertical hints (not a second source of truth — org still picks template + entity).  
+   - **Family / source:** `Q` | `L` | `S` | `R` | `F` (financial) | `A` (attention) — aligns with existing Card 1.5 families.  
+   - **`calculation_type`:** one of a **closed enum** — `count` | `sum` | `average` | `aging` | `conversion` |
+     `queue_count` | `lifecycle_count` (names illustrative; final enum is code-defined).  
+   - **Parameter schema:** JSON Schema or TypeScript-first schema (Zod-like) **shipped in repo** — lists allowed keys,
+     value types, and **where** each value may come from (`status_key` → org `status_definitions`, `queue_key` →
+     work unit `queue_definition` / V1 queue registry, `date_field` → allowlisted fields for that entity,
+     `money_field` → allowlisted numeric/money fields, `time_window` → `last_7d` | `this_month` | `todays` | …).  
+   - **Reducer reference:** symbol known to runtime (e.g. `reduceQueueSummaries`, `reduceLifecycleSnapshot`,
+     `reduceStatusHistogram`) — **never** a string that loads user code.
+
+2. **`metric_definition` (org-configured instance)**  
+   - Stable id per org (UUID).  
+   - `template_key` + **validated `parameters` object** (subset of template schema).  
+   - Optional human `name`, `description`, `default_label`, `default_format`.  
+   - **Versioning:** `definition_version` or immutable rows + `superseded_by` (design choice in a later card).  
+   - **Governance:** created/updated by admin; optional audit log.
+
+3. **`workspace_kpi_placement` (placement; existing)**  
+   - References **`metric_definition_id`** **or** (transition) continues `metric_key` for legacy built-ins that map
+     1:1 to definitions.  
+   - `display_order`, `is_visible`, `label_override` unchanged (Card 9 compatible).
+
+**Compatibility:** v0 **hard-coded registry** rows can migrate to **seed metric_definition** rows pointing at
+built-in templates with empty or fixed parameters — no need to break the Settings UI in one shot.
+
+================================================================================
+§10.3 Metric templates (catalog — illustrative)
+================================================================================
+
+Each template declares which **parameters** it accepts; all values validated against org-scoped catalogs.
+
+| Template key (illustrative) | calculation_type | Typical parameters (all validated) | Primary data source (today / later) |
+|-----------------------------|------------------|------------------------------------|-------------------------------------|
+| `count_by_status` | count | `entity_type`, `status_keys[]`, optional `time_window`, optional `date_field` for “in period” | Status histogram / DB aggregate (later batch) |
+| `count_created_in_period` | count | `entity_type`, `time_window`, `date_field` (created_at allowlist) | Backend aggregate |
+| `sum_money_field` | sum | `entity_type`, `money_field` (allowlist), optional status filter | Payments / job pricing fields (entity-specific) |
+| `queue_count` | queue_count | `queue_key` (+ work unit / dept scope from placement surface) | **QueueService** / existing queue summaries |
+| `lifecycle_bucket_sum` | lifecycle_count | lifecycle stage keys or “in motion” composite | **Existing opportunity lifecycle KPI** payload |
+| `aging_in_status` | aging | `status_key`, `date_field` (entered_at allowlist), aggregation `avg` or `max_days` | Backend / precomputed slice (later) |
+| `conversion_pair` | conversion | `entity_type`, `from_status`, `to_status`, `time_window` | Event or transition log (later; not v0 SQL) |
+| `needs_attention_count` | count | registered `exception_type` or `rule_key` from Attention/SLA registry | **QueueService** attention lanes or rules engine |
+
+**Rule:** New templates require a **design review + code release** — not something operators invent in JSON.
+
+================================================================================
+§10.4 Configurable parameters — guardrails (non-negotiable)
+================================================================================
+
+- **`status_key`:** must exist in org-scoped `status_definitions` (or equivalent) for the template’s `entity_type`.  
+- **`queue_key`:** must exist in the relevant **queue definition** / RRS registry for the work unit or org context.  
+- **`entity_type`:** from a **small code enum** aligned with Alloy core entities (opportunity, job, payment, …).  
+- **`date_field` / `money_field`:** must appear in a **template-specific allowlist** (per entity) maintained in code —
+  not “any column.”  
+- **`time_window`:** from a **closed enum**; implementation maps to bounded predicates (no arbitrary date picker SQL).  
+- **No raw SQL, no formula strings, no arbitrary JSON paths** into row blobs.
+
+Invalid combinations are rejected **at save time** and **at resolution time** (defense in depth).
+
+================================================================================
+§10.5 Runtime strategy — safe resolution and batching
+================================================================================
+
+**Principles**
+- **No per-metric HTTP** from the client for computed values (Card 1.5 / Card 4 doctrine preserved).  
+- **Planner pass:** for a given surface session, collect all `metric_definition`s for visible placements → group by
+  **data source bucket** (`queue_batch`, `lifecycle_batch`, `financial_batch`, `generic_aggregate`).  
+- **Reuse today**
+  - **Queue counts:** existing `work-unit-queue-summaries`, `QueueService.getWorkUnitQueueSummaries`, department batch
+    routes — one batch supplies many `queue_count` / attention templates.  
+  - **Opportunity lifecycle:** existing per-department lifecycle snapshot APIs — one payload feeds many
+    `lifecycle_bucket_sum` / motion-style templates scoped to CRM vertical.  
+- **Later (backend aggregation service)**
+  - Templates that need **cross-row SQL** or **historical windows** run in a **single batched query** (or small fixed
+    set of queries) keyed by `(entity_type, template_key, normalized_filter_shape)` — still **no** user SQL.  
+  - Optional future: **read-model snapshots** (materialized counters per org) updated by workflows — outside Card 10
+    scope except as extension point.
+
+**Resolver shape (future)**
+- Input: org id, surface, scope ids, **list of metric_definition ids**, **pre-fetched batch payloads** (same as today).  
+- Output: `KPIVm[]` + warnings (unknown template version, missing parameter, facet cap).  
+- **Feature flag / version:** template schema version in code; old definitions either migrate or fall back to “—”.
+
+================================================================================
+§10.6 Settings UX direction (builds on Card 9)
+================================================================================
+
+1. Admin selects **metric template** (human name + short description from code catalog).  
+2. UI renders **parameter form** from template schema (dropdowns + validation only).  
+3. **Live preview** text: “Counts opportunities in status **Qualified** created in **last 7 days**” (no numeric preview
+   required in v1 wizard if expensive — phrase preview is enough).  
+4. **Save** creates or updates **`metric_definition`**; placement UI either **picks an existing definition** or creates
+   placement + definition in one flow.  
+5. **Card 9 table** remains: list placements; optionally show **definition summary** column; advanced users may open
+   “Edit definition” → same wizard.
+
+================================================================================
+§10.7 Versioning and governance
+================================================================================
+
+| Concern | Code-owned | Org-configured | Future API / migration |
+|---------|------------|----------------|-------------------------|
+| Template catalog & enums | Yes | No | Add templates via releases |
+| Parameter allowlists (fields) | Yes | No | Extend allowlists per vertical in code |
+| Status/queue choices | Validate against live org data | Pick values | — |
+| metric_definition rows | Validate on write | CRUD | Export/import optional |
+| AI-suggested metrics | Propose **template_key + parameters** only | Human approve | Never auto-apply unvalidated JSON |
+
+**AI (later):** assistant may suggest “you might want `queue_count` + `needs_attention`”; system only persists after
+passing the same validator as the UI.
+
+================================================================================
+§10.8 Example definitions (cross-vertical — illustrative, not CRM-only)
+================================================================================
+
+**CRM / opportunities**
+- Template: `lifecycle_bucket_sum` — parameters: stages `intake,qualification` → “Active early stage count”
+  (reuses lifecycle snapshot reducer).  
+- Template: `conversion_pair` — parameters: `from_status=qualified`, `to_status=enrolled`, `time_window=this_month` —
+  “Qualified → enrolled this month” (later; needs transition log or materialized transitions).  
+- Template: `aging_in_status` — parameters: `status_key=qualified`, `date_field=entered_qualified_at` — “Avg days in
+  Qualified” (later aggregate).
+
+**Cleaning / jobs**
+- Template: `count_by_status` — parameters: `entity_type=job`, `status_keys=[scheduled,in_progress]` — “Jobs in flight.”  
+- Template: `queue_count` — parameters: `queue_key=needs_attention` — “Attention jobs in this work unit”
+  (queue-backed).  
+- Template: `sum_money_field` — parameters: `entity_type=job`, `money_field=quoted_total` (allowlist) — “Pipeline
+  value for open jobs” (batch aggregate later).
+
+**Billing / payments**
+- Template: `sum_money_field` — parameters: `entity_type=payment`, `money_field=amount_cents`, filter by status
+  `posted` — “Posted revenue (period)” with `time_window` on `paid_at` (allowlist).  
+- Template: `count_created_in_period` — parameters: `entity_type=payment`, `time_window=last_7d`,
+  `date_field=created_at` — “Payments recorded last 7 days.”
+
+These examples show **one architecture** with **vertical breadth**; they are not new hard-coded `metric_key`
+literals — they are **instances** of templates + parameters.
+
+================================================================================
+§10.9 Safe-now vs later implementation split
+================================================================================
+
+**Safe-now (next builds after Card 10 sign-off)**
+- Freeze **template catalog** to 2–3 templates that map to **existing data** only: e.g. `queue_count` +
+  `lifecycle_bucket_sum` (+ existing structure metrics).  
+- Introduce **`metric_definition`** storage + validation layer **without** new general-purpose SQL aggregators.  
+- Wire resolver planner to **reuse current batch payloads** only (no new KPI value explosion).
+
+**Later (explicit cards; higher risk)**
+- Generic `count_by_status` / `count_created_in_period` backed by **batched, parameterized queries** or read models.  
+- `conversion_pair` requiring **transition** or event history.  
+- `aging_in_status` and advanced financial windows.  
+- Unified **rollup API** returning multiple resolved metrics in one response (still not arbitrary BI).
+
+================================================================================
+§10.10 Proposed build cards after Card 10 (for future sequencing)
+================================================================================
+
+| Card | Working title | Outcome |
+|------|----------------|---------|
+| **11** | Metric template registry (TS + schema) | `template_key`s, parameter schemas, reducer dispatch table; unit tests |
+| **12** | `metric_definition` persistence | Migration, RLS, org CRUD API, strict validation against schemas |
+| **13** | Resolver planner v1 | Group definitions by batch source; extend resolver input types; keep `KPIVm` out |
+| **14** | Settings: definition wizard | Template picker + parameters + preview; link to placements |
+| **15** | Legacy migration | Map hard-coded `MetricKey` → seeded definitions; backward-compatible placement |
+| **16** | Aggregator service v1 (optional) | Safe parameterized queries for 1–2 non-queue templates; single batched endpoint |
+| **17** | Governance + AI suggestions | Audit log, proposal-only AI flow |
+
+**This document:** Card 10 is **design-only** until stakeholders sign off; **do not implement** templates or
+`metric_definition` tables until Card 11 is opened with explicit acceptance criteria.
+
+--------------------------------------------------------------------------------
 Execution Rules (Card 2 onward)
 --------------------------------------------------------------------------------
 
@@ -1181,6 +1396,8 @@ Execution Rules (Card 2 onward)
 6. **Preserve `KPIBlock` props** (`KPIVm[]`).
 7. **Preserve queue count trust** (Card 0.5 Q parity).
 8. **Performance:** no per-metric fetch, no N+1, no redundant full reductions over the same batch (Card 4).
+9. **Card 10** is **design documentation only** until explicit Card 11+ kickoff; it does not authorize new SQL,
+   formula engines, or BI-style dashboards.
 
 ================================================================================
 Implementation notes (shipped) — 2026-04-30
@@ -1209,6 +1426,8 @@ Implementation notes (shipped) — 2026-04-30
 **Card 9 — Settings UI (AdminV2):** Route `/adminV2/settings/kpis` — `KpiPlacementsSettingsClient` loads all placement rows via `GET /api/admin/workspace-kpi-placements?list=org` (**admin role only**). Tables grouped by surface (workspace / department / work unit) with registry columns (`family`, allowed surfaces, default-format as “unit”, default label). Edits: `is_visible`, `display_order`, `label_override` via `PATCH` (soft-hide; no row delete API). Add placement via `POST` with metric chosen only from registry keys; server validates scope + `validateMetricForSurface`. No `metadata` JSON editing. Mutations **admin-only**; existing `GET ?surface=…` for workspace strips unchanged (visible rows only). `KPIBlock` unchanged.
 
 **Deferrals (Card 9):** Bulk reorder UX; `lane_override` / `format_override` editing; ops read-only listing for `list=org`; hard delete endpoint.
+
+**CARD 10 (design):** See **CARD 10 — Flexible Metric Definition Architecture** (before Execution Rules): template-based metrics with guardrailed parameters across verticals — **not** arbitrary SQL/formulas/BI; proposed Cards 11–17 for implementation.
 
 **Risks before commit:** Seeded placements apply only to orgs matching childcare seed migration; other orgs get resolver **baseline** until rows exist. Department facet `KPIVm.id` uses `dept.wu_queue.total_per_work_unit:{wuId}` when placements resolve (baseline used `wu_{id}`) — cosmetic unless consumers key off `id`.
 
