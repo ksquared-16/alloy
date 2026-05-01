@@ -433,15 +433,15 @@ export default function AdminV2WorkspaceDepartmentPage() {
     const renderWorkUnitSection = () => {
         return (
             <section
-                className="adminv2-ws-dept-qsec adminv2-ws-dept-qsec--primary adminv2-ws-dept-throughput-panel"
+                className="adminv2-ws-dept-qsec adminv2-ws-dept-qsec--primary adminv2-ws-dept-throughput-panel flex h-full min-h-0 min-w-0 flex-col"
                 aria-label="Work Unit Queue"
             >
-                <header className="adminv2-ws-queue-header">
+                <header className="adminv2-ws-queue-header shrink-0">
                     <div className="adminv2-ws-queue-title-row">
                         <h3 className="adminv2-ws-queue-title">Work Unit Queue</h3>
                     </div>
                 </header>
-                <div className="adminv2-ws-wu-v2" data-ws-surface="work_unit">
+                <div className="adminv2-ws-wu-v2 min-h-0 flex-1" data-ws-surface="work_unit">
                     <ul className="adminv2-ws-queue-list" role="list">
                         {deptWorkUnitsError ? (
                             <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
@@ -496,15 +496,15 @@ export default function AdminV2WorkspaceDepartmentPage() {
     const renderNeedsAttentionBlock = () => {
         return (
             <section
-                className="adminv2-ws-dept-qsec adminv2-ws-dept-qsec--secondary adminv2-ws-dept-attention-panel adminv2-ws-dept-attention-panel--framed"
+                className="adminv2-ws-dept-qsec adminv2-ws-dept-qsec--secondary adminv2-ws-dept-attention-panel adminv2-ws-dept-attention-panel--framed flex h-full min-h-0 min-w-0 flex-col"
                 aria-label="Needs Attention"
             >
-                <header className="adminv2-ws-queue-header">
+                <header className="adminv2-ws-queue-header shrink-0">
                     <div className="adminv2-ws-queue-title-row">
                         <h3 className="adminv2-ws-queue-title adminv2-ws-queue-title--section-primary-type">Needs Attention</h3>
                     </div>
                 </header>
-                <div className="adminv2-ws-wu-v2" data-ws-surface="work_unit">
+                <div className="adminv2-ws-wu-v2 min-h-0 flex-1" data-ws-surface="work_unit">
                     <ul className="adminv2-ws-queue-list" role="list">
                         <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
                             <Link
@@ -603,7 +603,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     signalsSlot={null}
                     kpiSlot={kpis.length ? <KPIBlock kpis={kpis} maxVisible={5} /> : null}
                     throughputSlot={
-                        <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+                        <div className="grid grid-cols-1 items-stretch gap-3 xl:grid-cols-2">
                             {renderWorkUnitSection()}
                             {renderNeedsAttentionBlock()}
                         </div>

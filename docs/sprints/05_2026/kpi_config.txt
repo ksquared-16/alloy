@@ -1836,3 +1836,46 @@ product doctrine; **no implementation** authorized by §12 alone.
 **Risks before commit:** Seeded placements apply only to orgs matching childcare seed migration; other orgs get resolver **baseline** until rows exist. Department facet `KPIVm.id` uses `dept.wu_queue.total_per_work_unit:{wuId}` when placements resolve (baseline used `wu_{id}`) — cosmetic unless consumers key off `id`.
 
 --------------------------------------------------------------------------------
+Work-unit pills & KPI strip (staging follow-up, shipped 2026-04-30)
+--------------------------------------------------------------------------------
+
+**§1 — Count mismatch (smoke) — root cause**
+
+- The **all-records** lane total (QueueService summary for `ui.primary_total_queue` or the broadest non–`needs_attention` lane without status filters) includes **every** opportunity in that lane’s scope.
+- **Stage/status pills** are separate queues with **status ⊂** filters (from `queue_definition`). Records whose `status_key` is **missing**, **not covered** by any throughput lane’s status list, or **outside** the lifecycle grouping still belong to the all-lane but **do not** increment any stage pill.
+- Summing pills **without** a remainder therefore **under-counts** versus the all-lane total (e.g. total **8** vs pills summing to **7**).
+- **`needs_attention`** is a **different queue** (exception / attention rules). Its count can **overlap** staged records; it is not required to sum with stage pills to the all-lane total.
+
+**Sources of truth:** `GET /api/admin/work-units/:id/queues` (per-lane `count`), drill-in `GET /api/admin/queues/:workUnitId/:queueKey`. Pills use the same summaries as the work-unit chrome.
+
+**§2 — Derived pill model (no new pill table, no hardcoded Enrollment names)**
+
+- Pills are **queue lanes** ordered by **existing** `queue_definition` + **UI sections** (`getQueueUiConfig` / `partitionQueueUiSections`); labels come from queue config (which is backed by status/lifecycle setup — not ad hoc UI strings in the page).
+- **Other** appears only when `computeUnmappedOverflowCount` > 0: `all_lane_count − Σ(non–needs_attention throughput lane counts)` so totals can reconcile at the summary level.
+- Ordering: sections from config, with **`reorderSectionsWithAllRecordsFirst`** so the all-lane pill is first in its throughput section.
+
+**§3 — Default behavior**
+
+- Initial selected queue prefers **all-records** (`findAllRecordsQueueKey`) when `?queue=` is absent or invalid; explicit `?queue=` still wins.
+- Stage pills and **Needs Attention** remain **clickable filters** (existing queue selection + fetch).
+- **Other** uses `?unmapped=1` **and** the all-lane `?queue=` for a stable, shareable URL.
+
+**§4 — KPI strip on work-unit**
+
+- When `shouldSuppressWorkUnitKpiStrip` is true (`pipeline_with_attention` **or** multiple throughput sections with at least one status-filtered lane), the work-unit model **`kpis` is forced to `[]`**, placement fetch is skipped, and the generic strip does **not** compete with pills. **Org/dept** KPI surfaces are unchanged.
+- When suppression is off, existing **placement + `buildDefaultWorkUnitKpis`** behavior remains (future non-pipeline work units).
+
+**§5 — Dept layout (paired cards)**
+
+- Throughput grid uses **`items-stretch`**; **Work Unit Queue** and **Needs Attention** sections use **`flex h-full min-h-0 flex-col`** with **`shrink-0`** headers and **`flex-1`** body wrappers so titles and rows align as a row pair without a full redesign.
+
+**§6 — Tests / validation**
+
+- `web/tests/workspace/workUnitQueueDerived.test.ts` covers **all-lane resolution**, **covered status keys**, **unmapped overflow**, **KPI suppression** cases, and **unmapped row** classification.
+- Run: `npm run test -- tests/kpi/ tests/workspace/workUnitQueueDerived.test.ts`; `npm exec tsc --noEmit` (web).
+
+**§7 — Deferral / risk**
+
+- **Other / unmapped** list rows are filtered **client-side on the current page** of the all-lane drill-in; the **pill count** remains summary-accurate. **Correct paging** through the full unmapped set requires a **server-side** queue filter or dedicated lane in `queue_definition` — not implemented here to avoid silent partial UX without API work.
+
+--------------------------------------------------------------------------------
