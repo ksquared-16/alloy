@@ -29,6 +29,17 @@ Behavior in summary:
 
 **Presentation-only:** swapping shell layout/CSS does **not** redefine `queue_definition`, action catalogs, resolver payloads, or APIs.
 
+## Paired operational panels (shared layout contract)
+
+For **side-by-side operational blocks** (e.g. **Work Unit Queue** | **Needs Attention** on the department bridge), use:
+
+| Piece | Location |
+|-------|----------|
+| **React** | `WorkspacePairedOperPanelsGrid`, `WorkspacePairedOperPanel` — `web/components/admin/workspace/WorkspacePairedOperPanels.tsx` |
+| **CSS** | `.adminv2-ws-paired-oper-grid`, `.adminv2-ws-paired-oper-panel`, … — `web/app/adminV2/components/workspace/workspace.css` |
+
+Panels compose existing `adminv2-ws-dept-qsec` / throughput / attention **visual tokens**; the contract aligns header band height, card **min-height**, and **Open** chip vertical rhythm. Prefer this over route-local Tailwind grid hacks.
+
 ## Queue row preview standard (`ui.row_preview`)
 
 Queue rows use **config-selected, code-registered templates** — **not** free-form page-builder layouts.

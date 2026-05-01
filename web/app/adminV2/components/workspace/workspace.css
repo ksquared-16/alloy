@@ -67,9 +67,47 @@
 /* Work-unit: slightly tighter vertical rhythm (keeps Automations block closer to the lane). */
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 {
   --ws-dept-section-gap: 12px;
-  /* Capped queue list — internal scroll so header + rail stay in view */
   --ws-dept-primary-queue-list-max-height: min(52vh, calc(100vh - 15.5rem));
 }
+
+/* Paired operational panels — shared grid + rhythm (department throughput | needs attention; reusable elsewhere) */
+.adminv2-ws-paired-oper-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--ws-dept-workbench-gutter, 20px);
+  align-items: stretch;
+}
+
+@media (min-width: 1280px) {
+  .adminv2-ws-paired-oper-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.adminv2-ws-paired-oper-panel {
+  min-width: 0;
+}
+
+.adminv2-ws-paired-oper-panel > .adminv2-ws-queue-header.adminv2-ws-paired-oper-panel__header {
+  min-height: 2.75rem;
+  margin-bottom: 6px;
+  padding-bottom: 5px;
+  justify-content: flex-start;
+}
+
+.adminv2-ws-paired-oper-panel--attention > .adminv2-ws-queue-header.adminv2-ws-paired-oper-panel__header {
+  border-bottom-color: color-mix(in srgb, #bc4300 22%, var(--d-border));
+}
+
+.adminv2-ws-paired-oper-panel__body .adminv2-ws-wu-queue-card--compact {
+  min-height: 4.5rem;
+  align-items: center;
+}
+
+.adminv2-ws-paired-oper-panel__body .adminv2-ws-wu-queue-card-compact-aside {
+  align-self: center;
+}
+
 
 /*
  * Major workspace block rhythm (16px) — spacing lives on the follower only.
@@ -3768,23 +3806,6 @@
   margin-bottom: 4px;
   padding-bottom: 6px;
   border-bottom-color: color-mix(in srgb, #bc4300 22%, var(--d-border));
-}
-
-/* Department — paired Work Unit Queue | Needs Attention: match header band + row rhythm */
-[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-throughput-panel > .adminv2-ws-queue-header,
-[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-attention-panel.adminv2-ws-dept-qsec--secondary > .adminv2-ws-queue-header {
-  min-height: 2.75rem;
-  margin-bottom: 6px;
-  padding-bottom: 5px;
-}
-
-[data-ws-surface="department"].adminv2-ws-dept-v2 [data-ws-surface="work_unit"] .adminv2-ws-wu-queue-card--compact {
-  min-height: 4.5rem;
-  align-items: center;
-}
-
-[data-ws-surface="department"].adminv2-ws-dept-v2 [data-ws-surface="work_unit"] .adminv2-ws-wu-queue-card-compact-aside {
-  align-self: center;
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-qsec--secondary .adminv2-ws-queue-toolbar,

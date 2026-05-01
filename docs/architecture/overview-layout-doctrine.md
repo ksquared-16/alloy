@@ -38,3 +38,7 @@ Overview layout consumes the **Record Rendering System** payload and **field/sec
 - **Do not** use overview as the only place financial data exists — full record and workflows may expose more; overview **summarizes**.
 
 **Terms:** [glossary.md](./glossary.md)
+
+## Workspace Admin v2 (related)
+
+Department and work-unit **paired operational panels** (e.g. Work Unit Queue / Needs Attention) use a **shared layout contract** so sibling panels align (headers, row rhythm, actions), independent of record-overview layout above. Scope, lifecycle/status pill derivation, and “Other” coverage discipline are documented in [workspace-work-unit-scope-doctrine.md](./workspace-work-unit-scope-doctrine.md); implementation pointers live in [WORKSPACE_SYSTEM.md](../implementation/workspace-v2/WORKSPACE_SYSTEM.md).

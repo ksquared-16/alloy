@@ -23,6 +23,7 @@
 - **Field registry:** `field_definitions` / `field_values` / `field_section_definitions` — labels, types, section placement, visibility flags (drawer, table, public booking), sort order, inactive state.
 - **Status vocabulary:** Org-scoped `status_definitions` rows (labels, keys where allowed) — must remain consistent with enums/checks the code enforces.
 - **Work hierarchy:** `departments`, `work_units` — names, keys (stable identifiers), sort order, `is_active`, **`metadata`** and **`queue_definition`** **when** validated against a **versioned schema** (see config model spec).
+- **Work-unit queue coverage:** For lifecycle / multi-lane opportunity (or job) work units, **in-scope** records should map to a **status-filtered** stage lane or appear explicitly as **Other** (unmapped `status_key` relative to lane filters). **`work_unit_scope_total`** (primary lane count) is the canonical card total; **do not** sum all tab counts when lanes overlap. Operators may see **coverage diagnostics** on the work-unit surface when **Other** &gt; 0; fixes live in **queue_definition** filters and org **status_definitions** / admin Statuses settings — not ad hoc UI.
 - **Record chrome (templates):** `record_layouts`, `record_actions` — section order, overview structure tokens, action rows (labels, placement keys) — **handlers** for `event_key` remain code.
 - **Document fields:** `document_field_definitions` for org + doc type.
 

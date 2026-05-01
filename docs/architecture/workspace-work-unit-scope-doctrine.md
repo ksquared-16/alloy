@@ -104,6 +104,16 @@ The shell refactor was **presentation-layer only**: **`work_units.queue_definiti
 - **Same scope, same number:** Counts shown on **org / department / work-unit** workspace surfaces for the **same** queue or aggregation scope **must not contradict** each other after refresh (within normal race windows). When performance requires staged loading, prefer **empty / deferred / “…”** states over a wrong integer.
 - **Performance is real; trust comes first** for operational triage. Batch or shared queries and honest loading states beat **fast wrong** numbers on pills and KPI-style readouts.
 
+### Lifecycle / status pills, “Other,” and reconciliation (canonical)
+
+- **Pills are derived** from `work_units.queue_definition` (+ UI sections / `getQueueUiConfig`). There is **no** separate pill configuration table; do not hardcode vertical-specific status lists in page code.
+- **All-records** (primary / broadest non–`needs_attention` lane per definition) is the **canonical scope total** for “how many records are in this work unit” comparisons.
+- **Reconciliation:** `All` (all-records lane) **=** sum of **status-filtered** lifecycle/stage lane counts **+** **Other** (remainder = opportunities whose `status_key` is not in any stage lane’s status `in` set). **Non-status** lanes (e.g. date slices) are **not** part of that sum.
+- **Needs Attention** is a **first-class exception overlay** (typically `needs_attention` queue). It **may overlap** lifecycle stages; it is **not** a bucket in the `All = stages + Other` sum.
+- **Other** is a **configuration / data coverage signal** — treat nonzero Other as “status vocabulary or queue filters don’t cover some in-scope records,” not as a generic UI bug.
+- **KPI strip:** On lifecycle-heavy work units, the **generic** KPI strip is **suppressed** when stage/status **pills** already summarize the context (`shouldSuppressWorkUnitKpiStrip`); placements remain valid for future non-pipeline work units.
+- **Paired throughput | attention panels:** Use **`WorkspacePairedOperPanelsGrid` / `WorkspacePairedOperPanel`** and `.adminv2-ws-paired-oper-*` (see `WORKSPACE_SYSTEM.md`) so department and similar surfaces stay visually aligned without one-off CSS.
+
 ### Visual system (Admin V2 — workspace)
 
 High-level palette roles for workspace chrome (token detail: [`docs/implementation/workspace-v2/VISUAL_CONTEXT_SYSTEM.md`](../implementation/workspace-v2/VISUAL_CONTEXT_SYSTEM.md)):

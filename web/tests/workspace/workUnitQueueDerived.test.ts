@@ -3,10 +3,12 @@ import { validateQueueDefinition, type QueueDefinitionV1 } from "@/lib/config/qu
 import { getQueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
 import {
     computeUnmappedOverflowCount,
+    computeWorkUnitLifecycleCoverage,
     findAllRecordsQueueKey,
     isRowUnmappedForThroughput,
     shouldSuppressWorkUnitKpiStrip,
     statusKeysCoveredByThroughputQueues,
+    summarizeUnmappedRowsForDiagnostics,
     workUnitScopeTotalFromSummaries,
 } from "@/lib/workspace/workUnitQueueDerived";
 
@@ -161,5 +163,69 @@ describe("workUnitQueueDerived", () => {
         expect(isRowUnmappedForThroughput({ id: "1" }, covered)).toBe(true);
         expect(isRowUnmappedForThroughput({ id: "1", status_key: "a" }, covered)).toBe(false);
         expect(isRowUnmappedForThroughput({ id: "1", status_key: "z" }, covered)).toBe(true);
+    });
+
+    it("computeWorkUnitLifecycleCoverage reports full coverage when unmapped is 0", () => {
+        const def = enrollmentLikeDef();
+        const c = computeWorkUnitLifecycleCoverage({
+            def,
+            allRecordsQueueKey: "all_open",
+            summaries: [
+                { key: "all_open", count: 5 },
+                { key: "stage_a", count: 3 },
+                { key: "stage_b", count: 2 },
+                { key: "needs_attention", count: 1 },
+            ],
+        });
+        expect(c.isComplete).toBe(true);
+        expect(c.allRecordsCount).toBe(5);
+        expect(c.statusLaneCountSum).toBe(5);
+        expect(c.unmappedCount).toBe(0);
+        expect(c.needsAttentionCount).toBe(1);
+    });
+
+    it("computeWorkUnitLifecycleCoverage warns via unmappedCount when status lanes do not exhaust all-lane", () => {
+        const def = enrollmentLikeDef();
+        const c = computeWorkUnitLifecycleCoverage({
+            def,
+            allRecordsQueueKey: "all_open",
+            summaries: [
+                { key: "all_open", count: 8 },
+                { key: "stage_a", count: 3 },
+                { key: "stage_b", count: 2 },
+                { key: "needs_attention", count: 1 },
+            ],
+        });
+        expect(c.isComplete).toBe(true);
+        expect(c.unmappedCount).toBe(3);
+    });
+
+    it("computeWorkUnitLifecycleCoverage marks incomplete when a status lane is deferred", () => {
+        const def = enrollmentLikeDef();
+        const c = computeWorkUnitLifecycleCoverage({
+            def,
+            allRecordsQueueKey: "all_open",
+            summaries: [
+                { key: "all_open", count: 5 },
+                { key: "stage_a", count: 3, counts_deferred: true },
+                { key: "stage_b", count: 2 },
+                { key: "needs_attention", count: 0 },
+            ],
+        });
+        expect(c.isComplete).toBe(false);
+        expect(c.statusLaneCountSum).toBe(null);
+    });
+
+    it("summarizeUnmappedRowsForDiagnostics ignores mapped rows; needs_attention overlap does not add unmapped", () => {
+        const covered = new Set(["inquiry", "tour_booked"]);
+        const rows = [
+            { id: "1", name: "A", status_key: "inquiry" },
+            { id: "2", name: "B", status_key: "lost" },
+            { id: "3", name: "C", status_key: "tour_booked", _attention_reason_label: "Stale" },
+        ];
+        const d = summarizeUnmappedRowsForDiagnostics(rows, covered, 10);
+        expect(d.samples).toHaveLength(1);
+        expect(d.samples[0]?.id).toBe("2");
+        expect(d.statusKeyCounts).toEqual({ lost: 1 });
     });
 });

@@ -1886,4 +1886,10 @@ Work-unit pills & KPI strip (staging follow-up, shipped 2026-04-30)
 
 - **Other / unmapped** list rows are filtered **client-side on the current page** of the all-lane drill-in; the **pill count** remains summary-accurate. **Correct paging** through the full unmapped set requires a **server-side** queue filter or dedicated lane in `queue_definition` — not implemented here to avoid silent partial UX without API work.
 
+**§8 — Final polish (paired layout, coverage UX, guardrails, 2026-05-01 pause)**
+
+- **Paired operational panels:** `WorkspacePairedOperPanelsGrid` + `WorkspacePairedOperPanel` (`web/components/admin/workspace/WorkspacePairedOperPanels.tsx`) + `.adminv2-ws-paired-oper-*` in `workspace.css` — canonical layout for sibling throughput | needs-attention style panels (department page first consumer). Avoid ad hoc per-page grid/card margin hacks.
+- **Coverage guardrails:** `computeWorkUnitLifecycleCoverage`, `summarizeUnmappedRowsForDiagnostics` in `web/lib/workspace/workUnitQueueDerived.ts`. Work-unit chrome: `WorkUnitLifecycleCoveragePanel` — operator copy for **Other**, amber **coverage gap** when `unmappedCount > 0`, collapsible **Admin diagnostics** (sample table + status histogram from **already-loaded** queue rows; no new API).
+- **Doctrine sources:** `docs/architecture/workspace-work-unit-scope-doctrine.md` (pills, Other, reconciliation), `docs/architecture/configuration-doctrine.md` (queue coverage discipline), `docs/implementation/workspace-v2/WORKSPACE_SYSTEM.md` (paired panels anchor).
+
 --------------------------------------------------------------------------------
