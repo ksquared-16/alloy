@@ -16,6 +16,7 @@ import { executeOpportunityRecordAction } from "@/lib/recordChrome/executeOpport
 import type { WorkspaceAction } from "@/lib/ui-v2/workspace-actions";
 import type {
     CrmCompactChildLineVm,
+    KPIVm,
     QueueItemQuickActionVm,
     WorkUnitWorkspaceModel,
 } from "@/lib/ui-v2/workspace-types";
@@ -24,6 +25,10 @@ import { buildRealOpportunityWorkUnitWorkspaceModel } from "@/lib/ui-v2/adapters
 import { mergeEnrollmentRightRailActions } from "@/lib/workspace/viewModels/enrollmentRightRailMerge";
 import { rightRailResolvedFromActionsPayload } from "@/lib/workspace/rightRailResolvedFromActionsPayload";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import { resolveKpisForWorkUnit } from "@/lib/kpi/resolver";
+import { buildDefaultWorkUnitKpis } from "@/lib/kpi/baseline";
+import { workUnitContextFromParts } from "@/lib/kpi/surfaceContext";
+import type { WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
 import { workspaceRouteParam } from "@/lib/workspace/workspaceRouteParam";
 import { validateQueueDefinition, type QueueDefinitionV1 } from "@/lib/config/queueDefinitionSchema";
 import { getQueueUiConfig, type QueueUiConfig, type QueueUiRowPreviewField } from "@/lib/ui-v2/queueUiConfig";
@@ -192,6 +197,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [queueItemsRoute, setQueueItemsRoute] = useState<string | null>(null);
     const [queueItemsLoading, setQueueItemsLoading] = useState(false);
     const [wuPrimaryLaneTimedOut, setWuPrimaryLaneTimedOut] = useState(false);
+    /** `undefined` = placement fetch pending/failed → use queue baseline; otherwise resolver output. */
+    const [wuPlacementStrip, setWuPlacementStrip] = useState<KPIVm[] | undefined>(undefined);
     /** First primary-queue items response for this work unit (not reset on tab change — tab uses in-lane loading). */
     const [wuBootPrimarySettled, setWuBootPrimarySettled] = useState(false);
     const queueItemsRequestSeq = useRef(0);
@@ -272,6 +279,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             setQueueItemsLoading(false);
             setOpportunityQueueRowActions(null);
             setEnrollmentRightRailResolved(null);
+            setWuPlacementStrip(undefined);
             setError("Missing department or work unit in the URL.");
             queueItemsLastFetchSigRef.current = null;
             return;
@@ -299,6 +307,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     setOpportunityQueueRowActions(null);
                     setEnrollmentRightRailResolved(null);
                     queueItemsLastFetchSigRef.current = null;
+                    setWuPlacementStrip(undefined);
                 }
 
                 const [wuRes, deptRes, deptWusRes] = await Promise.all([
@@ -1219,6 +1228,94 @@ export default function AdminV2OpportunityWorkUnitPage() {
         });
     }, [departmentId, dept, enrollmentRightRailResolved, oq, opportunityQueueRowActions, searchParams, workUnit]);
 
+    const workUnitKpiContext = useMemo(() => {
+        if (!workUnit?.id || !departmentId) return null;
+        const summariesForKpi =
+            queueSummaries?.map((q) => ({
+                key: q.key,
+                label: q.label,
+                count: q.count,
+                counts_deferred: q.counts_deferred,
+            })) ?? null;
+        const qi = queueItems
+            ? {
+                  queue: { key: queueItems.queue.key },
+                  total: queueItems.total,
+                  total_omitted: queueItems.total_omitted,
+                  offset: queueItems.offset,
+                  items: queueItems.items ?? [],
+              }
+            : null;
+
+        let legacyOpportunityListTotal: number | null = null;
+        if (!queueSummaries && model) {
+            const badge = model.primaryQueue?.countBadge;
+            if (typeof badge === "number" && !Number.isNaN(badge)) {
+                legacyOpportunityListTotal = badge;
+            } else if (model.primaryQueue?.items) {
+                legacyOpportunityListTotal = model.primaryQueue.items.length;
+            }
+        }
+
+        return workUnitContextFromParts({
+            workUnitId: workUnit.id,
+            queueSummaries: summariesForKpi,
+            queueSummariesLoading: queueSummaries === null && queueSummariesError === null,
+            queueSummariesError,
+            selectedQueueKey,
+            queueItems: qi,
+            queueItemsLoading,
+            queueItemsError,
+            legacyOpportunityListTotal,
+        });
+    }, [
+        departmentId,
+        workUnit?.id,
+        queueSummaries,
+        queueSummariesError,
+        selectedQueueKey,
+        queueItems,
+        queueItemsLoading,
+        queueItemsError,
+        model,
+    ]);
+
+    useEffect(() => {
+        if (!departmentId || !workUnit?.id || !workUnitKpiContext) return;
+        let cancelled = false;
+        const init = workspaceDataFetchInit();
+        void (async () => {
+            try {
+                const res = await fetch(
+                    `/api/admin/workspace-kpi-placements?surface=work_unit&department_id=${encodeURIComponent(
+                        departmentId
+                    )}&work_unit_id=${encodeURIComponent(workUnit.id)}`,
+                    { ...(init ?? {}), cache: "no-store" }
+                );
+                if (!res.ok) {
+                    if (!cancelled) setWuPlacementStrip(undefined);
+                    return;
+                }
+                const j = (await res.json().catch(() => ({}))) as {
+                    items?: WorkspaceKpiPlacementRow[];
+                    scope_has_placements?: boolean;
+                };
+                if (cancelled) return;
+                const { items } = resolveKpisForWorkUnit({
+                    placementRows: j.items ?? [],
+                    scopeHasPlacementRows: j.scope_has_placements === true,
+                    context: workUnitKpiContext,
+                });
+                if (!cancelled) setWuPlacementStrip(items);
+            } catch {
+                if (!cancelled) setWuPlacementStrip(undefined);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [departmentId, workUnit?.id, workUnitKpiContext]);
+
     const enrollmentRightRailByKey = useMemo(() => {
         const m = new Map<string, ResolvedActionForClient>();
         for (const a of enrollmentRightRailResolved ?? []) m.set(a.key, a);
@@ -1466,7 +1563,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
     const deptName = dept?.name?.trim() || "Department";
     const wuName = workUnit?.name?.trim() || "Work unit";
-    const effectiveModel = queueModel ?? model;
+    const mergedWorkspaceModel = useMemo(() => {
+        const base = queueModel ?? model;
+        if (!base || !workUnitKpiContext) return base;
+        const kpis =
+            wuPlacementStrip !== undefined ? wuPlacementStrip : buildDefaultWorkUnitKpis(workUnitKpiContext);
+        return { ...base, kpis };
+    }, [queueModel, model, workUnitKpiContext, wuPlacementStrip]);
+
+    const effectiveModel = mergedWorkspaceModel;
 
     const usingMultiQueue = Boolean(queueSummaries && queueSummaries.length > 0);
     const wuShowPrimaryTransition =

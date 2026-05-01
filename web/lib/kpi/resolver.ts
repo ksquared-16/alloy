@@ -4,7 +4,22 @@ import {
     buildWorkspaceRootOrgOpportunityKpis,
     type DepartmentLifecycleKpisPayload,
 } from "@/lib/workspace/viewModels/workspaceRootRollup";
-import { buildDefaultDepartmentKpis, buildDefaultWorkspaceKpis, type DeptWorkUnitRow } from "@/lib/kpi/baseline";
+import {
+    buildDefaultDepartmentKpis,
+    buildDefaultWorkspaceKpis,
+    buildDefaultWorkUnitKpis,
+    type DeptWorkUnitRow,
+} from "@/lib/kpi/baseline";
+import {
+    departmentNeedsAttentionSumSafe,
+    departmentSumWorkUnitTotals,
+    workspaceLifecycleTotalInScope,
+    workUnitNeedsAttentionCount,
+    workUnitPrimaryLaneTotal,
+    workUnitSelectedTabFromContext,
+    workUnitTotalInQueueFromContext,
+} from "@/lib/kpi/contextKpiMetrics";
+import type { WorkUnitKpiContext } from "@/lib/kpi/surfaceContext";
 import { getMetricDefinition, isKnownMetricKey, validateMetricForSurface } from "@/lib/kpi/registry";
 import type { MetricKey, ResolveKpisResult, WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
 
@@ -15,11 +30,7 @@ function formatInt(n: number | null | undefined): string {
     return String(Math.max(0, Math.floor(n)));
 }
 
-function vmFromRow(
-    metricKey: MetricKey,
-    value: string,
-    row: WorkspaceKpiPlacementRow | null
-): KPIVm {
+function vmFromRow(metricKey: MetricKey, value: string, row: WorkspaceKpiPlacementRow | null): KPIVm {
     const def = getMetricDefinition(metricKey);
     const lane = (row?.lane_override ?? def.defaultLane) as KPIVm["lane"];
     return {
@@ -92,10 +103,13 @@ export function resolveKpisForWorkspace(params: {
             continue;
         }
         switch (mk) {
+            case "ctx.workspace.total_in_scope": {
+                const n = workspaceLifecycleTotalInScope(params.growthSnapshots);
+                items.push(vmFromRow(mk, formatInt(n), row));
+                break;
+            }
             case "org.structure.departments_count":
-                items.push(
-                    vmFromRow(mk, formatInt(params.metrics?.departments), row)
-                );
+                items.push(vmFromRow(mk, formatInt(params.metrics?.departments), row));
                 break;
             case "org.structure.work_units_count":
                 items.push(vmFromRow(mk, formatInt(params.metrics?.workUnits), row));
@@ -141,13 +155,13 @@ export function resolveKpisForDepartment(params: {
     deptQueueSummariesError: string | null;
 }): ResolveKpisResult {
     const warnings: string[] = [];
-    const baseline = () =>
-        buildDefaultDepartmentKpis({
-            deptWorkUnits: params.deptWorkUnits,
-            deptWorkUnitSummaries: params.deptWorkUnitSummaries,
-            deptQueueSummariesLoading: params.deptQueueSummariesLoading,
-            deptQueueSummariesError: params.deptQueueSummariesError,
-        });
+    const deptCtx = {
+        deptWorkUnits: params.deptWorkUnits,
+        deptWorkUnitSummaries: params.deptWorkUnitSummaries,
+        deptQueueSummariesLoading: params.deptQueueSummariesLoading,
+        deptQueueSummariesError: params.deptQueueSummariesError,
+    };
+    const baseline = () => buildDefaultDepartmentKpis(deptCtx);
 
     const visible = params.placementRows.filter((r) => r.is_visible !== false);
     if (visible.length === 0) {
@@ -195,8 +209,86 @@ export function resolveKpisForDepartment(params: {
                     lane: row.lane_override ?? "business",
                 });
             }
+        } else if (mk === "ctx.dept.total_in_scope" || mk === "ctx.dept.queue_total") {
+            const n = departmentSumWorkUnitTotals(deptCtx);
+            items.push(vmFromRow(mk, formatInt(n), row));
+        } else if (mk === "ctx.dept.needs_attention_count") {
+            const n = departmentNeedsAttentionSumSafe(deptCtx);
+            items.push(vmFromRow(mk, formatInt(n), row));
         } else {
             warnings.push(`unhandled_department_metric:${mk}`);
+        }
+    }
+
+    if (items.length === 0) {
+        if (!params.scopeHasPlacementRows) {
+            return { items: baseline(), warnings };
+        }
+        return { items: [], warnings };
+    }
+    return { items, warnings };
+}
+
+export function resolveKpisForWorkUnit(params: {
+    placementRows: WorkspaceKpiPlacementRow[];
+    scopeHasPlacementRows: boolean;
+    context: WorkUnitKpiContext;
+}): ResolveKpisResult {
+    const warnings: string[] = [];
+    const baseline = () => buildDefaultWorkUnitKpis(params.context);
+    const visible = params.placementRows.filter((r) => r.is_visible !== false);
+
+    if (visible.length === 0) {
+        if (!params.scopeHasPlacementRows) {
+            return { items: baseline(), warnings };
+        }
+        return { items: [], warnings };
+    }
+
+    const items: KPIVm[] = [];
+    const ctx = params.context;
+
+    for (const row of sortPlacements(visible)) {
+        const mk = row.metric_key;
+        if (!isKnownMetricKey(mk)) {
+            warnings.push(`unknown_metric_key:${mk}`);
+            continue;
+        }
+        if (!validateMetricForSurface(mk, "work_unit")) {
+            warnings.push(`surface_mismatch:${mk}:work_unit`);
+            continue;
+        }
+
+        const fmt = (n: number | null) => formatInt(n);
+
+        switch (mk) {
+            case "ctx.wu.total_in_queue":
+                items.push(
+                    vmFromRow(
+                        mk,
+                        fmt(
+                            workUnitTotalInQueueFromContext({
+                                queueSummaries: ctx.queueSummaries,
+                                legacyOpportunityListTotal: ctx.legacyOpportunityListTotal,
+                            })
+                        ),
+                        row
+                    )
+                );
+                break;
+            case "ctx.wu.selected_queue_count":
+            case "wu.queue.selected_tab_count":
+                items.push(vmFromRow(mk, fmt(workUnitSelectedTabFromContext(ctx)), row));
+                break;
+            case "ctx.wu.primary_lane_total":
+            case "wu.queue.primary_lane_total":
+                items.push(vmFromRow(mk, fmt(workUnitPrimaryLaneTotal(ctx.queueSummaries)), row));
+                break;
+            case "ctx.wu.needs_attention_count":
+                items.push(vmFromRow(mk, fmt(workUnitNeedsAttentionCount(ctx.queueSummaries)), row));
+                break;
+            default:
+                warnings.push(`unhandled_work_unit_metric:${mk}`);
         }
     }
 

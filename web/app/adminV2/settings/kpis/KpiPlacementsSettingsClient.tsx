@@ -20,8 +20,7 @@ type WuRow = { id: string; name: string | null; department_id: string; key: stri
 
 const SURFACE_ORDER: KpiSurface[] = ["workspace", "department", "work_unit"];
 
-/** Work unit KPI strip is not rendered in AdminV2 yet (Card 6) — do not offer new placements for it. */
-const ADD_PLACEMENT_SURFACES: KpiSurface[] = ["workspace", "department"];
+const ADD_PLACEMENT_SURFACES: KpiSurface[] = ["workspace", "department", "work_unit"];
 
 function sortPlacements(items: WorkspaceKpiPlacementRow[]): WorkspaceKpiPlacementRow[] {
     const rank = (s: string) => SURFACE_ORDER.indexOf(s as KpiSurface);
@@ -67,6 +66,7 @@ export default function KpiPlacementsSettingsClient() {
 
     const [addSurface, setAddSurface] = useState<KpiSurface>("workspace");
     const [addDeptId, setAddDeptId] = useState("");
+    const [addWorkUnitId, setAddWorkUnitId] = useState("");
     const [addMetricKey, setAddMetricKey] = useState<MetricKey | "">("");
     const [addDisplayOrder, setAddDisplayOrder] = useState(0);
     const [addLabel, setAddLabel] = useState("");
@@ -225,6 +225,10 @@ export default function KpiPlacementsSettingsClient() {
             setAddError("Select a department");
             return;
         }
+        if (addSurface === "work_unit" && (!addDeptId || !addWorkUnitId)) {
+            setAddError("Select a department and work unit");
+            return;
+        }
         setAddBusy(true);
         try {
             const body: Record<string, unknown> = {
@@ -234,6 +238,10 @@ export default function KpiPlacementsSettingsClient() {
                 label_override: addLabel.trim() ? addLabel.trim() : null,
             };
             if (addSurface === "department") body.department_id = addDeptId;
+            if (addSurface === "work_unit") {
+                body.department_id = addDeptId;
+                body.work_unit_id = addWorkUnitId;
+            }
 
             const init: RequestInit = {
                 ...(workspaceDataFetchInit() ?? {}),
@@ -248,6 +256,7 @@ export default function KpiPlacementsSettingsClient() {
             setAddMetricKey("");
             setAddLabel("");
             setAddDisplayOrder(0);
+            setAddWorkUnitId("");
             await reload();
         } catch (e) {
             setAddError(e instanceof Error ? e.message : "Create failed");
@@ -332,10 +341,9 @@ export default function KpiPlacementsSettingsClient() {
                             {surfaceTitle(surface)}
                         </h2>
                         {surface === "work_unit" ? (
-                            <p className="text-[11px] leading-snug text-amber-900/85 bg-amber-50/90 border border-amber-200/80 rounded-md px-2.5 py-2">
-                                <strong className="font-medium">Not on work unit UI yet</strong> — AdminV2 work-unit KPI
-                                strip is deferred (Card 6). Rows here have <em>no effect</em> on the work-unit page until
-                                runtime ships. Use <strong>Remove</strong> to delete legacy rows, or leave them hidden.
+                            <p className="text-[11px] leading-snug text-alloy-midnight/65 bg-alloy-midnight/[0.02] border border-alloy-forge/15 rounded-md px-2.5 py-2">
+                                Work-unit KPIs summarize the <strong className="font-medium">same queue summaries</strong> as the
+                                work-unit page (active lane + totals). They do not show org pipeline metrics.
                             </p>
                         ) : null}
 
@@ -505,6 +513,7 @@ export default function KpiPlacementsSettingsClient() {
                                         const s = e.target.value as KpiSurface;
                                         setAddSurface(s);
                                         setAddDeptId("");
+                                        setAddWorkUnitId("");
                                         setAddMetricKey("");
                                     }}
                                 >
@@ -515,7 +524,7 @@ export default function KpiPlacementsSettingsClient() {
                                     ))}
                                 </select>
                             </label>
-                            {addSurface === "department" && (
+                            {(addSurface === "department" || addSurface === "work_unit") && (
                                 <label className="flex flex-col gap-0.5 text-[10px] text-alloy-midnight/55">
                                     Department
                                     <select
@@ -523,6 +532,7 @@ export default function KpiPlacementsSettingsClient() {
                                         value={addDeptId}
                                         onChange={(e) => {
                                             setAddDeptId(e.target.value);
+                                            setAddWorkUnitId("");
                                         }}
                                     >
                                         <option value="">Select…</option>
@@ -531,6 +541,26 @@ export default function KpiPlacementsSettingsClient() {
                                                 {d.name?.trim() || d.key || d.id}
                                             </option>
                                         ))}
+                                    </select>
+                                </label>
+                            )}
+                            {addSurface === "work_unit" && (
+                                <label className="flex flex-col gap-0.5 text-[10px] text-alloy-midnight/55">
+                                    Work unit
+                                    <select
+                                        className="min-w-[10rem] rounded border border-alloy-forge/20 bg-white px-2 py-1 text-xs"
+                                        value={addWorkUnitId}
+                                        onChange={(e) => setAddWorkUnitId(e.target.value)}
+                                        disabled={!addDeptId}
+                                    >
+                                        <option value="">{addDeptId ? "Select…" : "Pick a department first"}</option>
+                                        {workUnits
+                                            .filter((w) => w.department_id === addDeptId)
+                                            .map((w) => (
+                                                <option key={w.id} value={w.id}>
+                                                    {w.name?.trim() || w.key || w.id}
+                                                </option>
+                                            ))}
                                     </select>
                                 </label>
                             )}

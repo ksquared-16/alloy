@@ -139,6 +139,22 @@ export async function POST(request: NextRequest) {
         if (!deptOk.ok) return NextResponse.json({ error: "Department not found" }, { status: 404 });
     }
 
+    if (parsed.surface === "work_unit") {
+        if (!deptOk.ok) return NextResponse.json({ error: "Department not found" }, { status: 404 });
+        const { data: wuRow, error: wuErr } = await supabase
+            .from("work_units")
+            .select("id, department_id")
+            .eq("id", parsed.work_unit_id ?? "")
+            .eq("org_id", ctx.orgId)
+            .maybeSingle();
+        if (wuErr || !wuRow) {
+            return NextResponse.json({ error: "Work unit not found" }, { status: 404 });
+        }
+        if (String((wuRow as { department_id?: string }).department_id ?? "") !== String(parsed.department_id ?? "")) {
+            return NextResponse.json({ error: "Work unit does not belong to selected department" }, { status: 400 });
+        }
+    }
+
     const insertRow = {
         org_id: ctx.orgId,
         surface: parsed.surface,

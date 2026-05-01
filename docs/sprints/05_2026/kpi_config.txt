@@ -16,7 +16,7 @@ GLOBAL IMPLEMENTATION RULES
 # KPI Configuration v0 Sprint
 
 Objective:
-Make workspace KPIs configurable across org, department, and work-unit surfaces without breaking performance, queue accuracy, or the config-driven foundation.
+Make workspace KPIs configurable across org, department, and work-unit surfaces without breaking performance, queue accuracy, or the config-driven foundation. **KPI V1 product intent:** resolved KPIs **summarize the same batched data the surface renders** (see sprint-header pivot + §12); not a standalone global catalog.
 
 Why now:
 The workspace shell is stable: shared layout, sticky rail, exact queue counts, config-selected queue preview templates, and compact KPI/scorecard presentation. The next step is allowing operators/admins to decide which registered metrics appear, in what order, and on which surface.
@@ -26,6 +26,28 @@ Important doctrine:
 - Code owns metric definitions and calculation logic.
 - Do not allow arbitrary SQL or unvalidated calculation logic in config.
 - Preserve performance and existing contracts.
+
+--------------------------------------------------------------------------------
+KPI V1 pivot — Context-derived KPIs (product doctrine; full spec §12)
+--------------------------------------------------------------------------------
+
+**We are not building a global, context-agnostic metric catalog as the primary product story.**
+
+**KPI V1** optimizes for **context-derived KPIs**: every displayed number is a **summary of the same batched inputs the
+surface already uses** to render queues, lifecycle strips, and work-unit chrome — not an independent “metric” computed
+off-screen with no relationship to what the user sees.
+
+- **`metric_key`** = a **label + reducer slot** that maps **placement config** to a **derived summary of the current
+  context** (workspace / department / work unit), not a freestanding global calculation.  
+- **Inputs** are fixed to: **QueueService** results, **lifecycle / status** distribution already loaded, **work-unit
+  summaries**, and **timestamps already present** in those payloads — **no extra queries** for KPI value beyond what
+  the UI session’s batches already fetch (Card 4 / batching discipline unchanged).  
+- **Surface awareness** is required: resolver input includes **surface + scope ids**; the same `metric_key` **type** may
+  **resolve differently** on org vs dept vs WU because **scope and batch shape** differ — value comes from **consistency
+  with the page**, not from catalog parity across surfaces.
+
+Detailed types, surface mapping, and work-unit behavior: **§12** below. **No implementation** authorized by this section
+alone — explicit build cards still required.
 
 --------------------------------------------------------------------------------
 CARD 0 — KPI Audit / Context Intake (COMPLETE)
@@ -946,6 +968,10 @@ GO / NO-GO FOR CARD 2
 **GO:** All sections §1–§10 above are **locked**; Card 2 implementation may proceed after **explicit stakeholder
 sign-off** on this CARD 1.5 block (especially optional work-unit strip and facet cap).
 
+**§12 addendum (later):** **§12 (KPI V1 context model)** is **design-only** like §11; it **does not** reopen queue parity,
+batching (Card 4), or placement storage contracts. Implementation follows **explicit** cards when stakeholders adopt the
+pivot.
+
 **NO-GO triggers:** New endpoints added for v0 without revisiting this doc; per-metric fetches; breaking
 lifecycle/queue JSON contracts; classic scope creep without v0.1 label.
 
@@ -1177,6 +1203,10 @@ the **next layer** so KPIs can be useful across verticals **without** becoming a
 **North-star**
 - More flexible than a hand-maintained list of CRM-only keys.
 - **Not** arbitrary SQL, **not** user-authored formulas, **not** a full dashboard builder.
+
+**Alignment with KPI V1 (§12 + sprint header “pivot”):** Card 10 templates **parameterize** the **context-derived
+reducer types** in §12 (`total_in_scope`, `count_in_queue`, …). The primary product story is **same-batch-as-UI
+summaries**, not a disconnected global metric catalog.
 
 **Doctrine (unchanged, extended)**
 - **Code owns** templates, allowed parameter shapes, reducers, and batch strategy.
@@ -1500,6 +1530,241 @@ Attention/SLA and transition infrastructure exist.
 - User-defined thresholds in v1 for risk signals (thresholds stay **code** or **admin settings** with validation).  
 - Replacing `KPIBlock` or placement CRUD.
 
+================================================================================
+§12 — KPI V1: Context-derived types and surface mapping (DESIGN ONLY)
+================================================================================
+
+**Purpose:** Operationalize the **KPI V1 pivot** (header, this doc): replace the mental model **“independent
+`metric_key` calculation”** with **“derived summary of current UI context.”** Placement rows and `KPIBlock` stay as today;
+ evolution is **registry + resolver input contracts + batch composition** — still **no BI**, **no arbitrary SQL** in
+config, **no** new per-KPI fetches.
+
+--------------------------------------------------------------------------------
+§12.1 Canonical inputs (same batches as the UI)
+--------------------------------------------------------------------------------
+
+| Input bucket | Examples in repo | Used for |
+|--------------|------------------|----------|
+| **Queue batch** | `QueueService` / `getWorkUnitQueueSummaries`; dept `work-unit-queue-summaries` (`count_mode=exact`) | Lane counts, needs_attention, **active tab** queue totals |
+| **Lifecycle / status** | `opportunity-lifecycle-kpis`, lifecycle histograms, growth-slice rollups | `count_by_status`, pipeline motion, stage totals **already** on workspace |
+| **Work-unit summaries** | Per-WU queue list, tab selection, `primaryQueue` / lane model | Work-unit strip = **this** WU’s loaded queues |
+| **Timestamps in batch** | `created_at`, `updated_at`, row preview fields already returned with list/preview payloads | `count_in_time_window` **only** where timestamps exist **in the same payload** (no shadow query) |
+
+Rule: if a number **cannot** be derived from **already-scheduled** fetches for that surface session, it is **out of scope**
+for V1 unless a **single** additional batch is explicitly added for **both** UI and KPI (shared, not KPI-only).
+
+--------------------------------------------------------------------------------
+§12.2 Mental model (locked)
+--------------------------------------------------------------------------------
+
+| From (deprecated framing) | To (KPI V1) |
+|---------------------------|------------|
+| `metric_key` names a global metric | `metric_key` names a **reducer** over **context batch** + **surface** |
+| Same key “means the same” everywhere | Same key **type** may **resolve per scope** from **different batch slices** |
+| KPI can lag unknown data off-page | KPI **must align** with visible queues / lifecycle / WU state |
+
+Card 10 **templates** (future) parameterize **which** context summary; they do **not** reintroduce a catalog of
+disconnected global metrics.
+
+--------------------------------------------------------------------------------
+§12.3 Context-aware KPI **types** (small closed set; 3–5 core)
+--------------------------------------------------------------------------------
+
+These are **implementation categories** (not user-facing pick lists in v0). Each maps to **code-owned** reducers over
+context batches. **Stable `metric_key`s** are still assigned per product need (see §12.4).
+
+**1. `total_in_scope`**  
+- **Meaning:** Single scalar — total entities or total queue heads **in the current scope** (sum of relevant lane counts,
+  or lifecycle “in motion” total where that **is** the batch).  
+- **Reducer:** Sum over allowed queues or lifecycle buckets **included in batch**.  
+- **Extra queries:** None.
+
+**2. `count_by_status`**  
+- **Meaning:** One number per requested status (or one rolled bucket), from **status distribution** already in
+  lifecycle / loaded row set.  
+- **Reducer:** Count keys in histogram or filter loaded items by `status_key` when the UI’s data source is list-based.  
+- **Extra queries:** None if distribution ships in lifecycle batch; work-unit may be **limited to preview cap**
+  (document honesty).
+
+**3. `count_in_queue`**  
+- **Meaning:** Head count for a **specific `queue_key`** (e.g. `needs_attention`, primary tab queue).  
+- **Reducer:** Read `QueueService` summary **for that lane**; work-unit uses **active** `queue` from route/query + batch.  
+- **Extra queries:** None.
+
+**4. `count_in_time_window`**  
+- **Meaning:** Count rows whose timestamp field falls in **fixed window** (e.g. last 7d, today) **using timestamps
+  present in already-loaded items or summary metadata**.  
+- **Reducer:** Filter in memory on batch; if timestamps absent, signal **unavailable** (“—”), no new SQL.  
+- **Extra queries:** None in V1 ideal; **later** optional shared snapshot if UI also needs it.
+
+**5. `simple_derived`**  
+- **Meaning:** **Pure composites** on the same batch: **sum of queues**, **max queue across WUs**, **ratio** of two
+  batch scalars (e.g. attention / total) with **no** new data.fetches.  
+- **Reducer:** Tuple math on integers from queue + lifecycle batch.  
+- **Extra queries:** None.
+
+**Optional (not counted in “3–5” minimum):** `extremum_in_scope` (argmax WU label + count) as a variant of
+`simple_derived`.
+
+--------------------------------------------------------------------------------
+§12.4 Surface mapping (workspace · department · work unit)
+--------------------------------------------------------------------------------
+
+| KPI type | **Workspace** (org root) | **Department** (bridge) | **Work unit** |
+|----------|--------------------------|-------------------------|---------------|
+| **`total_in_scope`** | e.g. sum of **needs_attention** or **all-queue totals** across org from **one composed batch**; or lifecycle **in-motion** total from growth rollups **already** loaded | Sum of queue totals (or attention) across **WUs in this dept** from `work-unit-queue-summaries` | **Total head count for the active queue tab** (and optionally sum of visible lanes) from **that WU’s** QueueService result — **not** org pipeline |
+| **`count_by_status`** | Aggregate lifecycle **stage counts** from per-dept lifecycle payloads **already** fetched for grid/strip | Same lifecycle payload **scoped to this department** if present in batch | Count by status **only from loaded queue items / preview** (bounded honesty) or from WU-level summary if API exposes stage mix |
+| **`count_in_queue`** | Optional: org-wide sum for named `queue_key` if batch aggregates exist | Sum `queue_key` across WUs **or** single dept-level lane | **Exact** count for **selected** `queue` + `queue_key` from current summaries |
+| **`count_in_time_window`** | Only if batch includes timestamps (e.g. preview subsets); else “—” | Same | **Primary:** filter **current list** timestamps; no silent precision claim beyond loaded window |
+| **`simple_derived`** | e.g. **max** dept attention, **ratio** attention/total | e.g. **max** WU total, **spread** across lanes | e.g. **secondary lane** vs **primary** from same payload; **oldest-in-queue** if max timestamp in batch (already pattern in legacy adapters) |
+
+**Work-unit (explicit):** The strip **summarizes the active queue / lane** and sibling lanes from the **same**
+`QueueService` response the page uses — **no hardcoded org “pipeline” strip** (enrollment pipeline KPIs are **workspace
+/ dept growth-slice** concerns; WU stays queue-native).
+
+--------------------------------------------------------------------------------
+§12.5 Proposed example `metric_key`s (context-first naming)
+--------------------------------------------------------------------------------
+
+Illustrative keys (final names in registry via implementation card):  
+`ctx.total_heads_in_scope`, `ctx.count_queue.needs_attention`, `ctx.count_status.*` (parameterized later),
+`ctx.count_window.created_7d` (only when batch supports), `ctx.derived.attention_over_total`,
+`ctx.derived.max_work_unit_total` (dept), `ctx.wu.active_queue_total` (work unit).
+
+Existing keys (`org.pipeline.*`, `dept.wu_queue.total_per_work_unit`, structure counts) **migrate conceptually** to these
+types: e.g. facet totals = **`simple_derived` / `total_in_scope`** per WU; pipeline rollups = **`count_by_status` /
+lifecycle-derived** at workspace.
+
+--------------------------------------------------------------------------------
+§12.6 Relation to §10 (templates) and §11 (signals)
+--------------------------------------------------------------------------------
+
+- **§10** remains the **parameter guardrail** story; templates should **attach** to **context types** (§12.3), not drift
+  into global catalogs.  
+- **§11 “signals”** are **product labels** for **context summaries** (attention, flow); each maps to **one or more** §12
+  **types** over the **same** batches.  
+- **Placement** still selects **which** summaries appear; resolver **always** receives **ContextBatch** (name TBD) keyed by
+  surface.
+
+--------------------------------------------------------------------------------
+§12.7 Non-goals (V1)
+--------------------------------------------------------------------------------
+
+- KPIs that **out-know** the page (extra server round-trips only for KPI).  
+- Cross-org or benchmarks.  
+- User-defined formulas.  
+- Work-unit **org pipeline** strip as default.
+
+================================================================================
+§13 — KPI V1 implementation sequence (Cards 13–18) — Apr 2026
+================================================================================
+
+**Goal:** Resolver KPIs are **reducers over the same in-memory/work-session batches** already used to render each surface.
+**Out of scope:** metric templates (Card 10), `signal.*` catalog (§11), BI, arbitrary SQL, user formulas, global catalogs,
+new “KPI value” APIs.
+
+**Execution:** Cards **13 → 18** in order. Shipped notes are appended under **§13.9** after each delivery batch.
+
+--------------------------------------------------------------------------------
+CARD 13 — Audit Existing Context Payloads (EVIDENCE → INVENTORY)
+--------------------------------------------------------------------------------
+
+**Surfaces:** `/adminV2/workspace`, `/adminV2/workspace/dept/[departmentId]`,
+`/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]`.
+
+### Card 13.A — Context payload inventory (repo state at KPI V1 kickoff)
+
+| Batch / source | Workspace (org root) | Department (bridge) | Work unit |
+|----------------|----------------------|---------------------|-----------|
+| **GET `/api/admin/departments`** | Yes — department rows | Dept row | Dept row |
+| **GET `/api/admin/work-units`** | Yes — count + per-dept WU counts in tiles | WUs for dept | — |
+| **GET `/api/admin/departments/:id/opportunity-lifecycle-kpis`** | Yes — parallel per **growth-slice** dept (`counts`, `values`, `statusBreakdown`) | **Not** loaded | **Not** loaded |
+| **GET `.../work-unit-queue-summaries?count_mode=exact`** | **Not** loaded | Yes — per-WU queue lanes + `count` | **Not** (dept aggregate route)|
+| **GET `/api/admin/work-units/:id/queues` (QueueService)** | **Not** | **Not** | Yes — `queues[]` with `count`, `counts_deferred`, optional previews |
+| **GET `/api/admin/queues/:wuId/:queueKey` (items)** | **Not** | **Not** | Yes — `total`, `total_omitted`, `items[]`, `queue` meta |
+| **Legacy opportunity runtime (`oq`)** | **Not** | **Not** | Optional when multi-queue summaries unavailable — in-memory list / total |
+| **Timestamps on KPI batches** | Lifecycle API uses `status_key, quote_total` only — **no `created_at` in client payload** | Summaries: **no** row timestamps | Queue **items** may include `created_at` (entity-specific) when items fetch runs; not guaranteed on summary-only states |
+
+### Card 13.B — Safe-now reducer inputs (no new fetches)
+
+- **Workspace:** `WorkspaceRootMetrics`, growth-slice lifecycle snapshots (`counts.total`, stage buckets, `values` for currency pipeline — use only where already meaningful).
+- **Department:** `deptWorkUnits` list + `work-unit-queue-summaries` derived map `{ total, needs_attention }` (same as queue cards).
+- **Work unit:** `queues` summary list + selected `queue` + items payload (`total` / tab reconciliation) + optional legacy list total.
+
+### Card 13.C — Missing / deferred (honest)
+
+| Planned metric | Blocker |
+|----------------|---------|
+| `ctx.workspace.new_last_7d` | No **`created_at`** (or equivalent) in lifecycle KPI JSON delivered to the page; adding would be a **new** batch field or fetch — **deferred**. |
+| `ctx.dept.new_last_7d` | Department page does not load per-row or time-window opportunity payloads — **deferred**. |
+| `ctx.wu.new_last_7d` | Possible in theory from **loaded** queue `items` when `created_at` present; caps/partial lists make it misleading without explicit product contract — **deferred** for V1. |
+
+**Card 13 acceptance:** inventory above is authoritative for implementation; **no** KPI value endpoint; **no** template/signal build.
+
+--------------------------------------------------------------------------------
+CARD 14 — Define Context Reducer Contract
+--------------------------------------------------------------------------------
+
+**Deliver:** `WorkspaceKpiContext`, `DepartmentKpiContext`, `WorkUnitKpiContext` types; pure metric helpers; resolver consumes context only.  
+**Forbidden:** DB migrations, formulas, SQL, placement schema changes, new endpoints.
+
+--------------------------------------------------------------------------------
+CARD 15 — Implement First Context-Aware Metric Keys
+--------------------------------------------------------------------------------
+
+**Registry keys (V1):** `ctx.workspace.total_in_scope`, `ctx.dept.total_in_scope`, `ctx.dept.queue_total`, `ctx.dept.needs_attention_count`, `ctx.wu.total_in_queue`, `ctx.wu.selected_queue_count`, `ctx.wu.primary_lane_total`, `ctx.wu.needs_attention_count` — plus **legacy** keys retained for existing rows (`org.*`, `dept.wu_queue.*`, `wu.queue.*`).
+
+**Rules:** unavailable inputs → **"—"**; no fake pipeline dollars; no invented time windows.
+
+--------------------------------------------------------------------------------
+CARD 16 — Wire Work-Unit KPI Strip
+--------------------------------------------------------------------------------
+
+**Deliver:** `GET workspace-kpi-placements?surface=work_unit&department_id&work_unit_id`, resolver output → `WorkUnitWorkspace` `kpis`；Settings allow **create** for `work_unit` surface; remove “unsupported” gating.
+
+--------------------------------------------------------------------------------
+CARD 17 — Replace Generic V0 Defaults With Context-Aware Defaults
+--------------------------------------------------------------------------------
+
+**Deliver:** Baseline strips prefer context summaries; **new migration** (idempotent) adds context primary seeds for childcare pattern orgs — **do not edit** `20260501193000_workspace_kpi_placement.sql`.
+
+--------------------------------------------------------------------------------
+CARD 18 — Tests + Staging Smoke
+--------------------------------------------------------------------------------
+
+**Tests:** reducers, workspace/dept/work-unit resolver branches, visibility / scope_has_placements, invalid surface/metric rejection, placement **create** for work_unit.  
+**Smoke checklist:** §13.9.
+
+--------------------------------------------------------------------------------
+§13.9 Shipped notes — KPI V1 (append-only)
+--------------------------------------------------------------------------------
+
+**2026-04-30 (Cards 13–18) — KPI V1 context reducers + work-unit strip**
+
+- **Card 13:** Inventory recorded in §13.A–§13.C (workspace lifecycle batches, dept `work-unit-queue-summaries`, WU
+  QueueService + items; `new_last_7d` **deferred** — no `created_at` on workspace lifecycle client payload; dept has no
+  time window batch).
+- **Card 14–15:** `WorkspaceKpiContext` / `DepartmentKpiContext` / `WorkUnitKpiContext` in `web/lib/kpi/surfaceContext.ts`;
+  pure reducers in `web/lib/kpi/contextKpiMetrics.ts`; `CONTEXT_DERIVED_METRIC_KEYS` in `web/lib/kpi/contextReducerRegistry.ts`;
+  resolver handles `ctx.workspace.*`, `ctx.dept.*`, `ctx.wu.*` + legacy `org.*`, `dept.wu_queue.*`, `wu.queue.*`.
+- **Card 16:** Work-unit page loads `GET .../workspace-kpi-placements?surface=work_unit&department_id&work_unit_id`, merges
+  `resolveKpisForWorkUnit` into `WorkUnitWorkspace` model `kpis`; baseline from `buildDefaultWorkUnitKpis` when scope has no
+  rows; hide-all when `scope_has_placements` and no visible rows. Settings: work-unit **Add placement** + banner update;
+  `validatePlacementCreateBody` allows `work_unit`. POST verifies work unit belongs to department.
+- **Card 17:** New migration `supabase/migrations/20260502100000_kpi_v1_context_placement_seeds.sql` — idempotent childcare
+  seeds: `ctx.workspace.total_in_scope` (workspace), `ctx.dept.total_in_scope` + `ctx.dept.needs_attention_count`
+  (enrollment departments). `buildDefaultWorkspaceKpis` / `buildDefaultDepartmentKpis` prefer context-first aggregates.
+- **Card 18:** Tests `web/tests/kpi/kpiResolver.test.ts` (23 cases), `kpiPlacementMutationValidation.test.ts`; `npm exec tsc --noEmit` (web) passes.
+
+**Smoke (staging / local):**
+
+1. `/adminV2/settings/kpis` — add/edit/delete/toggle; work-unit row requires dept + WU + metric.
+2. `/adminV2/workspace` — strip values match loaded lifecycle + structure batches; `ctx.workspace.total_in_scope` when configured.
+3. `/adminV2/workspace/dept/[id]` — dept aggregates match summed WU cards; needs-attention aggregate “—” if any WU unknown.
+4. `/adminV2/workspace/dept/[id]/work-unit/[id]` — KPI strip matches queue summaries / selected tab; no org pipeline strip.
+
+**Deferrals:** `ctx.*.new_last_7d`; template metrics (Card 10); `signal.*` (§11); KPI value API.
+
 --------------------------------------------------------------------------------
 Execution Rules (Card 2 onward)
 --------------------------------------------------------------------------------
@@ -1520,6 +1785,10 @@ Execution Rules (Card 2 onward)
 10. **§11 (operational signals)** is **design documentation only** — `signal.*` metrics require explicit implementation
     cards; no new aggregators without batching discipline (Card 4). Renumbering of build cards in §10.10 is unchanged
     (template Card 11 there ≠ this §11 annex).
+11. **§12 (context-derived KPI model)** is **design documentation**. Any resolver **context-batch** contract, reducer
+    wiring, or work-unit queue-native strip must land via **explicit implementation cards** — not silently. §12 forbids
+    KPI-only fetches and a **default** work-unit org-pipeline strip; shipped code should **converge** to §12 when those
+    cards ship.
 
 ================================================================================
 Implementation notes (shipped) — 2026-04-30
@@ -1527,33 +1796,42 @@ Implementation notes (shipped) — 2026-04-30
 
 **Migration:** `supabase/migrations/20260501193000_workspace_kpi_placement.sql` — table `workspace_kpi_placement` with `display_order`, `is_visible`, `metadata` (jsonb), partial unique indexes, RLS, childcare idempotent seeds (workspace org metrics + `dept.wu_queue.total_per_work_unit` per enrollment department).
 
+**KPI V1 seed migration:** `supabase/migrations/20260502100000_kpi_v1_context_placement_seeds.sql` — idempotent childcare rows for `ctx.workspace.total_in_scope`, `ctx.dept.total_in_scope`, `ctx.dept.needs_attention_count` (enrollment departments).
+
 **Placement API (rows only):** `GET /api/admin/workspace-kpi-placements` — `list=org` (admin-only, all rows visible+hidden) for Settings; otherwise `surface` + optional `work_unit_id` / `department_id` for strips (visible only). `POST` / `PATCH` (admin-only) for create/update. No computed KPI values.
 
-**Registry / resolver:** `web/lib/kpi/` — `registry.ts`, `baseline.ts`, `resolver.ts` (`resolveKpisForWorkspace`, `resolveKpisForDepartment`), `types.ts`, `index.ts`. Facet cap 12 for `dept.wu_queue.total_per_work_unit` with `facet_cap_exceeded` warning.
+**Registry / resolver:** `web/lib/kpi/` — `registry.ts`, `baseline.ts`, `resolver.ts` (`resolveKpisForWorkspace`, `resolveKpisForDepartment`, `resolveKpisForWorkUnit`), `contextKpiMetrics.ts`, `surfaceContext.ts`, `contextReducerRegistry.ts`, `types.ts`, `index.ts`. Facet cap 12 for `dept.wu_queue.total_per_work_unit` with `facet_cap_exceeded` warning.
 
 **adminV2:** `web/app/adminV2/workspace/page.tsx` loads placements after existing rollup and passes `workspaceKpiStrip` into `WorkspaceRootShell` when the placement fetch succeeds; otherwise legacy structure + pipeline merge. `web/app/adminV2/workspace/dept/[departmentId]/page.tsx` resolves department surface KPIs from placements with the same queue summary inputs as before (`exact` head counts). `KPIBlock` props unchanged.
 
-**Card 6:** **Deferred** — work-unit surface strip (`wu.queue.*`) not wired in v0; work-unit route behavior unchanged. Revisit under Card 6 gate when product requests it.
+**Card 6 / work unit:** **Superseded by KPI V1 Card 16** — work-unit KPI strip is wired (placements + baseline). Legacy
+“Card 6 deferred” note applies only to pre–KPI V1 snapshots.
+
+**KPI V1:** See **§13** (Cards 13–18) and **§13.9** shipped notes.
 
 **Tests:** `web/tests/kpi/kpiResolver.test.ts`, `web/tests/kpi/kpiPlacementMutationValidation.test.ts` (Vitest). Commands: `npm run test -- tests/kpi/`; `npm exec tsc --noEmit` (pass). Full-repo `npm run lint` still reports many pre-existing issues; targeted ESLint on changed KPI files passes.
 
 **Manual smoke (operator):**
 - `/adminV2/workspace` — KPI strip matches seeded order when placements exist; matches legacy strip if placement API fails.
 - `/adminV2/workspace/dept/[id]` — facet totals match work-unit queue cards (same `work-unit-queue-summaries` source); ≤12 WUs on strip with cap warning in resolver only (dev could log).
-- Work-unit route — unchanged (Card 6 deferred).
+- Work-unit route — KPI strip from placements + queue context (§13); baseline when no placement rows for scope.
 - Classic `/admin` — not modified.
 
-**Known deferrals (v0.1+):** KPIBand / classic placement; thin KPI snapshot endpoint; snapshot service; broader lifecycle funnel keys; `dept.queue.needs_attention_sum`; work-unit strip metrics (`wu.queue.selected_tab_count`, `wu.queue.primary_lane_total`).
+**Known deferrals (v0.1+):** KPIBand / classic placement; thin KPI snapshot endpoint; snapshot service; broader lifecycle funnel keys; time-window context keys (`ctx.*.new_last_7d`) until batch exposes safe timestamps; template/`signal.*` layers.
 
 **Card 9 — Settings UI (AdminV2):** Route `/adminV2/settings/kpis` — `KpiPlacementsSettingsClient` loads all placement rows via `GET /api/admin/workspace-kpi-placements?list=org` (**admin role only**). Tables grouped by surface (workspace / department / work unit) with registry columns (`family`, allowed surfaces, default-format as “unit”, default label). Edits: `is_visible`, `display_order`, `label_override` via `PATCH` (soft-hide; no row delete API). Add placement via `POST` with metric chosen only from registry keys; server validates scope + `validateMetricForSurface`. No `metadata` JSON editing. Mutations **admin-only**; existing `GET ?surface=…` for workspace strips unchanged (visible rows only). `KPIBlock` unchanged.
 
-**Deferrals (Card 9):** Bulk reorder UX; `lane_override` / `format_override` editing; ops read-only listing for `list=org`; hard delete endpoint.
+**Deferrals (Card 9):** Bulk reorder UX; `lane_override` / `format_override` editing; ops read-only listing for `list=org`. Hard **delete** is implemented (Remove in Settings).
 
 **CARD 10 (design):** See **CARD 10 — Flexible Metric Definition Architecture** (before Execution Rules): template-based metrics with guardrailed parameters across verticals — **not** arbitrary SQL/formulas/BI; proposed Cards 11–17 for implementation.
 
 **§11 signals (design):** **Operational signal KPI catalog** (annex before Execution Rules) — attention / flow / risk / ops
 signals, proposed `signal.*` keys; 5–8 **safe-now** candidates; **no implementation** in this doc. Distinct from §10.10
 **build Card 11** (metric template registry).
+
+**§12 (design):** **KPI V1 context-derived model** — five reducer categories (§12.3), workspace / department / work-unit
+matrix (§12.4), work-unit = **active queue/lane** from the same `QueueService` batch (§12.4–§12.7). Sprint header restates
+product doctrine; **no implementation** authorized by §12 alone.
 
 **Risks before commit:** Seeded placements apply only to orgs matching childcare seed migration; other orgs get resolver **baseline** until rows exist. Department facet `KPIVm.id` uses `dept.wu_queue.total_per_work_unit:{wuId}` when placements resolve (baseline used `wu_{id}`) — cosmetic unless consumers key off `id`.
 

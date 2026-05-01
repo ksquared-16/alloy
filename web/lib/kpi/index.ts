@@ -6,5 +6,7 @@ export {
     listMetricDefinitions,
     metricFormatUnitLabel,
 } from "@/lib/kpi/registry";
-export { buildDefaultWorkspaceKpis, buildDefaultDepartmentKpis, type DeptWorkUnitRow } from "@/lib/kpi/baseline";
-export { resolveKpisForWorkspace, resolveKpisForDepartment } from "@/lib/kpi/resolver";
+export { buildDefaultWorkspaceKpis, buildDefaultDepartmentKpis, buildDefaultWorkUnitKpis, type DeptWorkUnitRow } from "@/lib/kpi/baseline";
+export { resolveKpisForWorkspace, resolveKpisForDepartment, resolveKpisForWorkUnit } from "@/lib/kpi/resolver";
+export type { WorkspaceKpiContext, DepartmentKpiContext, WorkUnitKpiContext } from "@/lib/kpi/surfaceContext";
+export { CONTEXT_DERIVED_METRIC_KEYS, isContextDerivedMetricKey } from "@/lib/kpi/contextReducerRegistry";

@@ -40,15 +40,15 @@ describe("validatePlacementCreateBody", () => {
         ).toThrow(PlacementValidationError);
     });
 
-    it("rejects work_unit surface until work-unit KPI runtime ships", () => {
-        expect(() =>
-            validatePlacementCreateBody({
-                surface: "work_unit",
-                metric_key: "wu.queue.selected_tab_count",
-                department_id: "00000000-0000-0000-0000-0000000000de",
-                work_unit_id: "00000000-0000-0000-0000-0000000000wu",
-            })
-        ).toThrow(PlacementValidationError);
+    it("accepts work_unit surface with department and work unit ids", () => {
+        const r = validatePlacementCreateBody({
+            surface: "work_unit",
+            metric_key: "ctx.wu.total_in_queue",
+            department_id: "00000000-0000-0000-0000-0000000000de",
+            work_unit_id: "00000000-0000-0000-0000-0000000000wu",
+        });
+        expect(r.surface).toBe("work_unit");
+        expect(r.metric_key).toBe("ctx.wu.total_in_queue");
     });
 });
 
