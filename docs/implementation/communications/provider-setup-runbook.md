@@ -1,5 +1,7 @@
 # Communications — Provider setup runbook (Card 13)
 
+**Staging-safe binding path / placeholder SQL:** see **`provider-binding-staging-setup.md`** (exact table shape, env checklist, Resend/Twilio steps).
+
 This runbook aligns with **`secret_ref` only**: `env:VAR_NAME`, `legacy_global_twilio`, or `unconfigured`.  
 **Never** store API keys, auth tokens, or Twilio secrets in `config` JSONB.
 
