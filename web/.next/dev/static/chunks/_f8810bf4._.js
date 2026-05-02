@@ -759,43 +759,47 @@ function closedCountFromLifecycleCounts(c) {
     if (!c) return 0;
     return (c.success ?? 0) + (c.failure ?? 0);
 }
-function buildWorkspaceRootOrgOpportunityKpis(deptSnapshots) {
-    let inMotion = 0;
+function buildWorkspaceRootOrgOpportunityKpis(snapshots) {
+    let inquiriesInLane = 0;
+    let sawInquiries = false;
     let closed = 0;
     let pipeline = 0;
-    for (const { departmentKey, kpis } of deptSnapshots){
-        if (!(0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$workspace$2f$growthSliceDepartments$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["isGrowthSliceDepartmentKey"])(departmentKey) || !kpis?.counts) continue;
-        inMotion += inMotionCountFromLifecycleCounts(kpis.counts);
-        closed += closedCountFromLifecycleCounts(kpis.counts);
-        pipeline += Number(kpis.values?.openPipeline ?? 0);
+    for (const { key, pipelineExact, lifecycleAnalytics } of snapshots){
+        if (!(0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$workspace$2f$growthSliceDepartments$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["isGrowthSliceDepartmentKey"])(key)) continue;
+        if (pipelineExact?.total != null) {
+            sawInquiries = true;
+            inquiriesInLane += Math.max(0, pipelineExact.total);
+        }
+        const kpis = lifecycleAnalytics;
+        if (kpis?.counts) {
+            closed += closedCountFromLifecycleCounts(kpis.counts);
+            pipeline += Number(kpis.values?.openPipeline ?? 0);
+        }
     }
     return [
         {
             id: "org_in_motion",
-            label: "Active pipeline",
-            value: String(Math.max(0, inMotion)),
+            label: "Inquiries (pipeline lane)",
+            value: sawInquiries ? String(Math.max(0, inquiriesInLane)) : "—",
             lane: "business"
         },
         {
             id: "org_pipeline_value",
-            label: "Pipeline value",
+            label: "Pipeline value (lifecycle)",
             value: pipeline > 0 ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$ui$2d$v2$2f$formatWorkspaceCurrency$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatWorkspaceUsdGrouped"])(pipeline) : "—",
             lane: "business"
         },
         {
             id: "org_closed",
-            label: "Closed outcomes",
+            label: "Closed (lifecycle)",
             value: String(Math.max(0, closed)),
             lane: "business"
         }
     ];
 }
 function buildWorkspaceRootDepartmentTileRollupLine(params) {
-    if ((0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$workspace$2f$growthSliceDepartments$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["isGrowthSliceDepartmentKey"])(params.departmentKey) && params.kpis?.counts) {
-        const motion = inMotionCountFromLifecycleCounts(params.kpis.counts);
-        const pipe = params.kpis.values?.openPipeline;
-        const pipeLabel = pipe != null && pipe > 0 ? ` · ${(0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$ui$2d$v2$2f$formatWorkspaceCurrency$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatWorkspaceUsdGrouped"])(Number(pipe))} open` : "";
-        return `${motion} active in pipeline${pipeLabel}`;
+    if ((0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$workspace$2f$growthSliceDepartments$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["isGrowthSliceDepartmentKey"])(params.departmentKey) && params.pipelineExact?.total != null) {
+        return `${params.pipelineExact.total} in pipeline`;
     }
     if (params.workUnitCount >= 0) {
         return `${params.workUnitCount} work unit${params.workUnitCount === 1 ? "" : "s"}`;
@@ -827,10 +831,24 @@ __turbopack_context__.s([
     "workUnitTotalInQueueFromContext",
     ()=>workUnitTotalInQueueFromContext,
     "workspaceLifecycleTotalInScope",
-    ()=>workspaceLifecycleTotalInScope
+    ()=>workspaceLifecycleTotalInScope,
+    "workspacePipelineExactTotalInScope",
+    ()=>workspacePipelineExactTotalInScope
 ]);
 var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$workspace$2f$growthSliceDepartments$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/workspace/growthSliceDepartments.ts [app-client] (ecmascript)");
 ;
+function workspacePipelineExactTotalInScope(snapshots) {
+    let sum = 0;
+    let saw = false;
+    for (const { departmentKey, pipelineExact } of snapshots){
+        if (!(0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$workspace$2f$growthSliceDepartments$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["isGrowthSliceDepartmentKey"])(departmentKey)) continue;
+        if (pipelineExact?.total != null) {
+            saw = true;
+            sum += Math.max(0, pipelineExact.total);
+        }
+    }
+    return saw ? sum : null;
+}
 function workspaceLifecycleTotalInScope(growthSnapshots) {
     let sum = 0;
     let saw = false;
@@ -963,11 +981,16 @@ function formatInt(n) {
     return String(Math.max(0, Math.floor(n)));
 }
 function buildDefaultWorkspaceKpis(metrics, growthSnapshots) {
-    const inScope = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$kpi$2f$contextKpiMetrics$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["workspaceLifecycleTotalInScope"])(growthSnapshots);
+    const mapped = growthSnapshots.map((s)=>({
+            departmentKey: s.key,
+            kpis: s.lifecycleAnalytics,
+            pipelineExact: s.pipelineExact ?? undefined
+        }));
+    const inScope = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$kpi$2f$contextKpiMetrics$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["workspacePipelineExactTotalInScope"])(mapped);
     const contextFirst = inScope != null ? [
         {
             id: "baseline.ctx.workspace.total_in_scope",
-            label: "Opportunities in pipeline scope",
+            label: "Inquiries (pipeline lane)",
             value: String(inScope),
             lane: "business"
         }
@@ -1378,7 +1401,11 @@ function resolveKpisForWorkspace(params) {
         switch(mk){
             case "ctx.workspace.total_in_scope":
                 {
-                    const n = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$kpi$2f$contextKpiMetrics$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["workspaceLifecycleTotalInScope"])(params.growthSnapshots);
+                    const n = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$kpi$2f$contextKpiMetrics$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["workspacePipelineExactTotalInScope"])(params.growthSnapshots.map((s)=>({
+                            departmentKey: s.key,
+                            kpis: s.lifecycleAnalytics,
+                            pipelineExact: s.pipelineExact ?? undefined
+                        })));
                     items.push(vmFromRow(mk, formatInt(n), row));
                     break;
                 }
@@ -2874,21 +2901,50 @@ async function loadWorkspaceRollup(departments) {
     }
     const growthDepts = departments.filter((d)=>(0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$workspace$2f$growthSliceDepartments$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["isGrowthSliceDepartmentKey"])(d.key));
     const growthSettled = await Promise.allSettled(growthDepts.map((d)=>(async ()=>{
-            let res = null;
+            let lifecycleRes = null;
+            let pipelineRes = null;
             try {
-                res = await fetch(`/api/admin/departments/${encodeURIComponent(d.id)}/opportunity-lifecycle-kpis`, fetchInit);
+                [lifecycleRes, pipelineRes] = await Promise.all([
+                    fetch(`/api/admin/departments/${encodeURIComponent(d.id)}/opportunity-lifecycle-kpis`, fetchInit),
+                    fetch(`/api/admin/departments/${encodeURIComponent(d.id)}/pipeline-exact-count`, fetchInit)
+                ]);
             } catch  {
                 return {
                     id: d.id,
                     key: d.key,
-                    payload: null
+                    pipelineExact: null,
+                    lifecycleAnalytics: null
                 };
             }
-            const json = await (res?.json().catch(()=>({})) ?? Promise.resolve({}));
+            const lifecycleJson = await (lifecycleRes?.json().catch(()=>({})) ?? Promise.resolve({}));
+            const pipelineJson = await (pipelineRes?.json().catch(()=>({})) ?? Promise.resolve({}));
+            const lifecycleAnalytics = lifecycleRes?.ok && lifecycleJson.counts ? lifecycleJson : null;
+            let pipelineExact = null;
+            if (pipelineRes?.ok) {
+                if (typeof pipelineJson.work_unit_id === "string" && String(pipelineJson.work_unit_id).trim() && typeof pipelineJson.total === "number" && Number.isFinite(pipelineJson.total)) {
+                    pipelineExact = {
+                        work_unit_id: pipelineJson.work_unit_id,
+                        queue_key: typeof pipelineJson.queue_key === "string" ? pipelineJson.queue_key : null,
+                        total: pipelineJson.total
+                    };
+                } else {
+                    pipelineExact = null;
+                }
+            }
+            if ("TURBOPACK compile-time truthy", 1) {
+                console.warn("[pipeline-count-unify]", {
+                    source: "workspace",
+                    department_id: d.id,
+                    work_unit_id: pipelineExact?.work_unit_id ?? null,
+                    queue_key: pipelineExact?.queue_key ?? null,
+                    count: pipelineExact?.total ?? null
+                });
+            }
             return {
                 id: d.id,
                 key: d.key,
-                payload: res.ok && json.counts ? json : null
+                pipelineExact,
+                lifecycleAnalytics
             };
         })()));
     const growthSnapshots = growthDepts.map((d, i)=>{
@@ -2897,29 +2953,27 @@ async function loadWorkspaceRollup(departments) {
         return {
             id: d.id,
             key: d.key,
-            payload: null
+            pipelineExact: null,
+            lifecycleAnalytics: null
         };
     });
-    const kpisByDeptId = new Map(growthSnapshots.map((s)=>[
+    const pipelineByDeptId = new Map(growthSnapshots.map((s)=>[
             s.id,
-            s.payload
+            s
         ]));
     for (const d of departments){
         const wu = deptTileStats[d.id]?.workUnitCount ?? 0;
-        const payload = kpisByDeptId.get(d.id) ?? null;
+        const growthSnap = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$workspace$2f$growthSliceDepartments$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["isGrowthSliceDepartmentKey"])(d.key) ? pipelineByDeptId.get(d.id) : undefined;
         deptTileStats[d.id] = {
             workUnitCount: wu,
             opportunityRollupLine: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$workspace$2f$viewModels$2f$workspaceRootRollup$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["buildWorkspaceRootDepartmentTileRollupLine"])({
                 departmentKey: d.key,
                 workUnitCount: wu,
-                kpis: payload
+                pipelineExact: growthSnap?.pipelineExact ?? null
             })
         };
     }
-    const orgOpportunityKpis = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$workspace$2f$viewModels$2f$workspaceRootRollup$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["buildWorkspaceRootOrgOpportunityKpis"])(growthSnapshots.map((s)=>({
-            departmentKey: s.key,
-            kpis: s.payload
-        })));
+    const orgOpportunityKpis = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$workspace$2f$viewModels$2f$workspaceRootRollup$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["buildWorkspaceRootOrgOpportunityKpis"])(growthSnapshots);
     const metrics = {
         departments: null,
         workUnits: workUnitsRes?.ok && Array.isArray(wuJson.items) ? wuJson.items.length : null
@@ -3009,12 +3063,7 @@ function AdminV2WorkspaceIndexPage() {
                                                     placementRows: body.items ?? [],
                                                     scopeHasPlacementRows: body.scope_has_placements === true,
                                                     metrics: metricsForResolve,
-                                                    growthSnapshots: growthSnapshots.map({
-                                                        "AdminV2WorkspaceIndexPage.useEffect": (s)=>({
-                                                                departmentKey: s.key,
-                                                                kpis: s.payload
-                                                            })
-                                                    }["AdminV2WorkspaceIndexPage.useEffect"])
+                                                    growthSnapshots
                                                 }).items;
                                             }
                                         } catch  {
@@ -3101,30 +3150,30 @@ function AdminV2WorkspaceIndexPage() {
                             children: "Workspace"
                         }, void 0, false, {
                             fileName: "[project]/app/adminV2/workspace/page.tsx",
-                            lineNumber: 268,
+                            lineNumber: 299,
                             columnNumber: 25
                         }, this)
                     }, void 0, false, {
                         fileName: "[project]/app/adminV2/workspace/page.tsx",
-                        lineNumber: 267,
+                        lineNumber: 298,
                         columnNumber: 21
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$admin$2f$workspace$2f$AdminV2RouteLoadingState$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["AdminV2RouteLoadingState"], {
                         variant: "workspace"
                     }, void 0, false, {
                         fileName: "[project]/app/adminV2/workspace/page.tsx",
-                        lineNumber: 270,
+                        lineNumber: 301,
                         columnNumber: 21
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/app/adminV2/workspace/page.tsx",
-                lineNumber: 266,
+                lineNumber: 297,
                 columnNumber: 17
             }, this)
         }, void 0, false, {
             fileName: "[project]/app/adminV2/workspace/page.tsx",
-            lineNumber: 265,
+            lineNumber: 296,
             columnNumber: 13
         }, this);
     }
@@ -3136,12 +3185,12 @@ function AdminV2WorkspaceIndexPage() {
                 children: error
             }, void 0, false, {
                 fileName: "[project]/app/adminV2/workspace/page.tsx",
-                lineNumber: 279,
+                lineNumber: 310,
                 columnNumber: 17
             }, this)
         }, void 0, false, {
             fileName: "[project]/app/adminV2/workspace/page.tsx",
-            lineNumber: 278,
+            lineNumber: 309,
             columnNumber: 13
         }, this);
     }
@@ -3154,7 +3203,7 @@ function AdminV2WorkspaceIndexPage() {
                     children: "No active departments found for your organization."
                 }, void 0, false, {
                     fileName: "[project]/app/adminV2/workspace/page.tsx",
-                    lineNumber: 287,
+                    lineNumber: 318,
                     columnNumber: 17
                 }, this),
                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -3162,13 +3211,13 @@ function AdminV2WorkspaceIndexPage() {
                     children: "Add departments under Organization, then return here."
                 }, void 0, false, {
                     fileName: "[project]/app/adminV2/workspace/page.tsx",
-                    lineNumber: 288,
+                    lineNumber: 319,
                     columnNumber: 17
                 }, this)
             ]
         }, void 0, true, {
             fileName: "[project]/app/adminV2/workspace/page.tsx",
-            lineNumber: 286,
+            lineNumber: 317,
             columnNumber: 13
         }, this);
     }
@@ -3182,7 +3231,7 @@ function AdminV2WorkspaceIndexPage() {
         workspaceKpiStrip: workspaceKpiStrip
     }, void 0, false, {
         fileName: "[project]/app/adminV2/workspace/page.tsx",
-        lineNumber: 296,
+        lineNumber: 327,
         columnNumber: 9
     }, this);
 }

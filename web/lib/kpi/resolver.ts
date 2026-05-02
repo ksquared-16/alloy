@@ -2,7 +2,7 @@ import type { KPIVm } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceRootMetrics } from "@/components/admin/workspace/WorkspaceRootShell";
 import {
     buildWorkspaceRootOrgOpportunityKpis,
-    type DepartmentLifecycleKpisPayload,
+    type WorkspaceGrowthDeptSnapshot,
 } from "@/lib/workspace/viewModels/workspaceRootRollup";
 import {
     buildDefaultDepartmentKpis,
@@ -13,7 +13,7 @@ import {
 import {
     departmentNeedsAttentionSumSafe,
     departmentSumWorkUnitTotals,
-    workspaceLifecycleTotalInScope,
+    workspacePipelineExactTotalInScope,
     workUnitNeedsAttentionCount,
     workUnitPrimaryLaneTotal,
     workUnitSelectedTabFromContext,
@@ -76,7 +76,7 @@ export function resolveKpisForWorkspace(params: {
      */
     scopeHasPlacementRows: boolean;
     metrics: WorkspaceRootMetrics | null;
-    growthSnapshots: Array<{ departmentKey: string; kpis: DepartmentLifecycleKpisPayload | null }>;
+    growthSnapshots: WorkspaceGrowthDeptSnapshot[];
 }): ResolveKpisResult {
     const warnings: string[] = [];
     const visible = params.placementRows.filter((r) => r.is_visible !== false);
@@ -104,7 +104,13 @@ export function resolveKpisForWorkspace(params: {
         }
         switch (mk) {
             case "ctx.workspace.total_in_scope": {
-                const n = workspaceLifecycleTotalInScope(params.growthSnapshots);
+                const n = workspacePipelineExactTotalInScope(
+                    params.growthSnapshots.map((s) => ({
+                        departmentKey: s.key,
+                        kpis: s.lifecycleAnalytics,
+                        pipelineExact: s.pipelineExact ?? undefined,
+                    }))
+                );
                 items.push(vmFromRow(mk, formatInt(n), row));
                 break;
             }

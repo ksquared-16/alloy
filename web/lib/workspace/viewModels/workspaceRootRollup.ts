@@ -10,6 +10,23 @@ export type DepartmentLifecycleKpisPayload = {
     error?: string;
 };
 
+/** Exact primary-lane count from QueueService (same filters as row list for that queue). */
+export type PipelineExactSnapshot =
+    | {
+          work_unit_id: string;
+          queue_key: string | null;
+          total: number | null;
+      }
+    | null;
+
+/** Growth / enrollment: exact pipeline work unit + optional lifecycle analytics (not for pipeline row counts). */
+export type WorkspaceGrowthDeptSnapshot = {
+    id: string;
+    key: string;
+    pipelineExact: PipelineExactSnapshot;
+    lifecycleAnalytics: DepartmentLifecycleKpisPayload | null;
+};
+
 export function inMotionCountFromLifecycleCounts(c: OpportunityLifecycleKpiCounts | undefined): number {
     if (!c) return 0;
     return (c.intake ?? 0) + (c.qualification ?? 0) + (c.execution ?? 0) + (c.decision ?? 0);
@@ -21,47 +38,52 @@ export function closedCountFromLifecycleCounts(c: OpportunityLifecycleKpiCounts 
 }
 
 /**
- * Org-level orientation KPIs — derived only from lifecycle KPI snapshots (same semantics as /dept).
- * No queue execution lists; no per-row logic.
+ * Org KPI strip — inquiry pipeline counts from exact Queue Service lane; lifecycle only for USD/closed analytics.
  */
-export function buildWorkspaceRootOrgOpportunityKpis(
-    deptSnapshots: Array<{ departmentKey: string; kpis: DepartmentLifecycleKpisPayload | null }>
-): KPIVm[] {
-    let inMotion = 0;
+export function buildWorkspaceRootOrgOpportunityKpis(snapshots: WorkspaceGrowthDeptSnapshot[]): KPIVm[] {
+    let inquiriesInLane = 0;
+    let sawInquiries = false;
     let closed = 0;
     let pipeline = 0;
-    for (const { departmentKey, kpis } of deptSnapshots) {
-        if (!isGrowthSliceDepartmentKey(departmentKey) || !kpis?.counts) continue;
-        inMotion += inMotionCountFromLifecycleCounts(kpis.counts);
-        closed += closedCountFromLifecycleCounts(kpis.counts);
-        pipeline += Number(kpis.values?.openPipeline ?? 0);
+    for (const { key, pipelineExact, lifecycleAnalytics } of snapshots) {
+        if (!isGrowthSliceDepartmentKey(key)) continue;
+        if (pipelineExact?.total != null) {
+            sawInquiries = true;
+            inquiriesInLane += Math.max(0, pipelineExact.total);
+        }
+        const kpis = lifecycleAnalytics;
+        if (kpis?.counts) {
+            closed += closedCountFromLifecycleCounts(kpis.counts);
+            pipeline += Number(kpis.values?.openPipeline ?? 0);
+        }
     }
     return [
-        { id: "org_in_motion", label: "Active pipeline", value: String(Math.max(0, inMotion)), lane: "business" },
+        {
+            id: "org_in_motion",
+            label: "Inquiries (pipeline lane)",
+            value: sawInquiries ? String(Math.max(0, inquiriesInLane)) : "—",
+            lane: "business",
+        },
         {
             id: "org_pipeline_value",
-            label: "Pipeline value",
+            label: "Pipeline value (lifecycle)",
             value: pipeline > 0 ? formatWorkspaceUsdGrouped(pipeline) : "—",
             lane: "business",
         },
-        { id: "org_closed", label: "Closed outcomes", value: String(Math.max(0, closed)), lane: "business" },
+        { id: "org_closed", label: "Closed (lifecycle)", value: String(Math.max(0, closed)), lane: "business" },
     ];
 }
 
 /**
- * One orientation line per department tile — opportunity semantics for Growth-slice departments,
- * otherwise structure-only (work unit count).
+ * Department tile subline — exact pipeline lane total for Growth-slice; otherwise work unit count.
  */
 export function buildWorkspaceRootDepartmentTileRollupLine(params: {
     departmentKey: string;
     workUnitCount: number;
-    kpis: DepartmentLifecycleKpisPayload | null;
+    pipelineExact: PipelineExactSnapshot;
 }): string | null {
-    if (isGrowthSliceDepartmentKey(params.departmentKey) && params.kpis?.counts) {
-        const motion = inMotionCountFromLifecycleCounts(params.kpis.counts);
-        const pipe = params.kpis.values?.openPipeline;
-        const pipeLabel = pipe != null && pipe > 0 ? ` · ${formatWorkspaceUsdGrouped(Number(pipe))} open` : "";
-        return `${motion} active in pipeline${pipeLabel}`;
+    if (isGrowthSliceDepartmentKey(params.departmentKey) && params.pipelineExact?.total != null) {
+        return `${params.pipelineExact.total} in pipeline`;
     }
     if (params.workUnitCount >= 0) {
         return `${params.workUnitCount} work unit${params.workUnitCount === 1 ? "" : "s"}`;

@@ -3,7 +3,7 @@ import type { WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
 import { isKnownMetricKey, validateMetricForSurface } from "@/lib/kpi/registry";
 import { buildDefaultWorkspaceKpis, buildDefaultDepartmentKpis } from "@/lib/kpi/baseline";
 import { resolveKpisForDepartment, resolveKpisForWorkspace, resolveKpisForWorkUnit } from "@/lib/kpi/resolver";
-import type { DepartmentLifecycleKpisPayload } from "@/lib/workspace/viewModels/workspaceRootRollup";
+import type { WorkspaceGrowthDeptSnapshot } from "@/lib/workspace/viewModels/workspaceRootRollup";
 import { workUnitContextFromParts } from "@/lib/kpi/surfaceContext";
 
 const orgId = "00000000-0000-0000-0000-000000000001";
@@ -43,7 +43,7 @@ describe("kpi registry", () => {
 });
 
 describe("resolveKpisForWorkspace", () => {
-    const growthSnapshots: Array<{ departmentKey: string; kpis: DepartmentLifecycleKpisPayload | null }> = [];
+    const growthSnapshots: WorkspaceGrowthDeptSnapshot[] = [];
 
     it("falls back to baseline when no placements exist for scope", () => {
         const metrics = { departments: 3, workUnits: 7 };
@@ -96,11 +96,24 @@ describe("resolveKpisForWorkspace", () => {
         expect(items.map((k) => k.id)).toEqual(["org.structure.departments_count", "org.structure.work_units_count"]);
     });
 
-    it("resolves ctx.workspace.total_in_scope from lifecycle snapshots", () => {
-        const growthSnapshots: Array<{ departmentKey: string; kpis: DepartmentLifecycleKpisPayload | null }> = [
+    it("resolves ctx.workspace.total_in_scope from exact pipeline snapshots (not lifecycle totals)", () => {
+        const growthSnapshots: WorkspaceGrowthDeptSnapshot[] = [
             {
-                departmentKey: "enrollment",
-                kpis: { counts: { total: 12, intake: 1, qualification: 2, execution: 3, decision: 4, success: 1, failure: 1, unclassified: 0 } },
+                id: "d1",
+                key: "enrollment",
+                pipelineExact: { work_unit_id: "wu-pipe", queue_key: "lane", total: 12 },
+                lifecycleAnalytics: {
+                    counts: {
+                        total: 99,
+                        intake: 1,
+                        qualification: 2,
+                        execution: 3,
+                        decision: 4,
+                        success: 1,
+                        failure: 1,
+                        unclassified: 0,
+                    },
+                },
             },
         ];
         const rows: WorkspaceKpiPlacementRow[] = [

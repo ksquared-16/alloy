@@ -73,7 +73,7 @@
 
 | Item | Detail |
 |------|--------|
-| **Inputs** | Query: `timezone` (default America/Los_Angeles). |
+| **Inputs** | Query: `timezone` (optional IANA; default: `ALLOY_PUBLIC_ORG_ID` org operational TZ → UTC). |
 | **Outputs** | 200: `{ ok: true, slots: [{ start, end, display, timeWindow, isoStart, isoEnd }], count, timezone }`. 500: generic error. |
 | **DB read** | `schedules` (start_at, end_at in next 30 days) — used only to filter out conflicting slots. |
 | **DB write** | None. |

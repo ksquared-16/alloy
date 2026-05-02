@@ -3,6 +3,7 @@ Dispatch and contractor reply routes.
 """
 import logging
 import math
+import os
 import random
 import time
 from datetime import datetime, timedelta
@@ -40,47 +41,66 @@ logger = logging.getLogger("alloy-dispatcher")
 
 router = APIRouter()
 
-# Timezone for date formatting
-LA_TZ = ZoneInfo("America/Los_Angeles")
+
+def resolve_schedule_timezone_iana_str(job_summary: Dict[str, Any]) -> str:
+    """IANA zone for job metadata / SMS display; payload → env → UTC (matches org operational fallback)."""
+    for key in ("timezone", "time_zone", "timeZone", "iana_timezone"):
+        raw = job_summary.get(key)
+        if isinstance(raw, str) and raw.strip():
+            return raw.strip()
+    sched = job_summary.get("schedule")
+    if isinstance(sched, dict):
+        for key in ("timezone", "time_zone"):
+            raw = sched.get(key)
+            if isinstance(raw, str) and raw.strip():
+                return raw.strip()
+    env_tz = os.environ.get("ALLOY_DEFAULT_BUSINESS_TIMEZONE", "").strip()
+    if env_tz:
+        return env_tz
+    return "UTC"
 
 
-def format_datetime_friendly(iso_string: Optional[str], fallback: str = "TBD") -> str:
+def resolve_friendly_display_tz(job_summary: Dict[str, Any]) -> ZoneInfo:
+    tz_str = resolve_schedule_timezone_iana_str(job_summary)
+    try:
+        return ZoneInfo(tz_str)
+    except Exception:
+        return ZoneInfo("UTC")
+
+
+def format_datetime_friendly(
+    iso_string: Optional[str],
+    fallback: str = "TBD",
+    display_tz: Optional[ZoneInfo] = None,
+) -> str:
     """
-    Convert ISO datetime string to friendly format in America/Los_Angeles timezone.
-    
-    Args:
-        iso_string: ISO datetime string (may include Z or timezone offset)
-        fallback: String to return if parsing fails
-    
-    Returns:
-        Formatted string like "Wed, Jan 8 at 8:00 AM"
+    Convert ISO datetime string to a friendly format in ``display_tz`` (default UTC).
+
+    Naive ISO strings are interpreted as local wall time in ``display_tz``.
     """
     if not iso_string:
         return fallback
-    
+
+    tz = display_tz or ZoneInfo("UTC")
+
     try:
         # Handle both Z and timezone-aware strings
         if iso_string.endswith("Z"):
             dt = datetime.fromisoformat(iso_string.replace("Z", "+00:00"))
         else:
             dt = datetime.fromisoformat(iso_string)
-        
-        # If naive datetime, treat as America/Los_Angeles local time
+
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=LA_TZ)
-            dt_la = dt
+            dt_local = dt.replace(tzinfo=tz)
         else:
-            # Convert to LA timezone if timezone-aware
-            dt_la = dt.astimezone(LA_TZ)
-        
-        # Format: "Wed, Jan 8 at 8:00 AM"
-        # Use day without leading zero and hour without leading zero
-        day = dt_la.day
-        hour_str = dt_la.strftime("%I").lstrip("0") or "12"  # Handle 12-hour format, remove leading zero
-        minute_str = dt_la.strftime("%M")
-        am_pm = dt_la.strftime("%p")
-        weekday = dt_la.strftime("%a")
-        month = dt_la.strftime("%b")
+            dt_local = dt.astimezone(tz)
+
+        day = dt_local.day
+        hour_str = dt_local.strftime("%I").lstrip("0") or "12"
+        minute_str = dt_local.strftime("%M")
+        am_pm = dt_local.strftime("%p")
+        weekday = dt_local.strftime("%a")
+        month = dt_local.strftime("%b")
         return f"{weekday}, {month} {day} at {hour_str}:{minute_str} {am_pm}"
     except Exception as e:
         logger.warning("format_datetime_friendly: failed to parse %s: %s", iso_string, e)
@@ -593,8 +613,8 @@ async def dispatch(request: Request):
                 job_date = job_summary.get("job_date")
                 job_time_window = job_summary.get("job_time_window")
                 
-                # Parse timezone (default to America/Los_Angeles if not specified)
-                timezone_str = "America/Los_Angeles"  # Default, can be extracted from payload if available
+                # Schedule timezone for metadata: payload keys → ALLOY_DEFAULT_BUSINESS_TIMEZONE → UTC
+                timezone_str = resolve_schedule_timezone_iana_str(job_summary)
                 
                 # Extract pricing info for structured logging
                 estimated_price = job_summary.get("estimated_price")
@@ -861,9 +881,11 @@ async def dispatch(request: Request):
         logger.warning("OPP_RECURRING_CONTRACTOR_PAY_UPDATE_SKIPPED opportunity_id=%s (OPP_RECURRING_CONTRACTOR_PAY_AMOUNT not configured)", opportunity_id)
     
     # Format friendly date/time
+    _offer_sms_tz = resolve_friendly_display_tz(job_summary)
     friendly_datetime = format_datetime_friendly(
         job_summary.get("start_time_iso") or job_summary.get("start_time"),
-        job_summary.get("start_time", "TBD")
+        job_summary.get("start_time", "TBD"),
+        display_tz=_offer_sms_tz,
     )
 
     # Build contractor SMS message (NO access info yet – only broadcast)
@@ -1275,9 +1297,11 @@ async def contractor_reply(request: Request):
     # 1) Confirm to the accepting contractor — including all details
     # Format date/time nicely using the same helper (same as offer SMS)
     start_time_iso = job.get("start_time_iso") or job.get("start_time")
+    _winner_tz = resolve_friendly_display_tz(job)
     start_time_display = format_datetime_friendly(
         start_time_iso,
-        "TBD"  # Only show TBD if no start_time exists
+        "TBD",  # Only show TBD if no start_time exists
+        display_tz=_winner_tz,
     )
     logger.info("OFFER_ACCEPT_WINNER_SMS_DATETIME start_time_iso=%s start_time_display=%s",
                start_time_iso, start_time_display)

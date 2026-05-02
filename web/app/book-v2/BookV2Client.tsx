@@ -270,6 +270,8 @@ const PREFILL_ATTEMPTED_KEY = "alloy_quote_start_attempted_v1";
 const QUOTE_REFINED_KEY = "alloy_quote_refined_v1";
 
 type PublicBookingCatalog = {
+    /** Org operational IANA from booking-config (slot calendar). */
+    operational_timezone_iana?: string;
     square_footage_tiers: Array<{ sqft_key: string; sqft_label: string }>;
     home_types: Array<{ key: string; label: string }>;
     bedroom_options: Array<{ value: string; label: string }>;
@@ -551,8 +553,10 @@ export default function BookV2Client() {
     /** True after first run of identity resolution (avoids flashing inline form before hydration) */
     const [identityHydrated, setIdentityHydrated] = useState(false);
 
-    // Default timezone
-    const timezone = "America/Los_Angeles";
+    const timezone = useMemo(
+        () => bookingCatalog?.operational_timezone_iana ?? "UTC",
+        [bookingCatalog?.operational_timezone_iana]
+    );
 
     // Debug mode: Use mocked quote to bypass quote requirement
     const mockQuote: QuoteResponse = {
@@ -586,6 +590,10 @@ export default function BookV2Client() {
                     access_method_booking_ui: data.access_method_booking_ui ?? [],
                     addons: data.addons ?? [],
                     pricing_frequencies: data.pricing_frequencies ?? [],
+                    operational_timezone_iana:
+                        typeof data.operational_timezone_iana === "string"
+                            ? data.operational_timezone_iana
+                            : undefined,
                 });
             })
             .catch(() => {});

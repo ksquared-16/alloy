@@ -14,6 +14,8 @@ import {
     buildWorkspaceRootDepartmentTileRollupLine,
     buildWorkspaceRootOrgOpportunityKpis,
     type DepartmentLifecycleKpisPayload,
+    type PipelineExactSnapshot,
+    type WorkspaceGrowthDeptSnapshot,
 } from "@/lib/workspace/viewModels/workspaceRootRollup";
 import { resolveKpisForWorkspace } from "@/lib/kpi/resolver";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
@@ -23,7 +25,7 @@ async function loadWorkspaceRollup(departments: WorkspaceRootDepartmentRow[]): P
     metrics: WorkspaceRootMetrics;
     deptTileStats: WorkspaceRootDeptTileStats;
     orgOpportunityKpis: KPIVm[];
-    growthSnapshots: Array<{ id: string; key: string; payload: DepartmentLifecycleKpisPayload | null }>;
+    growthSnapshots: WorkspaceGrowthDeptSnapshot[];
 }> {
     const fetchInit = workspaceDataFetchInit();
     let workUnitsRes: Response | null = null;
@@ -56,45 +58,77 @@ async function loadWorkspaceRollup(departments: WorkspaceRootDepartmentRow[]): P
     const growthDepts = departments.filter((d) => isGrowthSliceDepartmentKey(d.key));
     const growthSettled = await Promise.allSettled(
         growthDepts.map((d) =>
-            (async () => {
-                let res: Response | null = null;
+            (async (): Promise<WorkspaceGrowthDeptSnapshot> => {
+                let lifecycleRes: Response | null = null;
+                let pipelineRes: Response | null = null;
                 try {
-                    res = await fetch(
-                        `/api/admin/departments/${encodeURIComponent(d.id)}/opportunity-lifecycle-kpis`,
-                        fetchInit
-                    );
+                    [lifecycleRes, pipelineRes] = await Promise.all([
+                        fetch(`/api/admin/departments/${encodeURIComponent(d.id)}/opportunity-lifecycle-kpis`, fetchInit),
+                        fetch(`/api/admin/departments/${encodeURIComponent(d.id)}/pipeline-exact-count`, fetchInit),
+                    ]);
                 } catch {
-                    return { id: d.id, key: d.key, payload: null as DepartmentLifecycleKpisPayload | null };
+                    return { id: d.id, key: d.key, pipelineExact: null, lifecycleAnalytics: null };
                 }
-                const json = (await (res?.json().catch(() => ({})) ?? Promise.resolve({}))) as DepartmentLifecycleKpisPayload;
-                return { id: d.id, key: d.key, payload: res.ok && json.counts ? json : null };
+                const lifecycleJson = (await (lifecycleRes?.json().catch(() => ({})) ?? Promise.resolve({}))) as DepartmentLifecycleKpisPayload;
+                const pipelineJson = (await (pipelineRes?.json().catch(() => ({})) ?? Promise.resolve({}))) as {
+                    work_unit_id?: string | null;
+                    queue_key?: string | null;
+                    total?: number | null;
+                    code?: string;
+                };
+                const lifecycleAnalytics = lifecycleRes?.ok && lifecycleJson.counts ? lifecycleJson : null;
+                let pipelineExact: PipelineExactSnapshot = null;
+                if (pipelineRes?.ok) {
+                    if (
+                        typeof pipelineJson.work_unit_id === "string" &&
+                        String(pipelineJson.work_unit_id).trim() &&
+                        typeof pipelineJson.total === "number" &&
+                        Number.isFinite(pipelineJson.total)
+                    ) {
+                        pipelineExact = {
+                            work_unit_id: pipelineJson.work_unit_id,
+                            queue_key: typeof pipelineJson.queue_key === "string" ? pipelineJson.queue_key : null,
+                            total: pipelineJson.total,
+                        };
+                    } else {
+                        pipelineExact = null;
+                    }
+                }
+                if (typeof window !== "undefined") {
+                    console.warn("[pipeline-count-unify]", {
+                        source: "workspace",
+                        department_id: d.id,
+                        work_unit_id: pipelineExact?.work_unit_id ?? null,
+                        queue_key: pipelineExact?.queue_key ?? null,
+                        count: pipelineExact?.total ?? null,
+                    });
+                }
+                return { id: d.id, key: d.key, pipelineExact, lifecycleAnalytics };
             })()
         )
     );
-    const growthSnapshots = growthDepts.map((d, i) => {
+    const growthSnapshots: WorkspaceGrowthDeptSnapshot[] = growthDepts.map((d, i) => {
         const s = growthSettled[i];
         if (s?.status === "fulfilled") return s.value;
-        return { id: d.id, key: d.key, payload: null };
+        return { id: d.id, key: d.key, pipelineExact: null, lifecycleAnalytics: null };
     });
 
-    const kpisByDeptId = new Map(growthSnapshots.map((s) => [s.id, s.payload]));
+    const pipelineByDeptId = new Map(growthSnapshots.map((s) => [s.id, s]));
 
     for (const d of departments) {
         const wu = deptTileStats[d.id]?.workUnitCount ?? 0;
-        const payload = kpisByDeptId.get(d.id) ?? null;
+        const growthSnap = isGrowthSliceDepartmentKey(d.key) ? pipelineByDeptId.get(d.id) : undefined;
         deptTileStats[d.id] = {
             workUnitCount: wu,
             opportunityRollupLine: buildWorkspaceRootDepartmentTileRollupLine({
                 departmentKey: d.key,
                 workUnitCount: wu,
-                kpis: payload,
+                pipelineExact: growthSnap?.pipelineExact ?? null,
             }),
         };
     }
 
-    const orgOpportunityKpis = buildWorkspaceRootOrgOpportunityKpis(
-        growthSnapshots.map((s) => ({ departmentKey: s.key, kpis: s.payload }))
-    );
+    const orgOpportunityKpis = buildWorkspaceRootOrgOpportunityKpis(growthSnapshots);
 
     const metrics: WorkspaceRootMetrics = {
         departments: null,
@@ -186,10 +220,7 @@ export default function AdminV2WorkspaceIndexPage() {
                                         placementRows: body.items ?? [],
                                         scopeHasPlacementRows: body.scope_has_placements === true,
                                         metrics: metricsForResolve,
-                                        growthSnapshots: growthSnapshots.map((s) => ({
-                                            departmentKey: s.key,
-                                            kpis: s.payload,
-                                        })),
+                                        growthSnapshots,
                                     }).items;
                                 }
                             } catch {

@@ -11,7 +11,7 @@ R.c("server/chunks/ssr/node_modules_next_dist_client_components_builtin_forbidde
 R.c("server/chunks/ssr/node_modules_next_dist_client_components_builtin_unauthorized_15817684.js")
 R.c("server/chunks/ssr/[root-of-the-server]__587b1ed9._.js")
 R.c("server/chunks/ssr/node_modules_ccc50fdf._.js")
-R.c("server/chunks/ssr/_599bd7a5._.js")
+R.c("server/chunks/ssr/_6744bc5d._.js")
 R.c("server/chunks/ssr/_25be7dfd._.js")
 R.c("server/chunks/ssr/app_adminV2_workspace_dept_[departmentId]_loading_tsx_661af92f._.js")
 R.c("server/chunks/ssr/b9064_workspace_dept_[departmentId]_work-unit_[workUnitId]_loading_tsx_c0e28ff8._.js")

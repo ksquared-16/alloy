@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import AdminV2WorkspaceClientProviders from "./AdminV2WorkspaceClientProviders";
 import type { AdminViewerTimezoneValue } from "@/contexts/AdminViewerTimezoneContext";
 import { loadAdminViewerTimezoneBootstrap } from "@/lib/admin/viewerTimezoneBootstrap";
+import { loadOperationalOrgTimezoneIana } from "@/lib/admin/loadOperationalOrgTimezoneServer";
 
 export const dynamic = "force-dynamic";
 
@@ -45,12 +46,20 @@ export default async function AdminV2WorkspaceLayout({
     console.error("[adminV2/workspace/layout] viewer timezone bootstrap failed:", e);
   }
 
+  let operationalTimezoneIana = "UTC";
+  try {
+    operationalTimezoneIana = await loadOperationalOrgTimezoneIana(orgId);
+  } catch (e) {
+    console.error("[adminV2/workspace/layout] operational org timezone failed:", e);
+  }
+
   return (
     <AdminV2WorkspaceClientProviders
       userEmail={typeof auth.user.email === "string" && auth.user.email ? auth.user.email : "Unknown"}
       role={auth.role}
       orgName={orgName}
       initialViewerTimezone={viewerTimezone}
+      initialOperationalTimezoneIana={operationalTimezoneIana}
     >
       {children}
     </AdminV2WorkspaceClientProviders>

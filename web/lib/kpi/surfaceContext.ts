@@ -1,5 +1,5 @@
 import type { WorkspaceRootMetrics } from "@/components/admin/workspace/WorkspaceRootShell";
-import type { DepartmentLifecycleKpisPayload } from "@/lib/workspace/viewModels/workspaceRootRollup";
+import type { WorkspaceGrowthDeptSnapshot } from "@/lib/workspace/viewModels/workspaceRootRollup";
 import type { DeptWorkUnitRow } from "@/lib/kpi/baseline";
 import type { WuQueueItemsForKpi, WuQueueSummaryForKpi } from "@/lib/kpi/contextKpiMetrics";
 
@@ -9,7 +9,7 @@ import type { WuQueueItemsForKpi, WuQueueSummaryForKpi } from "@/lib/kpi/context
  */
 export type WorkspaceKpiContext = {
     metrics: WorkspaceRootMetrics | null;
-    growthSnapshots: Array<{ departmentKey: string; kpis: DepartmentLifecycleKpisPayload | null }>;
+    growthSnapshots: WorkspaceGrowthDeptSnapshot[];
 };
 
 export type DepartmentKpiContext = {

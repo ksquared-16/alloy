@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useAdminOrgOperationalTimezone } from "@/contexts/AdminOrgOperationalTimezoneContext";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import AdminListPageHeader from "@/components/admin/AdminListPageHeader";
 import { useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext";
@@ -25,16 +26,12 @@ type ScheduleRow = {
 
 type JobOption = { id: string; title: string | null };
 
-const EMPTY_FORM = {
-  job_id: "",
-  start_at: "",
-  end_at: "",
-  timezone: "America/Los_Angeles",
-  visit_type: "",
-  status: "",
-};
-
 export default function SchedulesClient() {
+  const orgOpTz = useAdminOrgOperationalTimezone();
+  const emptyForm = useMemo(
+    () => ({ job_id: "", start_at: "", end_at: "", timezone: orgOpTz, visit_type: "", status: "" }),
+    [orgOpTz]
+  );
   const { openDrawer, drawer } = useAdminDrawer();
   const { labels } = useEntityLabels();
   const plural = getEntityLabel(labels, "schedules", "plural");
@@ -51,7 +48,7 @@ export default function SchedulesClient() {
   const [statusKeyFilter, setStatusKeyFilter] = useState("");
   const [statusOptions, setStatusOptions] = useState<{ status_key: string; status_label: string | null }[]>([]);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [form, setForm] = useState(emptyForm);
   const [saveLoading, setSaveLoading] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
@@ -130,7 +127,7 @@ export default function SchedulesClient() {
   }, [fetchJobs]);
 
   const openCreate = () => {
-    setForm(EMPTY_FORM);
+    setForm(emptyForm);
     setSaveError(null);
     setDrawerOpen(true);
   };
@@ -374,7 +371,7 @@ export default function SchedulesClient() {
                 value={form.timezone}
                 onChange={(e) => setForm((f) => ({ ...f, timezone: e.target.value }))}
                 className="w-full px-2 py-1.5 border border-alloy-stone/40 rounded"
-                placeholder="America/Los_Angeles"
+                placeholder="IANA, e.g. America/New_York"
               />
             </div>
             <div>

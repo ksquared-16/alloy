@@ -2,11 +2,12 @@ import type { KPIVm } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceRootMetrics } from "@/components/admin/workspace/WorkspaceRootShell";
 import {
     buildWorkspaceRootOrgOpportunityKpis,
-    type DepartmentLifecycleKpisPayload,
+    type WorkspaceGrowthDeptSnapshot,
 } from "@/lib/workspace/viewModels/workspaceRootRollup";
 
 import {
-    workspaceLifecycleTotalInScope,
+    workspacePipelineExactTotalInScope,
+    type WorkspaceKpiGrowthSnapshot,
     departmentNeedsAttentionSumSafe,
     departmentSumWorkUnitTotals,
     workUnitNeedsAttentionCount,
@@ -20,18 +21,23 @@ function formatInt(n: number | null | undefined): string {
     return String(Math.max(0, Math.floor(n)));
 }
 
-/** Baseline org workspace strip — context-first, then structure, then pipeline rollups. */
+/** Baseline org workspace strip — exact pipeline lane totals, then structure, then org strip. */
 export function buildDefaultWorkspaceKpis(
     metrics: WorkspaceRootMetrics | null,
-    growthSnapshots: Array<{ departmentKey: string; kpis: DepartmentLifecycleKpisPayload | null }>
+    growthSnapshots: WorkspaceGrowthDeptSnapshot[]
 ): KPIVm[] {
-    const inScope = workspaceLifecycleTotalInScope(growthSnapshots);
+    const mapped: WorkspaceKpiGrowthSnapshot[] = growthSnapshots.map((s) => ({
+        departmentKey: s.key,
+        kpis: s.lifecycleAnalytics,
+        pipelineExact: s.pipelineExact ?? undefined,
+    }));
+    const inScope = workspacePipelineExactTotalInScope(mapped);
     const contextFirst: KPIVm[] =
         inScope != null
             ? [
                   {
                       id: "baseline.ctx.workspace.total_in_scope",
-                      label: "Opportunities in pipeline scope",
+                      label: "Inquiries (pipeline lane)",
                       value: String(inScope),
                       lane: "business",
                   },

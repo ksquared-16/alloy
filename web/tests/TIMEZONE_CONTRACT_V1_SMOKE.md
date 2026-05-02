@@ -27,4 +27,12 @@ Run after deploy / migration `20260502143000_user_profiles_timezone.sql`.
 6. **No data mutation**
    - Confirm `created_at` / `start_at` / `occurred_at` values unchanged in DB for sample rows after browsing admin.
 
+7. **Public booking / availability (slice 2)**
+   - `GET /api/public/booking-config` includes `operational_timezone_iana` when `ALLOY_PUBLIC_ORG_ID` is set (org metadata chain → UTC).
+   - `/book-v2` uses that field for slot fetch after catalog loads; before load, client uses `UTC` (no hardcoded LA).
+   - `GET /api/book-v2/availability` without `timezone` uses the same public-org resolution; invalid `timezone` query falls back to UTC.
+
+8. **Admin schedule forms**
+   - Create schedule / job schedule drawer defaults: org operational TZ from layout (`AdminOrgOperationalTimezoneProvider`), not viewer profile TZ. Existing rows still prefer `schedules.timezone` when editing.
+
 Automated coverage: `npm test` → `tests/timezoneContract.test.ts`, `tests/workspace/deriveDepartmentJobMetrics.scheduledToday.test.ts`.

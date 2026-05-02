@@ -1,8 +1,29 @@
 import { isGrowthSliceDepartmentKey } from "@/lib/workspace/growthSliceDepartments";
-import type { DepartmentLifecycleKpisPayload } from "@/lib/workspace/viewModels/workspaceRootRollup";
+import type { DepartmentLifecycleKpisPayload, PipelineExactSnapshot } from "@/lib/workspace/viewModels/workspaceRootRollup";
 import type { DeptWorkUnitRow } from "@/lib/kpi/baseline";
 
-/** Sum `counts.total` across growth-slice departments with a loaded lifecycle payload (same API as org pipeline strip). */
+/** KPI / placement: growth dept row with optional exact pipeline lane (replaces lifecycle row-count semantics). */
+export type WorkspaceKpiGrowthSnapshot = {
+    departmentKey: string;
+    kpis: DepartmentLifecycleKpisPayload | null;
+    pipelineExact?: PipelineExactSnapshot;
+};
+
+/** Sum exact primary-lane inquiries across growth departments (matches row lists). */
+export function workspacePipelineExactTotalInScope(snapshots: WorkspaceKpiGrowthSnapshot[]): number | null {
+    let sum = 0;
+    let saw = false;
+    for (const { departmentKey, pipelineExact } of snapshots) {
+        if (!isGrowthSliceDepartmentKey(departmentKey)) continue;
+        if (pipelineExact?.total != null) {
+            saw = true;
+            sum += Math.max(0, pipelineExact.total);
+        }
+    }
+    return saw ? sum : null;
+}
+
+/** @deprecated Prefer workspacePipelineExactTotalInScope ; lifecycle row totals are not pipeline lane counts. */
 export function workspaceLifecycleTotalInScope(
     growthSnapshots: Array<{ departmentKey: string; kpis: DepartmentLifecycleKpisPayload | null }>
 ): number | null {

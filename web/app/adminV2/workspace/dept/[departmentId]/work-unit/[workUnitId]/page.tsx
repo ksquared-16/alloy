@@ -122,13 +122,7 @@ function isOperatorFacingQueueSummaryDescription(description: string): boolean {
     return !/\(internal\)/i.test(description.trim());
 }
 
-function mergeQueueSummariesByKey(prev: QueueSummary[], incoming: QueueSummary[]): QueueSummary[] {
-    if (!incoming.length) return prev;
-    const byKey = new Map(incoming.map((q) => [q.key, q]));
-    return prev.map((q) => byKey.get(q.key) ?? q);
-}
-
-    type WorkflowKpis = {
+type WorkflowKpis = {
     runs_today: number;
     runs_last_7d: number;
     successful_last_7d: number;
@@ -424,9 +418,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 let usedNewQueueApi = false;
                 let shouldFallbackToLegacy = false;
                 let fallbackReason: string | null = null;
-                const qFromUrlEarly = queueParamFromWindow().trim();
 
-                const queueListRoute = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?include_previews=false&count_mode=planned&limit=3&summary_mode=initial&focus_queue=${encodeURIComponent(qFromUrlEarly)}`;
+                const queueListRoute = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?include_previews=false&count_mode=exact&limit=3`;
 
                 const actionsListRoute =
                     `/api/admin/actions?` +
@@ -488,6 +481,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             error?: string;
                             queues?: QueueSummary[];
                             deferred_queue_keys?: string[];
+                            work_unit_scope_total?: number | null;
+                            work_unit_scope_queue_key?: string | null;
                         };
                         const route = queueListRoute;
                         if (res.ok) {
@@ -497,27 +492,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 setQueueSummaries(qs);
                                 setQueueSummariesError(null);
                                 setQueueSummariesRoute(route);
-                                const dk = j.deferred_queue_keys;
-                                if (dk && dk.length) {
-                                    const fill = () => {
-                                        const fillRoute = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?include_previews=false&count_mode=planned&limit=3&summary_mode=partial&only_queue_keys=${encodeURIComponent(dk.join(","))}`;
-                                        fetch(fillRoute, init)
-                                            .then((r) => (r.ok ? r.json() : null))
-                                            .then((fj: { queues?: QueueSummary[] } | null) => {
-                                                if (cancelled || !fj?.queues?.length) return;
-                                                setQueueSummaries((prev) =>
-                                                    prev && prev.length
-                                                        ? mergeQueueSummariesByKey(prev, fj.queues as QueueSummary[])
-                                                        : prev
-                                                );
-                                            })
-                                            .catch(() => {});
-                                    };
-                                    if (typeof requestIdleCallback !== "undefined") {
-                                        requestIdleCallback(fill, { timeout: 1500 });
-                                    } else {
-                                        window.setTimeout(fill, 120);
-                                    }
+                                if (typeof window !== "undefined") {
+                                    console.warn("[pipeline-count-unify]", {
+                                        source: "work-unit",
+                                        work_unit_id: workUnitId,
+                                        queue_key: j.work_unit_scope_queue_key ?? null,
+                                        count: typeof j.work_unit_scope_total === "number" ? j.work_unit_scope_total : null,
+                                    });
                                 }
                                 const qFromUrl = queueParamFromWindow().trim();
                                 let allKeyFromDef: string | null = null;
@@ -729,28 +710,40 @@ export default function AdminV2OpportunityWorkUnitPage() {
         []
     );
 
-    const fetchQueueSummaries = useCallback(async (wuId: string, focusQueueKey: string | null) => {
+    const fetchQueueSummaries = useCallback(async (wuId: string, _focusQueueKey: string | null) => {
         const seq = ++queueSummariesRequestSeq.current;
         const qs = new URLSearchParams({
             include_previews: "false",
-            count_mode: "planned",
+            count_mode: "exact",
             limit: "3",
-            summary_mode: "initial",
         });
-        const fq = (focusQueueKey ?? "").trim();
-        if (fq) qs.set("focus_queue", fq);
         const route = `/api/admin/work-units/${encodeURIComponent(wuId)}/queues?${qs.toString()}`;
         setQueueSummariesError(null);
         setQueueSummariesRoute(route);
         try {
             const init = workspaceDataFetchInit();
             const res = await fetch(route, init);
-            const json = (await res.json().catch(() => ({}))) as { error?: string; queues?: QueueSummary[] };
+            const json = (await res.json().catch(() => ({}))) as {
+                error?: string;
+                queues?: QueueSummary[];
+                work_unit_scope_total?: number | null;
+                work_unit_scope_queue_key?: string | null;
+            };
             if (!res.ok) {
                 throw new Error(json.error ?? "Failed to load queues");
             }
             const qsOut = (json.queues ?? []) as QueueSummary[];
-            if (seq === queueSummariesRequestSeq.current) setQueueSummaries(qsOut);
+            if (seq === queueSummariesRequestSeq.current) {
+                setQueueSummaries(qsOut);
+                if (typeof window !== "undefined") {
+                    console.warn("[pipeline-count-unify]", {
+                        source: "work-unit-refresh",
+                        work_unit_id: wuId,
+                        queue_key: json.work_unit_scope_queue_key ?? null,
+                        count: typeof json.work_unit_scope_total === "number" ? json.work_unit_scope_total : null,
+                    });
+                }
+            }
         } catch (e) {
             if (seq === queueSummariesRequestSeq.current) {
                 setQueueSummaries(null);

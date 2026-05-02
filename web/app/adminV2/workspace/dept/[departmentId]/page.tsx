@@ -71,6 +71,7 @@ type V1QueueSummary = {
     priority: "standard" | "attention" | "critical";
     display: "list" | "cards";
     count: number;
+    counts_deferred?: boolean;
 };
 
 type DeptRow = { id: string; name: string | null; key: string | null };
@@ -231,8 +232,8 @@ export default function AdminV2WorkspaceDepartmentPage() {
         void (async () => {
             try {
                 const init = workspaceDataFetchInit();
-                // Planned counts for department rollup cards (align with work-unit summary strategy).
-                const route = `/api/admin/departments/${encodeURIComponent(departmentId)}/work-unit-queue-summaries?include_previews=false&count_mode=planned`;
+                // Exact counts — same QueueService path as work-unit queue rows (no planned estimates).
+                const route = `/api/admin/departments/${encodeURIComponent(departmentId)}/work-unit-queue-summaries?include_previews=false&count_mode=exact`;
                 const res = await fetch(route, init);
                 const j = (await res.json().catch(() => ({}))) as {
                     error?: string;
@@ -255,20 +256,31 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     const id = typeof row.id === "string" ? row.id : "";
                     if (!id) continue;
                     if (row.error) {
-                        next[id] = { total: 0, needs_attention: null };
                         continue;
                     }
                     const queues = (row.queues ?? []) as V1QueueSummary[];
-                    /** Match work-unit "All" lane — do not sum tabs (overlapping lanes double-count). */
-                    const legacySumAllQueues = () =>
-                        queues.reduce((acc, q) => acc + (typeof q.count === "number" ? q.count : 0), 0);
                     const total =
                         typeof row.work_unit_scope_total === "number" && Number.isFinite(row.work_unit_scope_total)
                             ? Math.max(0, Math.floor(row.work_unit_scope_total))
-                            : legacySumAllQueues();
+                            : null;
+                    if (total == null) {
+                        continue;
+                    }
                     const needsRow = queues.find((q) => (q.key ?? "").trim().toLowerCase() === "needs_attention");
-                    const needs = needsRow && typeof needsRow.count === "number" ? needsRow.count : null;
+                    const needs =
+                        needsRow && needsRow.counts_deferred !== true && typeof needsRow.count === "number"
+                            ? needsRow.count
+                            : null;
                     next[id] = { total, needs_attention: needs };
+                    if (typeof window !== "undefined") {
+                        console.warn("[pipeline-count-unify]", {
+                            source: "department",
+                            department_id: departmentId,
+                            work_unit_id: id,
+                            queue_key: row.work_unit_scope_queue_key ?? null,
+                            count: total,
+                        });
+                    }
                 }
                 setDeptWorkUnitSummaries(next);
                 setDeptQueueSummariesError(null);

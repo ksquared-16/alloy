@@ -11362,7 +11362,7 @@ function AdminEntityDrawer() {
                                                         timezone: e.target.value
                                                     })),
                                             className: "w-full px-2 py-1.5 border rounded text-sm",
-                                            placeholder: "e.g. America/Los_Angeles"
+                                            placeholder: "IANA, e.g. America/New_York"
                                         }, void 0, false, {
                                             fileName: "[project]/components/admin/AdminEntityDrawer.tsx",
                                             lineNumber: 7515,

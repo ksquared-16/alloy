@@ -553,3 +553,54 @@ Import trace:
 [00:13:41.978] Browser INFO    [timing][drawer] {"key":"opportunities:c7928cd3-9f1f-4286-a3c5-5de40f0ad8a5","ms":2481.4,"phase":"work_unit_fetch","url":"/api/admin/work-units/5ba90557-876d-4450-9c28-36beac6e83be"}
 [00:13:42.788] Server  WARN    [admin-context-perf] getAdminAuth {}
 [00:13:42.988] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:17:50.071] Server  LOG      ✓ Compiled in 146ms
+[00:17:52.419] Server  LOG      ✓ Compiled in 127ms
+[00:17:53.482] Server  LOG      ✓ Compiled in 165ms
+[00:17:56.391] Server  LOG      ✓ Compiled in 979ms
+[00:17:59.221] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:17:59.550] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:17:59.557] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:17:59.597] Server  WARN    [admin-timing] GET /api/admin/work-units {}
+[00:17:59.920] Server  WARN    [admin-timing] GET /api/admin/workflows/summary variant=workspace {}
+[00:18:00.611] Server  WARN    [admin-timing] GET /api/admin/workflow-runs list=kpis {}
+[00:18:01.241] Server  WARN    [admin-timing] GET /api/admin/work-units {}
+[00:18:01.564] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:18:02.054] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:18:02.695] Server  WARN    [queue-perf] getWorkUnitQueueSummaries {}
+[00:18:02.696] Server  WARN    [admin-timing] GET /api/admin/work-units/[id]/queues {}
+[00:18:02.697] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:18:02.699] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:18:03.056] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:18:03.796] Server  WARN    [admin-timing] GET /api/admin/workflows/summary variant=workspace {}
+[00:18:03.826] Server  WARN    [admin-timing] GET /api/admin/work-units {}
+[00:18:04.956] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:18:05.125] Server  WARN    [entity-labels-perf] resolveEntityLabelsForOrg {}
+[00:18:05.127] Server  WARN    [entity-labels-perf] GET /api/admin/entity-labels {}
+[00:18:05.208] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:18:05.679] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:18:05.948] Server  WARN    [queue-perf] getWorkUnitQueueSummaries {}
+[00:18:05.949] Server  WARN    [admin-timing] GET /api/admin/work-units/[id]/queues {}
+[00:18:06.046] Server  WARN    [admin-timing] GET /api/admin/workflow-runs list=kpis {}
+[00:18:06.294] Server  WARN    [admin-timing] GET /api/admin/workflows/summary variant=workspace {}
+[00:18:06.395] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:18:08.355] Server  WARN    [queue-perf] getWorkUnitQueueSummaries {}
+[00:18:08.355] Server  WARN    [admin-timing] GET /api/admin/work-units/[id]/queues {}
+[00:18:11.190] Server  WARN    [queue-perf] enrichOpportunityRows {}
+[00:18:11.190] Server  WARN    [queue-perf] getWorkUnitQueueItems opportunity {}
+[00:18:11.190] Server  WARN    [admin-timing] GET /api/admin/queues/[workUnitId]/[queueKey] {}
+[00:18:29.541] Server  LOG      ✓ Compiled in 486ms
+[00:18:53.613] Server  LOG      ✓ Compiled in 193ms
+[00:20:29.544] Server  LOG      ✓ Compiled in 131ms
+[00:20:41.125] Server  LOG      ✓ Compiled in 0ms
+[00:20:41.476] Server  LOG      ✓ Compiled in 279ms
+[00:20:42.079] Server  LOG      ✓ Compiled in 221ms
+[00:21:03.232] Server  LOG      ✓ Compiled in 1ms
+[00:21:57.131] Server  LOG      ✓ Compiled in 222ms
+[00:21:57.891] Server  LOG      ✓ Compiled in 295ms
+[00:22:12.325] Server  LOG      ✓ Compiled in 173ms
+[00:22:13.284] Server  LOG      ✓ Compiled in 160ms
+[00:22:13.959] Server  LOG      ✓ Compiled in 164ms
+[00:22:16.647] Server  LOG      ✓ Compiled in 198ms
+[00:22:20.263] Server  LOG      ✓ Compiled in 172ms
+[00:22:56.198] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:23:08.941] Server  WARN    [admin-context-perf] getAdminAuth {}
