@@ -833,7 +833,8 @@ function JobDrawerRelationshipsSection(props: {
 }
 
 /** Opportunities always load `surface=full` (single coherent bundle — Phase 4). */
-type OpportunityEntitySurface = "full";
+/** `drawer_visible` = fast shell; client hydrates `full` in background. `full` = single bundle (refetch, mutations). */
+type OpportunityEntitySurface = "full" | "drawer_visible";
 
 function logOpportunityEnrichHeaderFromResponse(res: Response): void {
     const h = res.headers.get("X-Alloy-Opp-Enrich");
@@ -877,7 +878,7 @@ function buildAdminEntityFetchUrl(
         return `/api/admin/entity/jobs/${encodeURIComponent(id)}?surface=${encodeURIComponent(surface)}`;
     }
     if (type === "opportunities" && id !== "new") {
-        const s = opportunityEntitySurface ?? "full";
+        const s = opportunityEntitySurface ?? "drawer_visible";
         return `/api/admin/entity/opportunities/${encodeURIComponent(id)}?surface=${encodeURIComponent(s)}`;
     }
     return `/api/admin/entity/${encodeURIComponent(type)}/${encodeURIComponent(id)}`;
@@ -946,8 +947,13 @@ export default function AdminEntityDrawer() {
         const rid = (data as { id?: unknown }).id;
         return String(rid ?? "") === String(drawer.id);
     }, [data, drawer.id, drawer.type]);
-    /** Staged `drawer_initial` → `full` removed; identity + inquiry data ship in one entity fetch (Phase 4). */
-    const opportunityRecordHydrationPending = false;
+    /** Staged `drawer_visible` → `full` hydrates inquiry/defs/relationships without a second loading shell. */
+    const opportunityRecordHydrationPending = useMemo(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return false;
+        if (!data || typeof data !== "object") return false;
+        if (String((data as { id?: unknown }).id ?? "") !== String(drawer.id)) return false;
+        return (data as { _record_surface?: string })._record_surface === "drawer_visible";
+    }, [data, drawer.id, drawer.type]);
     const [isEditing, setIsEditing] = useState(false);
     const [initialInlineFormSnapshot, setInitialInlineFormSnapshot] = useState<string | null>(null);
     const [formData, setFormData] = useState<Record<string, unknown>>({});
@@ -989,6 +995,9 @@ export default function AdminEntityDrawer() {
     const [opportunityResolvedHeaderLoading, setOpportunityResolvedHeaderLoading] = useState(false);
     /** After `drawer_visible_ready` + two animation frames — defer non-critical fetches (activity-signal, deletion check). */
     const [postDrawerVisibleKey, setPostDrawerVisibleKey] = useState<string | null>(null);
+    /** Background `surface=full` after `drawer_visible` — avoids second loading shell; cleared on new entity fetch / drawer close. */
+    const opportunityFullHydrateInFlightRef = useRef<string | null>(null);
+    const opportunityFullHydrateDoneRef = useRef<string | null>(null);
 
     /** Coherent shell: entity row loaded (header actions may still resolve in parallel). */
     const drawerReady = useMemo(() => {
@@ -1020,6 +1029,8 @@ export default function AdminEntityDrawer() {
 
     useEffect(() => {
         setPostDrawerVisibleKey(null);
+        opportunityFullHydrateInFlightRef.current = null;
+        opportunityFullHydrateDoneRef.current = null;
     }, [drawer.type, drawer.id]);
 
     const [oppQuoteIntakeOpen, setOppQuoteIntakeOpen] = useState(false);
@@ -1568,6 +1579,8 @@ export default function AdminEntityDrawer() {
     useEffect(() => {
         if (!drawer.type || !drawer.id) {
             entityDrawerTabInitKeyRef.current = "";
+            opportunityFullHydrateInFlightRef.current = null;
+            opportunityFullHydrateDoneRef.current = null;
             setData(null);
             setError(null);
             setIsEditing(false);
@@ -1623,6 +1636,10 @@ export default function AdminEntityDrawer() {
         setLoading(true);
         setError(null);
         setIsEditing(false);
+        if (drawer.type === "opportunities" && drawer.id !== "new") {
+            opportunityFullHydrateInFlightRef.current = null;
+            opportunityFullHydrateDoneRef.current = null;
+        }
         if ((drawer.type === "locations" || drawer.type === "customers" || drawer.type === "opportunities" || drawer.type === "vendors" || drawer.type === "jobs" || drawer.type === "persons") && drawer.id === "new") {
             setData({ _create: true });
             setLoading(false);
@@ -1659,6 +1676,45 @@ export default function AdminEntityDrawer() {
     // pathname read only when entity identity changes (see entityDrawerTabInitKeyRef); omit from deps so tab is not reset on SPA navigation.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [drawer.type, drawer.id, drawer.jobRecordSurface]);
+
+    useEffect(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+        if (!opportunityRecordHydrationPending) return;
+        if (opportunityFullHydrateDoneRef.current === drawer.id) return;
+        if (opportunityFullHydrateInFlightRef.current === drawer.id) return;
+        const url = buildAdminEntityFetchUrl(drawer.type, drawer.id, drawer.jobRecordSurface, "full");
+        if (!url) return;
+        opportunityFullHydrateInFlightRef.current = drawer.id;
+        const ac = new AbortController();
+        fetch(url, { signal: ac.signal })
+            .then((res) => {
+                captureDrawerEntityResponsePerf(res);
+                if (!res.ok) throw new Error(res.status === 404 ? "Not found" : "Failed to load");
+                logOpportunityEnrichHeaderFromResponse(res);
+                return res.json();
+            })
+            .then((json) => {
+                if (String((json as { id?: unknown }).id ?? "") !== String(drawer.id)) return;
+                opportunityFullHydrateInFlightRef.current = null;
+                opportunityFullHydrateDoneRef.current = drawer.id;
+                setData((prev) => {
+                    if (!prev || String((prev as { id?: unknown }).id ?? "") !== String(drawer.id)) {
+                        return json as Record<string, unknown>;
+                    }
+                    return { ...prev, ...(json as Record<string, unknown>) };
+                });
+            })
+            .catch((e) => {
+                opportunityFullHydrateInFlightRef.current = null;
+                if (e instanceof Error && e.name === "AbortError") return;
+            });
+        return () => {
+            ac.abort();
+            if (opportunityFullHydrateInFlightRef.current === drawer.id) {
+                opportunityFullHydrateInFlightRef.current = null;
+            }
+        };
+    }, [drawer.type, drawer.id, drawer.jobRecordSurface, opportunityRecordHydrationPending]);
 
     useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;

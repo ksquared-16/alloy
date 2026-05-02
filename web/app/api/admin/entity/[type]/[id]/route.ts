@@ -366,7 +366,67 @@ export async function GET(
                 })
             );
             markPhase("after_status_defs_and_financial");
-            const drawerInitial = request.nextUrl.searchParams.get("surface")?.trim().toLowerCase() === "drawer_initial";
+            const surfaceParam = (request.nextUrl.searchParams.get("surface") ?? "").trim().toLowerCase();
+            const drawerInitial = surfaceParam === "drawer_initial";
+            const drawerVisible = surfaceParam === "drawer_visible";
+            if (drawerVisible) {
+                markPhase("drawer_visible_skip_field_defs_rel_inquiry");
+                out._field_definitions = [];
+                out._record_surface = "drawer_visible";
+                out._inquiry_children = [];
+                out._opportunity_persons = [];
+                out._relationship_displays = {};
+                const householdId =
+                    typeof opp.customer_id === "string" && opp.customer_id.trim() ? opp.customer_id.trim() : null;
+                const householdLabel = trimOrNull(out._customer_name) ?? "—";
+                const inquiryTitleEarly = trimOrNull(out.name) ?? trimOrNull(out.title) ?? "—";
+                out._identity = {
+                    household: householdId ? { id: householdId, label: householdLabel } : null,
+                    primary_person: opp.primary_person_id
+                        ? {
+                              id: String(opp.primary_person_id),
+                              label: trimOrNull(out._primary_person_name) ?? "—",
+                              email: trimOrNull(out._primary_person_email),
+                              phone: trimOrNull(out._primary_person_phone),
+                              role_key: null,
+                              role_label: null,
+                          }
+                        : null,
+                    primary_contact: opp.primary_contact_id
+                        ? {
+                              id: String(opp.primary_contact_id),
+                              label: trimOrNull(out._primary_contact_name) ?? "—",
+                              email: trimOrNull(out._primary_contact_email),
+                              phone: trimOrNull(out._primary_contact_phone),
+                              role_key: null,
+                              role_label: null,
+                          }
+                        : null,
+                    primary_child: null,
+                    inquiry: { title: inquiryTitleEarly, lines: [], section_key: "quote" },
+                };
+                markPhase("after_identity_block");
+                const enrichTotalMs = Date.now() - enrichStartedAt;
+                const enrichHeader =
+                    JSON.stringify({ total_ms: enrichTotalMs, phases_ms: enrichPhaseMs }).length < 3900
+                        ? JSON.stringify({ total_ms: enrichTotalMs, phases_ms: enrichPhaseMs })
+                        : JSON.stringify({ total_ms: enrichTotalMs, phases_ms: {} });
+                const serverRouteMs = Date.now() - opportunityRouteStartedAt;
+                if (process.env.NODE_ENV !== "production") {
+                    console.warn("[timing][opportunity-api]", {
+                        opportunity_id: id,
+                        enrich_ms: enrichTotalMs,
+                        enrich_phases_ms: enrichPhaseMs,
+                        surface: "drawer_visible",
+                    });
+                }
+                return NextResponse.json(out, {
+                    headers: {
+                        "X-Alloy-Opp-Enrich": enrichHeader,
+                        "X-Alloy-Server-Duration": String(serverRouteMs),
+                    },
+                });
+            }
             await attachFieldDefinitionsAndValues(supabase, out, "opportunities", id, { mergeValues: !drawerInitial });
             markPhase("after_field_definitions_values");
             if (drawerInitial) {

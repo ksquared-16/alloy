@@ -97,6 +97,32 @@ function resolveProvisionalQueueKey(wu: WorkUnitRow, qFromUrl: string): string |
     }
 }
 
+/** Default lane for CRM pipeline-style opportunity work units when definition includes this key. */
+const OPPORTUNITY_PIPELINE_TOTAL_FALLBACK_KEY = "pipeline_total";
+
+/**
+ * Queue key to start row fetch as soon as work-unit JSON is available (before summaries).
+ * Priority: URL (must exist on work unit when definition exists), definition default, pipeline_total if present, else first queue.
+ */
+function resolveNavTimeRowQueueKey(wu: WorkUnitRow, qFromUrl: string): string | null {
+    const qTrim = qFromUrl.trim();
+    if (!wu.queue_definition) {
+        return qTrim || null;
+    }
+    try {
+        const def = validateQueueDefinition(wu.queue_definition);
+        const ui = getQueueUiConfig(def);
+        const keys = new Set(def.queues.map((q) => q.key));
+        if (qTrim && keys.has(qTrim)) return qTrim;
+        const fromDef = resolveProvisionalQueueKey(wu, "");
+        if (fromDef && keys.has(fromDef)) return fromDef;
+        if (keys.has(OPPORTUNITY_PIPELINE_TOTAL_FALLBACK_KEY)) return OPPORTUNITY_PIPELINE_TOTAL_FALLBACK_KEY;
+        return def.queues[0]?.key ?? null;
+    } catch {
+        return qTrim || null;
+    }
+}
+
 function buildWorkUnitQueuesListRoute(workUnitId: string, focusQueueKey: string | null): string {
     const queueQs = new URLSearchParams({
         include_previews: "false",
@@ -897,20 +923,37 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 });
 
                 let rowKickInvoked = false;
+                let rowKeyUsedForBootstrap: string | null = null;
                 if (qFromUrlEffective) {
                     rowKickInvoked = true;
+                    rowKeyUsedForBootstrap = qFromUrlEffective;
                     void fetchQueueItems(workUnitId, qFromUrlEffective, null);
                 }
 
-                const [wuR, deptR] = await Promise.all([wuP, deptP]);
+                const wuR = await wuP;
 
                 if (!wuR.res.ok) throw new Error(wuR.j.error ?? "Failed to load work unit");
-                if (!deptR.res.ok) throw new Error(deptR.j.error ?? "Failed to load department");
 
                 const wu = wuR.j as WorkUnitRow;
                 if (wu.department_id !== departmentId) {
                     throw new Error("Work unit does not belong to this department");
                 }
+
+                const navRowKey = resolveNavTimeRowQueueKey(wu, qFromUrlEffective);
+                if (navRowKey) {
+                    if (!rowKickInvoked) {
+                        void fetchQueueItems(workUnitId, navRowKey, null);
+                        rowKickInvoked = true;
+                        rowKeyUsedForBootstrap = navRowKey;
+                    } else if (rowKeyUsedForBootstrap !== navRowKey) {
+                        void fetchQueueItems(workUnitId, navRowKey, null, { force: true });
+                        rowKeyUsedForBootstrap = navRowKey;
+                    }
+                }
+
+                const deptR = await deptP;
+
+                if (!deptR.res.ok) throw new Error(deptR.j.error ?? "Failed to load department");
 
                 if (!cancelled) {
                     setWorkUnit(wu);
@@ -985,10 +1028,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 });
                             }
                             const initial = deriveSelectedQueueKeyFromSummaries(wu, qs, qFromUrlEffective);
-                            if (initial) setSelectedQueueKey(initial);
-                            if (!rowKickInvoked && initial) {
-                                void fetchQueueItems(workUnitId, initial, null);
-                                rowKickInvoked = true;
+                            if (initial) {
+                                setSelectedQueueKey(initial);
+                                if (rowKeyUsedForBootstrap === null) {
+                                    void fetchQueueItems(workUnitId, initial, null);
+                                    rowKickInvoked = true;
+                                    rowKeyUsedForBootstrap = initial;
+                                } else if (rowKeyUsedForBootstrap !== initial) {
+                                    void fetchQueueItems(workUnitId, initial, null, { force: true });
+                                    rowKeyUsedForBootstrap = initial;
+                                }
                             }
                             if (typeof window !== "undefined" && typeof performance !== "undefined") {
                                 requestAnimationFrame(() => {
