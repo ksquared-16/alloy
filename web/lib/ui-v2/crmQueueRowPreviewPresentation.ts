@@ -7,11 +7,22 @@ import type {
     CrmCompactChildLineVm,
     CrmCompactRowSemanticSlots,
     WorkUnitQueueCrmFactGroupVm,
+    WorkUnitQueueCrmFactLineVm,
+    WorkUnitQueueCrmFactPartVm,
     WorkUnitQueueCrmTimingSegmentVm,
 } from "@/lib/ui-v2/workspace-types";
 import { formatDateUsShortHyphenUtc, formatPhoneUS, formatQueuePreviewTourTimingUtc } from "@/lib/adminFormatters";
 import type { QueueUiRowPreviewField } from "@/lib/ui-v2/queueUiConfig";
 import { mergeQueueRowPreviewFieldLabels } from "@/lib/ui-v2/queueUiConfig";
+
+/** Legacy middot join for flat strings only (e.g. `crmCompactTimingValueLine`, snippets). Not for flex layout. */
+export const CRM_COMPACT_VALUE_DOT_SEP = " · ";
+
+function joinFactPartsForLegacyString(parts: WorkUnitQueueCrmFactPartVm[]): string {
+  return parts
+    .map((p) => (typeof p === "string" ? p : `${p.label} ${p.value}`.trim()))
+    .join(CRM_COMPACT_VALUE_DOT_SEP);
+}
 
 export function stripTourContextValuePrefix(raw: string | null | undefined): string {
     const t = (raw ?? "").trim();
@@ -123,7 +134,7 @@ function deriveStructuredContactFromQueueRow(
     const contactSnippet = structuredAny
         ? null
         : snippetParts.length > 0
-          ? snippetParts.join(" · ")
+          ? snippetParts.join(CRM_COMPACT_VALUE_DOT_SEP)
           : wantPrimary && contactLine
             ? contactLine
             : null;
@@ -136,19 +147,27 @@ function deriveStructuredContactFromQueueRow(
     };
 }
 
-/** One doctrine line: name · phone · email (row_preview gates). */
-export function buildCrmContactDotLine(
+/** Structured contact row (gates); falls back to snippet string when enrichment is flat only. */
+export function buildCrmContactFactLine(
     row: Record<string, unknown>,
     want: (f: QueueUiRowPreviewField) => boolean
-): string | null {
+): WorkUnitQueueCrmFactLineVm | null {
     const c = deriveStructuredContactFromQueueRow(row, want);
     const parts: string[] = [];
     if (want("primary_contact") && c.contactDisplayName?.trim()) parts.push(c.contactDisplayName.trim());
     if (want("phone") && c.contactPhoneDisplay?.trim()) parts.push(c.contactPhoneDisplay.trim());
     if (want("email") && c.contactEmail?.trim()) parts.push(c.contactEmail.trim());
-    if (parts.length) return parts.join(" · ");
+    if (parts.length) return { parts };
     if (c.contactSnippet?.trim()) return c.contactSnippet.trim();
     return null;
+}
+
+/** One flat line for non-UI summaries (legacy string fields). */
+export function buildCrmContactDotLine(row: Record<string, unknown>, want: (f: QueueUiRowPreviewField) => boolean): string | null {
+    const line = buildCrmContactFactLine(row, want);
+    if (!line) return null;
+    if (typeof line === "string") return line;
+    return joinFactPartsForLegacyString(line.parts);
 }
 
 function computeCrmTimingSegments(
@@ -200,14 +219,14 @@ export type BuildCrmCompactWorkUnitFactGroupsParams = {
 
 /**
  * Work-unit queue record row — middle-zone fact groups (doctrine).
- * Label above, value below; timing uses semibold field names via `timingSegments`.
+ * Label above, value below; timing uses `{ parts: [{ label, value }] }` for flex layout.
  */
 export function buildCrmCompactWorkUnitFactGroups(params: BuildCrmCompactWorkUnitFactGroupsParams): WorkUnitQueueCrmFactGroupVm[] {
     const labels = mergeQueueRowPreviewFieldLabels(params.rowPreviewFieldLabels);
     const { want, row } = params;
     const out: WorkUnitQueueCrmFactGroupVm[] = [];
 
-    const contactLine = buildCrmContactDotLine(row, want);
+    const contactLine = buildCrmContactFactLine(row, want);
     if (contactLine) {
         out.push({
             kind: "contact",
@@ -217,7 +236,7 @@ export function buildCrmCompactWorkUnitFactGroups(params: BuildCrmCompactWorkUni
     }
 
     const childLabel = labels.children_programs ?? "Children / Programs";
-    const lines: string[] = [];
+    const childLines: WorkUnitQueueCrmFactLineVm[] = [];
     const multi = params.childrenLines && params.childrenLines.length >= 2;
 
     if (want("child_name") && multi) {
@@ -226,27 +245,32 @@ export function buildCrmCompactWorkUnitFactGroups(params: BuildCrmCompactWorkUni
         const overflow = Math.max(0, list.length - visible.length);
         for (const ch of visible) {
             const prog = ch.programInline?.trim() ?? "";
-            lines.push(prog ? `${ch.primary} · ${prog}` : ch.primary);
+            if (prog) childLines.push({ parts: [ch.primary, prog] });
+            else childLines.push(ch.primary);
         }
-        if (overflow > 0) lines.push(`+${overflow} more`);
+        if (overflow > 0) childLines.push(`+${overflow} more`);
     } else if (want("child_name") || want("program")) {
         const name = (params.childNameSingle ?? "").trim();
         const prog = want("program") ? (params.programSingle ?? "").trim() : "";
-        if (name && prog) lines.push(`${name} · ${prog}`);
-        else if (name) lines.push(name);
-        else if (prog) lines.push(prog);
+        if (name && prog) childLines.push({ parts: [name, prog] });
+        else if (name) childLines.push(name);
+        else if (prog) childLines.push(prog);
     }
 
-    if (lines.length) {
-        out.push({ kind: "children_programs", label: childLabel, lines });
+    if (childLines.length) {
+        out.push({ kind: "children_programs", label: childLabel, lines: childLines });
     }
 
     const timingSegments = computeCrmTimingSegments(row, want, labels);
     if (timingSegments?.length) {
+        const timingParts: WorkUnitQueueCrmFactPartVm[] = timingSegments.map((s) => ({
+            label: s.label,
+            value: s.value,
+        }));
         out.push({
             kind: "timing",
             label: labels.timing ?? "Timing",
-            timingSegments,
+            lines: [{ parts: timingParts }],
         });
     }
 
@@ -321,7 +345,7 @@ export function buildCrmQueueRowPreviewPresentation(
 
     const timingSegments = computeCrmTimingSegments(row, want, labels);
     const crmCompactTimingValueLine = timingSegments?.length
-        ? timingSegments.map((s) => `${s.label} ${s.value}`.trim()).join(" · ")
+        ? timingSegments.map((s) => `${s.label} ${s.value}`.trim()).join(CRM_COMPACT_VALUE_DOT_SEP)
         : null;
 
     return {
