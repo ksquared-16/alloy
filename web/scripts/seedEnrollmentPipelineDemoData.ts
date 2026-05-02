@@ -12,6 +12,7 @@
 import { config as loadEnv } from "dotenv";
 import { resolve } from "path";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
 
 loadEnv({ path: resolve(process.cwd(), ".env.local") });
 loadEnv({ path: resolve(process.cwd(), ".env") });
@@ -221,39 +222,37 @@ async function ensureOpportunity(
         statusKey === "ready_to_enroll";
     const tourDate = tourEligible ? isoDateOnly(new Date(now.getTime() + (2 + (now.getDate() % 6)) * 86400000)) : null;
 
-    const { data: created, error } = await supabase
-        .from("opportunities")
-        .insert({
-            org_id: orgId,
-            name: `Enrollment — ${familyLast} Family`,
-            status_key: statusKey,
-            work_unit_id: workUnitId,
-            customer_id: customerId,
-            primary_person_id: guardianPersonId,
-            primary_contact_id: null,
-            metadata: {
-                seed_key: seedKey,
-                demo_seed_package: "enrollment_pipeline_demo_v2",
-                // Operational display fields (keep in metadata for now; identity is person-backed).
-                program_label: prog.program_label,
-                age_group: prog.age_group,
-                desired_start_date: desiredStart,
-                tour_date: tourDate,
-                notes: note,
-                next_step:
-                    statusKey === "new_inquiry"
-                        ? "Call to confirm age and preferred start window."
-                        : statusKey === "contacted"
-                          ? "Propose two tour times."
-                          : statusKey === "tour_scheduled"
-                            ? "Send tour reminder 24h ahead."
-                            : "Move to the next clear step.",
-            },
-            created_at: isoDate(now),
-            updated_at: isoDate(now),
-        } as any)
-        .select("id")
-        .single();
+    const insertRow: Record<string, unknown> = {
+        org_id: orgId,
+        name: `Enrollment — ${familyLast} Family`,
+        status_key: statusKey,
+        work_unit_id: workUnitId,
+        customer_id: customerId,
+        primary_person_id: guardianPersonId,
+        primary_contact_id: null,
+        metadata: {
+            seed_key: seedKey,
+            demo_seed_package: "enrollment_pipeline_demo_v2",
+            // Operational display fields (keep in metadata for now; identity is person-backed).
+            program_label: prog.program_label,
+            age_group: prog.age_group,
+            desired_start_date: desiredStart,
+            tour_date: tourDate,
+            notes: note,
+            next_step:
+                statusKey === "new_inquiry"
+                    ? "Call to confirm age and preferred start window."
+                    : statusKey === "contacted"
+                      ? "Propose two tour times."
+                      : statusKey === "tour_scheduled"
+                        ? "Send tour reminder 24h ahead."
+                        : "Move to the next clear step.",
+        },
+        created_at: isoDate(now),
+        updated_at: isoDate(now),
+    };
+    await normalizeOpportunityWritePayload(supabase, insertRow, "seedEnrollmentPipelineDemoData:ensureOpportunity");
+    const { data: created, error } = await supabase.from("opportunities").insert(insertRow as any).select("id").single();
     if (error) throw new Error(`opportunities insert failed (${seedKey}): ${error.message}`);
     return (created as any).id;
 }

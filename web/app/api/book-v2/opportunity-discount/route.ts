@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
+import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
 
 type DiscountBody = {
   opportunity_id: string;
@@ -76,6 +77,7 @@ export async function POST(request: NextRequest) {
         update.estimated_price_cents = cents;
         update.monetary_value_cents = cents;
       }
+      await normalizeOpportunityWritePayload(supabase, update, "book-v2/opportunity-discount:clear");
       const { error } = await supabase.from("opportunities").update(update).eq("id", opportunityId);
       if (error) {
         console.error("[BOOK_V2_OPP_DISCOUNT] clear failed", error.message);
@@ -120,6 +122,7 @@ export async function POST(request: NextRequest) {
       updated_at: new Date().toISOString(),
     };
 
+    await normalizeOpportunityWritePayload(supabase, update, "book-v2/opportunity-discount:apply");
     const { error } = await supabase.from("opportunities").update(update).eq("id", opportunityId);
     if (error) {
       console.error("[BOOK_V2_OPP_DISCOUNT] update failed", error.message);

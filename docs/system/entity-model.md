@@ -10,7 +10,7 @@ Describe the main database-backed entities and how **persons**, **customer_perso
 - **Persons:** `persons` holds human identity fields used across booking, CRM, and admin.
 - **Customer linkage:** `customer_persons` joins `person_id` ↔ `customer_id` with `role_type`, `is_primary`, optional status/dates, org-scoped uniqueness on `(org_id, customer_id, person_id, role_type)` per baseline SQL.
 - **Contacts:** `contacts` table still exists; admin drawer and entity APIs include `contacts` as an entity type. Some inbound flows (e.g. lead capture) still reference contact IDs; opportunity rows may carry `primary_contact_id` depending on migration age.
-- **Opportunities:** `opportunities` tie pipeline state to customers and work units; migrations add person-flavored FKs (verify migration `*_opportunity_persons_*` in repo).
+- **Opportunities:** `opportunities` tie pipeline state to customers and work units; **`primary_person_id`** is the canonical identity for **new writes** (all inserts/updates normalize via `web/lib/opportunityIdentity.ts`). **`primary_contact_id`** is **legacy fallback** for compatibility (messaging, GHL, aged rows). Python/sync use **`enrich_opportunity_payload_person_first`** before PostgREST. Legacy rows may lack `primary_person_id` until backfill — see **`docs/execution/known-gaps.md`**.
 - **Jobs, schedules, payments, documents:** First-class entities with org scoping; used across workspace, billing, and communications.
 
 ## How it works
@@ -27,18 +27,20 @@ Describe the main database-backed entities and how **persons**, **customer_perso
 | Admin entity GET (many types) | `web/app/api/admin/entity/[type]/[id]/route.ts` |
 | Person type / role settings | `web/lib/admin/personTypeSettings.ts` |
 | Drawer UI | `web/components/admin/AdminEntityDrawer.tsx` |
-| Opportunity status entity typing | `web/lib/admin/statusDefinitionsAdminEntityTypes.ts` |
+| Opportunity row identity rules | `web/lib/opportunityIdentity.ts` |
 
 ## Guardrails
 
-- **Do not** design new CRM or booking features assuming **`contacts`** are the long-term source of truth for people.
-- **Do** use **`persons` + `customer_persons`** for new relationship modeling.
-- When both `primary_contact_id` and `primary_person_id` exist on a row, **do not guess** which is authoritative without reading the row and migration notes — prefer **`primary_person_id`** for new code when populated.
+- **Canonical identity:** **`persons`** + **`customer_persons`** model people and customer relationships for new CRM/booking features.
+- **Compatibility:** **`contacts`** and FKs such as **`primary_contact_id`**, **`messages_outbox.to_contact_id`**, and **`documents.owner_contact_id`** remain required for messaging, workflows, documents, vendor/GHL integrations, and aged rows — **do not delete** in application code without an explicit deprecation project.
+- **Precedence in new code:** When both `primary_contact_id` and `primary_person_id` exist on an entity row, **`primary_person_id` wins** for CRM semantics **when populated**; never assume `primary_contact_id` alone is sufficient for new relationship modeling.
+- **Opportunity writes:** Do not bypass **`normalizeOpportunityWritePayload`** (or Python **`enrich_opportunity_payload_person_first`**) on new code paths that touch `opportunities` identity columns. Plain `.mjs` demo seeds that are person-first by construction may document a **normalization bypass** inline when TypeScript helpers are unavailable.
+- **Do not** design new CRM features that treat **`contacts`** as the long-term source of truth for people.
 
 ## Known gaps / risks
 
-- **Needs verification:** Complete mapping of which inbound APIs still create **`contacts`** only vs **`persons`**.
-- **Needs verification:** Share of production **`opportunities`** rows populated on `primary_person_id` vs legacy contact fields.
+- **Needs verification:** Production share of **`opportunities`** rows with **`primary_person_id`** populated vs **`primary_contact_id`**-only (see `docs/audits/person-vs-contact-audit.md`).
+- **Needs verification:** Complete mapping of inbound APIs that still create **`contacts`** without threading **`person_id`** / **`customer_persons`** where applicable.
 
 ## When this doc must be updated
 

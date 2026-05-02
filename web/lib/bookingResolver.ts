@@ -1,5 +1,9 @@
 /**
  * Booking resolver: resolve or create contact + customer for public book-v2 (service role).
+ *
+ * LEGACY_COMPAT: contacts are compatibility-only for booking paths that still dedupe on contact rows.
+ * New identity flows must use persons/customer_persons (see `ensureCustomerPersonsPrimaryLink` when `personIdParam`
+ * is provided). Do not introduce new contact-first writes here without threading the canonical person.
  */
 
 import { SupabaseClient } from "@supabase/supabase-js";
@@ -524,6 +528,7 @@ async function createAndLinkCustomer(
 
   const customerPayload: Record<string, unknown> = {
     name: customerName,
+    // LEGACY_COMPAT: customers.primary_contact_id — keep for downstream UIs/workflows; pair with customer_persons when person id is known (caller uses ensureCustomerPersonsPrimaryLink).
     primary_contact_id: contactId,
     status: "active",
     org_id: orgId,

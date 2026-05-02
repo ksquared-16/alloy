@@ -54,7 +54,7 @@ This roadmap **does not** override principles in `core/system-overview.md`. If r
 
 ## Confirmed gaps
 
-- **Opportunity vs contact vs person:** Inbound examples (e.g. gutters lead route) still log/create `contact_id` paths; full inventory of which entrypoints are person-first not done in this pass.
+- **Opportunity vs contact vs person:** Full inventory and sprint notes live in **`docs/audits/person-vs-contact-audit.md`**; remaining work is tightening inbound parity and messaging/document exceptions — not deleting compatibility tables.
 - **Event coverage:** Not every admin mutator has been audited for `emitEvent` parity; risk of pockets mutating without canonical events.
 - **Documents/forms:** No single “forms engine” location confirmed; storage/compliance pipeline **Needs verification**.
 - **AI production surface:** Exact routes/flags for agent behaviors not cataloged in this pass (**Needs verification**).

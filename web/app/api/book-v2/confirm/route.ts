@@ -34,6 +34,7 @@ import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { loadPublicBookingFieldDefRows } from "@/lib/fields/loadPublicBookingFieldDefs";
 import { upsertConfigurableFieldValuesForEntity } from "@/lib/fields/upsertConfigurableFieldValues";
 import { initializeJobPricing } from "@/lib/pricing/initializeJobPricing";
+import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 
 type Supabase = ReturnType<typeof createServiceRoleClient>;
@@ -806,7 +807,9 @@ export async function POST(request: NextRequest) {
                 );
             }
             if (oppPrimaryPersonId == null && trimmedPersonFromBody) {
-                await supabase.from("opportunities").update({ primary_person_id: trimmedPersonFromBody }).eq("id", opportunity_id_from_quote);
+                const _oppPatch = { primary_person_id: trimmedPersonFromBody };
+                await normalizeOpportunityWritePayload(supabase, _oppPatch, "book-v2/confirm:backfill-opp-person-from-quote");
+                await supabase.from("opportunities").update(_oppPatch).eq("id", opportunity_id_from_quote);
             }
             opportunityId = opportunity_id_from_quote!;
             verticalId = opp.vertical_id ?? "";
@@ -841,10 +844,9 @@ export async function POST(request: NextRequest) {
                         orgId: orgForLink,
                     });
                 }
-                await supabase
-                    .from("opportunities")
-                    .update({ primary_person_id: quotePersonId, customer_id: customerId })
-                    .eq("id", opportunityId);
+                const _oppPatchCust = { primary_person_id: quotePersonId, customer_id: customerId };
+                await normalizeOpportunityWritePayload(supabase, _oppPatchCust, "book-v2/confirm:opp-customer-existing");
+                await supabase.from("opportunities").update(_oppPatchCust).eq("id", opportunityId);
             } else {
                 try {
                     const { customer_id } = await ensureCustomerForPersonNative(supabase, quotePersonId, {
@@ -856,13 +858,12 @@ export async function POST(request: NextRequest) {
                         phone: contact_phone ?? null,
                     });
                     customerId = customer_id;
-                    await supabase
-                        .from("opportunities")
-                        .update({
-                            customer_id: customerId,
-                            primary_person_id: quotePersonId,
-                        })
-                        .eq("id", opportunityId);
+                    const _oppPatchNewCust = {
+                        customer_id: customerId,
+                        primary_person_id: quotePersonId,
+                    };
+                    await normalizeOpportunityWritePayload(supabase, _oppPatchNewCust, "book-v2/confirm:opp-new-customer");
+                    await supabase.from("opportunities").update(_oppPatchNewCust).eq("id", opportunityId);
                 } catch (err) {
                     const msg = err instanceof Error ? err.message : "Could not create customer for booking.";
                     console.error("[BOOK_V2_CONFIRM] ensureCustomerForPersonNative (quote path) failed", msg, err);
@@ -961,10 +962,8 @@ export async function POST(request: NextRequest) {
                 (oppUpdate as Record<string, unknown>).discount_code = discount_code;
             }
 
-            const { error: oppUpdateError } = await supabase
-                .from("opportunities")
-                .update(oppUpdate)
-                .eq("id", opportunityId);
+            await normalizeOpportunityWritePayload(supabase, oppUpdate, "book-v2/confirm:reuse-quote-opp-update");
+            const { error: oppUpdateError } = await supabase.from("opportunities").update(oppUpdate).eq("id", opportunityId);
             if (oppUpdateError) {
                 return NextResponse.json(
                     { ok: false, message: "Failed to update opportunity", booking_attempt_id: booking_attempt_id ?? null },
@@ -1271,10 +1270,8 @@ export async function POST(request: NextRequest) {
             }
             if (existingOppData && !existingOppData.vertical_id) updatePayload.vertical_id = verticalId;
 
-            const { error: oppUpdateError } = await supabase
-                .from("opportunities")
-                .update(updatePayload)
-                .eq("id", opportunityId);
+            await normalizeOpportunityWritePayload(supabase, updatePayload, "book-v2/confirm:existing-opp-update");
+            const { error: oppUpdateError } = await supabase.from("opportunities").update(updatePayload).eq("id", opportunityId);
 
             if (oppUpdateError) {
                 console.error("[BOOK_V2_CONFIRM] Failed to update opportunity booking_attempt_id=", booking_attempt_id, oppUpdateError);
@@ -1334,6 +1331,7 @@ export async function POST(request: NextRequest) {
                 }),
                 metadata: insertMeta,
             };
+            await normalizeOpportunityWritePayload(supabase, insertPayload, "book-v2/confirm:new-opp-insert");
             const { data: newOpp, error: oppError } = await supabase
                 .from("opportunities")
                 .insert(insertPayload)
@@ -1360,7 +1358,9 @@ export async function POST(request: NextRequest) {
         });
         if (resolvedPrimaryPersonId) {
             personIdFromQuote = resolvedPrimaryPersonId;
-            await supabase.from("opportunities").update({ primary_person_id: resolvedPrimaryPersonId }).eq("id", opportunityId);
+            const _finalPersonPatch = { primary_person_id: resolvedPrimaryPersonId };
+            await normalizeOpportunityWritePayload(supabase, _finalPersonPatch, "book-v2/confirm:resolve-primary-person");
+            await supabase.from("opportunities").update(_finalPersonPatch).eq("id", opportunityId);
         }
         if (!personIdFromQuote?.trim()) {
             return NextResponse.json(

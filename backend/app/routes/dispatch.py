@@ -453,6 +453,7 @@ async def dispatch(request: Request):
                         base_url = _get_base_url()
                         headers = _get_headers()
                         opportunities_url = f"{base_url}/opportunities"
+                        # LEGACY: contact-based opportunity lookup (do not extend). TODO: migrate to person_id / dual key.
                         opportunities_params = {
                             "select": "id",
                             "primary_contact_id": f"eq.{supabase_contact_id}",

@@ -269,6 +269,9 @@ async function main() {
   add("field_values", "locations:4");
 
   // --- 9) Opportunity / Inquiry linked to family + primary contact + center
+  // OPPORTUNITY_WRITE_NORMALIZATION (bypass): Plain `.mjs` seed — row is person-first by construction
+  // (`primary_person_id: sarahId`, no `primary_contact_id`). Cannot import `normalizeOpportunityWritePayload`
+  // from TypeScript here; parity with `web/scripts/seedEnrollmentPipelineDemoData.ts` which calls normalization.
   const { data: oppRow, error: oppErr } = await sb
     .from("opportunities")
     .insert({

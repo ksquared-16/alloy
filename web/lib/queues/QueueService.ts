@@ -330,10 +330,12 @@ function opportunityNeedsAttention(row: OpportunityNeedsAttentionRow, now: Date)
     // 1) stale: updated_at < now - 3 days
     if (updatedAt.getTime() < subtractDays(now, 3).getTime()) return true;
 
-    // 2) missing data (enrollment demo is person-backed; legacy data may still use primary_contact_id)
+    // 2) missing data (enrollment demo is person-backed).
+    // LEGACY: contact-based identity (do not extend). TODO: migrate to person_id — legacy rows may only have primary_contact_id.
     const pkg = row.metadata && typeof row.metadata.demo_seed_package === "string" ? String(row.metadata.demo_seed_package) : "";
     const isDemoV2 = pkg === "enrollment_pipeline_demo_v2";
     const hasPerson = row.primary_person_id != null && String(row.primary_person_id).trim() !== "";
+    // LEGACY: contact-based identity (do not extend). TODO: migrate to person_id
     const hasLegacyContact = row.primary_contact_id != null && String(row.primary_contact_id).trim() !== "";
     const missingContactLike = isDemoV2 ? !hasPerson : !(hasPerson || hasLegacyContact);
     if (missingContactLike || row.customer_id == null) return true;
@@ -353,6 +355,7 @@ function opportunityNeedsAttentionReasonLabel(row: OpportunityNeedsAttentionRow,
     const pkg = row.metadata && typeof row.metadata.demo_seed_package === "string" ? String(row.metadata.demo_seed_package) : "";
     const isDemoV2 = pkg === "enrollment_pipeline_demo_v2";
     const hasPerson = row.primary_person_id != null && String(row.primary_person_id).trim() !== "";
+    // LEGACY: contact-based identity (do not extend). TODO: migrate to person_id
     const hasLegacyContact = row.primary_contact_id != null && String(row.primary_contact_id).trim() !== "";
     const missingContactLike = isDemoV2 ? !hasPerson : !(hasPerson || hasLegacyContact);
     if (missingContactLike || row.customer_id == null) return "Missing contact/customer";

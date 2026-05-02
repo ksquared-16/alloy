@@ -388,7 +388,9 @@ function renderFieldEditNode(
     "primary_person_id",
     "assigned_vendor_id",
     "location_id",
+    // LEGACY: contact-based identity (do not extend). TODO: migrate to person_id
     "primary_contact_id",
+    // LEGACY: contact-based identity (do not extend). TODO: migrate to person_id
     "contact_id",
     "customer_id",
     "opportunity_id",

@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 
+/**
+ * LEGACY_COMPAT: `customer_member_contacts` links members to compatibility `contacts`.
+ * Do not add new household↔person modeling here — prefer `customer_persons` / `person_relationships` for canonical CRM links.
+ */
+
 /** GET: list customer_member_contacts for a member. Query: customer_member_id. Admin + ops can read. */
 export async function GET(request: NextRequest) {
     const ctx = await getAdminContextCached();
@@ -59,7 +64,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ links });
 }
 
-/** POST: create a customer_member_contact link. Admin only. */
+/**
+ * POST: create a customer_member_contact link. Admin only.
+ * LEGACY_COMPAT only — prefer modeling people via persons + customer_persons for new features.
+ */
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) {

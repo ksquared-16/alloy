@@ -6,6 +6,7 @@ import { assertAllowedStatusKey } from "@/lib/admin/statusDefinitionsResolve";
 import { validateStatusTransition } from "@/lib/admin/statusTransitionRules";
 import { emitEvent } from "@/lib/emitEvent";
 import { findOrCreatePersonInOrgWithMeta } from "@/lib/persons/findOrCreatePersonInOrg";
+import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 
 export type ExecuteAdminActionInput = {
@@ -420,7 +421,7 @@ export async function executeAdminAction(
                 }
                 const { data: existing } = await supabase
                     .from("opportunities")
-                    .select("status_key, customer_id, primary_contact_id, metadata, work_unit_id")
+                    .select("status_key, customer_id, primary_contact_id, primary_person_id, metadata, work_unit_id")
                     .eq("id", entityId)
                     .eq("org_id", ctx.orgId)
                     .maybeSingle();
@@ -460,9 +461,11 @@ export async function executeAdminAction(
                 if (!transition.ok) {
                     return { ok: false, correlation_id: correlationId, error: transition.message, status: 400 };
                 }
+                const _afterStatusPatch: Record<string, unknown> = { status_key: afterUpdateStatusKey };
+                await normalizeOpportunityWritePayload(supabase, _afterStatusPatch, "executeAdminAction:open_form.after");
                 const { data: updated, error: upErr } = await supabase
                     .from("opportunities")
-                    .update({ status_key: afterUpdateStatusKey })
+                    .update(_afterStatusPatch)
                     .eq("id", entityId)
                     .eq("org_id", ctx.orgId)
                     .select()
@@ -474,9 +477,12 @@ export async function executeAdminAction(
                 const newStatusKey = (updated as { status_key?: string | null }).status_key ?? null;
                 const metadata: Record<string, unknown> = {};
                 const cust = (existing as { customer_id?: string | null }).customer_id;
+                const pp = (existing as { primary_person_id?: string | null }).primary_person_id;
                 const pc = (existing as { primary_contact_id?: string | null }).primary_contact_id;
                 if (cust != null) metadata.customer_id = cust;
-                if (pc != null) metadata.primary_contact_id = pc;
+                if (pp != null) metadata.primary_person_id = pp;
+                // LEGACY: contact-based identity (do not extend). TODO: migrate to person_id
+                if (pc != null) metadata.fallback_contact_id = pc;
                 try {
                     await emitStatusChangedEvent({
                         supabase,
@@ -510,7 +516,7 @@ export async function executeAdminAction(
 
                 const { data: existing } = await supabase
                     .from("opportunities")
-                    .select("status_key, customer_id, primary_contact_id, metadata, work_unit_id")
+                    .select("status_key, customer_id, primary_contact_id, primary_person_id, metadata, work_unit_id")
                     .eq("id", entityId)
                     .eq("org_id", ctx.orgId)
                     .maybeSingle();
@@ -575,9 +581,11 @@ export async function executeAdminAction(
                     return { ok: false, correlation_id: correlationId, error: transition.message, status: 400 };
                 }
 
+                const _openFormStatusPatch: Record<string, unknown> = { status_key: statusKey, metadata: nextMd };
+                await normalizeOpportunityWritePayload(supabase, _openFormStatusPatch, "executeAdminAction:open_form.submit:update_status");
                 const { data: updated, error: upErr } = await supabase
                     .from("opportunities")
-                    .update({ status_key: statusKey, metadata: nextMd })
+                    .update(_openFormStatusPatch)
                     .eq("id", entityId)
                     .eq("org_id", ctx.orgId)
                     .select()
@@ -590,9 +598,12 @@ export async function executeAdminAction(
 
                 const metadata: Record<string, unknown> = {};
                 const cust = (existing as { customer_id?: string | null }).customer_id;
+                const pp = (existing as { primary_person_id?: string | null }).primary_person_id;
                 const pc = (existing as { primary_contact_id?: string | null }).primary_contact_id;
                 if (cust != null) metadata.customer_id = cust;
-                if (pc != null) metadata.primary_contact_id = pc;
+                if (pp != null) metadata.primary_person_id = pp;
+                // LEGACY: contact-based identity (do not extend). TODO: migrate to person_id
+                if (pc != null) metadata.fallback_contact_id = pc;
                 try {
                     await emitStatusChangedEvent({
                         supabase,
@@ -659,9 +670,11 @@ export async function executeAdminAction(
                     const nextMd: Record<string, unknown> = { ...(md && typeof md === "object" ? md : {}) };
                     if (tourDate) nextMd.tour_date = tourDate;
                     if (tourTime) nextMd.tour_time = tourTime;
+                    const _tourMetadataPatch: Record<string, unknown> = { metadata: nextMd };
+                    await normalizeOpportunityWritePayload(supabase, _tourMetadataPatch, "executeAdminAction:schedule_tour_metadata");
                     const { data: mdUpdated } = await supabase
                         .from("opportunities")
-                        .update({ metadata: nextMd })
+                        .update(_tourMetadataPatch)
                         .eq("id", entityId)
                         .eq("org_id", ctx.orgId)
                         .select()
@@ -772,7 +785,7 @@ export async function executeAdminAction(
             }
             const { data: existing } = await supabase
                 .from("opportunities")
-                .select("status_key, customer_id, primary_contact_id, metadata, work_unit_id")
+                .select("status_key, customer_id, primary_contact_id, primary_person_id, metadata, work_unit_id")
                 .eq("id", entityId)
                 .eq("org_id", ctx.orgId)
                 .maybeSingle();
@@ -816,6 +829,7 @@ export async function executeAdminAction(
             if (merged.lost_reason != null) {
                 updates.lost_reason = String(merged.lost_reason);
             }
+            await normalizeOpportunityWritePayload(supabase, updates, "executeAdminAction:update_status");
             const { data: updated, error: upErr } = await supabase
                 .from("opportunities")
                 .update(updates)
@@ -829,9 +843,12 @@ export async function executeAdminAction(
             const newStatusKey = (updated as { status_key?: string | null }).status_key ?? null;
             const metadata: Record<string, unknown> = {};
             const cust = (existing as { customer_id?: string | null }).customer_id;
+            const pp = (existing as { primary_person_id?: string | null }).primary_person_id;
             const pc = (existing as { primary_contact_id?: string | null }).primary_contact_id;
             if (cust != null) metadata.customer_id = cust;
-            if (pc != null) metadata.primary_contact_id = pc;
+            if (pp != null) metadata.primary_person_id = pp;
+            // LEGACY: contact-based identity (do not extend). TODO: migrate to person_id
+            if (pc != null) metadata.fallback_contact_id = pc;
             try {
                 await emitStatusChangedEvent({
                     supabase,
@@ -869,9 +886,11 @@ export async function executeAdminAction(
                 return { ok: false, correlation_id: correlationId, error: "update_field: unsupported field_key for v1", status: 400 };
             }
             const value = merged.value;
+            const _oppFieldPatch: Record<string, unknown> = { [fieldKey]: value };
+            await normalizeOpportunityWritePayload(supabase, _oppFieldPatch, "executeAdminAction:update_field");
             const { data: updated, error: upErr } = await supabase
                 .from("opportunities")
-                .update({ [fieldKey]: value })
+                .update(_oppFieldPatch)
                 .eq("id", entityId)
                 .eq("org_id", ctx.orgId)
                 .select()

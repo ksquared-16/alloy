@@ -11,6 +11,7 @@ import {
     type VendorRow,
 } from "@/lib/admin/vendorPayoutPolicy";
 import { CANONICAL_SQFT_TIER_OPTIONS } from "@/lib/book-v2/loadCleaningPricingCatalog";
+import { attachCanonicalOpportunityIdentityToWorkflowPayload } from "@/lib/opportunityIdentity";
 import { getByPath, renderActionLinkMetadata, renderTemplate } from "@/lib/workflowTemplate";
 import { resolveJobStatusRowByOrgAndKey } from "@/lib/admin/jobEffectiveStatusKey";
 import { resolveScheduleStatusRowByKey } from "@/lib/admin/scheduleEffectiveStatusKey";
@@ -1490,6 +1491,7 @@ export async function executeWorkflowRun(
     };
 
     await enrichWorkflowEventPayloadEntities(supabase, payload);
+    await attachCanonicalOpportunityIdentityToWorkflowPayload(supabase, payload as Record<string, unknown>);
     await enrichVendorPayload(supabase, payload);
 
     const { data: workflow, error: wErr } = await supabase
@@ -2027,6 +2029,8 @@ export async function executeWorkflowRun(
                             });
                         }
                         const dedupeKey = `${workflowId}:${channel}:${recipient}:${templateKey}:${hashForRecipient}`;
+                        // LEGACY_COMPAT: messages_outbox.to_contact_id — required for compatibility with contact-keyed sends/dedupe.
+                        // Do not introduce new contact-only recipient models; prefer person-backed drawer recipients where implemented.
                         const row: Record<string, unknown> = {
                             org_id: orgId,
                             workflow_run_id: runId,

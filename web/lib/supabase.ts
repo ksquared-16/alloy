@@ -212,6 +212,32 @@ export async function updateContact(
   return data[0];
 }
 
+/** Load contact row fields needed for person/contact dual-write (service role). */
+export async function fetchContactIdentityById(
+  contactId: string
+): Promise<{ id: string; person_id: string | null } | null> {
+  const url = `${getPostgrestUrl()}/contacts`;
+  const headers = getPostgrestHeaders();
+  const params = new URLSearchParams({
+    select: "id,person_id",
+    id: `eq.${contactId.trim()}`,
+    limit: "1",
+  });
+  try {
+    const response = await fetch(`${url}?${params.toString()}`, {
+      headers,
+      method: "GET",
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (!data || data.length === 0) return null;
+    const row = data[0] as { id: string; person_id?: string | null };
+    return { id: row.id, person_id: row.person_id ?? null };
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Get vertical ID by slug from verticals table
  */
@@ -257,13 +283,15 @@ export async function getVerticalIdBySlug(slug: string): Promise<string> {
 }
 
 /**
- * Create opportunity
+ * Create opportunity (person-first: `insertOpportunityWithPersonFirst` resolves or creates `primary_person_id`).
+ * `primary_contact_id` is retained for legacy linkage.
  */
 export async function createOpportunity(
   opportunityData: {
     vertical_id?: string;
     customer_id?: string;
     primary_contact_id: string;
+    primary_person_id?: string | null;
     location_id?: string;
     name: string;
     status: string;
@@ -271,26 +299,29 @@ export async function createOpportunity(
     monetary_value_cents?: number;
     metadata?: Record<string, any>;
   }
-): Promise<{ id: string }> {
-  const url = `${getPostgrestUrl()}/opportunities`;
-  const headers = getPostgrestHeaders();
-
-  const response = await fetch(url, {
-    headers,
-    method: "POST",
-    body: JSON.stringify(opportunityData),
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Failed to create opportunity: ${response.status} ${text}`);
+): Promise<{ id: string; primary_person_id: string }> {
+  const { createClient } = await import("@supabase/supabase-js");
+  const { insertOpportunityWithPersonFirst } = await import("@/lib/opportunityIdentity");
+  const supabase = createClient(getSupabaseUrl(), getSupabaseServiceRoleKey());
+  const pc = typeof opportunityData.primary_contact_id === "string" ? opportunityData.primary_contact_id.trim() : "";
+  if (!pc) {
+    throw new Error("createOpportunity: primary_contact_id is required");
   }
-
-  const data = await response.json();
-  if (!data || data.length === 0) {
-    throw new Error("Create returned no data");
-  }
-
-  return data[0];
+  return insertOpportunityWithPersonFirst(
+    supabase,
+    {
+      vertical_id: opportunityData.vertical_id,
+      customer_id: opportunityData.customer_id,
+      primary_contact_id: pc,
+      primary_person_id: opportunityData.primary_person_id,
+      location_id: opportunityData.location_id,
+      name: opportunityData.name,
+      status: opportunityData.status,
+      source: opportunityData.source,
+      monetary_value_cents: opportunityData.monetary_value_cents,
+      metadata: opportunityData.metadata,
+    },
+    "lib/supabase.createOpportunity"
+  );
 }
 

@@ -13,7 +13,12 @@ import {
     opportunityQuotePipelineActive,
     type OpportunityPricingExistingRow,
 } from "@/lib/admin/opportunityQuotePatch";
+import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
 
+/**
+ * PATCH allowlist intentionally excludes identity FKs (`primary_contact_id`, `primary_person_id`).
+ * Prefer drawer/entity routes that maintain person-first invariants; do not widen this list with contact-only writes.
+ */
 const ALLOWED_KEYS = [
     "name",
     "job_date",
@@ -68,7 +73,7 @@ export async function PATCH(
         const { data: existing } = await supabase
             .from("opportunities")
             .select(
-                "org_id, status_key, customer_id, primary_contact_id, vertical_id, metadata, work_unit_id, quote_subtotal, quote_total, price_breakdown, discount_amount, discount_code, discount_code_id, discount_program_id, discount_validated_at, quote_is_overridden, quote_override_total, quote_override_reason, estimated_price_cents, monetary_value_cents"
+                "org_id, status_key, customer_id, primary_contact_id, primary_person_id, vertical_id, metadata, work_unit_id, quote_subtotal, quote_total, price_breakdown, discount_amount, discount_code, discount_code_id, discount_program_id, discount_validated_at, quote_is_overridden, quote_override_total, quote_override_reason, estimated_price_cents, monetary_value_cents"
             )
             .eq("id", id)
             .eq("org_id", ctx.orgId)
@@ -78,6 +83,7 @@ export async function PATCH(
             status_key?: string | null;
             customer_id?: string | null;
             primary_contact_id?: string | null;
+            primary_person_id?: string | null;
             vertical_id?: string | null;
             metadata?: Record<string, unknown> | null;
             work_unit_id?: string | null;
@@ -211,6 +217,8 @@ export async function PATCH(
             return NextResponse.json({ error: "No allowed fields to update" }, { status: 400 });
         }
 
+        await normalizeOpportunityWritePayload(supabase, updates, "admin/opportunities/PATCH");
+
         const { data, error } = await supabase
             .from("opportunities")
             .update(updates)
@@ -229,7 +237,9 @@ export async function PATCH(
             const newStatusKey = (data as { status_key?: string | null }).status_key ?? null;
             const metadata: Record<string, unknown> = {};
             if (existingRow.customer_id != null) metadata.customer_id = existingRow.customer_id;
-            if (existingRow.primary_contact_id != null) metadata.primary_contact_id = existingRow.primary_contact_id;
+            if (existingRow.primary_person_id != null) metadata.primary_person_id = existingRow.primary_person_id;
+            // LEGACY: contact-based identity (do not extend). TODO: migrate to person_id
+            if (existingRow.primary_contact_id != null) metadata.fallback_contact_id = existingRow.primary_contact_id;
             await emitStatusChangedEvent({
                 supabase,
                 orgId,

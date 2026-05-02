@@ -5,6 +5,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
 
 export const CHILDCARE_DEMO_SEED_PACKAGE = "childcare_demo_v1";
 
@@ -290,7 +291,7 @@ export async function seedChildcareDemo(supabase: SupabaseClient, orgId: string)
         const locationId =
             spec.locationClassroomIndex != null ? classroomIds[spec.locationClassroomIndex % classroomIds.length] : null;
 
-        const { error: oErr } = await supabase.from("opportunities").insert({
+        const oppSeedRow: Record<string, unknown> = {
             org_id: orgId,
             vertical_id: verticalId,
             customer_id: fam.customerId,
@@ -311,7 +312,9 @@ export async function seedChildcareDemo(supabase: SupabaseClient, orgId: string)
                 demo_seed_package: CHILDCARE_DEMO_SEED_PACKAGE,
                 ...(spec.demo_meta ?? {}),
             },
-        });
+        };
+        await normalizeOpportunityWritePayload(supabase, oppSeedRow, "seedChildcareDemo:opp-insert");
+        const { error: oErr } = await supabase.from("opportunities").insert(oppSeedRow);
         if (oErr) {
             return { ok: false, error: `opportunities[${spec.seed_key}]: ${oErr.message}` };
         }

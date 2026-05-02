@@ -45,6 +45,9 @@ export async function GET(
         const supabase = createAdminClient();
 
         if (entity === "contact") {
+            // LEGACY_COMPAT: contact drawer "related" lists are keyed off primary_contact_id, to_contact_id,
+            // owner_contact_id, customer_member_contacts.contact_id, etc. New related-entity work for people
+            // should load via customer_persons / person_relationships and only use contact joins for compatibility.
             const { data: contactRow } = await supabase.from("contacts").select("customer_id, vendor_id").eq("id", id).maybeSingle();
             const customerId = (contactRow as { customer_id?: string | null } | null)?.customer_id ?? null;
             const vendorId = (contactRow as { vendor_id?: string | null } | null)?.vendor_id ?? null;
@@ -52,6 +55,7 @@ export async function GET(
             const [linkedCustomerRes, linkedVendorRes, oppRes, jobsRes, subsRes, cmcRes, vcRes, messagesRes, docByOwner, docByEntityContact, docByEntityContacts, redemptionsRes] = await Promise.all([
                 customerId ? supabase.from("customers").select("id, name").eq("id", customerId).maybeSingle() : Promise.resolve({ data: null }),
                 vendorId ? supabase.from("vendors").select("id, name").eq("id", vendorId).maybeSingle() : Promise.resolve({ data: null }),
+                // LEGACY: contact-based identity (do not extend). TODO: migrate to person_id for opportunity match.
                 supabase.from("opportunities").select("id, created_at, name, status, job_date, quote_total").eq("primary_contact_id", id).order("created_at", { ascending: false }).limit(LIMIT),
                 supabase.from("jobs").select("id, created_at, title, scheduled_at, opportunity_id").eq("primary_contact_id", id).order("created_at", { ascending: false }).limit(LIMIT),
                 supabase.from("customer_subscriptions").select("id, created_at, customer_id, status, start_date").eq("primary_contact_id", id).order("created_at", { ascending: false }).limit(LIMIT).then((r) => (r.error ? { data: [] } : r)),

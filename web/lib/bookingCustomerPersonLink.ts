@@ -1,6 +1,9 @@
 /**
  * Booking funnel: keep contacts.person_id and customer_persons in sync when we know the canonical person.
  *
+ * `customer_persons` rows written here are the canonical customer↔person relationship. Contacts updates exist so
+ * messaging/workflows keyed by contact_id remain consistent — do not treat contacts as canonical for new CRM modeling.
+ *
  * role_type must match an org's customer_person_role_types.key (seeded as `primary_contact` in data_public.sql).
  * Duplicates are prevented by UNIQUE (org_id, customer_id, person_id, role_type) plus pre-insert select and 23505 swallow.
  */

@@ -9,7 +9,7 @@ Cover **opportunities**, pipeline status, CRM-adjacent admin behavior, **communi
 - **Table:** `opportunities` with org scoping, `customer_id`, `work_unit_id`, status keys, person/contact fields depending on migration age.
 - **Admin:** `GET/PATCH /api/admin/opportunities/[id]`, entity drawer type `opportunities`, status definitions include **`opportunities`** and related types (`web/lib/admin/statusDefinitionsAdminEntityTypes.ts`).
 - **Queues:** `QueueService` supports opportunity preview lists with field/sort allowlists and work-unit scoping tests (`web/tests/queues/QueueServiceOpportunityScoping.test.ts`).
-- **Inbound leads:** Example vertical route `web/app/api/leads/gutters/route.ts` creates opportunities and emits events — still logs `contact_id` path; verify alignment with person model when extending.
+- **Opportunity identity (writes):** All server paths that `insert` / `update` `opportunities` must run **`normalizeOpportunityWritePayload`** (`web/lib/opportunityIdentity.ts`) on the payload when identity keys may appear; metadata-only patches no-op. **`primary_person_id`** is canonical when present; **`primary_contact_id`** is legacy fallback only — resolution fills `primary_person_id` from `contacts.person_id` when possible. Python/sync use **`enrich_opportunity_payload_person_first`** before PostgREST writes.
 
 ## How it works
 
@@ -24,11 +24,12 @@ Cover **opportunities**, pipeline status, CRM-adjacent admin behavior, **communi
 | Admin opportunity API | `web/app/api/admin/opportunities/[id]/route.ts` |
 | Queue opportunity handling | `web/lib/queues/QueueService.ts` |
 | Status definitions | `web/lib/admin/statusDefinitionsResolve.ts` |
-| Lead creation example | `web/app/api/leads/gutters/route.ts` |
+| Opportunity identity normalization | `web/lib/opportunityIdentity.ts` (`normalizeOpportunityWritePayload`, `insertOpportunityWithPersonFirst`) |
 
 ## Guardrails
 
-- Prefer linking people via **`persons` + `customer_persons`**; do not add new **contact-only** assumptions for CRM without an explicit migration plan.
+- Prefer linking people via **`persons` + `customer_persons`**; **`contacts`** are **legacy/compatibility only** (drawer, messaging, workflows, documents, vendor/GHL paths).
+- When an opportunity or job row has both identity FKs, **`primary_person_id` wins** for new CRM logic **when populated**; keep **`primary_contact_id`** for compatibility until messaging/workflows no longer require it.
 - **Queue previews** are not authoritative for opportunity financials or document state — use entity GET.
 
 ## Known gaps / risks
@@ -71,6 +72,7 @@ Outbound/inbound messaging threads tied to **entities** and **workflows** — wi
 - **Do not** bypass org checks or send from the client with secrets.
 - **Do not** fork template composition in the drawer when a workflow/helper already defines canonical content.
 - Map entity types using shared normalization — avoid ad hoc string switches in new code.
+- **Identity:** Outbound pipelines that resolve **`contact_id`** / **`to_contact_id`** are **compatibility exceptions** — do not assume contacts are canonical people; align new work with **person-backed** drawer recipients where implemented (`drawer-recipients`).
 
 ### Known gaps / risks
 

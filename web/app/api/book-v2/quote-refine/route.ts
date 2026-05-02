@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
+import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
 import type { SquareFootageOption } from "@/lib/pricing/cleaningPricing";
 import { mapServiceTypeToKey } from "@/lib/pricing/supabasePricing";
 import type { SupabaseQuoteResult } from "@/lib/pricing/supabasePricing";
@@ -326,6 +327,7 @@ export async function POST(request: NextRequest) {
           metadata_has_quote_output: !!(oppUpdate.metadata as Record<string, unknown>)?.quote_output,
         });
 
+        await normalizeOpportunityWritePayload(supabase, oppUpdate, "book-v2/quote-refine");
         const { data: updatedRows, error: oppUpdateErr } = await supabase
           .from("opportunities")
           .update(oppUpdate)

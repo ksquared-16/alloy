@@ -181,6 +181,7 @@ export async function GET(
                     patch._contact_name = patch._primary_person_name;
                     patch._primary_contact_name = patch._primary_person_name;
                 } else if (opp.primary_contact_id) {
+                    // LEGACY_COMPAT: fallback display/load via compatibility contact when primary_person_id is unset.
                     const contact = await supabase
                         .from("contacts")
                         .select("first_name, last_name, person_id, email, phone")

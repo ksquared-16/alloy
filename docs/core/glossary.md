@@ -16,9 +16,9 @@ Use these meanings in code review and prompts.
 |------|---------|
 | **Org / tenant** | Row scoping via `org_id` (or equivalent FK closure). Users belong to orgs through org membership roles. |
 | **Entity** | A first-class business record type: customer, opportunity, job, schedule, person, payment, etc. |
-| **Person** | Row in `persons` — canonical human identity for the forward path. |
-| **Customer person** | Row in `customer_persons` — link of a `person` to a `customer` with `role_type` (and optional primary flag). |
-| **Contact** | Legacy/compatibility person-like record; still present in APIs and `AdminEntityDrawer` — **not** the target canonical model. |
+| **Person** | Row in `persons` — **canonical** human identity for the forward path. |
+| **Customer person** | Row in `customer_persons` — **canonical** link of a `person` to a `customer` with `role_type` (and optional primary flag). |
+| **Contact** | Legacy/compatibility person-like record (`contacts`); required for some messaging/workflows/documents/vendor paths — **not** canonical CRM identity. |
 | **Customer** | Account/household/business shell (`customers`) people attach to. |
 | **Opportunity** | CRM pipeline record (`opportunities`), often tied to `customer_id`, `work_unit_id`, and person/contact FKs depending on age of row. |
 | **Event** | Stored business fact in `workflow_events` (append-oriented), driving workflows. |
@@ -38,11 +38,11 @@ Use these meanings in code review and prompts.
 
 ## Guardrails
 
-Do not redefine **Person** as **Contact** in new specs. Do not call queue rows **records** in the same sense as resolver output.
+Do not redefine **Person** as **Contact** in new specs. Do not call queue rows **records** in the same sense as resolver output. For CRM and booking flows, **`primary_person_id` wins over `primary_contact_id`** in new application logic **when populated**. **`contacts`** remain allowed only as **compatibility** surfaces until retired from schema UI/API per roadmap.
 
 ## Known gaps / risks
 
-- **Needs verification:** Exact deprecation timeline for **`contacts`** vs read-only compatibility window.
+- **Needs verification:** Exact deprecation timeline for **`contacts`** vs read-only compatibility window (see `docs/audits/person-vs-contact-audit.md`).
 
 ## When this doc must be updated
 

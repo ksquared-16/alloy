@@ -45,9 +45,11 @@ export function opportunityOverviewRelationshipReadLabel(
         case "primary_person_id":
             if (!hasNonEmptyFk(record, "primary_person_id")) return undefined;
             return trimNonEmpty(record._primary_person_name) ?? "";
+        // LEGACY: contact-based identity (do not extend). TODO: migrate to person_id
         case "primary_contact_id":
             if (!hasNonEmptyFk(record, "primary_contact_id")) return undefined;
             return trimNonEmpty(record._primary_contact_name ?? record._contact_name) ?? "";
+        // LEGACY: contact-based identity (do not extend). TODO: migrate to person_id
         case "contact_id":
             if (!hasNonEmptyFk(record, "contact_id") && !hasNonEmptyFk(record, "primary_contact_id")) return undefined;
             return trimNonEmpty(record._primary_contact_name ?? record._contact_name) ?? "";

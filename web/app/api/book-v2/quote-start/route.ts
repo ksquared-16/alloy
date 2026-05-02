@@ -12,6 +12,7 @@ import {
   upsertTypedFieldValue,
 } from "@/lib/bookV2/fieldValueUpsert";
 import { findOrCreatePersonInOrg } from "@/lib/persons/findOrCreatePersonInOrg";
+import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
 import { LEGACY_QUOTE_STARTED_PIPELINE_STAGE_ID } from "@/lib/book-v2/bookingConstants";
 import { resolvePipelineStageIdByOrgKey, pipelineStageEnvFallback } from "@/lib/book-v2/resolvePipelineStage";
 import {
@@ -417,6 +418,7 @@ export async function POST(request: NextRequest) {
           monetary_value_cents: quote_output_estimated_cents(quoteOutput),
         }),
       };
+      await normalizeOpportunityWritePayload(supabase, updatePayload, "book-v2/quote-start:reuse-opp");
       await supabase.from("opportunities").update(updatePayload).eq("id", opportunityId);
     } else {
       const estimatedPriceCents = quoteOutput.estimated_price != null ? Math.round(quoteOutput.estimated_price * 100) : null;
@@ -445,6 +447,7 @@ export async function POST(request: NextRequest) {
         },
       };
       oppInsertPayload.org_id = orgIdForWrites;
+      await normalizeOpportunityWritePayload(supabase, oppInsertPayload, "book-v2/quote-start:new-opp");
       const { data: newOpp, error: oppError } = await supabase
         .from("opportunities")
         .insert(oppInsertPayload)

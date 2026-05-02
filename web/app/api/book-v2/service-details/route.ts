@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
+import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
 import {
   coalesceBookV2BedBathRaw,
   homeTypeInputToStableKey,
@@ -177,17 +178,16 @@ export async function POST(request: NextRequest) {
       saved_at: new Date().toISOString(),
     };
 
-    await supabase
-      .from("opportunities")
-      .update({
-        metadata: {
-          ...meta,
-          service_details_saved_at: book_v2_service_property.saved_at,
-          book_v2_service_property,
-        },
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", opportunityId);
+    const oppSvcPatch: Record<string, unknown> = {
+      metadata: {
+        ...meta,
+        service_details_saved_at: book_v2_service_property.saved_at,
+        book_v2_service_property,
+      },
+      updated_at: new Date().toISOString(),
+    };
+    await normalizeOpportunityWritePayload(supabase, oppSvcPatch, "book-v2/service-details");
+    await supabase.from("opportunities").update(oppSvcPatch).eq("id", opportunityId);
 
     return NextResponse.json({ ok: true, location_id: locationId });
   } catch (e) {

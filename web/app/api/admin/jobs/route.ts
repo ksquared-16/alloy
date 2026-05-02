@@ -283,7 +283,12 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ jobs: withReceivables, total: count ?? withReceivables.length });
 }
 
-/** POST: create job. Admin only. customer_id and status_key (must exist in status_definitions for jobs) required. */
+/**
+ * POST: create job. Admin only. customer_id and status_key (must exist in status_definitions for jobs) required.
+ *
+ * LEGACY_COMPAT: Jobs still accept `primary_contact_id` for messaging/history compatibility. When omitted,
+ * resolve `primary_person_id` from that contact (`contacts.person_id`) when possible—do not treat contact as canonical identity for new CRM features.
+ */
 export async function POST(request: NextRequest) {
   const ctx = await getAdminContextCached();
   if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
@@ -303,6 +308,8 @@ export async function POST(request: NextRequest) {
   const service_frequency_key = typeof body.service_frequency_key === "string" ? body.service_frequency_key.trim() || null : null;
   const gross_price_cents = typeof body.gross_price_cents === "number" && Number.isFinite(body.gross_price_cents) ? Math.round(body.gross_price_cents) : null;
   const primary_contact_id = typeof body.primary_contact_id === "string" && body.primary_contact_id.trim() ? body.primary_contact_id.trim() : null;
+  let primary_person_id =
+    typeof body.primary_person_id === "string" && body.primary_person_id.trim() ? body.primary_person_id.trim() : null;
   const discount_selection_raw =
     typeof body.discount_code_id === "string" && body.discount_code_id.trim() ? body.discount_code_id.trim() : null;
 
@@ -347,9 +354,18 @@ export async function POST(request: NextRequest) {
   }
 
   if (primary_contact_id) {
-    const { data: contact } = await supabase.from("contacts").select("id, customer_id, org_id").eq("id", primary_contact_id).maybeSingle();
+    const { data: contact } = await supabase
+      .from("contacts")
+      .select("id, customer_id, org_id, person_id")
+      .eq("id", primary_contact_id)
+      .maybeSingle();
     if (!contact || (contact as { org_id?: string }).org_id !== ctx.orgId || (contact as { customer_id?: string }).customer_id !== customer_id) {
       return NextResponse.json({ error: "Primary contact not found or does not belong to this customer" }, { status: 400 });
+    }
+    // Person-first when contact is linked; avoid new jobs that are contact-only when the contact already has a canonical person.
+    if (!primary_person_id) {
+      const pid = (contact as { person_id?: string | null }).person_id;
+      if (typeof pid === "string" && pid.trim()) primary_person_id = pid.trim();
     }
   }
 
@@ -395,6 +411,7 @@ export async function POST(request: NextRequest) {
     service_frequency_key: service_frequency_key ?? null,
     gross_price_cents: gross_price_cents ?? null,
     primary_contact_id: primary_contact_id ?? null,
+    primary_person_id: primary_person_id ?? null,
     title: typeof body.title === "string" ? body.title.trim() || null : null,
     description: typeof body.description === "string" ? body.description.trim() || null : null,
     assigned_vendor_id: typeof body.assigned_vendor_id === "string" && body.assigned_vendor_id.trim() ? body.assigned_vendor_id.trim() : null,
