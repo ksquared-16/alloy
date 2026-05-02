@@ -41,7 +41,7 @@ Workspace navigation context for queues: **`docs/system/workspace-system.md`**.
 
 - **`GET /api/admin/entity/[type]/[id]`** is the generic drawer loader for many entity types.
 - **Jobs** use the **record resolution system (RRS)** via `resolveJobRecord` (`web/lib/rrs/entities/job.ts`) with **`surface`** query param (`resolveRecordSurfaceParam`).
-- **Opportunities** have specialized **surface** behavior today (drawer/entity route), but **full RRS parity with jobs** still **needs verification** — see `docs/product/crm-system.md` and `docs/execution/roadmap-and-gaps.md`.
+- **Opportunities** are resolved in **`respondOpportunityEntityGet`** (`web/lib/admin/opportunityEntityRecord.ts`), wired from the same entity GET route as other types — not RRS. Surfaces include `drawer_visible` (fast shell), `drawer_initial`, and `full`. **Lifecycle and “priced” rules** use the same effective quote as `_quote_total_display` via **`effectiveOpportunityQuoteDollars`** (`web/lib/admin/opportunityLifecyclePresentation.ts`), including **`drawer_visible` + `full` parity** (both load opportunity **`fetchEffectiveStatusDefinitions`** for lifecycle metadata). **RRS parity with jobs** for opportunities remains a separate product question — see `docs/product/crm-system.md` and `docs/execution/roadmap-and-gaps.md`.
 - For **jobs** (RRS), responses may include **`_rrs`** metadata and a **flat** shape suitable for the drawer and overview layout.
 - Other types may still be “select * + hydration” in the same route; check the branch for the type.
 
@@ -56,6 +56,8 @@ Workspace navigation context for queues: **`docs/system/workspace-system.md`**.
 | Concern | Location |
 |---------|-----------|
 | Entity GET route | `web/app/api/admin/entity/[type]/[id]/route.ts` |
+| Opportunity record resolution | `web/lib/admin/opportunityEntityRecord.ts` |
+| Opportunity quote + lifecycle helpers | `web/lib/admin/opportunityLifecyclePresentation.ts` |
 | Job resolution | `web/lib/rrs/entities/job.ts`, `web/lib/rrs/resolveRecord.ts` |
 | Surfaces | `web/lib/rrs/surfaces.ts` |
 | Drawer fetch wiring | `web/components/admin/AdminEntityDrawer.tsx` |
