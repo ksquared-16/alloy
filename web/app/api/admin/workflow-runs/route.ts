@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { getOrgLocalTodayUtcBounds } from "@/lib/admin/orgLocalDayBounds";
+import {
+    fetchOperationalTimezoneForOrg,
+} from "@/lib/admin/timezoneContract";
 
 export type WorkflowRunRow = {
     id: string;
@@ -35,13 +39,17 @@ export async function GET(request: NextRequest) {
         const t0 = Date.now();
         const supabase = createAdminClient();
         const now = new Date();
-        const startOfToday = new Date(now);
-        startOfToday.setHours(0, 0, 0, 0);
+        const { iana: timezoneEffective, source: timezoneSource } = await fetchOperationalTimezoneForOrg(
+            supabase,
+            orgId
+        );
+        const todayBounds = getOrgLocalTodayUtcBounds(timezoneEffective, now);
+        const dayStartIso = todayBounds.dayStartUtc.toISOString();
+        const dayEndExclusiveIso = todayBounds.dayEndExclusiveUtc.toISOString();
         const last7d = new Date(now);
         last7d.setDate(last7d.getDate() - 7);
 
         const rangeFroms = {
-            today: startOfToday.toISOString(),
             last7d: last7d.toISOString(),
         };
 
@@ -70,7 +78,6 @@ export async function GET(request: NextRequest) {
         let running7d = 0;
         let skipped7d = 0;
         let runsToday = 0;
-        const todayIso = rangeFroms.today;
         for (const r of rows) {
             runs7d += 1;
             const st = String(r.status ?? "");
@@ -79,7 +86,7 @@ export async function GET(request: NextRequest) {
             else if (st === "running") running7d += 1;
             else if (st === "skipped") skipped7d += 1;
             const sa = r.started_at ? String(r.started_at) : "";
-            if (sa >= todayIso) runsToday += 1;
+            if (sa >= dayStartIso && sa < dayEndExclusiveIso) runsToday += 1;
         }
 
         const recentRunIds = rows.map((r) => r.id);
@@ -120,6 +127,13 @@ export async function GET(request: NextRequest) {
                 running_last_7d: running7d,
                 skipped_last_7d: skipped7d,
                 success_rate_last_7d: successRate,
+            },
+            meta: {
+                calendar_type: "operational_day" as const,
+                timezone_effective: timezoneEffective,
+                timezone_source: timezoneSource,
+                day_start_utc: dayStartIso,
+                day_end_exclusive_utc: dayEndExclusiveIso,
             },
         });
     }

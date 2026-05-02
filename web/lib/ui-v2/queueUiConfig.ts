@@ -15,6 +15,28 @@ export type QueueUiRowPreviewField =
     | "tour_date";
 export type QueueUiRowPreviewAction = "open" | "call" | "email";
 
+/** Default captions for CRM compact row groups; override via queue definition `ui.row_preview.field_labels`. */
+export const DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS: Record<string, string> = {
+    title: "Title",
+    status: "Status",
+    primary_contact: "Contact",
+    phone: "Phone",
+    email: "Email",
+    child_name: "Child",
+    program: "Programs",
+    desired_start_date: "Desired Start Date",
+    tour_date: "Tour",
+    age_band: "Age band",
+};
+
+export function mergeQueueRowPreviewFieldLabels(override?: Record<string, string> | null): Record<string, string> {
+    return { ...DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS, ...(override ?? {}) };
+}
+
+export function getQueueRowPreviewFieldLabel(ui: QueueUiConfig, key: string): string {
+    return ui.row_preview.fieldLabels[key] ?? DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS[key] ?? key;
+}
+
 export type QueueUiSection = {
     key: string;
     label: string;
@@ -31,6 +53,8 @@ export type QueueUiConfig = {
         variant: QueueUiRowPreviewVariant;
         fields: QueueUiRowPreviewField[];
         actions: QueueUiRowPreviewAction[];
+        /** Resolved labels for CRM compact groups (defaults + optional queue `ui.row_preview.field_labels`). */
+        fieldLabels: Record<string, string>;
     };
 };
 
@@ -56,7 +80,8 @@ export function getQueueUiConfig(def: QueueDefinitionV1): QueueUiConfig {
               primary_total_label?: string;
               primary_total_queue?: string;
               sections?: QueueUiSection[];
-              row_preview?: Partial<QueueUiConfig["row_preview"]>;
+              /** JSON queue defs use `field_labels`; resolved config uses camelCase `fieldLabels`. */
+              row_preview?: Partial<QueueUiConfig["row_preview"]> & { field_labels?: Record<string, string> };
           }
         | undefined;
 
@@ -65,7 +90,7 @@ export function getQueueUiConfig(def: QueueDefinitionV1): QueueUiConfig {
         primary_total_label: undefined,
         primary_total_queue: undefined,
         sections: [{ key: "all", label: "Queues", queue_keys: allKeys }],
-        row_preview: { variant: "basic", fields: ["title", "status"], actions: ["open"] },
+        row_preview: { variant: "basic", fields: ["title", "status"], actions: ["open"], fieldLabels: mergeQueueRowPreviewFieldLabels() },
     };
 
     if (!ui) return fallback;
@@ -87,13 +112,20 @@ export function getQueueUiConfig(def: QueueDefinitionV1): QueueUiConfig {
     const fields = Array.isArray(row_preview.fields) && row_preview.fields.length ? row_preview.fields : fallback.row_preview.fields;
     const actions =
         Array.isArray(row_preview.actions) && row_preview.actions.length ? row_preview.actions : fallback.row_preview.actions;
+    const labelOverride =
+        row_preview.field_labels && typeof row_preview.field_labels === "object"
+            ? row_preview.field_labels
+            : row_preview.fieldLabels && typeof row_preview.fieldLabels === "object"
+              ? row_preview.fieldLabels
+              : null;
+    const fieldLabels = mergeQueueRowPreviewFieldLabels(labelOverride);
 
     return {
         layout: ui.layout === "pipeline_with_attention" ? "pipeline_with_attention" : "single_section",
         primary_total_label: ui.primary_total_label,
         primary_total_queue: ui.primary_total_queue,
         sections,
-        row_preview: { variant, fields, actions },
+        row_preview: { variant, fields, actions, fieldLabels },
     };
 }
 

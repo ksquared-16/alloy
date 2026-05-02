@@ -604,3 +604,518 @@ Import trace:
 [00:22:20.263] Server  LOG      ✓ Compiled in 172ms
 [00:22:56.198] Server  WARN    [admin-context-perf] getAdminAuth {}
 [00:23:08.941] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:23:39.326] Server  LOG      ✓ Compiled in 0ms
+[00:23:40.392] Server  LOG      ✓ Compiled in 0ms
+[00:23:46.036] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:23:47.826] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:23:56.163] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:24:09.447] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:25:51.977] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:25:56.231] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:26:02.156] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:26:04.678] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:26:06.429] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:26:06.446] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:26:07.383] Server  WARN    [admin-timing] GET /api/admin/work-units {}
+[00:26:07.965] Server  WARN    [entity-labels-perf] resolveEntityLabelsForOrg {}
+[00:26:07.966] Server  WARN    [entity-labels-perf] GET /api/admin/entity-labels {}
+[00:26:08.305] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:26:08.495] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:26:09.001] Server  WARN    [admin-timing] GET /api/admin/workflows/summary variant=workspace {}
+[00:26:09.019] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:26:09.026] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:26:09.899] Server  WARN    [admin-timing] GET /api/admin/workflow-runs list=kpis {}
+[00:26:10.129] Server  WARN    [queue-perf] getWorkUnitQueueSummaries {}
+[00:26:10.130] Server  WARN    [admin-timing] GET /api/admin/work-units/[id]/queues {}
+[00:26:10.247] Browser WARN    [pipeline-count-unify] {"count":4,"queue_key":"pipeline_total","source":"work-unit","work_unit_id":"5ba90557-876d-4450-9c28-36beac6e83be"}
+[00:26:13.783] Server  WARN    [queue-perf] enrichOpportunityRows {}
+[00:26:13.783] Server  WARN    [queue-perf] getWorkUnitQueueItems opportunity {}
+[00:26:13.784] Server  WARN    [admin-timing] GET /api/admin/queues/[workUnitId]/[queueKey] {}
+[00:26:13.895] Browser WARN    [pipeline-count-unify] {"count":0,"queue_key":"pipeline_total","source":"queue-rows","work_unit_id":"5ba90557-876d-4450-9c28-36beac6e83be"}
+[00:27:17.841] Server  LOG      ✓ Compiled in 747ms
+[00:27:56.542] Server  LOG      ✓ Compiled in 108ms
+[00:27:57.969] Server  LOG      ✓ Compiled in 76ms
+[00:27:58.749] Server  LOG      ✓ Compiled in 83ms
+[00:28:18.410] Server  LOG      ✓ Compiled in 325ms
+[00:28:21.172] Server  LOG      ✓ Compiled in 341ms
+[00:28:21.790] Server  LOG      ✓ Compiled in 191ms
+[00:28:24.144] Server  LOG      ✓ Compiled in 120ms
+[00:28:24.777] Server  LOG      ✓ Compiled in 122ms
+[00:28:25.594] Server  LOG      ✓ Compiled in 142ms
+[00:28:26.331] Server  LOG      ✓ Compiled in 168ms
+[00:28:26.949] Server  LOG      ✓ Compiled in 86ms
+[00:28:28.455] Server  LOG      ✓ Compiled in 177ms
+[00:28:29.123] Server  LOG      ✓ Compiled in 88ms
+[00:28:32.850] Server  LOG      ✓ Compiled in 94ms
+[00:28:43.453] Server  LOG      ✓ Compiled in 83ms
+[00:29:10.148] Server  LOG      ✓ Compiled in 386ms
+[00:29:10.284] Browser ERROR   uncaughtError: ReferenceError: buildCrmQueueRowPreviewPresentation is not defined
+[00:29:11.472] Server  WARN     ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+[00:29:11.485] Server  LOG      ✓ Compiled in 305ms
+[00:29:17.836] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:29:17.844] Server  WARN     ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+[00:29:18.391] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:29:18.541] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:29:18.572] Server  WARN    [admin-timing] GET /api/admin/work-units {}
+[00:29:18.888] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:29:18.898] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:29:18.969] Server  LOG      ✓ Compiled in 0ms
+[00:29:18.975] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:29:19.547] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:29:19.551] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:29:19.783] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:29:19.912] Server  WARN    [admin-timing] GET /api/admin/workflows/summary variant=workspace {}
+[00:29:20.936] Server  WARN    [admin-timing] GET /api/admin/workflow-runs list=kpis {}
+[00:29:21.032] Server  WARN    [entity-labels-perf] resolveEntityLabelsForOrg {}
+[00:29:21.032] Server  WARN    [entity-labels-perf] GET /api/admin/entity-labels {}
+[00:29:21.171] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:29:21.408] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:29:22.239] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:29:22.245] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:29:22.814] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:29:22.927] Server  WARN    [queue-perf] getWorkUnitQueueSummaries {}
+[00:29:22.928] Server  WARN    [admin-timing] GET /api/admin/work-units/[id]/queues {}
+[00:29:23.000] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:29:26.229] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:29:26.268] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:29:26.274] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:29:27.257] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:29:27.267] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:29:28.482] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:29:29.015] Server  LOG      ✓ Compiled in 2ms
+[00:29:29.203] Server  WARN    [admin-timing] GET /api/admin/work-units {}
+[00:29:29.212] Server  WARN    [entity-labels-perf] resolveEntityLabelsForOrg {}
+[00:29:29.213] Server  WARN    [entity-labels-perf] GET /api/admin/entity-labels {}
+[00:29:30.785] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:29:31.123] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:29:31.198] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:29:31.680] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:29:31.852] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:29:31.877] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:29:32.312] Server  WARN    [admin-timing] GET /api/admin/workflows/summary variant=workspace {}
+[00:29:32.666] Server  WARN    [admin-timing] GET /api/admin/workflow-runs list=kpis {}
+[00:29:32.990] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:29:33.003] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:29:33.075] Server  WARN    [queue-perf] getWorkUnitQueueSummaries {}
+[00:29:33.076] Server  WARN    [admin-timing] GET /api/admin/work-units/[id]/queues {}
+[00:29:33.190] Browser WARN    [pipeline-count-unify] {"count":4,"queue_key":"pipeline_total","source":"work-unit","work_unit_id":"5ba90557-876d-4450-9c28-36beac6e83be"}
+[00:29:34.335] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:29:34.787] Server  LOG      ✓ Compiled in 239ms
+[00:29:36.887] Server  WARN    [queue-perf] enrichOpportunityRows {}
+[00:29:36.887] Server  WARN    [queue-perf] getWorkUnitQueueItems opportunity {}
+[00:29:36.887] Server  WARN    [admin-timing] GET /api/admin/queues/[workUnitId]/[queueKey] {}
+[00:29:37.028] Browser WARN    [pipeline-count-unify] {"count":0,"queue_key":"pipeline_total","source":"queue-rows","work_unit_id":"5ba90557-876d-4450-9c28-36beac6e83be"}
+[00:29:37.028] Browser ERROR   uncaughtError: ReferenceError: timingLine is not defined
+[00:29:38.242] Browser ERROR   ./app/adminV2/workspace/dept/[departmentId]/page.tsx:559:5
+Parsing ecmascript source code failed
+  557 |     }
+  558 |
+> 559 |     return (
+      |     ^^^^^^^^
+> 560 |         <WorkspaceChrome
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 561 |             variant="bridge"
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 562 |             breadcrumbs={[
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 563 |                 { href: WORKSPACE_BASE, label: "Workspace" },
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 564 |                 { href: `${WORKSPACE_BASE}/dept/${departmentId}`, label: title },
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 565 |             ]}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 566 |             title={title}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 567 |             subtitle=""
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 568 |         >
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 569 |             {dept && primaryWorkUnit && deptSummariesRibbonPending ? (
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 570 |                 <WsRouteLoadingRibbon label="Loading queue summaries" />
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 571 |             ) : null}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 572 |             {deptWorkUnitsError && dept ? <p className="text-sm text-alloy-ember px-1">{deptWorkUnitsError}</p> : null}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 573 |             {deptQueueSummariesError && dept ? <p className="text-sm text-alloy-ember px-1">{deptQueueSummariesError}</p> : null}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 574 |             {!dept ? (
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 575 |                 <div
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 576 |                     className="rounded-xl border px-4 py-10 text-center text-sm text-alloy-ember/90"
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 577 |                     style={{ borderColor: "var(--d-border, rgba(39,63,82,0.14))" }}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 578 |                 >
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 579 |                     {deptError ??
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 580 |                         "This department could not be loaded. Use the workspace link above to pick another department."}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 581 |                 </div>
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 582 |             ) : primaryWorkUnit ? (
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 583 |                 <DepartmentWorkspaceBridgeShell
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 584 |                     departmentKey={deptKey}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 585 |                     briefTitle={title}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 586 |                     briefSubtitle=""
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 587 |                     signalsSlot={null}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 588 |                     kpiSlot={kpis.length ? <KPIBlock kpis={kpis} maxVisible={5} /> : null}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 589 |                     throughputSlot={throughputPairedPanels}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 590 |                     attentionSlot={null}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 591 |                     contextSlot={
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 592 |                         <div
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 593 |                             className="adminv2-ws-dept-v2-workflows-strip"
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 594 |                             data-ws-lane-kind="automation_workflows"
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 595 |                         >
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 596 |                             <AutomationWorkflowsBlock
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 597 |                                 title="Automations"
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 598 |                                 kpisLoading={workflowKpisLoading}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 599 |                                 kpis={{
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 600 |                                     runs_today: workflowKpis.runs_today,
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 601 |                                     failed_last_7d: workflowKpis.failed_last_7d,
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 602 |                                     running_last_7d: workflowKpis.running_last_7d,
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 603 |                                     success_rate_last_7d: workflowKpis.success_rate_last_7d,
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 604 |                                 }}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 605 |                                 workflows={workflowsSummary}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 606 |                                 href="/adminV2/workflows"
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 607 |                             />
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 608 |                         </div>
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 609 |                     }
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 610 |                     railSlot={
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 611 |                         deptKey === "enrollment" &&
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 612 |                         (enrollmentDepartmentRailModel?.systemActions?.length ?? 0) > 0 ? (
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 613 |                             <ActionsBlock
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 614 |                                 model={enrollmentDepartmentRailModel!}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 615 |                                 onAction={onEnrollmentDeptRailAction}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 616 |                                 title="Actions"
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 617 |                                 surface="department"
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 618 |                             />
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 619 |                         ) : null
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 620 |                     }
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 621 |                 />
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 622 |             ) : (
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 623 |                 <div
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 624 |                     className="rounded-xl border px-4 py-10 text-center text-sm text-alloy-midnight/55"
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 625 |                     style={{ borderColor: "var(--d-border, rgba(39,63,82,0.14))" }}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 626 |                 >
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 627 |                     No configured Work Unit UI was found for this department.
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 628 |                 </div>
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 629 |             )}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 630 |         </WorkspaceChrome>
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 631 |     );
+      | ^^^^^^^
+  632 | }
+  633 |
+
+Return statement is not allowed here
+
+Import traces:
+  Client Component Browser:
+    ./app/adminV2/workspace/dept/[departmentId]/page.tsx [Client Component Browser]
+    ./app/adminV2/workspace/dept/[departmentId]/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/adminV2/workspace/dept/[departmentId]/page.tsx [Client Component SSR]
+    ./app/adminV2/workspace/dept/[departmentId]/page.tsx [Server Component]
+[00:29:43.514] Server  LOG      ✓ Compiled in 235ms
+[00:29:43.630] Browser ERROR   ./app/adminV2/workspace/dept/[departmentId]/page.tsx:559:5
+Parsing ecmascript source code failed
+  557 |     }
+  558 |
+> 559 |     return (
+      |     ^^^^^^^^
+> 560 |         <WorkspaceChrome
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 561 |             variant="bridge"
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 562 |             breadcrumbs={[
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 563 |                 { href: WORKSPACE_BASE, label: "Workspace" },
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 564 |                 { href: `${WORKSPACE_BASE}/dept/${departmentId}`, label: title },
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 565 |             ]}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 566 |             title={title}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 567 |             subtitle=""
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 568 |         >
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 569 |             {dept && primaryWorkUnit && deptSummariesRibbonPending ? (
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 570 |                 <WsRouteLoadingRibbon label="Loading queue summaries" />
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 571 |             ) : null}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 572 |             {deptWorkUnitsError && dept ? <p className="text-sm text-alloy-ember px-1">{deptWorkUnitsError}</p> : null}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 573 |             {deptQueueSummariesError && dept ? <p className="text-sm text-alloy-ember px-1">{deptQueueSummariesError}</p> : null}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 574 |             {!dept ? (
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 575 |                 <div
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 576 |                     className="rounded-xl border px-4 py-10 text-center text-sm text-alloy-ember/90"
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 577 |                     style={{ borderColor: "var(--d-border, rgba(39,63,82,0.14))" }}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 578 |                 >
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 579 |                     {deptError ??
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 580 |                         "This department could not be loaded. Use the workspace link above to pick another department."}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 581 |                 </div>
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 582 |             ) : primaryWorkUnit ? (
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 583 |                 <DepartmentWorkspaceBridgeShell
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 584 |                     departmentKey={deptKey}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 585 |                     briefTitle={title}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 586 |                     briefSubtitle=""
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 587 |                     signalsSlot={null}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 588 |                     kpiSlot={kpis.length ? <KPIBlock kpis={kpis} maxVisible={5} /> : null}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 589 |                     throughputSlot={throughputPairedPanels}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 590 |                     attentionSlot={null}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 591 |                     contextSlot={
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 592 |                         <div
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 593 |                             className="adminv2-ws-dept-v2-workflows-strip"
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 594 |                             data-ws-lane-kind="automation_workflows"
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 595 |                         >
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 596 |                             <AutomationWorkflowsBlock
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 597 |                                 title="Automations"
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 598 |                                 kpisLoading={workflowKpisLoading}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 599 |                                 kpis={{
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 600 |                                     runs_today: workflowKpis.runs_today,
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 601 |                                     failed_last_7d: workflowKpis.failed_last_7d,
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 602 |                                     running_last_7d: workflowKpis.running_last_7d,
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 603 |                                     success_rate_last_7d: workflowKpis.success_rate_last_7d,
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 604 |                                 }}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 605 |                                 workflows={workflowsSummary}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 606 |                                 href="/adminV2/workflows"
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 607 |                             />
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 608 |                         </div>
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 609 |                     }
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 610 |                     railSlot={
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 611 |                         deptKey === "enrollment" &&
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 612 |                         (enrollmentDepartmentRailModel?.systemActions?.length ?? 0) > 0 ? (
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 613 |                             <ActionsBlock
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 614 |                                 model={enrollmentDepartmentRailModel!}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 615 |                                 onAction={onEnrollmentDeptRailAction}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 616 |                                 title="Actions"
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 617 |                                 surface="department"
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 618 |                             />
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 619 |                         ) : null
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 620 |                     }
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 621 |                 />
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 622 |             ) : (
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 623 |                 <div
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 624 |                     className="rounded-xl border px-4 py-10 text-center text-sm text-alloy-midnight/55"
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 625 |                     style={{ borderColor: "var(--d-border, rgba(39,63,82,0.14))" }}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 626 |                 >
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 627 |                     No configured Work Unit UI was found for this department.
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 628 |                 </div>
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 629 |             )}
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 630 |         </WorkspaceChrome>
+      | ^^^^^^^^^^^^^^^^^^^^^^^^
+> 631 |     );
+      | ^^^^^^^
+  632 | }
+  633 |
+
+Return statement is not allowed here
+
+Import traces:
+  Client Component Browser:
+    ./app/adminV2/workspace/dept/[departmentId]/page.tsx [Client Component Browser]
+    ./app/adminV2/workspace/dept/[departmentId]/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./app/adminV2/workspace/dept/[departmentId]/page.tsx [Client Component SSR]
+    ./app/adminV2/workspace/dept/[departmentId]/page.tsx [Server Component]
+[00:29:45.252] Server  WARN     ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+[00:29:45.259] Server  LOG      ✓ Compiled in 206ms
+[00:29:48.158] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:29:48.163] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:29:48.208] Server  WARN    [admin-timing] GET /api/admin/work-units {}
+[00:29:48.505] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:29:48.909] Server  WARN    [admin-timing] GET /api/admin/workflows/summary variant=workspace {}
+[00:29:49.779] Server  WARN    [admin-timing] GET /api/admin/workflow-runs list=kpis {}
+[00:29:50.112] Server  WARN    [entity-labels-perf] resolveEntityLabelsForOrg {}
+[00:29:50.112] Server  WARN    [entity-labels-perf] GET /api/admin/entity-labels {}
+[00:29:50.537] Browser INFO    %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[00:29:50.593] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:29:51.274] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:29:51.710] Server  WARN    [queue-perf] getWorkUnitQueueSummaries {}
+[00:29:51.710] Server  WARN    [admin-timing] GET /api/admin/work-units/[id]/queues {}
+[00:29:52.248] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:29:52.344] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:29:52.359] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:29:52.679] Server  WARN    [admin-timing] GET /api/admin/work-units {}
+[00:29:53.460] Server  WARN    [entity-labels-perf] resolveEntityLabelsForOrg {}
+[00:29:53.461] Server  WARN    [entity-labels-perf] GET /api/admin/entity-labels {}
+[00:29:53.819] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:29:54.028] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:29:54.147] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:29:54.205] Server  WARN    [admin-context-perf] getAdminAuth {}
+[00:29:54.920] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:29:55.100] Server  WARN    [admin-timing] GET /api/admin/workflows/summary variant=workspace {}
+[00:29:55.232] Server  WARN    [queue-perf] getWorkUnitQueueSummaries {}
+[00:29:55.232] Server  WARN    [admin-timing] GET /api/admin/work-units/[id]/queues {}
+[00:29:55.346] Browser WARN    [pipeline-count-unify] {"count":4,"queue_key":"pipeline_total","source":"work-unit","work_unit_id":"5ba90557-876d-4450-9c28-36beac6e83be"}
+[00:29:55.631] Server  WARN    [admin-timing] GET /api/admin/workflow-runs list=kpis {}
+[00:29:56.071] Server  WARN    [admin-context-perf] getAdminContext {}
+[00:29:58.653] Server  WARN    [queue-perf] enrichOpportunityRows {}
+[00:29:58.653] Server  WARN    [queue-perf] getWorkUnitQueueItems opportunity {}
+[00:29:58.654] Server  WARN    [admin-timing] GET /api/admin/queues/[workUnitId]/[queueKey] {}
+[00:29:58.763] Browser WARN    [pipeline-count-unify] {"count":0,"queue_key":"pipeline_total","source":"queue-rows","work_unit_id":"5ba90557-876d-4450-9c28-36beac6e83be"}
+[00:30:09.680] Server  LOG      ✓ Compiled in 1991ms
+[00:30:10.436] Server  LOG      ✓ Compiled in 338ms
+[00:30:33.922] Server  LOG      ✓ Compiled in 159ms
+[00:30:34.710] Server  LOG      ✓ Compiled in 165ms
+[00:30:35.147] Server  LOG      ✓ Compiled in 269ms
+[00:30:40.592] Server  LOG      ✓ Compiled in 226ms
+[00:30:42.411] Server  LOG      ✓ Compiled in 331ms
+[00:30:43.893] Server  LOG      ✓ Compiled in 1181ms
+[00:30:44.876] Server  LOG      ✓ Compiled in 298ms
+[00:37:12.537] Server  LOG      ✓ Compiled in 265ms
+[00:37:40.037] Browser ERROR   ./components/admin/workspace/WorkspaceRootShell.tsx:187:11
+Parsing ecmascript source code failed
+  185 |             />
+  186 |           </section>
+> 187 |         </>
+      |           ^
+  188 |       }
+  189 |     />
+  190 |   );
+
+Expression expected
+
+Import traces:
+  Client Component Browser:
+    ./components/admin/workspace/WorkspaceRootShell.tsx [Client Component Browser]
+    ./app/adminV2/workspace/page.tsx [Client Component Browser]
+    ./app/adminV2/workspace/page.tsx [Server Component]
+
+  Client Component SSR:
+    ./components/admin/workspace/WorkspaceRootShell.tsx [Client Component SSR]
+    ./app/adminV2/workspace/page.tsx [Client Component SSR]
+    ./app/adminV2/workspace/page.tsx [Server Component]
+[00:37:45.091] Server  LOG      ✓ Compiled in 87ms
+[00:37:55.428] Server  LOG      ✓ Compiled in 157ms
+[00:38:00.300] Server  LOG      ✓ Compiled in 203ms
+[00:38:10.913] Server  LOG      ✓ Compiled in 1927ms
+[00:38:11.759] Server  LOG      ✓ Compiled in 223ms
+[00:38:19.704] Server  LOG      ✓ Compiled in 126ms
+[00:38:21.522] Server  LOG      ✓ Compiled in 222ms
+[00:38:24.366] Server  LOG      ✓ Compiled in 663ms
+[00:38:32.844] Server  LOG      ✓ Compiled in 546ms
+[00:38:33.372] Server  LOG      ✓ Compiled in 255ms
+[00:38:34.721] Server  LOG      ✓ Compiled in 853ms
+[00:38:35.314] Server  LOG      ✓ Compiled in 286ms
+[00:38:37.831] Server  LOG      ✓ Compiled in 214ms
+[00:38:46.552] Server  LOG      ✓ Compiled in 567ms
+[00:38:46.895] Server  LOG      ✓ Compiled in 201ms
+[00:38:47.602] Server  LOG      ✓ Compiled in 178ms
+[00:38:48.314] Server  LOG      ✓ Compiled in 128ms
+[00:38:53.085] Server  LOG      ✓ Compiled in 472ms

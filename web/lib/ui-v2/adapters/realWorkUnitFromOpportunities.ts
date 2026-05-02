@@ -142,6 +142,8 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
     queueRowQuickActions?: QueueItemQuickActionVm[] | null;
     /** Resolved `right_rail` placements (GET …/actions?surface=right_rail); merged ahead of hardcoded enrollment rail. */
     rightRailResolved?: ResolvedActionForClient[] | null;
+    /** Queue definition `ui.row_preview.field_labels` merged with defaults (CRM compact captions). */
+    rowPreviewFieldLabels?: Record<string, string> | null;
 }): WorkUnitWorkspaceModel {
     const workUnitKeyLower = input.workUnitKey.trim().toLowerCase();
     const isAllInquiries = workUnitKeyLower === "pipeline_overview";
@@ -149,7 +151,10 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
 
     const rawItems: QueueItemVm[] = input.oq.items.map((row) => {
         const base = isEnrollmentDept
-            ? buildEnrollmentOpportunityQueueItemVm(row, { workUnitKey: input.workUnitKey })
+            ? buildEnrollmentOpportunityQueueItemVm(row, {
+                  workUnitKey: input.workUnitKey,
+                  rowPreviewFieldLabels: input.rowPreviewFieldLabels,
+              })
             : defaultOpportunityQueueItemVm(row, input.workUnitKey);
         if (input.queueRowQuickActions?.length) {
             return { ...base, quickActions: input.queueRowQuickActions };

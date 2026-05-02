@@ -5972,11 +5972,9 @@ __turbopack_context__.s([
     "enrollmentCrmContactCapabilityForRow",
     ()=>enrollmentCrmContactCapabilityForRow
 ]);
-var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$adminFormatters$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/adminFormatters.ts [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$opportunityActivityTimelineFormat$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__ = __turbopack_context__.i("[project]/lib/admin/opportunityActivityTimelineFormat.ts [app-client] (ecmascript) <locals>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$contactNormalize$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/contactNormalize.ts [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$ui$2d$v2$2f$formatWorkspaceCurrency$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/ui-v2/formatWorkspaceCurrency.ts [app-client] (ecmascript)");
-;
 ;
 ;
 ;
@@ -6162,7 +6160,7 @@ function crmContactQuickActions(row) {
     }
     return out;
 }
-function buildEnrollmentCrmRowSemanticSlots(row) {
+function buildEnrollmentCrmRowSemanticSlots(row, options) {
     const customer = (row._customer_name ?? "").trim();
     const titleBase = (row.name ?? "").trim();
     const primaryIdentity = customer || titleBase || row.id.slice(-8);
@@ -6191,7 +6189,7 @@ function buildEnrollmentCrmRowSemanticSlots(row) {
     const contactLine = row._primary_contact_line?.trim() || "";
     const email = (row._primary_email ?? "").trim();
     const phone = (row._primary_phone ?? "").trim();
-    const phoneFmt = phone ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$adminFormatters$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatPhoneUS"])(phone) : "";
+    const phoneFmt = phone ? formatPhoneUS(phone) : "";
     const contactSnippet = contactLine || [
         phoneFmt && phoneFmt !== "—" ? phoneFmt : "",
         email
@@ -7590,13 +7588,40 @@ if (typeof globalThis.$RefreshHelpers$ === 'object' && globalThis.$RefreshHelper
 "use strict";
 
 __turbopack_context__.s([
+    "DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS",
+    ()=>DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS,
+    "getQueueRowPreviewFieldLabel",
+    ()=>getQueueRowPreviewFieldLabel,
     "getQueueUiConfig",
     ()=>getQueueUiConfig,
+    "mergeQueueRowPreviewFieldLabels",
+    ()=>mergeQueueRowPreviewFieldLabels,
     "partitionQueueUiSections",
     ()=>partitionQueueUiSections,
     "queuePrimaryTotalFromSummaries",
     ()=>queuePrimaryTotalFromSummaries
 ]);
+const DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS = {
+    title: "Title",
+    status: "Status",
+    primary_contact: "Contact",
+    phone: "Phone",
+    email: "Email",
+    child_name: "Child",
+    program: "Programs",
+    desired_start_date: "Desired Start Date",
+    tour_date: "Tour",
+    age_band: "Age band"
+};
+function mergeQueueRowPreviewFieldLabels(override) {
+    return {
+        ...DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS,
+        ...override ?? {}
+    };
+}
+function getQueueRowPreviewFieldLabel(ui, key) {
+    return ui.row_preview.fieldLabels[key] ?? DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS[key] ?? key;
+}
 function uniqPreserve(xs) {
     const out = [];
     const seen = new Set();
@@ -7631,7 +7656,8 @@ function getQueueUiConfig(def) {
             ],
             actions: [
                 "open"
-            ]
+            ],
+            fieldLabels: mergeQueueRowPreviewFieldLabels()
         }
     };
     if (!ui) return fallback;
@@ -7645,6 +7671,7 @@ function getQueueUiConfig(def) {
     const variant = row_preview.variant === "crm_compact" ? "crm_compact" : "basic";
     const fields = Array.isArray(row_preview.fields) && row_preview.fields.length ? row_preview.fields : fallback.row_preview.fields;
     const actions = Array.isArray(row_preview.actions) && row_preview.actions.length ? row_preview.actions : fallback.row_preview.actions;
+    const fieldLabels = mergeQueueRowPreviewFieldLabels(row_preview.field_labels && typeof row_preview.field_labels === "object" ? row_preview.field_labels : null);
     return {
         layout: ui.layout === "pipeline_with_attention" ? "pipeline_with_attention" : "single_section",
         primary_total_label: ui.primary_total_label,
@@ -7653,7 +7680,8 @@ function getQueueUiConfig(def) {
         row_preview: {
             variant,
             fields,
-            actions
+            actions,
+            fieldLabels
         }
     };
 }
@@ -8429,8 +8457,8 @@ function AdminV2OpportunityWorkUnitPage() {
     const queueItemsRequestSeq = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useRef"])(0);
     const queueSummariesRequestSeq = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useRef"])(0);
     /**
-     * Skips redundant queue-item GETs when only `queueSummaries` reference changes (e.g. idle partial
-     * count merge) while work unit, selected tab, and omit-total semantics are unchanged — same URL as last fetch.
+     * Skips redundant queue-item GETs when only `queueSummaries` reference changes while work unit,
+     * selected tab, and omit-total semantics are unchanged — same URL as last fetch.
      * Cleared on work-unit navigation; bypass with fetchQueueItems(..., { force: true }) for invalidation.
      */ const queueItemsLastFetchSigRef = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useRef"])(null);
     const [workflowKpis, setWorkflowKpis] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(DEFAULT_WF_KPIS);
@@ -8991,7 +9019,18 @@ function AdminV2OpportunityWorkUnitPage() {
                     if (res.status === 501) throw new Error("Queue type not supported yet");
                     throw new Error(json.error ?? "Failed to load queue items");
                 }
-                if (seq === queueItemsRequestSeq.current) setQueueItems(json);
+                const payload = json;
+                if (seq === queueItemsRequestSeq.current) {
+                    setQueueItems(payload);
+                    if ("TURBOPACK compile-time truthy", 1) {
+                        console.warn("[pipeline-count-unify]", {
+                            source: "queue-rows",
+                            work_unit_id: workUnitId,
+                            queue_key: queueKey,
+                            count: typeof payload.total === "number" ? payload.total : null
+                        });
+                    }
+                }
             } catch (e) {
                 if (seq === queueItemsRequestSeq.current) {
                     setQueueItems(null);
@@ -9161,13 +9200,13 @@ function AdminV2OpportunityWorkUnitPage() {
                             ]
                         }, void 0, true, {
                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                            lineNumber: 828,
+                            lineNumber: 839,
                             columnNumber: 25
                         }, this) : null
                     ]
                 }, void 0, true, {
                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                    lineNumber: 825,
+                    lineNumber: 836,
                     columnNumber: 17
                 }, this);
             }
@@ -9184,13 +9223,13 @@ function AdminV2OpportunityWorkUnitPage() {
                             ]
                         }, void 0, true, {
                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                            lineNumber: 838,
+                            lineNumber: 849,
                             columnNumber: 25
                         }, this) : null
                     ]
                 }, void 0, true, {
                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                    lineNumber: 835,
+                    lineNumber: 846,
                     columnNumber: 17
                 }, this);
             }
@@ -9244,7 +9283,7 @@ function AdminV2OpportunityWorkUnitPage() {
                                             children: section.label
                                         }, void 0, false, {
                                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                                            lineNumber: 911,
+                                            lineNumber: 922,
                                             columnNumber: 33
                                         }, this) : null,
                                         section.queues.map({
@@ -9278,7 +9317,7 @@ function AdminV2OpportunityWorkUnitPage() {
                                                             children: q.label
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                                                            lineNumber: 954,
+                                                            lineNumber: 965,
                                                             columnNumber: 41
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -9286,13 +9325,13 @@ function AdminV2OpportunityWorkUnitPage() {
                                                             children: queuePillBadgeCount(q)
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                                                            lineNumber: 955,
+                                                            lineNumber: 966,
                                                             columnNumber: 41
                                                         }, this)
                                                     ]
                                                 }, q.key, true, {
                                                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                                                    lineNumber: 938,
+                                                    lineNumber: 949,
                                                     columnNumber: 37
                                                 }, this);
                                             }
@@ -9323,7 +9362,7 @@ function AdminV2OpportunityWorkUnitPage() {
                                                     children: "Other"
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                                                    lineNumber: 986,
+                                                    lineNumber: 997,
                                                     columnNumber: 37
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -9331,25 +9370,25 @@ function AdminV2OpportunityWorkUnitPage() {
                                                     children: unmappedPillCount ?? "—"
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                                                    lineNumber: 987,
+                                                    lineNumber: 998,
                                                     columnNumber: 37
                                                 }, this)
                                             ]
                                         }, "__derived_other__", true, {
                                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                                            lineNumber: 966,
+                                            lineNumber: 977,
                                             columnNumber: 33
                                         }, this) : null
                                     ]
                                 }, section.key, true, {
                                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                                    lineNumber: 909,
+                                    lineNumber: 920,
                                     columnNumber: 25
                                 }, this)
                         }["AdminV2OpportunityWorkUnitPage.useMemo[queuePicker]"])
                     }, void 0, false, {
                         fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                        lineNumber: 907,
+                        lineNumber: 918,
                         columnNumber: 17
                     }, this),
                     activeSummary?.description?.trim() && isOperatorFacingQueueSummaryDescription(activeSummary.description) ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -9357,13 +9396,13 @@ function AdminV2OpportunityWorkUnitPage() {
                         children: activeSummary.description.trim()
                     }, void 0, false, {
                         fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                        lineNumber: 1002,
+                        lineNumber: 1013,
                         columnNumber: 21
                     }, this) : null
                 ]
             }, void 0, true, {
                 fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                lineNumber: 906,
+                lineNumber: 917,
                 columnNumber: 13
             }, this);
         }
@@ -9707,13 +9746,13 @@ function AdminV2OpportunityWorkUnitPage() {
                         coveredStatusKeys: coveredThroughputStatusKeys
                     }, void 0, false, {
                         fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                        lineNumber: 1410,
+                        lineNumber: 1421,
                         columnNumber: 17
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                lineNumber: 1408,
+                lineNumber: 1419,
                 columnNumber: 13
             }, this);
         }
@@ -10223,7 +10262,7 @@ function AdminV2OpportunityWorkUnitPage() {
             variant: "work_unit"
         }, void 0, false, {
             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-            lineNumber: 1858,
+            lineNumber: 1869,
             columnNumber: 17
         }, this) : effectiveModel ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Fragment"], {
             children: [
@@ -10239,13 +10278,13 @@ function AdminV2OpportunityWorkUnitPage() {
                             children: "View workflows"
                         }, void 0, false, {
                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                            lineNumber: 1867,
+                            lineNumber: 1878,
                             columnNumber: 29
                         }, this)
                     ]
                 }, void 0, true, {
                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                    lineNumber: 1862,
+                    lineNumber: 1873,
                     columnNumber: 25
                 }, this) : null,
                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$app$2f$adminV2$2f$components$2f$workspace$2f$shells$2f$WorkUnitWorkspace$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["default"], {
@@ -10265,12 +10304,12 @@ function AdminV2OpportunityWorkUnitPage() {
                         href: "/adminV2/workflows"
                     }, void 0, false, {
                         fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                        lineNumber: 1877,
+                        lineNumber: 1888,
                         columnNumber: 29
                     }, void 0)
                 }, void 0, false, {
                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                    lineNumber: 1872,
+                    lineNumber: 1883,
                     columnNumber: 21
                 }, this),
                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$admin$2f$opportunity$2f$actions$2f$UpdateStatusAddNoteModal$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["UpdateStatusAddNoteModal"], {
@@ -10317,7 +10356,7 @@ function AdminV2OpportunityWorkUnitPage() {
                     }
                 }, void 0, false, {
                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                    lineNumber: 1891,
+                    lineNumber: 1902,
                     columnNumber: 21
                 }, this),
                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$admin$2f$opportunity$2f$actions$2f$ContactAttemptedModal$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["ContactAttemptedModal"], {
@@ -10357,7 +10396,7 @@ function AdminV2OpportunityWorkUnitPage() {
                     }
                 }, void 0, false, {
                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                    lineNumber: 1928,
+                    lineNumber: 1939,
                     columnNumber: 21
                 }, this)
             ]
@@ -10366,12 +10405,12 @@ function AdminV2OpportunityWorkUnitPage() {
             children: error ?? "Unable to load this work unit."
         }, void 0, false, {
             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-            lineNumber: 1964,
+            lineNumber: 1975,
             columnNumber: 17
         }, this)
     }, void 0, false, {
         fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-        lineNumber: 1847,
+        lineNumber: 1858,
         columnNumber: 9
     }, this);
 }

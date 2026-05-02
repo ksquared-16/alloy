@@ -22,6 +22,7 @@ import type {
 } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
 import { buildRealOpportunityWorkUnitWorkspaceModel } from "@/lib/ui-v2/adapters/realWorkUnitFromOpportunities";
+import { buildCrmQueueRowPreviewPresentation } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
 import { mergeEnrollmentRightRailActions } from "@/lib/workspace/viewModels/enrollmentRightRailMerge";
 import { rightRailResolvedFromActionsPayload } from "@/lib/workspace/rightRailResolvedFromActionsPayload";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
@@ -31,7 +32,13 @@ import { workUnitContextFromParts } from "@/lib/kpi/surfaceContext";
 import type { WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
 import { workspaceRouteParam } from "@/lib/workspace/workspaceRouteParam";
 import { validateQueueDefinition, type QueueDefinitionV1 } from "@/lib/config/queueDefinitionSchema";
-import { getQueueUiConfig, partitionQueueUiSections, type QueueUiConfig, type QueueUiRowPreviewField } from "@/lib/ui-v2/queueUiConfig";
+import {
+    getQueueUiConfig,
+    partitionQueueUiSections,
+    type QueueUiConfig,
+    type QueueUiRowPreviewAction,
+    type QueueUiRowPreviewField,
+} from "@/lib/ui-v2/queueUiConfig";
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { UpdateStatusAddNoteModal } from "@/components/admin/opportunity/actions/UpdateStatusAddNoteModal";
 import { ContactAttemptedModal } from "@/components/admin/opportunity/actions/ContactAttemptedModal";
@@ -216,8 +223,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const queueItemsRequestSeq = useRef(0);
     const queueSummariesRequestSeq = useRef(0);
     /**
-     * Skips redundant queue-item GETs when only `queueSummaries` reference changes (e.g. idle partial
-     * count merge) while work unit, selected tab, and omit-total semantics are unchanged — same URL as last fetch.
+     * Skips redundant queue-item GETs when only `queueSummaries` reference changes while work unit,
+     * selected tab, and omit-total semantics are unchanged — same URL as last fetch.
      * Cleared on work-unit navigation; bypass with fetchQueueItems(..., { force: true }) for invalidation.
      */
     const queueItemsLastFetchSigRef = useRef<string | null>(null);
@@ -356,7 +363,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
         }
 
         let cancelled = false;
-        (async () => {
+        void (async () => {
+            const routeStart = typeof performance !== "undefined" ? performance.now() : 0;
             setLoading(true);
             setError(null);
             const init = workspaceDataFetchInit();
@@ -387,12 +395,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     fetch(`/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`, init),
                 ]);
 
-                const wuJson = (await wuRes.json().catch(() => ({}))) as { error?: string } & Partial<WorkUnitRow>;
-                const deptJson = (await deptRes.json().catch(() => ({}))) as { error?: string } & Partial<DeptRow>;
-                const deptWusJson = (await deptWusRes.json().catch(() => ({}))) as {
-                    error?: string;
-                    items?: Array<{ id: string; key?: string | null }>;
-                };
+                const [wuJson, deptJson, deptWusJson] = await Promise.all([
+                    wuRes.json().catch(() => ({})),
+                    deptRes.json().catch(() => ({})),
+                    deptWusRes.json().catch(() => ({})),
+                ]) as [
+                    { error?: string } & Partial<WorkUnitRow>,
+                    { error?: string } & Partial<DeptRow>,
+                    { error?: string; items?: Array<{ id: string; key?: string | null }> },
+                ];
 
                 if (!wuRes.ok) throw new Error(wuJson.error ?? "Failed to load work unit");
                 if (!deptRes.ok) throw new Error(deptJson.error ?? "Failed to load department");
@@ -409,7 +420,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     setWorkUnit(wu);
                     setDept(deptJson as DeptRow);
                     setNeedsAttentionWorkUnitId(naWuEarly?.id ?? null);
-                    setLoading(false);
                 }
 
                 const isAttention = (wu.key ?? "").trim().toLowerCase() === "needs_attention";
@@ -627,7 +637,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     setEnrollmentRightRailResolved(null);
                 }
             } finally {
-                if (!cancelled) setLoading(false);
+                if (!cancelled) {
+                    setLoading(false);
+                    if (typeof performance !== "undefined" && typeof window !== "undefined") {
+                        console.log("[page-timing]", {
+                            route: "work_unit",
+                            phase: "first_paint",
+                            duration_ms: Math.round(performance.now() - routeStart),
+                        });
+                    }
+                }
             }
         })();
         return () => {
@@ -697,7 +716,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     if (res.status === 501) throw new Error("Queue type not supported yet");
                     throw new Error(json.error ?? "Failed to load queue items");
                 }
-                if (seq === queueItemsRequestSeq.current) setQueueItems(json as unknown as QueueItemsResult);
+                const payload = json as unknown as QueueItemsResult;
+                if (seq === queueItemsRequestSeq.current) {
+                    setQueueItems(payload);
+                    if (typeof window !== "undefined") {
+                        console.warn("[pipeline-count-unify]", {
+                            source: "queue-rows",
+                            work_unit_id: workUnitId,
+                            queue_key: queueKey,
+                            count: typeof payload.total === "number" ? payload.total : null,
+                        });
+                    }
+                }
             } catch (e) {
                 if (seq === queueItemsRequestSeq.current) {
                     setQueueItems(null);
@@ -1124,9 +1154,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
             .filter((r) => typeof (r as { id?: unknown })?.id === "string" && String((r as { id: string }).id).trim())
             .filter((r) => (unmappedClientFilter ? isRowUnmappedForThroughput(r, coveredThroughputStatusKeys) : true));
 
-        const previewCfg = queueUi?.row_preview ?? { variant: "basic" as const, fields: ["title", "status"] as QueueUiRowPreviewField[], actions: ["open"] as const };
+        const previewCfg = queueUi?.row_preview ?? {
+            variant: "basic" as const,
+            fields: ["title", "status"] as QueueUiRowPreviewField[],
+            actions: ["open"] satisfies QueueUiRowPreviewAction[],
+        };
         const previewFields = previewCfg.fields ?? (["title", "status"] as QueueUiRowPreviewField[]);
-        const previewActions = previewCfg.actions ?? (["open"] as const);
+        const previewActions: QueueUiRowPreviewAction[] = previewCfg.actions?.length
+            ? [...previewCfg.actions]
+            : ["open"];
 
         const vmItems = (
             sourceRows as Array<Record<string, unknown> & { id?: string }>
@@ -1154,9 +1190,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 const email = typeof r?._primary_email === "string" ? r._primary_email.trim() : "";
                 const childName = typeof r?._child_display_name === "string" ? r._child_display_name.trim() : "";
                 const program = typeof r?._requested_program === "string" ? r._requested_program.trim() : "";
-                const desiredStart =
-                    typeof r?._desired_start_date === "string" ? r._desired_start_date.trim() : "";
-                const tourCtx = typeof r?._tour_context === "string" ? r._tour_context.trim() : "";
                 const note =
                     formatOpportunityQueueNotesPreview(
                         typeof r?._notes_preview === "string" ? r._notes_preview : null,
@@ -1252,34 +1285,32 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     quickActions,
                     semanticCrmCompact:
                         previewCfg.variant === "crm_compact"
-                            ? {
-                                  primaryIdentity: familyTitle,
-                                  childrenLines: want("child_name") && multiChildren ? crmChildrenParsed : null,
-                                  childName: want("child_name") ? (multiChildren ? null : childName || null) : null,
-                                  stageLabel: null,
-                                  statusLabel: want("status") ? statusLabel || null : null,
-                                  nextStep:
-                                      typeof r?._next_step_preview === "string" && r._next_step_preview.trim()
-                                          ? r._next_step_preview.trim()
-                                          : null,
-                                  lastActivity: activityLastLine,
-                                  commercialValue: null,
-                                  contactSnippet:
-                                      [
-                                          want("primary_contact") ? contactName : "",
-                                          want("phone") ? formatPhoneUS(phone) : "",
-                                          want("email") ? email : "",
-                                      ]
-                                          .filter((s) => s && s !== "—")
-                                          .join(" · ") || null,
-                                  programContext: want("program") ? program || null : null,
-                                  roomContext: null,
-                                  ageContext: want("desired_start_date") ? (desiredStart || null) : null,
-                                  tourContext: want("tour_date") ? tourCtx || null : null,
-                                  attentionReason: attentionReason || null,
-                                  familyNote: note || null,
-                                  activityStale,
-                              }
+                            ? (() => {
+                                  const crmPresentation = buildCrmQueueRowPreviewPresentation(
+                                      r as Record<string, unknown>,
+                                      want,
+                                      queueUi?.row_preview.fieldLabels
+                                  );
+                                  return {
+                                      primaryIdentity: familyTitle,
+                                      childrenLines: want("child_name") && multiChildren ? crmChildrenParsed : null,
+                                      childName: want("child_name") ? (multiChildren ? null : childName || null) : null,
+                                      stageLabel: null,
+                                      statusLabel: want("status") ? statusLabel || null : null,
+                                      nextStep:
+                                          typeof r?._next_step_preview === "string" && r._next_step_preview.trim()
+                                              ? r._next_step_preview.trim()
+                                              : null,
+                                      lastActivity: activityLastLine,
+                                      commercialValue: null,
+                                      ...crmPresentation,
+                                      programContext: want("program") ? program || null : null,
+                                      roomContext: null,
+                                      attentionReason: attentionReason || null,
+                                      familyNote: note || null,
+                                      activityStale,
+                                  };
+                              })()
                             : undefined,
                 };
             });
@@ -1476,8 +1507,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
             oq: oqFiltered,
             queueRowQuickActions: opportunityQueueRowActions,
             rightRailResolved: enrollmentRightRailResolved ?? [],
+            rowPreviewFieldLabels: queueUi?.row_preview.fieldLabels ?? null,
         });
-    }, [departmentId, dept, enrollmentRightRailResolved, oq, opportunityQueueRowActions, searchParams, workUnit]);
+    }, [departmentId, dept, enrollmentRightRailResolved, oq, opportunityQueueRowActions, queueUi, searchParams, workUnit]);
 
     const workUnitKpiContext = useMemo(() => {
         if (!workUnit?.id || !departmentId) return null;
@@ -1543,6 +1575,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         setWuScopeHasPlacements(false);
         const init = workspaceDataFetchInit();
         void (async () => {
+            const tPlace0 = typeof performance !== "undefined" ? performance.now() : 0;
             try {
                 const res = await fetch(
                     `/api/admin/workspace-kpi-placements?surface=work_unit&department_id=${encodeURIComponent(
@@ -1551,7 +1584,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     { ...(init ?? {}), cache: "no-store" }
                 );
                 if (!res.ok) {
-                    if (!cancelled) setWuPlacementRows(undefined);
+                    if (!cancelled) {
+                        setWuPlacementRows([]);
+                        setWuScopeHasPlacements(false);
+                    }
                     return;
                 }
                 const j = (await res.json().catch(() => ({}))) as {
@@ -1564,7 +1600,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     setWuScopeHasPlacements(j.scope_has_placements === true);
                 }
             } catch {
-                if (!cancelled) setWuPlacementRows(undefined);
+                if (!cancelled) {
+                    setWuPlacementRows([]);
+                    setWuScopeHasPlacements(false);
+                }
+            } finally {
+                if (typeof performance !== "undefined" && typeof window !== "undefined") {
+                    console.log("[page-timing]", {
+                        route: "work_unit",
+                        phase: "kpi_placement",
+                        duration_ms: Math.round(performance.now() - tPlace0),
+                    });
+                }
             }
         })();
         return () => {
@@ -1836,12 +1883,26 @@ export default function AdminV2OpportunityWorkUnitPage() {
         if (suppressWorkUnitKpiStrip) {
             return { ...base, kpis: [] };
         }
-        const kpis =
-            wuResolvedPlacementKpis !== undefined ? wuResolvedPlacementKpis : buildDefaultWorkUnitKpis(workUnitKpiContext);
+        if (wuPlacementRows === undefined) {
+            return { ...base, kpis: [] };
+        }
+        const kpis = wuResolvedPlacementKpis ?? buildDefaultWorkUnitKpis(workUnitKpiContext);
         return { ...base, kpis };
-    }, [queueModel, model, workUnitKpiContext, wuResolvedPlacementKpis, suppressWorkUnitKpiStrip]);
+    }, [
+        queueModel,
+        model,
+        workUnitKpiContext,
+        wuResolvedPlacementKpis,
+        suppressWorkUnitKpiStrip,
+        wuPlacementRows,
+    ]);
 
     const effectiveModel = mergedWorkspaceModel;
+
+    const workUnitKpiStripPlaceholder = !suppressWorkUnitKpiStrip && wuPlacementRows === undefined;
+
+    /** Queue summaries + entity context — KPI placements load after paint (skeleton strip). */
+    const workUnitPageCoherent = !loading && (!workUnit || !dept || !!error);
 
     return (
         <WorkspaceChrome
@@ -1854,8 +1915,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
             title={wuName}
             subtitle=""
         >
-            {loading ? (
-                <AdminV2RouteLoadingState variant="work_unit" />
+            {!workUnitPageCoherent ? (
+                <AdminV2RouteLoadingState variant="work_unit" showRibbon={false} />
             ) : effectiveModel ? (
                 <>
                     {actionFeedback ? (
@@ -1873,6 +1934,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         model={effectiveModel}
                         onAction={onAction}
                         headerQueuePicker={headerQueuePickerSlot}
+                        kpiStripPlaceholder={workUnitKpiStripPlaceholder}
                         primaryFooterSlot={
                             <AutomationWorkflowsBlock
                                 title="Automations"

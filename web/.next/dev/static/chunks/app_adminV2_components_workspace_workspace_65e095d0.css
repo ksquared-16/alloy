@@ -4712,6 +4712,34 @@
   font-weight: 650;
 }
 
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__contact-segments {
+  min-width: 0;
+  color: color-mix(in srgb, var(--d-muted) 18%, var(--d-text-primary, #273f52));
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .45em .65em;
+  font-weight: 650;
+  display: flex;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__contact-seg {
+  font-size: inherit;
+  line-height: inherit;
+  font-weight: inherit;
+  max-width: 100%;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__contact-seg--name {
+  font-weight: inherit;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__contact-seg-k {
+  font-weight: inherit;
+  color: color-mix(in srgb, var(--d-muted) 50%, var(--d-text-primary, #273f52));
+}
+
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__footer {
   border-top: 1px solid color-mix(in srgb, var(--d-border) 42%, transparent);
   flex-direction: column;
@@ -5388,6 +5416,33 @@
   font-size: 12px;
   font-weight: 520;
   line-height: 1.36;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__contact-segments {
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .4em .6em;
+  min-width: 0;
+  font-weight: 520;
+  display: flex;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__contact-seg {
+  font-size: inherit;
+  line-height: inherit;
+  font-weight: inherit;
+  max-width: 100%;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__contact-seg--name {
+  font-weight: inherit;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__contact-seg-k {
+  font-weight: inherit;
+  color: color-mix(in srgb, var(--d-muted) 48%, var(--d-text-primary, #273f52));
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__footer-notes {

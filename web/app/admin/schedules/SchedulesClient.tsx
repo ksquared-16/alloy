@@ -6,7 +6,7 @@ import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import AdminListPageHeader from "@/components/admin/AdminListPageHeader";
 import { useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext";
 import Drawer from "@/components/admin/Drawer";
-import { formatDateTime } from "@/lib/adminFormatters";
+import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
 import { isScheduleCanceledStatusKey } from "@/lib/admin/scheduleCanceledStatus";
 import { Filter } from "lucide-react";
 
@@ -28,6 +28,12 @@ type JobOption = { id: string; title: string | null };
 
 export default function SchedulesClient() {
   const orgOpTz = useAdminOrgOperationalTimezone();
+  const visitDisplayTz = (rowTz: string | null | undefined) => {
+    const s = rowTz != null ? String(rowTz).trim() : "";
+    return s || orgOpTz;
+  };
+  const formatScheduleBoundary = (iso: string, rowTz: string | null | undefined) =>
+    formatDateTimeForUserDisplay(iso, visitDisplayTz(rowTz));
   const emptyForm = useMemo(
     () => ({ job_id: "", start_at: "", end_at: "", timezone: orgOpTz, visit_type: "", status: "" }),
     [orgOpTz]
@@ -295,8 +301,8 @@ export default function SchedulesClient() {
                         openDrawer({ type: "schedules", id: s.id });
                       }}
                     >
-                      <td className="px-5 py-3.5 text-alloy-midnight/90">{formatDateTime(s.start_at)}</td>
-                      <td className="px-5 py-3.5 text-alloy-midnight/90">{formatDateTime(s.end_at)}</td>
+                      <td className="px-5 py-3.5 text-alloy-midnight/90">{formatScheduleBoundary(s.start_at, s.timezone)}</td>
+                      <td className="px-5 py-3.5 text-alloy-midnight/90">{formatScheduleBoundary(s.end_at, s.timezone)}</td>
                       <td className="px-5 py-3.5 text-alloy-midnight/90">{s._job_title ?? s.job_id?.slice(0, 8) ?? "—"}</td>
                       <td className="px-5 py-3.5 text-alloy-midnight/90">{s._customer_name ?? "—"}</td>
                       <td className="px-5 py-3.5 text-alloy-midnight/90">{s._location_label ?? "—"}</td>
@@ -396,7 +402,7 @@ export default function SchedulesClient() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true">
           <div className="bg-white rounded-lg shadow-lg border border-alloy-stone/30 p-6 max-w-md w-full mx-4">
             <h3 className="text-lg font-semibold text-alloy-midnight mb-2">Cancel {singular.toLowerCase()}</h3>
-            <p className="text-sm text-alloy-midnight/80 mb-2">Cancel this {singular.toLowerCase()}? Start: {formatDateTime(cancelTarget.start_at)}</p>
+            <p className="text-sm text-alloy-midnight/80 mb-2">Cancel this {singular.toLowerCase()}? Start: {formatScheduleBoundary(cancelTarget.start_at, cancelTarget.timezone)}</p>
             <p className="text-xs text-alloy-midnight/55 mb-3 leading-snug">
               This uses the server cancel action (records <code className="text-[11px] bg-alloy-stone/15 px-1 rounded">canceled_at</code>, applies cancellation-fee rules). It is not the same as setting workflow status to canceled.
             </p>

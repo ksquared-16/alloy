@@ -6,12 +6,15 @@ import { operationalWorkspaceShellStyle } from "@/lib/visualContext";
 import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
 import { SignalBlock, KPIBlock, QueueBlock, WorkBlock, ActionsBlock } from "../blocks";
 import { WorkspaceShellLayout } from "@/components/admin/workspace/WorkspaceShellLayout";
+import { KpiStripSkeleton } from "@/components/admin/workspace/KpiStripSkeleton";
 
 type Props = {
   model: WorkUnitWorkspaceModel;
   onAction: WorkspaceActionHandler;
   /** Compact queue pills in the control-deck header (below lane headline). Body starts with queue rows only. */
   headerQueuePicker?: ReactNode;
+  /** Non-numeric placeholder while KPI placements load (Phase 3). */
+  kpiStripPlaceholder?: boolean;
   /** Optional footer content constrained to the primary column width. */
   primaryFooterSlot?: ReactNode;
 };
@@ -20,7 +23,13 @@ type Props = {
  * Work unit — same shell grammar as Department (control deck, KPI strip, split grid, workflows strip, command rail).
  * Main surface is a structured queue of drillable records (not department rollups). No inline AI form — shell bar only.
  */
-export default function WorkUnitWorkspace({ model, onAction, headerQueuePicker, primaryFooterSlot }: Props) {
+export default function WorkUnitWorkspace({
+  model,
+  onAction,
+  headerQueuePicker,
+  kpiStripPlaceholder = false,
+  primaryFooterSlot,
+}: Props) {
   const wuShellStyle: CSSProperties = useMemo(
     () =>
       operationalWorkspaceShellStyle({
@@ -43,7 +52,8 @@ export default function WorkUnitWorkspace({ model, onAction, headerQueuePicker, 
   const hasSignals = model.signals.length > 0;
   const hasKpis = model.kpis.length > 0;
   const hasTopStack = hasBrief || hasSignals || hasAwareness || Boolean(headerQueuePicker);
-  const hasControlDeck = hasTopStack || hasKpis;
+  const hasKpiZone = hasKpis || kpiStripPlaceholder;
+  const hasControlDeck = hasTopStack || hasKpiZone;
   const focusKicker = model.focusLabel?.trim() || "Work unit";
 
   const li = model.laneInterpretation;
@@ -119,7 +129,11 @@ export default function WorkUnitWorkspace({ model, onAction, headerQueuePicker, 
                   ) : null}
                 </div>
               ) : null}
-              {hasKpis ? (
+              {kpiStripPlaceholder ? (
+                <div data-workspace-zone="kpi-banner">
+                  <KpiStripSkeleton id="wu-kpi-skeleton" />
+                </div>
+              ) : hasKpis ? (
                 <div data-workspace-zone="kpi-banner">
                   <KPIBlock kpis={model.kpis} maxVisible={5} />
                 </div>

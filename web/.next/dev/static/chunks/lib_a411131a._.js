@@ -100,8 +100,12 @@ __turbopack_context__.s([
     ()=>formatDateTimeForUserDisplay,
     "formatDateTimeLocal",
     ()=>formatDateTimeLocal,
+    "formatDateTimeUsShortHyphenUtc",
+    ()=>formatDateTimeUsShortHyphenUtc,
     "formatDateTimeUtcAudit",
     ()=>formatDateTimeUtcAudit,
+    "formatDateUsShortHyphenUtc",
+    ()=>formatDateUsShortHyphenUtc,
     "formatDateUtcAudit",
     ()=>formatDateUtcAudit,
     "formatFrequencyLabel",
@@ -116,10 +120,14 @@ __turbopack_context__.s([
     ()=>formatPayoutPercent,
     "formatPhoneUS",
     ()=>formatPhoneUS,
+    "formatQueuePreviewTourTimingUtc",
+    ()=>formatQueuePreviewTourTimingUtc,
     "formatRecurrenceLabel",
     ()=>formatRecurrenceLabel,
     "formatScheduleDrawerHeaderTitle",
     ()=>formatScheduleDrawerHeaderTitle,
+    "normalizePreviewLooseDateTokens",
+    ()=>normalizePreviewLooseDateTokens,
     "personDisplayName",
     ()=>personDisplayName
 ]);
@@ -160,6 +168,62 @@ function formatPayoutPercent(value) {
     if (Number.isNaN(n)) return "—";
     const display = n > 0 && n <= 1 ? n * 100 : n;
     return `${display}%`;
+}
+function formatDateUsShortHyphenUtc(value) {
+    if (value === null || value === undefined || value === "") return "—";
+    const d = typeof value === "object" && value instanceof Date ? value : new Date(value);
+    if (!Number.isNaN(d.getTime())) {
+        const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+        const dd = String(d.getUTCDate()).padStart(2, "0");
+        const yy = String(d.getUTCFullYear());
+        return `${mm}-${dd}-${yy}`;
+    }
+    const s = String(value).trim();
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+    if (m) return `${m[2]}-${m[3]}-${m[1]}`;
+    return s;
+}
+function formatDateTimeUsShortHyphenUtc(value) {
+    if (value === null || value === undefined || value === "") return "—";
+    const d = typeof value === "object" && value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(d.getTime())) return "—";
+    const datePart = formatDateUsShortHyphenUtc(d);
+    const timePart = new Intl.DateTimeFormat("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+        timeZone: "UTC"
+    }).format(d);
+    return `${datePart} ${timePart}`;
+}
+function normalizePreviewLooseDateTokens(text) {
+    let s = text;
+    s = s.replace(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/g, (_full, mo, day, yr)=>{
+        return `${String(mo).padStart(2, "0")}-${String(day).padStart(2, "0")}-${yr}`;
+    });
+    s = s.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (_full, yr, mo, day)=>`${mo}-${day}-${yr}`);
+    return s;
+}
+function formatQueuePreviewTourTimingUtc(value) {
+    const t = (value ?? "").trim();
+    if (!t || t === "—" || t === "-") return "";
+    const slashFull = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(.*))?$/.exec(t);
+    if (slashFull) {
+        const mm = slashFull[1].padStart(2, "0");
+        const dd = slashFull[2].padStart(2, "0");
+        const yy = slashFull[3];
+        const datePart = `${mm}-${dd}-${yy}`;
+        const rest = slashFull[4]?.trim();
+        return rest ? `${datePart} ${rest}` : datePart;
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return formatDateUsShortHyphenUtc(t);
+    const ms = Date.parse(t);
+    if (Number.isFinite(ms)) {
+        const d = new Date(ms);
+        const hasExplicitTime = /\d{1,2}:\d{2}/.test(t) || /[Tt]/.test(t) && (d.getUTCHours() !== 0 || d.getUTCMinutes() !== 0 || d.getUTCSeconds() !== 0 || d.getUTCMilliseconds() !== 0);
+        return hasExplicitTime ? formatDateTimeUsShortHyphenUtc(d) : formatDateUsShortHyphenUtc(d);
+    }
+    return normalizePreviewLooseDateTokens(t);
 }
 function formatDateUtcAudit(value) {
     if (value === null || value === undefined) return "-";
@@ -7539,7 +7603,8 @@ const queueUiRowPreviewSchema = __TURBOPACK__imported__module__$5b$project$5d2f$
         "email"
     ])).default([
         "open"
-    ])
+    ]),
+    field_labels: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v4$2f$classic$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].record(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v4$2f$classic$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string(), __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v4$2f$classic$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string()).optional()
 }).strict();
 const queueUiSectionSchema = __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v4$2f$classic$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].object({
     key: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v4$2f$classic$2f$external$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().min(1),

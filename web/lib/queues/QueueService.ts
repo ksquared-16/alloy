@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { validateQueueDefinition, type QueueConfig, type QueueDefinitionV1, type QueueFilter } from "@/lib/config/queueDefinitionSchema";
-import type { QueueItemsResult, QueueSummary } from "@/lib/queues/types";
+import type { QueueItemsResult, QueueOperationalCalendarMeta, QueueSummary } from "@/lib/queues/types";
 import { workUnitScopeTotalFromSummaries } from "@/lib/workspace/workUnitQueueDerived";
 import {
     fetchEffectiveStatusDefinitions,
@@ -8,6 +8,8 @@ import {
     type StatusDefinitionRow,
 } from "@/lib/admin/statusDefinitionsResolve";
 import { formatTourDateTime } from "@/lib/enrollment/formatTourDateTime";
+import { getOrgLocalTodayUtcBounds, type OrgLocalDayUtcBounds } from "@/lib/admin/orgLocalDayBounds";
+import { fetchOperationalTimezoneForOrg, UTC_FALLBACK_IANA } from "@/lib/admin/timezoneContract";
 
 type JobRowPreview = {
     id: string;
@@ -84,10 +86,50 @@ function assertSupportedEntityType(def: QueueDefinitionV1) {
     throw new QueueServiceError(`QueueService does not support entity_type: ${def.entity_type}`, 501, "NOT_IMPLEMENTED");
 }
 
-function startOfTodayServerLocal(): Date {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    return d;
+type OperationalDayPlanContext = {
+    dayBounds: OrgLocalDayUtcBounds;
+    calendar_meta: QueueOperationalCalendarMeta;
+};
+
+function utcFallbackOperationalDayContext(refUtc: Date): OperationalDayPlanContext {
+    const dayBounds = getOrgLocalTodayUtcBounds(UTC_FALLBACK_IANA, refUtc);
+    return {
+        dayBounds,
+        calendar_meta: {
+            calendar_type: "operational_day",
+            timezone_effective: UTC_FALLBACK_IANA,
+            timezone_source: "utc_fallback",
+            day_start_utc: dayBounds.dayStartUtc.toISOString(),
+            day_end_exclusive_utc: dayBounds.dayEndExclusiveUtc.toISOString(),
+        },
+    };
+}
+
+function planContextOrUtcFallback(ctx: OperationalDayPlanContext | undefined, refUtc: Date): OperationalDayPlanContext {
+    return ctx ?? utcFallbackOperationalDayContext(refUtc);
+}
+
+async function resolveOperationalDayPlanContext(
+    supabase: ReturnType<typeof createAdminClient>,
+    orgId: string,
+    refUtc: Date
+): Promise<OperationalDayPlanContext> {
+    const { iana, source } = await fetchOperationalTimezoneForOrg(supabase as any, orgId);
+    const dayBounds = getOrgLocalTodayUtcBounds(iana, refUtc);
+    return {
+        dayBounds,
+        calendar_meta: {
+            calendar_type: "operational_day",
+            timezone_effective: iana,
+            timezone_source: source,
+            day_start_utc: dayBounds.dayStartUtc.toISOString(),
+            day_end_exclusive_utc: dayBounds.dayEndExclusiveUtc.toISOString(),
+        },
+    };
+}
+
+function queueUsesOperationalCalendarDateFilter(queue: QueueConfig): boolean {
+    return queue.filters.some((f) => f.type === "date" && (f.operator === "today" || f.operator === "past_due"));
 }
 
 type JobQueryPlanOp =
@@ -105,11 +147,17 @@ type JobSortPlan = { column: string; ascending: boolean };
 type OpportunityQueryPlanOp = JobQueryPlanOp;
 type OpportunitySortPlan = { column: string; ascending: boolean };
 
-function buildJobPlan(queue: QueueConfig): { ops: JobQueryPlanOp[]; sort: JobSortPlan[] } {
-    const ops: JobQueryPlanOp[] = [];
+function buildJobPlan(
+    queue: QueueConfig,
+    ctx?: OperationalDayPlanContext
+): { ops: JobQueryPlanOp[]; sort: JobSortPlan[]; calendar_meta?: QueueOperationalCalendarMeta } {
+    const refUtc = new Date();
+    const resolved = planContextOrUtcFallback(ctx, refUtc);
+    const useCalendarMeta = queueUsesOperationalCalendarDateFilter(queue);
 
+    const ops: JobQueryPlanOp[] = [];
     for (const f of queue.filters) {
-        ops.push(...jobFilterToOps(f));
+        ops.push(...jobFilterToOps(f, resolved.dayBounds));
     }
 
     const sort: JobSortPlan[] = [];
@@ -124,16 +172,20 @@ function buildJobPlan(queue: QueueConfig): { ops: JobQueryPlanOp[]; sort: JobSor
         sort.push({ column: "updated_at", ascending: false });
     }
 
-    return { ops, sort };
+    return { ops, sort, calendar_meta: useCalendarMeta ? resolved.calendar_meta : undefined };
 }
 
 function buildOpportunityPlan(
     queue: QueueConfig,
-    now: Date = new Date()
-): { ops: OpportunityQueryPlanOp[]; sort: OpportunitySortPlan[] } {
+    now: Date = new Date(),
+    ctx?: OperationalDayPlanContext
+): { ops: OpportunityQueryPlanOp[]; sort: OpportunitySortPlan[]; calendar_meta?: QueueOperationalCalendarMeta } {
+    const resolved = planContextOrUtcFallback(ctx, now);
+    const useCalendarMeta = queueUsesOperationalCalendarDateFilter(queue);
+
     const ops: OpportunityQueryPlanOp[] = [];
     for (const f of queue.filters) {
-        ops.push(...opportunityFilterToOps(f, now));
+        ops.push(...opportunityFilterToOps(f, now, resolved.dayBounds));
     }
 
     const sort: OpportunitySortPlan[] = [];
@@ -156,10 +208,10 @@ function buildOpportunityPlan(
         sort.push({ column: "updated_at", ascending: false });
     }
 
-    return { ops, sort };
+    return { ops, sort, calendar_meta: useCalendarMeta ? resolved.calendar_meta : undefined };
 }
 
-function jobFilterToOps(f: QueueFilter): JobQueryPlanOp[] {
+function jobFilterToOps(f: QueueFilter, dayBounds: OrgLocalDayUtcBounds): JobQueryPlanOp[] {
     switch (f.type) {
         case "status": {
             // jobs.status_key IN (...)
@@ -182,19 +234,16 @@ function jobFilterToOps(f: QueueFilter): JobQueryPlanOp[] {
             if (!JOB_DATE_FIELD_ALLOWLIST.has(f.field as (typeof JOB_DATE_FIELD_ALLOWLIST extends Set<infer T> ? T : never))) {
                 throw new QueueServiceError(`Unsupported job date field: ${f.field}`, 400, "UNSUPPORTED_DATE_FIELD");
             }
-            const start = startOfTodayServerLocal();
-            const startIso = start.toISOString();
+            const startIso = dayBounds.dayStartUtc.toISOString();
+            const endExclusiveIso = dayBounds.dayEndExclusiveUtc.toISOString();
             if (f.operator === "today") {
-                const end = new Date(start);
-                end.setDate(end.getDate() + 1);
-                const endIso = end.toISOString();
                 return [
                     { kind: "gte", column: f.field, value: startIso },
-                    { kind: "range_lt", column: f.field, value: endIso },
+                    { kind: "range_lt", column: f.field, value: endExclusiveIso },
                 ];
             }
             if (f.operator === "past_due") {
-                // NOTE: for created_at this means "created before today". For future due-date fields, this will tighten.
+                // NOTE: for created_at this means "timestamp before start of org-local today". Same instant semantics as pre–Slice-3B, but the boundary is org TZ (not server-local midnight).
                 return [{ kind: "lt", column: f.field, value: startIso }];
             }
             throw new QueueServiceError(`Unsupported date operator: ${String((f as { operator?: unknown }).operator)}`, 400, "UNSUPPORTED_OPERATOR");
@@ -674,7 +723,7 @@ async function loadOpportunityNeedsAttentionRows(params: {
     return sortOpportunityRowsByPlan(filtered, params.sort);
 }
 
-function opportunityFilterToOps(f: QueueFilter, now: Date): OpportunityQueryPlanOp[] {
+function opportunityFilterToOps(f: QueueFilter, now: Date, dayBounds: OrgLocalDayUtcBounds): OpportunityQueryPlanOp[] {
     switch (f.type) {
         case "status": {
             if (f.operator !== "in") {
@@ -713,15 +762,12 @@ function opportunityFilterToOps(f: QueueFilter, now: Date): OpportunityQueryPlan
             ) {
                 throw new QueueServiceError(`Unsupported opportunity date field: ${f.field}`, 400, "UNSUPPORTED_DATE_FIELD");
             }
-            const start = startOfTodayServerLocal();
-            const startIso = start.toISOString();
+            const startIso = dayBounds.dayStartUtc.toISOString();
+            const endExclusiveIso = dayBounds.dayEndExclusiveUtc.toISOString();
             if (f.operator === "today") {
-                const end = new Date(start);
-                end.setDate(end.getDate() + 1);
-                const endIso = end.toISOString();
                 return [
                     { kind: "gte", column: f.field, value: startIso },
-                    { kind: "range_lt", column: f.field, value: endIso },
+                    { kind: "range_lt", column: f.field, value: endExclusiveIso },
                 ];
             }
             if (f.operator === "past_due") {
@@ -934,6 +980,8 @@ export async function getWorkUnitQueueSummaries(params: {
     assertSupportedEntityType(def);
 
     const supabase = createAdminClient();
+    const refUtc = new Date();
+    const operationalDay = await resolveOperationalDayPlanContext(supabase, params.orgId, refUtc);
 
     const previewLimit = clampLimit(params.limit ?? 3, 1, 10);
 
@@ -985,7 +1033,7 @@ export async function getWorkUnitQueueSummaries(params: {
         let needsAttentionLoadMs = 0;
         let rowsEnriched = 0;
 
-        const finish = (summary: QueueSummary): QueueSummary => {
+        const finish = (summary: QueueSummary, calendar_meta?: QueueOperationalCalendarMeta): QueueSummary => {
             perQueueMs[queueIndex] = {
                 key: q.key,
                 count_ms: countMs,
@@ -995,11 +1043,11 @@ export async function getWorkUnitQueueSummaries(params: {
                 total_ms: Date.now() - qT0,
                 rows_enriched: rowsEnriched,
             };
-            return summary;
+            return calendar_meta ? { ...summary, calendar_meta } : summary;
         };
 
         if (def.entity_type === "job") {
-            const { ops, sort } = buildJobPlan(q);
+            const { ops, sort, calendar_meta } = buildJobPlan(q, operationalDay);
 
             const tC0 = Date.now();
             const base = supabase
@@ -1016,16 +1064,19 @@ export async function getWorkUnitQueueSummaries(params: {
             }
 
             if (!includePreviews) {
-                return finish({
-                    key: q.key,
-                    label: q.label,
-                    description: q.description,
-                    entity_type: def.entity_type,
-                    priority: q.priority ?? "standard",
-                    display: q.display ?? "list",
-                    count: count ?? 0,
-                    preview: [],
-                });
+                return finish(
+                    {
+                        key: q.key,
+                        label: q.label,
+                        description: q.description,
+                        entity_type: def.entity_type,
+                        priority: q.priority ?? "standard",
+                        display: q.display ?? "list",
+                        count: count ?? 0,
+                        preview: [],
+                    },
+                    calendar_meta
+                );
             }
 
             const tP0 = Date.now();
@@ -1041,65 +1092,75 @@ export async function getWorkUnitQueueSummaries(params: {
                 throw new QueueServiceError(previewErr.message, 400, "DB_ERROR");
             }
 
-            return finish({
-                key: q.key,
-                label: q.label,
-                description: q.description,
-                entity_type: def.entity_type,
-                priority: q.priority ?? "standard",
-                display: q.display ?? "list",
-                count: count ?? 0,
-                preview: (preview ?? []) as unknown[],
-            });
-        }
-
-        // opportunity
-        let ops: OpportunityQueryPlanOp[] = [];
-        let sort: OpportunitySortPlan[] = [];
-        try {
-            const plan = buildOpportunityPlan(q);
-            ops = plan.ops;
-            sort = plan.sort;
-        } catch (e) {
-            if (e instanceof QueueServiceError && e.status === 501) {
-                return finish({
+            return finish(
+                {
                     key: q.key,
                     label: q.label,
                     description: q.description,
                     entity_type: def.entity_type,
                     priority: q.priority ?? "standard",
                     display: q.display ?? "list",
-                    count: 0,
-                    preview: [],
-                });
+                    count: count ?? 0,
+                    preview: (preview ?? []) as unknown[],
+                },
+                calendar_meta
+            );
+        }
+
+        // opportunity
+        let ops: OpportunityQueryPlanOp[] = [];
+        let sort: OpportunitySortPlan[] = [];
+        let calendar_meta: QueueOperationalCalendarMeta | undefined;
+        try {
+            const plan = buildOpportunityPlan(q, refUtc, operationalDay);
+            ops = plan.ops;
+            sort = plan.sort;
+            calendar_meta = plan.calendar_meta;
+        } catch (e) {
+            if (e instanceof QueueServiceError && e.status === 501) {
+                return finish(
+                    {
+                        key: q.key,
+                        label: q.label,
+                        description: q.description,
+                        entity_type: def.entity_type,
+                        priority: q.priority ?? "standard",
+                        display: q.display ?? "list",
+                        count: 0,
+                        preview: [],
+                    },
+                    undefined
+                );
             }
             throw e;
         }
 
         if (q.key === "needs_attention") {
-            const now = new Date();
             const tN0 = Date.now();
             const matched = await loadOpportunityNeedsAttentionRows({
                 supabase,
                 orgId: params.orgId,
                 workUnitId: params.workUnitId,
                 sort,
-                now,
+                now: refUtc,
                 fetchCap: includePreviews ? undefined : NEEDS_ATTENTION_COUNT_ONLY_FETCH_CAP,
             });
             needsAttentionLoadMs = Date.now() - tN0;
 
             if (!includePreviews) {
-                return finish({
-                    key: q.key,
-                    label: q.label,
-                    description: q.description,
-                    entity_type: def.entity_type,
-                    priority: q.priority ?? "standard",
-                    display: q.display ?? "list",
-                    count: matched.length,
-                    preview: [],
-                });
+                return finish(
+                    {
+                        key: q.key,
+                        label: q.label,
+                        description: q.description,
+                        entity_type: def.entity_type,
+                        priority: q.priority ?? "standard",
+                        display: q.display ?? "list",
+                        count: matched.length,
+                        preview: [],
+                    },
+                    undefined
+                );
             }
 
             const previewRows = matched.slice(0, previewLimit);
@@ -1115,16 +1176,19 @@ export async function getWorkUnitQueueSummaries(params: {
             });
             enrichMs = Date.now() - tE0;
 
-            return finish({
-                key: q.key,
-                label: q.label,
-                description: q.description,
-                entity_type: def.entity_type,
-                priority: q.priority ?? "standard",
-                display: q.display ?? "list",
-                count: matched.length,
-                preview: preview as unknown[],
-            });
+            return finish(
+                {
+                    key: q.key,
+                    label: q.label,
+                    description: q.description,
+                    entity_type: def.entity_type,
+                    priority: q.priority ?? "standard",
+                    display: q.display ?? "list",
+                    count: matched.length,
+                    preview: preview as unknown[],
+                },
+                undefined
+            );
         }
 
         const tC0 = Date.now();
@@ -1142,16 +1206,19 @@ export async function getWorkUnitQueueSummaries(params: {
         }
 
         if (!includePreviews) {
-            return finish({
-                key: q.key,
-                label: q.label,
-                description: q.description,
-                entity_type: def.entity_type,
-                priority: q.priority ?? "standard",
-                display: q.display ?? "list",
-                count: count ?? 0,
-                preview: [],
-            });
+            return finish(
+                {
+                    key: q.key,
+                    label: q.label,
+                    description: q.description,
+                    entity_type: def.entity_type,
+                    priority: q.priority ?? "standard",
+                    display: q.display ?? "list",
+                    count: count ?? 0,
+                    preview: [],
+                },
+                calendar_meta
+            );
         }
 
         const tP0 = Date.now();
@@ -1179,16 +1246,19 @@ export async function getWorkUnitQueueSummaries(params: {
         });
         enrichMs = Date.now() - tE0;
 
-        return finish({
-            key: q.key,
-            label: q.label,
-            description: q.description,
-            entity_type: def.entity_type,
-            priority: q.priority ?? "standard",
-            display: q.display ?? "list",
-            count: count ?? 0,
-            preview: preview as unknown[],
-        });
+        return finish(
+            {
+                key: q.key,
+                label: q.label,
+                description: q.description,
+                entity_type: def.entity_type,
+                priority: q.priority ?? "standard",
+                display: q.display ?? "list",
+                count: count ?? 0,
+                preview: preview as unknown[],
+            },
+            calendar_meta
+        );
     });
 
     const rowResults = await runPool(factories, QUEUE_SUMMARY_PER_DEF_CONCURRENCY);
@@ -1344,6 +1414,8 @@ export async function getWorkUnitQueueItems(params: {
     const q = findQueueByKey(def, params.queueKey);
 
     const supabase = createAdminClient();
+    const refUtc = new Date();
+    const operationalDay = await resolveOperationalDayPlanContext(supabase, params.orgId, refUtc);
 
     const effectiveLimit = clampLimit(params.limit ?? q.limit ?? 50, 1, 200);
     const effectiveOffset = clampLimit(params.offset ?? 0, 0, 1000000);
@@ -1351,7 +1423,7 @@ export async function getWorkUnitQueueItems(params: {
     const countSel = omitTotal ? null : queueCountSelect(params.countAccuracy);
 
     if (def.entity_type === "job") {
-        const { ops, sort } = buildJobPlan(q);
+        const { ops, sort, calendar_meta } = buildJobPlan(q, operationalDay);
 
         const itemsBase = supabase
             .from("jobs")
@@ -1385,6 +1457,7 @@ export async function getWorkUnitQueueItems(params: {
                 limit: effectiveLimit,
                 offset: effectiveOffset,
                 total_omitted: true,
+                ...(calendar_meta ? { calendar_meta } : {}),
             };
         }
 
@@ -1426,16 +1499,16 @@ export async function getWorkUnitQueueItems(params: {
             total: count ?? 0,
             limit: effectiveLimit,
             offset: effectiveOffset,
+            ...(calendar_meta ? { calendar_meta } : {}),
         };
     }
 
     // opportunity
-    const { ops, sort } = buildOpportunityPlan(q);
+    const { ops, sort, calendar_meta } = buildOpportunityPlan(q, refUtc, operationalDay);
 
     const oppStatusDefsPromise = fetchEffectiveStatusDefinitions(supabase as any, params.orgId, "opportunities", { activeOnly: true });
 
     if (params.queueKey === "needs_attention") {
-        const now = new Date();
         const tNa0 = Date.now();
         const [matched, effectiveStatusDefs] = await Promise.all([
             loadOpportunityNeedsAttentionRows({
@@ -1443,7 +1516,7 @@ export async function getWorkUnitQueueItems(params: {
                 orgId: params.orgId,
                 workUnitId: params.workUnitId,
                 sort,
-                now,
+                now: refUtc,
             }),
             oppStatusDefsPromise,
         ]);
@@ -1533,6 +1606,7 @@ export async function getWorkUnitQueueItems(params: {
             limit: effectiveLimit,
             offset: effectiveOffset,
             total_omitted: true,
+            ...(calendar_meta ? { calendar_meta } : {}),
         };
     }
 
@@ -1589,6 +1663,7 @@ export async function getWorkUnitQueueItems(params: {
         total: count ?? 0,
         limit: effectiveLimit,
         offset: effectiveOffset,
+        ...(calendar_meta ? { calendar_meta } : {}),
     };
 }
 

@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import Link from "next/link";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
 import KPIBlock from "@/app/adminV2/components/workspace/blocks/KPIBlock";
+import { KpiStripSkeleton } from "@/components/admin/workspace/KpiStripSkeleton";
 import type { KPIVm } from "@/lib/ui-v2/workspace-types";
 import {
   WorkspaceRootDepartmentGrid,
@@ -62,6 +63,8 @@ type Props = {
    * When `undefined`, the shell builds the legacy merge from `metrics` + `orgOpportunityKpis`.
    */
   workspaceKpiStrip?: KPIVm[] | undefined;
+  /** Skeleton only — placements still loading after first paint (no numeric KPIs yet). */
+  kpiStripPlaceholder?: boolean;
 };
 
 function formatInt(n: number | null | undefined): string {
@@ -91,6 +94,7 @@ export function WorkspaceRootShell({
   metricsLoading,
   orgOpportunityKpis,
   workspaceKpiStrip,
+  kpiStripPlaceholder = false,
 }: Props) {
   const displayName = (orgName && orgName.trim()) || "Your organization";
 
@@ -160,7 +164,7 @@ export function WorkspaceRootShell({
                 </p>
               </div>
             </div>
-            <KPIBlock kpis={kpis} maxVisible={5} />
+            {kpiStripPlaceholder ? <KpiStripSkeleton id="ws-root-kpi-skeleton" /> : <KPIBlock kpis={kpis} maxVisible={5} />}
           </div>
 
           <section className="adminv2-ws-root-departments-zone" aria-labelledby="ws-root-dept-heading">

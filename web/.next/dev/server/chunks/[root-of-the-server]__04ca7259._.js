@@ -442,7 +442,8 @@ const queueUiRowPreviewSchema = __TURBOPACK__imported__module__$5b$project$5d2f$
         "email"
     ])).default([
         "open"
-    ])
+    ]),
+    field_labels: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v4$2f$classic$2f$external$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].record(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v4$2f$classic$2f$external$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string(), __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v4$2f$classic$2f$external$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string()).optional()
 }).strict();
 const queueUiSectionSchema = __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v4$2f$classic$2f$external$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].object({
     key: __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$zod$2f$v4$2f$classic$2f$external$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__$3c$export__$2a$__as__z$3e$__["z"].string().min(1),
@@ -482,13 +483,40 @@ function validateQueueDefinition(input) {
 "use strict";
 
 __turbopack_context__.s([
+    "DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS",
+    ()=>DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS,
+    "getQueueRowPreviewFieldLabel",
+    ()=>getQueueRowPreviewFieldLabel,
     "getQueueUiConfig",
     ()=>getQueueUiConfig,
+    "mergeQueueRowPreviewFieldLabels",
+    ()=>mergeQueueRowPreviewFieldLabels,
     "partitionQueueUiSections",
     ()=>partitionQueueUiSections,
     "queuePrimaryTotalFromSummaries",
     ()=>queuePrimaryTotalFromSummaries
 ]);
+const DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS = {
+    title: "Title",
+    status: "Status",
+    primary_contact: "Contact",
+    phone: "Phone",
+    email: "Email",
+    child_name: "Child",
+    program: "Programs",
+    desired_start_date: "Desired Start Date",
+    tour_date: "Tour",
+    age_band: "Age band"
+};
+function mergeQueueRowPreviewFieldLabels(override) {
+    return {
+        ...DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS,
+        ...override ?? {}
+    };
+}
+function getQueueRowPreviewFieldLabel(ui, key) {
+    return ui.row_preview.fieldLabels[key] ?? DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS[key] ?? key;
+}
 function uniqPreserve(xs) {
     const out = [];
     const seen = new Set();
@@ -523,7 +551,8 @@ function getQueueUiConfig(def) {
             ],
             actions: [
                 "open"
-            ]
+            ],
+            fieldLabels: mergeQueueRowPreviewFieldLabels()
         }
     };
     if (!ui) return fallback;
@@ -537,6 +566,7 @@ function getQueueUiConfig(def) {
     const variant = row_preview.variant === "crm_compact" ? "crm_compact" : "basic";
     const fields = Array.isArray(row_preview.fields) && row_preview.fields.length ? row_preview.fields : fallback.row_preview.fields;
     const actions = Array.isArray(row_preview.actions) && row_preview.actions.length ? row_preview.actions : fallback.row_preview.actions;
+    const fieldLabels = mergeQueueRowPreviewFieldLabels(row_preview.field_labels && typeof row_preview.field_labels === "object" ? row_preview.field_labels : null);
     return {
         layout: ui.layout === "pipeline_with_attention" ? "pipeline_with_attention" : "single_section",
         primary_total_label: ui.primary_total_label,
@@ -545,7 +575,8 @@ function getQueueUiConfig(def) {
         row_preview: {
             variant,
             fields,
-            actions
+            actions,
+            fieldLabels
         }
     };
 }

@@ -72,6 +72,27 @@ export type CrmCompactRowSemanticSlots = {
   /** Quote / offer total when present. */
   commercialValue: string | null;
   contactSnippet: string | null;
+  /**
+   * CRM compact: structured contact when `row_preview` gates supply name/phone/email separately.
+   * `contactSnippet` is used for legacy / fallback one-line contact.
+   */
+  contactDisplayName?: string | null;
+  contactPhoneDisplay?: string | null;
+  contactEmail?: string | null;
+  /** Desired start date, date-only UI (MM-DD-YYYY, UTC calendar). */
+  desiredStartDateDisplay?: string | null;
+  /**
+   * When both desired start and tour are present (and row_preview gates allow both),
+   * one compact line: `{desired_label}: {date} • {tour_label}: {date[/time]}`.
+   */
+  timingDesiredStartAndTourLine?: string | null;
+  /** `_age_band` when present (contrasts with legacy combined `ageContext`). */
+  ageBandContext?: string | null;
+  /** Captions for CRM compact row groups — from queue `row_preview.field_labels` + defaults. */
+  rowPreviewLabelPrimaryContact?: string | null;
+  rowPreviewLabelDesiredStartDate?: string | null;
+  rowPreviewLabelTourDate?: string | null;
+  rowPreviewLabelAgeBand?: string | null;
   programContext: string | null;
   roomContext: string | null;
   ageContext: string | null;

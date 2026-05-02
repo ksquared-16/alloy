@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { resolveOrgOperationalMonthToDateForFinancialMtd } from "@/lib/admin/orgLocalDayBounds";
+import { fetchOperationalTimezoneForOrg, type OperationalTimezoneSource } from "@/lib/admin/timezoneContract";
 
 /**
  * Financials / GL helpers.
@@ -33,8 +35,23 @@ export function balanceCentsForAccountType(
     }
 }
 
+/** Present on every financial snapshot; aligns MTD with org operational calendar (not server-local dates). */
+export type FinancialSnapshotCalendarMeta = {
+    calendar_type: "operational_month_to_date";
+    timezone_effective: string;
+    timezone_source: OperationalTimezoneSource;
+    mtd_start_local_date: string;
+    mtd_end_local_date: string;
+    /** ISO UTC instant: start of `mtd_start_local_date` in org TZ. */
+    mtd_start_utc?: string;
+    /** ISO UTC instant: exclusive end of MTD (start of day after `mtd_end_local_date` in org TZ). */
+    mtd_end_exclusive_utc?: string;
+};
+
 export interface FinancialSnapshot {
+    /** Inclusive MTD lower bound for `entry_date` (equals `calendar_meta.mtd_start_local_date`). */
     mtd_start: string;
+    /** Inclusive MTD upper bound for `entry_date` (equals `calendar_meta.mtd_end_local_date`). */
     mtd_end: string;
     mtd_revenue_cents: number;
     mtd_contractor_cogs_cents: number;
@@ -43,15 +60,28 @@ export interface FinancialSnapshot {
     mtd_net_income_cents: number;
     stripe_clearing_cents: number;
     contractor_payable_cents: number;
+    calendar_meta: FinancialSnapshotCalendarMeta;
 }
 
 export async function getFinancialSnapshot(
     supabase: SupabaseClient,
     orgId: string
 ): Promise<FinancialSnapshot> {
-    const now = new Date();
-    const mtdStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-    const mtdEnd = now.toISOString().split("T")[0];
+    const refUtc = new Date();
+    const { iana, source } = await fetchOperationalTimezoneForOrg(supabase, orgId);
+    const mtd = resolveOrgOperationalMonthToDateForFinancialMtd(iana, refUtc);
+    const mtdStart = mtd.mtd_start_local_date;
+    const mtdEnd = mtd.mtd_end_local_date;
+
+    const calendar_meta: FinancialSnapshotCalendarMeta = {
+        calendar_type: "operational_month_to_date",
+        timezone_effective: iana,
+        timezone_source: source,
+        mtd_start_local_date: mtd.mtd_start_local_date,
+        mtd_end_local_date: mtd.mtd_end_local_date,
+        mtd_start_utc: mtd.mtd_start_utc,
+        mtd_end_exclusive_utc: mtd.mtd_end_exclusive_utc,
+    };
 
     const { data: accounts } = await supabase
         .from("gl_accounts")
@@ -160,5 +190,6 @@ export async function getFinancialSnapshot(
         mtd_net_income_cents: mtdRevenueCents - mtdExpensesCents,
         stripe_clearing_cents: stripeClearingAccount ? balanceCentsForAccountId(stripeClearingAccount.id) : 0,
         contractor_payable_cents: contractorPayableAccount ? balanceCentsForAccountId(contractorPayableAccount.id) : 0,
+        calendar_meta,
     };
 }

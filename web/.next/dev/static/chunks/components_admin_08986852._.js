@@ -1283,6 +1283,7 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$contexts$2f$AdminDrawerConte
 var __TURBOPACK__imported__module__$5b$project$5d2f$contexts$2f$AdminAuthContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/contexts/AdminAuthContext.tsx [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$contexts$2f$EntityLabelsContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/contexts/EntityLabelsContext.tsx [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$adminFormatters$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/adminFormatters.ts [app-client] (ecmascript)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$contexts$2f$AdminViewerTimezoneContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/contexts/AdminViewerTimezoneContext.tsx [app-client] (ecmascript)");
 ;
 var _s = __turbopack_context__.k.signature();
 "use client";
@@ -1294,51 +1295,58 @@ var _s = __turbopack_context__.k.signature();
 ;
 ;
 ;
-const RELATED_SCHEDULE_COLUMNS = [
-    {
-        key: "start_at",
-        label: "Start",
-        render: (v)=>v ? new Date(v).toLocaleString() : "—"
-    },
-    {
-        key: "end_at",
-        label: "End",
-        render: (v)=>v ? new Date(v).toLocaleString() : "—"
-    },
-    {
-        key: "timezone",
-        label: "Timezone",
-        render: (v)=>{
-            if (v == null || v === "") return "—";
-            const s = String(v).trim();
-            return s.length > 0 ? s : "—";
-        }
-    },
-    {
-        key: "status_key",
-        label: "Workflow",
-        render: (v)=>{
-            if (v == null || v === "") return "—";
-            const s = String(v).trim();
-            return s.length > 0 ? s : "—";
-        }
-    },
-    {
-        key: "canceled_at",
-        label: "Canceled",
-        render: (v, row)=>{
-            if (!v) return "—";
-            const when = new Date(v).toLocaleString();
-            const reason = row?.cancel_reason;
-            if (reason != null && String(reason).trim()) {
-                const s = String(reason).trim();
-                const short = s.length > 64 ? `${s.slice(0, 64)}…` : s;
-                return `${when} · ${short}`;
+;
+function relatedScheduleColumns(viewerTz) {
+    const visitTz = (row)=>{
+        const t = row?.timezone;
+        return typeof t === "string" && t.trim() ? t.trim() : viewerTz;
+    };
+    return [
+        {
+            key: "start_at",
+            label: "Start",
+            render: (v, row)=>v ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$adminFormatters$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatDateTimeForUserDisplay"])(String(v), visitTz(row)) : "—"
+        },
+        {
+            key: "end_at",
+            label: "End",
+            render: (v, row)=>v ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$adminFormatters$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatDateTimeForUserDisplay"])(String(v), visitTz(row)) : "—"
+        },
+        {
+            key: "timezone",
+            label: "Timezone",
+            render: (v)=>{
+                if (v == null || v === "") return "—";
+                const s = String(v).trim();
+                return s.length > 0 ? s : "—";
             }
-            return when;
+        },
+        {
+            key: "status_key",
+            label: "Workflow",
+            render: (v)=>{
+                if (v == null || v === "") return "—";
+                const s = String(v).trim();
+                return s.length > 0 ? s : "—";
+            }
+        },
+        {
+            key: "canceled_at",
+            label: "Canceled",
+            render: (v, row)=>{
+                if (!v) return "—";
+                const when = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$adminFormatters$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatDateTimeForUserDisplay"])(String(v), visitTz(row));
+                const reason = row?.cancel_reason;
+                if (reason != null && String(reason).trim()) {
+                    const s = String(reason).trim();
+                    const short = s.length > 64 ? `${s.slice(0, 64)}…` : s;
+                    return `${when} · ${short}`;
+                }
+                return when;
+            }
         }
-    }
-];
+    ];
+}
 const EMPTY = {
     people: [],
     opportunities: [],
@@ -1360,6 +1368,10 @@ function RelatedRecordsTabs({ entityType, entityId }) {
     const { openDrawer } = (0, __TURBOPACK__imported__module__$5b$project$5d2f$contexts$2f$AdminDrawerContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useAdminDrawer"])();
     const { canMutate } = (0, __TURBOPACK__imported__module__$5b$project$5d2f$contexts$2f$AdminAuthContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useAdminAuth"])();
     const { labels } = (0, __TURBOPACK__imported__module__$5b$project$5d2f$contexts$2f$EntityLabelsContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEntityLabels"])();
+    const viewerTz = (0, __TURBOPACK__imported__module__$5b$project$5d2f$contexts$2f$AdminViewerTimezoneContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useAdminViewerTimezone"])();
+    const schedCols = relatedScheduleColumns(viewerTz);
+    const fmtDate = (v)=>v ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$adminFormatters$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatDateForUserDisplay"])(String(v), viewerTz) : "—";
+    const fmtDt = (v)=>v ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$adminFormatters$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatDateTimeForUserDisplay"])(String(v), viewerTz) : "—";
     const membersPlural = labels.customer_members?.plural ?? "Members";
     const membersSingular = labels.customer_members?.singular ?? "Member";
     const [data, setData] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(EMPTY);
@@ -1464,7 +1476,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                 {
                     key: "created_at",
                     label: "Created",
-                    render: (v)=>v ? new Date(v).toLocaleDateString() : "-"
+                    render: (v)=>fmtDate(v)
                 },
                 {
                     key: "name",
@@ -1493,7 +1505,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                 {
                     key: "created_at",
                     label: "Created",
-                    render: (v)=>v ? new Date(v).toLocaleDateString() : "-"
+                    render: (v)=>fmtDate(v)
                 },
                 {
                     key: "title",
@@ -1502,7 +1514,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                 {
                     key: "scheduled_at",
                     label: "Scheduled",
-                    render: (v)=>v ? new Date(v).toLocaleString() : "-"
+                    render: (v)=>fmtDt(v)
                 }
             ]
         }, {
@@ -1510,7 +1522,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
             label: "Schedules",
             entityType: "schedules",
             dataKey: "schedules",
-            columns: RELATED_SCHEDULE_COLUMNS
+            columns: schedCols
         }, {
             key: "documents",
             label: "Documents",
@@ -1563,7 +1575,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                 {
                     key: "created_at",
                     label: "Created",
-                    render: (v)=>v ? new Date(v).toLocaleDateString() : "-"
+                    render: (v)=>fmtDate(v)
                 },
                 {
                     key: "first_name",
@@ -1621,7 +1633,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                 {
                     key: "created_at",
                     label: "Created",
-                    render: (v)=>v ? new Date(v).toLocaleDateString() : "-"
+                    render: (v)=>fmtDate(v)
                 },
                 {
                     key: "name",
@@ -1646,7 +1658,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                 {
                     key: "created_at",
                     label: "Created",
-                    render: (v)=>v ? new Date(v).toLocaleDateString() : "-"
+                    render: (v)=>fmtDate(v)
                 },
                 {
                     key: "title",
@@ -1655,7 +1667,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                 {
                     key: "scheduled_at",
                     label: "Scheduled",
-                    render: (v)=>v ? new Date(v).toLocaleString() : "-"
+                    render: (v)=>fmtDt(v)
                 }
             ]
         }, {
@@ -1663,7 +1675,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
             label: "Schedules",
             entityType: "schedules",
             dataKey: "schedules",
-            columns: RELATED_SCHEDULE_COLUMNS
+            columns: schedCols
         }, {
             key: "locations",
             label: "Locations",
@@ -1701,12 +1713,12 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                 {
                     key: "start_date",
                     label: "Start date",
-                    render: (v)=>v ? new Date(v).toLocaleDateString() : "—"
+                    render: (v)=>fmtDate(v)
                 },
                 {
                     key: "created_at",
                     label: "Created",
-                    render: (v)=>v ? new Date(v).toLocaleDateString() : "—"
+                    render: (v)=>fmtDate(v)
                 }
             ]
         }, {
@@ -1718,7 +1730,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                 {
                     key: "created_at",
                     label: "Redeemed",
-                    render: (v)=>v ? new Date(v).toLocaleDateString() : "—"
+                    render: (v)=>fmtDate(v)
                 },
                 {
                     key: "discount_code_id",
@@ -1745,7 +1757,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                 {
                     key: "created_at",
                     label: "Created",
-                    render: (v)=>v ? new Date(v).toLocaleDateString() : "-"
+                    render: (v)=>fmtDate(v)
                 },
                 {
                     key: "title",
@@ -1754,7 +1766,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                 {
                     key: "scheduled_at",
                     label: "Scheduled",
-                    render: (v)=>v ? new Date(v).toLocaleString() : "-"
+                    render: (v)=>fmtDt(v)
                 }
             ]
         }, {
@@ -1762,7 +1774,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
             label: "Schedules",
             entityType: "schedules",
             dataKey: "schedules",
-            columns: RELATED_SCHEDULE_COLUMNS
+            columns: schedCols
         }, {
             key: "documents",
             label: "Documents",
@@ -1778,7 +1790,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
             label: "Schedules",
             entityType: "schedules",
             dataKey: "schedules",
-            columns: RELATED_SCHEDULE_COLUMNS
+            columns: schedCols
         }, {
             key: "documents",
             label: "Documents",
@@ -1821,7 +1833,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                 {
                     key: "created_at",
                     label: "Created",
-                    render: (v)=>v ? new Date(v).toLocaleDateString() : "-"
+                    render: (v)=>fmtDate(v)
                 },
                 {
                     key: "title",
@@ -1830,7 +1842,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                 {
                     key: "scheduled_at",
                     label: "Scheduled",
-                    render: (v)=>v ? new Date(v).toLocaleString() : "-"
+                    render: (v)=>fmtDt(v)
                 }
             ]
         }, {
@@ -1838,7 +1850,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
             label: "Schedules",
             entityType: "schedules",
             dataKey: "schedules",
-            columns: RELATED_SCHEDULE_COLUMNS
+            columns: schedCols
         }, {
             key: "documents",
             label: "Documents",
@@ -1862,7 +1874,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                 children: "Related"
             }, void 0, false, {
                 fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                lineNumber: 255,
+                lineNumber: 274,
                 columnNumber: 13
             }, this),
             error && !hideGlobalErrorBanner && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -1873,7 +1885,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                 ]
             }, void 0, true, {
                 fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                lineNumber: 256,
+                lineNumber: 275,
                 columnNumber: 49
             }, this),
             loading ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -1881,7 +1893,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                 children: "Loading related records…"
             }, void 0, false, {
                 fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                lineNumber: 258,
+                lineNumber: 277,
                 columnNumber: 17
             }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Fragment"], {
                 children: [
@@ -1894,12 +1906,12 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                                 children: t.label
                             }, t.key, false, {
                                 fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                                lineNumber: 263,
+                                lineNumber: 282,
                                 columnNumber: 29
                             }, this))
                     }, void 0, false, {
                         fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                        lineNumber: 261,
+                        lineNumber: 280,
                         columnNumber: 21
                     }, this),
                     entityType === "customer" && activeTab === "customer_members" && canMutate && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1913,12 +1925,12 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                             ]
                         }, void 0, true, {
                             fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                            lineNumber: 275,
+                            lineNumber: 294,
                             columnNumber: 29
                         }, this)
                     }, void 0, false, {
                         fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                        lineNumber: 274,
+                        lineNumber: 293,
                         columnNumber: 25
                     }, this),
                     entityType === "customer" && activeTab === "locations" && canMutate && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1946,12 +1958,12 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                             children: "Add location"
                         }, void 0, false, {
                             fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                            lineNumber: 285,
+                            lineNumber: 304,
                             columnNumber: 29
                         }, this)
                     }, void 0, false, {
                         fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                        lineNumber: 284,
+                        lineNumber: 303,
                         columnNumber: 25
                     }, this),
                     active.isDocumentsPanel && active.documentUploadEntityType ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$admin$2f$EntityDocumentsSection$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["default"], {
@@ -1965,7 +1977,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                         onAfterUpload: refetch
                     }, void 0, false, {
                         fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                        lineNumber: 311,
+                        lineNumber: 330,
                         columnNumber: 25
                     }, this) : rows.length === 0 ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
                         className: "text-alloy-midnight/60 text-sm",
@@ -1976,7 +1988,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                         ]
                     }, void 0, true, {
                         fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                        lineNumber: 322,
+                        lineNumber: 341,
                         columnNumber: 25
                     }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                         className: "overflow-x-auto",
@@ -1991,17 +2003,17 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                                                 children: col.label
                                             }, col.key, false, {
                                                 fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                                                lineNumber: 329,
+                                                lineNumber: 348,
                                                 columnNumber: 45
                                             }, this))
                                     }, void 0, false, {
                                         fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                                        lineNumber: 327,
+                                        lineNumber: 346,
                                         columnNumber: 37
                                     }, this)
                                 }, void 0, false, {
                                     fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                                    lineNumber: 326,
+                                    lineNumber: 345,
                                     columnNumber: 33
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("tbody", {
@@ -2016,28 +2028,28 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                                                     children: col.render ? col.render(row[col.key], row) : row[col.key] ?? "-"
                                                 }, col.key, false, {
                                                     fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                                                    lineNumber: 343,
+                                                    lineNumber: 362,
                                                     columnNumber: 49
                                                 }, this))
                                         }, (active.rowIdKey ? row[active.rowIdKey] : row.id) ?? String(i), false, {
                                             fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                                            lineNumber: 337,
+                                            lineNumber: 356,
                                             columnNumber: 41
                                         }, this))
                                 }, void 0, false, {
                                     fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                                    lineNumber: 335,
+                                    lineNumber: 354,
                                     columnNumber: 33
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                            lineNumber: 325,
+                            lineNumber: 344,
                             columnNumber: 29
                         }, this)
                     }, void 0, false, {
                         fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                        lineNumber: 324,
+                        lineNumber: 343,
                         columnNumber: 25
                     }, this)
                 ]
@@ -2056,7 +2068,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                             children: addLocationError
                         }, void 0, false, {
                             fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                            lineNumber: 363,
+                            lineNumber: 382,
                             columnNumber: 42
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2066,7 +2078,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                                     children: "Name"
                                 }, void 0, false, {
                                     fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                                    lineNumber: 365,
+                                    lineNumber: 384,
                                     columnNumber: 25
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("input", {
@@ -2078,13 +2090,13 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                                     className: "w-full px-2 py-1.5 border rounded text-sm"
                                 }, void 0, false, {
                                     fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                                    lineNumber: 366,
+                                    lineNumber: 385,
                                     columnNumber: 25
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                            lineNumber: 364,
+                            lineNumber: 383,
                             columnNumber: 21
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2094,7 +2106,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                                     children: "Type"
                                 }, void 0, false, {
                                     fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                                    lineNumber: 373,
+                                    lineNumber: 392,
                                     columnNumber: 25
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("select", {
@@ -2110,7 +2122,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                                             children: "— Select —"
                                         }, void 0, false, {
                                             fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                                            lineNumber: 379,
+                                            lineNumber: 398,
                                             columnNumber: 29
                                         }, this),
                                         locationTypes.map((t)=>/*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("option", {
@@ -2118,19 +2130,19 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                                                 children: t.label
                                             }, t.id, false, {
                                                 fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                                                lineNumber: 381,
+                                                lineNumber: 400,
                                                 columnNumber: 33
                                             }, this))
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                                    lineNumber: 374,
+                                    lineNumber: 393,
                                     columnNumber: 25
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                            lineNumber: 372,
+                            lineNumber: 391,
                             columnNumber: 21
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2145,7 +2157,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                                             }))
                                 }, void 0, false, {
                                     fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                                    lineNumber: 386,
+                                    lineNumber: 405,
                                     columnNumber: 25
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("label", {
@@ -2153,13 +2165,13 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                                     children: "Primary"
                                 }, void 0, false, {
                                     fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                                    lineNumber: 391,
+                                    lineNumber: 410,
                                     columnNumber: 25
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                            lineNumber: 385,
+                            lineNumber: 404,
                             columnNumber: 21
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2174,7 +2186,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                                             }))
                                 }, void 0, false, {
                                     fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                                    lineNumber: 394,
+                                    lineNumber: 413,
                                     columnNumber: 25
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("label", {
@@ -2182,13 +2194,13 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                                     children: "Active"
                                 }, void 0, false, {
                                     fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                                    lineNumber: 399,
+                                    lineNumber: 418,
                                     columnNumber: 25
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                            lineNumber: 393,
+                            lineNumber: 412,
                             columnNumber: 21
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2198,7 +2210,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                                     children: "Address 1"
                                 }, void 0, false, {
                                     fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                                    lineNumber: 402,
+                                    lineNumber: 421,
                                     columnNumber: 25
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("input", {
@@ -2210,13 +2222,13 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                                     className: "w-full px-2 py-1.5 border rounded text-sm"
                                 }, void 0, false, {
                                     fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                                    lineNumber: 403,
+                                    lineNumber: 422,
                                     columnNumber: 25
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                            lineNumber: 401,
+                            lineNumber: 420,
                             columnNumber: 21
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2226,7 +2238,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                                     children: "Address 2"
                                 }, void 0, false, {
                                     fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                                    lineNumber: 410,
+                                    lineNumber: 429,
                                     columnNumber: 25
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("input", {
@@ -2238,13 +2250,13 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                                     className: "w-full px-2 py-1.5 border rounded text-sm"
                                 }, void 0, false, {
                                     fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                                    lineNumber: 411,
+                                    lineNumber: 430,
                                     columnNumber: 25
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                            lineNumber: 409,
+                            lineNumber: 428,
                             columnNumber: 21
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2260,7 +2272,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                                     className: "px-2 py-1.5 border rounded text-sm"
                                 }, void 0, false, {
                                     fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                                    lineNumber: 418,
+                                    lineNumber: 437,
                                     columnNumber: 25
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("input", {
@@ -2273,7 +2285,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                                     className: "px-2 py-1.5 border rounded text-sm"
                                 }, void 0, false, {
                                     fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                                    lineNumber: 424,
+                                    lineNumber: 443,
                                     columnNumber: 25
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("input", {
@@ -2286,13 +2298,13 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                                     className: "px-2 py-1.5 border rounded text-sm"
                                 }, void 0, false, {
                                     fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                                    lineNumber: 430,
+                                    lineNumber: 449,
                                     columnNumber: 25
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                            lineNumber: 417,
+                            lineNumber: 436,
                             columnNumber: 21
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2302,7 +2314,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                                     children: "Country"
                                 }, void 0, false, {
                                     fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                                    lineNumber: 438,
+                                    lineNumber: 457,
                                     columnNumber: 25
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("input", {
@@ -2314,13 +2326,13 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                                     className: "w-full px-2 py-1.5 border rounded text-sm"
                                 }, void 0, false, {
                                     fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                                    lineNumber: 439,
+                                    lineNumber: 458,
                                     columnNumber: 25
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                            lineNumber: 437,
+                            lineNumber: 456,
                             columnNumber: 21
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2330,7 +2342,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                                     children: "Access notes"
                                 }, void 0, false, {
                                     fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                                    lineNumber: 446,
+                                    lineNumber: 465,
                                     columnNumber: 25
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("textarea", {
@@ -2343,13 +2355,13 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                                     rows: 2
                                 }, void 0, false, {
                                     fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                                    lineNumber: 447,
+                                    lineNumber: 466,
                                     columnNumber: 25
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                            lineNumber: 445,
+                            lineNumber: 464,
                             columnNumber: 21
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2403,7 +2415,7 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                                     children: addLocationSaving ? "Saving…" : "Save"
                                 }, void 0, false, {
                                     fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                                    lineNumber: 455,
+                                    lineNumber: 474,
                                     columnNumber: 25
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -2413,38 +2425,39 @@ function RelatedRecordsTabs({ entityType, entityId }) {
                                     children: "Cancel"
                                 }, void 0, false, {
                                     fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                                    lineNumber: 500,
+                                    lineNumber: 519,
                                     columnNumber: 25
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                            lineNumber: 454,
+                            lineNumber: 473,
                             columnNumber: 21
                         }, this)
                     ]
                 }, void 0, true, {
                     fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                    lineNumber: 362,
+                    lineNumber: 381,
                     columnNumber: 17
                 }, this)
             }, void 0, false, {
                 fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-                lineNumber: 355,
+                lineNumber: 374,
                 columnNumber: 13
             }, this)
         ]
     }, void 0, true, {
         fileName: "[project]/components/admin/RelatedRecordsTabs.tsx",
-        lineNumber: 254,
+        lineNumber: 273,
         columnNumber: 9
     }, this);
 }
-_s(RelatedRecordsTabs, "tLaynlEa61JqhwiC7u/giPImwFA=", false, function() {
+_s(RelatedRecordsTabs, "ctnjQVe2NFBHPeLGoJquD1439RE=", false, function() {
     return [
         __TURBOPACK__imported__module__$5b$project$5d2f$contexts$2f$AdminDrawerContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useAdminDrawer"],
         __TURBOPACK__imported__module__$5b$project$5d2f$contexts$2f$AdminAuthContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useAdminAuth"],
-        __TURBOPACK__imported__module__$5b$project$5d2f$contexts$2f$EntityLabelsContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEntityLabels"]
+        __TURBOPACK__imported__module__$5b$project$5d2f$contexts$2f$EntityLabelsContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEntityLabels"],
+        __TURBOPACK__imported__module__$5b$project$5d2f$contexts$2f$AdminViewerTimezoneContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useAdminViewerTimezone"]
     ];
 });
 _c = RelatedRecordsTabs;

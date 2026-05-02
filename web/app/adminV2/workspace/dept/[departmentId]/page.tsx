@@ -11,7 +11,7 @@ import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import { DepartmentWorkspaceBridgeShell } from "@/components/admin/workspace/DepartmentWorkspaceBridgeShell";
 import KPIBlock from "@/app/adminV2/components/workspace/blocks/KPIBlock";
 import { AdminV2RouteLoadingState } from "@/components/admin/workspace/AdminV2RouteLoadingState";
-import { WsRouteLoadingRibbon } from "@/components/admin/workspace/workspaceRouteSkeletons";
+import { KpiStripSkeleton } from "@/components/admin/workspace/KpiStripSkeleton";
 import { workspaceRouteParam } from "@/lib/workspace/workspaceRouteParam";
 import ActionsBlock from "@/app/adminV2/components/workspace/blocks/ActionsBlock";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
@@ -27,7 +27,6 @@ import { rightRailResolvedFromActionsPayload } from "@/lib/workspace/rightRailRe
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { AutomationWorkflowsBlock } from "@/app/adminV2/components/workspace/blocks/AutomationWorkflowsBlock";
-import { buildDefaultDepartmentKpis } from "@/lib/kpi/baseline";
 import { resolveKpisForDepartment } from "@/lib/kpi/resolver";
 import type { WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
 
@@ -98,7 +97,6 @@ export default function AdminV2WorkspaceDepartmentPage() {
     );
     const [deptQueueSummariesLoading, setDeptQueueSummariesLoading] = useState(false);
     const [deptQueueSummariesError, setDeptQueueSummariesError] = useState<string | null>(null);
-    const [deptSummariesWaitTimedOut, setDeptSummariesWaitTimedOut] = useState(false);
 
     /**
      * `undefined` = placement config not loaded yet → baseline strip.
@@ -153,6 +151,9 @@ export default function AdminV2WorkspaceDepartmentPage() {
             setDeptWorkUnits(null);
             setDeptWorkUnitsError(null);
             setDeptError(null);
+            setDeptWorkUnitSummaries({});
+            setDeptQueueSummariesLoading(false);
+            setDeptQueueSummariesError(null);
             setDeptLoading(false);
             return;
         }
@@ -160,12 +161,20 @@ export default function AdminV2WorkspaceDepartmentPage() {
         setDeptLoading(true);
         setDeptError(null);
         setDeptWorkUnitsError(null);
+        setDeptQueueSummariesLoading(true);
+        setDeptQueueSummariesError(null);
         void (async () => {
+            const routeStart = typeof performance !== "undefined" ? performance.now() : 0;
             try {
                 const init = workspaceDataFetchInit();
                 const deptRoute = `/api/admin/departments/${encodeURIComponent(departmentId)}`;
                 const wuRoute = `/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`;
-                const [deptRes, wuRes] = await Promise.all([fetch(deptRoute, init), fetch(wuRoute, init)]);
+                const summariesRoute = `/api/admin/departments/${encodeURIComponent(departmentId)}/work-unit-queue-summaries?include_previews=false&count_mode=exact`;
+                const [deptRes, wuRes, sumRes] = await Promise.all([
+                    fetch(deptRoute, init),
+                    fetch(wuRoute, init),
+                    fetch(summariesRoute, init),
+                ]);
 
                 const deptJson = (await deptRes.json().catch(() => ({}))) as {
                     error?: string;
@@ -176,6 +185,16 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 const wuJson = (await wuRes.json().catch(() => ({}))) as {
                     error?: string;
                     items?: Array<{ id: string; name?: string | null; key?: string | null }>;
+                };
+                const j = (await sumRes.json().catch(() => ({}))) as {
+                    error?: string;
+                    work_units?: Array<{
+                        id?: string;
+                        queues?: V1QueueSummary[];
+                        error?: string;
+                        work_unit_scope_total?: number | null;
+                        work_unit_scope_queue_key?: string | null;
+                    }>;
                 };
 
                 if (cancelled) return;
@@ -199,8 +218,53 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     setDeptWorkUnits(null);
                     setDeptWorkUnitsError(wuJson.error ?? "Failed to load work units");
                 } else {
-                    setDeptWorkUnits((wuJson.items ?? []).map((w) => ({ id: String(w.id), name: w.name ?? null, key: w.key ?? null })));
+                    setDeptWorkUnits(
+                        (wuJson.items ?? []).map((w) => ({
+                            id: String(w.id),
+                            name: w.name ?? null,
+                            key: w.key ?? null,
+                        }))
+                    );
                     setDeptWorkUnitsError(null);
+                }
+
+                if (!sumRes.ok) {
+                    setDeptWorkUnitSummaries({});
+                    setDeptQueueSummariesError(j.error ?? "Failed to load queue summaries");
+                } else {
+                    const next: Record<string, { total: number; needs_attention: number | null }> = {};
+                    for (const row of j.work_units ?? []) {
+                        const id = typeof row.id === "string" ? row.id : "";
+                        if (!id) continue;
+                        if (row.error) {
+                            continue;
+                        }
+                        const queues = (row.queues ?? []) as V1QueueSummary[];
+                        const total =
+                            typeof row.work_unit_scope_total === "number" && Number.isFinite(row.work_unit_scope_total)
+                                ? Math.max(0, Math.floor(row.work_unit_scope_total))
+                                : null;
+                        if (total == null) {
+                            continue;
+                        }
+                        const needsRow = queues.find((q) => (q.key ?? "").trim().toLowerCase() === "needs_attention");
+                        const needs =
+                            needsRow && needsRow.counts_deferred !== true && typeof needsRow.count === "number"
+                                ? needsRow.count
+                                : null;
+                        next[id] = { total, needs_attention: needs };
+                        if (typeof window !== "undefined") {
+                            console.warn("[pipeline-count-unify]", {
+                                source: "department",
+                                department_id: departmentId,
+                                work_unit_id: id,
+                                queue_key: row.work_unit_scope_queue_key ?? null,
+                                count: total,
+                            });
+                        }
+                    }
+                    setDeptWorkUnitSummaries(next);
+                    setDeptQueueSummariesError(null);
                 }
             } catch (e) {
                 if (!cancelled) {
@@ -208,9 +272,21 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     setDeptError(e instanceof Error ? e.message : "Failed to load department");
                     setDeptWorkUnits(null);
                     setDeptWorkUnitsError(e instanceof Error ? e.message : "Failed to load work units");
+                    setDeptWorkUnitSummaries({});
+                    setDeptQueueSummariesError(e instanceof Error ? e.message : "Failed to load queue summaries");
                 }
             } finally {
-                if (!cancelled) setDeptLoading(false);
+                if (!cancelled) {
+                    setDeptQueueSummariesLoading(false);
+                    setDeptLoading(false);
+                    if (typeof performance !== "undefined" && typeof window !== "undefined") {
+                        console.log("[page-timing]", {
+                            route: "department",
+                            phase: "first_paint",
+                            duration_ms: Math.round(performance.now() - routeStart),
+                        });
+                    }
+                }
             }
         })();
         return () => {
@@ -219,99 +295,23 @@ export default function AdminV2WorkspaceDepartmentPage() {
     }, [departmentId]);
 
     useEffect(() => {
-        const list = deptWorkUnits ?? [];
-        if (!departmentId || list.length === 0) {
-            setDeptWorkUnitSummaries({});
-            setDeptQueueSummariesLoading(false);
-            setDeptQueueSummariesError(null);
-            return;
-        }
-        let cancelled = false;
-        setDeptQueueSummariesLoading(true);
-        setDeptQueueSummariesError(null);
-        void (async () => {
-            try {
-                const init = workspaceDataFetchInit();
-                // Exact counts — same QueueService path as work-unit queue rows (no planned estimates).
-                const route = `/api/admin/departments/${encodeURIComponent(departmentId)}/work-unit-queue-summaries?include_previews=false&count_mode=exact`;
-                const res = await fetch(route, init);
-                const j = (await res.json().catch(() => ({}))) as {
-                    error?: string;
-                    work_units?: Array<{
-                        id?: string;
-                        queues?: V1QueueSummary[];
-                        error?: string;
-                        work_unit_scope_total?: number | null;
-                        work_unit_scope_queue_key?: string | null;
-                    }>;
-                };
-                if (cancelled) return;
-                if (!res.ok) {
-                    setDeptWorkUnitSummaries({});
-                    setDeptQueueSummariesError(j.error ?? "Failed to load queue summaries");
-                    return;
-                }
-                const next: Record<string, { total: number; needs_attention: number | null }> = {};
-                for (const row of j.work_units ?? []) {
-                    const id = typeof row.id === "string" ? row.id : "";
-                    if (!id) continue;
-                    if (row.error) {
-                        continue;
-                    }
-                    const queues = (row.queues ?? []) as V1QueueSummary[];
-                    const total =
-                        typeof row.work_unit_scope_total === "number" && Number.isFinite(row.work_unit_scope_total)
-                            ? Math.max(0, Math.floor(row.work_unit_scope_total))
-                            : null;
-                    if (total == null) {
-                        continue;
-                    }
-                    const needsRow = queues.find((q) => (q.key ?? "").trim().toLowerCase() === "needs_attention");
-                    const needs =
-                        needsRow && needsRow.counts_deferred !== true && typeof needsRow.count === "number"
-                            ? needsRow.count
-                            : null;
-                    next[id] = { total, needs_attention: needs };
-                    if (typeof window !== "undefined") {
-                        console.warn("[pipeline-count-unify]", {
-                            source: "department",
-                            department_id: departmentId,
-                            work_unit_id: id,
-                            queue_key: row.work_unit_scope_queue_key ?? null,
-                            count: total,
-                        });
-                    }
-                }
-                setDeptWorkUnitSummaries(next);
-                setDeptQueueSummariesError(null);
-            } catch (e) {
-                if (!cancelled) {
-                    setDeptWorkUnitSummaries({});
-                    setDeptQueueSummariesError(e instanceof Error ? e.message : "Failed to load queue summaries");
-                }
-            } finally {
-                if (!cancelled) setDeptQueueSummariesLoading(false);
-            }
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, [departmentId, deptWorkUnits]);
-
-    useEffect(() => {
         if (!departmentId) return;
         setDeptPlacementRows(undefined);
         setDeptScopeHasPlacements(false);
         let cancelled = false;
         const init = workspaceDataFetchInit();
         void (async () => {
+            const tPlace0 = typeof performance !== "undefined" ? performance.now() : 0;
             try {
                 const res = await fetch(
                     `/api/admin/workspace-kpi-placements?surface=department&department_id=${encodeURIComponent(departmentId)}`,
                     { ...(init ?? {}), cache: "no-store" }
                 );
                 if (!res.ok) {
-                    if (!cancelled) setDeptPlacementRows(undefined);
+                    if (!cancelled) {
+                        setDeptPlacementRows([]);
+                        setDeptScopeHasPlacements(false);
+                    }
                     return;
                 }
                 const j = (await res.json().catch(() => ({}))) as {
@@ -324,7 +324,18 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     setDeptScopeHasPlacements(j.scope_has_placements === true);
                 }
             } catch {
-                if (!cancelled) setDeptPlacementRows(undefined);
+                if (!cancelled) {
+                    setDeptPlacementRows([]);
+                    setDeptScopeHasPlacements(false);
+                }
+            } finally {
+                if (typeof performance !== "undefined" && typeof window !== "undefined") {
+                    console.log("[page-timing]", {
+                        route: "department",
+                        phase: "kpi_placement",
+                        duration_ms: Math.round(performance.now() - tPlace0),
+                    });
+                }
             }
         })();
         return () => {
@@ -332,14 +343,10 @@ export default function AdminV2WorkspaceDepartmentPage() {
         };
     }, [departmentId]);
 
-    useEffect(() => {
-        if (!deptQueueSummariesLoading) {
-            setDeptSummariesWaitTimedOut(false);
-            return;
-        }
-        const t = window.setTimeout(() => setDeptSummariesWaitTimedOut(true), 10_000);
-        return () => clearTimeout(t);
-    }, [deptQueueSummariesLoading]);
+    const departmentPageBlockingLoad = useMemo(() => {
+        if (!departmentId) return false;
+        return deptLoading || deptQueueSummariesLoading;
+    }, [departmentId, deptLoading, deptQueueSummariesLoading]);
 
     useEffect(() => {
         if (deptKey !== "enrollment" || !departmentId || !primaryWorkUnit?.id) {
@@ -393,12 +400,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
     const kpis = useMemo(() => {
         const wuList = deptWorkUnits ?? [];
         if (deptPlacementRows === undefined) {
-            return buildDefaultDepartmentKpis({
-                deptWorkUnits: wuList,
-                deptWorkUnitSummaries,
-                deptQueueSummariesLoading,
-                deptQueueSummariesError,
-            });
+            return [];
         }
         return resolveKpisForDepartment({
             placementRows: deptPlacementRows,
@@ -460,8 +462,6 @@ export default function AdminV2WorkspaceDepartmentPage() {
         },
         [departmentId, enrollmentRightRailByKey, needsAttentionHref, openDrawer, primaryWorkUnit?.id, router]
     );
-
-    const deptSummariesRibbonPending = deptQueueSummariesLoading && !deptSummariesWaitTimedOut;
 
     const throughputPairedPanels = (
         <WorkspacePairedOperPanelsGrid>
@@ -559,7 +559,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
         </WorkspacePairedOperPanelsGrid>
     );
 
-    if (deptLoading) {
+    if (departmentPageBlockingLoad) {
         return (
             <WorkspaceChrome
                 variant="bridge"
@@ -570,7 +570,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 title="Loading…"
                 subtitle=""
             >
-                <AdminV2RouteLoadingState variant="department" />
+                <AdminV2RouteLoadingState variant="department" showRibbon={false} />
             </WorkspaceChrome>
         );
     }
@@ -585,9 +585,6 @@ export default function AdminV2WorkspaceDepartmentPage() {
             title={title}
             subtitle=""
         >
-            {dept && primaryWorkUnit && deptSummariesRibbonPending ? (
-                <WsRouteLoadingRibbon label="Loading queue summaries" />
-            ) : null}
             {deptWorkUnitsError && dept ? <p className="text-sm text-alloy-ember px-1">{deptWorkUnitsError}</p> : null}
             {deptQueueSummariesError && dept ? <p className="text-sm text-alloy-ember px-1">{deptQueueSummariesError}</p> : null}
             {!dept ? (
@@ -604,7 +601,13 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     briefTitle={title}
                     briefSubtitle=""
                     signalsSlot={null}
-                    kpiSlot={kpis.length ? <KPIBlock kpis={kpis} maxVisible={5} /> : null}
+                    kpiSlot={
+                        deptPlacementRows === undefined ? (
+                            <KpiStripSkeleton id="dept-kpi-skeleton" />
+                        ) : kpis.length ? (
+                            <KPIBlock kpis={kpis} maxVisible={5} />
+                        ) : null
+                    }
                     throughputSlot={throughputPairedPanels}
                     attentionSlot={null}
                     contextSlot={

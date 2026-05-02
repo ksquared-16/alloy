@@ -448,7 +448,7 @@ function buildStructureKpis(params) {
         }
     ];
 }
-function WorkspaceRootShell({ orgName, departments, deptTileStats, metrics, metricsLoading, orgOpportunityKpis, workspaceKpiStrip }) {
+function WorkspaceRootShell({ orgName, departments, deptTileStats, metrics, metricsLoading, orgOpportunityKpis, workspaceKpiStrip, kpiStripPlaceholder = false }) {
     _s();
     const displayName = orgName && orgName.trim() || "Your organization";
     const kpis = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useMemo"])({
@@ -487,7 +487,7 @@ function WorkspaceRootShell({ orgName, departments, deptTileStats, metrics, metr
                     children: "Orientation"
                 }, void 0, false, {
                     fileName: "[project]/components/admin/workspace/WorkspaceRootShell.tsx",
-                    lineNumber: 116,
+                    lineNumber: 119,
                     columnNumber: 11
                 }, void 0),
                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -495,7 +495,7 @@ function WorkspaceRootShell({ orgName, departments, deptTileStats, metrics, metr
                     children: "You are at the top of the hierarchy. Use the department cards to drill into work units and queues; this column stays lightweight."
                 }, void 0, false, {
                     fileName: "[project]/components/admin/workspace/WorkspaceRootShell.tsx",
-                    lineNumber: 117,
+                    lineNumber: 120,
                     columnNumber: 11
                 }, void 0),
                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -507,7 +507,7 @@ function WorkspaceRootShell({ orgName, departments, deptTileStats, metrics, metr
                             children: "Drill path"
                         }, void 0, false, {
                             fileName: "[project]/components/admin/workspace/WorkspaceRootShell.tsx",
-                            lineNumber: 122,
+                            lineNumber: 125,
                             columnNumber: 13
                         }, void 0),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -515,13 +515,13 @@ function WorkspaceRootShell({ orgName, departments, deptTileStats, metrics, metr
                             children: "Department → work unit → record"
                         }, void 0, false, {
                             fileName: "[project]/components/admin/workspace/WorkspaceRootShell.tsx",
-                            lineNumber: 123,
+                            lineNumber: 126,
                             columnNumber: 13
                         }, void 0)
                     ]
                 }, void 0, true, {
                     fileName: "[project]/components/admin/workspace/WorkspaceRootShell.tsx",
-                    lineNumber: 121,
+                    lineNumber: 124,
                     columnNumber: 11
                 }, void 0),
                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -533,7 +533,7 @@ function WorkspaceRootShell({ orgName, departments, deptTileStats, metrics, metr
                             children: "Open inquiries (classic admin)"
                         }, void 0, false, {
                             fileName: "[project]/components/admin/workspace/WorkspaceRootShell.tsx",
-                            lineNumber: 126,
+                            lineNumber: 129,
                             columnNumber: 13
                         }, void 0),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$client$2f$app$2d$dir$2f$link$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["default"], {
@@ -542,19 +542,19 @@ function WorkspaceRootShell({ orgName, departments, deptTileStats, metrics, metr
                             children: "Work unit registry"
                         }, void 0, false, {
                             fileName: "[project]/components/admin/workspace/WorkspaceRootShell.tsx",
-                            lineNumber: 132,
+                            lineNumber: 135,
                             columnNumber: 13
                         }, void 0)
                     ]
                 }, void 0, true, {
                     fileName: "[project]/components/admin/workspace/WorkspaceRootShell.tsx",
-                    lineNumber: 125,
+                    lineNumber: 128,
                     columnNumber: 11
                 }, void 0)
             ]
         }, void 0, true, {
             fileName: "[project]/components/admin/workspace/WorkspaceRootShell.tsx",
-            lineNumber: 115,
+            lineNumber: 118,
             columnNumber: 9
         }, void 0),
         containLead: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("nav", {
@@ -565,12 +565,12 @@ function WorkspaceRootShell({ orgName, departments, deptTileStats, metrics, metr
                 children: "Workspace"
             }, void 0, false, {
                 fileName: "[project]/components/admin/workspace/WorkspaceRootShell.tsx",
-                lineNumber: 143,
+                lineNumber: 146,
                 columnNumber: 11
             }, void 0)
         }, void 0, false, {
             fileName: "[project]/components/admin/workspace/WorkspaceRootShell.tsx",
-            lineNumber: 142,
+            lineNumber: 145,
             columnNumber: 9
         }, void 0),
         primaryColumn: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Fragment"], {
@@ -588,7 +588,7 @@ function WorkspaceRootShell({ orgName, departments, deptTileStats, metrics, metr
                                         children: "Organization workspace"
                                     }, void 0, false, {
                                         fileName: "[project]/components/admin/workspace/WorkspaceRootShell.tsx",
-                                        lineNumber: 151,
+                                        lineNumber: 154,
                                         columnNumber: 17
                                     }, void 0),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -598,12 +598,12 @@ function WorkspaceRootShell({ orgName, departments, deptTileStats, metrics, metr
                                             children: displayName
                                         }, void 0, false, {
                                             fileName: "[project]/components/admin/workspace/WorkspaceRootShell.tsx",
-                                            lineNumber: 153,
+                                            lineNumber: 156,
                                             columnNumber: 19
                                         }, void 0)
                                     }, void 0, false, {
                                         fileName: "[project]/components/admin/workspace/WorkspaceRootShell.tsx",
-                                        lineNumber: 152,
+                                        lineNumber: 155,
                                         columnNumber: 17
                                     }, void 0),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -614,32 +614,38 @@ function WorkspaceRootShell({ orgName, departments, deptTileStats, metrics, metr
                                         children: "Pick a department to drill into work units. This root surface stays structure-only."
                                     }, void 0, false, {
                                         fileName: "[project]/components/admin/workspace/WorkspaceRootShell.tsx",
-                                        lineNumber: 155,
+                                        lineNumber: 158,
                                         columnNumber: 17
                                     }, void 0)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/components/admin/workspace/WorkspaceRootShell.tsx",
-                                lineNumber: 150,
+                                lineNumber: 153,
                                 columnNumber: 15
                             }, void 0)
                         }, void 0, false, {
                             fileName: "[project]/components/admin/workspace/WorkspaceRootShell.tsx",
-                            lineNumber: 149,
+                            lineNumber: 152,
                             columnNumber: 13
                         }, void 0),
-                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$app$2f$adminV2$2f$components$2f$workspace$2f$blocks$2f$KPIBlock$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["default"], {
+                        kpiStripPlaceholder ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(KpiStripSkeleton, {
+                            id: "ws-root-kpi-skeleton"
+                        }, void 0, false, {
+                            fileName: "[project]/components/admin/workspace/WorkspaceRootShell.tsx",
+                            lineNumber: 166,
+                            columnNumber: 36
+                        }, void 0) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$app$2f$adminV2$2f$components$2f$workspace$2f$blocks$2f$KPIBlock$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["default"], {
                             kpis: kpis,
                             maxVisible: 5
                         }, void 0, false, {
                             fileName: "[project]/components/admin/workspace/WorkspaceRootShell.tsx",
-                            lineNumber: 163,
-                            columnNumber: 13
+                            lineNumber: 166,
+                            columnNumber: 85
                         }, void 0)
                     ]
                 }, void 0, true, {
                     fileName: "[project]/components/admin/workspace/WorkspaceRootShell.tsx",
-                    lineNumber: 148,
+                    lineNumber: 151,
                     columnNumber: 11
                 }, void 0),
                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("section", {
@@ -656,7 +662,7 @@ function WorkspaceRootShell({ orgName, departments, deptTileStats, metrics, metr
                                         children: "Departments"
                                     }, void 0, false, {
                                         fileName: "[project]/components/admin/workspace/WorkspaceRootShell.tsx",
-                                        lineNumber: 169,
+                                        lineNumber: 172,
                                         columnNumber: 17
                                     }, void 0),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -664,18 +670,18 @@ function WorkspaceRootShell({ orgName, departments, deptTileStats, metrics, metr
                                         children: "Each card is a live department from your org — drill in to work units and queues."
                                     }, void 0, false, {
                                         fileName: "[project]/components/admin/workspace/WorkspaceRootShell.tsx",
-                                        lineNumber: 172,
+                                        lineNumber: 175,
                                         columnNumber: 17
                                     }, void 0)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/components/admin/workspace/WorkspaceRootShell.tsx",
-                                lineNumber: 168,
+                                lineNumber: 171,
                                 columnNumber: 15
                             }, void 0)
                         }, void 0, false, {
                             fileName: "[project]/components/admin/workspace/WorkspaceRootShell.tsx",
-                            lineNumber: 167,
+                            lineNumber: 170,
                             columnNumber: 13
                         }, void 0),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$admin$2f$workspace$2f$WorkspaceRootDepartmentGrid$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["WorkspaceRootDepartmentGrid"], {
@@ -686,20 +692,20 @@ function WorkspaceRootShell({ orgName, departments, deptTileStats, metrics, metr
                             omitOuterChrome: true
                         }, void 0, false, {
                             fileName: "[project]/components/admin/workspace/WorkspaceRootShell.tsx",
-                            lineNumber: 177,
+                            lineNumber: 180,
                             columnNumber: 13
                         }, void 0)
                     ]
                 }, void 0, true, {
                     fileName: "[project]/components/admin/workspace/WorkspaceRootShell.tsx",
-                    lineNumber: 166,
+                    lineNumber: 169,
                     columnNumber: 11
                 }, void 0)
             ]
         }, void 0, true)
     }, void 0, false, {
         fileName: "[project]/components/admin/workspace/WorkspaceRootShell.tsx",
-        lineNumber: 107,
+        lineNumber: 110,
         columnNumber: 5
     }, this);
 }
@@ -2869,15 +2875,8 @@ var _s = __turbopack_context__.k.signature();
 ;
 ;
 ;
-async function loadWorkspaceRollup(departments) {
+async function loadWorkspaceRollup(departments, workUnitsRes, wuJson) {
     const fetchInit = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$workspace$2f$workspaceDataFetch$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["workspaceDataFetchInit"])();
-    let workUnitsRes = null;
-    try {
-        workUnitsRes = await fetch("/api/admin/work-units", fetchInit);
-    } catch  {
-        workUnitsRes = null;
-    }
-    const wuJson = await (workUnitsRes?.json().catch(()=>({})) ?? Promise.resolve({}));
     const deptTileStats = {};
     if (workUnitsRes?.ok && Array.isArray(wuJson.items)) {
         for (const row of wuJson.items){
@@ -2995,7 +2994,7 @@ function AdminV2WorkspaceIndexPage() {
     const [deptTileStats, setDeptTileStats] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])({});
     const [orgOpportunityKpis, setOrgOpportunityKpis] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(null);
     /** `undefined` = use shell legacy merge; otherwise full strip from placement resolver (after successful placement fetch). */ const [workspaceKpiStrip, setWorkspaceKpiStrip] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(undefined);
-    const [metricsLoading, setMetricsLoading] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(true);
+    /** KPI placements load after first paint — skeleton until settled (no baseline→placement number swap). */ const [workspaceKpiPlacementPending, setWorkspaceKpiPlacementPending] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(false);
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
         "AdminV2WorkspaceIndexPage.useEffect": ()=>{
             /** Synchronous: avoids a Strict Mode window where `loading` is still default `true` but the async body has not run yet (same class of bug as deferred `setLoading(true)`). */ setLoading(true);
@@ -3008,15 +3007,30 @@ function AdminV2WorkspaceIndexPage() {
             let applyResults = true;
             void ({
                 "AdminV2WorkspaceIndexPage.useEffect": async ()=>{
+                    const routeStart = typeof performance !== "undefined" ? performance.now() : 0;
                     try {
                         const perfDebug = ("TURBOPACK compile-time value", "object") !== "undefined" && window.__WS_PERF_DEBUG__ === true;
                         const t0 = perfDebug ? performance.now() : 0;
-                        const res = await fetch("/api/admin/departments", {
-                            signal: ac.signal
-                        });
-                        const json = await res.json().catch({
-                            "AdminV2WorkspaceIndexPage.useEffect": ()=>({})
-                        }["AdminV2WorkspaceIndexPage.useEffect"]);
+                        const fetchInit = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$workspace$2f$workspaceDataFetch$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["workspaceDataFetchInit"])();
+                        const [res, wuRes] = await Promise.all([
+                            fetch("/api/admin/departments", {
+                                signal: ac.signal
+                            }),
+                            fetch("/api/admin/work-units", {
+                                ...fetchInit ?? {},
+                                signal: ac.signal
+                            }).catch({
+                                "AdminV2WorkspaceIndexPage.useEffect": ()=>null
+                            }["AdminV2WorkspaceIndexPage.useEffect"])
+                        ]);
+                        const [json, wuJson] = await Promise.all([
+                            res.json().catch({
+                                "AdminV2WorkspaceIndexPage.useEffect": ()=>({})
+                            }["AdminV2WorkspaceIndexPage.useEffect"]),
+                            wuRes?.json().catch({
+                                "AdminV2WorkspaceIndexPage.useEffect": ()=>({})
+                            }["AdminV2WorkspaceIndexPage.useEffect"]) ?? Promise.resolve({})
+                        ]);
                         if (!res.ok) throw new Error(json.error ?? "Failed to load departments");
                         const items = json.items ?? [];
                         const active = items.filter({
@@ -3025,8 +3039,7 @@ function AdminV2WorkspaceIndexPage() {
                         if (applyResults) {
                             setDepartments(active);
                         }
-                        // Rollup runs after departments resolve without blocking first paint of the shell.
-                        if (applyResults && active.length) {
+                        /** Blocking: departments + work-units + pipeline-exact rollup only (placements deferred). */ if (applyResults && active.length) {
                             setMetrics({
                                 departments: null,
                                 workUnits: null
@@ -3034,63 +3047,79 @@ function AdminV2WorkspaceIndexPage() {
                             setDeptTileStats({});
                             setOrgOpportunityKpis(null);
                             setWorkspaceKpiStrip(undefined);
-                            setMetricsLoading(true);
-                            void ({
-                                "AdminV2WorkspaceIndexPage.useEffect": async ()=>{
-                                    try {
-                                        const fetchInit = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$workspace$2f$workspaceDataFetch$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["workspaceDataFetchInit"])();
-                                        const [rollupResult, placementRes] = await Promise.all([
-                                            loadWorkspaceRollup(active),
-                                            fetch("/api/admin/workspace-kpi-placements?surface=workspace", {
-                                                ...fetchInit ?? {},
+                            setWorkspaceKpiPlacementPending(true);
+                            try {
+                                const rollupResult = await loadWorkspaceRollup(active, wuRes, wuJson);
+                                const { metrics: m, deptTileStats: stats, orgOpportunityKpis: roll, growthSnapshots } = rollupResult;
+                                if (!applyResults) return;
+                                setMetrics(m);
+                                setDeptTileStats(stats);
+                                setOrgOpportunityKpis(roll.length ? roll : null);
+                                const growthSnapshotsRef = growthSnapshots;
+                                const metricsForPlacement = {
+                                    ...m,
+                                    departments: active.length
+                                };
+                                void ({
+                                    "AdminV2WorkspaceIndexPage.useEffect": async ()=>{
+                                        const tPlace0 = typeof performance !== "undefined" ? performance.now() : 0;
+                                        let placementStrip = undefined;
+                                        try {
+                                            const placementRes = await fetch("/api/admin/workspace-kpi-placements?surface=workspace", {
+                                                ...(0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$workspace$2f$workspaceDataFetch$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["workspaceDataFetchInit"])() ?? {},
                                                 cache: "no-store"
                                             }).catch({
                                                 "AdminV2WorkspaceIndexPage.useEffect": ()=>null
-                                            }["AdminV2WorkspaceIndexPage.useEffect"])
-                                        ]);
-                                        const { metrics: m, deptTileStats: stats, orgOpportunityKpis: roll, growthSnapshots } = rollupResult;
-                                        let placementStrip = undefined;
-                                        try {
+                                            }["AdminV2WorkspaceIndexPage.useEffect"]);
                                             if (placementRes?.ok) {
                                                 const body = await placementRes.json().catch({
                                                     "AdminV2WorkspaceIndexPage.useEffect": ()=>({})
                                                 }["AdminV2WorkspaceIndexPage.useEffect"]);
-                                                const metricsForResolve = {
-                                                    ...m,
-                                                    departments: active.length
-                                                };
                                                 placementStrip = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$kpi$2f$resolver$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["resolveKpisForWorkspace"])({
                                                     placementRows: body.items ?? [],
                                                     scopeHasPlacementRows: body.scope_has_placements === true,
-                                                    metrics: metricsForResolve,
-                                                    growthSnapshots
+                                                    metrics: metricsForPlacement,
+                                                    growthSnapshots: growthSnapshotsRef
                                                 }).items;
                                             }
                                         } catch  {
                                             placementStrip = undefined;
+                                        } finally{
+                                            if (applyResults) {
+                                                setWorkspaceKpiStrip(placementStrip);
+                                                setWorkspaceKpiPlacementPending(false);
+                                            }
+                                            if (typeof performance !== "undefined" && ("TURBOPACK compile-time value", "object") !== "undefined") {
+                                                console.log("[page-timing]", {
+                                                    route: "workspace",
+                                                    phase: "kpi_placement",
+                                                    duration_ms: Math.round(performance.now() - tPlace0)
+                                                });
+                                            }
                                         }
-                                        if (!applyResults) return;
-                                        setMetrics(m);
-                                        setDeptTileStats(stats);
-                                        setOrgOpportunityKpis(roll.length ? roll : null);
-                                        setWorkspaceKpiStrip(placementStrip);
-                                    } catch  {
-                                        if (!applyResults) return;
-                                        setMetrics(null);
-                                        setDeptTileStats({});
-                                        setOrgOpportunityKpis(null);
-                                        setWorkspaceKpiStrip(undefined);
-                                    } finally{
-                                        if (applyResults) setMetricsLoading(false);
                                     }
-                                }
-                            })["AdminV2WorkspaceIndexPage.useEffect"]();
+                                })["AdminV2WorkspaceIndexPage.useEffect"]();
+                            } catch  {
+                                if (!applyResults) return;
+                                setMetrics(null);
+                                setDeptTileStats({});
+                                setOrgOpportunityKpis(null);
+                                setWorkspaceKpiStrip(undefined);
+                                setWorkspaceKpiPlacementPending(false);
+                            }
                         } else if (applyResults) {
-                            setMetricsLoading(false);
                             setMetrics(null);
                             setDeptTileStats({});
                             setOrgOpportunityKpis(null);
                             setWorkspaceKpiStrip(undefined);
+                            setWorkspaceKpiPlacementPending(false);
+                        }
+                        if (typeof performance !== "undefined" && ("TURBOPACK compile-time value", "object") !== "undefined") {
+                            console.log("[page-timing]", {
+                                route: "workspace",
+                                phase: "first_paint",
+                                duration_ms: Math.round(performance.now() - routeStart)
+                            });
                         }
                         if (perfDebug) {
                             const t1 = performance.now();
@@ -3122,7 +3151,6 @@ function AdminV2WorkspaceIndexPage() {
             })["AdminV2WorkspaceIndexPage.useEffect"];
         }
     }["AdminV2WorkspaceIndexPage.useEffect"], []);
-    // Rollup is now driven by the initial load effect to avoid staggered readiness waves.
     const metricsResolved = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useMemo"])({
         "AdminV2WorkspaceIndexPage.useMemo[metricsResolved]": ()=>{
             if (!metrics) return null;
@@ -3150,30 +3178,31 @@ function AdminV2WorkspaceIndexPage() {
                             children: "Workspace"
                         }, void 0, false, {
                             fileName: "[project]/app/adminV2/workspace/page.tsx",
-                            lineNumber: 299,
+                            lineNumber: 317,
                             columnNumber: 25
                         }, this)
                     }, void 0, false, {
                         fileName: "[project]/app/adminV2/workspace/page.tsx",
-                        lineNumber: 298,
+                        lineNumber: 316,
                         columnNumber: 21
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$admin$2f$workspace$2f$AdminV2RouteLoadingState$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["AdminV2RouteLoadingState"], {
-                        variant: "workspace"
+                        variant: "workspace",
+                        showRibbon: false
                     }, void 0, false, {
                         fileName: "[project]/app/adminV2/workspace/page.tsx",
-                        lineNumber: 301,
+                        lineNumber: 319,
                         columnNumber: 21
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/app/adminV2/workspace/page.tsx",
-                lineNumber: 297,
+                lineNumber: 315,
                 columnNumber: 17
             }, this)
         }, void 0, false, {
             fileName: "[project]/app/adminV2/workspace/page.tsx",
-            lineNumber: 296,
+            lineNumber: 314,
             columnNumber: 13
         }, this);
     }
@@ -3185,12 +3214,12 @@ function AdminV2WorkspaceIndexPage() {
                 children: error
             }, void 0, false, {
                 fileName: "[project]/app/adminV2/workspace/page.tsx",
-                lineNumber: 310,
+                lineNumber: 328,
                 columnNumber: 17
             }, this)
         }, void 0, false, {
             fileName: "[project]/app/adminV2/workspace/page.tsx",
-            lineNumber: 309,
+            lineNumber: 327,
             columnNumber: 13
         }, this);
     }
@@ -3203,7 +3232,7 @@ function AdminV2WorkspaceIndexPage() {
                     children: "No active departments found for your organization."
                 }, void 0, false, {
                     fileName: "[project]/app/adminV2/workspace/page.tsx",
-                    lineNumber: 318,
+                    lineNumber: 336,
                     columnNumber: 17
                 }, this),
                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -3211,13 +3240,13 @@ function AdminV2WorkspaceIndexPage() {
                     children: "Add departments under Organization, then return here."
                 }, void 0, false, {
                     fileName: "[project]/app/adminV2/workspace/page.tsx",
-                    lineNumber: 319,
+                    lineNumber: 337,
                     columnNumber: 17
                 }, this)
             ]
         }, void 0, true, {
             fileName: "[project]/app/adminV2/workspace/page.tsx",
-            lineNumber: 317,
+            lineNumber: 335,
             columnNumber: 13
         }, this);
     }
@@ -3226,16 +3255,17 @@ function AdminV2WorkspaceIndexPage() {
         departments: departments,
         deptTileStats: deptTileStats,
         metrics: metricsResolved,
-        metricsLoading: metricsLoading,
+        metricsLoading: false,
         orgOpportunityKpis: orgOpportunityKpis,
-        workspaceKpiStrip: workspaceKpiStrip
+        workspaceKpiStrip: workspaceKpiStrip,
+        kpiStripPlaceholder: workspaceKpiPlacementPending
     }, void 0, false, {
         fileName: "[project]/app/adminV2/workspace/page.tsx",
-        lineNumber: 327,
+        lineNumber: 345,
         columnNumber: 9
     }, this);
 }
-_s(AdminV2WorkspaceIndexPage, "AMHsNdhjPSZEkmihHo94L50mzfo=", false, function() {
+_s(AdminV2WorkspaceIndexPage, "gW5YLATmeUQh4Sfd9Ufk/H/phM4=", false, function() {
     return [
         __TURBOPACK__imported__module__$5b$project$5d2f$contexts$2f$WorkspaceOrgContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useWorkspaceOrg"]
     ];

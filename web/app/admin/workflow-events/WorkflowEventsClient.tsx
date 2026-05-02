@@ -5,7 +5,8 @@ import { useSearchParams } from "next/navigation";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import Drawer from "@/components/admin/Drawer";
-import { formatDateTime } from "@/lib/adminFormatters";
+import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
+import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 
 type WorkflowEventRow = {
     id: string;
@@ -27,6 +28,12 @@ const RANGE_OPTIONS = [
 
 export default function WorkflowEventsClient() {
     const searchParams = useSearchParams();
+    const viewerTz = useAdminViewerTimezone();
+    const formatEventInstant = useCallback(
+        (iso: string | null | undefined) =>
+            iso ? formatDateTimeForUserDisplay(iso, viewerTz) : "—",
+        [viewerTz]
+    );
     const [events, setEvents] = useState<WorkflowEventRow[]>([]);
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -160,7 +167,7 @@ export default function WorkflowEventsClient() {
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="border-b border-alloy-stone/30 text-left text-alloy-midnight/70">
-                                        <th className="pb-2 pr-4">Occurred at</th>
+                                        <th className="pb-2 pr-4" title="Displayed in your admin display timezone">Occurred at</th>
                                         <th className="pb-2 pr-4">Event type</th>
                                         <th className="pb-2 pr-4">Entity type</th>
                                         <th className="pb-2 pr-4">Entity ID</th>
@@ -178,7 +185,7 @@ export default function WorkflowEventsClient() {
                                                 className="border-b border-alloy-stone/20 hover:bg-alloy-stone/20 cursor-pointer"
                                                 onClick={() => setSelected(e)}
                                             >
-                                                <td className="py-2 pr-4">{formatDateTime(e.occurred_at)}</td>
+                                                <td className="py-2 pr-4">{formatEventInstant(e.occurred_at)}</td>
                                                 <td className="py-2 pr-4">{e.event_type ?? "—"}</td>
                                                 <td className="py-2 pr-4">{e.entity_type ?? "—"}</td>
                                                 <td className="py-2 pr-4 font-mono text-xs truncate max-w-[120px]" title={e.entity_id ?? undefined}>{e.entity_id ? `${e.entity_id.slice(0, 8)}…` : "—"}</td>
@@ -230,9 +237,9 @@ export default function WorkflowEventsClient() {
                 {selected && (
                     <div className="space-y-4">
                         <div className="grid grid-cols-2 gap-2 text-sm">
-                            <div><span className="text-alloy-midnight/60">Occurred at</span><br />{formatDateTime(selected.occurred_at)}</div>
+                            <div><span className="text-alloy-midnight/60">Occurred at</span><br />{formatEventInstant(selected.occurred_at)}</div>
                             {selected.created_at != null && (
-                                <div><span className="text-alloy-midnight/60">Created at</span><br />{formatDateTime(selected.created_at)}</div>
+                                <div><span className="text-alloy-midnight/60">Created at</span><br />{formatEventInstant(selected.created_at)}</div>
                             )}
                             <div><span className="text-alloy-midnight/60">Event type</span><br />{selected.event_type ?? "—"}</div>
                             <div><span className="text-alloy-midnight/60">Entity type</span><br />{selected.entity_type ?? "—"}</div>

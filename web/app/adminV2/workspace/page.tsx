@@ -21,23 +21,17 @@ import { resolveKpisForWorkspace } from "@/lib/kpi/resolver";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { AdminV2RouteLoadingState } from "@/components/admin/workspace/AdminV2RouteLoadingState";
 
-async function loadWorkspaceRollup(departments: WorkspaceRootDepartmentRow[]): Promise<{
+async function loadWorkspaceRollup(
+    departments: WorkspaceRootDepartmentRow[],
+    workUnitsRes: Response | null,
+    wuJson: { items?: { department_id?: string }[]; error?: string }
+): Promise<{
     metrics: WorkspaceRootMetrics;
     deptTileStats: WorkspaceRootDeptTileStats;
     orgOpportunityKpis: KPIVm[];
     growthSnapshots: WorkspaceGrowthDeptSnapshot[];
 }> {
     const fetchInit = workspaceDataFetchInit();
-    let workUnitsRes: Response | null = null;
-    try {
-        workUnitsRes = await fetch("/api/admin/work-units", fetchInit);
-    } catch {
-        workUnitsRes = null;
-    }
-    const wuJson = (await (workUnitsRes?.json().catch(() => ({})) ?? Promise.resolve({}))) as {
-        items?: { department_id?: string }[];
-        error?: string;
-    };
 
     const deptTileStats: WorkspaceRootDeptTileStats = {};
     if (workUnitsRes?.ok && Array.isArray(wuJson.items)) {
@@ -152,7 +146,8 @@ export default function AdminV2WorkspaceIndexPage() {
     const [orgOpportunityKpis, setOrgOpportunityKpis] = useState<KPIVm[] | null>(null);
     /** `undefined` = use shell legacy merge; otherwise full strip from placement resolver (after successful placement fetch). */
     const [workspaceKpiStrip, setWorkspaceKpiStrip] = useState<KPIVm[] | undefined>(undefined);
-    const [metricsLoading, setMetricsLoading] = useState(true);
+    /** KPI placements load after first paint — skeleton until settled (no baseline→placement number swap). */
+    const [workspaceKpiPlacementPending, setWorkspaceKpiPlacementPending] = useState(false);
 
     useEffect(() => {
         /** Synchronous: avoids a Strict Mode window where `loading` is still default `true` but the async body has not run yet (same class of bug as deferred `setLoading(true)`). */
@@ -166,15 +161,24 @@ export default function AdminV2WorkspaceIndexPage() {
         let applyResults = true;
 
         void (async () => {
+            const routeStart = typeof performance !== "undefined" ? performance.now() : 0;
             try {
                 const perfDebug =
                     typeof window !== "undefined" &&
                     (window as unknown as { __WS_PERF_DEBUG__?: boolean }).__WS_PERF_DEBUG__ === true;
                 const t0 = perfDebug ? performance.now() : 0;
 
-                const res = await fetch("/api/admin/departments", { signal: ac.signal });
+                const fetchInit = workspaceDataFetchInit();
+                const [res, wuRes] = await Promise.all([
+                    fetch("/api/admin/departments", { signal: ac.signal }),
+                    fetch("/api/admin/work-units", { ...(fetchInit ?? {}), signal: ac.signal }).catch(() => null as Response | null),
+                ]);
                 const json = (await res.json().catch(() => ({}))) as {
                     items?: WorkspaceRootDepartmentRow[];
+                    error?: string;
+                };
+                const wuJson = (await (wuRes?.json().catch(() => ({})) ?? Promise.resolve({}))) as {
+                    items?: { department_id?: string }[];
                     error?: string;
                 };
                 if (!res.ok) throw new Error(json.error ?? "Failed to load departments");
@@ -184,69 +188,86 @@ export default function AdminV2WorkspaceIndexPage() {
                     setDepartments(active);
                 }
 
-                // Rollup runs after departments resolve without blocking first paint of the shell.
+                /** Blocking: departments + work-units + pipeline-exact rollup only (placements deferred). */
                 if (applyResults && active.length) {
                     setMetrics({ departments: null, workUnits: null });
                     setDeptTileStats({});
                     setOrgOpportunityKpis(null);
                     setWorkspaceKpiStrip(undefined);
-                    setMetricsLoading(true);
-                    void (async () => {
-                        try {
-                            const fetchInit = workspaceDataFetchInit();
+                    setWorkspaceKpiPlacementPending(true);
+                    try {
+                        const rollupResult = await loadWorkspaceRollup(active, wuRes, wuJson);
+                        const { metrics: m, deptTileStats: stats, orgOpportunityKpis: roll, growthSnapshots } =
+                            rollupResult;
+                        if (!applyResults) return;
+                        setMetrics(m);
+                        setDeptTileStats(stats);
+                        setOrgOpportunityKpis(roll.length ? roll : null);
+
+                        const growthSnapshotsRef = growthSnapshots;
+                        const metricsForPlacement: WorkspaceRootMetrics = {
+                            ...m,
+                            departments: active.length,
+                        };
+                        void (async () => {
+                            const tPlace0 = typeof performance !== "undefined" ? performance.now() : 0;
                             type PlacementBody = {
                                 items?: WorkspaceKpiPlacementRow[];
                                 scope_has_placements?: boolean;
                             };
-                            const [rollupResult, placementRes] = await Promise.all([
-                                loadWorkspaceRollup(active),
-                                fetch("/api/admin/workspace-kpi-placements?surface=workspace", {
-                                    ...(fetchInit ?? {}),
-                                    cache: "no-store",
-                                }).catch(() => null as Response | null),
-                            ]);
-                            const { metrics: m, deptTileStats: stats, orgOpportunityKpis: roll, growthSnapshots } =
-                                rollupResult;
-
                             let placementStrip: KPIVm[] | undefined = undefined;
                             try {
+                                const placementRes = await fetch("/api/admin/workspace-kpi-placements?surface=workspace", {
+                                    ...(workspaceDataFetchInit() ?? {}),
+                                    cache: "no-store",
+                                }).catch(() => null as Response | null);
                                 if (placementRes?.ok) {
                                     const body = (await placementRes.json().catch(() => ({}))) as PlacementBody;
-                                    const metricsForResolve: WorkspaceRootMetrics = {
-                                        ...m,
-                                        departments: active.length,
-                                    };
                                     placementStrip = resolveKpisForWorkspace({
                                         placementRows: body.items ?? [],
                                         scopeHasPlacementRows: body.scope_has_placements === true,
-                                        metrics: metricsForResolve,
-                                        growthSnapshots,
+                                        metrics: metricsForPlacement,
+                                        growthSnapshots: growthSnapshotsRef,
                                     }).items;
                                 }
                             } catch {
                                 placementStrip = undefined;
+                            } finally {
+                                if (applyResults) {
+                                    setWorkspaceKpiStrip(placementStrip);
+                                    setWorkspaceKpiPlacementPending(false);
+                                }
+                                if (typeof performance !== "undefined" && typeof window !== "undefined") {
+                                    console.log("[page-timing]", {
+                                        route: "workspace",
+                                        phase: "kpi_placement",
+                                        duration_ms: Math.round(performance.now() - tPlace0),
+                                    });
+                                }
                             }
-                            if (!applyResults) return;
-                            setMetrics(m);
-                            setDeptTileStats(stats);
-                            setOrgOpportunityKpis(roll.length ? roll : null);
-                            setWorkspaceKpiStrip(placementStrip);
-                        } catch {
-                            if (!applyResults) return;
-                            setMetrics(null);
-                            setDeptTileStats({});
-                            setOrgOpportunityKpis(null);
-                            setWorkspaceKpiStrip(undefined);
-                        } finally {
-                            if (applyResults) setMetricsLoading(false);
-                        }
-                    })();
+                        })();
+                    } catch {
+                        if (!applyResults) return;
+                        setMetrics(null);
+                        setDeptTileStats({});
+                        setOrgOpportunityKpis(null);
+                        setWorkspaceKpiStrip(undefined);
+                        setWorkspaceKpiPlacementPending(false);
+                    }
                 } else if (applyResults) {
-                    setMetricsLoading(false);
                     setMetrics(null);
                     setDeptTileStats({});
                     setOrgOpportunityKpis(null);
                     setWorkspaceKpiStrip(undefined);
+                    setWorkspaceKpiPlacementPending(false);
+                }
+
+                if (typeof performance !== "undefined" && typeof window !== "undefined") {
+                    console.log("[page-timing]", {
+                        route: "workspace",
+                        phase: "first_paint",
+                        duration_ms: Math.round(performance.now() - routeStart),
+                    });
                 }
 
                 if (perfDebug) {
@@ -281,8 +302,6 @@ export default function AdminV2WorkspaceIndexPage() {
         };
     }, []);
 
-    // Rollup is now driven by the initial load effect to avoid staggered readiness waves.
-
     const metricsResolved = useMemo(() => {
         if (!metrics) return null;
         return {
@@ -298,7 +317,7 @@ export default function AdminV2WorkspaceIndexPage() {
                     <nav className="text-sm text-alloy-midnight/60 flex flex-wrap items-center gap-1 pb-2" aria-label="Breadcrumb">
                         <span className="text-alloy-midnight/80 font-medium">Workspace</span>
                     </nav>
-                    <AdminV2RouteLoadingState variant="workspace" />
+                    <AdminV2RouteLoadingState variant="workspace" showRibbon={false} />
                 </div>
             </div>
         );
@@ -329,9 +348,10 @@ export default function AdminV2WorkspaceIndexPage() {
             departments={departments}
             deptTileStats={deptTileStats}
             metrics={metricsResolved}
-            metricsLoading={metricsLoading}
+            metricsLoading={false}
             orgOpportunityKpis={orgOpportunityKpis}
             workspaceKpiStrip={workspaceKpiStrip}
+            kpiStripPlaceholder={workspaceKpiPlacementPending}
         />
     );
 }

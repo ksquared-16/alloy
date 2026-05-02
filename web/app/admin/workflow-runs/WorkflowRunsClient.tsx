@@ -6,7 +6,8 @@ import { useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext"
 import AdminListPageHeader from "@/components/admin/AdminListPageHeader";
 import Drawer from "@/components/admin/Drawer";
 import { StatusBadge } from "@/components/admin/StatusBadge";
-import { formatDateTime } from "@/lib/adminFormatters";
+import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
+import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import { Filter } from "lucide-react";
 
 type WorkflowRunRow = {
@@ -132,6 +133,12 @@ function ActionRunItem({
 
 export default function WorkflowRunsClient() {
     const { labels } = useEntityLabels();
+    const viewerTz = useAdminViewerTimezone();
+    const formatRunInstant = useCallback(
+        (iso: string | null | undefined) =>
+            iso ? formatDateTimeForUserDisplay(iso, viewerTz) : "—",
+        [viewerTz]
+    );
     const [runs, setRuns] = useState<WorkflowRunRow[]>([]);
     const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(true);
@@ -340,7 +347,9 @@ export default function WorkflowRunsClient() {
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="border-b border-admin-border bg-alloy-blue/[0.08]">
-                                        <th className="px-5 py-3.5 text-left text-xs font-semibold tracking-wider text-alloy-slate">Started at</th>
+                                        <th className="px-5 py-3.5 text-left text-xs font-semibold tracking-wider text-alloy-slate" title="Displayed in your admin display timezone">
+                                            Started at
+                                        </th>
                                         <th className="px-5 py-3.5 text-left text-xs font-semibold tracking-wider text-alloy-slate">Workflow</th>
                                         <th className="px-5 py-3.5 text-left text-xs font-semibold tracking-wider text-alloy-slate">Event</th>
                                         <th className="px-5 py-3.5 text-left text-xs font-semibold tracking-wider text-alloy-slate">Entity</th>
@@ -358,7 +367,7 @@ export default function WorkflowRunsClient() {
                                                 className="cursor-pointer hover:bg-alloy-juniper/[0.08] transition-colors duration-100"
                                                 onClick={() => setSelected(r)}
                                             >
-                                                <td className="px-5 py-3.5 text-alloy-midnight/90">{formatDateTime(r.started_at)}</td>
+                                                <td className="px-5 py-3.5 text-alloy-midnight/90">{formatRunInstant(r.started_at)}</td>
                                                 <td className="px-5 py-3.5 text-alloy-midnight/90">{r.workflow_name ?? r.workflow_id?.slice(0, 8) ?? "—"}</td>
                                                 <td className="px-5 py-3.5 text-alloy-midnight/90">{r.event_type ?? "—"}</td>
                                                 <td className="px-5 py-3.5 font-mono text-xs truncate max-w-[120px] text-alloy-midnight/90" title={r.entity_id ?? undefined}>
@@ -491,8 +500,8 @@ export default function WorkflowRunsClient() {
                                 ) : "—"}
                             </div>
                             <div><span className="text-alloy-midnight/60">Status</span><br /><StatusBadge label={selected.status} variant={statusVariant(selected.status)} /></div>
-                            <div><span className="text-alloy-midnight/60">Started at</span><br />{formatDateTime(selected.started_at)}</div>
-                            <div><span className="text-alloy-midnight/60">Completed at</span><br />{selected.completed_at ? formatDateTime(selected.completed_at) : "—"}</div>
+                            <div><span className="text-alloy-midnight/60">Started at</span><br />{formatRunInstant(selected.started_at)}</div>
+                            <div><span className="text-alloy-midnight/60">Completed at</span><br />{selected.completed_at ? formatRunInstant(selected.completed_at) : "—"}</div>
                             <div><span className="text-alloy-midnight/60">Duration</span><br />{formatDuration(selected.started_at, selected.completed_at)}</div>
                             <div className="col-span-2"><span className="text-alloy-midnight/60">Run ID</span><br /><span className="font-mono text-xs break-all">{selected.id}</span></div>
                         </div>

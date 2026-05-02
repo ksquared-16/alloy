@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { getOrgLocalTodayUtcBounds } from "@/lib/admin/orgLocalDayBounds";
 import { QueueServiceError, __testing } from "@/lib/queues/QueueService";
 
 describe("QueueService — pure helpers", () => {
@@ -49,6 +50,33 @@ describe("QueueService — pure helpers", () => {
         const plan = __testing.buildJobPlan(q as any);
         expect(plan.ops).toEqual([{ kind: "in", column: "status_key", values: ["new", "scheduled"] }]);
         expect(plan.sort[0]).toEqual({ column: "created_at", ascending: true });
+        expect(plan.calendar_meta).toBeUndefined();
+    });
+
+    it("job today filter uses org operational day bounds and returns calendar_meta", () => {
+        const refUtc = new Date("2026-05-02T12:00:00.000Z");
+        const dayBounds = getOrgLocalTodayUtcBounds("America/New_York", refUtc);
+        const ctx = {
+            dayBounds,
+            calendar_meta: {
+                calendar_type: "operational_day" as const,
+                timezone_effective: "America/New_York",
+                timezone_source: "org_metadata" as const,
+                day_start_utc: dayBounds.dayStartUtc.toISOString(),
+                day_end_exclusive_utc: dayBounds.dayEndExclusiveUtc.toISOString(),
+            },
+        };
+        const q = {
+            key: "x",
+            label: "X",
+            filters: [{ type: "date" as const, field: "created_at" as const, operator: "today" as const }],
+        };
+        const plan = __testing.buildJobPlan(q as any, ctx as any);
+        expect(plan.ops).toEqual([
+            { kind: "gte", column: "created_at", value: dayBounds.dayStartUtc.toISOString() },
+            { kind: "range_lt", column: "created_at", value: dayBounds.dayEndExclusiveUtc.toISOString() },
+        ]);
+        expect(plan.calendar_meta).toEqual(ctx.calendar_meta);
     });
 
     it("opportunity status filter builds path", () => {
@@ -61,6 +89,7 @@ describe("QueueService — pure helpers", () => {
         const plan = __testing.buildOpportunityPlan(q as any);
         expect(plan.ops).toEqual([{ kind: "in", column: "status_key", values: ["new_inquiry", "contacted"] }]);
         expect(plan.sort[0]).toEqual({ column: "updated_at", ascending: false });
+        expect(plan.calendar_meta).toBeUndefined();
     });
 
     it("unsupported opportunity field fails clearly", () => {

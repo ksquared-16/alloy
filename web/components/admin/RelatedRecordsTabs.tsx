@@ -8,7 +8,8 @@ import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useEntityLabels } from "@/contexts/EntityLabelsContext";
-import { formatMoneyFromDollars } from "@/lib/adminFormatters";
+import { formatMoneyFromDollars, formatDateForUserDisplay, formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
+import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 
 type EntityKind = "contact" | "customer" | "opportunity" | "job" | "location";
 
@@ -26,43 +27,57 @@ interface TabConfig {
     documentUploadEntityType?: string;
 }
 
-const RELATED_SCHEDULE_COLUMNS: TabConfig["columns"] = [
-    { key: "start_at", label: "Start", render: (v) => (v ? new Date(v as string).toLocaleString() : "—") },
-    { key: "end_at", label: "End", render: (v) => (v ? new Date(v as string).toLocaleString() : "—") },
-    {
-        key: "timezone",
-        label: "Timezone",
-        render: (v) => {
-            if (v == null || v === "") return "—";
-            const s = String(v).trim();
-            return s.length > 0 ? s : "—";
+function relatedScheduleColumns(viewerTz: string): TabConfig["columns"] {
+    const visitTz = (row?: Record<string, unknown>) => {
+        const t = row?.timezone;
+        return typeof t === "string" && t.trim() ? t.trim() : viewerTz;
+    };
+    return [
+        {
+            key: "start_at",
+            label: "Start",
+            render: (v, row) => (v ? formatDateTimeForUserDisplay(String(v), visitTz(row)) : "—"),
         },
-    },
-    {
-        key: "status_key",
-        label: "Workflow",
-        render: (v) => {
-            if (v == null || v === "") return "—";
-            const s = String(v).trim();
-            return s.length > 0 ? s : "—";
+        {
+            key: "end_at",
+            label: "End",
+            render: (v, row) => (v ? formatDateTimeForUserDisplay(String(v), visitTz(row)) : "—"),
         },
-    },
-    {
-        key: "canceled_at",
-        label: "Canceled",
-        render: (v, row) => {
-            if (!v) return "—";
-            const when = new Date(v as string).toLocaleString();
-            const reason = row?.cancel_reason;
-            if (reason != null && String(reason).trim()) {
-                const s = String(reason).trim();
-                const short = s.length > 64 ? `${s.slice(0, 64)}…` : s;
-                return `${when} · ${short}`;
-            }
-            return when;
+        {
+            key: "timezone",
+            label: "Timezone",
+            render: (v) => {
+                if (v == null || v === "") return "—";
+                const s = String(v).trim();
+                return s.length > 0 ? s : "—";
+            },
         },
-    },
-];
+        {
+            key: "status_key",
+            label: "Workflow",
+            render: (v) => {
+                if (v == null || v === "") return "—";
+                const s = String(v).trim();
+                return s.length > 0 ? s : "—";
+            },
+        },
+        {
+            key: "canceled_at",
+            label: "Canceled",
+            render: (v, row) => {
+                if (!v) return "—";
+                const when = formatDateTimeForUserDisplay(String(v), visitTz(row));
+                const reason = row?.cancel_reason;
+                if (reason != null && String(reason).trim()) {
+                    const s = String(reason).trim();
+                    const short = s.length > 64 ? `${s.slice(0, 64)}…` : s;
+                    return `${when} · ${short}`;
+                }
+                return when;
+            },
+        },
+    ];
+}
 
 const EMPTY: Record<string, unknown[]> = { people: [], opportunities: [], jobs: [], schedules: [], contacts: [], locations: [], customer_members: [], payments: [], customer_subscriptions: [], discount_redemptions: [], documents: [], messages: [], customer_tags: [], linked_persons: [] };
 
@@ -76,6 +91,10 @@ export default function RelatedRecordsTabs({
     const { openDrawer } = useAdminDrawer();
     const { canMutate } = useAdminAuth();
     const { labels } = useEntityLabels();
+    const viewerTz = useAdminViewerTimezone();
+    const schedCols = relatedScheduleColumns(viewerTz);
+    const fmtDate = (v: unknown) => (v ? formatDateForUserDisplay(String(v), viewerTz) : "—");
+    const fmtDt = (v: unknown) => (v ? formatDateTimeForUserDisplay(String(v), viewerTz) : "—");
     const membersPlural = labels.customer_members?.plural ?? "Members";
     const membersSingular = labels.customer_members?.singular ?? "Member";
     const [data, setData] = useState<Record<string, unknown[]>>(EMPTY);
@@ -146,18 +165,18 @@ export default function RelatedRecordsTabs({
     if (entityType === "contact") {
         tabs.push(
             { key: "opportunities", label: "Opportunities", entityType: "opportunities", dataKey: "opportunities", columns: [
-                { key: "created_at", label: "Created", render: (v) => v ? new Date(v as string).toLocaleDateString() : "-" },
+                { key: "created_at", label: "Created", render: (v) => fmtDate(v) },
                 { key: "name", label: "Name" },
                 { key: "status", label: "Status" },
                 { key: "job_date", label: "Job Date" },
                 { key: "quote_total", label: "Quote", render: (v) => formatMoneyFromDollars(v as number) },
             ]},
             { key: "jobs", label: "Jobs", entityType: "jobs", dataKey: "jobs", columns: [
-                { key: "created_at", label: "Created", render: (v) => v ? new Date(v as string).toLocaleDateString() : "-" },
+                { key: "created_at", label: "Created", render: (v) => fmtDate(v) },
                 { key: "title", label: "Title" },
-                { key: "scheduled_at", label: "Scheduled", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },
+                { key: "scheduled_at", label: "Scheduled", render: (v) => fmtDt(v) },
             ]},
-            { key: "schedules", label: "Schedules", entityType: "schedules", dataKey: "schedules", columns: RELATED_SCHEDULE_COLUMNS },
+            { key: "schedules", label: "Schedules", entityType: "schedules", dataKey: "schedules", columns: schedCols },
             { key: "documents", label: "Documents", entityType: "contacts", dataKey: "documents", isDocumentsPanel: true, documentUploadEntityType: "contact", columns: [] },
         );
     } else if (entityType === "customer") {
@@ -170,7 +189,7 @@ export default function RelatedRecordsTabs({
             ]},
             { key: "contacts", label: "Contacts", entityType: "contacts", dataKey: "contacts", columns: [
                 { key: "_primary", label: " ", render: (_v, row) => (row?.id && primaryContactId && row.id === primaryContactId ? "Primary" : "") },
-                { key: "created_at", label: "Created", render: (v) => v ? new Date(v as string).toLocaleDateString() : "-" },
+                { key: "created_at", label: "Created", render: (v) => fmtDate(v) },
                 { key: "first_name", label: "Name", render: (_v, row) => (row ? [row.first_name, row.last_name].filter(Boolean).join(" ") || (row.email as string) || "—" : "—") },
                 { key: "email", label: "Email" },
                 { key: "phone", label: "Phone" },
@@ -182,17 +201,17 @@ export default function RelatedRecordsTabs({
                 { key: "is_active", label: "Active", render: (v) => v ? "Yes" : "No" },
             ]},
             { key: "opportunities", label: "Opportunities", entityType: "opportunities", dataKey: "opportunities", columns: [
-                { key: "created_at", label: "Created", render: (v) => v ? new Date(v as string).toLocaleDateString() : "-" },
+                { key: "created_at", label: "Created", render: (v) => fmtDate(v) },
                 { key: "name", label: "Name" },
                 { key: "status", label: "Status" },
                 { key: "quote_total", label: "Quote", render: (v) => formatMoneyFromDollars(v as number) },
             ]},
             { key: "jobs", label: "Jobs", entityType: "jobs", dataKey: "jobs", columns: [
-                { key: "created_at", label: "Created", render: (v) => v ? new Date(v as string).toLocaleDateString() : "-" },
+                { key: "created_at", label: "Created", render: (v) => fmtDate(v) },
                 { key: "title", label: "Title" },
-                { key: "scheduled_at", label: "Scheduled", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },
+                { key: "scheduled_at", label: "Scheduled", render: (v) => fmtDt(v) },
             ]},
-            { key: "schedules", label: "Schedules", entityType: "schedules", dataKey: "schedules", columns: RELATED_SCHEDULE_COLUMNS },
+            { key: "schedules", label: "Schedules", entityType: "schedules", dataKey: "schedules", columns: schedCols },
             { key: "locations", label: "Locations", entityType: "locations", dataKey: "locations", columns: [
                 { key: "label", label: "Name" },
                 { key: "location_type", label: "Type", render: (v) => (v && typeof v === "string") ? (v as string).charAt(0).toUpperCase() + (v as string).slice(1).toLowerCase() : "—" },
@@ -201,11 +220,11 @@ export default function RelatedRecordsTabs({
             ]},
             { key: "customer_subscriptions", label: "Subscriptions", entityType: "subscriptions", dataKey: "customer_subscriptions", columns: [
                 { key: "status", label: "Status" },
-                { key: "start_date", label: "Start date", render: (v) => v ? new Date(v as string).toLocaleDateString() : "—" },
-                { key: "created_at", label: "Created", render: (v) => v ? new Date(v as string).toLocaleDateString() : "—" },
+                { key: "start_date", label: "Start date", render: (v) => fmtDate(v) },
+                { key: "created_at", label: "Created", render: (v) => fmtDate(v) },
             ]},
             { key: "discount_redemptions", label: "Discounts / Promotions", entityType: "discount_redemptions", dataKey: "discount_redemptions", columns: [
-                { key: "created_at", label: "Redeemed", render: (v) => v ? new Date(v as string).toLocaleDateString() : "—" },
+                { key: "created_at", label: "Redeemed", render: (v) => fmtDate(v) },
                 { key: "discount_code_id", label: "Code ID", render: (v) => (v && typeof v === "string") ? (v as string).slice(0, 8) + "…" : "—" },
             ]},
             { key: "documents", label: "Documents", entityType: "customers", dataKey: "documents", isDocumentsPanel: true, documentUploadEntityType: "customer", columns: [] },
@@ -213,16 +232,16 @@ export default function RelatedRecordsTabs({
     } else if (entityType === "opportunity") {
         tabs.push(
             { key: "jobs", label: "Jobs", entityType: "jobs", dataKey: "jobs", columns: [
-                { key: "created_at", label: "Created", render: (v) => v ? new Date(v as string).toLocaleDateString() : "-" },
+                { key: "created_at", label: "Created", render: (v) => fmtDate(v) },
                 { key: "title", label: "Title" },
-                { key: "scheduled_at", label: "Scheduled", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },
+                { key: "scheduled_at", label: "Scheduled", render: (v) => fmtDt(v) },
             ]},
-            { key: "schedules", label: "Schedules", entityType: "schedules", dataKey: "schedules", columns: RELATED_SCHEDULE_COLUMNS },
+            { key: "schedules", label: "Schedules", entityType: "schedules", dataKey: "schedules", columns: schedCols },
             { key: "documents", label: "Documents", entityType: "opportunities", dataKey: "documents", isDocumentsPanel: true, documentUploadEntityType: "opportunity", columns: [] },
         );
     } else if (entityType === "job") {
         tabs.push(
-            { key: "schedules", label: "Schedules", entityType: "schedules", dataKey: "schedules", columns: RELATED_SCHEDULE_COLUMNS },
+            { key: "schedules", label: "Schedules", entityType: "schedules", dataKey: "schedules", columns: schedCols },
             { key: "documents", label: "Documents", entityType: "jobs", dataKey: "documents", isDocumentsPanel: true, documentUploadEntityType: "job", columns: [] },
         );
     } else if (entityType === "location") {
@@ -233,11 +252,11 @@ export default function RelatedRecordsTabs({
                 { key: "relationship_type", label: "Link", render: (v) => (v as string)?.trim() || "—" },
             ]},
             { key: "jobs", label: "Jobs", entityType: "jobs", dataKey: "jobs", columns: [
-                { key: "created_at", label: "Created", render: (v) => v ? new Date(v as string).toLocaleDateString() : "-" },
+                { key: "created_at", label: "Created", render: (v) => fmtDate(v) },
                 { key: "title", label: "Title" },
-                { key: "scheduled_at", label: "Scheduled", render: (v) => v ? new Date(v as string).toLocaleString() : "-" },
+                { key: "scheduled_at", label: "Scheduled", render: (v) => fmtDt(v) },
             ]},
-            { key: "schedules", label: "Schedules", entityType: "schedules", dataKey: "schedules", columns: RELATED_SCHEDULE_COLUMNS },
+            { key: "schedules", label: "Schedules", entityType: "schedules", dataKey: "schedules", columns: schedCols },
             { key: "documents", label: "Documents", entityType: "locations", dataKey: "documents", isDocumentsPanel: true, documentUploadEntityType: "location", columns: [] },
         );
     }

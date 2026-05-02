@@ -5,8 +5,9 @@ import type {
     QueueItemQuickActionVm,
     QueueItemVm,
 } from "@/lib/ui-v2/workspace-types";
-import { formatPhoneUS } from "@/lib/adminFormatters";
 import { formatOpportunityQueueNotesPreview } from "@/lib/admin/opportunityActivityTimelineFormat";
+import { buildCrmQueueRowPreviewPresentation } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
+import type { QueueUiRowPreviewField } from "@/lib/ui-v2/queueUiConfig";
 import { normalizePhone } from "@/lib/contactNormalize";
 import { formatWorkspaceUsdGrouped } from "@/lib/ui-v2/formatWorkspaceCurrency";
 import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
@@ -147,7 +148,13 @@ function crmContactQuickActions(row: OppRow): QueueItemQuickActionVm[] {
     return out;
 }
 
-export function buildEnrollmentCrmRowSemanticSlots(row: OppRow): CrmCompactRowSemanticSlots {
+export type BuildEnrollmentCrmRowOptions = {
+    rowPreviewFieldLabels?: Record<string, string> | null;
+    previewWant?: ((field: QueueUiRowPreviewField) => boolean) | null;
+    viewerTimezone?: string | null;
+};
+
+export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildEnrollmentCrmRowOptions): CrmCompactRowSemanticSlots {
     const customer = (row._customer_name ?? "").trim();
     const titleBase = (row.name ?? "").trim();
     const primaryIdentity = customer || titleBase || row.id.slice(-8);
@@ -187,35 +194,27 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow): CrmCompactRowSe
             ? formatWorkspaceUsdGrouped(Number(row.quote_total))
             : null;
 
-    const contactLine = (row as { _primary_contact_line?: string | null })._primary_contact_line?.trim() || "";
-    const email = ((row as { _primary_email?: string | null })._primary_email ?? "").trim();
-    const phone = ((row as { _primary_phone?: string | null })._primary_phone ?? "").trim();
-    const phoneFmt = phone ? formatPhoneUS(phone) : "";
-    const contactSnippet =
-        contactLine ||
-        [phoneFmt && phoneFmt !== "—" ? phoneFmt : "", email].filter(Boolean).join(" · ") ||
-        null;
-
     const programContext = (row as { _requested_program?: string | null })._requested_program?.trim() || null;
     const roomContext = (row as { _room_label?: string | null })._room_label?.trim() || null;
-    const desiredStart = (row as { _desired_start_date?: string | null })._desired_start_date?.trim() || null;
-    const ageContext =
-        desiredStart ||
-        (row as { _age_band?: string | null })._age_band?.trim() ||
-        null;
-    const tourCtx =
-        (row as { _tour_context?: string | null })._tour_context?.trim() ||
-        (row as { _tour_timing?: string | null })._tour_timing?.trim() ||
-        null;
 
     const attentionReason = (row as { _attention_reason_label?: string | null })._attention_reason_label?.trim() || null;
-    const familyNote = formatOpportunityQueueNotesPreview((row as { _notes_preview?: string | null })._notes_preview);
+    const familyNote = formatOpportunityQueueNotesPreview(
+        (row as { _notes_preview?: string | null })._notes_preview,
+        options?.viewerTimezone ?? undefined
+    );
 
     const staleSig = (row as { stale_signal?: { label: string; severity: "low" | "medium" | "high" } | null }).stale_signal;
     const activityStale =
         staleSig && String(staleSig.label ?? "").trim()
             ? { label: String(staleSig.label).trim(), severity: staleSig.severity }
             : null;
+
+    const want = options?.previewWant ?? ((_f: QueueUiRowPreviewField) => true);
+    const previewPresentation = buildCrmQueueRowPreviewPresentation(
+        row as Record<string, unknown>,
+        want,
+        options?.rowPreviewFieldLabels
+    );
 
     return {
         primaryIdentity,
@@ -226,11 +225,9 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow): CrmCompactRowSe
         nextStep,
         lastActivity,
         commercialValue,
-        contactSnippet,
+        ...previewPresentation,
         programContext,
         roomContext,
-        ageContext,
-        tourContext: tourCtx,
         attentionReason,
         familyNote,
         activityStale,
@@ -241,8 +238,11 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow): CrmCompactRowSe
  * Enrollment work-unit queue row — binds `semanticCrmCompact` for config-driven layout,
  * plus legacy `QueueItemVm` fields for grouping and fallbacks.
  */
-export function buildEnrollmentOpportunityQueueItemVm(row: OppRow, ctx: { workUnitKey: string }): QueueItemVm {
-    const slots = buildEnrollmentCrmRowSemanticSlots(row);
+export function buildEnrollmentOpportunityQueueItemVm(
+    row: OppRow,
+    ctx: { workUnitKey: string; rowPreviewFieldLabels?: Record<string, string> | null }
+): QueueItemVm {
+    const slots = buildEnrollmentCrmRowSemanticSlots(row, { rowPreviewFieldLabels: ctx.rowPreviewFieldLabels });
     const titleBase = (row.name ?? "").trim();
     const title = (row._customer_name ?? "").trim() || titleBase || row.id.slice(-8);
     const status = (row.status_key ?? "").trim();

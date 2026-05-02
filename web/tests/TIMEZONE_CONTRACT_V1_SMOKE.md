@@ -1,5 +1,7 @@
 # Timezone Contract v1 — manual smoke checklist
 
+Canonical semantics (UTC vs org day vs user vs visit-local): see [`docs/TIMEZONE_SEMANTICS.md`](../docs/TIMEZONE_SEMANTICS.md).
+
 Run after deploy / migration `20260502143000_user_profiles_timezone.sql`.
 
 1. **Org timezone controls `scheduled_on=today`**
@@ -35,4 +37,9 @@ Run after deploy / migration `20260502143000_user_profiles_timezone.sql`.
 8. **Admin schedule forms**
    - Create schedule / job schedule drawer defaults: org operational TZ from layout (`AdminOrgOperationalTimezoneProvider`), not viewer profile TZ. Existing rows still prefer `schedules.timezone` when editing.
 
-Automated coverage: `npm test` → `tests/timezoneContract.test.ts`, `tests/workspace/deriveDepartmentJobMetrics.scheduledToday.test.ts`.
+Automated coverage: `npm test` → `tests/timezoneContract.test.ts`, `tests/workspace/deriveDepartmentJobMetrics.scheduledToday.test.ts`, `tests/orgLocalDayBounds.financialMtd.test.ts`.
+
+9. **Financial snapshot MTD = org operational month-to-date**
+   - Set org `metadata.timezone` (e.g. `America/Chicago`).
+   - `GET /api/admin/financials/snapshot` → body includes `calendar_meta.calendar_type: "operational_month_to_date"`, `timezone_effective` / `timezone_source`, `mtd_start_local_date`, `mtd_end_local_date` (and `mtd_start_utc` / `mtd_end_exclusive_utc`).
+   - `mtd_start` / `mtd_end` on the payload must match those local dates; MTD totals include posted rows whose `entry_date` is in that inclusive local range.
