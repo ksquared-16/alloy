@@ -30,3 +30,5 @@ node_modules/
 # Vercel
 .vercel/
 **/.vercel/
+
+web/.next/
