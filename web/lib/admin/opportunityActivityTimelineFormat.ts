@@ -3,9 +3,11 @@
  */
 
 import {
+    type ActivityQueueNotesPreviewParts,
     type ActivityTimelineEventInput,
     type ActivityTimelineFormatOptions,
     formatActivityQueueNotesBlobPreview,
+    formatActivityQueueNotesBlobPreviewParts,
     formatActivityTimelineEvent,
     formatQueueNoteDateTime,
     getActivityTimelineActorLabel,
@@ -70,6 +72,14 @@ export function formatOpportunityQueueNotesPreview(
     return formatActivityQueueNotesBlobPreview(raw, { dateFirst: true, displayTimeZone });
 }
 
+/** Same selection as `formatOpportunityQueueNotesPreview`, split for timestamp vs body typography. */
+export function formatOpportunityQueueNotesPreviewParts(
+    raw: string | null | undefined,
+    displayTimeZone?: string
+): ActivityQueueNotesPreviewParts | null {
+    return formatActivityQueueNotesBlobPreviewParts(raw, { displayTimeZone });
+}
+
 /** Humanize with enrollment status key map (for callers/tests) */
 export function humanizeOpportunitySnakeCaseToken(raw: string): string {
     return humanizeSnakeCaseToken(raw, OPPORTUNITY_ACTIVITY_STATUS_KEY_LABELS);
@@ -80,3 +90,4 @@ export {
     formatActivityTimelineEvent,
     humanizeSnakeCaseToken,
 } from "@/lib/admin/activityTimelineFormat";
+export type { ActivityQueueNotesPreviewParts } from "@/lib/admin/activityTimelineFormat";

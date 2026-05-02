@@ -1,17 +1,21 @@
 "use client";
 
-import { Fragment, useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
 import type {
   CrmCompactRowSemanticSlots,
   QueueItemQuickActionVm,
   QueueItemVm,
   QueueVm,
+  WorkUnitQueueCrmFactGroupKind,
   WorkUnitQueueCrmFactGroupVm,
+  WorkUnitQueueCrmFactLineVm,
+  WorkUnitQueueCrmFactPartVm,
 } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
 import { DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS } from "@/lib/ui-v2/queueUiConfig";
 import { normalizePreviewLooseDateTokens } from "@/lib/adminFormatters";
+import { CRM_COMPACT_VALUE_DOT_SEP } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
 
 type Props = {
   queue: QueueVm;
@@ -166,8 +170,242 @@ function formatWorkUnitQueueStatusPill(raw: string): string {
 }
 
 /**
- * CRM-compact queue preview — render-only layout from `CrmCompactRowSemanticSlots`.
- * Zones: identity+status+next | structured middle | footer note/activity preview (registry fields optional).
+ * When queue `field_labels` are all caps, present as title case (e.g. CONTACT → Contact).
+ * Mixed-case strings pass through unchanged.
+ */
+function displayCrmFactGroupLabel(raw: string): string {
+  const t = raw.trim();
+  if (!t) return t;
+  if (/[a-z]/.test(t)) return t;
+  if (!/[A-Z]/.test(t)) return t;
+  return t.toLowerCase().replace(/\b\w/g, (ch) => ch.toUpperCase());
+}
+
+function CrmFactPartSpan({ part }: { part: WorkUnitQueueCrmFactPartVm }) {
+  if (typeof part === "string") {
+    return <span className="adminv2-ws-queue-fact-part">{part}</span>;
+  }
+  return (
+    <span className="adminv2-ws-queue-fact-part adminv2-ws-queue-fact-part--kv">
+      <span className="adminv2-ws-queue-fact-timing-k">{part.label}</span>
+      <span className="adminv2-ws-queue-fact-timing-v"> {part.value}</span>
+    </span>
+  );
+}
+
+function CrmFactLineRow({
+  line,
+  groupKind,
+}: {
+  line: WorkUnitQueueCrmFactLineVm;
+  groupKind: WorkUnitQueueCrmFactGroupKind;
+}) {
+  if (typeof line === "string") {
+    return (
+      <div className="adminv2-ws-queue-fact-value adminv2-ws-queue-fact-line">{line}</div>
+    );
+  }
+  const isContact = groupKind === "contact";
+  const lineClass = [
+    "adminv2-ws-queue-fact-value",
+    "adminv2-ws-queue-fact-line",
+    "adminv2-ws-queue-fact-line--parts",
+    isContact ? "adminv2-ws-queue-fact-line--contact-parts" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+  return (
+    <div className={lineClass}>
+      {line.parts.flatMap((p, i) => {
+        const out: ReactNode[] = [<CrmFactPartSpan key={`p-${i}`} part={p} />];
+        if (i < line.parts.length - 1) {
+          out.push(
+            <span key={`s-${i}`} className="adminv2-ws-queue-fact-part-sep" aria-hidden="true">
+              ·
+            </span>
+          );
+        }
+        return out;
+      })}
+    </div>
+  );
+}
+
+/**
+ * Work-unit queue row doctrine — one fact group (label above, value below).
+ */
+function CrmWorkUnitFactGroup({ group }: { group: WorkUnitQueueCrmFactGroupVm }) {
+  const lines: WorkUnitQueueCrmFactLineVm[] | undefined =
+    group.lines ??
+    (group.timingSegments?.length
+      ? [{ parts: group.timingSegments.map((s) => ({ label: s.label, value: s.value })) }]
+      : undefined);
+
+  return (
+    <div className="adminv2-ws-queue-fact-group" data-fact-kind={group.kind}>
+      <div className="adminv2-ws-queue-fact-label">{displayCrmFactGroupLabel(group.label)}</div>
+      {lines?.map((line, li) => (
+        <CrmFactLineRow key={li} line={line} groupKind={group.kind} />
+      ))}
+    </div>
+  );
+}
+
+/** Split a flat preview string on middots into flex chunks; single chunk stays string. */
+function factLineFromMiddotString(raw: string): WorkUnitQueueCrmFactLineVm {
+  const chunks = raw
+    .split(/\s*·\s*/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (chunks.length >= 2) return { parts: chunks };
+  return raw.trim();
+}
+
+function legacyMiddleHasContent(slots: CrmCompactRowSemanticSlots): boolean {
+  const contactLine =
+    [slots.contactDisplayName?.trim(), slots.contactPhoneDisplay?.trim(), slots.contactEmail?.trim()]
+      .filter(Boolean)
+      .join(CRM_COMPACT_VALUE_DOT_SEP) || slots.contactSnippet?.trim();
+  const timingLine = slots.crmCompactTimingValueLine?.trim() ?? "";
+  const timingPartsLegacy: string[] = [];
+  if (!timingLine) {
+    if (slots.ageContext?.trim()) timingPartsLegacy.push(slots.ageContext.trim());
+    if (slots.tourContext?.trim() && slots.tourContext.trim() !== "—") {
+      const t = slots.tourContext.trim();
+      timingPartsLegacy.push(t.startsWith("Tour:") ? t : `Tour: ${t}`);
+    }
+  }
+  const timingLineLegacy = timingPartsLegacy.length ? normalizePreviewLooseDateTokens(timingPartsLegacy.join(CRM_COMPACT_VALUE_DOT_SEP)) : null;
+  const childLines = slots.childrenLines ?? [];
+  const multi = childLines.length >= 2;
+  return Boolean(
+    contactLine ||
+      (multi && childLines.length > 0) ||
+      (!multi && (slots.childName?.trim() || slots.programContext?.trim())) ||
+      (slots.programContext?.trim() && !multi && !slots.childName?.trim()) ||
+      timingLine ||
+      slots.roomContext?.trim() ||
+      slots.ageBandContext?.trim() ||
+      timingLineLegacy
+  );
+}
+
+/** Fallback when `crmFactGroups` is absent (older callers). Uses doctrine CSS; timing may be a single plain line. */
+function LegacyCrmCompactQueueMiddle({ slots }: { slots: CrmCompactRowSemanticSlots }) {
+  const nodes: ReactNode[] = [];
+  const primaryContactCaption = slots.rowPreviewLabelPrimaryContact?.trim() || "Contact";
+  const childrenLabel =
+    slots.crmChildrenProgramsGroupLabel?.trim() || DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS.children_programs;
+  const timingLabel = slots.rowPreviewLabelTimingGroup?.trim() || DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS.timing;
+  const ageLabel = slots.rowPreviewLabelAgeBand?.trim() || DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS.age_band;
+
+  const contactParts: string[] = [];
+  if (slots.contactDisplayName?.trim()) contactParts.push(slots.contactDisplayName.trim());
+  if (slots.contactPhoneDisplay?.trim()) contactParts.push(slots.contactPhoneDisplay.trim());
+  if (slots.contactEmail?.trim()) contactParts.push(slots.contactEmail.trim());
+  if (contactParts.length > 0 || slots.contactSnippet?.trim()) {
+    nodes.push(
+      <div key="contact" className="adminv2-ws-queue-fact-group" data-fact-kind="contact">
+        <div className="adminv2-ws-queue-fact-label">{displayCrmFactGroupLabel(primaryContactCaption)}</div>
+        <CrmFactLineRow
+          line={
+            contactParts.length > 0
+              ? { parts: contactParts }
+              : factLineFromMiddotString(slots.contactSnippet!.trim())
+          }
+          groupKind="contact"
+        />
+      </div>
+    );
+  }
+
+  const childLines = slots.childrenLines ?? [];
+  const multi = childLines.length >= 2;
+  const progLines: WorkUnitQueueCrmFactLineVm[] = [];
+  if (multi) {
+    const vis = childLines.slice(0, 4);
+    const overflow = Math.max(0, childLines.length - vis.length);
+    for (const ch of vis) {
+      const p = ch.programInline?.trim();
+      if (p) progLines.push({ parts: [ch.primary, p] });
+      else progLines.push(ch.primary);
+    }
+    if (overflow > 0) progLines.push(`+${overflow} more`);
+  } else {
+    const n = slots.childName?.trim() || "";
+    const p = slots.programContext?.trim() || "";
+    if (n && p) progLines.push({ parts: [n, p] });
+    else if (n) progLines.push(n);
+    else if (p) progLines.push(p);
+  }
+  if (progLines.length) {
+    nodes.push(
+      <div key="ch" className="adminv2-ws-queue-fact-group" data-fact-kind="children_programs">
+        <div className="adminv2-ws-queue-fact-label">{displayCrmFactGroupLabel(childrenLabel)}</div>
+        {progLines.map((ln, i) => (
+          <CrmFactLineRow key={i} line={ln} groupKind="children_programs" />
+        ))}
+      </div>
+    );
+  }
+
+  if (slots.crmCompactTimingValueLine?.trim()) {
+    nodes.push(
+      <div key="timing" className="adminv2-ws-queue-fact-group" data-fact-kind="timing">
+        <div className="adminv2-ws-queue-fact-label">{displayCrmFactGroupLabel(timingLabel)}</div>
+        <CrmFactLineRow
+          line={factLineFromMiddotString(slots.crmCompactTimingValueLine.trim())}
+          groupKind="timing"
+        />
+      </div>
+    );
+  }
+  if (slots.roomContext?.trim()) {
+    nodes.push(
+      <div key="room" className="adminv2-ws-queue-fact-group" data-fact-kind="meta">
+        <div className="adminv2-ws-queue-fact-label">{displayCrmFactGroupLabel(DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS.room)}</div>
+        <div className="adminv2-ws-queue-fact-value adminv2-ws-queue-fact-line">{slots.roomContext.trim()}</div>
+      </div>
+    );
+  }
+  if (slots.ageBandContext?.trim()) {
+    nodes.push(
+      <div key="age" className="adminv2-ws-queue-fact-group" data-fact-kind="meta">
+        <div className="adminv2-ws-queue-fact-label">{displayCrmFactGroupLabel(ageLabel)}</div>
+        <div className="adminv2-ws-queue-fact-value adminv2-ws-queue-fact-line">{slots.ageBandContext.trim()}</div>
+      </div>
+    );
+  }
+
+  const timingLine = slots.crmCompactTimingValueLine?.trim() ?? "";
+  const timingPartsLegacy: string[] = [];
+  if (!timingLine) {
+    if (slots.ageContext?.trim()) timingPartsLegacy.push(slots.ageContext.trim());
+    if (slots.tourContext?.trim() && slots.tourContext.trim() !== "—") {
+      const t = slots.tourContext.trim();
+      timingPartsLegacy.push(t.startsWith("Tour:") ? t : `Tour: ${t}`);
+    }
+  }
+  const timingLineLegacyRaw = timingPartsLegacy.length ? timingPartsLegacy.join(CRM_COMPACT_VALUE_DOT_SEP) : null;
+  const timingLineLegacy = timingLineLegacyRaw ? normalizePreviewLooseDateTokens(timingLineLegacyRaw) : null;
+  if (timingLineLegacy) {
+    nodes.push(
+      <div key="leg" className="adminv2-ws-queue-fact-group" data-fact-kind="timing">
+        <div className="adminv2-ws-queue-fact-label">{displayCrmFactGroupLabel(timingLabel)}</div>
+        <CrmFactLineRow
+          line={factLineFromMiddotString(timingLineLegacy)}
+          groupKind="timing"
+        />
+      </div>
+    );
+  }
+
+  return <>{nodes}</>;
+}
+
+/**
+ * CRM-compact queue preview — 3 zones: identity (left), fact groups (middle), actions (host).
+ * Middle follows work-unit queue row doctrine when `crmFactGroups` is set.
  */
 function CrmCompactQueuePreview({
   slots,
@@ -189,64 +427,22 @@ function CrmCompactQueuePreview({
         ? "adminv2-ws-queue-preview-stale adminv2-ws-queue-preview-stale--medium"
         : "adminv2-ws-queue-preview-stale adminv2-ws-queue-preview-stale--low";
 
-  const timingLine = slots.crmCompactTimingValueLine?.trim() ?? "";
-  const timingPartsLegacy: string[] = [];
-  if (!timingLine) {
-    if (slots.ageContext?.trim()) timingPartsLegacy.push(slots.ageContext.trim());
-    if (slots.tourContext?.trim()) {
-      const t = slots.tourContext.trim();
-      if (t !== "—") {
-        timingPartsLegacy.push(t.startsWith("Tour:") ? t : `Tour: ${t}`);
-      }
-    }
-  }
-  const timingLineLegacyRaw = timingPartsLegacy.length ? timingPartsLegacy.join(" · ") : null;
-  const timingLineLegacy = timingLineLegacyRaw ? normalizePreviewLooseDateTokens(timingLineLegacyRaw) : null;
-
-  const childLines = slots.childrenLines ?? [];
-  const multiChild = childLines.length >= 2;
-  const visibleChildren = childLines.slice(0, 4);
-  const childOverflow = Math.max(0, childLines.length - visibleChildren.length);
+  const useDoctrine = slots.crmFactGroups != null;
+  const hasMiddle = useDoctrine ? (slots.crmFactGroups?.length ?? 0) > 0 : legacyMiddleHasContent(slots);
 
   const hasNextStrip = Boolean(slots.nextStep?.trim());
 
-  const primaryContactCaption = slots.rowPreviewLabelPrimaryContact?.trim() || "Contact";
-  const phoneFieldK = slots.rowPreviewLabelPhone?.trim() || DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS.phone;
-  const emailFieldK = slots.rowPreviewLabelEmail?.trim() || DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS.email;
-
-  const childrenProgramsGroup =
-    slots.crmChildrenProgramsGroupLabel?.trim() || DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS.children_programs;
-  const timingGroupLabel =
-    slots.rowPreviewLabelTimingGroup?.trim() || DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS.timing;
-  const programFieldK =
-    slots.rowPreviewLabelProgramInline?.trim() || DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS.program_inline;
-
-  const structuredContact =
-    Boolean(slots.contactDisplayName?.trim()) ||
-    Boolean(slots.contactPhoneDisplay?.trim()) ||
-    Boolean(slots.contactEmail?.trim());
-
-  const ageBandDv = slots.ageBandContext?.trim();
-  const ageLabel = slots.rowPreviewLabelAgeBand?.trim() || DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS.age_band;
-
-  const showChildrenProgramsSection =
-    (multiChild && visibleChildren.length > 0) ||
-    Boolean(!multiChild && (slots.childName?.trim() || slots.programContext?.trim()));
-
-  const hasMiddle =
-    structuredContact ||
-    Boolean(slots.contactSnippet?.trim()) ||
-    showChildrenProgramsSection ||
-    Boolean(slots.programContext?.trim() && !showChildrenProgramsSection) ||
-    Boolean(slots.roomContext?.trim()) ||
-    Boolean(timingLine) ||
-    Boolean(ageBandDv) ||
-    Boolean(timingLineLegacy);
+  const notePrev = slots.familyNotePreview;
+  const hasStructuredNote = Boolean(
+    notePrev && (notePrev.timestamp?.trim() || notePrev.body?.trim())
+  );
+  const flatNote = slots.familyNote?.trim();
+  const showNoteFooter = Boolean(hasStructuredNote || flatNote);
 
   const bodyClass =
     `adminv2-ws-crm-queue-preview__body${hasMiddle ? "" : " adminv2-ws-crm-queue-preview__body--identity-only"}`;
 
-  const hasFooter = Boolean(slots.familyNote?.trim() || slots.lastActivity?.trim());
+  const hasFooter = Boolean(showNoteFooter || slots.lastActivity?.trim());
 
   const commercial = slots.commercialValue?.trim() ?? "";
 
@@ -286,105 +482,9 @@ function CrmCompactQueuePreview({
 
         {hasMiddle ? (
           <div className="adminv2-ws-crm-queue-preview__zone adminv2-ws-crm-queue-preview__zone--middle">
-            {structuredContact ? (
-              <div className="adminv2-ws-crm-queue-preview__group" aria-label={primaryContactCaption}>
-                <span className="adminv2-ws-crm-queue-preview__gk">{primaryContactCaption}</span>
-                <div className="adminv2-ws-crm-queue-preview__contact-segments">
-                  {slots.contactDisplayName?.trim() ? (
-                    <span className="adminv2-ws-crm-queue-preview__contact-seg adminv2-ws-crm-queue-preview__contact-seg--name">
-                      {slots.contactDisplayName.trim()}
-                    </span>
-                  ) : null}
-                  {slots.contactPhoneDisplay?.trim() ? (
-                    <span className="adminv2-ws-crm-queue-preview__contact-seg">
-                      <span className="adminv2-ws-crm-queue-preview__contact-seg-k">{phoneFieldK}:</span>{" "}
-                      {slots.contactPhoneDisplay.trim()}
-                    </span>
-                  ) : null}
-                  {slots.contactEmail?.trim() ? (
-                    <span className="adminv2-ws-crm-queue-preview__contact-seg">
-                      <span className="adminv2-ws-crm-queue-preview__contact-seg-k">{emailFieldK}:</span>{" "}
-                      {slots.contactEmail.trim()}
-                    </span>
-                  ) : null}
-                </div>
-              </div>
-            ) : slots.contactSnippet?.trim() ? (
-              <div className="adminv2-ws-crm-queue-preview__group">
-                <span className="adminv2-ws-crm-queue-preview__gk">{primaryContactCaption}</span>
-                <span className="adminv2-ws-crm-queue-preview__gv">{slots.contactSnippet.trim()}</span>
-              </div>
-            ) : null}
-            {showChildrenProgramsSection ? (
-              <div className="adminv2-ws-crm-queue-preview__group adminv2-ws-crm-queue-preview__group--children-stack">
-                <span className="adminv2-ws-crm-queue-preview__gk">{childrenProgramsGroup}</span>
-                {multiChild ? (
-                  <ul className="adminv2-ws-crm-queue-preview__children-mini" role="list">
-                    {visibleChildren.map((c, idx) => (
-                      <li key={idx} className="adminv2-ws-crm-queue-preview__child-mini">
-                        <div className="adminv2-ws-crm-queue-preview__child-program-row">
-                          <span className="adminv2-ws-crm-queue-preview__child-mini-primary">{c.primary}</span>
-                          {c.programInline?.trim() ? (
-                            <span className="adminv2-ws-crm-queue-preview__child-program-inline">
-                              <span className="adminv2-ws-crm-queue-preview__contact-seg-k">{programFieldK}:</span>{" "}
-                              {c.programInline.trim()}
-                            </span>
-                          ) : null}
-                        </div>
-                      </li>
-                    ))}
-                    {childOverflow > 0 ? (
-                      <li className="adminv2-ws-crm-queue-preview__child-mini adminv2-ws-crm-queue-preview__child-mini--more">
-                        +{childOverflow} more
-                      </li>
-                    ) : null}
-                  </ul>
-                ) : (
-                  <div className="adminv2-ws-crm-queue-preview__child-program-row">
-                    {slots.childName?.trim() ? (
-                      <span className="adminv2-ws-crm-queue-preview__gv">{slots.childName.trim()}</span>
-                    ) : null}
-                    {slots.programContext?.trim() ? (
-                      <span className="adminv2-ws-crm-queue-preview__child-program-inline">
-                        <span className="adminv2-ws-crm-queue-preview__contact-seg-k">{programFieldK}:</span>{" "}
-                        {slots.programContext.trim()}
-                      </span>
-                    ) : null}
-                  </div>
-                )}
-              </div>
-            ) : slots.programContext?.trim() ? (
-              <div className="adminv2-ws-crm-queue-preview__group">
-                <span className="adminv2-ws-crm-queue-preview__gk">{DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS.program}</span>
-                <span className="adminv2-ws-crm-queue-preview__gv">{slots.programContext.trim()}</span>
-              </div>
-            ) : null}
-            {slots.roomContext?.trim() ? (
-              <div className="adminv2-ws-crm-queue-preview__group">
-                <span className="adminv2-ws-crm-queue-preview__gk">Room</span>
-                <span className="adminv2-ws-crm-queue-preview__gv">{slots.roomContext.trim()}</span>
-              </div>
-            ) : null}
-            {ageBandDv ? (
-              <div className="adminv2-ws-crm-queue-preview__group">
-                <span className="adminv2-ws-crm-queue-preview__gk">{ageLabel}</span>
-                <span className="adminv2-ws-crm-queue-preview__gv">{ageBandDv}</span>
-              </div>
-            ) : null}
-            {timingLine ? (
-              <div className="adminv2-ws-crm-queue-preview__group">
-                <span className="adminv2-ws-crm-queue-preview__gk">{timingGroupLabel}</span>
-                <span className="adminv2-ws-crm-queue-preview__gv adminv2-ws-crm-queue-preview__timing-inline">
-                  {timingLine}
-                </span>
-              </div>
-            ) : null}
-            {timingLineLegacy ? (
-              <div className="adminv2-ws-crm-queue-preview__group">
-                <span className="adminv2-ws-crm-queue-preview__gk">{timingGroupLabel}</span>
-                <span className="adminv2-ws-crm-queue-preview__gv">{timingLineLegacy}</span>
-              </div>
-            ) : null}
+            {useDoctrine
+              ? slots.crmFactGroups!.map((g, i) => <CrmWorkUnitFactGroup key={i} group={g} />)
+              : <LegacyCrmCompactQueueMiddle slots={slots} />}
           </div>
         ) : null}
       </div>
@@ -397,10 +497,31 @@ function CrmCompactQueuePreview({
               : "adminv2-ws-crm-queue-preview__footer"
           }
         >
-          {slots.familyNote?.trim() ? (
+          {showNoteFooter ? (
             <div className="adminv2-ws-crm-queue-preview__footer-notes">
               <span className="adminv2-ws-crm-queue-preview__gk">Notes</span>
-              <span className="adminv2-ws-crm-queue-preview__gv">{slots.familyNote.trim()}</span>
+              {hasStructuredNote ? (
+                <span className="adminv2-ws-crm-queue-preview__note-line">
+                  {notePrev!.timestamp?.trim() ? (
+                    <>
+                      <span className="adminv2-ws-crm-queue-preview__note-ts">{notePrev!.timestamp!.trim()}</span>
+                      {notePrev!.body?.trim() ? (
+                        <>
+                          <span className="adminv2-ws-crm-queue-preview__note-sep" aria-hidden>
+                            {" "}
+                            ·{" "}
+                          </span>
+                          <span className="adminv2-ws-crm-queue-preview__note-body">{notePrev!.body.trim()}</span>
+                        </>
+                      ) : null}
+                    </>
+                  ) : (
+                    <span className="adminv2-ws-crm-queue-preview__note-body">{notePrev!.body.trim()}</span>
+                  )}
+                </span>
+              ) : (
+                <span className="adminv2-ws-crm-queue-preview__gv">{flatNote}</span>
+              )}
             </div>
           ) : null}
           {slots.lastActivity?.trim() ? (

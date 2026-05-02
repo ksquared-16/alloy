@@ -1623,3 +1623,13 @@
 .adminv2-sidebar-rail-link.adminv2-nav-link--active {
   background-color: rgba(0, 162, 131, 0.12);
 }
+
+/*
+ * Dense admin cards (e.g. Settings index) — shared role sizes aligned with workspace record-card doctrine.
+ * See docs/architecture/workspace-work-unit-scope-doctrine.md § Cross-surface typography roles.
+ */
+:root {
+  --adminv2-settings-section-eyebrow-size: 10px;
+  --adminv2-settings-nav-card-title-size: 0.875rem;
+  --adminv2-settings-nav-card-desc-size: 11px;
+}

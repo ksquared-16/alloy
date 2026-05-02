@@ -5,8 +5,16 @@ import type {
     QueueItemQuickActionVm,
     QueueItemVm,
 } from "@/lib/ui-v2/workspace-types";
-import { formatOpportunityQueueNotesPreview } from "@/lib/admin/opportunityActivityTimelineFormat";
-import { buildCrmQueueRowPreviewPresentation, dedupeRedundantProgramAgeInPreview, refineCrmCompactChildLinesForPreview } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
+import {
+    formatOpportunityQueueNotesPreview,
+    formatOpportunityQueueNotesPreviewParts,
+} from "@/lib/admin/opportunityActivityTimelineFormat";
+import {
+    buildCrmCompactWorkUnitFactGroups,
+    buildCrmQueueRowPreviewPresentation,
+    dedupeRedundantProgramAgeInPreview,
+    refineCrmCompactChildLinesForPreview,
+} from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
 import type { QueueUiRowPreviewField } from "@/lib/ui-v2/queueUiConfig";
 import { normalizePhone } from "@/lib/contactNormalize";
 import { formatWorkspaceUsdGrouped } from "@/lib/ui-v2/formatWorkspaceCurrency";
@@ -197,10 +205,9 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
     const roomContext = (row as { _room_label?: string | null })._room_label?.trim() || null;
 
     const attentionReason = (row as { _attention_reason_label?: string | null })._attention_reason_label?.trim() || null;
-    const familyNote = formatOpportunityQueueNotesPreview(
-        (row as { _notes_preview?: string | null })._notes_preview,
-        options?.viewerTimezone ?? undefined
-    );
+    const notesRaw = (row as { _notes_preview?: string | null })._notes_preview;
+    const familyNotePreview = formatOpportunityQueueNotesPreviewParts(notesRaw, options?.viewerTimezone ?? undefined);
+    const familyNote = formatOpportunityQueueNotesPreview(notesRaw, options?.viewerTimezone ?? undefined);
 
     const staleSig = (row as { stale_signal?: { label: string; severity: "low" | "medium" | "high" } | null }).stale_signal;
     const activityStale =
@@ -225,6 +232,17 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
         options?.rowPreviewFieldLabels
     );
 
+    const crmFactGroups = buildCrmCompactWorkUnitFactGroups({
+        row: row as Record<string, unknown>,
+        want,
+        rowPreviewFieldLabels: options?.rowPreviewFieldLabels,
+        childrenLines: multiChild ? childrenLinesRefined : null,
+        childNameSingle: !multiChild ? childNameFlat : null,
+        programSingle: multiChild ? null : want("program") ? programContextDeduped : null,
+        roomContext,
+        ageBandContext: previewPresentation.ageBandContext ?? null,
+    });
+
     const programContext = want("program") ? (!multiChild ? programContextDeduped : null) : null;
 
     return {
@@ -237,10 +255,12 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
         lastActivity,
         commercialValue,
         ...previewPresentation,
+        crmFactGroups,
         programContext,
         roomContext,
         attentionReason,
         familyNote,
+        familyNotePreview,
         activityStale,
     };
 }

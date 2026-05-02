@@ -35,8 +35,14 @@ function SettingsCard({
                 accentBorder,
             ].join(" ")}
         >
-            <div className="text-sm font-semibold leading-tight text-alloy-midnight group-hover:text-alloy-pine">{title}</div>
-            <div className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-alloy-midnight/55">{children}</div>
+            <div
+                className="text-[length:var(--adminv2-settings-nav-card-title-size)] font-semibold leading-tight text-alloy-midnight group-hover:text-alloy-pine"
+            >
+                {title}
+            </div>
+            <div className="mt-0.5 line-clamp-2 text-[length:var(--adminv2-settings-nav-card-desc-size)] leading-snug text-alloy-midnight/55">
+                {children}
+            </div>
         </Link>
     );
 }
@@ -73,7 +79,9 @@ function Group({
 }) {
     return (
         <div className={`space-y-2 border-l-2 pl-3 ${accentClass}`}>
-            <h3 className="text-[10px] font-semibold tracking-[0.14em] text-alloy-midnight/50">{label}</h3>
+            <h3 className="text-[length:var(--adminv2-settings-section-eyebrow-size)] font-semibold tracking-[0.14em] text-alloy-midnight/50">
+                {label}
+            </h3>
             {children}
         </div>
     );

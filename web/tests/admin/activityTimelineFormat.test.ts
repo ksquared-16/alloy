@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     formatActivityQueueNotesBlobPreview,
+    formatActivityQueueNotesBlobPreviewParts,
     formatActivityTimelineEvent,
     formatQueueNoteDateTime,
     getActivityTimelineActorLabel,
@@ -60,5 +61,13 @@ describe("activityTimelineFormat (generic)", () => {
         const out = formatActivityQueueNotesBlobPreview(raw);
         const want = `Hello · ${formatQueueNoteDateTime(Date.parse("2026-04-29T21:15:05Z"))}`;
         expect(out).toBe(want);
+    });
+
+    it("queue blob preview parts split timestamp and body (note · datetime order)", () => {
+        const raw = "[2026-04-29T21:15:05Z] Hello";
+        const parts = formatActivityQueueNotesBlobPreviewParts(raw);
+        const wantTs = formatQueueNoteDateTime(Date.parse("2026-04-29T21:15:05Z"));
+        expect(parts).toEqual({ timestamp: wantTs, body: "Hello" });
+        expect(wantTs).not.toContain(",");
     });
 });

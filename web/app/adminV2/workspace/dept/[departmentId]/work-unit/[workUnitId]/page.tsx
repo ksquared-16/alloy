@@ -23,6 +23,7 @@ import type {
 import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
 import { buildRealOpportunityWorkUnitWorkspaceModel } from "@/lib/ui-v2/adapters/realWorkUnitFromOpportunities";
 import {
+    buildCrmCompactWorkUnitFactGroups,
     buildCrmQueueRowPreviewPresentation,
     dedupeRedundantProgramAgeInPreview,
     refineCrmCompactChildLinesForPreview,
@@ -48,7 +49,7 @@ import { UpdateStatusAddNoteModal } from "@/components/admin/opportunity/actions
 import { ContactAttemptedModal } from "@/components/admin/opportunity/actions/ContactAttemptedModal";
 import { formatActivityRelativeShort } from "@/lib/admin/activitySignals";
 import { formatPhoneUS } from "@/lib/adminFormatters";
-import { formatOpportunityQueueNotesPreview } from "@/lib/admin/opportunityActivityTimelineFormat";
+import { formatOpportunityQueueNotesPreview, formatOpportunityQueueNotesPreviewParts } from "@/lib/admin/opportunityActivityTimelineFormat";
 import { normalizePhone } from "@/lib/contactNormalize";
 import { WorkUnitLifecycleCoveragePanel } from "@/components/admin/workspace/WorkUnitLifecycleCoveragePanel";
 import {
@@ -1329,6 +1330,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 const email = typeof r?._primary_email === "string" ? r._primary_email.trim() : "";
                 const childName = typeof r?._child_display_name === "string" ? r._child_display_name.trim() : "";
                 const program = typeof r?._requested_program === "string" ? r._requested_program.trim() : "";
+                const notePreview = formatOpportunityQueueNotesPreviewParts(
+                    typeof r?._notes_preview === "string" ? r._notes_preview : null,
+                    viewerTz
+                );
                 const note =
                     formatOpportunityQueueNotesPreview(
                         typeof r?._notes_preview === "string" ? r._notes_preview : null,
@@ -1438,6 +1443,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                       want,
                                       queueUi?.row_preview.fieldLabels
                                   );
+                                  const crmFactGroups = buildCrmCompactWorkUnitFactGroups({
+                                      row: r as Record<string, unknown>,
+                                      want,
+                                      rowPreviewFieldLabels: queueUi?.row_preview.fieldLabels,
+                                      childrenLines: multiChildren ? childrenLinesForVm : null,
+                                      childNameSingle: !multiChildren ? childName || null : null,
+                                      programSingle: multiChildren ? null : want("program") ? programDeduped : null,
+                                      roomContext: null,
+                                      ageBandContext: crmPresentation.ageBandContext ?? null,
+                                  });
                                   return {
                                       primaryIdentity: familyTitle,
                                       childrenLines: childrenLinesForVm,
@@ -1451,10 +1466,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                       lastActivity: activityLastLine,
                                       commercialValue: null,
                                       ...crmPresentation,
+                                      crmFactGroups,
                                       programContext: want("program") ? (multiChildren ? null : programDeduped) : null,
                                       roomContext: null,
                                       attentionReason: attentionReason || null,
                                       familyNote: note || null,
+                                      familyNotePreview: notePreview,
                                       activityStale,
                                   };
                               })()

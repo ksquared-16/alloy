@@ -222,12 +222,13 @@ export function formatActivityTimelineEvent(
 
 // --- Queue / CRM note line primitives (storage-agnostic) ---
 
-/** MM/DD/YYYY h:mm AM/PM in the given IANA timezone (default UTC for tests / server VMs). */
+/** MM/DD/YYYY h:mm AM/PM in the given IANA timezone (default UTC for tests / server VMs). No comma between date and time. */
 export function formatQueueNoteDateTime(ms: number, timeZoneIana: string = UTC_FALLBACK_IANA): string {
     const d = new Date(ms);
     if (!Number.isFinite(d.getTime())) return "";
     const s = formatDateTimeForUserDisplay(d, timeZoneIana);
-    return s === "-" ? "" : s;
+    if (s === "-") return "";
+    return s.replace(",", "").replace(/\s+/g, " ").trim();
 }
 
 /** `[2026-04-29T21:15:05Z] Note text` → timestamp ms + remainder */
@@ -296,36 +297,64 @@ export function truncateNoteLine(text: string, maxLen: number = NOTE_LINE_MAX): 
     return `${t.slice(0, maxLen)}…`;
 }
 
+export type ActivityQueueNotesPreviewParts = {
+    /** Local datetime per `formatQueueNoteDateTime`, or null when line has no parseable date */
+    timestamp: string | null;
+    /** Note body only (truncated); empty when preview is date-only */
+    body: string;
+};
+
+function joinNotePreviewParts(parts: ActivityQueueNotesPreviewParts, dateFirst: boolean): string | null {
+    const ts = parts.timestamp?.trim() || null;
+    const body = parts.body.trim();
+    if (!ts && !body) return null;
+    if (!ts) return body || null;
+    if (!body) return ts;
+    return dateFirst ? `${ts} · ${body}` : `${body} · ${ts}`;
+}
+
 /** When dated: default `{note} · {local datetime}`; with `dateFirst`, `{datetime} · {note}` (queue row scan). */
 export function formatDatedNoteLinePreview(line: string, opts?: { dateFirst?: boolean; displayTimeZone?: string }): string | null {
+    const parts = formatDatedNoteLinePreviewParts(line, opts);
+    if (!parts) return null;
+    return joinNotePreviewParts(parts, Boolean(opts?.dateFirst));
+}
+
+export function formatDatedNoteLinePreviewParts(
+    line: string,
+    opts?: { displayTimeZone?: string }
+): ActivityQueueNotesPreviewParts | null {
     const trimmed = line.trim().replace(/\s+/g, " ");
     if (!trimmed) return null;
-    const dateFirst = Boolean(opts?.dateFirst);
     const tz = opts?.displayTimeZone ?? UTC_FALLBACK_IANA;
 
     const bracket = parseBracketedTimestamp(trimmed);
     if (bracket) {
-        const dateStr = formatQueueNoteDateTime(bracket.ms, tz);
-        const body = bracket.rest;
-        if (!body) return dateStr || null;
-        const bodyShort = truncateNoteLine(body);
-        if (!dateStr) return bodyShort;
-        return dateFirst ? `${dateStr} · ${bodyShort}` : `${bodyShort} · ${dateStr}`;
+        const dateStr = formatQueueNoteDateTime(bracket.ms, tz) || null;
+        const body = bracket.rest ? truncateNoteLine(bracket.rest) : "";
+        if (!dateStr) return body ? { timestamp: null, body } : null;
+        return { timestamp: dateStr, body };
     }
 
     const parsed = parseLineLeadingDate(trimmed);
     if (parsed) {
-        const dateStr = formatQueueNoteDateTime(parsed.ms, tz);
-        const body = parsed.rest;
-        if (body) {
-            const bodyShort = truncateNoteLine(body);
-            if (!dateStr) return bodyShort;
-            return dateFirst ? `${dateStr} · ${bodyShort}` : `${bodyShort} · ${dateStr}`;
-        }
-        return dateStr || null;
+        const dateStr = formatQueueNoteDateTime(parsed.ms, tz) || null;
+        const body = parsed.rest ? truncateNoteLine(parsed.rest) : "";
+        if (!dateStr) return body ? { timestamp: null, body } : null;
+        return { timestamp: dateStr, body };
     }
 
-    return truncateNoteLine(trimmed);
+    return { timestamp: null, body: truncateNoteLine(trimmed) };
+}
+
+/** Single source line for queue note preview: latest dated line when multi-line, else trimmed blob. */
+function pickQueueNotesBlobPreviewLine(raw: string | null | undefined): string | null {
+    const blob = (raw ?? "").trim();
+    if (!blob) return null;
+    const lines = blob.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    if (lines.length === 0) return blob.replace(/\s+/g, " ");
+    if (lines.length === 1) return lines[0]!;
+    return chooseLatestDatedNoteLine(lines);
 }
 
 /**
@@ -335,10 +364,16 @@ export function formatActivityQueueNotesBlobPreview(
     raw: string | null | undefined,
     opts?: { dateFirst?: boolean; displayTimeZone?: string }
 ): string | null {
-    const blob = (raw ?? "").trim();
-    if (!blob) return null;
-    const lines = blob.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-    const pick =
-        lines.length === 0 ? blob.replace(/\s+/g, " ") : lines.length === 1 ? lines[0]! : chooseLatestDatedNoteLine(lines);
+    const pick = pickQueueNotesBlobPreviewLine(raw);
+    if (!pick) return null;
     return formatDatedNoteLinePreview(pick, opts);
+}
+
+export function formatActivityQueueNotesBlobPreviewParts(
+    raw: string | null | undefined,
+    opts?: { displayTimeZone?: string }
+): ActivityQueueNotesPreviewParts | null {
+    const pick = pickQueueNotesBlobPreviewLine(raw);
+    if (!pick) return null;
+    return formatDatedNoteLinePreviewParts(pick, opts);
 }

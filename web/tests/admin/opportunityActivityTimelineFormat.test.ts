@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     formatOpportunityQueueNotesPreview,
+    formatOpportunityQueueNotesPreviewParts,
     formatQueueNoteDateTime,
     getWorkflowActivityActorLabel,
     getWorkflowActivityEventDetail,
@@ -56,6 +57,18 @@ describe("opportunityActivityTimelineFormat", () => {
         expect(out).toBeTruthy();
         expect(out).toBe(`${wantDate} · Second note wins`);
         expect(wantDate).toMatch(/\d{1,2}\/\d{1,2}\/\d{4}/);
+        expect(wantDate).not.toContain(",");
+    });
+
+    it("queue note preview parts match string formatter (dateFirst)", () => {
+        const raw = "[2026-04-29T21:15:05Z] Tried to contact via phone today";
+        const parts = formatOpportunityQueueNotesPreviewParts(raw);
+        const line = formatOpportunityQueueNotesPreview(raw);
+        expect(parts).toEqual({
+            timestamp: formatQueueNoteDateTime(Date.parse("2026-04-29T21:15:05Z")),
+            body: "Tried to contact via phone today",
+        });
+        expect(line).toBe(`${parts!.timestamp} · ${parts!.body}`);
     });
 
     it("queue note parses bracketed ISO timestamp (local tz)", () => {

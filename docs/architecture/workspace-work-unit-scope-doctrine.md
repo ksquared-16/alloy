@@ -98,6 +98,58 @@ The shell refactor was **presentation-layer only**: **`work_units.queue_definiti
 - **Triage vs truth:** Queue rows are for **sorting and next action** in context. The **resolver-backed record** and **drawer** remain **authoritative** for inspection and decisions when precision matters.
 - **Implementation notes:** Normalization via `getQueueUiConfig()`; work-unit page mapper builds `semanticCrmCompact` / basic subtitles from row enrichment + field gates. See [`docs/implementation/workspace-v2/WORKSPACE_SYSTEM.md`](../implementation/workspace-v2/WORKSPACE_SYSTEM.md) § Queue row preview.
 
+### Work-unit queue record row (CRM compact — fact groups)
+
+This subsection is the **presentation doctrine** for **`crm_compact`** queue rows on **work-unit** surfaces. It does not change resolver semantics, queue membership, or actions — only how a row is read in triage.
+
+**Three zones (left → middle → right):**
+
+1. **Left — identity / next step** — family or opportunity title, status pill, next-step strip, attention or stale cue when present.
+2. **Middle — fact groups** — reusable **label above, value below** blocks. No mixed placement (no random inline field labels except the **timing** row pattern below).
+3. **Right — actions** — Open / Call / Email / configured row actions; alignment and behavior stay independent of fact groups.
+
+**Fact group pattern (middle zone):**
+
+- Each group has a **muted small label** (`row_preview.field_labels` merged with defaults from `DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS` in `web/lib/ui-v2/queueUiConfig.ts`).
+- **Values** sit on one or more lines **below** the label.
+- **Contact:** one middot-separated line — e.g. `Parent Name · 415-795-4019 · parent@example.com`. No `Phone:` / `Email:` / `Program:` prefixes in the value row. Built by `buildCrmContactDotLine` in `web/lib/ui-v2/crmQueueRowPreviewPresentation.ts`.
+- **Children / programs:** group label from `children_programs`. One line per child: `Name (age) · program slice`. Program text is deduped when age is redundant (`dedupeRedundantProgramAgeInPreview`). Multiple children stack as separate value lines.
+- **Timing:** single value row under label `timing`. Inline **field names** (e.g. `Desired Start Date:`) may be **semibold** in CSS; **values** share the same baseline size/weight as other fact values. Segments join with ` · `. **Empty or missing** configured fields render as **`—`**. **Date-only** values use **`MM-DD-YYYY`** (formatters in `web/lib/adminFormatters.ts`).
+
+Optional **meta** groups (`room`, `age_band`) may append when non-empty; they use the same label-above-value classes.
+
+**Structured VM:** `CrmCompactRowSemanticSlots.crmFactGroups` is an ordered list of `WorkUnitQueueCrmFactGroupVm` (`web/lib/ui-v2/workspace-types.ts`). **`QueueBlock`** (`web/app/adminV2/components/workspace/blocks/QueueBlock.tsx`) renders them with **`CrmWorkUnitFactGroup`**. If `crmFactGroups` is absent (older payloads), **`LegacyCrmCompactQueueMiddle`** mirrors the same visual grammar where possible.
+
+**CSS:** Reusable classes under `.adminv2-ws-crm-queue-preview` — `adminv2-ws-queue-fact-group`, `adminv2-ws-queue-fact-label`, `adminv2-ws-queue-fact-value`, `adminv2-ws-queue-fact-line`, `adminv2-ws-queue-fact-sep`, plus timing key/value (`adminv2-ws-queue-fact-timing-k` / `-v`). Fact label/value sizes and CRM row title weight use shared tokens on workspace surfaces: `--ws-type-fact-group-label-size`, `--ws-type-fact-value-size`, `--ws-type-crm-record-title-size`, etc. (see `:root` block on `[data-ws-surface="department|work_unit|company|record"].adminv2-ws-*` in `web/app/adminV2/components/workspace/workspace.css`). Company workspace department tiles reference `--ws-type-dept-tile-name-size` and `--ws-type-dept-tile-desc-size` for the same hierarchy family.
+
+### CRM queue row — notes footer (latest note only)
+
+- **Single preview line:** The footer shows **at most one** activity/note line. For multi-line `_notes_preview` blobs, the formatter **`chooseLatestDatedNoteLine`** (`web/lib/admin/activityTimelineFormat.ts`) picks the line with the greatest embedded date/timestamp; if no line is dated, the **last** line is used. There are **never** multiple note lines stacked in the CRM queue row.
+- **Display order:** **`{datetime} · {note body}`** (date first) via `formatOpportunityQueueNotesPreview` for scan-first triage.
+- **Datetime format:** **`MM/DD/YYYY h:mm A`** in the viewer/org-resolved IANA timezone (`formatQueueNoteDateTime`). **No comma** between the date and time (e.g. `04/29/2026 9:11 PM · …`).
+- **Typography:** `familyNotePreview` on `CrmCompactRowSemanticSlots` carries `{ timestamp, body }` so the **timestamp** can render **semibold** and the **body** **regular** weight (`QueueBlock` — classes `adminv2-ws-crm-queue-preview__note-ts` / `__note-body`). Plain `familyNote` remains the composed string for backward compatibility.
+
+### Cross-surface typography roles (record cards)
+
+Use this **role** vocabulary when adding or tuning compact record/deck surfaces (work-unit queues, department paired panels, workspace department tiles, dense settings cards):
+
+| Role | Intent | Typical use |
+|------|--------|-------------|
+| **Section label / eyebrow** | Muted section or group cue | Fact group labels, “Notes”, settings group headings |
+| **Record title** | Primary identity — clearly larger than fact values | CRM compact primary name; department tile name (tile scale may be larger than embedded queue row) |
+| **Fact label** | Muted, readable, not microscopic | `children_programs`, `timing`, contact group titles |
+| **Fact value** | Scannable data | Contact line, program lines, timing values |
+| **Meta / helper** | Secondary explanation | Last activity line, stale hint, tile description |
+| **Action control** | Button/chip label | Open, future composer-driven actions |
+
+**Rules:** Avoid arbitrary **all caps**; keep **titles larger than data**; **settings** may stay slightly denser than operational rows but should share **the same role ordering** (title → values → meta → actions). Prefer **configuration and shared tokens** over one-off pixel values.
+
+### Queue row quick actions (Call / Email → Message)
+
+- **`ui.row_preview.actions`** in the queue definition decides **which** built-in slots appear (`open`, `call`, `email`). That selection is **config-driven**.
+- **Implementations** for **`call`** and **`email`** today are **local quick actions** (e.g. `crm_tel` / `crm_mailto` with `tel:` / `mailto:` payloads) wired in work-unit mapper code — not arbitrary URLs from config.
+- A future **single “Message”** control should open the **communications composer** with **channel choice**, driven by an **action definition / registry** entry (same pattern as other queue actions), **not** by hardcoding another special case beside `crm_tel` / `crm_mailto`. Product should replace or alias the two slots via **config** once the composer path exists.
+
 ### Count consistency (Admin V2 — current standard)
 
 - **Authoritative operator counts use exact semantics** where the UI presents a number as **the** count for a bucket (pills, badges, headline totals tied to a queue scope). **Planned / estimated** counts (e.g. PostgreSQL planner estimates) are **not** acceptable for that role unless the UI **explicitly** frames them as approximate or non-authoritative.

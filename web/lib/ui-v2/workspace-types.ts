@@ -51,7 +51,7 @@ export type QueueItemWaitStatusVm = "safe" | "approaching" | "breached";
  */
 /**
  * Work-unit CRM compact queue row — one labeled fact group (doctrine: muted label above, value below).
- * @see docs/architecture/workspace-work-unit-scope-doctrine.md § Work-unit queue record row (fact groups)
+ * @see docs/architecture/workspace-work-unit-scope-doctrine.md § Work-unit queue record row (CRM compact — fact groups)
  */
 export type WorkUnitQueueCrmFactGroupKind = "contact" | "children_programs" | "timing" | "meta";
 
@@ -61,13 +61,28 @@ export type WorkUnitQueueCrmTimingSegmentVm = {
   value: string;
 };
 
+/** One chunk in a fact value row: plain string or labeled field (timing). */
+export type WorkUnitQueueCrmFactPartVm =
+  | string
+  | {
+      label: string;
+      value: string;
+    };
+
+/**
+ * One value row under a fact group: legacy single string, or separated chunks (flex + gap).
+ */
+export type WorkUnitQueueCrmFactLineVm = string | { parts: WorkUnitQueueCrmFactPartVm[] };
+
 export type WorkUnitQueueCrmFactGroupVm = {
   kind: WorkUnitQueueCrmFactGroupKind;
   /** Muted group title (from `field_labels` + defaults). */
   label: string;
-  /** Plain value lines (contact, children/programs, meta). */
-  lines?: string[];
-  /** Timing row: labeled segments; field names semibold in CSS, values baseline. */
+  /** Value rows: string and/or `{ parts }` (contact, children/programs, timing, meta). */
+  lines?: WorkUnitQueueCrmFactLineVm[];
+  /**
+   * Legacy timing payload when `lines` omitted (older `crmFactGroups`). Prefer `lines` with `{ parts }`.
+   */
   timingSegments?: WorkUnitQueueCrmTimingSegmentVm[];
 };
 
@@ -132,6 +147,11 @@ export type CrmCompactRowSemanticSlots = {
   ageContext: string | null;
   attentionReason: string | null;
   familyNote: string | null;
+  /**
+   * CRM queue footer: latest note only, split for typography (`timestamp` may be semibold; `body` regular).
+   * When omitted, `familyNote` string is shown as a single run (legacy).
+   */
+  familyNotePreview?: { timestamp: string | null; body: string } | null;
   /** Activity Signals V1 — config-driven stale hint (workflow_events + metadata). */
   activityStale?: { label: string; severity: "low" | "medium" | "high" } | null;
   /**
