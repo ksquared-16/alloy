@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
+import { markWorkUnitNavigationStart } from "@/lib/perf/markWorkUnitNavigationStart";
 import {
     WorkspacePairedOperPanel,
     WorkspacePairedOperPanelsGrid,
@@ -469,10 +471,13 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         const s = deptWorkUnitSummaries[wu.id];
                         const total = s ? s.total : null;
                         const needs = s ? s.needs_attention : null;
+                        const wuHref = `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(wu.id)}`;
                         return (
                             <li key={`wu:${wu.id}`} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
                                 <Link
-                                    href={`${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(wu.id)}`}
+                                    href={wuHref}
+                                    prefetch={shouldDisableAdminV2LinkPrefetch(wuHref) ? false : undefined}
+                                    onClick={markWorkUnitNavigationStart}
                                     className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-standard no-underline text-inherit hover:opacity-[0.98]"
                                     data-ws-wu-urgency="standard"
                                 >
@@ -517,6 +522,8 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
                         <Link
                             href={needsAttentionSummary.href}
+                            prefetch={shouldDisableAdminV2LinkPrefetch(needsAttentionSummary.href) ? false : undefined}
+                            onClick={markWorkUnitNavigationStart}
                             className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-warning no-underline text-inherit hover:opacity-[0.98]"
                             data-ws-wu-urgency="attention"
                         >

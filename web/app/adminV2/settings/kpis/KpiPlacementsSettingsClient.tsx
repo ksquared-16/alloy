@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import type { WorkspaceKpiPlacementRow, KpiSurface, MetricKey } from "@/lib/kpi/types";
 import {
@@ -616,11 +617,19 @@ export default function KpiPlacementsSettingsClient() {
             ) : null}
 
             <footer className="border-t border-alloy-forge/10 pt-3 text-[11px] text-alloy-midnight/50">
-                <Link href={SETTINGS_ROOT} className="font-medium text-alloy-blue hover:underline">
+                <Link
+                    href={SETTINGS_ROOT}
+                    prefetch={shouldDisableAdminV2LinkPrefetch(SETTINGS_ROOT) ? false : undefined}
+                    className="font-medium text-alloy-blue hover:underline"
+                >
                     ← Back to Settings
                 </Link>
                 {" · "}
-                <Link href="/adminV2/workspace" className="font-medium text-alloy-blue hover:underline">
+                <Link
+                    href="/adminV2/workspace"
+                    prefetch={shouldDisableAdminV2LinkPrefetch("/adminV2/workspace") ? false : undefined}
+                    className="font-medium text-alloy-blue hover:underline"
+                >
                     Open workspace
                 </Link>
             </footer>

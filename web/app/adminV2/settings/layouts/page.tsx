@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
 
 export const dynamic = "force-dynamic";
 
@@ -6,6 +7,7 @@ function Card({ href, title, children }: { href: string; title: string; children
     return (
         <Link
             href={href}
+            prefetch={shouldDisableAdminV2LinkPrefetch(href) ? false : undefined}
             className="block rounded-xl border border-alloy-forge/12 bg-white/60 px-4 py-3 shadow-sm hover:bg-white/80"
         >
             <div className="text-sm font-semibold text-alloy-midnight">{title}</div>

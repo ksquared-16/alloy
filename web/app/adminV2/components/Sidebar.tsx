@@ -7,6 +7,7 @@ import { neutral, brand } from "@/styles/tokens/colors";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
+import { markWorkUnitNavigationStart } from "@/lib/perf/markWorkUnitNavigationStart";
 
 const WORKSPACE = "/adminV2/workspace";
 const SETTINGS_HREF = "/adminV2/settings";
@@ -143,6 +144,7 @@ export default function Sidebar({
                                 active={Boolean(departmentId && !workUnitId)}
                                 className="adminv2-sidebar-rail-link"
                                 style={{ color: brand.primary }}
+                                onClick={markWorkUnitNavigationStart}
                             >
                                 <Building2 size={20} strokeWidth={1.75} />
                             </AdminV2NavLink>
@@ -155,6 +157,7 @@ export default function Sidebar({
                                 active
                                 className="adminv2-sidebar-rail-link"
                                 style={{ color: brand.primary }}
+                                onClick={markWorkUnitNavigationStart}
                             >
                                 <Boxes size={20} strokeWidth={1.75} />
                             </AdminV2NavLink>
@@ -235,6 +238,7 @@ export default function Sidebar({
                                             className="rounded-md px-2 py-1.5 font-medium hover:bg-alloy-stone/10"
                                             style={{ color: brand.primary }}
                                             title={name}
+                                            onClick={markWorkUnitNavigationStart}
                                         >
                                             <span className="inline-flex items-center gap-2">
                                                 <Building2 size={16} strokeWidth={1.75} />
@@ -255,6 +259,7 @@ export default function Sidebar({
                                                             className="rounded-md px-2 py-1.5 font-medium hover:bg-alloy-stone/10"
                                                             style={{ color: brand.primary }}
                                                             title={wuName}
+                                                            onClick={markWorkUnitNavigationStart}
                                                         >
                                                             <span className="inline-flex items-center gap-2">
                                                                 <Boxes size={15} strokeWidth={1.75} />

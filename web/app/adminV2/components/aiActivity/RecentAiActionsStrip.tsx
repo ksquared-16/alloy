@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
+import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
 import { activitySummaryLine, type ActivityItem } from "@/lib/adminV2/aiActivity/activityTypes";
 import AiActivityDetailModal from "./AiActivityDetailModal";
 
@@ -83,6 +84,7 @@ export default function RecentAiActionsStrip() {
                     </span>
                     <Link
                         href="/adminV2/ai-activity"
+                        prefetch={shouldDisableAdminV2LinkPrefetch("/adminV2/ai-activity") ? false : undefined}
                         className="text-[10px] font-medium underline-offset-2 hover:underline"
                         style={{ color: derived.textSecondary }}
                     >

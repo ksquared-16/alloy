@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
 import {
     growthLaneHelperText,
     growthLaneLabel,
@@ -38,6 +39,7 @@ function GrowthWorkspaceActionsInner({
     const lane = parseGrowthLaneParam(searchParams.get("lane"));
     const base = `${workspaceBasePath.replace(/\/$/, "")}/dept/${encodeURIComponent(departmentId)}`;
     const helper = growthLaneHelperText(lane);
+    const pf = (u: string) => (shouldDisableAdminV2LinkPrefetch(u) ? false : undefined);
 
     const inner = (
         <>
@@ -53,6 +55,7 @@ function GrowthWorkspaceActionsInner({
             >
                 <Link
                     href={laneHref(base, "clear")}
+                    prefetch={pf(laneHref(base, "clear"))}
                     className={
                         presentation === "bridge"
                             ? `rounded px-2 py-0.5 text-[10px] font-semibold border no-underline ${
@@ -67,6 +70,7 @@ function GrowthWorkspaceActionsInner({
                 </Link>
                 <Link
                     href={laneHref(base, "new_leads")}
+                    prefetch={pf(laneHref(base, "new_leads"))}
                     className={
                         presentation === "bridge"
                             ? `rounded px-2 py-0.5 text-[10px] font-semibold border no-underline ${
@@ -81,6 +85,7 @@ function GrowthWorkspaceActionsInner({
                 </Link>
                 <Link
                     href={laneHref(base, "unbooked_quotes")}
+                    prefetch={pf(laneHref(base, "unbooked_quotes"))}
                     className={
                         presentation === "bridge"
                             ? `rounded px-2 py-0.5 text-[10px] font-semibold border no-underline ${
@@ -111,6 +116,7 @@ function GrowthWorkspaceActionsInner({
                 </button>
                 <Link
                     href="/admin/opportunities"
+                    prefetch={pf("/admin/opportunities")}
                     className={
                         presentation === "bridge"
                             ? "adminv2-ws-actions-rail-secondary text-center no-underline rounded-md font-bold text-[11px] w-full"
@@ -121,6 +127,7 @@ function GrowthWorkspaceActionsInner({
                 </Link>
                 <Link
                     href="/admin/system/work-units"
+                    prefetch={pf("/admin/system/work-units")}
                     className={
                         presentation === "bridge"
                             ? "adminv2-ws-actions-rail-secondary text-center no-underline rounded-md font-bold text-[11px] w-full"

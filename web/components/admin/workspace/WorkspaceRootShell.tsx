@@ -4,6 +4,7 @@ import type { CSSProperties } from "react";
 import { useMemo } from "react";
 import Link from "next/link";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
+import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
 import KPIBlock from "@/app/adminV2/components/workspace/blocks/KPIBlock";
 import { KpiStripSkeleton } from "@/components/admin/workspace/KpiStripSkeleton";
 import type { KPIVm } from "@/lib/ui-v2/workspace-types";
@@ -129,12 +130,14 @@ export function WorkspaceRootShell({
           <div className="adminv2-ws-actions-rail-list adminv2-ws-actions-rail-list--column mt-3">
             <Link
               href="/admin/opportunities"
+              prefetch={shouldDisableAdminV2LinkPrefetch("/admin/opportunities") ? false : undefined}
               className="adminv2-ws-actions-rail-secondary adminv2-ws-workspace-orientation-link text-center no-underline rounded-md font-bold text-[11px] w-full"
             >
               Open inquiries (classic admin)
             </Link>
             <Link
               href="/admin/system/work-units"
+              prefetch={shouldDisableAdminV2LinkPrefetch("/admin/system/work-units") ? false : undefined}
               className="adminv2-ws-actions-rail-secondary adminv2-ws-workspace-orientation-link text-center no-underline rounded-md font-bold text-[11px] w-full"
             >
               Work unit registry

@@ -3,6 +3,8 @@
 import type { CSSProperties } from "react";
 import Link from "next/link";
 import { neutral, derived } from "@/styles/tokens/colors";
+import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
+import { markWorkUnitNavigationStart } from "@/lib/perf/markWorkUnitNavigationStart";
 import {
     alloyFamilyToWorkspaceTileTone,
     operationalWorkspaceShellStyle,
@@ -84,10 +86,14 @@ export function WorkspaceRootDepartmentGrid({
                                     : wu != null && wu >= 0
                                       ? `${wu} work unit${wu === 1 ? "" : "s"}`
                                       : null;
+                const p = `${base}/dept/${encodeURIComponent(d.id)}`;
+                const prefetchOff = shouldDisableAdminV2LinkPrefetch(p);
                             return (
                                 <Link
                                     key={d.id}
-                                    href={`${base}/dept/${encodeURIComponent(d.id)}`}
+                                    href={p}
+                                    prefetch={prefetchOff ? false : undefined}
+                                    onClick={markWorkUnitNavigationStart}
                                     className={[
                                         "adminv2-ws-company-dept-tile group block h-full text-left no-underline text-inherit rounded-[inherit] focus:outline-none focus-visible:ring-2 focus-visible:ring-alloy-blue/35",
                                         root ? "adminv2-ws-company-dept-tile--workspace-root" : "",

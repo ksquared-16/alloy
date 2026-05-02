@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { neutral, derived, brand, palette } from "@/styles/tokens/colors";
+import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
 import type { ActivityItem } from "@/lib/adminV2/aiActivity/activityTypes";
 import { activityStatusWord, formatActivityTs } from "@/lib/adminV2/aiActivity/activityTypes";
 import AiActivityDetailPanel from "@/app/adminV2/components/aiActivity/AiActivityDetailPanel";
@@ -134,6 +135,7 @@ export default function AiActivityPageClient() {
                                 <p className="text-[10px]" style={{ color: derived.textSecondary }}>
                                     <Link
                                         href="/adminV2/workspace"
+                                        prefetch={shouldDisableAdminV2LinkPrefetch("/adminV2/workspace") ? false : undefined}
                                         className="font-medium underline-offset-2 hover:underline"
                                         style={{ color: brand.secondary }}
                                     >

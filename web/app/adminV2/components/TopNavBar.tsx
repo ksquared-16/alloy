@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import { createClient } from "@/lib/supabaseClient";
 import { palette, neutral, derived } from "@/styles/tokens/colors";
+import { markWorkUnitNavigationStart } from "@/lib/perf/markWorkUnitNavigationStart";
 
 function normalizeAdminPath(pathname: string): string {
   if (pathname === "/admin/v2" || pathname.startsWith("/admin/v2/")) {
@@ -100,6 +101,9 @@ export default function TopNavBar() {
           className="px-2 py-1 rounded text-xs font-medium"
           style={tabStyle(isQueueContext)}
           title="Opens the current work unit queue when you are in workspace queue context; otherwise Workspace."
+          onClick={() => {
+            if (queueHref.includes("/work-unit/")) markWorkUnitNavigationStart();
+          }}
         >
           Queue
         </AdminV2NavLink>

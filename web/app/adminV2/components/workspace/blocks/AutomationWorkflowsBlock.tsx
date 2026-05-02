@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
 import "@/app/adminV2/components/workspace/workspace.css";
 
 export type AutomationWorkflowKpis = {
@@ -51,7 +52,11 @@ export function AutomationWorkflowsBlock(props: {
                         Live runs, reliability, and the workflows tied to this workspace surface.
                     </p>
                 </div>
-                <Link href={href} className="adminv2-ws-automation-telemetry__review">
+                <Link
+                    href={href}
+                    prefetch={shouldDisableAdminV2LinkPrefetch(href) ? false : undefined}
+                    className="adminv2-ws-automation-telemetry__review"
+                >
                     Review
                     <span aria-hidden> →</span>
                 </Link>

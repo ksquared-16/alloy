@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,7 @@ function SettingsCard({
     return (
         <Link
             href={href}
+            prefetch={shouldDisableAdminV2LinkPrefetch(href) ? false : undefined}
             className={[
                 "group flex h-full min-h-0 flex-col justify-center rounded-lg border border-alloy-forge/12 bg-white/50 px-3 py-2.5 shadow-sm backdrop-blur-[1px] transition-colors hover:bg-white/75",
                 TILE_MIN_H,

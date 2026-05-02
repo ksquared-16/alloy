@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { WorkspaceRuntimeData } from "@/lib/workspace/types";
+import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
 
 function groupAttentionReasons(items: Array<{ _attention_reason_label?: string | null }>) {
     const m = new Map<string, number>();
@@ -31,6 +32,7 @@ export function OpportunityAttentionLaneBlock({
     const wu = (runtime.workUnits ?? []).find((w) => String(w.key ?? "").trim().toLowerCase() === "needs_attention");
     const oq = runtime.opportunityQueues?.needs_attention;
     const href = wu ? `${base}/work-unit/${encodeURIComponent(wu.id)}` : `${base}`;
+    const pf = (u: string) => (shouldDisableAdminV2LinkPrefetch(u) ? false : undefined);
 
     const total = oq?.total ?? 0;
     const groups = oq?.items ? groupAttentionReasons(oq.items as Array<{ _attention_reason_label?: string | null }>) : [];
@@ -71,7 +73,7 @@ export function OpportunityAttentionLaneBlock({
                             <span className="adminv2-ws-attention-panel-count" aria-label={`${total} records`}>
                                 {total}
                             </span>
-                            <Link href={href} className="adminv2-ws-attention-panel-viewall">
+                            <Link href={href} prefetch={pf(href)} className="adminv2-ws-attention-panel-viewall">
                                 Open queue
                             </Link>
                         </div>

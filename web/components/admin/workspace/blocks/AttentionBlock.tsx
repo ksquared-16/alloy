@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useState } from "react";
+import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
 import type {
     WorkspaceAttentionBlock,
     WorkspaceAttentionCategory,
@@ -38,6 +39,7 @@ export function AttentionBlock({
     presentation?: "bridge" | "flat";
 }) {
     const [expanded, setExpanded] = useState<Partial<Record<WorkspaceAttentionCategoryKey, boolean>>>({});
+    const pf = (u: string) => (shouldDisableAdminV2LinkPrefetch(u) ? false : undefined);
 
     const toggle = useCallback((id: WorkspaceAttentionCategoryKey) => {
         setExpanded((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -89,7 +91,7 @@ export function AttentionBlock({
                                 <span className="adminv2-ws-attention-panel-count" aria-label={`${count} records`}>
                                     {count}
                                 </span>
-                                <Link href={href} className="adminv2-ws-attention-panel-viewall">
+                                <Link href={href} prefetch={pf(href)} className="adminv2-ws-attention-panel-viewall">
                                     Open queue
                                 </Link>
                             </div>
@@ -100,6 +102,7 @@ export function AttentionBlock({
                                     <Link
                                         key={qa.id}
                                         href={qa.href}
+                                        prefetch={pf(qa.href)}
                                         className="text-[11px] font-medium text-alloy-blue hover:underline"
                                     >
                                         {qa.label}
@@ -163,7 +166,7 @@ export function AttentionBlock({
                                 <div className="flex items-center justify-between gap-2">
                                     <span className="text-alloy-forge">{cat.label}</span>
                                     <span className="tabular-nums font-medium">{count}</span>
-                                    <Link href={href} className="text-alloy-blue text-xs font-medium hover:underline shrink-0">
+                                    <Link href={href} prefetch={pf(href)} className="text-alloy-blue text-xs font-medium hover:underline shrink-0">
                                         Open queue
                                     </Link>
                                 </div>
@@ -173,6 +176,7 @@ export function AttentionBlock({
                                             <Link
                                                 key={qa.id}
                                                 href={qa.href}
+                                                prefetch={pf(qa.href)}
                                                 className="text-[11px] text-alloy-blue/90 hover:underline"
                                             >
                                                 {qa.label}

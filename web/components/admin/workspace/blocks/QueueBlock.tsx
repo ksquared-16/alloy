@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
 import type { WorkspaceOpportunityQueueRuntime, WorkspaceQueueBlock, WorkspaceRuntimeData } from "@/lib/workspace/types";
 
 function isUnassignedWorkUnitRow(w: { name?: string | null; key?: string | null }): boolean {
@@ -168,6 +169,7 @@ export function QueueBlock({
 }) {
     const base = `${workspaceBasePath.replace(/\/$/, "")}/dept/${departmentId}`;
     const unassignedHref = `${base}/unassigned`;
+    const linkPrefetch = (href: string) => (shouldDisableAdminV2LinkPrefetch(href) ? false : undefined);
 
     const coveredKeys = new Set<string>();
     for (const e of block.entries) {
@@ -199,6 +201,7 @@ export function QueueBlock({
                                 <li key={`route-${entry.segment}-${i}`} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
                                     <Link
                                         href={href}
+                                        prefetch={linkPrefetch(href)}
                                         className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-standard flex flex-col items-stretch no-underline text-inherit hover:opacity-[0.98]"
                                         data-ws-wu-urgency="standard"
                                     >
@@ -226,6 +229,7 @@ export function QueueBlock({
                                 <li key={`triage-${i}`} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
                                     <Link
                                         href={unassignedHref}
+                                        prefetch={linkPrefetch(unassignedHref)}
                                         className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-standard flex flex-col items-stretch no-underline text-inherit hover:opacity-[0.98]"
                                         data-ws-wu-urgency="standard"
                                     >
@@ -264,6 +268,7 @@ export function QueueBlock({
                                 {opportunityWorkUnitHref ? (
                                     <Link
                                         href={opportunityWorkUnitHref}
+                                        prefetch={linkPrefetch(opportunityWorkUnitHref)}
                                         className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-standard flex flex-col items-stretch no-underline text-inherit hover:opacity-[0.98]"
                                         data-ws-wu-urgency={
                                             entry.work_unit_key.trim().toLowerCase() === "needs_attention" ? "warning" : "standard"
@@ -380,7 +385,7 @@ export function QueueBlock({
                             const href = `${base}/${entry.segment}`;
                             return (
                                 <li key={`route-${entry.segment}-${i}`}>
-                                    <Link href={href} className="block px-4 py-3 hover:bg-alloy-stone/30 transition-colors">
+                                    <Link href={href} prefetch={linkPrefetch(href)} className="block px-4 py-3 hover:bg-alloy-stone/30 transition-colors">
                                         <span className="font-medium text-alloy-midnight">{entry.label}</span>
                                         {entry.description ? (
                                             <p className="text-xs text-alloy-midnight/55 mt-0.5">{entry.description}</p>
@@ -394,6 +399,7 @@ export function QueueBlock({
                                 <li key={`triage-${i}`}>
                                     <Link
                                         href={unassignedHref}
+                                        prefetch={linkPrefetch(unassignedHref)}
                                         className="block px-4 py-3 hover:bg-alloy-stone/30 transition-colors"
                                     >
                                         <span className="font-medium text-alloy-midnight">{entry.label}</span>

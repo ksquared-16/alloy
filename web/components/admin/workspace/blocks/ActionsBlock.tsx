@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { resolveWorkspaceActionHref } from "@/lib/workspace/resolveWorkspaceActionHref";
+import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
 import type { WorkspaceActionsBlock, WorkspaceActionItem } from "@/lib/workspace/types";
 
 function hrefFor(
@@ -26,6 +27,7 @@ export function ActionsBlock({
     if (!block.actions.length) return null;
 
     const ctx = { departmentId, workspaceBasePath };
+    const pf = (u: string) => (shouldDisableAdminV2LinkPrefetch(u) ? false : undefined);
 
     if (presentation === "bridge") {
         const maxSolid = 2;
@@ -48,10 +50,12 @@ export function ActionsBlock({
                     {block.actions.map((a, i) => {
                         const useSolid = solidFlags[i] ?? false;
                         const cls = useSolid ? "adminv2-ws-actions-rail-primary" : "adminv2-ws-actions-rail-secondary";
+                        const h = hrefFor(a, ctx);
                         return (
                             <Link
                                 key={a.id}
-                                href={hrefFor(a, ctx)}
+                                href={h}
+                                prefetch={pf(h)}
                                 className={`${cls} text-center no-underline rounded-md font-bold text-[11px]`}
                             >
                                 {a.label}
@@ -67,10 +71,13 @@ export function ActionsBlock({
         <section className="rounded-xl border border-admin-border bg-white p-5 shadow-sm" data-workspace-block="actions">
             <h2 className="text-sm font-semibold text-alloy-midnight">{block.title ?? "Actions"}</h2>
             <div className="mt-3 flex flex-wrap gap-2">
-                {block.actions.map((a) => (
+                {block.actions.map((a) => {
+                    const h = hrefFor(a, ctx);
+                    return (
                     <Link
                         key={a.id}
-                        href={hrefFor(a, ctx)}
+                        href={h}
+                        prefetch={pf(h)}
                         className={
                             a.variant === "primary"
                                 ? "inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md hover:opacity-92 adminv2-ws-btn-primary-solid"
@@ -79,7 +86,8 @@ export function ActionsBlock({
                     >
                         {a.label}
                     </Link>
-                ))}
+                    );
+                })}
             </div>
         </section>
     );
