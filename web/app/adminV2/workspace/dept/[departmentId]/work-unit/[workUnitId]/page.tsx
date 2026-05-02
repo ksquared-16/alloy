@@ -251,8 +251,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const queueItemsRequestSeq = useRef(0);
     const queueSummariesRequestSeq = useRef(0);
     /**
-     * Skips redundant queue-item GETs when only `queueSummaries` reference changes while work unit,
-     * selected tab, and omit-total semantics are unchanged — same URL as last fetch.
+     * Skips redundant queue-item GETs when work unit + selected tab unchanged — same URL as last fetch.
      * Cleared on work-unit navigation; bypass with fetchQueueItems(..., { force: true }) for invalidation.
      */
     const queueItemsLastFetchSigRef = useRef<string | null>(null);
@@ -529,6 +528,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
                 let parsedQueueRowQuick: QueueItemQuickActionVm[] | null = null;
                 let parsedRightRail: ResolvedActionForClient[] = [];
+                if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                    alloyPerfSet("work_unit_summaries_request_start", performance.now());
+                }
                 const [queuesSettled, actionsSettled, rightRailSettled] = await Promise.allSettled([
                     fetch(queueListRoute, init),
                     dedupeAdminFetchWithTtl(actionsListRoute, init, 1500),
@@ -574,13 +576,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             work_unit_scope_queue_key?: string | null;
                         };
                         const route = queueListRoute;
+                        if (res.ok && typeof window !== "undefined" && typeof performance !== "undefined") {
+                            alloyPerfSet("work_unit_summaries_response", performance.now());
+                        }
                         if (res.ok) {
                             usedNewQueueApi = true;
                             if (!cancelled) {
                                 const qs = (j.queues ?? []) as QueueSummary[];
-                                if (typeof window !== "undefined" && typeof performance !== "undefined") {
-                                    alloyPerfSet("work_unit_summaries_ready", performance.now());
-                                }
                                 setQueueSummaries(qs);
                                 setQueueSummariesError(null);
                                 setQueueSummariesRoute(route);
@@ -618,6 +620,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                           ? allKeyFromDef
                                           : firstByUi;
                                 setSelectedQueueKey(initial);
+                                if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                                    requestAnimationFrame(() => {
+                                        requestAnimationFrame(() => alloyPerfSet("work_unit_summaries_applied", performance.now()));
+                                    });
+                                }
                             }
                         } else if (res.status === 501) {
                             shouldFallbackToLegacy = true;
@@ -731,7 +738,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
         const gated =
             Boolean(workUnitId) &&
             Boolean(selectedQueueKey) &&
-            Boolean(queueSummaries?.length) &&
+            Boolean(workUnit) &&
+            !loading &&
             queueItemsLoading &&
             queueItems === null &&
             !queueItemsError;
@@ -741,7 +749,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         }
         const t = window.setTimeout(() => setWuPrimaryLaneTimedOut(true), 12_000);
         return () => clearTimeout(t);
-    }, [workUnitId, selectedQueueKey, queueSummaries, queueItemsLoading, queueItems, queueItemsError]);
+    }, [workUnitId, selectedQueueKey, workUnit, loading, queueItemsLoading, queueItems, queueItemsError]);
 
     /** Browser back/forward: sync selected queue with `?queue=` without re-running bootstrap. */
     useEffect(() => {
@@ -755,20 +763,24 @@ export default function AdminV2OpportunityWorkUnitPage() {
         async (
             workUnitId: string,
             queueKey: string,
-            summaries: QueueSummary[] | null,
+            _summaries: QueueSummary[] | null,
             options?: { force?: boolean }
         ) => {
-            const tab = summaries?.find((q) => q.key === queueKey);
-            const canOmitTotal = tab != null && tab.counts_deferred !== true;
-            const fetchSig = `${workUnitId}|${queueKey}|${canOmitTotal ? "omit" : "fullcount"}`;
+            void _summaries;
+            /** Tab totals come from summaries; list fetch always omits row-route total work — avoids refetch when summaries land. */
+            const fetchSig = `${workUnitId}|${queueKey}|omit`;
             if (!options?.force && fetchSig === queueItemsLastFetchSigRef.current) {
                 return;
             }
             queueItemsLastFetchSigRef.current = fetchSig;
 
             const seq = ++queueItemsRequestSeq.current;
-            const qs = new URLSearchParams({ limit: "20", offset: "0", count_mode: "exact" });
-            if (canOmitTotal) qs.set("omit_total_count", "true");
+            const qs = new URLSearchParams({
+                limit: "20",
+                offset: "0",
+                count_mode: "exact",
+                omit_total_count: "true",
+            });
             const route = `/api/admin/queues/${encodeURIComponent(workUnitId)}/${encodeURIComponent(queueKey)}?${qs.toString()}`;
             setQueueItemsLoading(true);
             setQueueItemsError(null);
@@ -783,6 +795,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
             });
             try {
                 const init = workspaceDataFetchInit();
+                if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                    alloyPerfSet("queue_rows_request_start", performance.now());
+                }
                 const res = await fetch(route, init);
                 const json = (await res.json().catch(() => ({}))) as { error?: string };
                 if (!res.ok) {
@@ -791,16 +806,25 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 }
                 const payload = json as unknown as QueueItemsResult;
                 if (seq === queueItemsRequestSeq.current) {
-                    setQueueItems(payload);
                     if (typeof window !== "undefined" && typeof performance !== "undefined") {
-                        alloyPerfSet("queue_rows_ready", performance.now());
+                        alloyPerfSet("queue_rows_response", performance.now());
                     }
+                    setQueueItems(payload);
                     if (typeof window !== "undefined") {
                         console.warn("[pipeline-count-unify]", {
                             source: "queue-rows",
                             work_unit_id: workUnitId,
                             queue_key: queueKey,
                             count: typeof payload.total === "number" ? payload.total : null,
+                        });
+                    }
+                    if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                        requestAnimationFrame(() => {
+                            requestAnimationFrame(() => {
+                                const t = performance.now();
+                                alloyPerfSet("queue_rows_applied", t);
+                                alloyPerfSet("queue_rows_ready", t);
+                            });
                         });
                     }
                 }
@@ -831,6 +855,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
         setQueueSummariesRoute(route);
         try {
             const init = workspaceDataFetchInit();
+            if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                alloyPerfSet("work_unit_summaries_request_start", performance.now());
+            }
             const res = await fetch(route, init);
             const json = (await res.json().catch(() => ({}))) as {
                 error?: string;
@@ -843,9 +870,14 @@ export default function AdminV2OpportunityWorkUnitPage() {
             }
             const qsOut = (json.queues ?? []) as QueueSummary[];
             if (seq === queueSummariesRequestSeq.current) {
+                if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                    alloyPerfSet("work_unit_summaries_response", performance.now());
+                }
                 setQueueSummaries(qsOut);
                 if (typeof window !== "undefined" && typeof performance !== "undefined") {
-                    alloyPerfSet("work_unit_summaries_ready", performance.now());
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => alloyPerfSet("work_unit_summaries_applied", performance.now()));
+                    });
                 }
                 if (typeof window !== "undefined") {
                     console.warn("[pipeline-count-unify]", {
@@ -892,12 +924,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
         return () => window.removeEventListener("adminv2:opportunity-updated", onUpdated as EventListener);
     }, [fetchQueueItems, fetchQueueSummaries, selectedQueueKey, workUnitId]);
 
-    /** One row fetch per selection: wait for summaries (or a summaries error) so omit_total matches the final tab badge semantics — avoids exact-then-omit double GET. */
+    /** Row fetch starts once the work-unit shell and selection exist; does not wait on summaries (counts come from summaries; rows always `omit_total_count`). */
     useEffect(() => {
-        if (!workUnitId || !selectedQueueKey) return;
-        if (queueSummaries === null && !queueSummariesError) return;
-        void fetchQueueItems(workUnitId, selectedQueueKey, queueSummaries);
-    }, [fetchQueueItems, queueSummaries, queueSummariesError, selectedQueueKey, workUnitId]);
+        if (!workUnitId || !selectedQueueKey || loading || !workUnit) return;
+        void fetchQueueItems(workUnitId, selectedQueueKey, null);
+    }, [fetchQueueItems, selectedQueueKey, workUnitId, workUnit, loading]);
 
     useEffect(() => {
         let cancelled = false;
@@ -1535,8 +1566,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 : "";
         const awaitingFirstRows =
             !queueItemsError &&
-            Boolean(queueSummaries?.length) &&
             Boolean(selectedQueueKey) &&
+            Boolean(workUnit) &&
+            !loading &&
             queueItems === null;
         /** Empty list + in-flight fetch, tab mismatch, or waiting for first row batch — in-lane loading (no “No records”). */
         const rowsLoading =
@@ -1599,6 +1631,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         queueSummariesError,
         selectedQueueKey,
         workUnit,
+        loading,
         queueUi,
         opportunityQueueRowActions,
         unmappedOnly,

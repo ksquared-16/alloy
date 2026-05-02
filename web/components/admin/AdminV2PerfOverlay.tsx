@@ -72,27 +72,41 @@ export default function AdminV2PerfOverlay() {
     }
 
     const m = ensureAlloyPerf()?.marks ?? ({} as Record<string, number>);
+    const wu = m.work_unit_start;
 
-    const drawerTotal = fmtMs(m.drawer_visible_ready, m.drawer_open_start);
-    const drawerEntityResp = fmtMs(m.drawer_entity_response, m.drawer_open_start);
-    const drawerEntityApplied = fmtMs(m.drawer_entity_applied, m.drawer_open_start);
-    const drawerHeader = fmtMs(m.drawer_header_actions_ready, m.drawer_entity_applied);
-
-    const text = [
+    const lines: string[] = [
         `WS: ${fmtMs(m.workspace_ready, m.workspace_start)}`,
         `DEPT: ${fmtMs(m.department_ready, m.department_start)}`,
-        `WU Shell: ${fmtMs(m.work_unit_shell_ready, m.work_unit_start)}`,
-        `WU Summ: ${fmtMs(m.work_unit_summaries_ready, m.work_unit_start)}`,
-        `Rows: ${fmtMs(m.queue_rows_ready, m.work_unit_start)}`,
-        `Drawer: ${drawerTotal}`,
-        typeof m.drawer_entity_response === "number" ? `  entity response: ${drawerEntityResp}` : "",
-        typeof m.drawer_entity_applied === "number" ? `  entity applied: ${drawerEntityApplied}` : "",
-        typeof m.drawer_header_actions_ready === "number" && typeof m.drawer_entity_applied === "number"
-            ? `  header Δ: ${drawerHeader}`
-            : "",
-    ]
-        .filter(Boolean)
-        .join("\n");
+        `WU Shell: ${fmtMs(m.work_unit_shell_ready, wu)}`,
+        `WU Summ req: ${fmtMs(m.work_unit_summaries_request_start, wu)}`,
+        `WU Summ resp: ${fmtMs(m.work_unit_summaries_response, wu)}`,
+        `WU Summ applied: ${fmtMs(m.work_unit_summaries_applied, wu)}`,
+        `Rows req: ${fmtMs(m.queue_rows_request_start, wu)}`,
+        `Rows resp: ${fmtMs(m.queue_rows_response, wu)}`,
+        `Rows applied: ${fmtMs(m.queue_rows_applied, wu)}`,
+    ];
+
+    const dOpen = m.drawer_open_start;
+    if (typeof dOpen === "number") {
+        lines.push(`Drawer visible: ${fmtMs(m.drawer_visible_ready, dOpen)}`);
+        if (typeof m.drawer_entity_request_start === "number") {
+            lines.push(`  entity req: ${fmtMs(m.drawer_entity_request_start, dOpen)}`);
+        }
+        if (typeof m.drawer_entity_response === "number") {
+            lines.push(`  entity resp: ${fmtMs(m.drawer_entity_response, dOpen)}`);
+        }
+        if (typeof m.drawer_entity_applied === "number") {
+            lines.push(`  entity applied: ${fmtMs(m.drawer_entity_applied, dOpen)}`);
+        }
+        if (typeof m.drawer_header_actions_request_start === "number") {
+            lines.push(`  header req: ${fmtMs(m.drawer_header_actions_request_start, dOpen)}`);
+        }
+        if (typeof m.drawer_header_actions_response === "number") {
+            lines.push(`  header resp: ${fmtMs(m.drawer_header_actions_response, dOpen)}`);
+        }
+    }
+
+    const text = lines.join("\n");
 
     return (
         <div

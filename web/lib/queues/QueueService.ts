@@ -1529,6 +1529,8 @@ export async function getWorkUnitQueueItems(params: {
     const tSvc0 = Date.now();
     const supabase = createAdminClient();
     const refUtc = new Date();
+    /** Overlap with queue-definition load (opportunity rows always need these defs; job WUs pay one unused extra round-trip). */
+    const opportunityStatusDefsHeadStart = fetchEffectiveStatusDefinitions(supabase as any, params.orgId, "opportunities", { activeOnly: true });
     const tBoot0 = Date.now();
     const [def, operationalDay] = await Promise.all([
         loadWorkUnitQueueDefinition({ orgId: params.orgId, workUnitId: params.workUnitId }),
@@ -1660,7 +1662,7 @@ export async function getWorkUnitQueueItems(params: {
     // opportunity
     const { ops, sort, calendar_meta } = buildOpportunityPlan(q, refUtc, operationalDay);
 
-    const oppStatusDefsPromise = fetchEffectiveStatusDefinitions(supabase as any, params.orgId, "opportunities", { activeOnly: true });
+    const oppStatusDefsPromise = opportunityStatusDefsHeadStart;
 
     if (params.queueKey === "needs_attention") {
         const [{ value: matched, ms: naLoadMs }, { value: effectiveStatusDefs, ms: statusDefsMs }] = await Promise.all([

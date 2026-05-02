@@ -150,6 +150,79 @@ export async function GET(
             const oppPipelineStageId = (opp as { pipeline_stage_id?: string | null }).pipeline_stage_id ?? null;
             const oppPipelineId = (opp as { pipeline_id?: string | null }).pipeline_id ?? null;
             const oppDprogId = (opp as { discount_program_id?: string | null }).discount_program_id ?? null;
+            const oppOrgIdForDefs = (opp as { org_id?: string }).org_id;
+            const opportunityDefsP = oppOrgIdForDefs
+                ? fetchEffectiveStatusDefinitions(supabase, oppOrgIdForDefs, "opportunities", { activeOnly: true })
+                : Promise.resolve([]);
+            const personDisplayName = (p: { full_name?: string | null; first_name?: string | null; last_name?: string | null } | null) =>
+                p ? ((p.full_name && p.full_name.trim()) || [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null) : null;
+            const primaryPersonContactP = (async (): Promise<Record<string, unknown>> => {
+                const patch: Record<string, unknown> = {};
+                if (opp.primary_person_id) {
+                    const { data: person } = await supabase
+                        .from("persons")
+                        .select("id, first_name, last_name, full_name, email, phone")
+                        .eq("id", opp.primary_person_id)
+                        .eq("org_id", orgId)
+                        .maybeSingle();
+                    const p = person as {
+                        id: string;
+                        first_name?: string | null;
+                        last_name?: string | null;
+                        full_name?: string | null;
+                        email?: string | null;
+                        phone?: string | null;
+                    } | null;
+                    patch._primary_person_id = p?.id ?? null;
+                    patch._primary_person_name = personDisplayName(p);
+                    patch._primary_person_email = trimOrNull(p?.email);
+                    patch._primary_person_phone = trimOrNull(p?.phone);
+                    patch._contact_name = patch._primary_person_name;
+                    patch._primary_contact_name = patch._primary_person_name;
+                } else if (opp.primary_contact_id) {
+                    const contact = await supabase
+                        .from("contacts")
+                        .select("first_name, last_name, person_id, email, phone")
+                        .eq("id", opp.primary_contact_id)
+                        .eq("org_id", orgId)
+                        .single();
+                    const c = contact.data;
+                    const name = c ? [c.first_name, c.last_name].filter(Boolean).join(" ") || null : null;
+                    patch._contact_name = name;
+                    patch._primary_contact_name = name;
+                    patch._primary_contact_email = trimOrNull((c as { email?: string | null } | null)?.email);
+                    patch._primary_contact_phone = trimOrNull((c as { phone?: string | null } | null)?.phone);
+                    if (c && (c as { person_id?: string | null }).person_id) {
+                        const { data: person } = await supabase
+                            .from("persons")
+                            .select("id, first_name, last_name, full_name, email, phone")
+                            .eq("id", (c as { person_id: string }).person_id)
+                            .eq("org_id", orgId)
+                            .maybeSingle();
+                        const p = person as {
+                            id: string;
+                            first_name?: string | null;
+                            last_name?: string | null;
+                            full_name?: string | null;
+                            email?: string | null;
+                            phone?: string | null;
+                        } | null;
+                        patch._primary_person_id = p?.id ?? null;
+                        patch._primary_person_name = personDisplayName(p);
+                        if (!patch._primary_contact_email && p?.email) patch._primary_contact_email = trimOrNull(p.email);
+                        if (!patch._primary_contact_phone && p?.phone) patch._primary_contact_phone = trimOrNull(p.phone);
+                    } else {
+                        patch._primary_person_id = null;
+                        patch._primary_person_name = null;
+                    }
+                } else {
+                    patch._contact_name = null;
+                    patch._primary_contact_name = null;
+                    patch._primary_person_id = null;
+                    patch._primary_person_name = null;
+                }
+                return patch;
+            })();
             const [
                 wuDeptRow,
                 customerRow,
@@ -158,6 +231,8 @@ export async function GET(
                 dprRow,
                 vertRow,
                 locRow,
+                primaryPatch,
+                opportunityDefs,
             ] = await Promise.all([
                 wuidForDept
                     ? supabase
@@ -190,6 +265,8 @@ export async function GET(
                           .eq("org_id", orgId)
                           .maybeSingle()
                     : Promise.resolve({ data: null }),
+                primaryPersonContactP,
+                opportunityDefsP,
             ]);
             markPhase("after_parallel_context_lookups");
             out._work_unit_department_id = wuidForDept
@@ -224,77 +301,9 @@ export async function GET(
                 out._location_label = null;
                 out._location_id = null;
             }
-            // Prefer primary_person_id for display; fallback to contact
-            const personDisplayName = (p: { full_name?: string | null; first_name?: string | null; last_name?: string | null } | null) =>
-                p ? ((p.full_name && p.full_name.trim()) || [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null) : null;
-            if (opp.primary_person_id) {
-                const { data: person } = await supabase
-                    .from("persons")
-                    .select("id, first_name, last_name, full_name, email, phone")
-                    .eq("id", opp.primary_person_id)
-                    .eq("org_id", orgId)
-                    .maybeSingle();
-                const p = person as {
-                    id: string;
-                    first_name?: string | null;
-                    last_name?: string | null;
-                    full_name?: string | null;
-                    email?: string | null;
-                    phone?: string | null;
-                } | null;
-                out._primary_person_id = p?.id ?? null;
-                out._primary_person_name = personDisplayName(p);
-                out._primary_person_email = trimOrNull(p?.email);
-                out._primary_person_phone = trimOrNull(p?.phone);
-                out._contact_name = out._primary_person_name;
-                out._primary_contact_name = out._primary_person_name;
-            } else if (opp.primary_contact_id) {
-                const contact = await supabase
-                    .from("contacts")
-                    .select("first_name, last_name, person_id, email, phone")
-                    .eq("id", opp.primary_contact_id)
-                    .eq("org_id", orgId)
-                    .single();
-                const c = contact.data;
-                const name = c ? [c.first_name, c.last_name].filter(Boolean).join(" ") || null : null;
-                out._contact_name = name;
-                out._primary_contact_name = name;
-                out._primary_contact_email = trimOrNull((c as { email?: string | null } | null)?.email);
-                out._primary_contact_phone = trimOrNull((c as { phone?: string | null } | null)?.phone);
-                if (c && (c as { person_id?: string | null }).person_id) {
-                    const { data: person } = await supabase
-                        .from("persons")
-                        .select("id, first_name, last_name, full_name, email, phone")
-                        .eq("id", (c as { person_id: string }).person_id)
-                        .eq("org_id", orgId)
-                        .maybeSingle();
-                    const p = person as {
-                        id: string;
-                        first_name?: string | null;
-                        last_name?: string | null;
-                        full_name?: string | null;
-                        email?: string | null;
-                        phone?: string | null;
-                    } | null;
-                    out._primary_person_id = p?.id ?? null;
-                    out._primary_person_name = personDisplayName(p);
-                    if (!out._primary_contact_email && p?.email) out._primary_contact_email = trimOrNull(p.email);
-                    if (!out._primary_contact_phone && p?.phone) out._primary_contact_phone = trimOrNull(p.phone);
-                } else {
-                    out._primary_person_id = null;
-                    out._primary_person_name = null;
-                }
-            } else {
-                out._contact_name = null;
-                out._primary_contact_name = null;
-                out._primary_person_id = null;
-                out._primary_person_name = null;
-            }
+            Object.assign(out, primaryPatch);
             markPhase("after_primary_person_contact");
-            const oppOrgId = (opp as { org_id?: string }).org_id;
-            const opportunityDefs = oppOrgId
-                ? await fetchEffectiveStatusDefinitions(supabase, oppOrgId, "opportunities", { activeOnly: true })
-                : [];
+            const oppOrgId = oppOrgIdForDefs;
             const oppStatusLabelByKey = displayLabelsFromDefinitions(opportunityDefs);
             const oppLegacyStatus = (opp as { status?: string | null }).status;
             const oppSkRaw =
@@ -562,6 +571,13 @@ export async function GET(
                 ((personRows ?? []) as { id: string; first_name?: string | null; last_name?: string | null; full_name?: string | null; date_of_birth?: string | null }[]).map((p) => [p.id, p])
             );
 
+            const oppPersonsRowsP = supabase
+                .from("opportunity_persons")
+                .select("id, person_id, role_type, created_at")
+                .eq("org_id", orgId)
+                .eq("opportunity_id", id)
+                .order("created_at", { ascending: true });
+
             const tInquiry0 = Date.now();
             const ocmMemberStatusDefs = await ocmMemberStatusDefsP;
             const ocmStatusLabelByKey = displayLabelsFromDefinitions(ocmMemberStatusDefs);
@@ -572,7 +588,10 @@ export async function GET(
                 if (desiredProgramType) optionPairs.push({ setKey: "childcare_program_type", itemKey: desiredProgramType });
                 if (desiredScheduleType) optionPairs.push({ setKey: "childcare_schedule_type", itemKey: desiredScheduleType });
             }
-            const optionLabelMap = await batchOptionItemLabelsForOrg(supabase, orgId, optionPairs);
+            const [optionLabelMap, oppPersonsListRes] = await Promise.all([
+                batchOptionItemLabelsForOrg(supabase, orgId, optionPairs),
+                oppPersonsRowsP,
+            ]);
             const inquiryBatchMs = Date.now() - tInquiry0;
 
             const inquiryChildren = jrows.map((r) => {
@@ -696,12 +715,7 @@ export async function GET(
             markPhase("after_inquiry_children_resolved");
 
             {
-                const { data: opRows } = await supabase
-                    .from("opportunity_persons")
-                    .select("id, person_id, role_type, created_at")
-                    .eq("org_id", orgId)
-                    .eq("opportunity_id", id)
-                    .order("created_at", { ascending: true });
+                const opRows = oppPersonsListRes.data;
                 const personIdsForOpp = [
                     ...new Set(((opRows ?? []) as { person_id: string }[]).map((z) => z.person_id).filter(Boolean)),
                 ] as string[];
