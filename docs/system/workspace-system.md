@@ -35,6 +35,19 @@ All authoritative reads must come from:
 
 **Never:** Queue → execute logic directly.
 
+## Opportunity CRM compact previews — child vs program (doctrine)
+
+Work-unit **CRM compact** queue rows show **Child** and **Program** columns using enriched preview fields, not raw opportunity rows alone.
+
+- **Opportunity** = lifecycle / sales process (status, work unit, inquiry timing).
+- **Customer** = household / account (`customers`).
+- **Child roster** = **`customer_members`** for the same **`customer_id`**, filtered **`relationship = 'child'`** and **`is_active = true`**.
+- **`QueueService.enrichOpportunityRows`** (`web/lib/queues/QueueService.ts`) loads those members, builds **`_crm_compact_children`** (one line per child: display name or first+last, age from DOB, optional `persons.date_of_birth` when linked), and repeats **`metadata.program_label`** on each line for the Program column until child-specific programs exist elsewhere.
+- **Do not** treat **`opportunities.metadata`** as the source of truth for child names or DOB; it may hold **inquiry-only** attributes (e.g. program interest, tour dates, desired start). Duplicating household child identity into metadata is discouraged.
+- Preview rows remain **non-authoritative** (see **[Queue truth boundary](#queue-truth-boundary-critical-rule)**): enrichment may **read** canonical tables to render lanes, but the queue list is still not the system of record.
+
+**UI path:** Work-unit pages consume **`_crm_compact_children`** via **`buildWorkUnitQueueCrmCompactRowSlice`** (`web/lib/ui-v2/crmQueueRowPreviewPresentation.ts`) and `QueueBlock` fact columns.
+
 ## Current state
 
 - Routes under **`web/app/adminV2/`** compose the shell (`AdminV2Shell.tsx`) with workspace navigation and embedded perf overlay.
@@ -74,4 +87,4 @@ All authoritative reads must come from:
 
 ## When this doc must be updated
 
-When `queue_definition` schema version changes, department routing changes, or perf overlay contract.
+When `queue_definition` schema version changes, department routing changes, perf overlay contract changes, or **CRM compact child/program enrichment** rules change.

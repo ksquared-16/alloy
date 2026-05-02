@@ -31,6 +31,7 @@ Config surfaces include (non-exhaustive):
 
 ## Guardrails
 
+- **Opportunity `metadata`:** Treat it as **inquiry / enrollment context** (program interest, tour, desired start, notes, structured inquiry payloads), **not** as the canonical store for **household child identity**. Child names and DOB for queue previews must be enriched from **`customer_members`** via **`opportunities.customer_id`** (see **`docs/system/workspace-system.md`** and **`docs/system/entity-model.md`**). Do not add new features that **require** child names to live only in metadata.
 - **Do not** encode one-off business rules only in config if other orgs would break — platform must validate.
 - **Do not** hardcode strings/keys in UI that should be driven by status definitions or layout config when those systems already apply.
 - **Do** extend schema/version when changing queue or layout shape with migration + validation.
@@ -42,4 +43,4 @@ Config surfaces include (non-exhaustive):
 
 ## When this doc must be updated
 
-New config tables, new schema versions, or when elevating a concern from code → config or vice versa.
+New config tables, new schema versions, when elevating a concern from code → config or vice versa, or when **policy for what may live in opportunity JSON metadata** changes.

@@ -1,5 +1,5 @@
 /**
- * On-screen perf overlay uses `window.__alloyPerf` (see AdminV2PerfOverlay).
+ * Client timing marks on `window.__alloyPerf` for debugging (no default UI; use DevTools / Performance).
  * Active in development or when overlay is explicitly enabled (URL / localStorage).
  */
 

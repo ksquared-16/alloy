@@ -1,6 +1,7 @@
 /**
- * CRM compact queue row — presentation only. Sources: queue enrichment fields + `row_preview` gates/labels.
- * @see docs/architecture/workspace-work-unit-scope-doctrine.md (work-unit queue record row doctrine)
+ * CRM compact queue row — presentation only. Sources: queue enrichment (`_crm_compact_children`, contact fields)
+ * and `row_preview` gates/labels. For opportunity work-unit queues, child lines are enriched from
+ * `customer_members` (see `QueueService.enrichOpportunityRows`); program text from `metadata.program_label`.
  */
 
 import type {
@@ -94,22 +95,20 @@ export function parseQueueRowCrmChildrenStructured(raw: unknown): CrmCompactChil
                 ? o.secondary.trim()
                 : typeof o.detail === "string"
                   ? o.detail.trim()
-                  : null;
+                  : typeof o.program_inline === "string"
+                    ? o.program_inline.trim()
+                    : typeof o.programInline === "string"
+                      ? o.programInline.trim()
+                      : null;
         out.push({ primary, secondary: secondary || null });
     }
     return out;
 }
 
-/** `_child_display_name` from enrichment, else `metadata.child_name` (queue preview may omit structured children). */
+/** `_child_display_name` from queue enrichment (`customer_members`–backed in opportunity queues). */
 export function extractCrmChildDisplayLineFromQueueRow(row: Record<string, unknown>): string {
     const a = typeof row._child_display_name === "string" ? row._child_display_name.trim() : "";
-    if (a) return a;
-    const md = row.metadata;
-    if (md && typeof md === "object" && md !== null && "child_name" in md) {
-        const cn = (md as { child_name?: unknown }).child_name;
-        if (typeof cn === "string" && cn.trim()) return cn.trim();
-    }
-    return "";
+    return a;
 }
 
 /**
@@ -148,7 +147,7 @@ export function devWarnIfCrmCompactChildMissingWithProgramDev(
     if (hasChild) return;
     const rid = typeof row.id === "string" ? row.id : "?";
     console.warn(
-        "[crm-compact][dev] Child column empty while Program has text — check `_child_display_name`, `metadata.child_name`, `_crm_compact_children`.",
+        "[crm-compact][dev] Child column empty while Program has text — check `_child_display_name`, `customer_members` children, `_crm_compact_children`.",
         { rowId: rid }
     );
 }

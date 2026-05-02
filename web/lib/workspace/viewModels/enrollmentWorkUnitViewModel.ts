@@ -28,7 +28,7 @@ type OppRow = WorkspaceOpportunityQueueRuntime["items"][number];
  * (no persons.children join, no messaging routes). Used for docs + future payload work.
  */
 export const ENROLLMENT_CRM_QUEUE_PAYLOAD_GAPS = [
-    "structured multi-child CRM rows use `_crm_compact_children[]` (+ optional `_child_display_name` for single-child fallback) from queue enrichment.",
+    "structured multi-child CRM rows use `_crm_compact_children[]` from queue enrichment (household children from `customer_members`, not opportunity metadata).",
     "dedicated_sms_action (no SMS/comms API route wired from workspace queue)",
     "in_app_message_action (no threaded message UI route from workspace row)",
 ] as const;

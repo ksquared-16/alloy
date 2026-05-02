@@ -113,12 +113,15 @@ describe("buildCrmCompactWorkUnitFactGroups (child columns)", () => {
 });
 
 describe("buildWorkUnitQueueCrmCompactRowSlice (work-unit page path)", () => {
-    it("fills Child from metadata.child_name when structured children are absent", () => {
+    it("uses _crm_compact_children from enrichment (customer_members–backed) when present", () => {
         const slice = buildWorkUnitQueueCrmCompactRowSlice(
             {
                 id: "wu-row-1",
                 _requested_program: "Young Toddler (12–24 mo)",
-                metadata: { child_name: "Case Stale (2y)" },
+                _child_display_name: "Case Stale (2y)",
+                _crm_compact_children: [
+                    { primary: "Case Stale (2y)", secondary: "Young Toddler (12–24 mo)" },
+                ],
             },
             wantAll,
             null

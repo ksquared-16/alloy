@@ -5,28 +5,34 @@ import type { KPIVm } from "@/lib/ui-v2/workspace-types";
 
 const PLACEHOLDER_CELLS = 5;
 
-/** Same cell geometry as live KPI strip — reserved from first paint; crossfades to values when `placeholderPending` clears. */
+/**
+ * Loading strip uses the same orientation flex geometry as `KPIBlock`; cells are styled via
+ * `.adminv2-ws-kpi-strip--premium-loading` (muted surfaces, gentle pulse — no dashed debug chrome).
+ */
 function KpiOrientationPlaceholderStrip() {
     return (
         <div className="adminv2-ws-kpi-root-band adminv2-ws-kpi-root-band--compact" aria-hidden>
-            <div className="adminv2-ws-kpi-strip adminv2-ws-kpi-strip--orientation" role="presentation">
+            <div
+                className="adminv2-ws-kpi-strip adminv2-ws-kpi-strip--orientation adminv2-ws-kpi-strip--premium-loading"
+                role="presentation"
+            >
                 {Array.from({ length: PLACEHOLDER_CELLS }, (_, i) => (
                     <div
                         key={i}
                         className={[
                             "adminv2-ws-kpi-cell",
                             "adminv2-ws-kpi-cell--orientation",
-                            "adminv2-ws-kpi-cell--placeholder",
-                            i >= 3 ? "adminv2-ws-kpi-cell--lane-ai" : "",
+                            "adminv2-ws-kpi-orient-loading-cell",
+                            i >= 3 ? "adminv2-ws-kpi-orient-loading-cell--ai" : "",
                         ]
                             .filter(Boolean)
                             .join(" ")}
                     >
-                        <span className="adminv2-ws-kpi-label">
-                            <span className="adminv2-shimmer-bar inline-block h-2 w-[3.25rem] max-w-[92%] rounded bg-alloy-stone/22" />
+                        <span className="adminv2-ws-kpi-label adminv2-ws-kpi-orient-loading-label">
+                            <span className="adminv2-ws-kpi-orient-loading-bar adminv2-ws-kpi-orient-loading-bar--label" />
                         </span>
-                        <span className="adminv2-ws-kpi-value adminv2-ws-kpi-value--placeholder">
-                            <span className="adminv2-shimmer-bar inline-block h-[1.05rem] w-10 max-w-[90%] rounded bg-alloy-stone/28" />
+                        <span className="adminv2-ws-kpi-value">
+                            <span className="adminv2-ws-kpi-orient-loading-bar adminv2-ws-kpi-orient-loading-bar--value" />
                         </span>
                     </div>
                 ))}

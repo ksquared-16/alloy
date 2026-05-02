@@ -49,7 +49,7 @@ Workspace navigation context for queues: **`docs/system/workspace-system.md`**.
 
 1. **Drawer URL construction:** `buildAdminEntityFetchUrl` in `AdminEntityDrawer.tsx` uses `/api/admin/entity/jobs/:id?surface=...` and opportunities with `surface` when applicable; other types use the generic pattern.
 2. **Resolver:** RRS composes pricing, payments, relationships, and presentation helpers depending on surface; errors return 404/500 with structured messages.
-3. **Queue lists:** `QueueService` builds **preview** projections (allowlisted columns, sorting, filters) for jobs/opportunities/etc. — optimized for lane triage, not full record authority.
+3. **Queue lists:** `QueueService` builds **preview** projections (allowlisted columns, sorting, filters) for jobs/opportunities/etc. — optimized for lane triage, not full record authority. For opportunity **CRM compact** lanes, child display lines may be **enriched from `customer_members`** while remaining preview-only (see **`docs/system/workspace-system.md`**).
 
 ## Source of truth / key files
 
@@ -76,4 +76,4 @@ Workspace navigation context for queues: **`docs/system/workspace-system.md`**.
 
 ## When this doc must be updated
 
-When a new entity gains RRS, surfaces change, or queue preview fields gain/lose parity with resolver output.
+When a new entity gains RRS, surfaces change, queue preview fields gain/lose parity with resolver output, or **opportunity queue enrichment** sources for CRM compact change.

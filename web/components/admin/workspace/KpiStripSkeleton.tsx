@@ -1,6 +1,10 @@
 "use client";
 
-/** Non-numeric placeholder for deferred KPI placements (Phase 3 — avoids flicker vs baseline). */
+const CELLS = 5;
+
+/**
+ * Deferred KPI placements — same row geometry as the live orientation strip (`premium-loading` cells).
+ */
 export function KpiStripSkeleton({ id = "kpi-strip-skeleton" }: { id?: string }) {
     return (
         <div
@@ -9,11 +13,28 @@ export function KpiStripSkeleton({ id = "kpi-strip-skeleton" }: { id?: string })
             aria-busy="true"
             aria-label="Loading key metrics"
         >
-            <div className="adminv2-ws-kpi-strip adminv2-ws-kpi-strip--orientation flex flex-wrap gap-4" role="presentation">
-                {[1, 2, 3, 4].map((i) => (
-                    <div key={i} className="flex min-w-[4.5rem] flex-col gap-1.5">
-                        <div className="h-2.5 w-14 animate-pulse rounded bg-alloy-stone/20" />
-                        <div className="h-5 w-10 animate-pulse rounded bg-alloy-stone/25" />
+            <div
+                className="adminv2-ws-kpi-strip adminv2-ws-kpi-strip--orientation adminv2-ws-kpi-strip--premium-loading"
+                role="presentation"
+            >
+                {Array.from({ length: CELLS }, (_, i) => (
+                    <div
+                        key={i}
+                        className={[
+                            "adminv2-ws-kpi-cell",
+                            "adminv2-ws-kpi-cell--orientation",
+                            "adminv2-ws-kpi-orient-loading-cell",
+                            i >= 3 ? "adminv2-ws-kpi-orient-loading-cell--ai" : "",
+                        ]
+                            .filter(Boolean)
+                            .join(" ")}
+                    >
+                        <span className="adminv2-ws-kpi-label adminv2-ws-kpi-orient-loading-label">
+                            <span className="adminv2-ws-kpi-orient-loading-bar adminv2-ws-kpi-orient-loading-bar--label" />
+                        </span>
+                        <span className="adminv2-ws-kpi-value">
+                            <span className="adminv2-ws-kpi-orient-loading-bar adminv2-ws-kpi-orient-loading-bar--value" />
+                        </span>
                     </div>
                 ))}
             </div>
