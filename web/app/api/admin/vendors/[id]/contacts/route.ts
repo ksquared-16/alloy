@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAuthCached, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth";
+import { emitEvent } from "@/lib/emitEvent";
 
 /** POST: link a contact to this vendor (add to vendor_contacts). Body: { contact_id, role? } */
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -46,6 +47,22 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
             actor_user_id: auth.user.id,
             role: auth.role,
         });
+        try {
+            await emitEvent({
+                org_id: ctx.orgId,
+                event_type: "vendor_contact_linked",
+                entity_type: "vendors",
+                entity_id: vendorId,
+                payload: {
+                    vendor_contact_id: data.id,
+                    contact_id: contactId,
+                    role,
+                    actor_user_id: auth.user.id,
+                },
+            });
+        } catch (e) {
+            console.warn("[vendor contacts POST] emitEvent", e instanceof Error ? e.message : e);
+        }
         return NextResponse.json(data);
     } catch (e: unknown) {
         console.error("[ADMIN_VENDOR_ADD_CONTACT]", e);

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { emitEvent } from "@/lib/emitEvent";
 import { normalizeEmail, normalizePhone } from "@/lib/contactNormalize";
 import { displayLabelsFromDefinitions, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 
@@ -143,6 +144,22 @@ export async function POST(request: NextRequest) {
         const supabase = createAdminClient();
         const { data, error } = await supabase.from("contacts").insert(row).select().single();
         if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+        const created = data as { id: string };
+        try {
+            await emitEvent({
+                org_id: orgId,
+                event_type: "contact_created",
+                entity_type: "contacts",
+                entity_id: created.id,
+                payload: {
+                    customer_id: row.customer_id ?? null,
+                    vendor_id: row.vendor_id ?? null,
+                    actor_user_id: ctx.userId,
+                },
+            });
+        } catch (e) {
+            console.warn("[ADMIN_POST_CONTACT] emitEvent", e instanceof Error ? e.message : e);
+        }
         return NextResponse.json(data);
     } catch (e) {
         console.error("[ADMIN_POST_CONTACT]", e);

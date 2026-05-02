@@ -40,7 +40,7 @@ Explain how **business facts** become **`workflow_events`**, trigger **workflows
 
 ## Known gaps / risks
 
-- **Needs verification:** Exhaustive list of API routes that mutate state **without** emitting events (legacy pockets).
+- **Verified (2026-05-02):** Exhaustive route/mutation inventory and **`emitEvent`** coverage — see **`docs/audits/event-integrity-audit.md`**. Remaining high-risk gaps (e.g. GL posting routes, book-v2 discount path, contact create) are listed there.
 - Workflow payload still includes **`contact`** alongside **`person`** in `executeWorkflowRun` — treat **`person`** as preferred for new payload enrichment.
 
 ## When this doc must be updated

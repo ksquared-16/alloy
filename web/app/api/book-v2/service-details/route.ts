@@ -16,6 +16,7 @@ import {
   loadSqftTiersForVertical,
   normalizeSqftKeyInput,
 } from "@/lib/book-v2/loadCleaningPricingCatalog";
+import { emitEvent } from "@/lib/emitEvent";
 
 export type ServiceDetailsBody = {
   opportunity_id: string;
@@ -188,6 +189,24 @@ export async function POST(request: NextRequest) {
     };
     await normalizeOpportunityWritePayload(supabase, oppSvcPatch, "book-v2/service-details");
     await supabase.from("opportunities").update(oppSvcPatch).eq("id", opportunityId);
+
+    try {
+      await emitEvent({
+        org_id: orgId,
+        event_type: "book_v2_service_details_saved",
+        entity_type: "opportunities",
+        entity_id: opportunityId,
+        payload: {
+          location_id: locationId,
+          saved_at: book_v2_service_property.saved_at,
+          city,
+          postal_code: postal,
+          source: "book-v2/service-details",
+        },
+      });
+    } catch (e) {
+      console.warn("[BOOK_V2_SERVICE_DETAILS] emitEvent", e instanceof Error ? e.message : e);
+    }
 
     return NextResponse.json({ ok: true, location_id: locationId });
   } catch (e) {

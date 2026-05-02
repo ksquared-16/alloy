@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { displayLabelsFromDefinitions, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
+import { emitEvent } from "@/lib/emitEvent";
 
 /** GET: list customer_members for org. Optional ?customer_id= filter. Admin + ops can read. */
 export async function GET(request: NextRequest) {
@@ -177,6 +178,23 @@ export async function POST(request: NextRequest) {
 
     if (insertErr) {
         return NextResponse.json({ error: insertErr.message }, { status: 500 });
+    }
+
+    const ins = inserted as { id: string; customer_id: string; display_name?: string | null };
+    try {
+        await emitEvent({
+            org_id: ctx.orgId,
+            event_type: "customer_member_created",
+            entity_type: "customer_members",
+            entity_id: ins.id,
+            payload: {
+                customer_id: ins.customer_id,
+                display_name: ins.display_name ?? null,
+                actor_user_id: ctx.userId,
+            },
+        });
+    } catch (e) {
+        console.warn("[customer-members POST] emitEvent", e instanceof Error ? e.message : e);
     }
 
     return NextResponse.json(inserted);

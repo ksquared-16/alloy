@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { emitEvent } from "@/lib/emitEvent";
 
 export const dynamic = "force-dynamic";
 
@@ -85,6 +86,18 @@ export async function POST(request: NextRequest) {
 
     if (insertErr) {
         return NextResponse.json({ error: insertErr.message }, { status: 500 });
+    }
+    const row = inserted as { id: string; code: string; name: string };
+    try {
+        await emitEvent({
+            org_id: orgId,
+            event_type: "gl_account_created",
+            entity_type: "gl_accounts",
+            entity_id: row.id,
+            payload: { code: row.code, name: row.name, actor_user_id: ctx.userId },
+        });
+    } catch (e) {
+        console.warn("[gl_accounts POST] emitEvent", e instanceof Error ? e.message : e);
     }
     return NextResponse.json(inserted);
 }

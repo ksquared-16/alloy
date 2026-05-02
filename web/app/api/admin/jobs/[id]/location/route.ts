@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
+import { emitEvent } from "@/lib/emitEvent";
 
 /** PATCH: set job location. Admin only. */
 export async function PATCH(
@@ -86,6 +87,21 @@ export async function PATCH(
         actor_user_id: ctx.userId,
         role: ctx.role,
     });
+
+    try {
+        await emitEvent({
+            org_id: ctx.orgId,
+            event_type: "job_location_updated",
+            entity_type: "jobs",
+            entity_id: id,
+            payload: {
+                location_id,
+                actor_user_id: ctx.userId,
+            },
+        });
+    } catch (e) {
+        console.warn("[jobs/location] emitEvent", e instanceof Error ? e.message : e);
+    }
 
     return NextResponse.json({
         id: (updated as { id: string }).id,

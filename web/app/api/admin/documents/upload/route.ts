@@ -14,6 +14,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { normalizeDocumentRow } from "@/lib/admin/normalizeDocumentRow";
 import { classifySupabaseStorageError } from "@/lib/admin/storageDocumentErrors";
+import { emitEvent } from "@/lib/emitEvent";
 
 export const DEFAULT_ORG_DOCUMENTS_BUCKET = "org_documents";
 
@@ -189,5 +190,23 @@ export async function POST(request: NextRequest) {
     }
 
     const document = normalizeDocumentRow(row as Record<string, unknown>);
+    const docId = (row as { id: string }).id;
+    try {
+        await emitEvent({
+            org_id: ctx.orgId,
+            event_type: "document_uploaded",
+            entity_type: "documents",
+            entity_id: docId,
+            payload: {
+                canonical_entity_type: canonicalType,
+                entity_id: entityId,
+                doc_type: docType,
+                storage_path: storagePath,
+                actor_user_id: ctx.userId,
+            },
+        });
+    } catch (e) {
+        console.warn("[documents/upload] emitEvent", e instanceof Error ? e.message : e);
+    }
     return NextResponse.json({ document, raw: row });
 }

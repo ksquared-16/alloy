@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ensureCustomerForPersonNative } from "@/lib/bookingPersonCustomerResolve";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
+import { emitEvent } from "@/lib/emitEvent";
 
 /**
  * POST /api/book-v2/ensure-customer
@@ -34,6 +35,19 @@ export async function POST(request: NextRequest) {
         });
         const durationMs = Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - t0);
         console.log(`[BOOK_V2_PERF] ensure_customer total_ms=${durationMs} person_id=${String(person_id).slice(0, 8)}…`);
+        if (orgId) {
+            try {
+                await emitEvent({
+                    org_id: orgId,
+                    event_type: "customer_ensured_for_booking",
+                    entity_type: "customers",
+                    entity_id: customer_id,
+                    payload: { person_id: person_id.trim(), source: "book-v2/ensure-customer" },
+                });
+            } catch (e) {
+                console.warn("[BOOK_V2_ENSURE_CUSTOMER] emitEvent", e instanceof Error ? e.message : e);
+            }
+        }
         return NextResponse.json({
             ok: true,
             customer_id,
