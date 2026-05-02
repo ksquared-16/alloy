@@ -4,6 +4,8 @@
 
 Explain how **business facts** become **`workflow_events`**, trigger **workflows**, and drive **effects** — and how **admin actions** fit in.
 
+**Terminology:** **Admin action** refers to UI/system-triggered admin operations; **workflow action** refers to an ordered step executed inside workflow runs. Disambiguation of terms: **`docs/core/glossary.md`**.
+
 ## Current state
 
 - **`emitEvent`** (`web/lib/emitEvent.ts`) inserts into **`workflow_events`** (server-only, canonical layer).

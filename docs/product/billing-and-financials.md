@@ -15,7 +15,7 @@ Capture **payments**, **Stripe** linkage, and job pricing surfaces as they exist
 
 - Job drawer shows computed totals via helpers (`computeJobDisplayTotalCents` etc. in admin entity route).
 - Payment capture routes (e.g. payment-collect-context) assemble Stripe context for UI.
-- Financial mutations should eventually reflect in events/workflows where the product uses them — **Needs verification** per route.
+- **Not fully verified:** Per financial mutation route, whether events are emitted or workflows run where the product expects that pattern.
 
 ## Source of truth / key files
 

@@ -6,7 +6,7 @@ Rules that keep `docs/` aligned with code so Cursor/GPT context stays trustworth
 
 ## Current state
 
-Active docs are **19** `.md` files total (`README.md` plus 18 topic files — see `docs/README.md`). Historical material lives under **`docs/archive/2026-05-02-docs-reset/`**. **`docs/sprints/`** is exempt from archive passes.
+Active docs are **19** `.md` files total (`README.md` plus 18 topic files — see `docs/README.md`). **Keep the active documentation set at 19 `.md` files unless intentionally approved.** That count **includes** `docs/README.md` and **excludes** `docs/sprints/**` and `docs/archive/**`. Historical material lives under **`docs/archive/2026-05-02-docs-reset/`**. **`docs/sprints/`** is exempt from archive passes.
 
 ## How it works
 
@@ -35,7 +35,7 @@ must update the **matching topic file** in `docs/core`, `docs/system`, `docs/pro
 
 ## Anti-patterns
 
-- Creating a new markdown file for every feature (**forbidden** unless the topic cannot fit any existing file — then update `docs/README.md` load order and seek intentional approval to exceed twenty topics).
+- Creating a new markdown file for every feature (**forbidden** unless the topic cannot fit any existing file — then update `docs/README.md` load order and seek intentional approval to go beyond **19** active `.md` files).
 - Writing aspirational architecture that is not reflected in `web/` or `supabase/`.
 - Duplicating long specifications that belong in archived materials — link to archive path if historical context helps.
 
@@ -63,4 +63,4 @@ This doctrine file is **normative** for Alloy contributors using this repo.
 
 ## When this doc must be updated
 
-Process changes (e.g. new required section in every doc), or intentional expansion of the active doc set beyond twenty topics.
+Process changes (e.g. new required section in every doc), or intentional expansion of the active doc set beyond **19** `.md` files.

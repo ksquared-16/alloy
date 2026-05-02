@@ -2,6 +2,8 @@
 
 **Purpose:** Single compact source of truth for Cursor, GPT, and engineers. Prefer these files over chat memory or archived material under `docs/archive/`.
 
+For any merge that changes behavior, include `docs/execution/documentation-doctrine.md` in context.
+
 ## Load order for AI / onboarding
 
 1. **`core/system-overview.md`** — Multi-tenant model, event/workflow spine, org scope, principles (including person vs contact).
