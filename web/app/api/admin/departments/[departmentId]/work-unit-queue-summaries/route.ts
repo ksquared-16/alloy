@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
-import { getDepartmentWorkUnitQueueSummaries, QueueServiceError } from "@/lib/queues/QueueService";
+import { getDepartmentWorkUnitQueueSummaries, QueueServiceError, type QueueSummaryRequestMode } from "@/lib/queues/QueueService";
 
 function parseLimit(searchParams: URLSearchParams): number | undefined {
     const raw = (searchParams.get("limit") ?? "").trim();
@@ -31,6 +31,29 @@ function parseCountMode(searchParams: URLSearchParams): "exact" | "planned" | un
     throw new QueueServiceError("count_mode must be exact or planned", 400, "VALIDATION_FAILED");
 }
 
+/** Default `priority` when absent — department cards defer non-primary tab exact counts. */
+function parseDepartmentSummaryMode(searchParams: URLSearchParams): QueueSummaryRequestMode {
+    const raw = (searchParams.get("summary_mode") ?? "").trim().toLowerCase();
+    if (!raw || raw === "priority" || raw === "initial") return "priority";
+    if (raw === "all") return "all";
+    if (raw === "partial") {
+        throw new QueueServiceError("summary_mode=partial is not supported for department work-unit summaries", 400, "VALIDATION_FAILED");
+    }
+    throw new QueueServiceError("summary_mode must be all, initial, priority, or partial", 400, "VALIDATION_FAILED");
+}
+
+function parseFocusQueue(searchParams: URLSearchParams): string | null {
+    return (searchParams.get("focus_queue") ?? "").trim() || null;
+}
+
+function parsePriorityBudget(searchParams: URLSearchParams): number | undefined {
+    const raw = (searchParams.get("priority_budget") ?? "").trim();
+    if (!raw) return undefined;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) throw new QueueServiceError("priority_budget must be a number", 400, "VALIDATION_FAILED");
+    return Math.min(Math.max(1, Math.floor(n)), 20);
+}
+
 /** GET — Batch queue summaries for all work units in a department. */
 export async function GET(request: NextRequest, context: { params: Promise<{ departmentId: string }> }) {
     const ctx = await getAdminContextCached();
@@ -51,6 +74,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ dep
         const workUnitConcurrency = parseWuConcurrency(request.nextUrl.searchParams);
         const includePreviews = request.nextUrl.searchParams.get("include_previews") !== "false";
         const countAccuracy = parseCountMode(request.nextUrl.searchParams);
+        const summaryMode = parseDepartmentSummaryMode(request.nextUrl.searchParams);
+        const focusQueueKey = parseFocusQueue(request.nextUrl.searchParams);
+        const priorityBudget = parsePriorityBudget(request.nextUrl.searchParams);
         const payload = await getDepartmentWorkUnitQueueSummaries({
             orgId: ctx.orgId,
             departmentId,
@@ -58,6 +84,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ dep
             workUnitConcurrency,
             includePreviews,
             countAccuracy,
+            summaryMode,
+            focusQueueKey,
+            priorityBudget,
         });
         const ms = Date.now() - t0;
         if (ms > 400) {
@@ -67,6 +96,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ dep
                 work_units: payload.work_units.length,
                 include_previews: request.nextUrl.searchParams.get("include_previews") !== "false",
                 count_mode: request.nextUrl.searchParams.get("count_mode") || "exact",
+                summary_mode: summaryMode,
             });
         }
         return NextResponse.json(payload);

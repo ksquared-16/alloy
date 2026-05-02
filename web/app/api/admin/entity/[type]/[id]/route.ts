@@ -425,20 +425,36 @@ export async function GET(
             const householdLabel = trimOrNull(out._customer_name) ?? rel.customer_id?.label ?? null;
             const householdId = typeof opp.customer_id === "string" && opp.customer_id.trim() ? opp.customer_id.trim() : null;
 
-            // Primary guardian/person role label (from customer_persons.role_type -> role_types.label) when possible.
-            let personRoleKey: string | null = null;
-            let personRoleLabel: string | null = null;
-            if (householdId && typeof opp.primary_person_id === "string" && opp.primary_person_id.trim()) {
-                const pid = opp.primary_person_id.trim();
-                const rr = await resolveCustomerPersonRole(supabase, { orgId, customerId: householdId, personId: pid });
-                personRoleKey = rr.role_key;
-                personRoleLabel = rr.role_label;
-            }
+            // Canonical identity + OCM join header (parallelized round-trips).
+            const oppDefaultProgramType = trimOrNull(out.program_type);
+            const oppDefaultScheduleType = trimOrNull(out.schedule_type);
 
-            // Primary contact role label (same role system; derived via contact.person_id when available).
-            let contactRoleKey: string | null = null;
-            let contactRoleLabel: string | null = null;
-            if (householdId && typeof opp.primary_contact_id === "string" && opp.primary_contact_id.trim()) {
+            const ocmMemberStatusDefsP = fetchEffectiveStatusDefinitions(supabase, orgId, "opportunity_customer_members", {
+                activeOnly: true,
+            });
+
+            const ocmJoinP = supabase
+                .from("opportunity_customer_members")
+                .select(
+                    "id, customer_member_id, desired_program_type, desired_schedule_type, outcome_status_key, fit_status, notes, metadata, created_at, updated_at"
+                )
+                .eq("org_id", orgId)
+                .eq("opportunity_id", id)
+                .order("created_at", { ascending: true });
+
+            const primaryPersonRoleP =
+                householdId && typeof opp.primary_person_id === "string" && opp.primary_person_id.trim()
+                    ? resolveCustomerPersonRole(supabase, {
+                          orgId,
+                          customerId: householdId,
+                          personId: opp.primary_person_id.trim(),
+                      })
+                    : Promise.resolve({ role_key: null as string | null, role_label: null as string | null });
+
+            const contactRoleP = (async (): Promise<{ contactRoleKey: string | null; contactRoleLabel: string | null }> => {
+                if (!householdId || typeof opp.primary_contact_id !== "string" || !opp.primary_contact_id.trim()) {
+                    return { contactRoleKey: null, contactRoleLabel: null };
+                }
                 const { data: cRow } = await supabase
                     .from("contacts")
                     .select("person_id")
@@ -446,24 +462,37 @@ export async function GET(
                     .eq("org_id", orgId)
                     .maybeSingle();
                 const pid = trimOrNull((cRow as { person_id?: string | null } | null)?.person_id);
-                if (pid) {
-                    const rr = await resolveCustomerPersonRole(supabase, { orgId, customerId: householdId, personId: pid });
-                    contactRoleKey = rr.role_key;
-                    contactRoleLabel = rr.role_label;
-                }
-            }
+                if (!pid) return { contactRoleKey: null, contactRoleLabel: null };
+                const rr = await resolveCustomerPersonRole(supabase, { orgId, customerId: householdId, personId: pid });
+                return { contactRoleKey: rr.role_key, contactRoleLabel: rr.role_label };
+            })();
 
-            // Primary child (from customer_members; pick the first "child-like" relationship, else first member).
-            let child: { id: string; display_name: string; relationship?: string | null; relationship_label?: string | null; dob?: string | null } | null = null;
-            if (householdId) {
-                const { data: cms } = await supabase
-                    .from("customer_members")
-                    .select("id, display_name, relationship, dob")
-                    .eq("org_id", orgId)
-                    .eq("customer_id", householdId)
-                    .eq("is_active", true)
-                    .limit(25);
-                const rows = (cms ?? []) as { id: string; display_name: string; relationship?: string | null; dob?: string | null }[];
+            const customerMembersP = householdId
+                ? supabase
+                      .from("customer_members")
+                      .select("id, display_name, relationship, dob")
+                      .eq("org_id", orgId)
+                      .eq("customer_id", householdId)
+                      .eq("is_active", true)
+                      .limit(25)
+                : Promise.resolve({ data: [] as { id: string; display_name: string; relationship?: string | null; dob?: string | null }[] });
+
+            const [personRR, contactRR, cmsRes, joinRes] = await Promise.all([
+                primaryPersonRoleP,
+                contactRoleP,
+                customerMembersP,
+                ocmJoinP,
+            ]);
+
+            const personRoleKey = personRR.role_key;
+            const personRoleLabel = personRR.role_label;
+            const contactRoleKey = contactRR.contactRoleKey;
+            const contactRoleLabel = contactRR.contactRoleLabel;
+
+            let child: { id: string; display_name: string; relationship?: string | null; relationship_label?: string | null; dob?: string | null } | null =
+                null;
+            if (householdId && cmsRes.data) {
+                const rows = (cmsRes.data ?? []) as { id: string; display_name: string; relationship?: string | null; dob?: string | null }[];
                 const pick =
                     rows.find((r) => ["child", "dependent", "student"].includes(String(r.relationship ?? "").trim().toLowerCase())) ??
                     rows[0] ??
@@ -490,19 +519,8 @@ export async function GET(
                 }
             }
 
-            // -----------------------------------------------------------------
-            // Child links for this inquiry (opportunity_customer_members)
-            // -----------------------------------------------------------------
-            // This is the canonical “which siblings are included in this inquiry?” relationship.
-            // desired_program_type / desired_schedule_type may override opportunity-level defaults (when null, inherit).
-            const oppDefaultProgramType = trimOrNull(out.program_type);
-            const oppDefaultScheduleType = trimOrNull(out.schedule_type);
-            const { data: joinRows } = await supabase
-                .from("opportunity_customer_members")
-                .select("id, customer_member_id, desired_program_type, desired_schedule_type, outcome_status_key, fit_status, notes, metadata, created_at, updated_at")
-                .eq("org_id", orgId)
-                .eq("opportunity_id", id)
-                .order("created_at", { ascending: true });
+            const joinRows = joinRes.data;
+            markPhase("after_identity_parallel_fetch");
             const jrows = (joinRows ?? []) as {
                 id: string;
                 customer_member_id: string;
@@ -545,9 +563,7 @@ export async function GET(
             );
 
             const tInquiry0 = Date.now();
-            const ocmMemberStatusDefs = await fetchEffectiveStatusDefinitions(supabase, orgId, "opportunity_customer_members", {
-                activeOnly: true,
-            });
+            const ocmMemberStatusDefs = await ocmMemberStatusDefsP;
             const ocmStatusLabelByKey = displayLabelsFromDefinitions(ocmMemberStatusDefs);
             const optionPairs: { setKey: string; itemKey: string }[] = [];
             for (const r of jrows) {

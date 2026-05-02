@@ -173,7 +173,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 const init = workspaceDataFetchInit();
                 const deptRoute = `/api/admin/departments/${encodeURIComponent(departmentId)}`;
                 const wuRoute = `/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`;
-                const summariesRoute = `/api/admin/departments/${encodeURIComponent(departmentId)}/work-unit-queue-summaries?include_previews=false&count_mode=exact`;
+                const summariesRoute = `/api/admin/departments/${encodeURIComponent(departmentId)}/work-unit-queue-summaries?include_previews=false&count_mode=exact&summary_mode=priority&priority_budget=5`;
                 const [deptRes, wuRes, sumRes] = await Promise.all([
                     fetch(deptRoute, init),
                     fetch(wuRoute, init),
