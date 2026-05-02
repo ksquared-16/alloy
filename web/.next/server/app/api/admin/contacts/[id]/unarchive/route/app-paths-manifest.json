@@ -1,3 +1,0 @@
-{
-  "/api/admin/contacts/[id]/unarchive/route": "app/api/admin/contacts/[id]/unarchive/route.js"
-}

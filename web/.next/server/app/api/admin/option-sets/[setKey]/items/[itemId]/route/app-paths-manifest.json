@@ -1,3 +1,0 @@
-{
-  "/api/admin/option-sets/[setKey]/items/[itemId]/route": "app/api/admin/option-sets/[setKey]/items/[itemId]/route.js"
-}

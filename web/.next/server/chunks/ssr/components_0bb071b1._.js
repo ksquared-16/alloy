@@ -1,3 +1,0 @@
-module.exports=[53805,a=>{"use strict";var b=a.i(87924);let c=(0,a.i(72131).forwardRef)(({children:a,className:c="",maxWidth:d="xl",id:e},f)=>(0,b.jsx)("section",{ref:f,id:e,className:`w-full px-4 sm:px-6 lg:px-8 mx-auto ${{sm:"max-w-screen-sm",md:"max-w-screen-md",lg:"max-w-screen-lg",xl:"max-w-screen-xl","2xl":"max-w-screen-2xl",full:"max-w-full"}[d]} ${c}`,children:a}));c.displayName="Section",a.s(["default",0,c])},81590,a=>{"use strict";var b=a.i(87924);function c({children:a,className:c=""}){return(0,b.jsx)("div",{className:`flex w-full max-w-full flex-1 flex-col self-stretch ${c}`.trim(),children:a})}a.s(["default",()=>c])}];
-
-//# sourceMappingURL=components_0bb071b1._.js.map

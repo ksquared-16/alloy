@@ -1,3 +1,0 @@
-{
-  "/api/admin/queues/[workUnitId]/[queueKey]/route": "app/api/admin/queues/[workUnitId]/[queueKey]/route.js"
-}

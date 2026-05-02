@@ -1,3 +1,0 @@
-{
-  "/api/admin/workflow-runs/[runId]/action-runs/route": "app/api/admin/workflow-runs/[runId]/action-runs/route.js"
-}

@@ -1,7 +1,0 @@
-1:"$Sreact.fragment"
-2:"$Sreact.suspense"
-3:I[52442,["/_next/static/chunks/e588dc0ca513e94e.js","/_next/static/chunks/c67f9446a4379e7d.js","/_next/static/chunks/1a07e2d580289cc5.js","/_next/static/chunks/b42565fb11f6f376.js"],"default"]
-4:I[31552,["/_next/static/chunks/e588dc0ca513e94e.js","/_next/static/chunks/c67f9446a4379e7d.js","/_next/static/chunks/1a07e2d580289cc5.js","/_next/static/chunks/b42565fb11f6f376.js"],"default"]
-5:I[97367,["/_next/static/chunks/ff1a16fafef87110.js","/_next/static/chunks/0e8dad990bdd310e.js"],"OutletBoundary"]
-0:{"buildId":"ukUDUD_9T0XQ8UA-aZWCS","rsc":["$","$1","c",{"children":[[["$","$2",null,{"fallback":null,"children":["$","$L3",null,{}]}],["$","$2",null,{"fallback":["$","div",null,{"className":"min-h-screen py-6 md:py-10","children":["$","section",null,{"className":"w-full px-4 sm:px-6 lg:px-8 mx-auto max-w-screen-xl max-w-5xl","children":[false,["$","div",null,{"className":"bg-white rounded-2xl overflow-hidden border border-alloy-stone/20 shadow-sm p-4 md:p-6","children":["$","div",null,{"className":"min-h-[1200px] md:min-h-[900px] flex items-center justify-center","children":["$","p",null,{"className":"text-alloy-midnight/70","children":"Loading calendar..."}]}]}]]}]}],"children":["$","$L4",null,{}]}]],[["$","script","script-0",{"src":"/_next/static/chunks/b42565fb11f6f376.js","async":true}]],["$","$L5",null,{"children":["$","$2",null,{"name":"Next.MetadataOutlet","children":"$@6"}]}]]}],"loading":null,"isPartial":false}
-6:null
