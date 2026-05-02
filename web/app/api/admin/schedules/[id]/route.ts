@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 import {
     postScheduleCompletion,
@@ -32,7 +32,7 @@ export async function GET(
     _request: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
     const { id } = await context.params;
@@ -92,7 +92,7 @@ export async function PATCH(
     request: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     if (ctx.role !== "admin") {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });

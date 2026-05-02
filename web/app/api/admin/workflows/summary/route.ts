@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdminOrOps } from "@/lib/adminAuth";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 
 type WorkflowSummaryRow = {
     id: string;
@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
     const authMs = Date.now() - t0;
     if (forbidden) return forbidden;
     const t1 = Date.now();
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     const ctxMs = Date.now() - t1;
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     const orgId = ctx.orgId;

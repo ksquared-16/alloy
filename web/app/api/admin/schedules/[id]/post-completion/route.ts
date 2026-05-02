@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import {
     postScheduleCompletion,
     isPostScheduleCompletionError,
@@ -9,14 +9,14 @@ import {
 
 /**
  * POST: Post GL journal entry for a completed schedule (idempotent).
- * Auth: getAdminContext(); requires admin (canMutate).
+ * Auth: getAdminContextCached(); requires admin (canMutate).
  * Validates schedule is completed, then creates/updates gl_journal_entry + lines.
  */
 export async function POST(
     _request: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },

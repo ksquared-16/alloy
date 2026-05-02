@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { buildOpportunityLifecycleFields } from "@/lib/admin/opportunityLifecyclePresentation";
 import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import { getQueueDefinitionStoredVersion } from "@/lib/rrs/queue/queueDefinitionV1";
@@ -15,7 +15,7 @@ import { enrichOpportunityQueueRowsWithActivitySignals } from "@/lib/admin/activ
  * Server-side interpreter only; returns rows for workspace rendering.
  */
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
     const { id: workUnitId } = await context.params;

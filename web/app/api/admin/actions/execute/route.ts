@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { adminActionsOrgTag } from "@/lib/admin/actions/cacheTags";
 import { executeAdminAction } from "@/lib/admin/actions/executeAdminAction";
@@ -18,7 +18,7 @@ type ExecuteBody = {
 export async function POST(request: NextRequest) {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
     let body: ExecuteBody;

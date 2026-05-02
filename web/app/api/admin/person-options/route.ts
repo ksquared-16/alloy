@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 
 const LIMIT = 500;
 
@@ -14,7 +14,7 @@ function personLabel(p: { full_name?: string | null; first_name?: string | null;
 
 /** GET: persons for admin dropdowns (e.g. opportunity primary person). Optional customer_id narrows to persons linked to that customer. */
 export async function GET(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },

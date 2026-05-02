@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import {
     fetchLatestWorkflowEventByOpportunityId,
     getActivitySignalForEntity,
@@ -17,7 +17,7 @@ function trimOrEmpty(v: unknown): string {
  * Used by AdminEntityDrawer header; mirrors queue enrichment without N duplicate implementations.
  */
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
     const { id: opportunityId } = await context.params;

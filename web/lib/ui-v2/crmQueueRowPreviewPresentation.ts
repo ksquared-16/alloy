@@ -1,9 +1,14 @@
 /**
- * Shared CRM compact queue row presentation: structured contact + date/tour captions.
- * Driven by queue `row_preview.fields` (want()) and `row_preview.field_labels`.
+ * CRM compact queue row — presentation only. Sources: queue enrichment fields + `row_preview` gates/labels.
+ * @see docs/architecture/workspace-work-unit-scope-doctrine.md (work-unit queue record row doctrine)
  */
 
-import type { CrmCompactRowSemanticSlots } from "@/lib/ui-v2/workspace-types";
+import type {
+    CrmCompactChildLineVm,
+    CrmCompactRowSemanticSlots,
+    WorkUnitQueueCrmFactGroupVm,
+    WorkUnitQueueCrmTimingSegmentVm,
+} from "@/lib/ui-v2/workspace-types";
 import { formatDateUsShortHyphenUtc, formatPhoneUS, formatQueuePreviewTourTimingUtc } from "@/lib/adminFormatters";
 import type { QueueUiRowPreviewField } from "@/lib/ui-v2/queueUiConfig";
 import { mergeQueueRowPreviewFieldLabels } from "@/lib/ui-v2/queueUiConfig";
@@ -12,6 +17,50 @@ export function stripTourContextValuePrefix(raw: string | null | undefined): str
     const t = (raw ?? "").trim();
     if (!t) return "";
     return t.replace(/^Tour:\s*/i, "").trim() || t;
+}
+
+/** Drop redundant `· Ages …` chunks when age is already implied by the program label. */
+export function dedupeRedundantProgramAgeInPreview(text: string): string {
+    const t = text.trim();
+    if (!t) return "";
+    const parts = t
+        .split(/\s*·\s*/)
+        .map((p) => p.replace(/\s+/g, " ").trim())
+        .filter(Boolean);
+    if (parts.length < 2) return t;
+    const isAgeFragment = (p: string) => /^Ages?\s/i.test(p) || /^age\s*[:/]/i.test(p);
+    const kept: string[] = [];
+    for (const p of parts) {
+        if (!isAgeFragment(p)) {
+            kept.push(p);
+            continue;
+        }
+        const ageTail = p
+            .replace(/^Ages?\s*/i, "")
+            .replace(/\s/g, "")
+            .toLowerCase();
+        const redundant = kept.some((k) => {
+            const kn = k.replace(/\s/g, "").toLowerCase();
+            if (!ageTail || ageTail.length < 4) return false;
+            return kn.includes(ageTail) || kn.includes(ageTail.replace(/[–—-]/g, ""));
+        });
+        if (!redundant) kept.push(p);
+    }
+    return kept.length ? kept.join(" · ") : t;
+}
+
+export function refineCrmCompactChildLinesForPreview(
+    lines: CrmCompactChildLineVm[],
+    familyProgram: string | null | undefined,
+    opts: { attachFamilyWhenMissing: boolean }
+): CrmCompactChildLineVm[] {
+    const fam = (familyProgram ?? "").trim() ? dedupeRedundantProgramAgeInPreview(String(familyProgram)) : "";
+    return lines.map((line) => {
+        const sec = (line.secondary ?? "").trim() ? dedupeRedundantProgramAgeInPreview(String(line.secondary)) : "";
+        let programInline = sec || null;
+        if (!programInline && opts.attachFamilyWhenMissing && fam) programInline = fam;
+        return { ...line, programInline: programInline || null };
+    });
 }
 
 function deriveStructuredContactFromQueueRow(
@@ -87,6 +136,138 @@ function deriveStructuredContactFromQueueRow(
     };
 }
 
+/** One doctrine line: name · phone · email (row_preview gates). */
+export function buildCrmContactDotLine(
+    row: Record<string, unknown>,
+    want: (f: QueueUiRowPreviewField) => boolean
+): string | null {
+    const c = deriveStructuredContactFromQueueRow(row, want);
+    const parts: string[] = [];
+    if (want("primary_contact") && c.contactDisplayName?.trim()) parts.push(c.contactDisplayName.trim());
+    if (want("phone") && c.contactPhoneDisplay?.trim()) parts.push(c.contactPhoneDisplay.trim());
+    if (want("email") && c.contactEmail?.trim()) parts.push(c.contactEmail.trim());
+    if (parts.length) return parts.join(" · ");
+    if (c.contactSnippet?.trim()) return c.contactSnippet.trim();
+    return null;
+}
+
+function computeCrmTimingSegments(
+    row: Record<string, unknown>,
+    want: (f: QueueUiRowPreviewField) => boolean,
+    labels: Record<string, string>
+): WorkUnitQueueCrmTimingSegmentVm[] | null {
+    const wantD = want("desired_start_date");
+    const wantT = want("tour_date");
+    if (!wantD && !wantT) return null;
+
+    const desiredRaw =
+        typeof row._desired_start_date === "string" ? row._desired_start_date.trim() : "";
+    const desiredFormatted = wantD && desiredRaw ? formatDateUsShortHyphenUtc(desiredRaw) : null;
+    const desiredVal =
+        wantD && desiredFormatted && desiredFormatted !== "—" && desiredFormatted.trim()
+            ? desiredFormatted
+            : wantD
+              ? "—"
+              : "";
+
+    const tourPrimary = typeof row._tour_context === "string" ? row._tour_context.trim() : "";
+    const tourAlt = typeof row._tour_timing === "string" ? row._tour_timing.trim() : "";
+    const tourRaw = tourPrimary || tourAlt;
+    const tourStripped = tourRaw ? stripTourContextValuePrefix(tourRaw) : "";
+    const tourFormatted = wantT && tourStripped ? formatQueuePreviewTourTimingUtc(tourStripped) : "";
+    const tourVal = wantT ? (tourFormatted.trim() ? tourFormatted : "—") : "";
+
+    const segments: WorkUnitQueueCrmTimingSegmentVm[] = [];
+    if (wantD && labels.desired_start_date) {
+        segments.push({ label: `${labels.desired_start_date}:`, value: desiredVal });
+    }
+    if (wantT && labels.tour_date) {
+        segments.push({ label: `${labels.tour_date}:`, value: tourVal });
+    }
+    return segments.length ? segments : null;
+}
+
+export type BuildCrmCompactWorkUnitFactGroupsParams = {
+    row: Record<string, unknown>;
+    want: (f: QueueUiRowPreviewField) => boolean;
+    rowPreviewFieldLabels?: Record<string, string> | null;
+    childrenLines?: CrmCompactChildLineVm[] | null;
+    childNameSingle?: string | null;
+    programSingle?: string | null;
+    roomContext?: string | null;
+    ageBandContext?: string | null;
+};
+
+/**
+ * Work-unit queue record row — middle-zone fact groups (doctrine).
+ * Label above, value below; timing uses semibold field names via `timingSegments`.
+ */
+export function buildCrmCompactWorkUnitFactGroups(params: BuildCrmCompactWorkUnitFactGroupsParams): WorkUnitQueueCrmFactGroupVm[] {
+    const labels = mergeQueueRowPreviewFieldLabels(params.rowPreviewFieldLabels);
+    const { want, row } = params;
+    const out: WorkUnitQueueCrmFactGroupVm[] = [];
+
+    const contactLine = buildCrmContactDotLine(row, want);
+    if (contactLine) {
+        out.push({
+            kind: "contact",
+            label: labels.primary_contact ?? "Contact",
+            lines: [contactLine],
+        });
+    }
+
+    const childLabel = labels.children_programs ?? "Children / Programs";
+    const lines: string[] = [];
+    const multi = params.childrenLines && params.childrenLines.length >= 2;
+
+    if (want("child_name") && multi) {
+        const list = params.childrenLines!;
+        const visible = list.slice(0, 4);
+        const overflow = Math.max(0, list.length - visible.length);
+        for (const ch of visible) {
+            const prog = ch.programInline?.trim() ?? "";
+            lines.push(prog ? `${ch.primary} · ${prog}` : ch.primary);
+        }
+        if (overflow > 0) lines.push(`+${overflow} more`);
+    } else if (want("child_name") || want("program")) {
+        const name = (params.childNameSingle ?? "").trim();
+        const prog = want("program") ? (params.programSingle ?? "").trim() : "";
+        if (name && prog) lines.push(`${name} · ${prog}`);
+        else if (name) lines.push(name);
+        else if (prog) lines.push(prog);
+    }
+
+    if (lines.length) {
+        out.push({ kind: "children_programs", label: childLabel, lines });
+    }
+
+    const timingSegments = computeCrmTimingSegments(row, want, labels);
+    if (timingSegments?.length) {
+        out.push({
+            kind: "timing",
+            label: labels.timing ?? "Timing",
+            timingSegments,
+        });
+    }
+
+    if (params.roomContext?.trim()) {
+        out.push({
+            kind: "meta",
+            label: labels.room ?? "Room",
+            lines: [params.roomContext.trim()],
+        });
+    }
+    if (params.ageBandContext?.trim()) {
+        out.push({
+            kind: "meta",
+            label: labels.age_band ?? "Age band",
+            lines: [params.ageBandContext.trim()],
+        });
+    }
+
+    return out;
+}
+
 export function buildCrmQueueRowPreviewPresentation(
     row: Record<string, unknown>,
     want: (f: QueueUiRowPreviewField) => boolean,
@@ -98,11 +279,16 @@ export function buildCrmQueueRowPreviewPresentation(
     | "contactEmail"
     | "contactSnippet"
     | "desiredStartDateDisplay"
-    | "timingDesiredStartAndTourLine"
     | "ageBandContext"
     | "tourContext"
+    | "crmCompactTimingValueLine"
+    | "rowPreviewLabelTimingGroup"
+    | "crmChildrenProgramsGroupLabel"
+    | "rowPreviewLabelProgramInline"
     | "ageContext"
     | "rowPreviewLabelPrimaryContact"
+    | "rowPreviewLabelPhone"
+    | "rowPreviewLabelEmail"
     | "rowPreviewLabelDesiredStartDate"
     | "rowPreviewLabelTourDate"
     | "rowPreviewLabelAgeBand"
@@ -110,12 +296,18 @@ export function buildCrmQueueRowPreviewPresentation(
     const labels = mergeQueueRowPreviewFieldLabels(rowPreviewFieldLabels);
     const contact = deriveStructuredContactFromQueueRow(row, want);
 
+    const wantD = want("desired_start_date");
+    const wantT = want("tour_date");
+
     const desiredRaw =
         typeof row._desired_start_date === "string" ? row._desired_start_date.trim() : "";
-    const desiredFormatted =
-        want("desired_start_date") && desiredRaw ? formatDateUsShortHyphenUtc(desiredRaw) : null;
-    const desiredBad = desiredFormatted === "—" || !desiredFormatted?.trim();
-    const desiredStartDateDisplay = desiredBad ? null : desiredFormatted;
+    const desiredFormatted = wantD && desiredRaw ? formatDateUsShortHyphenUtc(desiredRaw) : null;
+    const desiredVal =
+        wantD && desiredFormatted && desiredFormatted !== "—" && desiredFormatted.trim()
+            ? desiredFormatted
+            : wantD
+              ? "—"
+              : null;
 
     const ageBandRaw = typeof row._age_band === "string" ? row._age_band.trim() : "";
     const ageBandContext = ageBandRaw || null;
@@ -124,33 +316,27 @@ export function buildCrmQueueRowPreviewPresentation(
     const tourAlt = typeof row._tour_timing === "string" ? row._tour_timing.trim() : "";
     const tourRaw = tourPrimary || tourAlt;
     const tourStripped = tourRaw ? stripTourContextValuePrefix(tourRaw) : "";
-    const tourFormatted =
-        want("tour_date") && tourStripped ? formatQueuePreviewTourTimingUtc(tourStripped) : "";
-    const tourDisplay = tourFormatted.trim() || null;
+    const tourFormatted = wantT && tourStripped ? formatQueuePreviewTourTimingUtc(tourStripped) : "";
+    const tourVal = wantT ? (tourFormatted.trim() ? tourFormatted : "—") : null;
 
-    const wantDesired = want("desired_start_date");
-    const wantTour = want("tour_date");
-    const hasDesired = Boolean(wantDesired && desiredStartDateDisplay);
-    const hasTour = Boolean(wantTour && tourDisplay);
-
-    let timingDesiredStartAndTourLine: string | null = null;
-    let desiredOut: string | null = wantDesired ? desiredStartDateDisplay : null;
-    let tourOut: string | null = wantTour ? tourDisplay : null;
-
-    if (hasDesired && hasTour && labels.desired_start_date && labels.tour_date) {
-        timingDesiredStartAndTourLine = `${labels.desired_start_date}: ${desiredOut}    •    ${labels.tour_date}: ${tourOut}`;
-        desiredOut = null;
-        tourOut = null;
-    }
+    const timingSegments = computeCrmTimingSegments(row, want, labels);
+    const crmCompactTimingValueLine = timingSegments?.length
+        ? timingSegments.map((s) => `${s.label} ${s.value}`.trim()).join(" · ")
+        : null;
 
     return {
         ...contact,
-        desiredStartDateDisplay: desiredOut,
-        timingDesiredStartAndTourLine,
+        desiredStartDateDisplay: wantD ? desiredVal : null,
         ageBandContext,
-        tourContext: tourOut,
+        tourContext: wantT ? tourVal : null,
+        crmCompactTimingValueLine,
+        rowPreviewLabelTimingGroup: labels.timing ?? null,
+        crmChildrenProgramsGroupLabel: labels.children_programs ?? null,
+        rowPreviewLabelProgramInline: labels.program_inline ?? null,
         ageContext: null,
         rowPreviewLabelPrimaryContact: labels.primary_contact ?? null,
+        rowPreviewLabelPhone: labels.phone ?? null,
+        rowPreviewLabelEmail: labels.email ?? null,
         rowPreviewLabelDesiredStartDate: labels.desired_start_date ?? null,
         rowPreviewLabelTourDate: labels.tour_date ?? null,
         rowPreviewLabelAgeBand: labels.age_band ?? null,

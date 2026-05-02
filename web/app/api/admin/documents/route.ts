@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { normalizeDocumentRow } from "@/lib/admin/normalizeDocumentRow";
 import { isV1DocumentEntityType } from "@/lib/admin/v1DocumentEntities";
 import {
@@ -130,7 +130,7 @@ async function attachRelatedLabels(
 
 /** GET: list documents for current org (admin + ops). */
 export async function GET(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     }

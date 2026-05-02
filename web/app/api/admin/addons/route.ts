@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 
 export type AddonListItem = {
     id: string;
@@ -18,7 +18,7 @@ export type AddonListItem = {
 };
 
 export async function GET(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
     const { searchParams } = new URL(request.url);
@@ -68,7 +68,7 @@ export async function GET(request: NextRequest) {
 
 /** POST: create a pricing addon. Body: addon_name, addon_key, vertical_id, amount_cents (or amount in dollars), sort_order?, is_active? */
 export async function POST(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
     let body: { addon_name?: string; addon_key?: string; vertical_id?: string | null; amount_cents?: number; amount?: number; sort_order?: number | null; is_active?: boolean };

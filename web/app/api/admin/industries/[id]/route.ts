@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 
 /** GET: single industry by id with default entity labels. Admin + ops can read. */
 export async function GET(
     _request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },

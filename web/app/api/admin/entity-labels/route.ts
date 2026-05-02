@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getOrgConfigLocked } from "@/lib/admin/getOrgConfigLocked";
 import { resolveEntityLabelsForOrg } from "@/lib/admin/entityLabelsResolve";
 
 /** GET: effective labels for org (industry defaults + overrides). Admin + ops can read. */
 export async function GET() {
     const t0 = Date.now();
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     const ctxMs = Date.now() - t0;
     if (!ctx.ok) {
         return NextResponse.json(
@@ -36,7 +36,7 @@ export async function GET() {
 
 /** PUT: upsert or clear override for one entity_type. Admin only. Blocked when config is locked. */
 export async function PUT(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
@@ -103,7 +103,7 @@ export async function PUT(request: NextRequest) {
 
 /** DELETE: remove override for entity_type. Admin only. Blocked when config is locked. */
 export async function DELETE(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },

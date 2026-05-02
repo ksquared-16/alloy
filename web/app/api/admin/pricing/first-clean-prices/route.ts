@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 
 export type FirstCleanPriceRow = {
     id: string;
@@ -20,7 +20,7 @@ export type FirstCleanPriceRow = {
 
 /** GET: list first clean prices with joined labels. Filter by vertical_id, service_offering_id (via service). */
 export async function GET(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
     const { searchParams } = new URL(request.url);
@@ -109,7 +109,7 @@ export async function GET(request: NextRequest) {
 
 /** POST: create first clean price. Body: vertical_id, service_id, sqft_tier_id, amount (dollars) or amount_cents, is_active. */
 export async function POST(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
     let body: { vertical_id?: string; service_id?: string; sqft_tier_id?: string; amount?: number; amount_cents?: number; is_active?: boolean };

@@ -1,17 +1,24 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
-import * as getAdminContext from "@/lib/admin/getAdminContext";
+
+const { mockGetAdminContext } = vi.hoisted(() => ({
+    mockGetAdminContext: vi.fn(),
+}));
 
 vi.mock("@/lib/admin/getAdminContext", async () => {
     const actual = await vi.importActual<typeof import("@/lib/admin/getAdminContext")>(
         "@/lib/admin/getAdminContext"
     );
-    return { ...actual, getAdminContext: vi.fn() };
+    return {
+        ...actual,
+        getAdminContext: mockGetAdminContext,
+        getAdminContextCached: mockGetAdminContext,
+    };
 });
 
 describe("Queue API routes (thin wrappers)", () => {
     beforeEach(() => {
-        vi.spyOn(getAdminContext, "getAdminContext").mockResolvedValue({
+        mockGetAdminContext.mockResolvedValue({
             ok: true,
             orgId: "org1",
             userId: "u1",

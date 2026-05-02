@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 
 export type PricingMatrixRow = {
     id: string;
@@ -28,7 +28,7 @@ export type PricingMatrixRow = {
 
 /** GET: list pricing_matrix rows with joined display labels (live quote base amounts for get_quote_pricing). */
 export async function GET(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
     const { searchParams } = new URL(request.url);
@@ -131,7 +131,7 @@ export async function GET(request: NextRequest) {
 
 /** POST: create a pricing_matrix row. Body: vertical_id, service_offering_id, pricing_mode_id, service_plan_template_id (optional), pricing_dimension_value_id (optional), amount or amount_cents, is_active. */
 export async function POST(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
     let body: {

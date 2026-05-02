@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { applyTenantBootstrap } from "@/lib/admin/tenantBootstrap/applyTenantBootstrap";
 import { previewTenantBootstrap } from "@/lib/admin/tenantBootstrap/previewTenantBootstrap";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
@@ -17,7 +17,7 @@ type Body = {
  * Wraps vertical-bootstrap with org/growth/scaffold intent. Apply persists structural_config only.
  */
 export async function POST(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     if (ctx.role !== "admin") {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });

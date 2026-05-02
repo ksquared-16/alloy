@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import {
     PlacementValidationError,
     validatePlacementCreateBody,
@@ -20,7 +20,7 @@ const SELECT_COLS =
  * - Otherwise — surface-scoped list for workspace KPI strips (visible only unless extended later).
  */
 export async function GET(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
     const listOrg = request.nextUrl.searchParams.get("list")?.trim() === "org";
@@ -109,7 +109,7 @@ export async function GET(request: NextRequest) {
 
 /** Create placement from registry metric keys only; **admin only**. */
 export async function POST(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     if (ctx.role !== "admin") {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -193,7 +193,7 @@ export async function POST(request: NextRequest) {
  * Patch one row (`id`). Soft-hide via `is_visible: false` (preferred over delete). **Admin only**.
  */
 export async function PATCH(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     if (ctx.role !== "admin") {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -258,7 +258,7 @@ export async function PATCH(request: NextRequest) {
  * Hard-delete a placement row (frees unique partial-index slot for a new visible row). **Admin only**.
  */
 export async function DELETE(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     if (ctx.role !== "admin") {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });

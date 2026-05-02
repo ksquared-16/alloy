@@ -1,11 +1,17 @@
 "use client";
 
-import { useMemo } from "react";
+import { Fragment, useMemo } from "react";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
-import type { CrmCompactRowSemanticSlots, QueueItemQuickActionVm, QueueItemVm, QueueVm } from "@/lib/ui-v2/workspace-types";
+import type {
+  CrmCompactRowSemanticSlots,
+  QueueItemQuickActionVm,
+  QueueItemVm,
+  QueueVm,
+  WorkUnitQueueCrmFactGroupVm,
+} from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
+import { DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS } from "@/lib/ui-v2/queueUiConfig";
 import { normalizePreviewLooseDateTokens } from "@/lib/adminFormatters";
-import { stripTourContextValuePrefix } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
 
 type Props = {
   queue: QueueVm;
@@ -183,11 +189,16 @@ function CrmCompactQueuePreview({
         ? "adminv2-ws-queue-preview-stale adminv2-ws-queue-preview-stale--medium"
         : "adminv2-ws-queue-preview-stale adminv2-ws-queue-preview-stale--low";
 
+  const timingLine = slots.crmCompactTimingValueLine?.trim() ?? "";
   const timingPartsLegacy: string[] = [];
-  if (slots.ageContext?.trim()) timingPartsLegacy.push(slots.ageContext.trim());
-  if (slots.tourContext?.trim()) {
-    const t = slots.tourContext.trim();
-    timingPartsLegacy.push(t.startsWith("Tour:") ? t : `Tour: ${t}`);
+  if (!timingLine) {
+    if (slots.ageContext?.trim()) timingPartsLegacy.push(slots.ageContext.trim());
+    if (slots.tourContext?.trim()) {
+      const t = slots.tourContext.trim();
+      if (t !== "—") {
+        timingPartsLegacy.push(t.startsWith("Tour:") ? t : `Tour: ${t}`);
+      }
+    }
   }
   const timingLineLegacyRaw = timingPartsLegacy.length ? timingPartsLegacy.join(" · ") : null;
   const timingLineLegacy = timingLineLegacyRaw ? normalizePreviewLooseDateTokens(timingLineLegacyRaw) : null;
@@ -200,33 +211,36 @@ function CrmCompactQueuePreview({
   const hasNextStrip = Boolean(slots.nextStep?.trim());
 
   const primaryContactCaption = slots.rowPreviewLabelPrimaryContact?.trim() || "Contact";
+  const phoneFieldK = slots.rowPreviewLabelPhone?.trim() || DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS.phone;
+  const emailFieldK = slots.rowPreviewLabelEmail?.trim() || DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS.email;
+
+  const childrenProgramsGroup =
+    slots.crmChildrenProgramsGroupLabel?.trim() || DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS.children_programs;
+  const timingGroupLabel =
+    slots.rowPreviewLabelTimingGroup?.trim() || DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS.timing;
+  const programFieldK =
+    slots.rowPreviewLabelProgramInline?.trim() || DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS.program_inline;
 
   const structuredContact =
     Boolean(slots.contactDisplayName?.trim()) ||
     Boolean(slots.contactPhoneDisplay?.trim()) ||
     Boolean(slots.contactEmail?.trim());
 
-  const timingCombined = slots.timingDesiredStartAndTourLine?.trim() ?? "";
-  const desiredStartDv = slots.desiredStartDateDisplay?.trim();
   const ageBandDv = slots.ageBandContext?.trim();
-  const tourDvRaw = slots.tourContext?.trim();
-  const tourDv = tourDvRaw ? stripTourContextValuePrefix(tourDvRaw) : "";
+  const ageLabel = slots.rowPreviewLabelAgeBand?.trim() || DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS.age_band;
 
-  const desiredLabel = slots.rowPreviewLabelDesiredStartDate?.trim() || null;
-  const ageLabel = slots.rowPreviewLabelAgeBand?.trim() || null;
-  const tourLabel = slots.rowPreviewLabelTourDate?.trim() || null;
+  const showChildrenProgramsSection =
+    (multiChild && visibleChildren.length > 0) ||
+    Boolean(!multiChild && (slots.childName?.trim() || slots.programContext?.trim()));
 
   const hasMiddle =
     structuredContact ||
     Boolean(slots.contactSnippet?.trim()) ||
-    Boolean(!multiChild && slots.childName?.trim()) ||
-    multiChild ||
-    Boolean(slots.programContext?.trim()) ||
+    showChildrenProgramsSection ||
+    Boolean(slots.programContext?.trim() && !showChildrenProgramsSection) ||
     Boolean(slots.roomContext?.trim()) ||
-    Boolean(timingCombined) ||
-    Boolean(desiredStartDv) ||
+    Boolean(timingLine) ||
     Boolean(ageBandDv) ||
-    Boolean(tourDv) ||
     Boolean(timingLineLegacy);
 
   const bodyClass =
@@ -274,6 +288,7 @@ function CrmCompactQueuePreview({
           <div className="adminv2-ws-crm-queue-preview__zone adminv2-ws-crm-queue-preview__zone--middle">
             {structuredContact ? (
               <div className="adminv2-ws-crm-queue-preview__group" aria-label={primaryContactCaption}>
+                <span className="adminv2-ws-crm-queue-preview__gk">{primaryContactCaption}</span>
                 <div className="adminv2-ws-crm-queue-preview__contact-segments">
                   {slots.contactDisplayName?.trim() ? (
                     <span className="adminv2-ws-crm-queue-preview__contact-seg adminv2-ws-crm-queue-preview__contact-seg--name">
@@ -282,91 +297,92 @@ function CrmCompactQueuePreview({
                   ) : null}
                   {slots.contactPhoneDisplay?.trim() ? (
                     <span className="adminv2-ws-crm-queue-preview__contact-seg">
-                      <span className="adminv2-ws-crm-queue-preview__contact-seg-k">Phone:</span>{" "}
+                      <span className="adminv2-ws-crm-queue-preview__contact-seg-k">{phoneFieldK}:</span>{" "}
                       {slots.contactPhoneDisplay.trim()}
                     </span>
                   ) : null}
                   {slots.contactEmail?.trim() ? (
                     <span className="adminv2-ws-crm-queue-preview__contact-seg">
-                      <span className="adminv2-ws-crm-queue-preview__contact-seg-k">Email:</span>{" "}
+                      <span className="adminv2-ws-crm-queue-preview__contact-seg-k">{emailFieldK}:</span>{" "}
                       {slots.contactEmail.trim()}
                     </span>
                   ) : null}
                 </div>
-                <span className="adminv2-ws-crm-queue-preview__gk">{primaryContactCaption}</span>
               </div>
             ) : slots.contactSnippet?.trim() ? (
               <div className="adminv2-ws-crm-queue-preview__group">
-                <span className="adminv2-ws-crm-queue-preview__gv">{slots.contactSnippet.trim()}</span>
                 <span className="adminv2-ws-crm-queue-preview__gk">{primaryContactCaption}</span>
+                <span className="adminv2-ws-crm-queue-preview__gv">{slots.contactSnippet.trim()}</span>
               </div>
             ) : null}
-            {multiChild ? (
+            {showChildrenProgramsSection ? (
               <div className="adminv2-ws-crm-queue-preview__group adminv2-ws-crm-queue-preview__group--children-stack">
-                <span className="adminv2-ws-crm-queue-preview__gk">Children</span>
-                <ul className="adminv2-ws-crm-queue-preview__children-mini" role="list">
-                  {visibleChildren.map((c, idx) => (
-                    <li key={idx} className="adminv2-ws-crm-queue-preview__child-mini">
-                      <span className="adminv2-ws-crm-queue-preview__child-mini-primary">{c.primary}</span>
-                      {c.secondary?.trim() ? (
-                        <span className="adminv2-ws-crm-queue-preview__child-mini-secondary">{c.secondary.trim()}</span>
-                      ) : null}
-                    </li>
-                  ))}
-                  {childOverflow > 0 ? (
-                    <li className="adminv2-ws-crm-queue-preview__child-mini adminv2-ws-crm-queue-preview__child-mini--more">
-                      +{childOverflow} more
-                    </li>
-                  ) : null}
-                </ul>
+                <span className="adminv2-ws-crm-queue-preview__gk">{childrenProgramsGroup}</span>
+                {multiChild ? (
+                  <ul className="adminv2-ws-crm-queue-preview__children-mini" role="list">
+                    {visibleChildren.map((c, idx) => (
+                      <li key={idx} className="adminv2-ws-crm-queue-preview__child-mini">
+                        <div className="adminv2-ws-crm-queue-preview__child-program-row">
+                          <span className="adminv2-ws-crm-queue-preview__child-mini-primary">{c.primary}</span>
+                          {c.programInline?.trim() ? (
+                            <span className="adminv2-ws-crm-queue-preview__child-program-inline">
+                              <span className="adminv2-ws-crm-queue-preview__contact-seg-k">{programFieldK}:</span>{" "}
+                              {c.programInline.trim()}
+                            </span>
+                          ) : null}
+                        </div>
+                      </li>
+                    ))}
+                    {childOverflow > 0 ? (
+                      <li className="adminv2-ws-crm-queue-preview__child-mini adminv2-ws-crm-queue-preview__child-mini--more">
+                        +{childOverflow} more
+                      </li>
+                    ) : null}
+                  </ul>
+                ) : (
+                  <div className="adminv2-ws-crm-queue-preview__child-program-row">
+                    {slots.childName?.trim() ? (
+                      <span className="adminv2-ws-crm-queue-preview__gv">{slots.childName.trim()}</span>
+                    ) : null}
+                    {slots.programContext?.trim() ? (
+                      <span className="adminv2-ws-crm-queue-preview__child-program-inline">
+                        <span className="adminv2-ws-crm-queue-preview__contact-seg-k">{programFieldK}:</span>{" "}
+                        {slots.programContext.trim()}
+                      </span>
+                    ) : null}
+                  </div>
+                )}
               </div>
-            ) : slots.childName?.trim() ? (
+            ) : slots.programContext?.trim() ? (
               <div className="adminv2-ws-crm-queue-preview__group">
-                <span className="adminv2-ws-crm-queue-preview__gv">{slots.childName.trim()}</span>
-                <span className="adminv2-ws-crm-queue-preview__gk">
-                  {slots.childName.includes(" · ") ? "Children" : "Child"}
-                </span>
-              </div>
-            ) : null}
-            {slots.programContext?.trim() ? (
-              <div className="adminv2-ws-crm-queue-preview__group">
+                <span className="adminv2-ws-crm-queue-preview__gk">{DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS.program}</span>
                 <span className="adminv2-ws-crm-queue-preview__gv">{slots.programContext.trim()}</span>
-                <span className="adminv2-ws-crm-queue-preview__gk">Programs</span>
               </div>
             ) : null}
             {slots.roomContext?.trim() ? (
               <div className="adminv2-ws-crm-queue-preview__group">
-                <span className="adminv2-ws-crm-queue-preview__gv">{slots.roomContext.trim()}</span>
                 <span className="adminv2-ws-crm-queue-preview__gk">Room</span>
-              </div>
-            ) : null}
-            {timingCombined ? (
-              <div className="adminv2-ws-crm-queue-preview__group">
-                <span className="adminv2-ws-crm-queue-preview__gv">{timingCombined}</span>
-              </div>
-            ) : null}
-            {!timingCombined && desiredStartDv ? (
-              <div className="adminv2-ws-crm-queue-preview__group">
-                <span className="adminv2-ws-crm-queue-preview__gv">{desiredStartDv}</span>
-                <span className="adminv2-ws-crm-queue-preview__gk">{desiredLabel ?? ""}</span>
+                <span className="adminv2-ws-crm-queue-preview__gv">{slots.roomContext.trim()}</span>
               </div>
             ) : null}
             {ageBandDv ? (
               <div className="adminv2-ws-crm-queue-preview__group">
+                <span className="adminv2-ws-crm-queue-preview__gk">{ageLabel}</span>
                 <span className="adminv2-ws-crm-queue-preview__gv">{ageBandDv}</span>
-                <span className="adminv2-ws-crm-queue-preview__gk">{ageLabel ?? ""}</span>
               </div>
             ) : null}
-            {!timingCombined && tourDv ? (
+            {timingLine ? (
               <div className="adminv2-ws-crm-queue-preview__group">
-                <span className="adminv2-ws-crm-queue-preview__gv">{tourDv}</span>
-                <span className="adminv2-ws-crm-queue-preview__gk">{tourLabel ?? ""}</span>
+                <span className="adminv2-ws-crm-queue-preview__gk">{timingGroupLabel}</span>
+                <span className="adminv2-ws-crm-queue-preview__gv adminv2-ws-crm-queue-preview__timing-inline">
+                  {timingLine}
+                </span>
               </div>
             ) : null}
-            {timingLineLegacy && !timingCombined && !desiredStartDv && !ageBandDv && !tourDv ? (
+            {timingLineLegacy ? (
               <div className="adminv2-ws-crm-queue-preview__group">
+                <span className="adminv2-ws-crm-queue-preview__gk">{timingGroupLabel}</span>
                 <span className="adminv2-ws-crm-queue-preview__gv">{timingLineLegacy}</span>
-                <span className="adminv2-ws-crm-queue-preview__gk">Timing</span>
               </div>
             ) : null}
           </div>
@@ -383,8 +399,8 @@ function CrmCompactQueuePreview({
         >
           {slots.familyNote?.trim() ? (
             <div className="adminv2-ws-crm-queue-preview__footer-notes">
-              <span className="adminv2-ws-crm-queue-preview__gv">{slots.familyNote.trim()}</span>
               <span className="adminv2-ws-crm-queue-preview__gk">Notes</span>
+              <span className="adminv2-ws-crm-queue-preview__gv">{slots.familyNote.trim()}</span>
             </div>
           ) : null}
           {slots.lastActivity?.trim() ? (

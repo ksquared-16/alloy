@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { ADMIN_FIELD_TYPES } from "@/lib/fields/adminFieldTypeList";
 import { validateSelectLikeConfig } from "@/lib/fields/fieldDefinitionConfig";
 
@@ -34,7 +34,7 @@ export type FieldDef = {
 
 /** GET: list field_definitions for current org and entity_type. Ordered by section_key, sort_order. */
 export async function GET(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
@@ -72,7 +72,7 @@ const FIELD_KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 
 /** POST: create a custom field definition. entity_type must be one of allowed types, is_system=false. Admin only. */
 export async function POST(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },

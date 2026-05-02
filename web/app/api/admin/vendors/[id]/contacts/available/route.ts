@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 
 /** GET: contacts in the same org as this vendor that are not yet linked. Query: search (optional, matches email/name). */
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     const { id: vendorId } = await context.params;
     if (!vendorId) return NextResponse.json({ error: "Missing vendor id" }, { status: 400 });

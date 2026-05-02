@@ -11,7 +11,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { normalizeDocumentRow } from "@/lib/admin/normalizeDocumentRow";
 import { classifySupabaseStorageError } from "@/lib/admin/storageDocumentErrors";
 
@@ -93,7 +93,7 @@ async function assertEntityInOrg(
 
 /** POST multipart: file + entity_type + entity_id; optional doc_type, title. Admin only (matches canMutate). */
 export async function POST(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden", code: "AUTH" }, { status: ctx.status });
     }

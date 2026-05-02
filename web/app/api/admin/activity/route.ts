@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdminOrOps } from "@/lib/adminAuth";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 
 /** Map common singular aliases to plural workflow_events.entity_type. */
 function normalizeEntityTypeParam(raw: string): string | null {
@@ -19,7 +19,7 @@ function normalizeEntityTypeParam(raw: string): string | null {
 export async function GET(request: NextRequest) {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
     const { searchParams } = new URL(request.url);

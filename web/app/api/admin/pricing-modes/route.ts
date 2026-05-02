@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 
 export type PricingModeListItem = {
     id: string;
@@ -13,7 +13,7 @@ export type PricingModeListItem = {
 
 /** GET: list pricing_modes */
 export async function GET() {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
     const supabase = createAdminClient();
@@ -37,7 +37,7 @@ export async function GET() {
 
 /** POST: create pricing_mode. Body: mode_key, mode_name, is_active?. org_id set from admin context. */
 export async function POST(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     if (!ctx.orgId) return NextResponse.json({ error: "Organization context required" }, { status: 403 });
 

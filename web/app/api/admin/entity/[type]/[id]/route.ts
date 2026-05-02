@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { formatRecurrenceLabel } from "@/lib/adminFormatters";
 import { attachDirectFkRelationshipDisplays } from "@/lib/admin/relationshipDisplayAttach";
@@ -118,7 +118,7 @@ export async function GET(
     }
 
     try {
-        const ctx = await getAdminContext();
+        const ctx = await getAdminContextCached();
         if (!ctx.ok) return adminContextFailureResponse(ctx);
         const orgId = ctx.orgId;
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { isV1DocumentEntityType } from "@/lib/admin/v1DocumentEntities";
 
 const OUT_LIMIT = 40;
@@ -8,7 +8,7 @@ const FETCH_CAP = 250;
 
 /** GET: records to attach a document. Query: entity_type (required), q (optional substring on label). */
 export async function GET(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     }

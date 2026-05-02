@@ -4696,6 +4696,27 @@
   font-weight: 600;
 }
 
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__child-program-row {
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .35em .75em;
+  width: 100%;
+  min-width: 0;
+  display: flex;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__child-program-inline {
+  font-size: inherit;
+  line-height: inherit;
+  font-weight: inherit;
+  min-width: 0;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__timing-inline {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__gk {
   letter-spacing: .035em;
   text-transform: none;
@@ -5405,6 +5426,27 @@
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__child-mini-secondary {
   font-size: 10.5px;
   line-height: 1.32;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__child-program-row {
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: .35em .7em;
+  width: 100%;
+  min-width: 0;
+  display: flex;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__child-program-inline {
+  font-size: inherit;
+  line-height: inherit;
+  font-weight: inherit;
+  min-width: 0;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__timing-inline {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__gk {

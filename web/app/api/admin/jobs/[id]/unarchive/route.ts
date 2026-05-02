@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 
 /** POST: set archived_at = null. Admin only. Scoped by org_id. */
 export async function POST(
   _request: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
-  const ctx = await getAdminContext();
+  const ctx = await getAdminContextCached();
   if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
   if (ctx.role !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

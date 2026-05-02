@@ -518,6 +518,9 @@ const DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS = {
     email: "Email",
     child_name: "Child",
     program: "Programs",
+    /** Inline label before program per child (e.g. `Program: Preschool`). */ program_inline: "Program",
+    /** CRM compact section heading above desired start + tour row. */ timing: "Timing",
+    /** CRM compact section above multi- or single-child rows with program. */ children_programs: "Children / Programs",
     desired_start_date: "Desired Start Date",
     tour_date: "Tour",
     age_band: "Age band"
@@ -623,6 +626,10 @@ if (typeof globalThis.$RefreshHelpers$ === 'object' && globalThis.$RefreshHelper
  */ __turbopack_context__.s([
     "buildCrmQueueRowPreviewPresentation",
     ()=>buildCrmQueueRowPreviewPresentation,
+    "dedupeRedundantProgramAgeInPreview",
+    ()=>dedupeRedundantProgramAgeInPreview,
+    "refineCrmCompactChildLinesForPreview",
+    ()=>refineCrmCompactChildLinesForPreview,
     "stripTourContextValuePrefix",
     ()=>stripTourContextValuePrefix
 ]);
@@ -634,6 +641,40 @@ function stripTourContextValuePrefix(raw) {
     const t = (raw ?? "").trim();
     if (!t) return "";
     return t.replace(/^Tour:\s*/i, "").trim() || t;
+}
+function dedupeRedundantProgramAgeInPreview(text) {
+    const t = text.trim();
+    if (!t) return "";
+    const parts = t.split(/\s*·\s*/).map((p)=>p.replace(/\s+/g, " ").trim()).filter(Boolean);
+    if (parts.length < 2) return t;
+    const isAgeFragment = (p)=>/^Ages?\s/i.test(p) || /^age\s*[:/]/i.test(p);
+    const kept = [];
+    for (const p of parts){
+        if (!isAgeFragment(p)) {
+            kept.push(p);
+            continue;
+        }
+        const ageTail = p.replace(/^Ages?\s*/i, "").replace(/\s/g, "").toLowerCase();
+        const redundant = kept.some((k)=>{
+            const kn = k.replace(/\s/g, "").toLowerCase();
+            if (!ageTail || ageTail.length < 4) return false;
+            return kn.includes(ageTail) || kn.includes(ageTail.replace(/[–—-]/g, ""));
+        });
+        if (!redundant) kept.push(p);
+    }
+    return kept.length ? kept.join(" · ") : t;
+}
+function refineCrmCompactChildLinesForPreview(lines, familyProgram, opts) {
+    const fam = (familyProgram ?? "").trim() ? dedupeRedundantProgramAgeInPreview(String(familyProgram)) : "";
+    return lines.map((line)=>{
+        const sec = (line.secondary ?? "").trim() ? dedupeRedundantProgramAgeInPreview(String(line.secondary)) : "";
+        let programInline = sec || null;
+        if (!programInline && opts.attachFamilyWhenMissing && fam) programInline = fam;
+        return {
+            ...line,
+            programInline: programInline || null
+        };
+    });
 }
 function deriveStructuredContactFromQueueRow(row, want) {
     const contactLine = typeof row._primary_contact_line === "string" ? row._primary_contact_line.trim() : "";
@@ -688,36 +729,32 @@ function deriveStructuredContactFromQueueRow(row, want) {
 function buildCrmQueueRowPreviewPresentation(row, want, rowPreviewFieldLabels) {
     const labels = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$ui$2d$v2$2f$queueUiConfig$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["mergeQueueRowPreviewFieldLabels"])(rowPreviewFieldLabels);
     const contact = deriveStructuredContactFromQueueRow(row, want);
+    const wantD = want("desired_start_date");
+    const wantT = want("tour_date");
     const desiredRaw = typeof row._desired_start_date === "string" ? row._desired_start_date.trim() : "";
-    const desiredFormatted = want("desired_start_date") && desiredRaw ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$adminFormatters$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatDateUsShortHyphenUtc"])(desiredRaw) : null;
-    const desiredBad = desiredFormatted === "—" || !desiredFormatted?.trim();
-    const desiredStartDateDisplay = desiredBad ? null : desiredFormatted;
+    const desiredFormatted = wantD && desiredRaw ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$adminFormatters$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatDateUsShortHyphenUtc"])(desiredRaw) : null;
+    const desiredVal = wantD && desiredFormatted && desiredFormatted !== "—" && desiredFormatted.trim() ? desiredFormatted : wantD ? "—" : null;
     const ageBandRaw = typeof row._age_band === "string" ? row._age_band.trim() : "";
     const ageBandContext = ageBandRaw || null;
     const tourPrimary = typeof row._tour_context === "string" ? row._tour_context.trim() : "";
     const tourAlt = typeof row._tour_timing === "string" ? row._tour_timing.trim() : "";
     const tourRaw = tourPrimary || tourAlt;
     const tourStripped = tourRaw ? stripTourContextValuePrefix(tourRaw) : "";
-    const tourFormatted = want("tour_date") && tourStripped ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$adminFormatters$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatQueuePreviewTourTimingUtc"])(tourStripped) : "";
-    const tourDisplay = tourFormatted.trim() || null;
-    const wantDesired = want("desired_start_date");
-    const wantTour = want("tour_date");
-    const hasDesired = Boolean(wantDesired && desiredStartDateDisplay);
-    const hasTour = Boolean(wantTour && tourDisplay);
-    let timingDesiredStartAndTourLine = null;
-    let desiredOut = wantDesired ? desiredStartDateDisplay : null;
-    let tourOut = wantTour ? tourDisplay : null;
-    if (hasDesired && hasTour && labels.desired_start_date && labels.tour_date) {
-        timingDesiredStartAndTourLine = `${labels.desired_start_date}: ${desiredOut}    •    ${labels.tour_date}: ${tourOut}`;
-        desiredOut = null;
-        tourOut = null;
-    }
+    const tourFormatted = wantT && tourStripped ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$adminFormatters$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatQueuePreviewTourTimingUtc"])(tourStripped) : "";
+    const tourVal = wantT ? tourFormatted.trim() ? tourFormatted : "—" : null;
+    const timingParts = [];
+    if (wantD && labels.desired_start_date) timingParts.push(`${labels.desired_start_date}: ${desiredVal ?? "—"}`);
+    if (wantT && labels.tour_date) timingParts.push(`${labels.tour_date}: ${tourVal ?? "—"}`);
+    const crmCompactTimingValueLine = timingParts.length ? timingParts.join("    ") : null;
     return {
         ...contact,
-        desiredStartDateDisplay: desiredOut,
-        timingDesiredStartAndTourLine,
+        desiredStartDateDisplay: wantD ? desiredVal : null,
         ageBandContext,
-        tourContext: tourOut,
+        tourContext: wantT ? tourVal : null,
+        crmCompactTimingValueLine,
+        rowPreviewLabelTimingGroup: labels.timing ?? null,
+        crmChildrenProgramsGroupLabel: labels.children_programs ?? null,
+        rowPreviewLabelProgramInline: labels.program_inline ?? null,
         ageContext: null,
         rowPreviewLabelPrimaryContact: labels.primary_contact ?? null,
         rowPreviewLabelDesiredStartDate: labels.desired_start_date ?? null,
@@ -1009,7 +1046,6 @@ function queueQuickActionDispatchId(qa) {
     const hasNextStrip = Boolean(slots.nextStep?.trim());
     const primaryContactCaption = slots.rowPreviewLabelPrimaryContact?.trim() || "Contact";
     const structuredContact = Boolean(slots.contactDisplayName?.trim()) || Boolean(slots.contactPhoneDisplay?.trim()) || Boolean(slots.contactEmail?.trim());
-    const timingCombined = slots.timingDesiredStartAndTourLine?.trim() ?? "";
     const desiredStartDv = slots.desiredStartDateDisplay?.trim();
     const ageBandDv = slots.ageBandContext?.trim();
     const tourDvRaw = slots.tourContext?.trim();
@@ -1017,7 +1053,7 @@ function queueQuickActionDispatchId(qa) {
     const desiredLabel = slots.rowPreviewLabelDesiredStartDate?.trim() || null;
     const ageLabel = slots.rowPreviewLabelAgeBand?.trim() || null;
     const tourLabel = slots.rowPreviewLabelTourDate?.trim() || null;
-    const hasMiddle = structuredContact || Boolean(slots.contactSnippet?.trim()) || Boolean(!multiChild && slots.childName?.trim()) || multiChild || Boolean(slots.programContext?.trim()) || Boolean(slots.roomContext?.trim()) || Boolean(timingCombined) || Boolean(desiredStartDv) || Boolean(ageBandDv) || Boolean(tourDv) || Boolean(timingLineLegacy);
+    const hasMiddle = structuredContact || Boolean(slots.contactSnippet?.trim()) || Boolean(!multiChild && slots.childName?.trim()) || multiChild || Boolean(slots.programContext?.trim()) || Boolean(slots.roomContext?.trim()) || Boolean(desiredStartDv) || Boolean(ageBandDv) || Boolean(tourDv) || Boolean(timingLineLegacy);
     const bodyClass = `adminv2-ws-crm-queue-preview__body${hasMiddle ? "" : " adminv2-ws-crm-queue-preview__body--identity-only"}`;
     const hasFooter = Boolean(slots.familyNote?.trim() || slots.lastActivity?.trim());
     const commercial = slots.commercialValue?.trim() ?? "";
@@ -1040,7 +1076,7 @@ function queueQuickActionDispatchId(qa) {
                                         children: slots.primaryIdentity
                                     }, void 0, false, {
                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                        lineNumber: 247,
+                                        lineNumber: 245,
                                         columnNumber: 13
                                     }, this),
                                     stageStatus ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1048,13 +1084,13 @@ function queueQuickActionDispatchId(qa) {
                                         children: formatWorkUnitQueueStatusPill(stageStatus)
                                     }, void 0, false, {
                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                        lineNumber: 251,
+                                        lineNumber: 249,
                                         columnNumber: 15
                                     }, this) : null
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                lineNumber: 246,
+                                lineNumber: 244,
                                 columnNumber: 11
                             }, this),
                             hasNextStrip ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1066,7 +1102,7 @@ function queueQuickActionDispatchId(qa) {
                                         children: slots.nextStep.trim()
                                     }, void 0, false, {
                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                        lineNumber: 260,
+                                        lineNumber: 258,
                                         columnNumber: 15
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1074,13 +1110,13 @@ function queueQuickActionDispatchId(qa) {
                                         children: "Next step"
                                     }, void 0, false, {
                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                        lineNumber: 261,
+                                        lineNumber: 259,
                                         columnNumber: 15
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                lineNumber: 259,
+                                lineNumber: 257,
                                 columnNumber: 13
                             }, this) : null,
                             commercial ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1088,7 +1124,7 @@ function queueQuickActionDispatchId(qa) {
                                 children: commercial
                             }, void 0, false, {
                                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                lineNumber: 265,
+                                lineNumber: 263,
                                 columnNumber: 13
                             }, this) : null,
                             slots.attentionReason?.trim() ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1096,7 +1132,7 @@ function queueQuickActionDispatchId(qa) {
                                 children: slots.attentionReason.trim()
                             }, void 0, false, {
                                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                lineNumber: 268,
+                                lineNumber: 266,
                                 columnNumber: 13
                             }, this) : null,
                             slots.activityStale ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1104,13 +1140,13 @@ function queueQuickActionDispatchId(qa) {
                                 children: slots.activityStale.label
                             }, void 0, false, {
                                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                lineNumber: 270,
+                                lineNumber: 268,
                                 columnNumber: 34
                             }, this) : null
                         ]
                     }, void 0, true, {
                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                        lineNumber: 245,
+                        lineNumber: 243,
                         columnNumber: 9
                     }, this),
                     hasMiddle ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1128,7 +1164,7 @@ function queueQuickActionDispatchId(qa) {
                                                 children: slots.contactDisplayName.trim()
                                             }, void 0, false, {
                                                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                                lineNumber: 279,
+                                                lineNumber: 277,
                                                 columnNumber: 21
                                             }, this) : null,
                                             slots.contactPhoneDisplay?.trim() ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1139,7 +1175,7 @@ function queueQuickActionDispatchId(qa) {
                                                         children: "Phone:"
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                                        lineNumber: 285,
+                                                        lineNumber: 283,
                                                         columnNumber: 23
                                                     }, this),
                                                     " ",
@@ -1147,7 +1183,7 @@ function queueQuickActionDispatchId(qa) {
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                                lineNumber: 284,
+                                                lineNumber: 282,
                                                 columnNumber: 21
                                             }, this) : null,
                                             slots.contactEmail?.trim() ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1158,7 +1194,7 @@ function queueQuickActionDispatchId(qa) {
                                                         children: "Email:"
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                                        lineNumber: 291,
+                                                        lineNumber: 289,
                                                         columnNumber: 23
                                                     }, this),
                                                     " ",
@@ -1166,13 +1202,13 @@ function queueQuickActionDispatchId(qa) {
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                                lineNumber: 290,
+                                                lineNumber: 288,
                                                 columnNumber: 21
                                             }, this) : null
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                        lineNumber: 277,
+                                        lineNumber: 275,
                                         columnNumber: 17
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1180,13 +1216,13 @@ function queueQuickActionDispatchId(qa) {
                                         children: primaryContactCaption
                                     }, void 0, false, {
                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                        lineNumber: 296,
+                                        lineNumber: 294,
                                         columnNumber: 17
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                lineNumber: 276,
+                                lineNumber: 274,
                                 columnNumber: 15
                             }, this) : slots.contactSnippet?.trim() ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                 className: "adminv2-ws-crm-queue-preview__group",
@@ -1196,7 +1232,7 @@ function queueQuickActionDispatchId(qa) {
                                         children: slots.contactSnippet.trim()
                                     }, void 0, false, {
                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                        lineNumber: 300,
+                                        lineNumber: 298,
                                         columnNumber: 17
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1204,13 +1240,13 @@ function queueQuickActionDispatchId(qa) {
                                         children: primaryContactCaption
                                     }, void 0, false, {
                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                        lineNumber: 301,
+                                        lineNumber: 299,
                                         columnNumber: 17
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                lineNumber: 299,
+                                lineNumber: 297,
                                 columnNumber: 15
                             }, this) : null,
                             multiChild ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1221,7 +1257,7 @@ function queueQuickActionDispatchId(qa) {
                                         children: "Children"
                                     }, void 0, false, {
                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                        lineNumber: 306,
+                                        lineNumber: 304,
                                         columnNumber: 17
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("ul", {
@@ -1236,7 +1272,7 @@ function queueQuickActionDispatchId(qa) {
                                                             children: c.primary
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                                            lineNumber: 310,
+                                                            lineNumber: 308,
                                                             columnNumber: 23
                                                         }, this),
                                                         c.secondary?.trim() ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1244,13 +1280,13 @@ function queueQuickActionDispatchId(qa) {
                                                             children: c.secondary.trim()
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                                            lineNumber: 312,
+                                                            lineNumber: 310,
                                                             columnNumber: 25
                                                         }, this) : null
                                                     ]
                                                 }, idx, true, {
                                                     fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                                    lineNumber: 309,
+                                                    lineNumber: 307,
                                                     columnNumber: 21
                                                 }, this)),
                                             childOverflow > 0 ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("li", {
@@ -1262,19 +1298,19 @@ function queueQuickActionDispatchId(qa) {
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                                lineNumber: 317,
+                                                lineNumber: 315,
                                                 columnNumber: 21
                                             }, this) : null
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                        lineNumber: 307,
+                                        lineNumber: 305,
                                         columnNumber: 17
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                lineNumber: 305,
+                                lineNumber: 303,
                                 columnNumber: 15
                             }, this) : slots.childName?.trim() ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                 className: "adminv2-ws-crm-queue-preview__group",
@@ -1284,7 +1320,7 @@ function queueQuickActionDispatchId(qa) {
                                         children: slots.childName.trim()
                                     }, void 0, false, {
                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                        lineNumber: 325,
+                                        lineNumber: 323,
                                         columnNumber: 17
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1292,13 +1328,13 @@ function queueQuickActionDispatchId(qa) {
                                         children: slots.childName.includes(" · ") ? "Children" : "Child"
                                     }, void 0, false, {
                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                        lineNumber: 326,
+                                        lineNumber: 324,
                                         columnNumber: 17
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                lineNumber: 324,
+                                lineNumber: 322,
                                 columnNumber: 15
                             }, this) : null,
                             slots.programContext?.trim() ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1309,7 +1345,7 @@ function queueQuickActionDispatchId(qa) {
                                         children: slots.programContext.trim()
                                     }, void 0, false, {
                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                        lineNumber: 333,
+                                        lineNumber: 331,
                                         columnNumber: 17
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1317,13 +1353,13 @@ function queueQuickActionDispatchId(qa) {
                                         children: "Programs"
                                     }, void 0, false, {
                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                        lineNumber: 334,
+                                        lineNumber: 332,
                                         columnNumber: 17
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                lineNumber: 332,
+                                lineNumber: 330,
                                 columnNumber: 15
                             }, this) : null,
                             slots.roomContext?.trim() ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1334,7 +1370,7 @@ function queueQuickActionDispatchId(qa) {
                                         children: slots.roomContext.trim()
                                     }, void 0, false, {
                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                        lineNumber: 339,
+                                        lineNumber: 337,
                                         columnNumber: 17
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1342,31 +1378,16 @@ function queueQuickActionDispatchId(qa) {
                                         children: "Room"
                                     }, void 0, false, {
                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                        lineNumber: 340,
+                                        lineNumber: 338,
                                         columnNumber: 17
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                lineNumber: 338,
+                                lineNumber: 336,
                                 columnNumber: 15
                             }, this) : null,
-                            timingCombined ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                className: "adminv2-ws-crm-queue-preview__group",
-                                children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
-                                    className: "adminv2-ws-crm-queue-preview__gv",
-                                    children: timingCombined
-                                }, void 0, false, {
-                                    fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                    lineNumber: 345,
-                                    columnNumber: 17
-                                }, this)
-                            }, void 0, false, {
-                                fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                lineNumber: 344,
-                                columnNumber: 15
-                            }, this) : null,
-                            !timingCombined && desiredStartDv ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                            desiredStartDv ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                 className: "adminv2-ws-crm-queue-preview__group",
                                 children: [
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1374,7 +1395,7 @@ function queueQuickActionDispatchId(qa) {
                                         children: desiredStartDv
                                     }, void 0, false, {
                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                        lineNumber: 350,
+                                        lineNumber: 343,
                                         columnNumber: 17
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1382,13 +1403,13 @@ function queueQuickActionDispatchId(qa) {
                                         children: desiredLabel ?? ""
                                     }, void 0, false, {
                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                        lineNumber: 351,
+                                        lineNumber: 344,
                                         columnNumber: 17
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                lineNumber: 349,
+                                lineNumber: 342,
                                 columnNumber: 15
                             }, this) : null,
                             ageBandDv ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1399,7 +1420,7 @@ function queueQuickActionDispatchId(qa) {
                                         children: ageBandDv
                                     }, void 0, false, {
                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                        lineNumber: 356,
+                                        lineNumber: 349,
                                         columnNumber: 17
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1407,16 +1428,16 @@ function queueQuickActionDispatchId(qa) {
                                         children: ageLabel ?? ""
                                     }, void 0, false, {
                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                        lineNumber: 357,
+                                        lineNumber: 350,
                                         columnNumber: 17
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                lineNumber: 355,
+                                lineNumber: 348,
                                 columnNumber: 15
                             }, this) : null,
-                            !timingCombined && tourDv ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                            tourDv ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                 className: "adminv2-ws-crm-queue-preview__group",
                                 children: [
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1424,7 +1445,7 @@ function queueQuickActionDispatchId(qa) {
                                         children: tourDv
                                     }, void 0, false, {
                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                        lineNumber: 362,
+                                        lineNumber: 355,
                                         columnNumber: 17
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1432,16 +1453,16 @@ function queueQuickActionDispatchId(qa) {
                                         children: tourLabel ?? ""
                                     }, void 0, false, {
                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                        lineNumber: 363,
+                                        lineNumber: 356,
                                         columnNumber: 17
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                lineNumber: 361,
+                                lineNumber: 354,
                                 columnNumber: 15
                             }, this) : null,
-                            timingLineLegacy && !timingCombined && !desiredStartDv && !ageBandDv && !tourDv ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                            timingLineLegacy && !desiredStartDv && !ageBandDv && !tourDv ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                 className: "adminv2-ws-crm-queue-preview__group",
                                 children: [
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1449,7 +1470,7 @@ function queueQuickActionDispatchId(qa) {
                                         children: timingLineLegacy
                                     }, void 0, false, {
                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                        lineNumber: 368,
+                                        lineNumber: 361,
                                         columnNumber: 17
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1457,25 +1478,25 @@ function queueQuickActionDispatchId(qa) {
                                         children: "Timing"
                                     }, void 0, false, {
                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                        lineNumber: 369,
+                                        lineNumber: 362,
                                         columnNumber: 17
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                lineNumber: 367,
+                                lineNumber: 360,
                                 columnNumber: 15
                             }, this) : null
                         ]
                     }, void 0, true, {
                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                        lineNumber: 274,
+                        lineNumber: 272,
                         columnNumber: 11
                     }, this) : null
                 ]
             }, void 0, true, {
                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                lineNumber: 244,
+                lineNumber: 242,
                 columnNumber: 7
             }, this),
             hasFooter ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1489,7 +1510,7 @@ function queueQuickActionDispatchId(qa) {
                                 children: slots.familyNote.trim()
                             }, void 0, false, {
                                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                lineNumber: 386,
+                                lineNumber: 379,
                                 columnNumber: 15
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1497,13 +1518,13 @@ function queueQuickActionDispatchId(qa) {
                                 children: "Notes"
                             }, void 0, false, {
                                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                lineNumber: 387,
+                                lineNumber: 380,
                                 columnNumber: 15
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                        lineNumber: 385,
+                        lineNumber: 378,
                         columnNumber: 13
                     }, this) : null,
                     slots.lastActivity?.trim() ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1511,19 +1532,19 @@ function queueQuickActionDispatchId(qa) {
                         children: slots.lastActivity.trim()
                     }, void 0, false, {
                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                        lineNumber: 391,
+                        lineNumber: 384,
                         columnNumber: 13
                     }, this) : null
                 ]
             }, void 0, true, {
                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                lineNumber: 377,
+                lineNumber: 370,
                 columnNumber: 9
             }, this) : null
         ]
     }, void 0, true, {
         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-        lineNumber: 240,
+        lineNumber: 238,
         columnNumber: 5
     }, this);
 }
@@ -1560,14 +1581,14 @@ function WorkUnitQueueLane({ queue, onAction }) {
                             children: queue.title.trim()
                         }, void 0, false, {
                             fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                            lineNumber: 422,
+                            lineNumber: 415,
                             columnNumber: 36
                         }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                             className: "sr-only",
                             children: "Queue"
                         }, void 0, false, {
                             fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                            lineNumber: 422,
+                            lineNumber: 415,
                             columnNumber: 103
                         }, this),
                         queue.countBadge != null ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1576,18 +1597,18 @@ function WorkUnitQueueLane({ queue, onAction }) {
                             children: queue.countBadge
                         }, void 0, false, {
                             fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                            lineNumber: 424,
+                            lineNumber: 417,
                             columnNumber: 15
                         }, this) : null
                     ]
                 }, void 0, true, {
                     fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                    lineNumber: 421,
+                    lineNumber: 414,
                     columnNumber: 11
                 }, this)
             }, void 0, false, {
                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                lineNumber: 420,
+                lineNumber: 413,
                 columnNumber: 9
             }, this) : null,
             queue.rollupSummary ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -1595,7 +1616,7 @@ function WorkUnitQueueLane({ queue, onAction }) {
                 children: queue.rollupSummary
             }, void 0, false, {
                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                lineNumber: 431,
+                lineNumber: 424,
                 columnNumber: 30
             }, this) : null,
             queue.sortCaption ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -1604,7 +1625,7 @@ function WorkUnitQueueLane({ queue, onAction }) {
                 children: queue.sortCaption
             }, void 0, false, {
                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                lineNumber: 433,
+                lineNumber: 426,
                 columnNumber: 9
             }, this) : null,
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("ul", {
@@ -1624,7 +1645,7 @@ function WorkUnitQueueLane({ queue, onAction }) {
                                     children: "Loading…"
                                 }, void 0, false, {
                                     fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                    lineNumber: 441,
+                                    lineNumber: 434,
                                     columnNumber: 15
                                 }, this),
                                 queue.laneQueueLabel?.trim() ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -1632,18 +1653,18 @@ function WorkUnitQueueLane({ queue, onAction }) {
                                     children: queue.laneQueueLabel.trim()
                                 }, void 0, false, {
                                     fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                    lineNumber: 443,
+                                    lineNumber: 436,
                                     columnNumber: 17
                                 }, this) : null
                             ]
                         }, void 0, true, {
                             fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                            lineNumber: 440,
+                            lineNumber: 433,
                             columnNumber: 13
                         }, this)
                     }, void 0, false, {
                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                        lineNumber: 439,
+                        lineNumber: 432,
                         columnNumber: 11
                     }, this) : !queue.rowsLoading && queue.items.length === 0 ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("li", {
                         className: "adminv2-ws-wu-queue-empty-wrap",
@@ -1656,7 +1677,7 @@ function WorkUnitQueueLane({ queue, onAction }) {
                                     children: "No records"
                                 }, void 0, false, {
                                     fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                    lineNumber: 450,
+                                    lineNumber: 443,
                                     columnNumber: 15
                                 }, this),
                                 queue.laneQueueLabel?.trim() ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -1664,18 +1685,18 @@ function WorkUnitQueueLane({ queue, onAction }) {
                                     children: queue.laneQueueLabel.trim()
                                 }, void 0, false, {
                                     fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                    lineNumber: 452,
+                                    lineNumber: 445,
                                     columnNumber: 17
                                 }, this) : null
                             ]
                         }, void 0, true, {
                             fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                            lineNumber: 449,
+                            lineNumber: 442,
                             columnNumber: 13
                         }, this)
                     }, void 0, false, {
                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                        lineNumber: 448,
+                        lineNumber: 441,
                         columnNumber: 11
                     }, this) : null,
                     queue.items.map((item)=>{
@@ -1700,7 +1721,7 @@ function WorkUnitQueueLane({ queue, onAction }) {
                                     children: sectionTitle
                                 }, void 0, false, {
                                     fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                    lineNumber: 480,
+                                    lineNumber: 473,
                                     columnNumber: 17
                                 }, this) : null,
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1737,12 +1758,12 @@ function WorkUnitQueueLane({ queue, onAction }) {
                                                         urgencyTier: tier
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                                        lineNumber: 515,
+                                                        lineNumber: 508,
                                                         columnNumber: 23
                                                     }, this)
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                                    lineNumber: 514,
+                                                    lineNumber: 507,
                                                     columnNumber: 21
                                                 }, this),
                                                 rowQuickActions.length ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1770,24 +1791,24 @@ function WorkUnitQueueLane({ queue, onAction }) {
                                                                 children: qa.label
                                                             }, `${item.id}-qa-${qa.id}`, false, {
                                                                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                                                lineNumber: 524,
+                                                                lineNumber: 517,
                                                                 columnNumber: 31
                                                             }, this);
                                                         })
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                                        lineNumber: 519,
+                                                        lineNumber: 512,
                                                         columnNumber: 25
                                                     }, this)
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                                    lineNumber: 518,
+                                                    lineNumber: 511,
                                                     columnNumber: 23
                                                 }, this) : null
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                            lineNumber: 513,
+                                            lineNumber: 506,
                                             columnNumber: 19
                                         }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                             className: "adminv2-ws-wu-queue-card-compact-text",
@@ -1797,7 +1818,7 @@ function WorkUnitQueueLane({ queue, onAction }) {
                                                     children: item.title
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                                    lineNumber: 553,
+                                                    lineNumber: 546,
                                                     columnNumber: 21
                                                 }, this),
                                                 item.subtitle?.trim() ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1805,7 +1826,7 @@ function WorkUnitQueueLane({ queue, onAction }) {
                                                     children: item.subtitle.trim()
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                                    lineNumber: 555,
+                                                    lineNumber: 548,
                                                     columnNumber: 23
                                                 }, this) : null,
                                                 item.tags && item.tags.length > 0 ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1816,12 +1837,12 @@ function WorkUnitQueueLane({ queue, onAction }) {
                                                             children: t
                                                         }, `${item.id}-tag-${t}`, false, {
                                                             fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                                            lineNumber: 560,
+                                                            lineNumber: 553,
                                                             columnNumber: 27
                                                         }, this))
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                                    lineNumber: 558,
+                                                    lineNumber: 551,
                                                     columnNumber: 23
                                                 }, this) : null,
                                                 item.routeLabel?.trim() ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1829,7 +1850,7 @@ function WorkUnitQueueLane({ queue, onAction }) {
                                                     children: item.routeLabel.trim()
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                                    lineNumber: 567,
+                                                    lineNumber: 560,
                                                     columnNumber: 23
                                                 }, this) : null,
                                                 item.windowLabel?.trim() ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1837,7 +1858,7 @@ function WorkUnitQueueLane({ queue, onAction }) {
                                                     children: item.windowLabel.trim()
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                                    lineNumber: 570,
+                                                    lineNumber: 563,
                                                     columnNumber: 23
                                                 }, this) : null,
                                                 item.metaLines && item.metaLines.length > 0 ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("ul", {
@@ -1855,7 +1876,7 @@ function WorkUnitQueueLane({ queue, onAction }) {
                                                                         children: line.label
                                                                     }, void 0, false, {
                                                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                                                        lineNumber: 593,
+                                                                        lineNumber: 586,
                                                                         columnNumber: 33
                                                                     }, this),
                                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1863,7 +1884,7 @@ function WorkUnitQueueLane({ queue, onAction }) {
                                                                         children: line.value
                                                                     }, void 0, false, {
                                                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                                                        lineNumber: 594,
+                                                                        lineNumber: 587,
                                                                         columnNumber: 33
                                                                     }, this)
                                                                 ]
@@ -1874,7 +1895,7 @@ function WorkUnitQueueLane({ queue, onAction }) {
                                                                         children: line.label
                                                                     }, void 0, false, {
                                                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                                                        lineNumber: 598,
+                                                                        lineNumber: 591,
                                                                         columnNumber: 33
                                                                     }, this),
                                                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -1882,25 +1903,25 @@ function WorkUnitQueueLane({ queue, onAction }) {
                                                                         children: line.value
                                                                     }, void 0, false, {
                                                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                                                        lineNumber: 599,
+                                                                        lineNumber: 592,
                                                                         columnNumber: 33
                                                                     }, this)
                                                                 ]
                                                             }, void 0, true)
                                                         }, `${item.id}-${line.label}`, false, {
                                                             fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                                            lineNumber: 582,
+                                                            lineNumber: 575,
                                                             columnNumber: 27
                                                         }, this))
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                                    lineNumber: 573,
+                                                    lineNumber: 566,
                                                     columnNumber: 23
                                                 }, this) : null
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                            lineNumber: 552,
+                                            lineNumber: 545,
                                             columnNumber: 19
                                         }, this),
                                         !crm ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1912,7 +1933,7 @@ function WorkUnitQueueLane({ queue, onAction }) {
                                                     children: valueShown
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                                    lineNumber: 611,
+                                                    lineNumber: 604,
                                                     columnNumber: 23
                                                 }, this) : null,
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1941,13 +1962,13 @@ function WorkUnitQueueLane({ queue, onAction }) {
                                                                     children: qa.label
                                                                 }, `${item.id}-qa-${qa.id}`, false, {
                                                                     fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                                                    lineNumber: 622,
+                                                                    lineNumber: 615,
                                                                     columnNumber: 31
                                                                 }, this);
                                                             })
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                                            lineNumber: 617,
+                                                            lineNumber: 610,
                                                             columnNumber: 25
                                                         }, this) : null,
                                                         rowQuickActions.some((qa)=>queueQuickActionDispatchId(qa) === "open_record") ? null : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -1965,44 +1986,44 @@ function WorkUnitQueueLane({ queue, onAction }) {
                                                             children: "Open"
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                                            lineNumber: 648,
+                                                            lineNumber: 641,
                                                             columnNumber: 25
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                                    lineNumber: 615,
+                                                    lineNumber: 608,
                                                     columnNumber: 21
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                            lineNumber: 609,
+                                            lineNumber: 602,
                                             columnNumber: 19
                                         }, this) : null
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                    lineNumber: 487,
+                                    lineNumber: 480,
                                     columnNumber: 15
                                 }, this)
                             ]
                         }, item.id, true, {
                             fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                            lineNumber: 478,
+                            lineNumber: 471,
                             columnNumber: 13
                         }, this);
                     })
                 ]
             }, void 0, true, {
                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                lineNumber: 437,
+                lineNumber: 430,
                 columnNumber: 7
             }, this)
         ]
     }, void 0, true, {
         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-        lineNumber: 414,
+        lineNumber: 407,
         columnNumber: 5
     }, this);
 }
@@ -2017,7 +2038,7 @@ function QueueBlock({ queue, onAction, variant = "primary", surface = "default" 
             variant: variant
         }, void 0, false, {
             fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-            lineNumber: 680,
+            lineNumber: 673,
             columnNumber: 12
         }, this);
     }
@@ -2027,7 +2048,7 @@ function QueueBlock({ queue, onAction, variant = "primary", surface = "default" 
             onAction: onAction
         }, void 0, false, {
             fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-            lineNumber: 684,
+            lineNumber: 677,
             columnNumber: 12
         }, this);
     }
@@ -2062,7 +2083,7 @@ function QueueBlock({ queue, onAction, variant = "primary", surface = "default" 
                                 children: queue.title
                             }, void 0, false, {
                                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                lineNumber: 694,
+                                lineNumber: 687,
                                 columnNumber: 11
                             }, this),
                             queue.countBadge != null && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -2077,13 +2098,13 @@ function QueueBlock({ queue, onAction, variant = "primary", surface = "default" 
                                 children: queue.countBadge
                             }, void 0, false, {
                                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                lineNumber: 698,
+                                lineNumber: 691,
                                 columnNumber: 13
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                        lineNumber: 693,
+                        lineNumber: 686,
                         columnNumber: 9
                     }, this),
                     queue.viewAllActionId && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -2107,13 +2128,13 @@ function QueueBlock({ queue, onAction, variant = "primary", surface = "default" 
                         children: queue.viewAllLabel ?? "View all"
                     }, void 0, false, {
                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                        lineNumber: 713,
+                        lineNumber: 706,
                         columnNumber: 11
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                lineNumber: 692,
+                lineNumber: 685,
                 columnNumber: 7
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("ul", {
@@ -2142,7 +2163,7 @@ function QueueBlock({ queue, onAction, variant = "primary", surface = "default" 
                                 children: item.title
                             }, void 0, false, {
                                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                lineNumber: 749,
+                                lineNumber: 742,
                                 columnNumber: 13
                             }, this),
                             item.subtitle && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2154,7 +2175,7 @@ function QueueBlock({ queue, onAction, variant = "primary", surface = "default" 
                                 children: item.subtitle
                             }, void 0, false, {
                                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                lineNumber: 751,
+                                lineNumber: 744,
                                 columnNumber: 15
                             }, this),
                             item.aiPrioritization && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2167,7 +2188,7 @@ function QueueBlock({ queue, onAction, variant = "primary", surface = "default" 
                                 children: item.aiPrioritization
                             }, void 0, false, {
                                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                lineNumber: 754,
+                                lineNumber: 747,
                                 columnNumber: 15
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2198,29 +2219,29 @@ function QueueBlock({ queue, onAction, variant = "primary", surface = "default" 
                                         children: qa.label
                                     }, qa.id, false, {
                                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                        lineNumber: 760,
+                                        lineNumber: 753,
                                         columnNumber: 17
                                     }, this))
                             }, void 0, false, {
                                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                                lineNumber: 758,
+                                lineNumber: 751,
                                 columnNumber: 13
                             }, this)
                         ]
                     }, item.id, true, {
                         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                        lineNumber: 740,
+                        lineNumber: 733,
                         columnNumber: 11
                     }, this))
             }, void 0, false, {
                 fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-                lineNumber: 738,
+                lineNumber: 731,
                 columnNumber: 7
             }, this)
         ]
     }, void 0, true, {
         fileName: "[project]/app/adminV2/components/workspace/blocks/QueueBlock.tsx",
-        lineNumber: 688,
+        lineNumber: 681,
         columnNumber: 5
     }, this);
 }
@@ -4409,7 +4430,7 @@ var _s = __turbopack_context__.k.signature();
 ;
 ;
 ;
-function WorkUnitWorkspace({ model, onAction, headerQueuePicker, kpiStripPlaceholder = false, primaryFooterSlot }) {
+function WorkUnitWorkspace({ model, onAction, headerQueuePicker, kpiStripPlaceholder, primaryFooterSlot }) {
     _s();
     const wuShellStyle = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useMemo"])({
         "WorkUnitWorkspace.useMemo[wuShellStyle]": ()=>(0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$visualContext$2f$contextStyle$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["operationalWorkspaceShellStyle"])({
@@ -4456,7 +4477,7 @@ function WorkUnitWorkspace({ model, onAction, headerQueuePicker, kpiStripPlaceho
             surface: "work_unit"
         }, void 0, false, {
             fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-            lineNumber: 78,
+            lineNumber: 81,
             columnNumber: 11
         }, void 0) : null,
         primaryColumn: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Fragment"], {
@@ -4475,7 +4496,7 @@ function WorkUnitWorkspace({ model, onAction, headerQueuePicker, kpiStripPlaceho
                                             children: focusKicker
                                         }, void 0, false, {
                                             fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                                            lineNumber: 89,
+                                            lineNumber: 92,
                                             columnNumber: 23
                                         }, void 0),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4486,14 +4507,14 @@ function WorkUnitWorkspace({ model, onAction, headerQueuePicker, kpiStripPlaceho
                                                     children: model.aiSummary.headline.trim()
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                                                    lineNumber: 92,
+                                                    lineNumber: 95,
                                                     columnNumber: 27
                                                 }, void 0) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("h2", {
                                                     className: "adminv2-ws-dept-v2-brief-headline adminv2-ws-dept-v2-brief-headline--placeholder",
                                                     children: "Lane headline"
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                                                    lineNumber: 94,
+                                                    lineNumber: 97,
                                                     columnNumber: 27
                                                 }, void 0),
                                                 fullBriefTooltip ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -4508,7 +4529,7 @@ function WorkUnitWorkspace({ model, onAction, headerQueuePicker, kpiStripPlaceho
                                                             children: "ⓘ"
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                                                            lineNumber: 105,
+                                                            lineNumber: 108,
                                                             columnNumber: 29
                                                         }, void 0),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -4516,19 +4537,19 @@ function WorkUnitWorkspace({ model, onAction, headerQueuePicker, kpiStripPlaceho
                                                             children: "Briefing"
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                                                            lineNumber: 108,
+                                                            lineNumber: 111,
                                                             columnNumber: 29
                                                         }, void 0)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                                                    lineNumber: 99,
+                                                    lineNumber: 102,
                                                     columnNumber: 27
                                                 }, void 0) : null
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                                            lineNumber: 90,
+                                            lineNumber: 93,
                                             columnNumber: 23
                                         }, void 0),
                                         headerQueuePicker ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4536,13 +4557,13 @@ function WorkUnitWorkspace({ model, onAction, headerQueuePicker, kpiStripPlaceho
                                             children: headerQueuePicker
                                         }, void 0, false, {
                                             fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                                            lineNumber: 113,
+                                            lineNumber: 116,
                                             columnNumber: 25
                                         }, void 0) : null
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                                    lineNumber: 88,
+                                    lineNumber: 91,
                                     columnNumber: 21
                                 }, void 0) : null,
                                 !hasBrief && headerQueuePicker ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4550,7 +4571,7 @@ function WorkUnitWorkspace({ model, onAction, headerQueuePicker, kpiStripPlaceho
                                     children: headerQueuePicker
                                 }, void 0, false, {
                                     fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                                    lineNumber: 118,
+                                    lineNumber: 121,
                                     columnNumber: 21
                                 }, void 0) : null,
                                 hasAwareness ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -4559,7 +4580,7 @@ function WorkUnitWorkspace({ model, onAction, headerQueuePicker, kpiStripPlaceho
                                     children: awarenessLine
                                 }, void 0, false, {
                                     fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                                    lineNumber: 121,
+                                    lineNumber: 124,
                                     columnNumber: 21
                                 }, void 0) : null,
                                 hasSignals ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4571,18 +4592,18 @@ function WorkUnitWorkspace({ model, onAction, headerQueuePicker, kpiStripPlaceho
                                         maxVisible: 3
                                     }, void 0, false, {
                                         fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                                        lineNumber: 127,
+                                        lineNumber: 130,
                                         columnNumber: 23
                                     }, void 0)
                                 }, void 0, false, {
                                     fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                                    lineNumber: 126,
+                                    lineNumber: 129,
                                     columnNumber: 21
                                 }, void 0) : null
                             ]
                         }, void 0, true, {
                             fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                            lineNumber: 86,
+                            lineNumber: 89,
                             columnNumber: 17
                         }, void 0) : null,
                         kpiStripPlaceholder ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4591,12 +4612,12 @@ function WorkUnitWorkspace({ model, onAction, headerQueuePicker, kpiStripPlaceho
                                 id: "wu-kpi-skeleton"
                             }, void 0, false, {
                                 fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                                lineNumber: 134,
+                                lineNumber: 137,
                                 columnNumber: 19
                             }, void 0)
                         }, void 0, false, {
                             fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                            lineNumber: 133,
+                            lineNumber: 136,
                             columnNumber: 17
                         }, void 0) : hasKpis ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                             "data-workspace-zone": "kpi-banner",
@@ -4605,18 +4626,18 @@ function WorkUnitWorkspace({ model, onAction, headerQueuePicker, kpiStripPlaceho
                                 maxVisible: 5
                             }, void 0, false, {
                                 fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                                lineNumber: 138,
+                                lineNumber: 141,
                                 columnNumber: 19
                             }, void 0)
                         }, void 0, false, {
                             fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                            lineNumber: 137,
+                            lineNumber: 140,
                             columnNumber: 17
                         }, void 0) : null
                     ]
                 }, void 0, true, {
                     fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                    lineNumber: 84,
+                    lineNumber: 87,
                     columnNumber: 13
                 }, void 0) : null,
                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4642,14 +4663,14 @@ function WorkUnitWorkspace({ model, onAction, headerQueuePicker, kpiStripPlaceho
                                                         children: "Status"
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                                                        lineNumber: 154,
+                                                        lineNumber: 157,
                                                         columnNumber: 25
                                                     }, void 0),
                                                     statusLine
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                                                lineNumber: 153,
+                                                lineNumber: 156,
                                                 columnNumber: 23
                                             }, void 0) : null,
                                             recLine ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -4660,20 +4681,20 @@ function WorkUnitWorkspace({ model, onAction, headerQueuePicker, kpiStripPlaceho
                                                         children: "Suggested"
                                                     }, void 0, false, {
                                                         fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                                                        lineNumber: 160,
+                                                        lineNumber: 163,
                                                         columnNumber: 25
                                                     }, void 0),
                                                     recLine
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                                                lineNumber: 159,
+                                                lineNumber: 162,
                                                 columnNumber: 23
                                             }, void 0) : null
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                                        lineNumber: 151,
+                                        lineNumber: 154,
                                         columnNumber: 19
                                     }, void 0) : null,
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$app$2f$adminV2$2f$components$2f$workspace$2f$blocks$2f$QueueBlock$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$export__default__as__QueueBlock$3e$__["QueueBlock"], {
@@ -4683,18 +4704,18 @@ function WorkUnitWorkspace({ model, onAction, headerQueuePicker, kpiStripPlaceho
                                         surface: "work_unit"
                                     }, void 0, false, {
                                         fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                                        lineNumber: 166,
+                                        lineNumber: 169,
                                         columnNumber: 17
                                     }, void 0)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                                lineNumber: 149,
+                                lineNumber: 152,
                                 columnNumber: 15
                             }, void 0)
                         }, void 0, false, {
                             fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                            lineNumber: 144,
+                            lineNumber: 147,
                             columnNumber: 13
                         }, void 0),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4702,13 +4723,13 @@ function WorkUnitWorkspace({ model, onAction, headerQueuePicker, kpiStripPlaceho
                             "aria-hidden": true
                         }, void 0, false, {
                             fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                            lineNumber: 169,
+                            lineNumber: 172,
                             columnNumber: 13
                         }, void 0)
                     ]
                 }, void 0, true, {
                     fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                    lineNumber: 143,
+                    lineNumber: 146,
                     columnNumber: 11
                 }, void 0),
                 model.workSummary ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4720,12 +4741,12 @@ function WorkUnitWorkspace({ model, onAction, headerQueuePicker, kpiStripPlaceho
                         surface: "work_unit"
                     }, void 0, false, {
                         fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                        lineNumber: 176,
+                        lineNumber: 179,
                         columnNumber: 15
                     }, void 0)
                 }, void 0, false, {
                     fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                    lineNumber: 175,
+                    lineNumber: 178,
                     columnNumber: 13
                 }, void 0) : null,
                 primaryFooterSlot ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4734,14 +4755,14 @@ function WorkUnitWorkspace({ model, onAction, headerQueuePicker, kpiStripPlaceho
                     children: primaryFooterSlot
                 }, void 0, false, {
                     fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-                    lineNumber: 180,
+                    lineNumber: 183,
                     columnNumber: 13
                 }, void 0) : null
             ]
         }, void 0, true)
     }, void 0, false, {
         fileName: "[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx",
-        lineNumber: 70,
+        lineNumber: 73,
         columnNumber: 5
     }, this);
 }
@@ -6682,7 +6703,6 @@ function buildEnrollmentCrmRowSemanticSlots(row, options) {
         lastActivity = lastTouchedMs != null ? `${formatAgeCompact(Date.now() - lastTouchedMs)} ago` : null;
     }
     const commercialValue = row.quote_total != null && Number.isFinite(Number(row.quote_total)) && Number(row.quote_total) > 0 ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$ui$2d$v2$2f$formatWorkspaceCurrency$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatWorkspaceUsdGrouped"])(Number(row.quote_total)) : null;
-    const programContext = row._requested_program?.trim() || null;
     const roomContext = row._room_label?.trim() || null;
     const attentionReason = row._attention_reason_label?.trim() || null;
     const familyNote = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$opportunityActivityTimelineFormat$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["formatOpportunityQueueNotesPreview"])(row._notes_preview, options?.viewerTimezone ?? undefined);
@@ -6691,12 +6711,18 @@ function buildEnrollmentCrmRowSemanticSlots(row, options) {
         label: String(staleSig.label).trim(),
         severity: staleSig.severity
     } : null;
+    const programRaw = row._requested_program?.trim() || null;
+    const programContextDeduped = programRaw ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$ui$2d$v2$2f$crmQueueRowPreviewPresentation$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["dedupeRedundantProgramAgeInPreview"])(programRaw) : null;
     const want = options?.previewWant ?? ((_f)=>true);
+    const childrenLinesRefined = multiChild && structuredChildren.length >= 2 ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$ui$2d$v2$2f$crmQueueRowPreviewPresentation$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["refineCrmCompactChildLinesForPreview"])(structuredChildren, want("program") ? programContextDeduped : null, {
+        attachFamilyWhenMissing: want("program")
+    }) : null;
     const previewPresentation = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$ui$2d$v2$2f$crmQueueRowPreviewPresentation$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["buildCrmQueueRowPreviewPresentation"])(row, want, options?.rowPreviewFieldLabels);
+    const programContext = want("program") ? !multiChild ? programContextDeduped : null : null;
     return {
         primaryIdentity,
         childName,
-        childrenLines: multiChild ? structuredChildren : null,
+        childrenLines: multiChild ? childrenLinesRefined : null,
         stageLabel,
         statusLabel,
         nextStep,
@@ -8750,6 +8776,26 @@ function queueParamFromWindow() {
         return "";
     }
 }
+/** Lane selection from definition + URL only — before exact summaries (Phase 3.1). */ function resolveProvisionalQueueKey(wu, qFromUrl) {
+    if (!wu.queue_definition) {
+        const q = qFromUrl.trim();
+        return q || null;
+    }
+    try {
+        const def = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$config$2f$queueDefinitionSchema$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["validateQueueDefinition"])(wu.queue_definition);
+        const ui = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$ui$2d$v2$2f$queueUiConfig$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["getQueueUiConfig"])(def);
+        const keys = new Set(def.queues.map((q)=>q.key));
+        const qTrim = qFromUrl.trim();
+        if (qTrim && keys.has(qTrim)) return qTrim;
+        const allKey = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$workspace$2f$workUnitQueueDerived$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["findAllRecordsQueueKey"])(def, ui);
+        if (allKey && keys.has(allKey)) return allKey;
+        const uiOrder = ui.sections.flatMap((s)=>s.queue_keys);
+        return uiOrder.find((k)=>keys.has(k)) ?? def.queues[0]?.key ?? null;
+    } catch  {
+        const q = qFromUrl.trim();
+        return q || null;
+    }
+}
 function registryQuickActionsFromResolved(rowInline) {
     return rowInline.map((a)=>({
             id: a.key,
@@ -8931,6 +8977,46 @@ function AdminV2OpportunityWorkUnitPage() {
         sectionedQueueSummaries,
         allRecordsQueueKey
     ]);
+    /** Tab shells from definition only (no counts) while exact summaries are in flight. */ const queueTabPlaceholders = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useMemo"])({
+        "AdminV2OpportunityWorkUnitPage.useMemo[queueTabPlaceholders]": ()=>{
+            if (!queueUi || !queueDef) return null;
+            const keySet = new Set(queueDef.queues.map({
+                "AdminV2OpportunityWorkUnitPage.useMemo[queueTabPlaceholders]": (q)=>q.key
+            }["AdminV2OpportunityWorkUnitPage.useMemo[queueTabPlaceholders]"]));
+            const sections = queueUi.sections.map({
+                "AdminV2OpportunityWorkUnitPage.useMemo[queueTabPlaceholders].sections": (s)=>({
+                        key: s.key,
+                        label: s.label,
+                        tone: s.tone ?? "standard",
+                        queues: s.queue_keys.filter({
+                            "AdminV2OpportunityWorkUnitPage.useMemo[queueTabPlaceholders].sections": (k)=>keySet.has(k)
+                        }["AdminV2OpportunityWorkUnitPage.useMemo[queueTabPlaceholders].sections"]).map({
+                            "AdminV2OpportunityWorkUnitPage.useMemo[queueTabPlaceholders].sections": (k)=>{
+                                const qc = queueDef.queues.find({
+                                    "AdminV2OpportunityWorkUnitPage.useMemo[queueTabPlaceholders].sections.qc": (q)=>q.key === k
+                                }["AdminV2OpportunityWorkUnitPage.useMemo[queueTabPlaceholders].sections.qc"]);
+                                if (!qc) return null;
+                                return {
+                                    key: qc.key,
+                                    label: qc.label,
+                                    priority: qc.priority ?? "standard"
+                                };
+                            }
+                        }["AdminV2OpportunityWorkUnitPage.useMemo[queueTabPlaceholders].sections"]).filter({
+                            "AdminV2OpportunityWorkUnitPage.useMemo[queueTabPlaceholders].sections": (q)=>q != null
+                        }["AdminV2OpportunityWorkUnitPage.useMemo[queueTabPlaceholders].sections"])
+                    })
+            }["AdminV2OpportunityWorkUnitPage.useMemo[queueTabPlaceholders].sections"]).filter({
+                "AdminV2OpportunityWorkUnitPage.useMemo[queueTabPlaceholders].sections": (s)=>s.queues.length > 0
+            }["AdminV2OpportunityWorkUnitPage.useMemo[queueTabPlaceholders].sections"]);
+            if (!sections.length) return null;
+            return (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$workspace$2f$workUnitQueueDerived$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["reorderSectionsWithAllRecordsFirst"])(sections, allRecordsQueueKey);
+        }
+    }["AdminV2OpportunityWorkUnitPage.useMemo[queueTabPlaceholders]"], [
+        queueUi,
+        queueDef,
+        allRecordsQueueKey
+    ]);
     const coveredThroughputStatusKeys = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useMemo"])({
         "AdminV2OpportunityWorkUnitPage.useMemo[coveredThroughputStatusKeys]": ()=>{
             if (!queueDef) return new Set();
@@ -9094,6 +9180,18 @@ function AdminV2OpportunityWorkUnitPage() {
                             setDept(deptJson);
                             setNeedsAttentionWorkUnitId(naWuEarly?.id ?? null);
                         }
+                        const qFromUrlEarly = queueParamFromWindow();
+                        const provisionalKey = resolveProvisionalQueueKey(wu, qFromUrlEarly);
+                        if (!cancelled) {
+                            if (provisionalKey) setSelectedQueueKey(provisionalKey);
+                            setLoading(false);
+                            if ("TURBOPACK compile-time truthy", 1) {
+                                console.log("[wu-load-phase]", {
+                                    phase: "first_paint",
+                                    duration_ms: Math.round(performance.now() - routeStart)
+                                });
+                            }
+                        }
                         const isAttention = (wu.key ?? "").trim().toLowerCase() === "needs_attention";
                         // Prefer the new QueueService-backed queues. Only fall back to legacy opportunity runtime on 501 or
                         // network/runtime failures that indicate the new queue API isn't usable.
@@ -9208,6 +9306,12 @@ function AdminV2OpportunityWorkUnitPage() {
                                             "AdminV2OpportunityWorkUnitPage.useEffect": (x)=>x.key === allKeyFromDef
                                         }["AdminV2OpportunityWorkUnitPage.useEffect"]) ? allKeyFromDef : firstByUi;
                                         setSelectedQueueKey(initial);
+                                        if ("TURBOPACK compile-time truthy", 1) {
+                                            console.log("[wu-load-phase]", {
+                                                phase: "summaries_ready",
+                                                duration_ms: Math.round(performance.now() - routeStart)
+                                            });
+                                        }
                                     }
                                 } else if (res.status === 501) {
                                     shouldFallbackToLegacy = true;
@@ -9301,16 +9405,7 @@ function AdminV2OpportunityWorkUnitPage() {
                             setEnrollmentRightRailResolved(null);
                         }
                     } finally{
-                        if (!cancelled) {
-                            setLoading(false);
-                            if (typeof performance !== "undefined" && ("TURBOPACK compile-time value", "object") !== "undefined") {
-                                console.log("[page-timing]", {
-                                    route: "work_unit",
-                                    phase: "first_paint",
-                                    duration_ms: Math.round(performance.now() - routeStart)
-                                });
-                            }
-                        }
+                        if (!cancelled) setLoading(false);
                     }
                 }
             })["AdminV2OpportunityWorkUnitPage.useEffect"]();
@@ -9510,7 +9605,6 @@ function AdminV2OpportunityWorkUnitPage() {
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
         "AdminV2OpportunityWorkUnitPage.useEffect": ()=>{
             if (!workUnitId || !selectedQueueKey) return;
-            if (!queueSummaries || queueSummaries.length === 0) return;
             void fetchQueueItems(workUnitId, selectedQueueKey, queueSummaries);
         }
     }["AdminV2OpportunityWorkUnitPage.useEffect"], [
@@ -9567,6 +9661,97 @@ function AdminV2OpportunityWorkUnitPage() {
     const queuePicker = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useMemo"])({
         "AdminV2OpportunityWorkUnitPage.useMemo[queuePicker]": ()=>{
             if (!workUnitId) return null;
+            const summariesPending = queueSummaries === null && !queueSummariesError;
+            if (summariesPending && queueTabPlaceholders?.length) {
+                const pillBase = "inline-flex max-w-full items-center gap-1.5 rounded-full border px-2 py-0.5 text-left text-[11px] font-semibold leading-tight transition-colors";
+                const countBadgePending = /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+                    className: "inline-flex h-3.5 w-3.5 shrink-0 rounded-full border-2 border-alloy-forge/20 border-t-alloy-blue/75 animate-spin",
+                    "aria-label": "Loading queue count"
+                }, void 0, false, {
+                    fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
+                    lineNumber: 923,
+                    columnNumber: 17
+                }, this);
+                const multiSectionPh = queueTabPlaceholders.length > 1;
+                return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                    className: "flex flex-col gap-1.5 min-w-0",
+                    children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                        className: "flex flex-col gap-1",
+                        children: queueTabPlaceholders.map({
+                            "AdminV2OpportunityWorkUnitPage.useMemo[queuePicker]": (section)=>/*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
+                                    className: "flex flex-wrap items-center gap-1",
+                                    role: "group",
+                                    "aria-label": section.label,
+                                    children: [
+                                        multiSectionPh ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+                                            className: "w-full text-[10px] font-semibold tracking-wide text-alloy-forge/50 sm:w-auto sm:mr-1",
+                                            children: section.label
+                                        }, void 0, false, {
+                                            fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
+                                            lineNumber: 935,
+                                            columnNumber: 37
+                                        }, this) : null,
+                                        section.queues.map({
+                                            "AdminV2OpportunityWorkUnitPage.useMemo[queuePicker]": (q)=>{
+                                                const selected = q.key === selectedQueueKey && (!unmappedOnly || allRecordsQueueKey == null || q.key !== allRecordsQueueKey);
+                                                const tier = q.priority === "critical" ? "critical" : q.priority === "attention" ? "attention" : "standard";
+                                                const ring = tier === "critical" ? selected ? "border-alloy-ember bg-alloy-ember/12 text-alloy-forge" : "border-alloy-ember/35 bg-white/60 text-alloy-forge/85" : tier === "attention" ? selected ? "border-alloy-honey bg-alloy-honey/12 text-alloy-forge" : "border-alloy-honey/40 bg-white/60 text-alloy-forge/85" : selected ? "border-alloy-blue bg-alloy-blue/[0.07] text-alloy-forge shadow-[inset_0_0_0_1px_rgba(0,69,140,0.12)]" : "border-admin-border bg-white/70 text-alloy-forge/80";
+                                                return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
+                                                    type: "button",
+                                                    onClick: {
+                                                        "AdminV2OpportunityWorkUnitPage.useMemo[queuePicker]": ()=>{
+                                                            setSelectedQueueKey(q.key);
+                                                            void fetchQueueItems(workUnitId, q.key, null, {
+                                                                force: true
+                                                            });
+                                                            if ("TURBOPACK compile-time truthy", 1) {
+                                                                const url = new URL(window.location.href);
+                                                                url.searchParams.set("queue", q.key);
+                                                                url.searchParams.delete("unmapped");
+                                                                router.replace(`${url.pathname}${url.search}`, {
+                                                                    scroll: false
+                                                                });
+                                                            }
+                                                        }
+                                                    }["AdminV2OpportunityWorkUnitPage.useMemo[queuePicker]"],
+                                                    className: `${pillBase} ${ring}`,
+                                                    "aria-pressed": selected,
+                                                    children: [
+                                                        /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
+                                                            className: "truncate",
+                                                            children: q.label
+                                                        }, void 0, false, {
+                                                            fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
+                                                            lineNumber: 978,
+                                                            columnNumber: 45
+                                                        }, this),
+                                                        countBadgePending
+                                                    ]
+                                                }, q.key, true, {
+                                                    fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
+                                                    lineNumber: 962,
+                                                    columnNumber: 41
+                                                }, this);
+                                            }
+                                        }["AdminV2OpportunityWorkUnitPage.useMemo[queuePicker]"])
+                                    ]
+                                }, section.key, true, {
+                                    fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
+                                    lineNumber: 933,
+                                    columnNumber: 29
+                                }, this)
+                        }["AdminV2OpportunityWorkUnitPage.useMemo[queuePicker]"])
+                    }, void 0, false, {
+                        fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
+                        lineNumber: 931,
+                        columnNumber: 21
+                    }, this)
+                }, void 0, false, {
+                    fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
+                    lineNumber: 930,
+                    columnNumber: 17
+                }, this);
+            }
             if (!queueSummaries) {
                 if (!queueSummariesError) return null;
                 return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -9581,13 +9766,13 @@ function AdminV2OpportunityWorkUnitPage() {
                             ]
                         }, void 0, true, {
                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                            lineNumber: 858,
+                            lineNumber: 996,
                             columnNumber: 25
                         }, this) : null
                     ]
                 }, void 0, true, {
                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                    lineNumber: 855,
+                    lineNumber: 993,
                     columnNumber: 17
                 }, this);
             }
@@ -9604,13 +9789,13 @@ function AdminV2OpportunityWorkUnitPage() {
                             ]
                         }, void 0, true, {
                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                            lineNumber: 868,
+                            lineNumber: 1006,
                             columnNumber: 25
                         }, this) : null
                     ]
                 }, void 0, true, {
                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                    lineNumber: 865,
+                    lineNumber: 1003,
                     columnNumber: 17
                 }, this);
             }
@@ -9664,7 +9849,7 @@ function AdminV2OpportunityWorkUnitPage() {
                                             children: section.label
                                         }, void 0, false, {
                                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                                            lineNumber: 941,
+                                            lineNumber: 1079,
                                             columnNumber: 33
                                         }, this) : null,
                                         section.queues.map({
@@ -9698,7 +9883,7 @@ function AdminV2OpportunityWorkUnitPage() {
                                                             children: q.label
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                                                            lineNumber: 984,
+                                                            lineNumber: 1122,
                                                             columnNumber: 41
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -9706,13 +9891,13 @@ function AdminV2OpportunityWorkUnitPage() {
                                                             children: queuePillBadgeCount(q)
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                                                            lineNumber: 985,
+                                                            lineNumber: 1123,
                                                             columnNumber: 41
                                                         }, this)
                                                     ]
                                                 }, q.key, true, {
                                                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                                                    lineNumber: 968,
+                                                    lineNumber: 1106,
                                                     columnNumber: 37
                                                 }, this);
                                             }
@@ -9743,7 +9928,7 @@ function AdminV2OpportunityWorkUnitPage() {
                                                     children: "Other"
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                                                    lineNumber: 1016,
+                                                    lineNumber: 1154,
                                                     columnNumber: 37
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -9751,25 +9936,25 @@ function AdminV2OpportunityWorkUnitPage() {
                                                     children: unmappedPillCount ?? "—"
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                                                    lineNumber: 1017,
+                                                    lineNumber: 1155,
                                                     columnNumber: 37
                                                 }, this)
                                             ]
                                         }, "__derived_other__", true, {
                                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                                            lineNumber: 996,
+                                            lineNumber: 1134,
                                             columnNumber: 33
                                         }, this) : null
                                     ]
                                 }, section.key, true, {
                                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                                    lineNumber: 939,
+                                    lineNumber: 1077,
                                     columnNumber: 25
                                 }, this)
                         }["AdminV2OpportunityWorkUnitPage.useMemo[queuePicker]"])
                     }, void 0, false, {
                         fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                        lineNumber: 937,
+                        lineNumber: 1075,
                         columnNumber: 17
                     }, this),
                     activeSummary?.description?.trim() && isOperatorFacingQueueSummaryDescription(activeSummary.description) ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -9777,13 +9962,13 @@ function AdminV2OpportunityWorkUnitPage() {
                         children: activeSummary.description.trim()
                     }, void 0, false, {
                         fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                        lineNumber: 1032,
+                        lineNumber: 1170,
                         columnNumber: 21
                     }, this) : null
                 ]
             }, void 0, true, {
                 fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                lineNumber: 936,
+                lineNumber: 1074,
                 columnNumber: 13
             }, this);
         }
@@ -9802,7 +9987,8 @@ function AdminV2OpportunityWorkUnitPage() {
         unmappedOnly,
         allRecordsQueueKey,
         unmappedPillCount,
-        otherPillSectionKey
+        otherPillSectionKey,
+        queueTabPlaceholders
     ]);
     const queueModel = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useMemo"])({
         "AdminV2OpportunityWorkUnitPage.useMemo[queueModel]": ()=>{
@@ -9996,6 +10182,10 @@ function AdminV2OpportunityWorkUnitPage() {
                     }["AdminV2OpportunityWorkUnitPage.useMemo[queueModel].vmItems.want"];
                     const crmChildrenParsed = parseQueueRowCrmChildren(r?._crm_compact_children);
                     const multiChildren = Boolean(want("child_name") && crmChildrenParsed.length >= 2);
+                    const programDeduped = program.trim() && want("program") ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$ui$2d$v2$2f$crmQueueRowPreviewPresentation$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["dedupeRedundantProgramAgeInPreview"])(program) : null;
+                    const childrenLinesForVm = want("child_name") && multiChildren ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$ui$2d$v2$2f$crmQueueRowPreviewPresentation$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["refineCrmCompactChildLinesForPreview"])(crmChildrenParsed, want("program") ? programDeduped : null, {
+                        attachFamilyWhenMissing: want("program")
+                    }) : null;
                     const basicSubtitleParts = [];
                     if (want("status") && statusLabel) basicSubtitleParts.push(`Status: ${statusLabel}`);
                     if (want("primary_contact") && contactName) basicSubtitleParts.push(contactName);
@@ -10019,7 +10209,7 @@ function AdminV2OpportunityWorkUnitPage() {
                                 const crmPresentation = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$ui$2d$v2$2f$crmQueueRowPreviewPresentation$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["buildCrmQueueRowPreviewPresentation"])(r, want, queueUi?.row_preview.fieldLabels);
                                 return {
                                     primaryIdentity: familyTitle,
-                                    childrenLines: want("child_name") && multiChildren ? crmChildrenParsed : null,
+                                    childrenLines: childrenLinesForVm,
                                     childName: want("child_name") ? multiChildren ? null : childName || null : null,
                                     stageLabel: null,
                                     statusLabel: want("status") ? statusLabel || null : null,
@@ -10027,7 +10217,7 @@ function AdminV2OpportunityWorkUnitPage() {
                                     lastActivity: activityLastLine,
                                     commercialValue: null,
                                     ...crmPresentation,
-                                    programContext: want("program") ? program || null : null,
+                                    programContext: want("program") ? multiChildren ? null : programDeduped : null,
                                     roomContext: null,
                                     attentionReason: attentionReason || null,
                                     familyNote: note || null,
@@ -10124,13 +10314,13 @@ function AdminV2OpportunityWorkUnitPage() {
                         coveredStatusKeys: coveredThroughputStatusKeys
                     }, void 0, false, {
                         fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                        lineNumber: 1441,
+                        lineNumber: 1588,
                         columnNumber: 17
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                lineNumber: 1439,
+                lineNumber: 1586,
                 columnNumber: 13
             }, this);
         }
@@ -10644,7 +10834,7 @@ function AdminV2OpportunityWorkUnitPage() {
     ]);
     const effectiveModel = mergedWorkspaceModel;
     const workUnitKpiStripPlaceholder = !suppressWorkUnitKpiStrip && wuPlacementRows === undefined;
-    /** Queue summaries + entity context — KPI placements load after paint (skeleton strip). */ const workUnitPageCoherent = !loading && (!workUnit || !dept || !!error);
+    /** Shell + header render after WU + dept; queue summaries and rows stay in-lane (Phase 3.1). */ const workUnitPageCoherent = !loading && Boolean(workUnit) && Boolean(dept) && !error;
     return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$admin$2f$workspace$2f$WorkspaceChrome$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["WorkspaceChrome"], {
         variant: "bridge",
         breadcrumbs: [
@@ -10667,7 +10857,7 @@ function AdminV2OpportunityWorkUnitPage() {
             showRibbon: false
         }, void 0, false, {
             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-            lineNumber: 1919,
+            lineNumber: 2066,
             columnNumber: 17
         }, this) : effectiveModel ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Fragment"], {
             children: [
@@ -10683,13 +10873,13 @@ function AdminV2OpportunityWorkUnitPage() {
                             children: "View workflows"
                         }, void 0, false, {
                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                            lineNumber: 1928,
+                            lineNumber: 2075,
                             columnNumber: 29
                         }, this)
                     ]
                 }, void 0, true, {
                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                    lineNumber: 1923,
+                    lineNumber: 2070,
                     columnNumber: 25
                 }, this) : null,
                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$app$2f$adminV2$2f$components$2f$workspace$2f$shells$2f$WorkUnitWorkspace$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["default"], {
@@ -10710,12 +10900,12 @@ function AdminV2OpportunityWorkUnitPage() {
                         href: "/adminV2/workflows"
                     }, void 0, false, {
                         fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                        lineNumber: 1939,
+                        lineNumber: 2086,
                         columnNumber: 29
                     }, void 0)
                 }, void 0, false, {
                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                    lineNumber: 1933,
+                    lineNumber: 2080,
                     columnNumber: 21
                 }, this),
                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$admin$2f$opportunity$2f$actions$2f$UpdateStatusAddNoteModal$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["UpdateStatusAddNoteModal"], {
@@ -10762,7 +10952,7 @@ function AdminV2OpportunityWorkUnitPage() {
                     }
                 }, void 0, false, {
                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                    lineNumber: 1953,
+                    lineNumber: 2100,
                     columnNumber: 21
                 }, this),
                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$admin$2f$opportunity$2f$actions$2f$ContactAttemptedModal$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["ContactAttemptedModal"], {
@@ -10802,7 +10992,7 @@ function AdminV2OpportunityWorkUnitPage() {
                     }
                 }, void 0, false, {
                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                    lineNumber: 1990,
+                    lineNumber: 2137,
                     columnNumber: 21
                 }, this)
             ]
@@ -10811,16 +11001,16 @@ function AdminV2OpportunityWorkUnitPage() {
             children: error ?? "Unable to load this work unit."
         }, void 0, false, {
             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-            lineNumber: 2026,
+            lineNumber: 2173,
             columnNumber: 17
         }, this)
     }, void 0, false, {
         fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-        lineNumber: 1908,
+        lineNumber: 2055,
         columnNumber: 9
     }, this);
 }
-_s(AdminV2OpportunityWorkUnitPage, "AS+pyNueU8y/6ZA3jN5wK+5SHWw=", false, function() {
+_s(AdminV2OpportunityWorkUnitPage, "o4IN9g84Nmj1BtzP2KnSm/g9adg=", false, function() {
     return [
         __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$navigation$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useParams"],
         __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$navigation$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useSearchParams"],

@@ -6,7 +6,7 @@ import type {
     QueueItemVm,
 } from "@/lib/ui-v2/workspace-types";
 import { formatOpportunityQueueNotesPreview } from "@/lib/admin/opportunityActivityTimelineFormat";
-import { buildCrmQueueRowPreviewPresentation } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
+import { buildCrmQueueRowPreviewPresentation, dedupeRedundantProgramAgeInPreview, refineCrmCompactChildLinesForPreview } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
 import type { QueueUiRowPreviewField } from "@/lib/ui-v2/queueUiConfig";
 import { normalizePhone } from "@/lib/contactNormalize";
 import { formatWorkspaceUsdGrouped } from "@/lib/ui-v2/formatWorkspaceCurrency";
@@ -194,7 +194,6 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
             ? formatWorkspaceUsdGrouped(Number(row.quote_total))
             : null;
 
-    const programContext = (row as { _requested_program?: string | null })._requested_program?.trim() || null;
     const roomContext = (row as { _room_label?: string | null })._room_label?.trim() || null;
 
     const attentionReason = (row as { _attention_reason_label?: string | null })._attention_reason_label?.trim() || null;
@@ -209,17 +208,29 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
             ? { label: String(staleSig.label).trim(), severity: staleSig.severity }
             : null;
 
+    const programRaw = (row as { _requested_program?: string | null })._requested_program?.trim() || null;
+    const programContextDeduped = programRaw ? dedupeRedundantProgramAgeInPreview(programRaw) : null;
+
     const want = options?.previewWant ?? ((_f: QueueUiRowPreviewField) => true);
+    const childrenLinesRefined =
+        multiChild && structuredChildren.length >= 2
+            ? refineCrmCompactChildLinesForPreview(structuredChildren, want("program") ? programContextDeduped : null, {
+                  attachFamilyWhenMissing: want("program"),
+              })
+            : null;
+
     const previewPresentation = buildCrmQueueRowPreviewPresentation(
         row as Record<string, unknown>,
         want,
         options?.rowPreviewFieldLabels
     );
 
+    const programContext = want("program") ? (!multiChild ? programContextDeduped : null) : null;
+
     return {
         primaryIdentity,
         childName,
-        childrenLines: multiChild ? structuredChildren : null,
+        childrenLines: multiChild ? childrenLinesRefined : null,
         stageLabel,
         statusLabel,
         nextStep,

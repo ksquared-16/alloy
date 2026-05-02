@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 
 const SET_KEY_REGEX = /^[a-z0-9_]{2,64}$/;
@@ -18,7 +18,7 @@ export type OptionSetListRow = {
 
 /** GET: list option_sets for current org with item counts. Admin/ops. */
 export async function GET() {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
@@ -71,7 +71,7 @@ export async function GET() {
 
 /** POST: create option_set. Admin only. */
 export async function POST(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },

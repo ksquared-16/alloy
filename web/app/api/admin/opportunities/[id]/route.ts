@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
-import { getAdminAuth, logAdminAudit } from "@/lib/adminAuth";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAuthCached, logAdminAudit } from "@/lib/adminAuth";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 import { emitEvent } from "@/lib/emitEvent";
 import { upsertFieldValuesFromBody } from "@/lib/admin/fieldValues";
@@ -50,13 +50,13 @@ export async function PATCH(
     request: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
-    const auth = await getAdminAuth();
+    const auth = await getAdminAuthCached();
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
     try {
-        const ctx = await getAdminContext();
+        const ctx = await getAdminContextCached();
         if (!ctx.ok) return adminContextFailureResponse(ctx);
         const body = (await request.json()) as Record<string, unknown>;
 

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdminOrOps } from "@/lib/adminAuth";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getOrgLocalTodayUtcBounds } from "@/lib/admin/orgLocalDayBounds";
 import {
     fetchOperationalTimezoneForOrg,
@@ -28,7 +28,7 @@ export type WorkflowRunRow = {
 export async function GET(request: NextRequest) {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     const orgId = ctx.orgId;
 

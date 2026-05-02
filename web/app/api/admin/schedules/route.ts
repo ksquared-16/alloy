@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { assertAllowedStatusKey, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import {
   fetchScheduleStatusKeyByFk,
@@ -12,7 +12,7 @@ import { fetchOperationalTimezoneForOrg, type OperationalTimezoneSource } from "
 
 /** GET: list schedules for current org. Admin/ops. Exclude canceled by default. */
 export async function GET(request: NextRequest) {
-  const ctx = await getAdminContext();
+  const ctx = await getAdminContextCached();
   if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
@@ -221,7 +221,7 @@ export async function GET(request: NextRequest) {
 
 /** POST: create schedule. Admin only. job_id required; job must belong to org. */
 export async function POST(request: NextRequest) {
-  const ctx = await getAdminContext();
+  const ctx = await getAdminContextCached();
   if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
   if (ctx.role !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

@@ -1,20 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
-import { getAdminAuth, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAuthCached, requireAdminOrOps, logAdminAudit } from "@/lib/adminAuth";
 
 /** POST: link a contact to this vendor (add to vendor_contacts). Body: { contact_id, role? } */
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     const { id: vendorId } = await context.params;
     if (!vendorId) return NextResponse.json({ error: "Missing vendor id" }, { status: 400 });
 
     try {
-        const auth = await getAdminAuth();
+        const auth = await getAdminAuthCached();
         if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
         const body = await request.json();

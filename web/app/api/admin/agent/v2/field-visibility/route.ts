@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { agentV2CommitFieldVisibilityApply } from "@/lib/agent/v2/agentV2FieldVisibilityAtomicCommit";
 import {
     lockTimestampMatches,
@@ -60,7 +60,7 @@ function isUuid(s: string): boolean {
  * POST — AI agent v2: `update_field_visibility` via structured_override only (no LLM).
  */
 export async function POST(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     if (ctx.role !== "admin") {
         return jsonErr(403, "POLICY_DENIED", "Forbidden");

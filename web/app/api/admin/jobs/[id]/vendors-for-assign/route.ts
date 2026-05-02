@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
-import { getAdminAuth, requireAdminOrOps } from "@/lib/adminAuth";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAuthCached, requireAdminOrOps } from "@/lib/adminAuth";
 import { withVendorSelectLabels } from "@/lib/admin/withVendorSelectLabels";
 import { DEFAULT_VENDOR_ASSIGNMENT_POLICY } from "@/lib/admin/vendorAssignmentPolicy";
 
@@ -9,9 +9,9 @@ import { DEFAULT_VENDOR_ASSIGNMENT_POLICY } from "@/lib/admin/vendorAssignmentPo
 export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    const auth = await getAdminAuth();
+    const auth = await getAdminAuthCached();
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const { id: jobId } = await context.params;
     if (!jobId) return NextResponse.json({ error: "Missing job id" }, { status: 400 });

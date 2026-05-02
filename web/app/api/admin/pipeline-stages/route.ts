@@ -1,12 +1,12 @@
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdmin } from "@/lib/adminAuth";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { NextRequest, NextResponse } from "next/server";
 
 /** GET: stages for caller org; optional ?pipeline_id= (must belong to org). */
 export async function GET(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     const pipelineId = request.nextUrl.searchParams.get("pipeline_id");
     try {
@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     const forbidden = await requireAdmin();
     if (forbidden) return forbidden;
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     try {
         const supabase = createAdminClient();

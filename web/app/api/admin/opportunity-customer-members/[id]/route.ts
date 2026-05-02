@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 
@@ -20,7 +20,7 @@ export async function PATCH(
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
     let body: Record<string, unknown> = {};

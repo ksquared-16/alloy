@@ -108,6 +108,15 @@ describe("QueueService — pure helpers", () => {
         expect(expr).toContain("and(status_key.eq.ready_to_enroll,");
     });
 
+    it("needs attention candidate OR prefilter is a superset (includes contact/person null lanes)", () => {
+        const now = new Date("2026-01-10T12:00:00.000Z");
+        const expr = __testing.buildOpportunityNeedsAttentionCandidateOrExpr(now);
+        expect(expr).toContain("customer_id.is.null");
+        expect(expr).toContain("primary_person_id.is.null");
+        expect(expr).toContain("primary_contact_id.is.null");
+        expect(expr).toContain("updated_at.lt.");
+    });
+
     it("opportunity exception queue returns 501 when evaluated", () => {
         const q = {
             key: "needs_attention",

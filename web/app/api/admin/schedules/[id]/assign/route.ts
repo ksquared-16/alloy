@@ -1,17 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
-import { getAdminAuth, requireAdminOrOps } from "@/lib/adminAuth";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAuthCached, requireAdminOrOps } from "@/lib/adminAuth";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 
 /** POST: assign a vendor to this schedule. Body: { vendor_id }. Workflow(s) with event_type "schedule_vendor_assigned" create/update assignment with status "offered". */
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    const auth = await getAdminAuth();
+    const auth = await getAdminAuthCached();
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const { id: scheduleId } = await context.params;
     if (!scheduleId) return NextResponse.json({ error: "Missing schedule id" }, { status: 400 });

@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 
 /** PATCH: update user role in org. Admin only. role must be a role_key from role_definitions for this org. */
 export async function PATCH(
   request: NextRequest,
   context: { params: Promise<{ userId: string }> }
 ) {
-  const ctx = await getAdminContext();
+  const ctx = await getAdminContextCached();
   if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
   if (ctx.role !== "admin") {

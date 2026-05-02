@@ -1,8 +1,22 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 import { POST } from "@/app/api/admin/agent/v2/field-visibility/route";
-import * as getAdminContext from "@/lib/admin/getAdminContext";
 import * as supabaseAdmin from "@/lib/supabaseAdmin";
+
+const { mockGetAdminContext } = vi.hoisted(() => ({
+    mockGetAdminContext: vi.fn(),
+}));
+
+vi.mock("@/lib/admin/getAdminContext", async () => {
+    const actual = await vi.importActual<typeof import("@/lib/admin/getAdminContext")>(
+        "@/lib/admin/getAdminContext"
+    );
+    return {
+        ...actual,
+        getAdminContext: mockGetAdminContext,
+        getAdminContextCached: mockGetAdminContext,
+    };
+});
 
 vi.mock("@/lib/supabaseAdmin", () => ({
     createAdminClient: vi.fn(),
@@ -17,7 +31,7 @@ const fieldId = "f1111111-1111-4111-8111-111111111111";
 describe("POST /api/admin/agent/v2/field-visibility", () => {
     beforeEach(() => {
         vi.stubEnv("AGENT_V2_FIELD_VISIBILITY_ENABLED", "true");
-        vi.spyOn(getAdminContext, "getAdminContext").mockResolvedValue({
+        mockGetAdminContext.mockResolvedValue({
             ok: true,
             orgId,
             userId,

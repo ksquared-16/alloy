@@ -2,8 +2,11 @@
  * Admin portal auth: role-based access (admin / ops).
  * Resolved from user_profiles, then user_roles, then app_users — no email allowlist.
  * V1 roles: admin (full access), ops (read-only). All other roles are denied.
+ *
+ * `getAdminAuth` / `getAdminAuthCached` are request-scoped memoized (React `cache()`).
  */
 
+import { cache } from "react";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import type { User } from "@supabase/supabase-js";
@@ -17,12 +20,7 @@ export interface AdminAuthResult {
     role: string;
 }
 
-/**
- * Get current user and their admin role.
- * Resolution order: user_profiles → user_roles (admin/ops + org) → app_users.
- * Returns null if not logged in or no allowed role is found.
- */
-export async function getAdminAuth(): Promise<AdminAuthResult | null> {
+async function loadAdminAuth(): Promise<AdminAuthResult | null> {
     const t0 = Date.now();
     const user = await getCachedAuthUser();
     const authUserMs = Date.now() - t0;
@@ -90,6 +88,37 @@ export async function getAdminAuth(): Promise<AdminAuthResult | null> {
     }
     return { user, role };
 }
+
+const resolveAdminAuthOnce = cache(async (): Promise<AdminAuthResult | null> => {
+    const t0 = Date.now();
+    const result = await loadAdminAuth();
+    console.log("[admin-context]", {
+        cache_hit: false,
+        duration_ms: Date.now() - t0,
+    });
+    return result;
+});
+
+const adminAuthInvocationCounter = cache(() => ({ n: 0 }));
+
+/**
+ * Request-scoped: repeated calls in the same handler request share one role resolution pass.
+ */
+export async function getAdminAuthCached(): Promise<AdminAuthResult | null> {
+    const ctr = adminAuthInvocationCounter();
+    ctr.n += 1;
+    const out = await resolveAdminAuthOnce();
+    if (ctr.n > 1) {
+        console.log("[admin-context]", {
+            cache_hit: true,
+            duration_ms: 0,
+        });
+    }
+    return out;
+}
+
+/** @deprecated Use `getAdminAuthCached` in new code — behavior is identical (cached). */
+export const getAdminAuth = getAdminAuthCached;
 
 /**
  * Use in mutation routes (POST/PATCH/DELETE). Returns a 401/403 Response if not allowed; otherwise null (caller proceeds).

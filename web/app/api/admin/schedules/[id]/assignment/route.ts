@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
-import { getAdminAuth, requireAdminOrOps } from "@/lib/adminAuth";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAuthCached, requireAdminOrOps } from "@/lib/adminAuth";
 
 /** PATCH: set assignment status (e.g. accepted, declined). Body: { status_key }. */
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
-    const auth = await getAdminAuth();
+    const auth = await getAdminAuthCached();
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     const { id: scheduleId } = await context.params;
     if (!scheduleId) return NextResponse.json({ error: "Missing schedule id" }, { status: 400 });

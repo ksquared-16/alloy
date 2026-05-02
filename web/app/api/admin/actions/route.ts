@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { unstable_cache } from "next/cache";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { adminActionsOrgTag } from "@/lib/admin/actions/cacheTags";
 import { resolveActionsForContext } from "@/lib/admin/actions/resolveActionsForContext";
@@ -22,7 +22,7 @@ const SURFACES = new Set<ActionSurface>([
 export async function GET(request: NextRequest) {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
     const { searchParams } = new URL(request.url);

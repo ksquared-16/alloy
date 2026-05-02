@@ -2,8 +2,22 @@ import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 import { GET } from "@/app/api/admin/record-overview-layouts/route";
 import { PUT } from "@/app/api/admin/config/record-overview-layout/route";
-import * as getAdminContext from "@/lib/admin/getAdminContext";
 import * as supabaseAdmin from "@/lib/supabaseAdmin";
+
+const { mockGetAdminContext } = vi.hoisted(() => ({
+    mockGetAdminContext: vi.fn(),
+}));
+
+vi.mock("@/lib/admin/getAdminContext", async () => {
+    const actual = await vi.importActual<typeof import("@/lib/admin/getAdminContext")>(
+        "@/lib/admin/getAdminContext"
+    );
+    return {
+        ...actual,
+        getAdminContext: mockGetAdminContext,
+        getAdminContextCached: mockGetAdminContext,
+    };
+});
 
 vi.mock("@/lib/supabaseAdmin", () => ({
     createAdminClient: vi.fn(),
@@ -25,7 +39,7 @@ const validConfig = {
 };
 
 function mockAdminCtx(role: string) {
-    vi.spyOn(getAdminContext, "getAdminContext").mockResolvedValue({
+    mockGetAdminContext.mockResolvedValue({
         ok: true,
         orgId,
         userId,

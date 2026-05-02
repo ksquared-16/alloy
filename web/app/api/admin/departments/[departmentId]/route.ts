@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 
 const KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 
@@ -15,7 +15,7 @@ function normalizeKey(raw: string): string {
 
 /** GET: single department in org. */
 export async function GET(_request: NextRequest, context: { params: Promise<{ departmentId: string }> }) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
     const { departmentId } = await context.params;
@@ -41,7 +41,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
 
 /** PATCH: update department. Admin only. */
 export async function PATCH(request: NextRequest, context: { params: Promise<{ departmentId: string }> }) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     if (ctx.role !== "admin") {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -129,7 +129,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
 
 /** DELETE: remove department if no work units reference it (RESTRICT). Admin only. */
 export async function DELETE(_request: NextRequest, context: { params: Promise<{ departmentId: string }> }) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     if (ctx.role !== "admin") {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });

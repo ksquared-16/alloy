@@ -24,9 +24,16 @@ export const DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS: Record<string, string> = {
     email: "Email",
     child_name: "Child",
     program: "Programs",
+    /** Inline label before program per child (e.g. `Program: Preschool`). */
+    program_inline: "Program",
+    /** CRM compact section heading above desired start + tour row. */
+    timing: "Timing",
+    /** CRM compact section above multi- or single-child rows with program. */
+    children_programs: "Children / Programs",
     desired_start_date: "Desired Start Date",
     tour_date: "Tour",
     age_band: "Age band",
+    room: "Room",
 };
 
 export function mergeQueueRowPreviewFieldLabels(override?: Record<string, string> | null): Record<string, string> {

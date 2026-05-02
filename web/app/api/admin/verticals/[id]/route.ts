@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdmin } from "@/lib/adminAuth";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { NextRequest, NextResponse } from "next/server";
 
 /**
@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const forbidden = await requireAdmin();
     if (forbidden) return forbidden;
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     try {
         const { id } = await context.params;

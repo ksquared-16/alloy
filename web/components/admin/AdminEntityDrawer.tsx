@@ -831,8 +831,8 @@ function JobDrawerRelationshipsSection(props: {
     );
 }
 
-/** Opportunity entity uses `surface=drawer_initial` for fast drawer chrome; `full` loads inquiry children, relationship groups, and full identity roles. */
-type OpportunityEntitySurface = "drawer_initial" | "full";
+/** Opportunities always load `surface=full` (single coherent bundle — Phase 4). */
+type OpportunityEntitySurface = "full";
 
 function buildAdminEntityFetchUrl(
     type: AdminDrawerEntityType | null,
@@ -846,10 +846,23 @@ function buildAdminEntityFetchUrl(
         return `/api/admin/entity/jobs/${encodeURIComponent(id)}?surface=${encodeURIComponent(surface)}`;
     }
     if (type === "opportunities" && id !== "new") {
-        const s = opportunityEntitySurface ?? "drawer_initial";
+        const s = opportunityEntitySurface ?? "full";
         return `/api/admin/entity/opportunities/${encodeURIComponent(id)}?surface=${encodeURIComponent(s)}`;
     }
     return `/api/admin/entity/${encodeURIComponent(type)}/${encodeURIComponent(id)}`;
+}
+
+function entityDataMatchesDrawer(
+    data: Record<string, unknown> | null,
+    drawerId: string | null | undefined
+): boolean {
+    return (
+        !data ||
+        !drawerId ||
+        drawerId === "new" ||
+        (data as { id?: string }).id == null ||
+        String((data as { id: string }).id) === String(drawerId)
+    );
 }
 
 function opportunityActivityStaleBadgeClass(severity: "low" | "medium" | "high"): string {
@@ -902,13 +915,8 @@ export default function AdminEntityDrawer() {
         const rid = (data as { id?: unknown }).id;
         return String(rid ?? "") === String(drawer.id);
     }, [data, drawer.id, drawer.type]);
-    const opportunityRecordHydrationPending = useMemo(() => {
-        if (drawer.type !== "opportunities" || !data || typeof data !== "object") return false;
-        if ((data as { _create?: boolean })._create) return false;
-        return String((data as { _record_surface?: string })._record_surface ?? "").trim() === "drawer_initial";
-    }, [data, drawer.type]);
-    const [opportunityDrawerHydrateHighlight, setOpportunityDrawerHydrateHighlight] = useState(false);
-    const opportunityHydrationWasPendingRef = useRef(false);
+    /** Staged `drawer_initial` → `full` removed; identity + inquiry data ship in one entity fetch (Phase 4). */
+    const opportunityRecordHydrationPending = false;
     const [isEditing, setIsEditing] = useState(false);
     const [initialInlineFormSnapshot, setInitialInlineFormSnapshot] = useState<string | null>(null);
     const [formData, setFormData] = useState<Record<string, unknown>>({});
@@ -948,6 +956,35 @@ export default function AdminEntityDrawer() {
     const [opportunityActionLoading, setOpportunityActionLoading] = useState<string | null>(null);
     const [opportunityResolvedHeaderActions, setOpportunityResolvedHeaderActions] = useState<ResolvedActionsBySlot | null>(null);
     const [opportunityResolvedHeaderLoading, setOpportunityResolvedHeaderLoading] = useState(false);
+
+    /** One coherent bundle: entity row + (for opportunities) record_header actions resolved — Phase 4. */
+    const drawerReady = useMemo(() => {
+        const dm = entityDataMatchesDrawer(data, drawer.id);
+        const overview = dm ? data : null;
+        const isDrawerCreateFlow =
+            !drawer.id ||
+            drawer.id === "new" ||
+            Boolean(overview && (overview as { _create?: boolean })._create);
+        const existingEntityDrawerTarget =
+            !!drawer.id &&
+            drawer.id !== "new" &&
+            !(overview && (overview as { _create?: boolean })._create);
+        const entityFetchReady =
+            existingEntityDrawerTarget && !loading && !error && data != null && dm;
+        if (isDrawerCreateFlow) return !loading && !error && data != null && dm;
+        return entityFetchReady && (drawer.type !== "opportunities" || !opportunityResolvedHeaderLoading);
+    }, [data, drawer.id, drawer.type, loading, error, opportunityResolvedHeaderLoading]);
+
+    const drawerGateLoading = useMemo(() => {
+        const dm = entityDataMatchesDrawer(data, drawer.id);
+        const overview = dm ? data : null;
+        const existingEntityDrawerTarget =
+            !!drawer.id &&
+            drawer.id !== "new" &&
+            !(overview && (overview as { _create?: boolean })._create);
+        return existingEntityDrawerTarget && !error && !drawerReady;
+    }, [data, drawer.id, error, drawerReady]);
+
     const [oppQuoteIntakeOpen, setOppQuoteIntakeOpen] = useState(false);
     const [oppDiscountOptions, setOppDiscountOptions] = useState<{ value: string; label: string }[] | null>(null);
     const [oppDiscountLoading, setOppDiscountLoading] = useState(false);
@@ -1044,10 +1081,10 @@ export default function AdminEntityDrawer() {
     const [opportunityWorkUnitDepartmentId, setOpportunityWorkUnitDepartmentId] = useState<string | null>(null);
     /** Fire `interactive` timing once per opportunity open (relaxed vs waiting on header fetch). */
     const opportunityInteractiveMarkedRef = useRef<string | null>(null);
-    /** Dedupes identical `record_header` resolutions across drawer_initial → full. */
+    /** Dedupes identical `record_header` resolutions on refetch. */
     const opportunityHeaderResolvedSigRef = useRef<string | null>(null);
-    /** First paint time when `drawer_initial` is shown (hydration wait measurement). */
-    const oppDrawerInitialSeenAtRef = useRef<number | null>(null);
+    const drawerLoadStartRef = useRef<{ key: string; at: number } | null>(null);
+    const drawerReadyLoggedKeyRef = useRef<string | null>(null);
     const [addInquiryChildState, setAddInquiryChildState] = useState<{ mode: "child" | "sibling" } | null>(null);
     const [collectPaymentOpen, setCollectPaymentOpen] = useState(false);
     const [collectPaymentContext, setCollectPaymentContext] = useState<AdminCollectPaymentModalContext | null>(null);
@@ -1388,6 +1425,38 @@ export default function AdminEntityDrawer() {
         console.info("[timing][drawer]", { key, phase: "open", ms_since_open: 0 });
     }, [drawer.type, drawer.id, timingEnabled]);
 
+    useEffect(() => {
+        if (!drawer.type || !drawer.id) {
+            drawerReadyLoggedKeyRef.current = null;
+            drawerLoadStartRef.current = null;
+            return;
+        }
+        drawerReadyLoggedKeyRef.current = null;
+        drawerLoadStartRef.current = { key: `${drawer.type}:${drawer.id}`, at: performance.now() };
+        if (typeof window !== "undefined") {
+            console.log("[drawer-load]", { phase: "open_start" });
+        }
+    }, [drawer.type, drawer.id]);
+
+    useEffect(() => {
+        if (!drawer.type || !drawer.id || !drawerReady) return;
+        const dm = entityDataMatchesDrawer(data, drawer.id);
+        const overview = dm ? data : null;
+        const existing =
+            !!drawer.id &&
+            drawer.id !== "new" &&
+            !(overview && (overview as { _create?: boolean })._create);
+        if (!existing) return;
+        const key = `${drawer.type}:${drawer.id}`;
+        if (drawerReadyLoggedKeyRef.current === key) return;
+        drawerReadyLoggedKeyRef.current = key;
+        const start = drawerLoadStartRef.current;
+        const duration_ms = start?.key === key ? Math.round(performance.now() - start.at) : 0;
+        if (typeof window !== "undefined") {
+            console.log("[drawer-load]", { phase: "ready", duration_ms });
+        }
+    }, [drawer.type, drawer.id, drawerReady, data]);
+
     const patchOpportunityQuote = useCallback(
         async (payload: Record<string, unknown>) => {
             if (!drawer.id || drawer.id === "new") return;
@@ -1513,58 +1582,11 @@ export default function AdminEntityDrawer() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [drawer.type, drawer.id, drawer.jobRecordSurface]);
 
-    const opportunityRecordNeedsHydrate = useMemo(() => {
-        if (drawer.type !== "opportunities" || !data || typeof data !== "object") return false;
-        return (data as { _record_surface?: string })._record_surface === "drawer_initial";
-    }, [drawer.type, data]);
-
-    useEffect(() => {
-        if (!opportunityRecordNeedsHydrate || !drawer.id || drawer.id === "new") return;
-        let cancelled = false;
-        const url = buildAdminEntityFetchUrl("opportunities", drawer.id, drawer.jobRecordSurface, "full");
-        if (!url) return;
-        const timingEnabled =
-            process.env.NODE_ENV !== "production" ||
-            (typeof window !== "undefined" && /staging|localhost|127\.0\.0\.1/i.test(window.location.hostname));
-        const t0 = timingEnabled ? performance.now() : 0;
-        fetch(url)
-            .then((res) => {
-                if (!res.ok) throw new Error("Failed to load");
-                return res.json();
-            })
-            .then((json) => {
-                if (!cancelled) {
-                    if (timingEnabled) {
-                        const now = performance.now();
-                        const pendingStart = oppDrawerInitialSeenAtRef.current;
-                        const wasVisiblyPending =
-                            typeof pendingStart === "number" && pendingStart > 0;
-                        const hydrationPendingMs =
-                            wasVisiblyPending && typeof pendingStart === "number"
-                                ? Math.round((now - pendingStart) * 10) / 10
-                                : null;
-                        console.info("[timing][drawer]", {
-                            key: `opportunities:${drawer.id}`,
-                            phase: "opportunity_full_hydration_applied",
-                            ms: Math.round((now - t0) * 10) / 10,
-                            was_visibly_pending: wasVisiblyPending,
-                            hydration_pending_ms: hydrationPendingMs,
-                        });
-                    }
-                    setData(json);
-                }
-            })
-            .catch(() => {});
-        return () => {
-            cancelled = true;
-        };
-    }, [opportunityRecordNeedsHydrate, drawer.id, drawer.jobRecordSurface]);
-
     useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
-        if (!entityRowReady) return;
+        if (!drawerReady) return;
         prefetchWorkspaceChildcareInquiryOptionSets();
-    }, [drawer.type, drawer.id, entityRowReady]);
+    }, [drawer.type, drawer.id, drawerReady]);
 
     useEffect(() => {
         if (drawerTab !== "activity") return;
@@ -1633,7 +1655,7 @@ export default function AdminEntityDrawer() {
             setOpportunityActivitySignalLoading(false);
             return;
         }
-        if (!entityRowReady) {
+        if (!drawerReady) {
             setOpportunityActivitySignal(null);
             setOpportunityActivitySignalLoading(false);
             return;
@@ -1673,7 +1695,7 @@ export default function AdminEntityDrawer() {
                 window.clearTimeout(timeoutHandle);
             }
         };
-    }, [drawer.type, drawer.id, entityRowReady, opportunityActivitySignalNonce]);
+    }, [drawer.type, drawer.id, drawerReady, opportunityActivitySignalNonce]);
 
     useEffect(() => {
         if (!drawer.type || !drawer.id || drawer.id === "new" || !canHardDeleteEntityType(drawer.type)) {
@@ -1681,7 +1703,7 @@ export default function AdminEntityDrawer() {
             setDeletionEligibilityLoading(false);
             return;
         }
-        if (!entityRowReady) {
+        if (!drawerReady) {
             setDeletionEligibility(null);
             setDeletionEligibilityLoading(false);
             return;
@@ -1695,7 +1717,7 @@ export default function AdminEntityDrawer() {
             })
             .catch(() => setDeletionEligibility(null))
             .finally(() => setDeletionEligibilityLoading(false));
-    }, [drawer.type, drawer.id, entityRowReady]);
+    }, [drawer.type, drawer.id, drawerReady]);
 
     useEffect(() => {
         if (drawer.type !== "contacts" || !drawer.id || drawer.id === "new") {
@@ -2355,36 +2377,11 @@ export default function AdminEntityDrawer() {
     }, [drawer.type, drawer.opportunityWorkspaceContext?.department_id, opportunityWorkUnitDepartmentId, data]);
 
     useEffect(() => {
-        oppDrawerInitialSeenAtRef.current = null;
-        opportunityHydrationWasPendingRef.current = false;
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
             opportunityInteractiveMarkedRef.current = null;
             opportunityHeaderResolvedSigRef.current = null;
         }
     }, [drawer.type, drawer.id]);
-
-    useEffect(() => {
-        if (drawer.type !== "opportunities") {
-            setOpportunityDrawerHydrateHighlight(false);
-            return;
-        }
-        const was = opportunityHydrationWasPendingRef.current;
-        if (was && !opportunityRecordHydrationPending) {
-            setOpportunityDrawerHydrateHighlight(true);
-            const t = window.setTimeout(() => setOpportunityDrawerHydrateHighlight(false), 320);
-            opportunityHydrationWasPendingRef.current = false;
-            return () => window.clearTimeout(t);
-        }
-        opportunityHydrationWasPendingRef.current = opportunityRecordHydrationPending;
-        return undefined;
-    }, [drawer.type, opportunityRecordHydrationPending]);
-
-    useEffect(() => {
-        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
-        if (entityRowReady && opportunityRecordNeedsHydrate && oppDrawerInitialSeenAtRef.current == null) {
-            oppDrawerInitialSeenAtRef.current = performance.now();
-        }
-    }, [drawer.type, drawer.id, entityRowReady, opportunityRecordNeedsHydrate]);
 
     useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
@@ -4697,59 +4694,9 @@ export default function AdminEntityDrawer() {
         return new Set([...h.primary, ...h.secondary, ...h.overflow].map((a) => a.key));
     }, [opportunityResolvedHeaderActions]);
 
-    const opportunityDepartmentIdKnown = Boolean(
-        (opportunityWorkUnitDepartmentId?.trim() ?? "") ||
-            (data && typeof data === "object"
-                ? String((data as { _work_unit_department_id?: unknown })._work_unit_department_id ?? "").trim()
-                : "")
-    );
-    const opportunityHeaderScopePending =
-        isOpportunityExistingView &&
-        drawer.id &&
-        !loading &&
-        data != null &&
-        entityRowReady &&
-        Boolean(opportunityWorkUnitId.trim()) &&
-        !opportunityDepartmentIdKnown;
-
-    /** Reserve header action lane while scoped registry resolves (avoids empty-then-pop layout). */
-    const showOpportunityHeaderRegistrySkeleton =
-        isOpportunityExistingView &&
-        drawer.id &&
-        !loading &&
-        data != null &&
-        entityRowReady &&
-        (opportunityResolvedHeaderLoading ||
-            (opportunityInquiryWorkflowDrawer && opportunityHeaderScopePending));
-
     const opportunityHeaderQuickActionsNode =
         isOpportunityExistingView && drawer.id && !loading && data != null && entityRowReady
-            ? showOpportunityHeaderRegistrySkeleton
-              ? (() => {
-                    const shell =
-                        drawerShellVariant === "adminV2"
-                            ? opportunityInquiryWorkflowDrawer
-                                ? "rounded-xl border border-admin-border/45 bg-white/80 px-2.5 py-2 shadow-sm ring-1 ring-alloy-stone/10 min-h-[3.25rem]"
-                                : "rounded-lg border border-admin-border/45 bg-white/70 px-2.5 py-1.5 shadow-sm min-h-[2.75rem]"
-                            : "min-h-[2.5rem]";
-                    return (
-                        <div
-                            className={`flex flex-wrap items-center ${shell}`}
-                            aria-busy="true"
-                            aria-label="Loading header actions"
-                            data-opportunity-record-actions-skeleton="true"
-                        >
-                            <AdminV2DrawerLoadingState
-                                density="micro"
-                                showTrack={false}
-                                title="Loading actions"
-                                description="Resolving controls for this record…"
-                                className="max-w-[22rem] border-0 bg-transparent px-1 py-0.5 shadow-none ring-0"
-                            />
-                        </div>
-                    );
-                })()
-              : useOpportunityActionRegistryHeader
+            ? useOpportunityActionRegistryHeader
                 ? (
             <div
                 className={`flex flex-wrap gap-2 items-center ${
@@ -4817,12 +4764,7 @@ export default function AdminEntityDrawer() {
                 : null
             : null;
 
-    const dataMatchesDrawer =
-        !data ||
-        !drawer.id ||
-        drawer.id === "new" ||
-        (data as { id?: string }).id == null ||
-        String((data as { id: string }).id) === String(drawer.id);
+    const dataMatchesDrawer = entityDataMatchesDrawer(data, drawer.id);
     const overviewData = dataMatchesDrawer ? data : null;
 
     const opportunityQuoteIntakeNode =
@@ -5102,14 +5044,6 @@ export default function AdminEntityDrawer() {
         isOpportunityRecordModalTarget &&
         !!overviewData &&
         !(overviewData as { _create?: boolean })._create;
-    /**
-     * Perceived-performance polish: ensure the drawer never renders an "empty body" flash
-     * on first open / record switch while the fetch effect hasn't flipped `loading` yet.
-     */
-    const showDrawerBodyLoading =
-        !!drawer.id &&
-        drawer.id !== "new" &&
-        (loading || data == null || (data != null && !dataMatchesDrawer));
 
     const jobDrawerV2SignalsNode = useMemo(() => {
         if (!isJobDrawerV2 || !overviewData) return null;
@@ -5193,7 +5127,7 @@ export default function AdminEntityDrawer() {
                                                     : drawer.type === "subscriptions"
                                                         ? `${subscriptionSingular}: ${(overviewData._customer_name as string) || `${(drawer.id ?? "").slice(0, 8)}…`}`
                                                     : "Details"
-        : showDrawerBodyLoading || loading
+        : drawerGateLoading || loading
             ? "Loading…"
             : "Details";
 
@@ -6084,8 +6018,7 @@ export default function AdminEntityDrawer() {
                           };
                       })
                     : [];
-                const detailPending =
-                    String((d as { _record_surface?: string })._record_surface ?? "").trim() === "drawer_initial";
+                const detailPending = false;
                 out.inquiry_children = (
                     <OpportunityInquiryChildrenSection
                         rows={rows.filter((r) => r.id && (r.customer_member_id || r.display_name))}
@@ -7051,7 +6984,7 @@ export default function AdminEntityDrawer() {
 
     if (!drawer.type || !drawer.id) return null;
 
-    const drawerStatusBadge = overviewData && !loading && !(overviewData as { _create?: boolean })?._create ? (
+    const drawerStatusBadge = overviewData && !loading && !drawerGateLoading && !(overviewData as { _create?: boolean })?._create ? (
         drawer.type === "jobs" && isJobExistingView ? (
             isJobDrawerV2 ? null : (
                 <div className="flex flex-wrap items-center gap-2">
@@ -7234,7 +7167,8 @@ export default function AdminEntityDrawer() {
                 active={drawerTab}
                 onSelect={setDrawerTab}
             />
-        ) : overviewData &&
+        ) : drawerReady &&
+          overviewData &&
           !loading &&
           ["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "persons", "vendors", "locations", "payments", "discount_redemptions", "service_offerings", "service_plan_templates", "addons", "subscriptions", "documents"].includes(drawer.type) &&
           !(overviewData as { _create?: boolean })?._create ? (
@@ -7263,8 +7197,8 @@ export default function AdminEntityDrawer() {
                   .join(" · ") || undefined
             : undefined;
     const drawerTitleResolved =
-        showDrawerBodyLoading && drawer.type === "opportunities"
-            ? `Loading ${opportunitySingular.toLowerCase()}…`
+        drawerGateLoading
+            ? `Loading ${drawer.type ? getEntityLabel(labels, drawer.type, "singular").toLowerCase() : "record"}…`
             : drawer.type === "opportunities" &&
                 overviewData &&
                 !(overviewData as { _create?: boolean })._create &&
@@ -7356,16 +7290,22 @@ export default function AdminEntityDrawer() {
             isOpen
             onClose={closeDrawer}
             title={drawerTitleResolved}
-            headerSubtitle={headerSubtitleResolved}
-            headerTitleRight={workflowHeaderTitleRight}
+            headerSubtitle={drawerGateLoading ? undefined : headerSubtitleResolved}
+            headerTitleRight={drawerGateLoading ? undefined : workflowHeaderTitleRight}
             statusBadge={
                 drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer ? undefined : drawerStatusBadge
             }
             headerActions={
-                drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer ? undefined : drawerHeaderActions
+                drawerGateLoading
+                    ? undefined
+                    : drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer
+                      ? undefined
+                      : drawerHeaderActions
             }
-            headerSignals={isJobDrawerV2 ? jobDrawerV2SignalsNode : opportunityInquiryWorkflowHeaderTimeline}
-            headerExtra={drawerHeaderExtra}
+            headerSignals={
+                drawerGateLoading ? undefined : isJobDrawerV2 ? jobDrawerV2SignalsNode : opportunityInquiryWorkflowHeaderTimeline
+            }
+            headerExtra={drawerGateLoading ? undefined : drawerHeaderExtra}
             zIndexBackdrop={60}
             zIndexPanel={70}
             accentColor={drawer.type ? DRAWER_ACCENT_COLORS[drawer.type] : undefined}
@@ -7382,34 +7322,19 @@ export default function AdminEntityDrawer() {
             }
         >
             <div className="adminv2-drawer-content-enter">
-            {showDrawerBodyLoading &&
-                (isOpportunityRecordModalTarget ? (
-                    <div className="px-1 py-2">
-                        <AdminV2DrawerLoadingState
-                            density="panel"
-                            title={`Loading ${opportunitySingular.toLowerCase()}`}
-                            description="Enrollment details, household context, and sections will appear in a moment — same loading pattern as workspace routes."
-                        />
-                    </div>
-                ) : isJobRecordModalTarget || isScheduleRecordModalTarget ? (
-                    <div
-                        className="space-y-4 px-1 py-2"
-                        aria-busy="true"
-                        aria-label={isJobRecordModalTarget ? "Loading job" : "Loading schedule"}
-                    >
-                        <div className="h-4 max-w-md w-full skeleton-pulse rounded-md bg-alloy-stone/25" />
-                        <div className="h-28 skeleton-pulse rounded-xl bg-alloy-stone/15" style={{ animationDelay: "60ms" }} />
-                        <div className="h-40 skeleton-pulse rounded-xl bg-alloy-stone/12" style={{ animationDelay: "120ms" }} />
-                    </div>
-                ) : (
-                    <p className="text-alloy-midnight/60">Loading…</p>
-                ))}
+            {drawerGateLoading && (
+                <div className="px-1 py-2">
+                    <AdminV2DrawerLoadingState
+                        density="panel"
+                        title="Loading record"
+                        description="Preparing details and actions…"
+                    />
+                </div>
+            )}
             {error && <p className="text-alloy-ember">Error: {error}</p>}
-            {data && !loading && dataMatchesDrawer && (
+            {drawerReady && data && dataMatchesDrawer && (
                 <div
-                    className={`${isJobDrawerV2 && drawer.type === "jobs" ? "space-y-3 max-w-none" : showScheduleRecordModalV2 || showOpportunityRecordModalV2 ? "space-y-3 max-w-none" : "space-y-6"}${showOpportunityRecordModalV2 ? " pb-24 sm:pb-28" : ""}${
-                        showOpportunityRecordModalV2 && opportunityDrawerHydrateHighlight ? " adminv2-opportunity-drawer-hydrate-flash" : ""
-                    }`}
+                    className={`${isJobDrawerV2 && drawer.type === "jobs" ? "space-y-3 max-w-none" : showScheduleRecordModalV2 || showOpportunityRecordModalV2 ? "space-y-3 max-w-none" : "space-y-6"}${showOpportunityRecordModalV2 ? " pb-24 sm:pb-28" : ""}`}
                     data-adminv2-job-drawer-body={isJobDrawerV2 && drawer.type === "jobs" ? "true" : undefined}
                     data-adminv2-schedule-drawer-body={showScheduleRecordModalV2 ? "true" : undefined}
                     data-adminv2-opportunity-drawer-body={showOpportunityRecordModalV2 ? "true" : undefined}
@@ -9624,12 +9549,9 @@ export default function AdminEntityDrawer() {
                                                                                     <div className="mt-1 text-[13px] font-semibold text-alloy-midnight/85">{household}</div>
                                                                                 )
                                                                             ) : opportunityRecordHydrationPending ? (
-                                                                                <AdminV2DrawerLoadingState
-                                                                                    density="micro"
-                                                                                    showTrack={false}
-                                                                                    title="Loading household"
-                                                                                    description="Finishes with the full enrollment record."
-                                                                                    className="mt-1 border-0 bg-transparent px-0 py-1 shadow-none ring-0"
+                                                                                <div
+                                                                                    className="mt-1 h-9 w-full max-w-[14rem] skeleton-pulse rounded-md bg-alloy-stone/15"
+                                                                                    aria-hidden
                                                                                 />
                                                                             ) : (
                                                                                 <div className="mt-1 text-[12px] text-alloy-midnight/45">No household on file.</div>
@@ -9638,12 +9560,9 @@ export default function AdminEntityDrawer() {
                                                                                 {commRoleLabel ? `Primary contact (${commRoleLabel})` : "Primary contact"}
                                                                             </div>
                                                                             {primaryContactNamePending ? (
-                                                                                <AdminV2DrawerLoadingState
-                                                                                    density="micro"
-                                                                                    showTrack={false}
-                                                                                    title="Loading primary contact"
-                                                                                    description="Name and contact details arrive with the full record."
-                                                                                    className="mt-0.5 border-0 bg-transparent px-0 py-1 shadow-none ring-0"
+                                                                                <div
+                                                                                    className="mt-0.5 h-9 w-full max-w-[14rem] skeleton-pulse rounded-md bg-alloy-stone/15"
+                                                                                    aria-hidden
                                                                                 />
                                                                             ) : (
                                                                                 <>
@@ -9655,12 +9574,9 @@ export default function AdminEntityDrawer() {
                                                                                         {primaryContactLabelLine || "—"}
                                                                                     </button>
                                                                                     {primaryContactChannelsPending ? (
-                                                                                        <AdminV2DrawerLoadingState
-                                                                                            density="micro"
-                                                                                            showTrack={false}
-                                                                                            title="Loading phone & email"
-                                                                                            description="Finishes with the full enrollment record."
-                                                                                            className="mt-1 border-0 bg-transparent px-0 py-1 shadow-none ring-0"
+                                                                                        <div
+                                                                                            className="mt-1 h-7 w-full max-w-[18rem] skeleton-pulse rounded-md bg-alloy-stone/12"
+                                                                                            aria-hidden
                                                                                         />
                                                                                     ) : (
                                                                                         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-alloy-midnight/70">
@@ -9915,12 +9831,9 @@ export default function AdminEntityDrawer() {
                                                                 <div className="rounded-lg border border-alloy-stone/25 bg-white px-2 py-1.5">
                                                                     {opportunityRecordHydrationPending &&
                                                                     !(commName || primaryContact || primaryPerson || household).trim() ? (
-                                                                        <AdminV2DrawerLoadingState
-                                                                            density="micro"
-                                                                            showTrack={false}
-                                                                            title="Loading primary contact"
-                                                                            description="Identity details arrive with the full record."
-                                                                            className="border-0 bg-transparent px-0 py-0.5 shadow-none ring-0"
+                                                                        <div
+                                                                            className="h-8 w-full max-w-[14rem] skeleton-pulse rounded-md bg-alloy-stone/15"
+                                                                            aria-hidden
                                                                         />
                                                                     ) : (
                                                                         <>
@@ -9930,12 +9843,9 @@ export default function AdminEntityDrawer() {
                                                                             {opportunityRecordHydrationPending &&
                                                                             !!(commName || primaryContact || primaryPerson || household).trim() &&
                                                                             (!commPhone || !commEmail) ? (
-                                                                                <AdminV2DrawerLoadingState
-                                                                                    density="micro"
-                                                                                    showTrack={false}
-                                                                                    title="Loading phone & email"
-                                                                                    description="Finishes with the full enrollment record."
-                                                                                    className="mt-1 border-0 bg-transparent px-0 py-0.5 shadow-none ring-0"
+                                                                                <div
+                                                                                    className="mt-1 h-6 w-full max-w-[16rem] skeleton-pulse rounded-md bg-alloy-stone/12"
+                                                                                    aria-hidden
                                                                                 />
                                                                             ) : (
                                                                                 <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[12px] font-medium text-alloy-midnight/65">

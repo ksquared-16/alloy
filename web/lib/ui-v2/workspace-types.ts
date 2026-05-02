@@ -49,11 +49,35 @@ export type QueueItemWaitStatusVm = "safe" | "approaching" | "breached";
  * Stable semantic slots for CRM-compact queue rows — config can target these keys
  * without reshaping the whole `QueueItemVm`.
  */
+/**
+ * Work-unit CRM compact queue row — one labeled fact group (doctrine: muted label above, value below).
+ * @see docs/architecture/workspace-work-unit-scope-doctrine.md § Work-unit queue record row (fact groups)
+ */
+export type WorkUnitQueueCrmFactGroupKind = "contact" | "children_programs" | "timing" | "meta";
+
+export type WorkUnitQueueCrmTimingSegmentVm = {
+  /** Includes trailing colon when appropriate, e.g. `Desired Start Date:` */
+  label: string;
+  value: string;
+};
+
+export type WorkUnitQueueCrmFactGroupVm = {
+  kind: WorkUnitQueueCrmFactGroupKind;
+  /** Muted group title (from `field_labels` + defaults). */
+  label: string;
+  /** Plain value lines (contact, children/programs, meta). */
+  lines?: string[];
+  /** Timing row: labeled segments; field names semibold in CSS, values baseline. */
+  timingSegments?: WorkUnitQueueCrmTimingSegmentVm[];
+};
+
 export type CrmCompactChildLineVm = {
   /** Name; may include age suffix from backend (e.g. "Alex (5y)"). */
   primary: string;
   /** Program slice / age-band when distinct from primary (inquiry metadata). */
   secondary?: string | null;
+  /** Deduped program / age text for doctrine line (`Name · program`). */
+  programInline?: string | null;
 };
 
 export type CrmCompactRowSemanticSlots = {
@@ -79,28 +103,42 @@ export type CrmCompactRowSemanticSlots = {
   contactDisplayName?: string | null;
   contactPhoneDisplay?: string | null;
   contactEmail?: string | null;
-  /** Desired start date, date-only UI (MM-DD-YYYY, UTC calendar). */
+  /** Desired start date, date-only MM-DD-YYYY (UTC), or `—` when the field is in row preview but missing. */
   desiredStartDateDisplay?: string | null;
   /**
-   * When both desired start and tour are present (and row_preview gates allow both),
-   * one compact line: `{desired_label}: {date} • {tour_label}: {date[/time]}`.
+   * Tour / timing (normalized). `—` when `tour_date` is in row preview but missing.
+   * Prefer `crmCompactTimingValueLine` for work-unit CRM layout.
    */
-  timingDesiredStartAndTourLine?: string | null;
+  tourContext?: string | null;
+  /** One line: labeled desired start + labeled tour (spaced), when either is configured in row preview. */
+  crmCompactTimingValueLine?: string | null;
+  /** Section label above timing value line (`field_labels.timing`). */
+  rowPreviewLabelTimingGroup?: string | null;
+  /** Section label above children + program rows (`field_labels.children_programs`). */
+  crmChildrenProgramsGroupLabel?: string | null;
+  /** Per-child inline label before program (`field_labels.program_inline`). */
+  rowPreviewLabelProgramInline?: string | null;
   /** `_age_band` when present (contrasts with legacy combined `ageContext`). */
   ageBandContext?: string | null;
   /** Captions for CRM compact row groups — from queue `row_preview.field_labels` + defaults. */
   rowPreviewLabelPrimaryContact?: string | null;
+  rowPreviewLabelPhone?: string | null;
+  rowPreviewLabelEmail?: string | null;
   rowPreviewLabelDesiredStartDate?: string | null;
   rowPreviewLabelTourDate?: string | null;
   rowPreviewLabelAgeBand?: string | null;
   programContext: string | null;
   roomContext: string | null;
   ageContext: string | null;
-  tourContext: string | null;
   attentionReason: string | null;
   familyNote: string | null;
   /** Activity Signals V1 — config-driven stale hint (workflow_events + metadata). */
   activityStale?: { label: string; severity: "low" | "medium" | "high" } | null;
+  /**
+   * Work-unit queue row doctrine: ordered fact groups for CRM compact middle zone.
+   * When non-empty, `QueueBlock` renders these via the shared fact-group renderer.
+   */
+  crmFactGroups?: WorkUnitQueueCrmFactGroupVm[] | null;
 };
 
 export type QueueItemVm = {

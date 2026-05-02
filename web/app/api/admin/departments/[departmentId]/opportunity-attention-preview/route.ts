@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1 } from "@/lib/workspace/opportunityAttentionRules";
 import { buildOpportunityAttentionQueueItems } from "@/lib/workspace/buildOpportunityAttentionQueueItems";
 import { enrichOpportunityQueueRowsWithActivitySignals } from "@/lib/admin/activitySignals";
@@ -12,7 +12,7 @@ import { enrichOpportunityQueueRowsWithActivitySignals } from "@/lib/admin/activ
  * Same item shape as `…/work-units/:id/opportunity-attention-queue`; uses default attention thresholds.
  */
 export async function GET(_request: NextRequest, context: { params: Promise<{ departmentId: string }> }) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
     const { departmentId } = await context.params;

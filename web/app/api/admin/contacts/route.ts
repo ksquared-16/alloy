@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { normalizeEmail, normalizePhone } from "@/lib/contactNormalize";
 import { displayLabelsFromDefinitions, fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 
@@ -21,7 +21,7 @@ const CREATE_ALLOWED: readonly string[] = [
 
 /** GET: list contacts for current org. Scoped by org from getAdminContext. */
 export async function GET(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     const { orgId } = ctx;
 
@@ -119,7 +119,7 @@ export async function GET(request: NextRequest) {
 
 /** POST: create contact. Server sets org_id from context. */
 export async function POST(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     const { orgId } = ctx;
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
@@ -13,7 +13,7 @@ export async function GET(
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
 
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
     const { threadId } = await context.params;

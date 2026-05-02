@@ -6005,6 +6005,27 @@
   color: color-mix(in srgb, var(--d-muted) 54%, transparent);
 }
 
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__child-program-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35em 0.75em;
+  width: 100%;
+  min-width: 0;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__child-program-inline {
+  font-size: inherit;
+  line-height: inherit;
+  font-weight: inherit;
+  min-width: 0;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__timing-inline {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__gk {
   font-weight: 670;
   letter-spacing: 0.035em;
@@ -6761,6 +6782,27 @@
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__child-mini-secondary {
   font-size: 10.5px;
   line-height: 1.32;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__child-program-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35em 0.7em;
+  width: 100%;
+  min-width: 0;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__child-program-inline {
+  font-size: inherit;
+  line-height: inherit;
+  font-weight: inherit;
+  min-width: 0;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__timing-inline {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__gk {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getWorkUnitQueueSummaries, QueueServiceError } from "@/lib/queues/QueueService";
 
 function parseLimit(searchParams: URLSearchParams): number | undefined {
@@ -41,7 +41,7 @@ function parseOnlyQueueKeys(searchParams: URLSearchParams): Set<string> | undefi
 
 /** GET — Queue summaries for a work unit. */
 export async function GET(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
     const { id } = await context.params;

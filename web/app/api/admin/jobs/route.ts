@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { parseJobDiscountSelectionInput, resolveJobDiscountSelection } from "@/lib/admin/jobDiscountSelection";
 import { initializeJobPricing } from "@/lib/pricing/initializeJobPricing";
 import { computeJobDisplayTotalCents } from "@/lib/admin/jobDisplayPrice";
@@ -11,7 +11,7 @@ import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { computeJobBalanceSnapshot } from "@/lib/admin/jobPaymentBalances";
 /** GET: list jobs for current org. Admin/ops. Exclude archived by default. */
 export async function GET(request: NextRequest) {
-  const ctx = await getAdminContext();
+  const ctx = await getAdminContextCached();
   if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
   const { searchParams } = new URL(request.url);
@@ -285,7 +285,7 @@ export async function GET(request: NextRequest) {
 
 /** POST: create job. Admin only. customer_id and status_key (must exist in status_definitions for jobs) required. */
 export async function POST(request: NextRequest) {
-  const ctx = await getAdminContext();
+  const ctx = await getAdminContextCached();
   if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
   if (ctx.role !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { agentV1CommitRecordOverviewLayoutApply } from "@/lib/agent/v1/agentV1RecordOverviewLayoutAtomicCommit";
 import { prepareRecordOverviewLayoutPut } from "@/lib/agent/v1/applyRecordOverviewLayoutUpdate";
 import { getOverviewLayoutConfigStoredVersion } from "@/lib/rrs/overview/overviewLayoutConfigStrict";
@@ -62,7 +62,7 @@ function isStructuredOverride(x: unknown): x is StructuredOverride {
  * Config + audit rows commit atomically (Postgres RPC).
  */
 export async function POST(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     if (ctx.role !== "admin") {
         return jsonErr(403, "POLICY_DENIED", "Forbidden");

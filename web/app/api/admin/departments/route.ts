@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +18,7 @@ function normalizeKey(raw: string): string {
 /** GET: list departments for current org. */
 export async function GET() {
     const t0 = Date.now();
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     const ctxMs = Date.now() - t0;
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
@@ -51,7 +51,7 @@ export async function GET() {
 
 /** POST: create department. Admin only. org_id server-side. */
 export async function POST(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     if (ctx.role !== "admin") {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });

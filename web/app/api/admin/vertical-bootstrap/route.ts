@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { applyVerticalBootstrap } from "@/lib/admin/verticalBootstrap/applyVerticalBootstrap";
 import { previewVerticalBootstrap } from "@/lib/admin/verticalBootstrap/previewVerticalBootstrap";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
@@ -17,7 +17,7 @@ type Body = {
  * Preview validates and returns a dry-run plan (no writes). Apply upserts org-scoped rows by natural key.
  */
 export async function POST(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     if (ctx.role !== "admin") {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });

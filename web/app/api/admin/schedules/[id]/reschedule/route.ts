@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminAuth } from "@/lib/adminAuth";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminAuthCached } from "@/lib/adminAuth";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { emitEvent } from "@/lib/emitEvent";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { resolveScheduleStatusRowByKey } from "@/lib/admin/scheduleEffectiveStatusKey";
@@ -8,9 +8,9 @@ import { executeWorkflowRun } from "@/lib/workflowRun";
 
 /** POST: create a new schedule (reschedule). Body: { start_at, end_at, timezone?, copy_assignment?: boolean }. When copy_assignment is false, workflow(s) with event_type "schedule_created" may create assignment from job default. */
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-    const auth = await getAdminAuth();
+    const auth = await getAdminAuthCached();
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     const { id: oldScheduleId } = await context.params;
     if (!oldScheduleId) return NextResponse.json({ error: "Missing schedule id" }, { status: 400 });

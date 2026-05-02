@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import {
     batchPaymentAllocationRollups,
@@ -52,7 +52,7 @@ const CANONICAL_STATUS_LABEL: Record<string, string> = {
 export async function GET(request: NextRequest) {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
     const { searchParams } = new URL(request.url);

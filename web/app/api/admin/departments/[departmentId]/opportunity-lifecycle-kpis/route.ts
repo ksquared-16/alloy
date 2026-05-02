@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import { computeOpportunityLifecycleKpis } from "@/lib/workspace/computeOpportunityLifecycleKpis";
@@ -11,7 +11,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
     const { departmentId } = await context.params;
     if (!departmentId) return NextResponse.json({ error: "Missing department id" }, { status: 400 });
 
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
     try {

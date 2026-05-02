@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 import { validateSelectLikeConfig } from "@/lib/fields/fieldDefinitionConfig";
 
@@ -26,7 +26,7 @@ const FORBIDDEN_FOR_SYSTEM = ["org_id", "entity_type", "field_key", "field_type"
 
 /** GET: single field_definition for current org (admin/ops). */
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
@@ -60,7 +60,7 @@ export async function PATCH(
     request: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
@@ -184,7 +184,7 @@ export async function PATCH(
 
 /** DELETE: remove a custom field definition (cascades field_values). System rows are protected. Admin only. */
 export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },

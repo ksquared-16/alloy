@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "crypto";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { agentV2CommitFieldVisibilityApply } from "@/lib/agent/v2/agentV2FieldVisibilityAtomicCommit";
 import {
     lockTimestampMatches,
@@ -14,7 +14,7 @@ import { getFieldDefinitionLockTimestamp } from "@/lib/agent/v2/fieldVisibilityC
  * Body: field_definition_id, expected_updated_at, visibility_patch (strict v0).
  */
 export async function PUT(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     if (ctx.role !== "admin") {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });

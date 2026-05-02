@@ -244,12 +244,18 @@ const getCachedAuthUser = (0, __TURBOPACK__imported__module__$5b$project$5d2f$no
 /**
  * Resolve admin org context from public.user_roles (membership scoping).
  * Use in admin API routes that need org_id and role.
+ *
+ * Request-scoped memoization: `getAdminContext` and `getAdminContextCached` are the same
+ * function — React `cache()` dedupes work within a single request (no cross-request leakage).
  */ __turbopack_context__.s([
     "adminContextFailureResponse",
     ()=>adminContextFailureResponse,
     "getAdminContext",
-    ()=>getAdminContext
+    ()=>getAdminContext,
+    "getAdminContextCached",
+    ()=>getAdminContextCached
 ]);
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$rsc$2f$react$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/dist/server/route-modules/app-page/vendored/rsc/react.js [app-route] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$server$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/server.js [app-route] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$supabaseAdmin$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/supabaseAdmin.ts [app-route] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$primaryAdminOpsOrg$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/admin/primaryAdminOpsOrg.ts [app-route] (ecmascript)");
@@ -258,7 +264,8 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$cachedAuthSe
 ;
 ;
 ;
-async function getAdminContext() {
+;
+async function loadAdminContext() {
     try {
         const t0 = Date.now();
         const userId = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$cachedAuthSession$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["getCachedAuthUserId"])();
@@ -307,6 +314,31 @@ async function getAdminContext() {
         };
     }
 }
+const resolveAdminContextOnce = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$rsc$2f$react$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["cache"])(async ()=>{
+    const t0 = Date.now();
+    const result = await loadAdminContext();
+    console.log("[admin-context]", {
+        cache_hit: false,
+        duration_ms: Date.now() - t0
+    });
+    return result;
+});
+const adminContextInvocationCounter = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$rsc$2f$react$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["cache"])(()=>({
+        n: 0
+    }));
+async function getAdminContextCached() {
+    const ctr = adminContextInvocationCounter();
+    ctr.n += 1;
+    const out = await resolveAdminContextOnce();
+    if (ctr.n > 1) {
+        console.log("[admin-context]", {
+            cache_hit: true,
+            duration_ms: 0
+        });
+    }
+    return out;
+}
+const getAdminContext = getAdminContextCached;
 function adminContextFailureResponse(failure) {
     const message = failure.status === 401 ? "Unauthorized" : "Forbidden";
     return __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$server$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["NextResponse"].json({
@@ -440,8 +472,12 @@ __turbopack_context__.s([
     ()=>formatDateTimeForUserDisplay,
     "formatDateTimeLocal",
     ()=>formatDateTimeLocal,
+    "formatDateTimeUsShortHyphenUtc",
+    ()=>formatDateTimeUsShortHyphenUtc,
     "formatDateTimeUtcAudit",
     ()=>formatDateTimeUtcAudit,
+    "formatDateUsShortHyphenUtc",
+    ()=>formatDateUsShortHyphenUtc,
     "formatDateUtcAudit",
     ()=>formatDateUtcAudit,
     "formatFrequencyLabel",
@@ -456,10 +492,14 @@ __turbopack_context__.s([
     ()=>formatPayoutPercent,
     "formatPhoneUS",
     ()=>formatPhoneUS,
+    "formatQueuePreviewTourTimingUtc",
+    ()=>formatQueuePreviewTourTimingUtc,
     "formatRecurrenceLabel",
     ()=>formatRecurrenceLabel,
     "formatScheduleDrawerHeaderTitle",
     ()=>formatScheduleDrawerHeaderTitle,
+    "normalizePreviewLooseDateTokens",
+    ()=>normalizePreviewLooseDateTokens,
     "personDisplayName",
     ()=>personDisplayName
 ]);
@@ -500,6 +540,62 @@ function formatPayoutPercent(value) {
     if (Number.isNaN(n)) return "—";
     const display = n > 0 && n <= 1 ? n * 100 : n;
     return `${display}%`;
+}
+function formatDateUsShortHyphenUtc(value) {
+    if (value === null || value === undefined || value === "") return "—";
+    const d = typeof value === "object" && value instanceof Date ? value : new Date(value);
+    if (!Number.isNaN(d.getTime())) {
+        const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+        const dd = String(d.getUTCDate()).padStart(2, "0");
+        const yy = String(d.getUTCFullYear());
+        return `${mm}-${dd}-${yy}`;
+    }
+    const s = String(value).trim();
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+    if (m) return `${m[2]}-${m[3]}-${m[1]}`;
+    return s;
+}
+function formatDateTimeUsShortHyphenUtc(value) {
+    if (value === null || value === undefined || value === "") return "—";
+    const d = typeof value === "object" && value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(d.getTime())) return "—";
+    const datePart = formatDateUsShortHyphenUtc(d);
+    const timePart = new Intl.DateTimeFormat("en-US", {
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+        timeZone: "UTC"
+    }).format(d);
+    return `${datePart} ${timePart}`;
+}
+function normalizePreviewLooseDateTokens(text) {
+    let s = text;
+    s = s.replace(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/g, (_full, mo, day, yr)=>{
+        return `${String(mo).padStart(2, "0")}-${String(day).padStart(2, "0")}-${yr}`;
+    });
+    s = s.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (_full, yr, mo, day)=>`${mo}-${day}-${yr}`);
+    return s;
+}
+function formatQueuePreviewTourTimingUtc(value) {
+    const t = (value ?? "").trim();
+    if (!t || t === "—" || t === "-") return "";
+    const slashFull = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(.*))?$/.exec(t);
+    if (slashFull) {
+        const mm = slashFull[1].padStart(2, "0");
+        const dd = slashFull[2].padStart(2, "0");
+        const yy = slashFull[3];
+        const datePart = `${mm}-${dd}-${yy}`;
+        const rest = slashFull[4]?.trim();
+        return rest ? `${datePart} ${rest}` : datePart;
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return formatDateUsShortHyphenUtc(t);
+    const ms = Date.parse(t);
+    if (Number.isFinite(ms)) {
+        const d = new Date(ms);
+        const hasExplicitTime = /\d{1,2}:\d{2}/.test(t) || /[Tt]/.test(t) && (d.getUTCHours() !== 0 || d.getUTCMinutes() !== 0 || d.getUTCSeconds() !== 0 || d.getUTCMilliseconds() !== 0);
+        return hasExplicitTime ? formatDateTimeUsShortHyphenUtc(d) : formatDateUsShortHyphenUtc(d);
+    }
+    return normalizePreviewLooseDateTokens(t);
 }
 function formatDateUtcAudit(value) {
     if (value === null || value === undefined) return "-";
@@ -4457,7 +4553,7 @@ async function GET(request, { params }) {
         });
     }
     try {
-        const ctx = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$getAdminContext$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["getAdminContext"])();
+        const ctx = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$getAdminContext$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["getAdminContextCached"])();
         if (!ctx.ok) return (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$getAdminContext$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["adminContextFailureResponse"])(ctx);
         const orgId = ctx.orgId;
         const supabase = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$supabaseAdmin$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["createAdminClient"])();

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { validateQueueDefinition } from "@/lib/config/queueDefinitionSchema";
 
 const KEY_REGEX = /^[a-z0-9_]{2,64}$/;
@@ -17,7 +17,7 @@ function normalizeKey(raw: string): string {
 
 /** GET: single work unit in org. */
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
     const { id } = await context.params;
@@ -43,7 +43,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
 
 /** PATCH: update work unit. Admin only. */
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     if (ctx.role !== "admin") {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -214,7 +214,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
 /** DELETE: remove work unit. Admin only. Jobs referencing it get work_unit_id cleared (FK). */
 export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     if (ctx.role !== "admin") {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });

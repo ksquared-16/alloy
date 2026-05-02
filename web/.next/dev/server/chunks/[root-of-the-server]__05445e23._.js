@@ -211,9 +211,13 @@ const getCachedAuthUser = (0, __TURBOPACK__imported__module__$5b$project$5d2f$no
  * Admin portal auth: role-based access (admin / ops).
  * Resolved from user_profiles, then user_roles, then app_users — no email allowlist.
  * V1 roles: admin (full access), ops (read-only). All other roles are denied.
+ *
+ * `getAdminAuth` / `getAdminAuthCached` are request-scoped memoized (React `cache()`).
  */ __turbopack_context__.s([
     "getAdminAuth",
     ()=>getAdminAuth,
+    "getAdminAuthCached",
+    ()=>getAdminAuthCached,
     "logAdminAudit",
     ()=>logAdminAudit,
     "requireAdmin",
@@ -221,9 +225,11 @@ const getCachedAuthUser = (0, __TURBOPACK__imported__module__$5b$project$5d2f$no
     "requireAdminOrOps",
     ()=>requireAdminOrOps
 ]);
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$rsc$2f$react$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/dist/server/route-modules/app-page/vendored/rsc/react.js [app-route] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$server$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/server.js [app-route] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$supabaseAdmin$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/supabaseAdmin.ts [app-route] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$cachedAuthSession$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/admin/cachedAuthSession.ts [app-route] (ecmascript)");
+;
 ;
 ;
 ;
@@ -231,7 +237,7 @@ const ALLOWED_ROLES = [
     "admin",
     "ops"
 ];
-async function getAdminAuth() {
+async function loadAdminAuth() {
     const t0 = Date.now();
     const user = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$cachedAuthSession$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["getCachedAuthUser"])();
     const authUserMs = Date.now() - t0;
@@ -281,6 +287,31 @@ async function getAdminAuth() {
         role
     };
 }
+const resolveAdminAuthOnce = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$rsc$2f$react$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["cache"])(async ()=>{
+    const t0 = Date.now();
+    const result = await loadAdminAuth();
+    console.log("[admin-context]", {
+        cache_hit: false,
+        duration_ms: Date.now() - t0
+    });
+    return result;
+});
+const adminAuthInvocationCounter = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$rsc$2f$react$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["cache"])(()=>({
+        n: 0
+    }));
+async function getAdminAuthCached() {
+    const ctr = adminAuthInvocationCounter();
+    ctr.n += 1;
+    const out = await resolveAdminAuthOnce();
+    if (ctr.n > 1) {
+        console.log("[admin-context]", {
+            cache_hit: true,
+            duration_ms: 0
+        });
+    }
+    return out;
+}
+const getAdminAuth = getAdminAuthCached;
 async function requireAdmin() {
     const auth = await getAdminAuth();
     if (!auth) {
@@ -354,12 +385,18 @@ async function fetchPrimaryAdminOpsMembershipForUser(admin, userId) {
 /**
  * Resolve admin org context from public.user_roles (membership scoping).
  * Use in admin API routes that need org_id and role.
+ *
+ * Request-scoped memoization: `getAdminContext` and `getAdminContextCached` are the same
+ * function — React `cache()` dedupes work within a single request (no cross-request leakage).
  */ __turbopack_context__.s([
     "adminContextFailureResponse",
     ()=>adminContextFailureResponse,
     "getAdminContext",
-    ()=>getAdminContext
+    ()=>getAdminContext,
+    "getAdminContextCached",
+    ()=>getAdminContextCached
 ]);
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$rsc$2f$react$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/dist/server/route-modules/app-page/vendored/rsc/react.js [app-route] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$server$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/server.js [app-route] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$supabaseAdmin$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/supabaseAdmin.ts [app-route] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$primaryAdminOpsOrg$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/admin/primaryAdminOpsOrg.ts [app-route] (ecmascript)");
@@ -368,7 +405,8 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$cachedAuthSe
 ;
 ;
 ;
-async function getAdminContext() {
+;
+async function loadAdminContext() {
     try {
         const t0 = Date.now();
         const userId = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$cachedAuthSession$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["getCachedAuthUserId"])();
@@ -417,6 +455,31 @@ async function getAdminContext() {
         };
     }
 }
+const resolveAdminContextOnce = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$rsc$2f$react$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["cache"])(async ()=>{
+    const t0 = Date.now();
+    const result = await loadAdminContext();
+    console.log("[admin-context]", {
+        cache_hit: false,
+        duration_ms: Date.now() - t0
+    });
+    return result;
+});
+const adminContextInvocationCounter = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$rsc$2f$react$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["cache"])(()=>({
+        n: 0
+    }));
+async function getAdminContextCached() {
+    const ctr = adminContextInvocationCounter();
+    ctr.n += 1;
+    const out = await resolveAdminContextOnce();
+    if (ctr.n > 1) {
+        console.log("[admin-context]", {
+            cache_hit: true,
+            duration_ms: 0
+        });
+    }
+    return out;
+}
+const getAdminContext = getAdminContextCached;
 function adminContextFailureResponse(failure) {
     const message = failure.status === 401 ? "Unauthorized" : "Forbidden";
     return __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$server$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["NextResponse"].json({
@@ -521,17 +584,18 @@ async function fetchEffectiveUserDisplayTimezone(supabase, params) {
     ()=>getOrgLocalTodayUtcBounds,
     "getOrgLocalYmdUtcBounds",
     ()=>getOrgLocalYmdUtcBounds,
+    "resolveOrgOperationalMonthToDateForFinancialMtd",
+    ()=>resolveOrgOperationalMonthToDateForFinancialMtd,
     "resolveScheduledOnBounds",
     ()=>resolveScheduledOnBounds
 ]);
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$date$2d$fns$2f$addDays$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/date-fns/addDays.js [app-route] (ecmascript)");
-var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$date$2d$fns$2f$parseISO$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/date-fns/parseISO.js [app-route] (ecmascript)");
-var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$date$2d$fns$2f$format$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__$3c$locals$3e$__ = __turbopack_context__.i("[project]/node_modules/date-fns/format.js [app-route] (ecmascript) <locals>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$date$2d$fns$2f$startOfDay$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/date-fns/startOfDay.js [app-route] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$date$2d$fns$2d$tz$2f$dist$2f$esm$2f$index$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__$3c$locals$3e$__ = __turbopack_context__.i("[project]/node_modules/date-fns-tz/dist/esm/index.js [app-route] (ecmascript) <locals>");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$date$2d$fns$2d$tz$2f$dist$2f$esm$2f$toDate$2f$index$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/date-fns-tz/dist/esm/toDate/index.js [app-route] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$date$2d$fns$2d$tz$2f$dist$2f$esm$2f$toZonedTime$2f$index$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/date-fns-tz/dist/esm/toZonedTime/index.js [app-route] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$date$2d$fns$2d$tz$2f$dist$2f$esm$2f$fromZonedTime$2f$index$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/date-fns-tz/dist/esm/fromZonedTime/index.js [app-route] (ecmascript)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$date$2d$fns$2d$tz$2f$dist$2f$esm$2f$formatInTimeZone$2f$index$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/date-fns-tz/dist/esm/formatInTimeZone/index.js [app-route] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$timezoneContract$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/admin/timezoneContract.ts [app-route] (ecmascript)");
 ;
 ;
@@ -556,8 +620,11 @@ function getOrgLocalYmdUtcBounds(ymd, timeZone) {
         throw new RangeError(`Invalid scheduled_on date: ${ymd}`);
     }
     const ymdStr = `${m[1]}-${m[2]}-${m[3]}`;
-    const base = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$date$2d$fns$2f$parseISO$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["parseISO"])(`${ymdStr}T00:00:00.000Z`);
-    const nextStr = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$date$2d$fns$2f$format$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__$3c$locals$3e$__["format"])((0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$date$2d$fns$2f$addDays$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["addDays"])(base, 1), "yyyy-MM-dd");
+    const y = Number(m[1]);
+    const mo = Number(m[2]);
+    const d = Number(m[3]);
+    const nextCal = new Date(Date.UTC(y, mo - 1, d + 1));
+    const nextStr = `${nextCal.getUTCFullYear()}-${String(nextCal.getUTCMonth() + 1).padStart(2, "0")}-${String(nextCal.getUTCDate()).padStart(2, "0")}`;
     const dayStartUtc = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$date$2d$fns$2d$tz$2f$dist$2f$esm$2f$toDate$2f$index$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["toDate"])(`${ymdStr}T00:00:00`, {
         timeZone
     });
@@ -575,6 +642,19 @@ function resolveScheduledOnBounds(scheduledOnRaw, timeZone, refUtc = new Date())
         return getOrgLocalTodayUtcBounds(timeZone, refUtc);
     }
     return getOrgLocalYmdUtcBounds(scheduledOnRaw.trim(), timeZone);
+}
+function resolveOrgOperationalMonthToDateForFinancialMtd(timeZone, refUtc = new Date()) {
+    const mtd_end_local_date = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$date$2d$fns$2d$tz$2f$dist$2f$esm$2f$formatInTimeZone$2f$index$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["formatInTimeZone"])(refUtc, timeZone, "yyyy-MM-dd");
+    const [yStr, mStr] = mtd_end_local_date.split("-");
+    const mtd_start_local_date = `${yStr}-${mStr}-01`;
+    const startBounds = getOrgLocalYmdUtcBounds(mtd_start_local_date, timeZone);
+    const endBounds = getOrgLocalYmdUtcBounds(mtd_end_local_date, timeZone);
+    return {
+        mtd_start_local_date,
+        mtd_end_local_date,
+        mtd_start_utc: startBounds.dayStartUtc.toISOString(),
+        mtd_end_exclusive_utc: endBounds.dayEndExclusiveUtc.toISOString()
+    };
 }
 }),
 "[project]/app/api/admin/workflow-runs/route.ts [app-route] (ecmascript)", ((__turbopack_context__) => {
@@ -599,7 +679,7 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$timezoneCont
 async function GET(request) {
     const forbidden = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$adminAuth$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["requireAdminOrOps"])();
     if (forbidden) return forbidden;
-    const ctx = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$getAdminContext$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["getAdminContext"])();
+    const ctx = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$getAdminContext$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["getAdminContextCached"])();
     if (!ctx.ok) return (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$getAdminContext$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["adminContextFailureResponse"])(ctx);
     const orgId = ctx.orgId;
     const { searchParams } = new URL(request.url);

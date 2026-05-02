@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 
 /** POST: remove user from org (delete user_roles row). Admin only. Does not delete auth.users. */
 export async function POST(
   _request: Request,
   context: { params: Promise<{ userId: string }> }
 ) {
-  const ctx = await getAdminContext();
+  const ctx = await getAdminContextCached();
   if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
   if (ctx.role !== "admin") {

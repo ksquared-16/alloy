@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdmin } from "@/lib/adminAuth";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 
 /** GET: single workflow in caller org. */
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     try {
         const supabase = createAdminClient();
@@ -25,7 +25,7 @@ const ALLOWED_KEYS = ["name", "description", "event_type", "entity_type", "enabl
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const forbidden = await requireAdmin();
     if (forbidden) return forbidden;
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
@@ -55,7 +55,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 export async function DELETE(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const forbidden = await requireAdmin();
     if (forbidden) return forbidden;
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });

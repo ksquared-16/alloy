@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminAuth, requireAdminOrOps } from "@/lib/adminAuth";
+import { getAdminAuthCached, requireAdminOrOps } from "@/lib/adminAuth";
 
 /** GET: list vendor statuses for admin dropdown (id, key, label). */
 export async function GET() {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
-    const auth = await getAdminAuth();
+    const auth = await getAdminAuthCached();
     if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     try {

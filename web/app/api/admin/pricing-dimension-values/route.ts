@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 
 export type PricingDimensionValueListItem = {
     id: string;
@@ -16,7 +16,7 @@ export type PricingDimensionValueListItem = {
 
 /** GET: list pricing_dimension_values with dimension name */
 export async function GET(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
     const { searchParams } = new URL(request.url);
@@ -54,7 +54,7 @@ export async function GET(request: NextRequest) {
 
 /** POST: create pricing_dimension_value. Body: value_label?, value_key?, dimension_id, sort_order?, is_active?. org_id set from admin context. */
 export async function POST(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     if (!ctx.orgId) return NextResponse.json({ error: "Organization context required" }, { status: 403 });
 

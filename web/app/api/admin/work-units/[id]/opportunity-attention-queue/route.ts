@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import {
     DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1,
     parseOpportunityAttentionRuleConfigV1FromMetadata,
@@ -14,7 +14,7 @@ import { enrichOpportunityQueueRowsWithActivitySignals } from "@/lib/admin/activ
  * V1: computed reasons from effective lifecycle stage + last-touched time (updated_at/created_at).
  */
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
     const { id: workUnitId } = await context.params;

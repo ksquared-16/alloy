@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 
 /** GET: single customer_member by id. Admin + ops can read. */
@@ -8,7 +8,7 @@ export async function GET(
     _request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
@@ -52,7 +52,7 @@ export async function PATCH(
     request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
@@ -147,7 +147,7 @@ export async function DELETE(
     _request: NextRequest,
     { params }: { params: Promise<{ id: string }> }
 ) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },

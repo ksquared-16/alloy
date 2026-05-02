@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { applyRecordOverviewLayoutPut } from "@/lib/agent/v1/applyRecordOverviewLayoutUpdate";
 import {
     RECORD_OVERVIEW_LAYOUT_V1_SURFACE,
@@ -18,7 +18,7 @@ type PutBody = {
  * PUT — org-scoped `record_overview_layouts.config` (admin). Mutations: admin role only.
  */
 export async function PUT(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     if (ctx.role !== "admin") {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });

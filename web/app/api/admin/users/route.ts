@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 
 export type AdminUserRow = {
   user_id: string;
@@ -11,7 +11,7 @@ export type AdminUserRow = {
 
 /** GET: list org members. Admin + ops can read. */
 export async function GET() {
-  const ctx = await getAdminContext();
+  const ctx = await getAdminContextCached();
   if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
   const supabase = createAdminClient();
@@ -56,7 +56,7 @@ export async function GET() {
 
 /** POST: invite user to org. Admin only. Body: { email, role } (role = role_key from role_definitions). */
 export async function POST(request: Request) {
-  const ctx = await getAdminContext();
+  const ctx = await getAdminContextCached();
   if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
   if (ctx.role !== "admin") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });

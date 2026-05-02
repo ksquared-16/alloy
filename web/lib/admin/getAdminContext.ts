@@ -1,8 +1,12 @@
 /**
  * Resolve admin org context from public.user_roles (membership scoping).
  * Use in admin API routes that need org_id and role.
+ *
+ * Request-scoped memoization: `getAdminContext` and `getAdminContextCached` are the same
+ * function — React `cache()` dedupes work within a single request (no cross-request leakage).
  */
 
+import { cache } from "react";
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { fetchPrimaryAdminOpsMembershipForUser } from "@/lib/admin/primaryAdminOpsOrg";
@@ -22,11 +26,7 @@ export type AdminContextFailure = {
 
 export type AdminContextResult = AdminContextSuccess | AdminContextFailure;
 
-/**
- * Get current user and their org + role from user_roles.
- * Returns { ok: true, orgId, role, userId } or { ok: false, status: 401 | 403 }.
- */
-export async function getAdminContext(): Promise<AdminContextResult> {
+async function loadAdminContext(): Promise<AdminContextResult> {
     try {
         const t0 = Date.now();
         const userId = await getCachedAuthUserId();
@@ -69,6 +69,37 @@ export async function getAdminContext(): Promise<AdminContextResult> {
         return { ok: false, status: 403 };
     }
 }
+
+const resolveAdminContextOnce = cache(async (): Promise<AdminContextResult> => {
+    const t0 = Date.now();
+    const result = await loadAdminContext();
+    console.log("[admin-context]", {
+        cache_hit: false,
+        duration_ms: Date.now() - t0,
+    });
+    return result;
+});
+
+const adminContextInvocationCounter = cache(() => ({ n: 0 }));
+
+/**
+ * Request-scoped: repeated calls in the same request return the same result with one DB/auth pass.
+ */
+export async function getAdminContextCached(): Promise<AdminContextResult> {
+    const ctr = adminContextInvocationCounter();
+    ctr.n += 1;
+    const out = await resolveAdminContextOnce();
+    if (ctr.n > 1) {
+        console.log("[admin-context]", {
+            cache_hit: true,
+            duration_ms: 0,
+        });
+    }
+    return out;
+}
+
+/** @deprecated Use `getAdminContextCached` in new code — behavior is identical (cached). */
+export const getAdminContext = getAdminContextCached;
 
 /** JSON error for `getAdminContext` failure (401 / 403). */
 export function adminContextFailureResponse(failure: AdminContextFailure): NextResponse {

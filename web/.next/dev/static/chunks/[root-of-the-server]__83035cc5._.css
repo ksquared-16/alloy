@@ -1664,6 +1664,18 @@
     max-width: 12rem;
   }
 
+  .max-w-\[14rem\] {
+    max-width: 14rem;
+  }
+
+  .max-w-\[16rem\] {
+    max-width: 16rem;
+  }
+
+  .max-w-\[18rem\] {
+    max-width: 18rem;
+  }
+
   .max-w-\[22rem\] {
     max-width: 22rem;
   }
@@ -3335,6 +3347,16 @@
   @supports (color: color-mix(in lab, red, red)) {
     .border-t-alloy-blue\/70 {
       border-top-color: color-mix(in oklab, var(--color-alloy-blue) 70%, transparent);
+    }
+  }
+
+  .border-t-alloy-blue\/75 {
+    border-top-color: #00458cbf;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-t-alloy-blue\/75 {
+      border-top-color: color-mix(in oklab, var(--color-alloy-blue) 75%, transparent);
     }
   }
 
@@ -6001,10 +6023,6 @@
 
   .normal-case {
     text-transform: none;
-  }
-
-  .uppercase {
-    text-transform: uppercase;
   }
 
   .italic {

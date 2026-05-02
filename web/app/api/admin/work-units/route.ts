@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { normalizeQueueDefinitionForCreate } from "@/lib/rrs/queue/queueDefinitionV1";
 
 const KEY_REGEX = /^[a-z0-9_]{2,64}$/;
@@ -18,7 +18,7 @@ function normalizeKey(raw: string): string {
 /** GET: list work units for current org. Optional ?department_id= */
 export async function GET(request: NextRequest) {
     const t0 = Date.now();
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     const ctxMs = Date.now() - t0;
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
@@ -70,7 +70,7 @@ export async function GET(request: NextRequest) {
 
 /** POST: create work unit. Admin only. org_id from department row, not client. */
 export async function POST(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     if (ctx.role !== "admin") {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });

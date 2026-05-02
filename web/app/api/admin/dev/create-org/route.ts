@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { createOrgAndAssignAdmin } from "@/lib/dev/createOrgAndAssignAdmin";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "DEV_TENANT_SPINUP_ENABLED is not set to true" }, { status: 403 });
     }
 
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
     if (ctx.role !== "admin") {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });

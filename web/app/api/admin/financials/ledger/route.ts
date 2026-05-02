@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 
 export const dynamic = "force-dynamic";
 
 /**
  * GET /api/admin/financials/ledger
  * Query: date_from, date_to, type, direction, job_id, schedule_id, customer_id, vendor_id, limit (default 100, max 500)
- * Auth: getAdminContext(); admin/ops can read.
+ * Auth: getAdminContextCached(); admin/ops can read.
  */
 export async function GET(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },

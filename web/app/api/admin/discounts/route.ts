@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import {
     createDiscountProgram,
     listDiscountProgramsAdmin,
@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 /** GET: list discount programs (discount_programs_admin_v). */
 export async function GET() {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     const supabase = createAdminClient();
     const { data, error } = await listDiscountProgramsAdmin(supabase);
@@ -19,7 +19,7 @@ export async function GET() {
 
 /** POST: create discount program (+ primary benefit, optional qualifier, commitment rule). */
 export async function POST(request: NextRequest) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     if (ctx.role !== "admin") {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });

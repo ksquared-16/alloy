@@ -1,8 +1,22 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 import { POST } from "@/app/api/admin/agent/v0/queue-definition/route";
-import * as getAdminContext from "@/lib/admin/getAdminContext";
 import * as supabaseAdmin from "@/lib/supabaseAdmin";
+
+const { mockGetAdminContext } = vi.hoisted(() => ({
+    mockGetAdminContext: vi.fn(),
+}));
+
+vi.mock("@/lib/admin/getAdminContext", async () => {
+    const actual = await vi.importActual<typeof import("@/lib/admin/getAdminContext")>(
+        "@/lib/admin/getAdminContext"
+    );
+    return {
+        ...actual,
+        getAdminContext: mockGetAdminContext,
+        getAdminContextCached: mockGetAdminContext,
+    };
+});
 
 vi.mock("@/lib/supabaseAdmin", () => ({
     createAdminClient: vi.fn(),
@@ -30,7 +44,7 @@ function buildRequest(body: Record<string, unknown>) {
 describe("POST /api/admin/agent/v0/queue-definition", () => {
     beforeEach(() => {
         vi.stubEnv("AGENT_V0_ENABLED", "true");
-        vi.spyOn(getAdminContext, "getAdminContext").mockResolvedValue({
+        mockGetAdminContext.mockResolvedValue({
             ok: true,
             orgId: "22222222-2222-2222-2222-222222222222",
             userId: "33333333-3333-3333-3333-333333333333",

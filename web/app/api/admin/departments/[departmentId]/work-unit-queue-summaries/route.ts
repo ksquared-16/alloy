@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { getDepartmentWorkUnitQueueSummaries, QueueServiceError } from "@/lib/queues/QueueService";
 
@@ -33,7 +33,7 @@ function parseCountMode(searchParams: URLSearchParams): "exact" | "planned" | un
 
 /** GET — Batch queue summaries for all work units in a department. */
 export async function GET(request: NextRequest, context: { params: Promise<{ departmentId: string }> }) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
     const { departmentId } = await context.params;

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContext } from "@/lib/admin/getAdminContext";
+import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { postCustomerPaymentForSchedule, type PostCashEventError } from "@/lib/admin/postCashEvent";
 
 function isPostError(result: { entry_id?: string; code?: string }): result is PostCashEventError {
@@ -9,13 +9,13 @@ function isPostError(result: { entry_id?: string; code?: string }): result is Po
 
 /**
  * POST: Post customer payment (cash receipt) for a completed schedule. Idempotent.
- * Auth: getAdminContext(); requires admin. Requires schedule status_key === 'completed' (case-insensitive).
+ * Auth: getAdminContextCached(); requires admin. Requires schedule status_key === 'completed' (case-insensitive).
  */
 export async function POST(
     _request: NextRequest,
     context: { params: Promise<{ id: string }> }
 ) {
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) {
         return NextResponse.json(
             { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },

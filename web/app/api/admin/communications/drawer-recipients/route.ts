@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
-import { adminContextFailureResponse, getAdminContext } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import {
@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     const forbidden = await requireAdminOrOps();
     if (forbidden) return forbidden;
 
-    const ctx = await getAdminContext();
+    const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
     const entityTypeRaw = request.nextUrl.searchParams.get("entity_type")?.trim().toLowerCase() ?? "";

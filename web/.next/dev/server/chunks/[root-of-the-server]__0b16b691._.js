@@ -244,12 +244,18 @@ const getCachedAuthUser = (0, __TURBOPACK__imported__module__$5b$project$5d2f$no
 /**
  * Resolve admin org context from public.user_roles (membership scoping).
  * Use in admin API routes that need org_id and role.
+ *
+ * Request-scoped memoization: `getAdminContext` and `getAdminContextCached` are the same
+ * function — React `cache()` dedupes work within a single request (no cross-request leakage).
  */ __turbopack_context__.s([
     "adminContextFailureResponse",
     ()=>adminContextFailureResponse,
     "getAdminContext",
-    ()=>getAdminContext
+    ()=>getAdminContext,
+    "getAdminContextCached",
+    ()=>getAdminContextCached
 ]);
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$rsc$2f$react$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/dist/server/route-modules/app-page/vendored/rsc/react.js [app-route] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$server$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/server.js [app-route] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$supabaseAdmin$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/supabaseAdmin.ts [app-route] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$primaryAdminOpsOrg$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/admin/primaryAdminOpsOrg.ts [app-route] (ecmascript)");
@@ -258,7 +264,8 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$cachedAuthSe
 ;
 ;
 ;
-async function getAdminContext() {
+;
+async function loadAdminContext() {
     try {
         const t0 = Date.now();
         const userId = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$cachedAuthSession$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["getCachedAuthUserId"])();
@@ -307,6 +314,31 @@ async function getAdminContext() {
         };
     }
 }
+const resolveAdminContextOnce = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$rsc$2f$react$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["cache"])(async ()=>{
+    const t0 = Date.now();
+    const result = await loadAdminContext();
+    console.log("[admin-context]", {
+        cache_hit: false,
+        duration_ms: Date.now() - t0
+    });
+    return result;
+});
+const adminContextInvocationCounter = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$rsc$2f$react$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["cache"])(()=>({
+        n: 0
+    }));
+async function getAdminContextCached() {
+    const ctr = adminContextInvocationCounter();
+    ctr.n += 1;
+    const out = await resolveAdminContextOnce();
+    if (ctr.n > 1) {
+        console.log("[admin-context]", {
+            cache_hit: true,
+            duration_ms: 0
+        });
+    }
+    return out;
+}
+const getAdminContext = getAdminContextCached;
 function adminContextFailureResponse(failure) {
     const message = failure.status === 401 ? "Unauthorized" : "Forbidden";
     return __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$server$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["NextResponse"].json({
@@ -361,9 +393,13 @@ async function collectOptionSetUsage(supabase, orgId, setKey) {
  * Admin portal auth: role-based access (admin / ops).
  * Resolved from user_profiles, then user_roles, then app_users — no email allowlist.
  * V1 roles: admin (full access), ops (read-only). All other roles are denied.
+ *
+ * `getAdminAuth` / `getAdminAuthCached` are request-scoped memoized (React `cache()`).
  */ __turbopack_context__.s([
     "getAdminAuth",
     ()=>getAdminAuth,
+    "getAdminAuthCached",
+    ()=>getAdminAuthCached,
     "logAdminAudit",
     ()=>logAdminAudit,
     "requireAdmin",
@@ -371,9 +407,11 @@ async function collectOptionSetUsage(supabase, orgId, setKey) {
     "requireAdminOrOps",
     ()=>requireAdminOrOps
 ]);
+var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$rsc$2f$react$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/dist/server/route-modules/app-page/vendored/rsc/react.js [app-route] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$server$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/server.js [app-route] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$supabaseAdmin$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/supabaseAdmin.ts [app-route] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$cachedAuthSession$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/admin/cachedAuthSession.ts [app-route] (ecmascript)");
+;
 ;
 ;
 ;
@@ -381,7 +419,7 @@ const ALLOWED_ROLES = [
     "admin",
     "ops"
 ];
-async function getAdminAuth() {
+async function loadAdminAuth() {
     const t0 = Date.now();
     const user = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$cachedAuthSession$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["getCachedAuthUser"])();
     const authUserMs = Date.now() - t0;
@@ -431,6 +469,31 @@ async function getAdminAuth() {
         role
     };
 }
+const resolveAdminAuthOnce = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$rsc$2f$react$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["cache"])(async ()=>{
+    const t0 = Date.now();
+    const result = await loadAdminAuth();
+    console.log("[admin-context]", {
+        cache_hit: false,
+        duration_ms: Date.now() - t0
+    });
+    return result;
+});
+const adminAuthInvocationCounter = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$rsc$2f$react$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["cache"])(()=>({
+        n: 0
+    }));
+async function getAdminAuthCached() {
+    const ctr = adminAuthInvocationCounter();
+    ctr.n += 1;
+    const out = await resolveAdminAuthOnce();
+    if (ctr.n > 1) {
+        console.log("[admin-context]", {
+            cache_hit: true,
+            duration_ms: 0
+        });
+    }
+    return out;
+}
+const getAdminAuth = getAdminAuthCached;
 async function requireAdmin() {
     const auth = await getAdminAuth();
     if (!auth) {
@@ -493,7 +556,7 @@ function decodeSetKeyParam(raw) {
     }
 }
 async function GET(_request, context) {
-    const ctx = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$getAdminContext$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["getAdminContext"])();
+    const ctx = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$getAdminContext$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["getAdminContextCached"])();
     if (!ctx.ok) {
         return __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$server$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["NextResponse"].json({
             error: ctx.status === 401 ? "Unauthorized" : "Forbidden"
@@ -547,7 +610,7 @@ async function GET(_request, context) {
     });
 }
 async function PATCH(request, context) {
-    const ctx = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$getAdminContext$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["getAdminContext"])();
+    const ctx = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$getAdminContext$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["getAdminContextCached"])();
     if (!ctx.ok) {
         return __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$server$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["NextResponse"].json({
             error: ctx.status === 401 ? "Unauthorized" : "Forbidden"
@@ -623,7 +686,7 @@ async function PATCH(request, context) {
     return __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$server$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["NextResponse"].json(updated);
 }
 async function DELETE(_request, context) {
-    const ctx = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$getAdminContext$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["getAdminContext"])();
+    const ctx = await (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$getAdminContext$2e$ts__$5b$app$2d$route$5d$__$28$ecmascript$29$__["getAdminContextCached"])();
     if (!ctx.ok) {
         return __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$server$2e$js__$5b$app$2d$route$5d$__$28$ecmascript$29$__["NextResponse"].json({
             error: ctx.status === 401 ? "Unauthorized" : "Forbidden"
