@@ -287,6 +287,7 @@ export function useOperationsWorkspaceData(departmentId: string) {
                             error?: string;
                             counts?: OpportunityLifecycleKpiSnapshot["counts"];
                             values?: OpportunityLifecycleKpiSnapshot["values"];
+                            positiveQuoteSumByNonTerminalStatus?: OpportunityLifecycleKpiSnapshot["positiveQuoteSumByNonTerminalStatus"];
                             statusBreakdown?: OpportunityLifecycleKpiSnapshot["statusBreakdown"];
                         };
                         return { kpResOk: kpRes?.ok === true, kpj };
@@ -314,6 +315,7 @@ export function useOperationsWorkspaceData(departmentId: string) {
                                 status: "ready",
                                 counts: kpj.counts,
                                 values: kpj.values,
+                                positiveQuoteSumByNonTerminalStatus: kpj.positiveQuoteSumByNonTerminalStatus ?? {},
                                 statusBreakdown: kpj.statusBreakdown,
                             });
                         } else {

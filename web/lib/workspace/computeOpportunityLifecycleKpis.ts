@@ -27,6 +27,11 @@ export type OpportunityLifecycleKpiValues = {
 export type OpportunityLifecycleKpiSnapshot = {
     counts: OpportunityLifecycleKpiCounts;
     values: OpportunityLifecycleKpiValues;
+    /**
+     * Positive `quote_total` sums for **non-terminal** opportunities only, keyed by lowercase `status_key`.
+     * Same row scope as `counts` / `values` (department KPI query — not queue preview lists).
+     */
+    positiveQuoteSumByNonTerminalStatus: Record<string, number>;
     /** Ordered by configured status definition order; counts computed from rows. */
     statusBreakdown?: Array<{
         status_key: string;
@@ -94,6 +99,7 @@ export function computeOpportunityLifecycleKpis(
 
     let openPipeline = 0;
     let pricedInMotion = 0;
+    const positiveQuoteSumByNonTerminalStatus: Record<string, number> = {};
 
     for (const row of rows) {
         const quoteNum = opportunityQuoteTotalForLifecycle(row);
@@ -111,6 +117,11 @@ export function computeOpportunityLifecycleKpis(
             openPipeline += q;
             if (quoteNum != null && quoteNum > 0) {
                 pricedInMotion += quoteNum;
+                const sk = String(row.status_key ?? "").trim().toLowerCase();
+                if (sk) {
+                    positiveQuoteSumByNonTerminalStatus[sk] =
+                        (positiveQuoteSumByNonTerminalStatus[sk] ?? 0) + quoteNum;
+                }
             }
         }
     }
@@ -118,5 +129,6 @@ export function computeOpportunityLifecycleKpis(
     return {
         counts,
         values: { openPipeline, pricedInMotion },
+        positiveQuoteSumByNonTerminalStatus,
     };
 }

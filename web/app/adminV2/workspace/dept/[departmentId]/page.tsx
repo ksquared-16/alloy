@@ -167,6 +167,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
         setDeptQueueSummariesLoading(true);
         setDeptQueueSummariesError(null);
         void (async () => {
+            let deptShellCommitted = false;
             const routeStart = typeof performance !== "undefined" ? performance.now() : 0;
             if (typeof performance !== "undefined" && typeof window !== "undefined") {
                 alloyPerfSet("department_start", routeStart);
@@ -234,6 +235,11 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     setDeptWorkUnitsError(null);
                 }
 
+                if (!cancelled) {
+                    setDeptLoading(false);
+                    deptShellCommitted = true;
+                }
+
                 if (!sumRes.ok) {
                     setDeptWorkUnitSummaries({});
                     setDeptQueueSummariesError(j.error ?? "Failed to load queue summaries");
@@ -284,7 +290,9 @@ export default function AdminV2WorkspaceDepartmentPage() {
             } finally {
                 if (!cancelled) {
                     setDeptQueueSummariesLoading(false);
-                    setDeptLoading(false);
+                    if (!deptShellCommitted) {
+                        setDeptLoading(false);
+                    }
                     if (typeof performance !== "undefined" && typeof window !== "undefined") {
                         alloyPerfSet("department_ready", performance.now());
                     }
@@ -338,8 +346,8 @@ export default function AdminV2WorkspaceDepartmentPage() {
 
     const departmentPageBlockingLoad = useMemo(() => {
         if (!departmentId) return false;
-        return deptLoading || deptQueueSummariesLoading;
-    }, [departmentId, deptLoading, deptQueueSummariesLoading]);
+        return deptLoading;
+    }, [departmentId, deptLoading]);
 
     useEffect(() => {
         if (deptKey !== "enrollment" || !departmentId || !primaryWorkUnit?.id) {

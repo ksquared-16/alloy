@@ -37,7 +37,6 @@ function defaultOpportunityQueueItemVm(row: WorkspaceOpportunityQueueRuntime["it
             : undefined;
 
     const reasonLabel = (row as { _attention_reason_label?: string | null })._attention_reason_label?.trim() || null;
-    const reason = (row as { _attention_reason?: string | null })._attention_reason?.trim() || null;
 
     const nextStep = row._lifecycle_next_step?.title?.trim() || "";
     const wfAt = (row as { last_activity_at?: string | null }).last_activity_at;
@@ -58,52 +57,36 @@ function defaultOpportunityQueueItemVm(row: WorkspaceOpportunityQueueRuntime["it
             lastTouchedMs != null ? `${formatAgeCompact(Date.now() - lastTouchedMs)} ago` : "";
     }
 
-    const quickActions =
-        workUnitKey.trim().toLowerCase() === "needs_attention" && reason
-            ? (() => {
-                  if (reason === "stale_quote_followup") {
-                      return [
-                          { id: "open_quote", label: "Open inquiry" },
-                          { id: "mark_won", label: "Enrolled" },
-                          { id: "mark_lost", label: "Lost" },
-                      ];
-                  }
-                  if (reason === "missing_quote_after_execution") {
-                      return [
-                          { id: "open_quote", label: "Open inquiry" },
-                          { id: "start_quote", label: "Schedule tour" },
-                          { id: "mark_lost", label: "Lost" },
-                      ];
-                  }
-                  return [
-                      { id: "qualify_opportunity", label: "Conversation had" },
-                      { id: "start_quote", label: "Schedule tour" },
-                      { id: "mark_lost", label: "Lost" },
-                  ];
-              })()
-            : (() => {
-                  const k = workUnitKey.trim().toLowerCase();
-                  if (k === "needs_attention") return [{ id: "open_quote", label: "Open" }];
-                  if (k === "priced_followup") {
-                      return [
-                          { id: "open_quote", label: "Open inquiry" },
-                          { id: "mark_won", label: "Enrolled" },
-                          { id: "mark_lost", label: "Lost" },
-                      ];
-                  }
-                  if (k === "quoting") {
-                      return [
-                          { id: "open_quote", label: "Open inquiry" },
-                          { id: "start_quote", label: "Schedule tour" },
-                          { id: "mark_lost", label: "Lost" },
-                      ];
-                  }
-                  return [
-                      { id: "qualify_opportunity", label: "Conversation had" },
-                      { id: "start_quote", label: "Schedule tour" },
-                      { id: "mark_lost", label: "Lost" },
-                  ];
-              })();
+    /** Quick-action chips are stable per lane — do not branch on attention-rule preview codes (`_attention_reason`). */
+    const quickActions = (() => {
+        const k = workUnitKey.trim().toLowerCase();
+        if (k === "needs_attention") {
+            return [
+                { id: "qualify_opportunity", label: "Conversation had" },
+                { id: "start_quote", label: "Schedule tour" },
+                { id: "mark_lost", label: "Lost" },
+            ];
+        }
+        if (k === "priced_followup") {
+            return [
+                { id: "open_quote", label: "Open inquiry" },
+                { id: "mark_won", label: "Enrolled" },
+                { id: "mark_lost", label: "Lost" },
+            ];
+        }
+        if (k === "quoting") {
+            return [
+                { id: "open_quote", label: "Open inquiry" },
+                { id: "start_quote", label: "Schedule tour" },
+                { id: "mark_lost", label: "Lost" },
+            ];
+        }
+        return [
+            { id: "qualify_opportunity", label: "Conversation had" },
+            { id: "start_quote", label: "Schedule tour" },
+            { id: "mark_lost", label: "Lost" },
+        ];
+    })();
 
     const stale = (row as { stale_signal?: { label: string; severity: "low" | "medium" | "high" } | null }).stale_signal;
     const tags =
@@ -172,6 +155,7 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
     const queue: QueueVm = {
         id: `oq:${input.workUnitId}`,
         title: input.workUnitName,
+        queueEntityType: "opportunity",
         countBadge: input.oq.total,
         items,
         sortCaption: "Grouped by status",
@@ -189,21 +173,13 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
     const laneKey = input.workUnitKey;
     const focusLabel = `${input.deptName} · ${input.workUnitName}`;
 
-    let valueTotal = 0;
+    /** Oldest timestamp uses loaded preview page only — triage hint, not authoritative latency KPI. */
     let oldestMs: number | null = null;
-    let needsActionCount = 0;
     for (const row of input.oq.items) {
-        const q = row.quote_total != null && Number.isFinite(Number(row.quote_total)) ? Number(row.quote_total) : 0;
-        if (q > 0) valueTotal += q;
         const touched =
             parseIsoMs((row as { updated_at?: string | null }).updated_at) ??
             parseIsoMs((row as { created_at?: string | null }).created_at);
         if (touched != null) oldestMs = oldestMs == null ? touched : Math.min(oldestMs, touched);
-        const hasNext = Boolean(row._lifecycle_next_step?.title?.trim());
-        if (!hasNext) needsActionCount += 1;
-    }
-    if (workUnitKeyLower === "needs_attention") {
-        needsActionCount = input.oq.total;
     }
     const oldestAgeLabel = oldestMs != null ? `${formatAgeCompact(Date.now() - oldestMs)} ago` : "—";
 
@@ -233,16 +209,9 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
         kpis: [
             { id: "wu_count", label: "In queue", value: String(Math.max(0, input.oq.total ?? 0)), lane: "business" },
             {
-                id: "wu_value",
-                label: "Queue value",
-                value: valueTotal > 0 ? formatWorkspaceUsdGrouped(valueTotal) : "—",
-                lane: "business",
-            },
-            { id: "wu_oldest", label: "Oldest in queue", value: oldestAgeLabel, lane: "business" },
-            {
-                id: "wu_needs_action",
-                label: "Needs action (queue)",
-                value: String(Math.max(0, needsActionCount)),
+                id: "wu_oldest",
+                label: "Oldest on page",
+                value: oldestAgeLabel,
                 lane: "business",
             },
         ],

@@ -2156,7 +2156,17 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 return;
             }
             if (action.type === "queue.item.action" && action.actionId === "open_record") {
-                const entityType = queueItems?.queue.entity_type;
+                const payload =
+                    action.payload && typeof action.payload === "object"
+                        ? (action.payload as Record<string, unknown>)
+                        : {};
+                const fromPayload =
+                    typeof payload.entityType === "string" ? payload.entityType.trim().toLowerCase() : "";
+                const queueEt = queueItems?.queue.entity_type;
+                const entityType =
+                    fromPayload === "job" || fromPayload === "schedule" || fromPayload === "opportunity"
+                        ? fromPayload
+                        : queueEt ?? "opportunity";
                 if (entityType === "job") {
                     openDrawer({ type: "jobs", id: action.itemId, jobRecordSurface: "drawer" });
                     return;
@@ -2165,12 +2175,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     openDrawer({ type: "schedules", id: action.itemId });
                     return;
                 }
-                if (entityType === "opportunity") {
-                    openDrawer({ type: "opportunities", id: action.itemId, ...oppDrawerExtra });
-                    return;
-                }
-            }
-            if (action.type === "queue.item.action" && action.actionId === "open_record") {
                 openDrawer({ type: "opportunities", id: action.itemId, ...oppDrawerExtra });
                 return;
             }

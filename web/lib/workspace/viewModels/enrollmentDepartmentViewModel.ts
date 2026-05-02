@@ -25,7 +25,7 @@ export type EnrollmentPipelineCardVm = {
     count: number | null;
     /** Preformatted count for display (includes "—" when unknown). */
     countDisplay: string;
-    /** Sum of positive `quote_total` across merged queue previews for this segment, else "—". */
+    /** Positive-quote USD total from department lifecycle KPI API (`pricedInMotion` / per-status slice), else "—". */
     valueDisplay: string;
     /** Primary drill action for this funnel segment. */
     openQueueAction: { label: string; href: string };
@@ -47,8 +47,6 @@ export type EnrollmentNeedsAttentionPreviewVm = {
 
 const OPEN_QUEUE_ACTION_LABEL = "Open queue";
 
-type OppQueueItem = WorkspaceOpportunityQueueRuntime["items"][number];
-
 function countsByStatusKey(k: OpportunityLifecycleKpisRuntime & { status: "ready" }): Map<string, number> {
     const m = new Map<string, number>();
     for (const s of k.statusBreakdown ?? []) {
@@ -57,29 +55,21 @@ function countsByStatusKey(k: OpportunityLifecycleKpisRuntime & { status: "ready
     return m;
 }
 
-/** Merge queue preview rows by opportunity id so the same record is not double-counted across work units. */
-function mergedQueueItems(
-    runtime: WorkspaceRuntimeData,
-    keys: Array<"pipeline_overview" | "quoting" | "priced_followup">
-): OppQueueItem[] {
-    const byId = new Map<string, OppQueueItem>();
-    const oq = runtime.opportunityQueues;
-    for (const key of keys) {
-        const bucket = oq?.[key];
-        for (const it of bucket?.items ?? []) {
-            byId.set(it.id, it);
-        }
+/**
+ * Pipeline-card dollar totals — same department lifecycle KPI dataset as counts (`GET …/opportunity-lifecycle-kpis`),
+ * never sums from queue preview rows (partial pages / merged lanes).
+ */
+function authoritativePositiveQuoteUsdForSegment(
+    k: OpportunityLifecycleKpisRuntime & { status: "ready" },
+    statusKeys: Set<string> | null
+): number {
+    if (statusKeys == null) {
+        return Number(k.values.pricedInMotion ?? 0);
     }
-    return [...byId.values()];
-}
-
-function sumPositiveQuotes(items: OppQueueItem[], statusKeys: Set<string> | null): number {
+    const by = k.positiveQuoteSumByNonTerminalStatus ?? {};
     let s = 0;
-    for (const it of items) {
-        const sk = String(it.status_key ?? "").trim().toLowerCase();
-        if (statusKeys && !statusKeys.has(sk)) continue;
-        const q = it.quote_total;
-        if (q != null && Number.isFinite(Number(q)) && Number(q) > 0) s += Number(q);
+    for (const sk of statusKeys) {
+        s += Number(by[sk.toLowerCase()] ?? 0);
     }
     return s;
 }
@@ -127,9 +117,7 @@ type CardDef = {
     stageLabel: string;
     supportingCopy: string;
     count: (by: Map<string, number>, total: number) => number | null;
-    /** Queue previews merged for quote sums (deduped by opportunity id). */
-    valueSourceQueueKeys: Array<"pipeline_overview" | "quoting" | "priced_followup">;
-    /** Limit quote sums to these statuses; `null` = all merged rows. */
+    /** Limit KPI dollar sums to these statuses; `null` = full scoped pipeline (`pricedInMotion`). */
     valueStatusKeys: string[] | null;
     workUnitKey: "pipeline_overview" | "quoting" | "priced_followup";
     /** Query params for the drill link (status filter on the work unit queue). */
@@ -145,7 +133,6 @@ const PIPELINE_CARD_DEFS: CardDef[] = [
             const closed = (by.get("enrolled") ?? 0) + (by.get("lost") ?? 0);
             return Math.max(0, total - closed);
         },
-        valueSourceQueueKeys: ["pipeline_overview", "quoting", "priced_followup"],
         valueStatusKeys: null,
         workUnitKey: "pipeline_overview",
         linkStatusKeys: null,
@@ -155,7 +142,6 @@ const PIPELINE_CARD_DEFS: CardDef[] = [
         stageLabel: "New",
         supportingCopy: "New inquiries not yet progressed.",
         count: (by) => by.get("new_inquiry") ?? null,
-        valueSourceQueueKeys: ["pipeline_overview"],
         valueStatusKeys: ["new_inquiry"],
         workUnitKey: "pipeline_overview",
         linkStatusKeys: ["new_inquiry"],
@@ -165,7 +151,6 @@ const PIPELINE_CARD_DEFS: CardDef[] = [
         stageLabel: "Contact Attempted",
         supportingCopy: "A first contact attempt was logged; schedule a tour next.",
         count: (by) => by.get("contact_attempted") ?? null,
-        valueSourceQueueKeys: ["pipeline_overview"],
         valueStatusKeys: ["contact_attempted"],
         workUnitKey: "pipeline_overview",
         linkStatusKeys: ["contact_attempted"],
@@ -175,7 +160,6 @@ const PIPELINE_CARD_DEFS: CardDef[] = [
         stageLabel: "Tours in progress",
         supportingCopy: "Tours scheduled, completed, or no-show.",
         count: (by) => (by.get("tour_scheduled") ?? 0) + (by.get("tour_completed") ?? 0) + (by.get("tour_no_show") ?? 0),
-        valueSourceQueueKeys: ["pipeline_overview", "quoting"],
         valueStatusKeys: ["tour_scheduled", "tour_completed", "tour_no_show"],
         workUnitKey: "quoting",
         linkStatusKeys: ["tour_scheduled", "tour_completed", "tour_no_show"],
@@ -185,7 +169,6 @@ const PIPELINE_CARD_DEFS: CardDef[] = [
         stageLabel: "Enrolling / waitlisted",
         supportingCopy: "Enrollment steps in progress or waitlist decision.",
         count: (by) => (by.get("enrolling") ?? 0) + (by.get("waitlisted") ?? 0),
-        valueSourceQueueKeys: ["pipeline_overview", "priced_followup"],
         valueStatusKeys: ["enrolling", "waitlisted"],
         workUnitKey: "priced_followup",
         linkStatusKeys: ["enrolling", "waitlisted"],
@@ -215,9 +198,9 @@ export function buildEnrollmentPipelineCardsVm(
                   }`
                 : base;
 
-        const merged = mergedQueueItems(runtime, def.valueSourceQueueKeys);
-        const filter = def.valueStatusKeys ? new Set(def.valueStatusKeys.map((s) => s.toLowerCase())) : null;
-        const quoteSum = sumPositiveQuotes(merged, filter);
+        const statusFilter = def.valueStatusKeys ? new Set(def.valueStatusKeys.map((s) => s.toLowerCase())) : null;
+        const quoteSum =
+            k?.status === "ready" ? authoritativePositiveQuoteUsdForSegment(k, statusFilter) : 0;
 
         const rawCount = k?.status === "ready" ? def.count(by, total) : null;
         const countDisplay = rawCount == null ? "—" : String(Math.max(0, rawCount));

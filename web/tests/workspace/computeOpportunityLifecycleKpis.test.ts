@@ -55,5 +55,7 @@ describe("computeOpportunityLifecycleKpis", () => {
         // open pipeline: first 4 rows (100 from quoted as decision); terminal excluded
         expect(r.values.openPipeline).toBe(100);
         expect(r.values.pricedInMotion).toBe(100);
+        expect(r.positiveQuoteSumByNonTerminalStatus.quoted).toBe(100);
+        expect(r.positiveQuoteSumByNonTerminalStatus.booked).toBeUndefined();
     });
 });

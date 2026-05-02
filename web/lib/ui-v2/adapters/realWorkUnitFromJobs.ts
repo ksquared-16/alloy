@@ -176,6 +176,7 @@ export function buildRealWorkUnitWorkspaceModel(input: {
     const primaryQueue: QueueVm = {
         id: `lane-${mode}-${departmentId}${exceptionFocus ? `-${exceptionFocus}` : ""}`,
         title: headline,
+        queueEntityType: useSchedules ? "schedule" : "job",
         countBadge: rowCount,
         items: useSchedules ? schedules.map(scheduleToQueueItem) : jobs.map(jobToQueueItem),
         sortCaption:

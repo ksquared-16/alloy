@@ -101,6 +101,7 @@ import { useRecordChromeConfig } from "@/hooks/useRecordChromeConfig";
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { prefetchWorkspaceChildcareInquiryOptionSets } from "@/lib/workspace/workspaceChildcareInquiryOptionSets";
+import { adminEntityRefetchShouldBlockDrawerShell } from "@/lib/ui-v2/adminV2EntityDrawerLoading";
 import { getSectionOrderFromScheduleLayoutBlocks } from "@/lib/recordChrome/scheduleLayoutConfig";
 import {
     applyOverviewSectionOrder,
@@ -1502,7 +1503,9 @@ export default function AdminEntityDrawer() {
             drawer.type === "opportunities" ? "full" : undefined
         );
         if (!url) return;
-        setLoading(true);
+        if (adminEntityRefetchShouldBlockDrawerShell(error, data, drawer.id)) {
+            setLoading(true);
+        }
         const t0 = timingEnabled ? performance.now() : 0;
         if (typeof window !== "undefined" && typeof performance !== "undefined") {
             const now = performance.now();
@@ -1552,7 +1555,7 @@ export default function AdminEntityDrawer() {
             })
             .catch((e) => setError(e.message))
             .finally(() => setLoading(false));
-    }, [drawer.type, drawer.id, drawer.jobRecordSurface, timingEnabled, markTiming]);
+    }, [data, drawer.type, drawer.id, drawer.jobRecordSurface, error, timingEnabled, markTiming]);
 
     useEffect(() => {
         if (!timingEnabled) return;

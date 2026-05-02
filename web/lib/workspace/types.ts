@@ -296,7 +296,7 @@ export type WorkspaceRuntimeData = {
     }>;
     /** Populated when layout includes an `attention` block — keyed by `WorkspaceAttentionCategoryKey`. */
     attention?: Partial<Record<WorkspaceAttentionCategoryKey, WorkspaceAttentionCategoryRuntime>>;
-    /** Growth: opportunity rows from GET `/api/admin/work-units/:id/opportunity-queue` (projections, not truth). */
+    /** Growth: opportunity rows from GET `/api/admin/work-units/:id/opportunity-queue` — preview projections only (display/triage/navigation); never authoritative for financials or lifecycle decisions. */
     opportunityQueues?: Partial<Record<string, WorkspaceOpportunityQueueRuntime>>;
     /** When true, queue rows may show minimal opportunity system actions (same execution path as record chrome). */
     opportunityQueueQuickActions?: boolean;

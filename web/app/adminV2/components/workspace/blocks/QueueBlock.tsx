@@ -25,6 +25,18 @@ type Props = {
   surface?: "default" | "department" | "work_unit";
 };
 
+/** Routing context for queue gestures — entity authority lives on GET / resolver after drill. */
+function queueRowEntityPayload(queue: QueueVm): Record<string, unknown> {
+  const et = queue.queueEntityType;
+  if (!et) return {};
+  return { entityType: et };
+}
+
+function mergeQueueActionPayload(queue: QueueVm, extra?: Record<string, unknown>): Record<string, unknown> | undefined {
+  const merged = { ...(extra ?? {}), ...queueRowEntityPayload(queue) };
+  return Object.keys(merged).length ? merged : undefined;
+}
+
 function fireViewAll(queue: QueueVm, onAction: WorkspaceActionHandler) {
   if (!queue.viewAllActionId) return;
   onAction({
@@ -632,6 +644,7 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
                     queueId: queue.id,
                     itemId: item.id,
                     actionId: "open_record",
+                    payload: mergeQueueActionPayload(queue),
                   })
                 }
                 onKeyDown={(e) => {
@@ -642,6 +655,7 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
                       queueId: queue.id,
                       itemId: item.id,
                       actionId: "open_record",
+                      payload: mergeQueueActionPayload(queue),
                     });
                   }
                 }}
@@ -673,7 +687,7 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
                                     queueId: queue.id,
                                     itemId: item.id,
                                     actionId: dispatchId,
-                                    payload: qa.payload,
+                                    payload: mergeQueueActionPayload(queue, qa.payload),
                                   });
                                 }}
                               >
@@ -771,7 +785,7 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
                                     queueId: queue.id,
                                     itemId: item.id,
                                     actionId: qaDispatchId,
-                                    payload: qa.payload,
+                                    payload: mergeQueueActionPayload(queue, qa.payload),
                                   });
                                 }}
                               >
@@ -792,6 +806,7 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
                               queueId: queue.id,
                               itemId: item.id,
                               actionId: "open_record",
+                              payload: mergeQueueActionPayload(queue),
                             });
                           }}
                         >

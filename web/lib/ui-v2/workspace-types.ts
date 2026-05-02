@@ -34,7 +34,7 @@ export type KPIVm = {
   tone?: "neutral" | "risk" | "positive";
 };
 
-/** Queue row quick actions without requiring drill-down */
+/** Queue row quick actions — labels/presentation only; execution hosts use entity id + action key. */
 export type QueueItemQuickActionVm = {
   id: string;
   label: string;
@@ -202,6 +202,12 @@ export type QueueItemVm = {
   semanticCrmCompact?: CrmCompactRowSemanticSlots;
 };
 
+/**
+ * Semantic alias for queue list rows — preview projections only.
+ * Business logic must use `entityType` + `entityId` (and entity GET / resolvers), not this shape.
+ */
+export type QueuePreviewItemVm = QueueItemVm;
+
 /** Department throughput / attention lanes — grouped counts (not work-unit rows). */
 export type QueueRollupGroupVm = {
   id: string;
@@ -223,7 +229,8 @@ export type QueueVm = {
   /** Work-unit drill list: server queue label (empty states, captions). */
   laneQueueLabel?: string;
   countBadge?: number;
-  items: QueueItemVm[];
+  /** Primary drill list — preview projections only; authoritative fields live on entity GET / resolvers. */
+  items: QueuePreviewItemVm[];
   viewAllActionId?: string;
   viewAllLabel?: string;
   /**
@@ -249,6 +256,11 @@ export type QueueVm = {
    * Use industry-native labels (e.g. Expiry · Binder for renewals).
    */
   workUnitMidlineKeys?: { left?: string; right?: string };
+  /**
+   * Entity kind for rows in this lane — echoed on `queue.item.action` payloads (`entityType`).
+   * Host must open drawers / execute actions by id; never infer entity kind from preview fields alone.
+   */
+  queueEntityType?: "job" | "schedule" | "opportunity";
   /**
    * Work-unit lane: while true, suppress empty-state copy ("No records") — rows are still loading or tab switched.
    */

@@ -33,6 +33,7 @@ export type QueueItemsResult = {
         priority: "standard" | "attention" | "critical";
         display: "list" | "cards";
     };
+    /** Preview projections for lane rendering — not authoritative records (see workspace / record system docs). */
     items: unknown[];
     total: number;
     limit: number;
