@@ -20,6 +20,7 @@ import {
 import { resolveKpisForWorkspace } from "@/lib/kpi/resolver";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { AdminV2RouteLoadingState } from "@/components/admin/workspace/AdminV2RouteLoadingState";
+import { recordAdminV2PerfMark } from "@/lib/perf/adminV2PerfCapture";
 
 async function loadWorkspaceRollup(
     departments: WorkspaceRootDepartmentRow[],
@@ -238,10 +239,15 @@ export default function AdminV2WorkspaceIndexPage() {
                                     setWorkspaceKpiPlacementPending(false);
                                 }
                                 if (typeof performance !== "undefined" && typeof window !== "undefined") {
+                                    const duration_ms = Math.round(performance.now() - tPlace0);
                                     console.log("[page-timing]", {
                                         route: "workspace",
                                         phase: "kpi_placement",
-                                        duration_ms: Math.round(performance.now() - tPlace0),
+                                        duration_ms,
+                                    });
+                                    recordAdminV2PerfMark("workspace_kpi_placement", {
+                                        phase: "kpi_placement",
+                                        duration_ms,
                                     });
                                 }
                             }
@@ -263,10 +269,15 @@ export default function AdminV2WorkspaceIndexPage() {
                 }
 
                 if (typeof performance !== "undefined" && typeof window !== "undefined") {
+                    const duration_ms = Math.round(performance.now() - routeStart);
                     console.log("[page-timing]", {
                         route: "workspace",
                         phase: "first_paint",
-                        duration_ms: Math.round(performance.now() - routeStart),
+                        duration_ms,
+                    });
+                    recordAdminV2PerfMark("workspace_page_ready", {
+                        phase: "first_paint",
+                        duration_ms,
                     });
                 }
 

@@ -15,6 +15,7 @@ import {
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import { useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext";
+import { recordAdminV2PerfMark } from "@/lib/perf/adminV2PerfCapture";
 import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
 import EntityDocumentsSection from "@/components/admin/EntityDocumentsSection";
 import CommunicationsDrawerSection from "@/components/admin/communications/CommunicationsDrawerSection";
@@ -1435,6 +1436,10 @@ export default function AdminEntityDrawer() {
         drawerLoadStartRef.current = { key: `${drawer.type}:${drawer.id}`, at: performance.now() };
         if (typeof window !== "undefined") {
             console.log("[drawer-load]", { phase: "open_start" });
+            recordAdminV2PerfMark("drawer_open_start", {
+                entity_type: drawer.type,
+                entity_id: drawer.id,
+            });
         }
     }, [drawer.type, drawer.id]);
 
@@ -1454,6 +1459,11 @@ export default function AdminEntityDrawer() {
         const duration_ms = start?.key === key ? Math.round(performance.now() - start.at) : 0;
         if (typeof window !== "undefined") {
             console.log("[drawer-load]", { phase: "ready", duration_ms });
+            recordAdminV2PerfMark("drawer_ready", {
+                entity_type: drawer.type,
+                entity_id: drawer.id,
+                duration_ms,
+            });
         }
     }, [drawer.type, drawer.id, drawerReady, data]);
 

@@ -18,6 +18,7 @@ import RecordsExpandable from "./records/RecordsExpandable";
 import { MOCK_DEPARTMENTS } from "./canvas/mockDepartments";
 import type { DepartmentKey } from "@/lib/departmentColors";
 import WorkspaceAmbientLayer from "./WorkspaceAmbientLayer";
+import AdminV2PerfCaptureWidget from "./AdminV2PerfCaptureWidget";
 
 /**
  * AdminV2 AI command surface is internal/admin-only and should be interactive whenever visible.
@@ -162,6 +163,7 @@ export default function AdminV2Shell({
               {adminV2AiCommandSurfaceEnabled() ? <AICommandSurfaceShell /> : <AICommandBar />}
             </div>
           </div>
+          <AdminV2PerfCaptureWidget />
         </div>
       </div>
     );
@@ -246,6 +248,7 @@ export default function AdminV2Shell({
           </div>
           {adminV2AiCommandSurfaceEnabled() ? <AICommandSurfaceShell /> : <AICommandBar />}
         </div>
+        <AdminV2PerfCaptureWidget />
       </div>
     </div>
   );

@@ -45,6 +45,7 @@ import {
     type QueueUiRowPreviewField,
 } from "@/lib/ui-v2/queueUiConfig";
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
+import { recordAdminV2PerfMark } from "@/lib/perf/adminV2PerfCapture";
 import { UpdateStatusAddNoteModal } from "@/components/admin/opportunity/actions/UpdateStatusAddNoteModal";
 import { ContactAttemptedModal } from "@/components/admin/opportunity/actions/ContactAttemptedModal";
 import { formatActivityRelativeShort } from "@/lib/admin/activitySignals";
@@ -485,9 +486,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     if (provisionalKey) setSelectedQueueKey(provisionalKey);
                     setLoading(false);
                     if (typeof window !== "undefined") {
+                        const duration_ms = Math.round(performance.now() - routeStart);
                         console.log("[wu-load-phase]", {
                             phase: "first_paint",
-                            duration_ms: Math.round(performance.now() - routeStart),
+                            duration_ms,
+                        });
+                        recordAdminV2PerfMark("work_unit_shell_ready", {
+                            work_unit_id: workUnitId,
+                            department_id: departmentId,
+                            phase: "first_paint",
+                            duration_ms,
                         });
                     }
                 }
@@ -607,9 +615,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                           : firstByUi;
                                 setSelectedQueueKey(initial);
                                 if (typeof window !== "undefined") {
+                                    const duration_ms = Math.round(performance.now() - routeStart);
                                     console.log("[wu-load-phase]", {
                                         phase: "summaries_ready",
-                                        duration_ms: Math.round(performance.now() - routeStart),
+                                        duration_ms,
+                                    });
+                                    recordAdminV2PerfMark("work_unit_summaries_ready", {
+                                        work_unit_id: workUnitId,
+                                        department_id: departmentId,
+                                        duration_ms,
                                     });
                                 }
                             }
@@ -764,6 +778,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             const qs = new URLSearchParams({ limit: "20", offset: "0", count_mode: "exact" });
             if (canOmitTotal) qs.set("omit_total_count", "true");
             const route = `/api/admin/queues/${encodeURIComponent(workUnitId)}/${encodeURIComponent(queueKey)}?${qs.toString()}`;
+            const queueRowsFetchStart = typeof performance !== "undefined" ? performance.now() : 0;
             setQueueItemsLoading(true);
             setQueueItemsError(null);
             setQueueItemsRoute(route);
@@ -787,11 +802,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 if (seq === queueItemsRequestSeq.current) {
                     setQueueItems(payload);
                     if (typeof window !== "undefined") {
+                        const duration_ms = Math.round(performance.now() - queueRowsFetchStart);
                         console.warn("[pipeline-count-unify]", {
                             source: "queue-rows",
                             work_unit_id: workUnitId,
                             queue_key: queueKey,
                             count: typeof payload.total === "number" ? payload.total : null,
+                        });
+                        recordAdminV2PerfMark("queue_rows_ready", {
+                            work_unit_id: workUnitId,
+                            queue_key: queueKey,
+                            duration_ms,
+                            items_count: Array.isArray(payload.items) ? payload.items.length : 0,
                         });
                     }
                 }
@@ -1770,10 +1792,17 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 }
             } finally {
                 if (typeof performance !== "undefined" && typeof window !== "undefined") {
+                    const duration_ms = Math.round(performance.now() - tPlace0);
                     console.log("[page-timing]", {
                         route: "work_unit",
                         phase: "kpi_placement",
-                        duration_ms: Math.round(performance.now() - tPlace0),
+                        duration_ms,
+                    });
+                    recordAdminV2PerfMark("work_unit_kpi_placement", {
+                        work_unit_id: workUnit.id,
+                        department_id: departmentId,
+                        phase: "kpi_placement",
+                        duration_ms,
                     });
                 }
             }

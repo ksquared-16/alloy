@@ -29,6 +29,7 @@ import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedu
 import { AutomationWorkflowsBlock } from "@/app/adminV2/components/workspace/blocks/AutomationWorkflowsBlock";
 import { resolveKpisForDepartment } from "@/lib/kpi/resolver";
 import type { WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
+import { recordAdminV2PerfMark } from "@/lib/perf/adminV2PerfCapture";
 
 const WORKSPACE_BASE = "/adminV2/workspace";
 
@@ -280,10 +281,16 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     setDeptQueueSummariesLoading(false);
                     setDeptLoading(false);
                     if (typeof performance !== "undefined" && typeof window !== "undefined") {
+                        const duration_ms = Math.round(performance.now() - routeStart);
                         console.log("[page-timing]", {
                             route: "department",
                             phase: "first_paint",
-                            duration_ms: Math.round(performance.now() - routeStart),
+                            duration_ms,
+                        });
+                        recordAdminV2PerfMark("department_page_ready", {
+                            department_id: departmentId,
+                            phase: "first_paint",
+                            duration_ms,
                         });
                     }
                 }
@@ -330,10 +337,16 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 }
             } finally {
                 if (typeof performance !== "undefined" && typeof window !== "undefined") {
+                    const duration_ms = Math.round(performance.now() - tPlace0);
                     console.log("[page-timing]", {
                         route: "department",
                         phase: "kpi_placement",
-                        duration_ms: Math.round(performance.now() - tPlace0),
+                        duration_ms,
+                    });
+                    recordAdminV2PerfMark("department_kpi_placement", {
+                        department_id: departmentId,
+                        phase: "kpi_placement",
+                        duration_ms,
                     });
                 }
             }
