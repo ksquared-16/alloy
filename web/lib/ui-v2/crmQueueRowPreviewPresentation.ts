@@ -278,12 +278,13 @@ export function buildCrmCompactWorkUnitFactGroups(params: BuildCrmCompactWorkUni
 
     const childLabelChild = labels.child_name ?? "Child";
     const childLabelProgram = labels.program ?? "Program";
-    const multi = params.childrenLines && params.childrenLines.length >= 2;
+    const childLines = params.childrenLines;
+    const maxChildRows = 30;
 
-    if (want("child_name") && multi) {
-        const list = params.childrenLines!;
-        const visible = list.slice(0, 4);
-        const overflow = Math.max(0, list.length - visible.length);
+    if (want("child_name") && childLines != null && childLines.length > 0) {
+        const list = childLines;
+        const visible = list.length > maxChildRows ? list.slice(0, maxChildRows) : list;
+        const overflow = list.length - visible.length;
         const headers = want("program") ? [childLabelChild, childLabelProgram] : [childLabelChild];
         const rows: string[][] = visible.map((ch) => {
             if (want("program")) {
@@ -293,8 +294,7 @@ export function buildCrmCompactWorkUnitFactGroups(params: BuildCrmCompactWorkUni
             return [ch.primary];
         });
         if (overflow > 0) {
-            const pad = want("program") ? 2 : 1;
-            rows.push([`+${overflow} more`, ...Array(Math.max(0, pad - 1)).fill("")]);
+            rows.push([`+${overflow} more`, ...(want("program") ? [""] : [])]);
         }
         out.push({ kind: "children_programs", label: "", columnGrid: { headers, rows } });
     } else if (want("child_name") || want("program")) {

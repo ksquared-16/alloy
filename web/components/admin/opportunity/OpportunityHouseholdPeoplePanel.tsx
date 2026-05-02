@@ -1,6 +1,6 @@
 "use client";
 
-import { AdminV2DrawerLoadingState } from "@/components/admin/workspace/AdminV2DrawerLoadingState";
+import { DrawerRelationshipPanelSkeleton } from "@/components/admin/workspace/DrawerRelationshipPanelSkeleton";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import OpportunityRecordSectionRegistryActions from "@/components/admin/opportunity/OpportunityRecordSectionRegistryActions";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
@@ -119,19 +119,9 @@ export function OpportunityHouseholdPeoplePanel(props: {
             ) : null}
 
             {loading ? (
-                <AdminV2DrawerLoadingState
-                    density="inline"
-                    title="Loading household people"
-                    description="Fetching people linked to this household."
-                    className="border-0 bg-transparent px-0 py-2 shadow-none ring-0"
-                />
+                <DrawerRelationshipPanelSkeleton rows={2} label="Loading household people" />
             ) : rows.length === 0 && householdEmptyAwaitingFull ? (
-                <AdminV2DrawerLoadingState
-                    density="inline"
-                    title="Loading household people"
-                    description="Additional links may still be merging into the full record."
-                    className="border-0 bg-transparent px-0 py-2 shadow-none ring-0"
-                />
+                <DrawerRelationshipPanelSkeleton rows={2} label="Merging household links" />
             ) : rows.length === 0 && opportunityFullHydrateFailed ? (
                 <div className="rounded-lg border border-amber-200/80 bg-amber-50/60 px-3 py-2 text-sm text-amber-950">
                     Full record did not load. Household links may be incomplete — try refreshing the drawer.

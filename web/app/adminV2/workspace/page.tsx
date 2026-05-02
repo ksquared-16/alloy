@@ -191,11 +191,14 @@ export default function AdminV2WorkspaceIndexPage() {
     const [workspaceKpiStrip, setWorkspaceKpiStrip] = useState<KPIVm[] | undefined>(undefined);
     /** KPI placements load after first paint — skeleton until settled (no baseline→placement number swap). */
     const [workspaceKpiPlacementPending, setWorkspaceKpiPlacementPending] = useState(false);
+    /** After per-dept rollup finishes — soft opacity lift on department cards (quick → refined stats). */
+    const [workspaceRollupRefined, setWorkspaceRollupRefined] = useState(false);
 
     useEffect(() => {
         /** Synchronous: avoids a Strict Mode window where `loading` is still default `true` but the async body has not run yet (same class of bug as deferred `setLoading(true)`). */
         setLoading(true);
         setError(null);
+        setWorkspaceRollupRefined(false);
 
         const ac = new AbortController();
         /** Hard cap so a hung `/api/admin/departments` cannot block the UI forever when `AbortSignal.timeout` is unavailable. */
@@ -242,6 +245,7 @@ export default function AdminV2WorkspaceIndexPage() {
                     setOrgOpportunityKpis(null);
                     setWorkspaceKpiStrip(undefined);
                     setWorkspaceKpiPlacementPending(true);
+                    setWorkspaceRollupRefined(false);
                     void (async () => {
                         try {
                             const rollupResult = await loadWorkspaceRollup(active, wuRes, wuJson);
@@ -251,6 +255,7 @@ export default function AdminV2WorkspaceIndexPage() {
                             setMetrics(m);
                             setDeptTileStats(stats);
                             setOrgOpportunityKpis(roll.length ? roll : null);
+                            setWorkspaceRollupRefined(true);
 
                             const growthSnapshotsRef = growthSnapshots;
                             const metricsForPlacement: WorkspaceRootMetrics = {
@@ -291,6 +296,7 @@ export default function AdminV2WorkspaceIndexPage() {
                             setOrgOpportunityKpis(null);
                             setWorkspaceKpiStrip(undefined);
                             setWorkspaceKpiPlacementPending(false);
+                            setWorkspaceRollupRefined(true);
                         }
                     })();
                 } else if (applyResults) {
@@ -299,6 +305,7 @@ export default function AdminV2WorkspaceIndexPage() {
                     setOrgOpportunityKpis(null);
                     setWorkspaceKpiStrip(undefined);
                     setWorkspaceKpiPlacementPending(false);
+                    setWorkspaceRollupRefined(true);
                 }
 
                 if (typeof performance !== "undefined" && typeof window !== "undefined") {
@@ -387,6 +394,7 @@ export default function AdminV2WorkspaceIndexPage() {
             orgOpportunityKpis={orgOpportunityKpis}
             workspaceKpiStrip={workspaceKpiStrip}
             kpiStripPlaceholder={workspaceKpiPlacementPending}
+            workspaceRollupRefined={workspaceRollupRefined}
         />
     );
 }

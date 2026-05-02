@@ -64,8 +64,10 @@ type Props = {
    * When `undefined`, the shell builds the legacy merge from `metrics` + `orgOpportunityKpis`.
    */
   workspaceKpiStrip?: KPIVm[] | undefined;
-  /** Skeleton only — placements still loading after first paint (no numeric KPIs yet). */
+  /** KPI placements still loading after first paint (no numeric KPIs yet). */
   kpiStripPlaceholder?: boolean;
+  /** After background rollup replaces quick tile stats — soft opacity lift on department zone */
+  workspaceRollupRefined?: boolean;
 };
 
 function formatInt(n: number | null | undefined): string {
@@ -96,6 +98,7 @@ export function WorkspaceRootShell({
   orgOpportunityKpis,
   workspaceKpiStrip,
   kpiStripPlaceholder = false,
+  workspaceRollupRefined = false,
 }: Props) {
   const displayName = (orgName && orgName.trim()) || "Your organization";
 
@@ -167,10 +170,19 @@ export function WorkspaceRootShell({
                 </p>
               </div>
             </div>
-            {kpiStripPlaceholder ? <KpiStripSkeleton id="ws-root-kpi-skeleton" /> : <KPIBlock kpis={kpis} maxVisible={5} />}
+            {kpiStripPlaceholder ? (
+              <KpiStripSkeleton id="ws-root-kpi-skeleton" />
+            ) : (
+              <div className="adminv2-ws-soft-content-reveal" data-workspace-zone="kpi-banner">
+                <KPIBlock kpis={kpis} maxVisible={5} />
+              </div>
+            )}
           </div>
 
-          <section className="adminv2-ws-root-departments-zone" aria-labelledby="ws-root-dept-heading">
+          <section
+            className={`adminv2-ws-root-departments-zone ${workspaceRollupRefined ? "adminv2-ws-deferred-surface--refined" : "adminv2-ws-deferred-surface--coarse"}`}
+            aria-labelledby="ws-root-dept-heading"
+          >
             <div className="flex flex-wrap items-end justify-between gap-2 mb-3">
               <div>
                 <h2 id="ws-root-dept-heading" className="adminv2-ws-root-zone-kicker">

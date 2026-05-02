@@ -11,6 +11,7 @@ import {
 } from "@/components/admin/workspace/WorkspacePairedOperPanels";
 import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import { DepartmentWorkspaceBridgeShell } from "@/components/admin/workspace/DepartmentWorkspaceBridgeShell";
+import { WorkspaceActionsRailPlaceholder } from "@/components/admin/workspace/WorkspaceActionsRailPlaceholder";
 import KPIBlock from "@/app/adminV2/components/workspace/blocks/KPIBlock";
 import { AdminV2RouteLoadingState } from "@/components/admin/workspace/AdminV2RouteLoadingState";
 import { KpiStripSkeleton } from "@/components/admin/workspace/KpiStripSkeleton";
@@ -611,7 +612,9 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         deptPlacementRows === undefined ? (
                             <KpiStripSkeleton id="dept-kpi-skeleton" />
                         ) : kpis.length ? (
-                            <KPIBlock kpis={kpis} maxVisible={5} />
+                            <div className="adminv2-ws-soft-content-reveal">
+                                <KPIBlock kpis={kpis} maxVisible={5} />
+                            </div>
                         ) : null
                     }
                     throughputSlot={throughputPairedPanels}
@@ -636,14 +639,19 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         </div>
                     }
                     railSlot={
-                        deptKey === "enrollment" &&
-                        (enrollmentDepartmentRailModel?.systemActions?.length ?? 0) > 0 ? (
-                            <ActionsBlock
-                                model={enrollmentDepartmentRailModel!}
-                                onAction={onEnrollmentDeptRailAction}
-                                title="Actions"
-                                surface="department"
-                            />
+                        deptKey === "enrollment" && primaryWorkUnit ? (
+                            (enrollmentDepartmentRailModel?.systemActions?.length ?? 0) > 0 ? (
+                                <div className="adminv2-ws-soft-content-reveal">
+                                    <ActionsBlock
+                                        model={enrollmentDepartmentRailModel!}
+                                        onAction={onEnrollmentDeptRailAction}
+                                        title="Actions"
+                                        surface="department"
+                                    />
+                                </div>
+                            ) : (
+                                <WorkspaceActionsRailPlaceholder />
+                            )
                         ) : null
                     }
                 />

@@ -6,7 +6,7 @@ import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
 import { formatPhoneUS } from "@/lib/adminFormatters";
 import { normalizePhone } from "@/lib/contactNormalize";
-import { AdminV2DrawerLoadingState } from "@/components/admin/workspace/AdminV2DrawerLoadingState";
+import { DrawerRelationshipPanelSkeleton } from "@/components/admin/workspace/DrawerRelationshipPanelSkeleton";
 
 export type OpportunityPersonRow = {
     id: string;
@@ -195,13 +195,7 @@ export function FamilyContactsPanel(props: {
                         </div>
                     </div>
                 ) : primaryContactAwaitingFullHydrate ? (
-                    <AdminV2DrawerLoadingState
-                        density="micro"
-                        showTrack={false}
-                        title="Loading primary contact"
-                        description="Person details arrive with the full record."
-                        className="mt-1 border-0 bg-transparent px-0 py-1 shadow-none ring-0"
-                    />
+                    <DrawerRelationshipPanelSkeleton density="compact" rows={1} label="Primary contact loading" />
                 ) : (
                     <p className={`mt-1 ${variant === "summary" ? "text-[12px] text-alloy-midnight/55" : "text-sm text-alloy-forge/60"}`}>
                         No primary person on this opportunity.
@@ -242,12 +236,7 @@ export function FamilyContactsPanel(props: {
                         opportunity.
                     </div>
                 ) : relationshipRowsAwaitingFullHydrate ? (
-                    <AdminV2DrawerLoadingState
-                        density="inline"
-                        title="Loading family & opportunity people"
-                        description="Relationship rows populate after the record fully hydrates."
-                        className="border-0 bg-transparent px-0 py-2 shadow-none ring-0"
-                    />
+                    <DrawerRelationshipPanelSkeleton density={variant === "summary" ? "compact" : "comfortable"} rows={2} />
                 ) : (
                     <div className={variant === "summary" ? "text-[12px] text-alloy-midnight/55" : "text-sm text-alloy-forge/60"}>
                         No additional people linked yet.

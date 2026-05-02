@@ -170,7 +170,10 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
     const structuredChildren = parseCrmChildrenFromStructuredRow(row);
     const multiChild = structuredChildren.length >= 2;
     const childNameFlat = (row as { _child_display_name?: string | null })._child_display_name?.trim() || null;
-    const childName = multiChild ? null : childNameFlat;
+    const childName =
+        multiChild
+            ? null
+            : childNameFlat ?? (structuredChildren.length === 1 ? structuredChildren[0]!.primary.trim() || null : null);
 
     const stageLabel = row._lifecycle_stage_title?.trim() || null;
     const statusLabel = (row._status_display ?? "").trim() || (row.status_key ?? "").trim() || null;
@@ -220,7 +223,7 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
 
     const want = options?.previewWant ?? ((_f: QueueUiRowPreviewField) => true);
     const childrenLinesRefined =
-        multiChild && structuredChildren.length >= 2
+        want("child_name") && structuredChildren.length >= 1
             ? refineCrmCompactChildLinesForPreview(structuredChildren, want("program") ? programContextDeduped : null, {
                   attachFamilyWhenMissing: want("program"),
               })
@@ -236,19 +239,20 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
         row: row as Record<string, unknown>,
         want,
         rowPreviewFieldLabels: options?.rowPreviewFieldLabels,
-        childrenLines: multiChild ? childrenLinesRefined : null,
-        childNameSingle: !multiChild ? childNameFlat : null,
-        programSingle: multiChild ? null : want("program") ? programContextDeduped : null,
+        childrenLines: childrenLinesRefined?.length ? childrenLinesRefined : null,
+        childNameSingle: childrenLinesRefined?.length ? null : !multiChild ? childNameFlat : null,
+        programSingle: childrenLinesRefined?.length ? null : multiChild ? null : want("program") ? programContextDeduped : null,
         roomContext,
         ageBandContext: previewPresentation.ageBandContext ?? null,
     });
 
-    const programContext = want("program") ? (!multiChild ? programContextDeduped : null) : null;
+    const programContext =
+        want("program") && !childrenLinesRefined?.length && !multiChild ? programContextDeduped : null;
 
     return {
         primaryIdentity,
         childName,
-        childrenLines: multiChild ? childrenLinesRefined : null,
+        childrenLines: childrenLinesRefined,
         stageLabel,
         statusLabel,
         nextStep,

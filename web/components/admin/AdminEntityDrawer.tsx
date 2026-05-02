@@ -7623,7 +7623,8 @@ export default function AdminEntityDrawer() {
             {error && <p className="text-alloy-ember">Error: {error}</p>}
             {drawerReady && data && dataMatchesDrawer && (
                 <div
-                    className={`${isJobDrawerV2 && drawer.type === "jobs" ? "space-y-3 max-w-none" : showScheduleRecordModalV2 || showOpportunityRecordModalV2 ? "space-y-3 max-w-none" : "space-y-6"}${showOpportunityRecordModalV2 ? " pb-24 sm:pb-28" : ""}`}
+                    key={`body:${drawer.type}:${drawer.id}`}
+                    className={`adminv2-ws-soft-content-reveal ${isJobDrawerV2 && drawer.type === "jobs" ? "space-y-3 max-w-none" : showScheduleRecordModalV2 || showOpportunityRecordModalV2 ? "space-y-3 max-w-none" : "space-y-6"}${showOpportunityRecordModalV2 ? " pb-24 sm:pb-28" : ""}`}
                     data-adminv2-job-drawer-body={isJobDrawerV2 && drawer.type === "jobs" ? "true" : undefined}
                     data-adminv2-schedule-drawer-body={showScheduleRecordModalV2 ? "true" : undefined}
                     data-adminv2-opportunity-drawer-body={showOpportunityRecordModalV2 ? "true" : undefined}

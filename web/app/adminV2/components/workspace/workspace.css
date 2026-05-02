@@ -2251,18 +2251,39 @@
 @keyframes adminv2-drawer-content-in {
   from {
     opacity: 0;
-    transform: scale(0.98);
   }
 
   to {
     opacity: 1;
-    transform: scale(1);
   }
 }
 
 .adminv2-drawer-content-enter {
-  animation: adminv2-drawer-content-in 120ms ease-out both;
-  transform-origin: top center;
+  animation: adminv2-drawer-content-in 200ms ease-out both;
+}
+
+/* Deferred workspace data (KPI / grid) — one-shot soft reveal, no pop-in */
+@keyframes adminv2-ws-soft-content-reveal {
+  from {
+    opacity: 0.72;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.adminv2-ws-soft-content-reveal {
+  animation: adminv2-ws-soft-content-reveal 420ms ease-out both;
+}
+
+.adminv2-ws-deferred-surface--coarse {
+  opacity: 0.94;
+}
+
+.adminv2-ws-deferred-surface--refined {
+  opacity: 1;
+  transition: opacity 400ms ease-out;
 }
 
 /* Opportunity drawer: one-shot soft emphasis when full hydration replaces `drawer_initial`. */
@@ -2445,8 +2466,18 @@
 
   .adminv2-drawer-content-enter {
     animation: none;
-    transform: none;
     opacity: 1;
+  }
+
+  .adminv2-ws-soft-content-reveal {
+    animation: none;
+    opacity: 1;
+  }
+
+  .adminv2-ws-deferred-surface--coarse,
+  .adminv2-ws-deferred-surface--refined {
+    opacity: 1;
+    transition: none;
   }
 
   .ws-loading-spinner {
@@ -5828,26 +5859,42 @@
   color: color-mix(in srgb, var(--d-muted) 58%, transparent);
 }
 
-/* Field columns — label above each value; no middots (contact / timing / children). */
+/* Field columns — label above each value; no middots (contact / timing / children).
+ * Columns size to content (no equal flex grow) so the middle zone stays compact. */
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview .adminv2-ws-queue-fact-column-grid,
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview .adminv2-ws-queue-fact-column-grid {
   display: flex;
   flex-direction: row;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: flex-start;
-  gap: 10px 18px;
+  justify-content: flex-start;
+  column-gap: 32px;
+  row-gap: 6px;
   width: 100%;
   min-width: 0;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview .adminv2-ws-queue-fact-field-col,
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview .adminv2-ws-queue-fact-field-col {
-  flex: 1 1 0;
-  min-width: 0;
+  flex: 0 1 auto;
+  min-width: min(5.25rem, 100%);
+  max-width: 11rem;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 2px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2
+  .adminv2-ws-crm-queue-preview
+  .adminv2-ws-queue-fact-group[data-fact-kind="contact"]
+  .adminv2-ws-queue-fact-field-col,
+[data-ws-surface="work_unit"].adminv2-ws-work-unit
+  .adminv2-ws-crm-queue-preview
+  .adminv2-ws-queue-fact-group[data-fact-kind="contact"]
+  .adminv2-ws-queue-fact-field-col {
+  max-width: 12.5rem;
+  min-width: min(6rem, 100%);
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview .adminv2-ws-queue-fact-col-head,

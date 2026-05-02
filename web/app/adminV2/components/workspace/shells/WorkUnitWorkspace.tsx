@@ -6,6 +6,7 @@ import { operationalWorkspaceShellStyle } from "@/lib/visualContext";
 import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
 import { SignalBlock, KPIBlock, QueueBlock, WorkBlock, ActionsBlock } from "../blocks";
 import { WorkspaceShellLayout } from "@/components/admin/workspace/WorkspaceShellLayout";
+import { WorkspaceActionsRailPlaceholder } from "@/components/admin/workspace/WorkspaceActionsRailPlaceholder";
 import { KpiStripSkeleton } from "@/components/admin/workspace/KpiStripSkeleton";
 
 type Props = {
@@ -18,6 +19,11 @@ type Props = {
    * Pass false when KPIs are not loaded asynchronously.
    */
   kpiStripPlaceholder: boolean;
+  /**
+   * Keep the command column at its final desktop width while registry right-rail actions resolve
+   * (enrollment work units — avoids primary column reflow when actions arrive).
+   */
+  reserveActionsRail?: boolean;
   /** Optional footer content constrained to the primary column width. */
   primaryFooterSlot?: ReactNode;
 };
@@ -31,6 +37,7 @@ export default function WorkUnitWorkspace({
   onAction,
   headerQueuePicker,
   kpiStripPlaceholder,
+  reserveActionsRail = false,
   primaryFooterSlot,
 }: Props) {
   const wuShellStyle: CSSProperties = useMemo(
@@ -69,16 +76,22 @@ export default function WorkUnitWorkspace({
     (model.actionsRail.quickOperations?.length ?? 0) > 0 ||
     (model.actionsRail.overflow?.length ?? 0) > 0;
 
+  const showRailColumn = reserveActionsRail || hasConfiguredActions;
+
   return (
     <WorkspaceShellLayout
       surface="work_unit"
       rootClassName="adminv2-ws-work-unit adminv2-ws-wu-v2"
       style={wuShellStyle}
       railAriaLabel="Decisions and actions"
-      showRail={hasConfiguredActions}
+      showRail={showRailColumn}
       railContent={
         hasConfiguredActions ? (
-          <ActionsBlock model={model.actionsRail} onAction={onAction} title="Actions" surface="work_unit" />
+          <div className="adminv2-ws-soft-content-reveal">
+            <ActionsBlock model={model.actionsRail} onAction={onAction} title="Actions" surface="work_unit" />
+          </div>
+        ) : reserveActionsRail ? (
+          <WorkspaceActionsRailPlaceholder />
         ) : null
       }
       primaryColumn={
@@ -137,7 +150,7 @@ export default function WorkUnitWorkspace({
                   <KpiStripSkeleton id="wu-kpi-skeleton" />
                 </div>
               ) : hasKpis ? (
-                <div data-workspace-zone="kpi-banner">
+                <div className="adminv2-ws-soft-content-reveal" data-workspace-zone="kpi-banner">
                   <KPIBlock kpis={model.kpis} maxVisible={5} />
                 </div>
               ) : null}

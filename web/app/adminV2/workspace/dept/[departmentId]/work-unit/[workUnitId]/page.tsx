@@ -1669,7 +1669,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 const programDeduped =
                     program.trim() && want("program") ? dedupeRedundantProgramAgeInPreview(program) : null;
                 const childrenLinesForVm =
-                    want("child_name") && multiChildren
+                    want("child_name") && crmChildrenParsed.length >= 1
                         ? refineCrmCompactChildLinesForPreview(crmChildrenParsed, want("program") ? programDeduped : null, {
                               attachFamilyWhenMissing: want("program"),
                           })
@@ -1708,16 +1708,20 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                       row: r as Record<string, unknown>,
                                       want,
                                       rowPreviewFieldLabels: queueUi?.row_preview.fieldLabels,
-                                      childrenLines: multiChildren ? childrenLinesForVm : null,
-                                      childNameSingle: !multiChildren ? childName || null : null,
-                                      programSingle: multiChildren ? null : want("program") ? programDeduped : null,
+                                      childrenLines: childrenLinesForVm?.length ? childrenLinesForVm : null,
+                                      childNameSingle: childrenLinesForVm?.length ? null : !multiChildren ? childName || null : null,
+                                      programSingle: childrenLinesForVm?.length ? null : multiChildren ? null : want("program") ? programDeduped : null,
                                       roomContext: null,
                                       ageBandContext: crmPresentation.ageBandContext ?? null,
                                   });
                                   return {
                                       primaryIdentity: familyTitle,
                                       childrenLines: childrenLinesForVm,
-                                      childName: want("child_name") ? (multiChildren ? null : childName || null) : null,
+                                      childName: want("child_name")
+                                          ? multiChildren
+                                              ? null
+                                              : childName || childrenLinesForVm?.[0]?.primary || null
+                                          : null,
                                       stageLabel: null,
                                       statusLabel: want("status") ? statusLabel || null : null,
                                       nextStep:
@@ -1728,7 +1732,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                       commercialValue: null,
                                       ...crmPresentation,
                                       crmFactGroups,
-                                      programContext: want("program") ? (multiChildren ? null : programDeduped) : null,
+                                      programContext: want("program")
+                                          ? childrenLinesForVm?.length || multiChildren
+                                              ? null
+                                              : programDeduped
+                                          : null,
                                       roomContext: null,
                                       attentionReason: attentionReason || null,
                                       familyNote: note || null,
@@ -2311,6 +2319,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         onAction={onAction}
                         headerQueuePicker={headerQueuePickerSlot}
                         kpiStripPlaceholder={workUnitKpiStripPlaceholder}
+                        reserveActionsRail={(dept?.key ?? "").trim().toLowerCase() === "enrollment"}
                         primaryFooterSlot={
                             <AutomationWorkflowsBlock
                                 title="Automations"
