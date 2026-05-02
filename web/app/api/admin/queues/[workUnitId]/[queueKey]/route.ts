@@ -72,16 +72,20 @@ export async function GET(
             countAccuracy,
             omitTotalCount,
         });
+        const tSer0 = Date.now();
+        const response = NextResponse.json(result);
+        const serializeMs = Date.now() - tSer0;
         const ms = Date.now() - t0;
         if (ms > 200) {
             console.warn("[admin-timing] GET /api/admin/queues/[workUnitId]/[queueKey]", {
                 ms,
+                response_serialize_ms: serializeMs,
                 work_unit_id: workUnitId,
                 queue_key: queueKey,
                 count_mode: omitTotalCount ? "omit" : countAccuracy ?? "exact",
             });
         }
-        return NextResponse.json(result);
+        return response;
     } catch (e) {
         if (e instanceof QueueServiceError) {
             return NextResponse.json({ error: e.message, code: e.code }, { status: e.status });

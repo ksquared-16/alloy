@@ -22,6 +22,48 @@ import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { AdminV2RouteLoadingState } from "@/components/admin/workspace/AdminV2RouteLoadingState";
 import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 
+/** First paint: work-unit counts + rollup lines without per-dept growth KPI / pipeline calls. */
+function buildWorkspaceQuickRollup(
+    departments: WorkspaceRootDepartmentRow[],
+    workUnitsRes: Response | null,
+    wuJson: { items?: { department_id?: string }[]; error?: string }
+): { metrics: WorkspaceRootMetrics; deptTileStats: WorkspaceRootDeptTileStats } {
+    const deptTileStats: WorkspaceRootDeptTileStats = {};
+    if (workUnitsRes?.ok && Array.isArray(wuJson.items)) {
+        for (const row of wuJson.items) {
+            const did = typeof row.department_id === "string" ? row.department_id : "";
+            if (!did) continue;
+            const cur = deptTileStats[did]?.workUnitCount ?? 0;
+            deptTileStats[did] = { workUnitCount: cur + 1 };
+        }
+    }
+
+    for (const d of departments) {
+        const wu = deptTileStats[d.id]?.workUnitCount ?? 0;
+        if (!deptTileStats[d.id]) deptTileStats[d.id] = { workUnitCount: wu };
+        else deptTileStats[d.id] = { ...deptTileStats[d.id], workUnitCount: wu };
+    }
+
+    for (const d of departments) {
+        const wu = deptTileStats[d.id]?.workUnitCount ?? 0;
+        deptTileStats[d.id] = {
+            workUnitCount: wu,
+            opportunityRollupLine: buildWorkspaceRootDepartmentTileRollupLine({
+                departmentKey: d.key,
+                workUnitCount: wu,
+                pipelineExact: null,
+            }),
+        };
+    }
+
+    const metrics: WorkspaceRootMetrics = {
+        departments: null,
+        workUnits: workUnitsRes?.ok && Array.isArray(wuJson.items) ? wuJson.items.length : null,
+    };
+
+    return { metrics, deptTileStats };
+}
+
 async function loadWorkspaceRollup(
     departments: WorkspaceRootDepartmentRow[],
     workUnitsRes: Response | null,
@@ -192,64 +234,65 @@ export default function AdminV2WorkspaceIndexPage() {
                     setDepartments(active);
                 }
 
-                /** Blocking: departments + work-units + pipeline-exact rollup only (placements deferred). */
+                /** First paint after departments + work units only; growth slice KPIs load in background. */
                 if (applyResults && active.length) {
-                    setMetrics({ departments: null, workUnits: null });
-                    setDeptTileStats({});
+                    const quick = buildWorkspaceQuickRollup(active, wuRes, wuJson);
+                    setMetrics(quick.metrics);
+                    setDeptTileStats(quick.deptTileStats);
                     setOrgOpportunityKpis(null);
                     setWorkspaceKpiStrip(undefined);
                     setWorkspaceKpiPlacementPending(true);
-                    try {
-                        const rollupResult = await loadWorkspaceRollup(active, wuRes, wuJson);
-                        const { metrics: m, deptTileStats: stats, orgOpportunityKpis: roll, growthSnapshots } =
-                            rollupResult;
-                        if (!applyResults) return;
-                        setMetrics(m);
-                        setDeptTileStats(stats);
-                        setOrgOpportunityKpis(roll.length ? roll : null);
+                    void (async () => {
+                        try {
+                            const rollupResult = await loadWorkspaceRollup(active, wuRes, wuJson);
+                            const { metrics: m, deptTileStats: stats, orgOpportunityKpis: roll, growthSnapshots } =
+                                rollupResult;
+                            if (!applyResults) return;
+                            setMetrics(m);
+                            setDeptTileStats(stats);
+                            setOrgOpportunityKpis(roll.length ? roll : null);
 
-                        const growthSnapshotsRef = growthSnapshots;
-                        const metricsForPlacement: WorkspaceRootMetrics = {
-                            ...m,
-                            departments: active.length,
-                        };
-                        void (async () => {
-                            type PlacementBody = {
-                                items?: WorkspaceKpiPlacementRow[];
-                                scope_has_placements?: boolean;
+                            const growthSnapshotsRef = growthSnapshots;
+                            const metricsForPlacement: WorkspaceRootMetrics = {
+                                ...m,
+                                departments: active.length,
                             };
-                            let placementStrip: KPIVm[] | undefined = undefined;
-                            try {
-                                const placementRes = await fetch("/api/admin/workspace-kpi-placements?surface=workspace", {
-                                    ...(workspaceDataFetchInit() ?? {}),
-                                    cache: "no-store",
-                                }).catch(() => null as Response | null);
-                                if (placementRes?.ok) {
-                                    const body = (await placementRes.json().catch(() => ({}))) as PlacementBody;
-                                    placementStrip = resolveKpisForWorkspace({
-                                        placementRows: body.items ?? [],
-                                        scopeHasPlacementRows: body.scope_has_placements === true,
-                                        metrics: metricsForPlacement,
-                                        growthSnapshots: growthSnapshotsRef,
-                                    }).items;
+                            void (async () => {
+                                type PlacementBody = {
+                                    items?: WorkspaceKpiPlacementRow[];
+                                    scope_has_placements?: boolean;
+                                };
+                                let placementStrip: KPIVm[] | undefined = undefined;
+                                try {
+                                    const placementRes = await fetch("/api/admin/workspace-kpi-placements?surface=workspace", {
+                                        ...(workspaceDataFetchInit() ?? {}),
+                                        cache: "no-store",
+                                    }).catch(() => null as Response | null);
+                                    if (placementRes?.ok) {
+                                        const body = (await placementRes.json().catch(() => ({}))) as PlacementBody;
+                                        placementStrip = resolveKpisForWorkspace({
+                                            placementRows: body.items ?? [],
+                                            scopeHasPlacementRows: body.scope_has_placements === true,
+                                            metrics: metricsForPlacement,
+                                            growthSnapshots: growthSnapshotsRef,
+                                        }).items;
+                                    }
+                                } catch {
+                                    placementStrip = undefined;
+                                } finally {
+                                    if (applyResults) {
+                                        setWorkspaceKpiStrip(placementStrip);
+                                        setWorkspaceKpiPlacementPending(false);
+                                    }
                                 }
-                            } catch {
-                                placementStrip = undefined;
-                            } finally {
-                                if (applyResults) {
-                                    setWorkspaceKpiStrip(placementStrip);
-                                    setWorkspaceKpiPlacementPending(false);
-                                }
-                            }
-                        })();
-                    } catch {
-                        if (!applyResults) return;
-                        setMetrics(null);
-                        setDeptTileStats({});
-                        setOrgOpportunityKpis(null);
-                        setWorkspaceKpiStrip(undefined);
-                        setWorkspaceKpiPlacementPending(false);
-                    }
+                            })();
+                        } catch {
+                            if (!applyResults) return;
+                            setOrgOpportunityKpis(null);
+                            setWorkspaceKpiStrip(undefined);
+                            setWorkspaceKpiPlacementPending(false);
+                        }
+                    })();
                 } else if (applyResults) {
                     setMetrics(null);
                     setDeptTileStats({});
@@ -264,7 +307,7 @@ export default function AdminV2WorkspaceIndexPage() {
 
                 if (perfDebug) {
                     const t1 = performance.now();
-                    console.debug(`[ws.root] departments+rollup ready in ${Math.round(t1 - t0)}ms`, {
+                    console.debug(`[ws.root] departments+quick rollup ready in ${Math.round(t1 - t0)}ms`, {
                         departments: active.length,
                     });
                 }

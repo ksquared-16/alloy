@@ -776,17 +776,25 @@ export async function GET(
             };
 
             markPhase("after_identity_block");
-            if (process.env.NODE_ENV !== "production") {
-                console.info("[timing][opportunity-api]", {
-                    opportunity_id: id,
-                    enrich_ms: Date.now() - enrichStartedAt,
-                    enrich_phases_ms: enrichPhaseMs,
-                    inquiry_batch_ms: enrichPhaseMs.inquiry_children_batch_ms,
-                    surface: "full",
-                });
+            const enrichTotalMs = Date.now() - enrichStartedAt;
+            const timingPayload = {
+                opportunity_id: id,
+                enrich_ms: enrichTotalMs,
+                enrich_phases_ms: enrichPhaseMs,
+                inquiry_batch_ms: enrichPhaseMs.inquiry_children_batch_ms,
+                surface: "full",
+            };
+            if (process.env.NODE_ENV !== "production" || enrichTotalMs > 250) {
+                console.warn("[timing][opportunity-api]", timingPayload);
             }
+            const enrichHeader =
+                JSON.stringify({ total_ms: enrichTotalMs, phases_ms: enrichPhaseMs }).length < 3900
+                    ? JSON.stringify({ total_ms: enrichTotalMs, phases_ms: enrichPhaseMs })
+                    : JSON.stringify({ total_ms: enrichTotalMs, phases_ms: {} });
 
-            return NextResponse.json(out);
+            return NextResponse.json(out, {
+                headers: { "X-Alloy-Opp-Enrich": enrichHeader },
+            });
         }
         if (type === "contacts") {
             if (id === "new") {

@@ -73,14 +73,24 @@ export default function AdminV2PerfOverlay() {
 
     const m = ensureAlloyPerf()?.marks ?? ({} as Record<string, number>);
 
+    const drawerTotal = fmtMs(m.drawer_ready, m.drawer_open_start);
+    const drawerEntity = fmtMs(m.drawer_entity_ready, m.drawer_open_start);
+    const drawerHeader = fmtMs(m.drawer_header_actions_ready, m.drawer_entity_ready);
+
     const text = [
         `WS: ${fmtMs(m.workspace_ready, m.workspace_start)}`,
         `DEPT: ${fmtMs(m.department_ready, m.department_start)}`,
         `WU Shell: ${fmtMs(m.work_unit_shell_ready, m.work_unit_start)}`,
         `WU Summ: ${fmtMs(m.work_unit_summaries_ready, m.work_unit_start)}`,
         `Rows: ${fmtMs(m.queue_rows_ready, m.work_unit_start)}`,
-        `Drawer: ${fmtMs(m.drawer_ready, m.drawer_open_start)}`,
-    ].join("\n");
+        `Drawer: ${drawerTotal}`,
+        typeof m.drawer_entity_ready === "number" ? `  entity: ${drawerEntity}` : "",
+        typeof m.drawer_header_actions_ready === "number" && typeof m.drawer_entity_ready === "number"
+            ? `  header Δ: ${drawerHeader}`
+            : "",
+    ]
+        .filter(Boolean)
+        .join("\n");
 
     return (
         <div

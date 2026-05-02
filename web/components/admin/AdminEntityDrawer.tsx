@@ -835,6 +835,17 @@ function JobDrawerRelationshipsSection(props: {
 /** Opportunities always load `surface=full` (single coherent bundle — Phase 4). */
 type OpportunityEntitySurface = "full";
 
+function logOpportunityEnrichHeaderFromResponse(res: Response): void {
+    const h = res.headers.get("X-Alloy-Opp-Enrich");
+    if (!h) return;
+    try {
+        const ph = JSON.parse(h) as { total_ms?: number; phases_ms?: Record<string, number> };
+        console.info("[timing][drawer][opportunity-api]", ph);
+    } catch {
+        /* ignore malformed */
+    }
+}
+
 function buildAdminEntityFetchUrl(
     type: AdminDrawerEntityType | null,
     id: string | null,
@@ -1392,6 +1403,7 @@ export default function AdminEntityDrawer() {
         fetch(url)
             .then((res) => {
                 if (!res.ok) throw new Error(res.status === 404 ? "Not found" : "Failed to load");
+                if (drawer.type === "opportunities") logOpportunityEnrichHeaderFromResponse(res);
                 return res.json();
             })
             .then((json) => {
@@ -1405,6 +1417,9 @@ export default function AdminEntityDrawer() {
                     });
                 }
                 setData(json);
+                if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                    alloyPerfSet("drawer_entity_ready", performance.now());
+                }
                 if (timingEnabled && drawer.type === "opportunities" && drawer.id && drawer.id !== "new") {
                     markTiming("record_fetch_json_applied", { url });
                 }
@@ -1572,9 +1587,15 @@ export default function AdminEntityDrawer() {
         fetch(url)
             .then((res) => {
                 if (!res.ok) throw new Error(res.status === 404 ? "Not found" : "Failed to load");
+                if (drawer.type === "opportunities") logOpportunityEnrichHeaderFromResponse(res);
                 return res.json();
             })
-            .then(setData)
+            .then((json) => {
+                setData(json);
+                if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                    alloyPerfSet("drawer_entity_ready", performance.now());
+                }
+            })
             .catch((e) => setError(e.message))
             .finally(() => setLoading(false));
     // pathname read only when entity identity changes (see entityDrawerTabInitKeyRef); omit from deps so tab is not reset on SPA navigation.
@@ -2400,7 +2421,7 @@ export default function AdminEntityDrawer() {
                 ? String((data as { work_unit_id?: unknown }).work_unit_id).trim()
                 : "";
         const workUnitId = ctxWu || dataWu;
-        const departmentId = ctxDept || (opportunityWorkUnitDepartmentId?.trim() ?? "") || departmentIdFromRecord;
+        const departmentId = ctxDept || departmentIdFromRecord || (opportunityWorkUnitDepartmentId?.trim() ?? "");
 
         if (!workUnitId) {
             if (!entityRowReady && !ctxWu) {
@@ -2451,7 +2472,12 @@ export default function AdminEntityDrawer() {
                 if (!cancelled) setOpportunityResolvedHeaderActions(null);
             })
             .finally(() => {
-                if (!cancelled) setOpportunityResolvedHeaderLoading(false);
+                if (!cancelled) {
+                    setOpportunityResolvedHeaderLoading(false);
+                    if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                        alloyPerfSet("drawer_header_actions_ready", performance.now());
+                    }
+                }
             });
         return () => {
             cancelled = true;
@@ -2490,7 +2516,7 @@ export default function AdminEntityDrawer() {
                     ? String((data as { work_unit_id?: unknown }).work_unit_id).trim()
                     : "";
             const workUnitId = (ctxWu || dataWu || opportunityWorkUnitId.trim()).trim();
-            const departmentId = (ctxDept || (opportunityWorkUnitDepartmentId?.trim() ?? "") || departmentIdFromRecord).trim();
+            const departmentId = (ctxDept || departmentIdFromRecord || (opportunityWorkUnitDepartmentId?.trim() ?? "")).trim();
             if (!workUnitId || !departmentId) return;
             opportunityHeaderResolvedSigRef.current = null;
             setOpportunityResolvedHeaderLoading(true);
@@ -2518,7 +2544,12 @@ export default function AdminEntityDrawer() {
                     }
                 })
                 .catch(() => setOpportunityResolvedHeaderActions(null))
-                .finally(() => setOpportunityResolvedHeaderLoading(false));
+                .finally(() => {
+                    setOpportunityResolvedHeaderLoading(false);
+                    if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                        alloyPerfSet("drawer_header_actions_ready", performance.now());
+                    }
+                });
         };
         window.addEventListener("adminv2:opportunity-updated", onUpdated as EventListener);
         return () => window.removeEventListener("adminv2:opportunity-updated", onUpdated as EventListener);
@@ -2604,26 +2635,9 @@ export default function AdminEntityDrawer() {
                 }
             }
         };
-        let idleHandle = 0;
-        let timeoutHandle = 0;
-        if (typeof requestIdleCallback !== "undefined") {
-            idleHandle = requestIdleCallback(
-                () => {
-                    void run();
-                },
-                { timeout: 1200 }
-            );
-        } else {
-            timeoutHandle = window.setTimeout(() => {
-                void run();
-            }, 150);
-        }
+        void run();
         return () => {
             cancelled = true;
-            if (idleHandle !== 0 && typeof cancelIdleCallback !== "undefined") {
-                cancelIdleCallback(idleHandle);
-            }
-            if (timeoutHandle !== 0) window.clearTimeout(timeoutHandle);
         };
     }, [drawer.type, drawer.id, data, entityRowReady, loading]);
 

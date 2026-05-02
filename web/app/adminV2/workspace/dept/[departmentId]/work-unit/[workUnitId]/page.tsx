@@ -500,7 +500,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 let shouldFallbackToLegacy = false;
                 let fallbackReason: string | null = null;
 
-                const queueListRoute = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?include_previews=false&count_mode=exact&limit=3`;
+                const queueQs = new URLSearchParams({
+                    include_previews: "false",
+                    count_mode: "exact",
+                    limit: "3",
+                    summary_mode: "priority",
+                });
+                const pk = (provisionalKey ?? "").trim();
+                if (pk) queueQs.set("focus_queue", pk);
+                const queueListRoute = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?${queueQs.toString()}`;
 
                 const actionsListRoute =
                     `/api/admin/actions?` +
@@ -808,13 +816,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
         []
     );
 
-    const fetchQueueSummaries = useCallback(async (wuId: string, _focusQueueKey: string | null) => {
+    const fetchQueueSummaries = useCallback(async (wuId: string, focusQueueKey: string | null) => {
         const seq = ++queueSummariesRequestSeq.current;
         const qs = new URLSearchParams({
             include_previews: "false",
             count_mode: "exact",
             limit: "3",
+            summary_mode: "priority",
         });
+        const fk = (focusQueueKey ?? "").trim();
+        if (fk) qs.set("focus_queue", fk);
         const route = `/api/admin/work-units/${encodeURIComponent(wuId)}/queues?${qs.toString()}`;
         setQueueSummariesError(null);
         setQueueSummariesRoute(route);

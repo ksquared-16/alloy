@@ -905,6 +905,20 @@ function clampLimit(n: number, min: number, max: number): number {
     return v;
 }
 
+/** Wall time for a branch when run in parallel with `Promise.all` of wrapped promises starting together. */
+async function timedBranch<T>(p: Promise<T>): Promise<{ value: T; ms: number }> {
+    const t0 = Date.now();
+    const value = await p;
+    return { value, ms: Date.now() - t0 };
+}
+
+type PgList = { data: unknown; error: { message: string } | null };
+type PgCount = { count: number | null; error: { message: string } | null };
+
+function logQueueItemsPhase(payload: Record<string, unknown>): void {
+    console.warn("[queue-items-phase]", payload);
+}
+
 /** `planned` uses PostgreSQL planner estimates (faster on large tables; approximate). */
 export type QueueCountAccuracy = "exact" | "planned";
 
@@ -1498,14 +1512,27 @@ export async function getWorkUnitQueueItems(params: {
         const itemsPromise = itemsQ0.range(effectiveOffset, effectiveOffset + effectiveLimit - 1);
 
         if (omitTotal) {
-            const { data, error } = await itemsPromise;
+            const { value: itemsRes, ms: baseQueryMs } = await timedBranch(itemsPromise as Promise<PgList>);
+            const { data, error } = itemsRes;
             if (error) {
                 throw new QueueServiceError(error.message, 400, "DB_ERROR");
             }
-            const ms = Date.now() - tSvc0;
-            console.log("[queue-opt]", { phase: "rows", duration_ms: ms, queue_key: q.key, entity: "job" });
-            if (ms > 250) {
-                console.warn("[queue-perf] getWorkUnitQueueItems job", { ms, load_def_ms: loadDefMs, omit_total: true, queue_key: q.key });
+            const totalMs = Date.now() - tSvc0;
+            logQueueItemsPhase({
+                entity: "job",
+                queue_key: q.key,
+                load_def_ms: loadDefMs,
+                base_query_ms: baseQueryMs,
+                count_ms: 0,
+                status_defs_ms: 0,
+                enrich_ms: 0,
+                response_serialize_ms: "see_route",
+                total_ms: totalMs,
+                omit_total: true,
+            });
+            console.log("[queue-opt]", { phase: "rows", duration_ms: totalMs, queue_key: q.key, entity: "job" });
+            if (totalMs > 250) {
+                console.warn("[queue-perf] getWorkUnitQueueItems job", { ms: totalMs, load_def_ms: loadDefMs, omit_total: true, queue_key: q.key });
             }
             return {
                 queue: {
@@ -1532,7 +1559,12 @@ export async function getWorkUnitQueueItems(params: {
             .eq("work_unit_id", params.workUnitId);
         const countQ = applyOpsToJobQuery(countBase as never, ops);
 
-        const [{ count, error: countErr }, { data, error }] = await Promise.all([countQ, itemsPromise]);
+        const [{ value: countRes, ms: countMs }, { value: itemsRes, ms: baseQueryMs }] = await Promise.all([
+            timedBranch(countQ as Promise<PgCount>),
+            timedBranch(itemsPromise as Promise<PgList>),
+        ]);
+        const { count, error: countErr } = countRes;
+        const { data, error } = itemsRes;
         if (countErr) {
             throw new QueueServiceError(countErr.message, 400, "DB_ERROR");
         }
@@ -1540,11 +1572,24 @@ export async function getWorkUnitQueueItems(params: {
             throw new QueueServiceError(error.message, 400, "DB_ERROR");
         }
 
-        const ms = Date.now() - tSvc0;
-        console.log("[queue-opt]", { phase: "rows", duration_ms: ms, queue_key: q.key, entity: "job" });
-        if (ms > 250) {
+        const totalMs = Date.now() - tSvc0;
+        logQueueItemsPhase({
+            entity: "job",
+            queue_key: q.key,
+            load_def_ms: loadDefMs,
+            base_query_ms: baseQueryMs,
+            count_ms: countMs,
+            status_defs_ms: 0,
+            enrich_ms: 0,
+            response_serialize_ms: "see_route",
+            total_ms: totalMs,
+            omit_total: false,
+            count_accuracy: countSel,
+        });
+        console.log("[queue-opt]", { phase: "rows", duration_ms: totalMs, queue_key: q.key, entity: "job" });
+        if (totalMs > 250) {
             console.warn("[queue-perf] getWorkUnitQueueItems job", {
-                ms,
+                ms: totalMs,
                 load_def_ms: loadDefMs,
                 queue_key: q.key,
                 count_accuracy: countSel,
@@ -1574,18 +1619,18 @@ export async function getWorkUnitQueueItems(params: {
     const oppStatusDefsPromise = fetchEffectiveStatusDefinitions(supabase as any, params.orgId, "opportunities", { activeOnly: true });
 
     if (params.queueKey === "needs_attention") {
-        const tNa0 = Date.now();
-        const [matched, effectiveStatusDefs] = await Promise.all([
-            loadOpportunityNeedsAttentionRows({
-                supabase,
-                orgId: params.orgId,
-                workUnitId: params.workUnitId,
-                sort,
-                now: refUtc,
-            }),
-            oppStatusDefsPromise,
+        const [{ value: matched, ms: naLoadMs }, { value: effectiveStatusDefs, ms: statusDefsMs }] = await Promise.all([
+            timedBranch(
+                loadOpportunityNeedsAttentionRows({
+                    supabase,
+                    orgId: params.orgId,
+                    workUnitId: params.workUnitId,
+                    sort,
+                    now: refUtc,
+                })
+            ),
+            timedBranch(oppStatusDefsPromise),
         ]);
-        const naLoadMs = Date.now() - tNa0;
         const slice = matched.slice(effectiveOffset, effectiveOffset + effectiveLimit);
         const tEn0 = Date.now();
         const items = await enrichOpportunityRows({
@@ -1596,11 +1641,26 @@ export async function getWorkUnitQueueItems(params: {
             enrichment: "full",
         });
         const enrichMs = Date.now() - tEn0;
-        const ms = Date.now() - tSvc0;
-        console.log("[queue-opt]", { phase: "rows", duration_ms: ms, queue_key: q.key, entity: "opportunity" });
-        if (ms > 250) {
+        const totalMs = Date.now() - tSvc0;
+        logQueueItemsPhase({
+            entity: "opportunity",
+            queue_key: q.key,
+            variant: "needs_attention",
+            load_def_ms: loadDefMs,
+            base_query_ms: naLoadMs,
+            count_ms: 0,
+            status_defs_ms: statusDefsMs,
+            enrich_ms: enrichMs,
+            matched_all: matched.length,
+            row_count: slice.length,
+            response_serialize_ms: "see_route",
+            total_ms: totalMs,
+            omit_total: false,
+        });
+        console.log("[queue-opt]", { phase: "rows", duration_ms: totalMs, queue_key: q.key, entity: "opportunity" });
+        if (totalMs > 250) {
             console.warn("[queue-perf] getWorkUnitQueueItems opportunity needs_attention", {
-                ms,
+                ms: totalMs,
                 load_def_ms: loadDefMs,
                 na_load_ms: naLoadMs,
                 enrich_ms: enrichMs,
@@ -1633,7 +1693,11 @@ export async function getWorkUnitQueueItems(params: {
     const itemsPromise = itemsQ0.range(effectiveOffset, effectiveOffset + effectiveLimit - 1);
 
     if (omitTotal) {
-        const [{ data: raw, error }, effectiveStatusDefs] = await Promise.all([itemsPromise, oppStatusDefsPromise]);
+        const [{ value: itemsRes, ms: baseQueryMs }, { value: effectiveStatusDefs, ms: statusDefsMs }] = await Promise.all([
+            timedBranch(itemsPromise as Promise<PgList>),
+            timedBranch(oppStatusDefsPromise),
+        ]);
+        const { data: raw, error } = itemsRes;
         if (error) {
             throw new QueueServiceError(error.message, 400, "DB_ERROR");
         }
@@ -1647,11 +1711,24 @@ export async function getWorkUnitQueueItems(params: {
             enrichment: "full",
         });
         const enrichMs = Date.now() - tEn0;
-        const ms = Date.now() - tSvc0;
-        console.log("[queue-opt]", { phase: "rows", duration_ms: ms, queue_key: q.key, entity: "opportunity" });
-        if (ms > 250) {
+        const totalMs = Date.now() - tSvc0;
+        logQueueItemsPhase({
+            entity: "opportunity",
+            queue_key: q.key,
+            load_def_ms: loadDefMs,
+            base_query_ms: baseQueryMs,
+            count_ms: 0,
+            status_defs_ms: statusDefsMs,
+            enrich_ms: enrichMs,
+            row_count: itemRows.length,
+            response_serialize_ms: "see_route",
+            total_ms: totalMs,
+            omit_total: true,
+        });
+        console.log("[queue-opt]", { phase: "rows", duration_ms: totalMs, queue_key: q.key, entity: "opportunity" });
+        if (totalMs > 250) {
             console.warn("[queue-perf] getWorkUnitQueueItems opportunity", {
-                ms,
+                ms: totalMs,
                 load_def_ms: loadDefMs,
                 enrich_ms: enrichMs,
                 row_count: itemRows.length,
@@ -1684,11 +1761,14 @@ export async function getWorkUnitQueueItems(params: {
         .eq("work_unit_id", params.workUnitId);
     const countQ = applyOpsToJobQuery(countBase as never, ops);
 
-    const [{ count, error: countErr }, { data: raw, error }, effectiveStatusDefs] = await Promise.all([
-        countQ,
-        itemsPromise,
-        oppStatusDefsPromise,
-    ]);
+    const [{ value: countRes, ms: countMs }, { value: itemsRes, ms: baseQueryMs }, { value: effectiveStatusDefs, ms: statusDefsMs }] =
+        await Promise.all([
+            timedBranch(countQ as Promise<PgCount>),
+            timedBranch(itemsPromise as Promise<PgList>),
+            timedBranch(oppStatusDefsPromise),
+        ]);
+    const { count, error: countErr } = countRes;
+    const { data: raw, error } = itemsRes;
     if (countErr) {
         throw new QueueServiceError(countErr.message, 400, "DB_ERROR");
     }
@@ -1705,11 +1785,25 @@ export async function getWorkUnitQueueItems(params: {
         enrichment: "full",
     });
     const enrichMs = Date.now() - tEn0;
-    const ms = Date.now() - tSvc0;
-    console.log("[queue-opt]", { phase: "rows", duration_ms: ms, queue_key: q.key, entity: "opportunity" });
-    if (ms > 250) {
+    const totalMs = Date.now() - tSvc0;
+    logQueueItemsPhase({
+        entity: "opportunity",
+        queue_key: q.key,
+        load_def_ms: loadDefMs,
+        base_query_ms: baseQueryMs,
+        count_ms: countMs,
+        status_defs_ms: statusDefsMs,
+        enrich_ms: enrichMs,
+        row_count: itemRows.length,
+        response_serialize_ms: "see_route",
+        total_ms: totalMs,
+        omit_total: false,
+        count_accuracy: countSel,
+    });
+    console.log("[queue-opt]", { phase: "rows", duration_ms: totalMs, queue_key: q.key, entity: "opportunity" });
+    if (totalMs > 250) {
         console.warn("[queue-perf] getWorkUnitQueueItems opportunity", {
-            ms,
+            ms: totalMs,
             load_def_ms: loadDefMs,
             enrich_ms: enrichMs,
             row_count: itemRows.length,
