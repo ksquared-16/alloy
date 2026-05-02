@@ -17,6 +17,7 @@ import { isGrowthSliceDepartmentKey } from "@/lib/workspace/growthSliceDepartmen
 import type { OpportunityLifecycleKpiSnapshot } from "@/lib/workspace/computeOpportunityLifecycleKpis";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
+import { parseAttentionReasonCountsPayload } from "@/lib/workspace/attentionReasonCountsSummary";
 
 type Dept = { id: string; name: string | null; key?: string | null };
 type WU = {
@@ -42,14 +43,17 @@ async function fetchOpportunityQueueRuntime(wu: WU | undefined): Promise<Workspa
             total?: number;
             items?: WorkspaceOpportunityQueueRuntime["items"];
             error?: string;
+            attention_reason_counts?: unknown;
         };
         if (!res.ok) {
             return { total: 0, error: j.error ?? "Failed to load queue", items: [] };
         }
+        const arc = parseAttentionReasonCountsPayload(j.attention_reason_counts);
         return {
             total: typeof j.total === "number" ? j.total : 0,
             error: null,
             items: j.items ?? [],
+            ...(arc ? { attention_reason_counts: arc } : {}),
         };
     } catch (e) {
         const msg = e instanceof Error ? e.message : "Queue request failed";
@@ -84,6 +88,7 @@ async function fetchNeedsAttentionPreviewRuntime(
             total?: number;
             items?: WorkspaceOpportunityQueueRuntime["items"];
             error?: string;
+            attention_reason_counts?: unknown;
         };
         if (!res.ok) {
             return [
@@ -95,12 +100,14 @@ async function fetchNeedsAttentionPreviewRuntime(
                 },
             ];
         }
+        const arc = parseAttentionReasonCountsPayload(j.attention_reason_counts);
         return [
             k,
             {
                 total: typeof j.total === "number" ? j.total : 0,
                 error: null,
                 items: j.items ?? emptyItems,
+                ...(arc ? { attention_reason_counts: arc } : {}),
             },
         ];
     } catch (e) {

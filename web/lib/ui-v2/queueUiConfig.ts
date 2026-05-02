@@ -23,7 +23,7 @@ export const DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS: Record<string, string> = {
     phone: "Phone",
     email: "Email",
     child_name: "Child",
-    program: "Programs",
+    program: "Program",
     /** Inline label before program per child (e.g. `Program: Preschool`). */
     program_inline: "Program",
     /** CRM compact section heading above desired start + tour row. */

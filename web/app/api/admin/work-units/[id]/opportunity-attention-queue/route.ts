@@ -49,7 +49,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1;
 
     try {
-        const { items, rules: resolvedRules } = await buildOpportunityAttentionQueueItems({
+        const { items, rules: resolvedRules, attention_reason_counts } = await buildOpportunityAttentionQueueItems({
             supabase,
             orgId: ctx.orgId,
             rules,
@@ -86,6 +86,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
             total: itemsOut.length,
             items: itemsOut,
             rules: resolvedRules,
+            attention_reason_counts,
         });
     } catch (e) {
         return NextResponse.json({ error: (e as Error).message }, { status: 500 });

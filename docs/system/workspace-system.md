@@ -33,6 +33,7 @@ Document **Admin V2 workspace**: departments, work units, queues, and how operat
 ## Guardrails
 
 - **Queues = preview:** Sorting/filtering is allowlisted in `QueueService`; fields not in previews may still exist on the entity — load entity GET when needed.
+- **Queue rows are preview projections only.** Any business logic, workflow execution, lifecycle transition, financial calculation, identity resolution, or drawer authority must refetch via resolver / entity GET (`GET /api/admin/entity/[type]/[id]` or RRS). Pass **`entityType` + `entityId` (+ action/work-unit keys)** from queue gestures — never treat preview payloads as source of truth.
 - **Do not** bypass org scope when listing work units or queue items (service uses admin client — callers must enforce org context).
 
 ## Known gaps / risks

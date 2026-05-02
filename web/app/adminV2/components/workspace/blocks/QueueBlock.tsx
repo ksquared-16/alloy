@@ -7,6 +7,7 @@ import type {
   QueueItemQuickActionVm,
   QueueItemVm,
   QueueVm,
+  WorkUnitQueueCrmFactColumnGridVm,
   WorkUnitQueueCrmFactGroupKind,
   WorkUnitQueueCrmFactGroupVm,
   WorkUnitQueueCrmFactLineVm,
@@ -243,10 +244,43 @@ function CrmFactLineRow({
   );
 }
 
+function CrmFactColumnGrid({ grid }: { grid: WorkUnitQueueCrmFactColumnGridVm }) {
+  const { headers, rows } = grid;
+  if (!headers.length || !rows.length) return null;
+  return (
+    <div className="adminv2-ws-queue-fact-column-grid">
+      {headers.map((header, colIdx) => (
+        <div key={`col-${colIdx}`} className="adminv2-ws-queue-fact-field-col">
+          <div className="adminv2-ws-queue-fact-col-head">{displayCrmFactGroupLabel(header)}</div>
+          {rows.map((row, rowIdx) => (
+            <div key={`${rowIdx}-${colIdx}`} className="adminv2-ws-queue-fact-value adminv2-ws-queue-fact-line">
+              {row[colIdx] ?? ""}
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /**
  * Work-unit queue row doctrine — one fact group (label above, value below).
  */
 function CrmWorkUnitFactGroup({ group }: { group: WorkUnitQueueCrmFactGroupVm }) {
+  const hasGrid = Boolean(group.columnGrid?.headers.length && group.columnGrid?.rows.length);
+  const showGroupLabel = Boolean(group.label?.trim());
+
+  if (hasGrid && group.columnGrid) {
+    return (
+      <div className="adminv2-ws-queue-fact-group" data-fact-kind={group.kind}>
+        {showGroupLabel ? (
+          <div className="adminv2-ws-queue-fact-label">{displayCrmFactGroupLabel(group.label)}</div>
+        ) : null}
+        <CrmFactColumnGrid grid={group.columnGrid} />
+      </div>
+    );
+  }
+
   const lines: WorkUnitQueueCrmFactLineVm[] | undefined =
     group.lines ??
     (group.timingSegments?.length
@@ -255,7 +289,9 @@ function CrmWorkUnitFactGroup({ group }: { group: WorkUnitQueueCrmFactGroupVm })
 
   return (
     <div className="adminv2-ws-queue-fact-group" data-fact-kind={group.kind}>
-      <div className="adminv2-ws-queue-fact-label">{displayCrmFactGroupLabel(group.label)}</div>
+      {showGroupLabel ? (
+        <div className="adminv2-ws-queue-fact-label">{displayCrmFactGroupLabel(group.label)}</div>
+      ) : null}
       {lines?.map((line, li) => (
         <CrmFactLineRow key={li} line={line} groupKind={group.kind} />
       ))}
@@ -296,74 +332,135 @@ function legacyMiddleHasContent(slots: CrmCompactRowSemanticSlots): boolean {
       (!multi && (slots.childName?.trim() || slots.programContext?.trim())) ||
       (slots.programContext?.trim() && !multi && !slots.childName?.trim()) ||
       timingLine ||
+      slots.desiredStartDateDisplay != null ||
+      slots.tourContext != null ||
       slots.roomContext?.trim() ||
       slots.ageBandContext?.trim() ||
       timingLineLegacy
   );
 }
 
-/** Fallback when `crmFactGroups` is absent (older callers). Uses doctrine CSS; timing may be a single plain line. */
+/** Fallback when `crmFactGroups` is absent (older callers). Prefers field column grids when slots allow. */
 function LegacyCrmCompactQueueMiddle({ slots }: { slots: CrmCompactRowSemanticSlots }) {
   const nodes: ReactNode[] = [];
-  const primaryContactCaption = slots.rowPreviewLabelPrimaryContact?.trim() || "Contact";
-  const childrenLabel =
-    slots.crmChildrenProgramsGroupLabel?.trim() || DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS.children_programs;
-  const timingLabel = slots.rowPreviewLabelTimingGroup?.trim() || DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS.timing;
-  const ageLabel = slots.rowPreviewLabelAgeBand?.trim() || DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS.age_band;
+  const DL = DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS;
+  const primaryContactCaption = slots.rowPreviewLabelPrimaryContact?.trim() || DL.primary_contact;
+  const timingLabel = slots.rowPreviewLabelTimingGroup?.trim() || DL.timing;
+  const ageLabel = slots.rowPreviewLabelAgeBand?.trim() || DL.age_band;
+  const childHdr = DL.child_name;
+  const programHdr = DL.program;
 
-  const contactParts: string[] = [];
-  if (slots.contactDisplayName?.trim()) contactParts.push(slots.contactDisplayName.trim());
-  if (slots.contactPhoneDisplay?.trim()) contactParts.push(slots.contactPhoneDisplay.trim());
-  if (slots.contactEmail?.trim()) contactParts.push(slots.contactEmail.trim());
-  if (contactParts.length > 0 || slots.contactSnippet?.trim()) {
-    nodes.push(
-      <div key="contact" className="adminv2-ws-queue-fact-group" data-fact-kind="contact">
-        <div className="adminv2-ws-queue-fact-label">{displayCrmFactGroupLabel(primaryContactCaption)}</div>
-        <CrmFactLineRow
-          line={
-            contactParts.length > 0
-              ? { parts: contactParts }
-              : factLineFromMiddotString(slots.contactSnippet!.trim())
-          }
-          groupKind="contact"
-        />
-      </div>
-    );
+  const hasStructContact =
+    Boolean(slots.contactDisplayName?.trim()) ||
+    Boolean(slots.contactPhoneDisplay?.trim()) ||
+    Boolean(slots.contactEmail?.trim());
+
+  if (hasStructContact || slots.contactSnippet?.trim()) {
+    if (hasStructContact) {
+      nodes.push(
+        <div key="contact" className="adminv2-ws-queue-fact-group" data-fact-kind="contact">
+          <CrmFactColumnGrid
+            grid={{
+              headers: [
+                slots.rowPreviewLabelPrimaryContact ?? DL.primary_contact,
+                slots.rowPreviewLabelPhone ?? DL.phone,
+                slots.rowPreviewLabelEmail ?? DL.email,
+              ],
+              rows: [
+                [
+                  slots.contactDisplayName?.trim() || "—",
+                  slots.contactPhoneDisplay?.trim() || "—",
+                  slots.contactEmail?.trim() || "—",
+                ],
+              ],
+            }}
+          />
+        </div>
+      );
+    } else {
+      nodes.push(
+        <div key="contact" className="adminv2-ws-queue-fact-group" data-fact-kind="contact">
+          <div className="adminv2-ws-queue-fact-label">{displayCrmFactGroupLabel(primaryContactCaption)}</div>
+          <CrmFactLineRow
+            line={factLineFromMiddotString(slots.contactSnippet!.trim())}
+            groupKind="contact"
+          />
+        </div>
+      );
+    }
   }
 
   const childLines = slots.childrenLines ?? [];
   const multi = childLines.length >= 2;
-  const progLines: WorkUnitQueueCrmFactLineVm[] = [];
+
   if (multi) {
     const vis = childLines.slice(0, 4);
     const overflow = Math.max(0, childLines.length - vis.length);
-    for (const ch of vis) {
-      const p = ch.programInline?.trim();
-      if (p) progLines.push({ parts: [ch.primary, p] });
-      else progLines.push(ch.primary);
+    const useProgramCol = vis.some((ch) => Boolean(ch.programInline?.trim()));
+    const headers = useProgramCol ? [childHdr, programHdr] : [childHdr];
+    const rows: string[][] = vis.map((ch) => {
+      if (useProgramCol) {
+        return [ch.primary, ch.programInline?.trim() || "—"];
+      }
+      return [ch.primary];
+    });
+    if (overflow > 0) {
+      rows.push([`+${overflow} more`, ...(useProgramCol ? [""] : [])]);
     }
-    if (overflow > 0) progLines.push(`+${overflow} more`);
+    nodes.push(
+      <div key="ch" className="adminv2-ws-queue-fact-group" data-fact-kind="children_programs">
+        <CrmFactColumnGrid grid={{ headers, rows }} />
+      </div>
+    );
   } else {
     const n = slots.childName?.trim() || "";
     const p = slots.programContext?.trim() || "";
-    if (n && p) progLines.push({ parts: [n, p] });
-    else if (n) progLines.push(n);
-    else if (p) progLines.push(p);
-  }
-  if (progLines.length) {
-    nodes.push(
-      <div key="ch" className="adminv2-ws-queue-fact-group" data-fact-kind="children_programs">
-        <div className="adminv2-ws-queue-fact-label">{displayCrmFactGroupLabel(childrenLabel)}</div>
-        {progLines.map((ln, i) => (
-          <CrmFactLineRow key={i} line={ln} groupKind="children_programs" />
-        ))}
-      </div>
-    );
+    if (n && p) {
+      nodes.push(
+        <div key="ch" className="adminv2-ws-queue-fact-group" data-fact-kind="children_programs">
+          <CrmFactColumnGrid grid={{ headers: [childHdr, programHdr], rows: [[n, p]] }} />
+        </div>
+      );
+    } else if (n) {
+      nodes.push(
+        <div key="ch" className="adminv2-ws-queue-fact-group" data-fact-kind="children_programs">
+          <CrmFactColumnGrid grid={{ headers: [childHdr], rows: [[n]] }} />
+        </div>
+      );
+    } else if (p) {
+      nodes.push(
+        <div key="ch" className="adminv2-ws-queue-fact-group" data-fact-kind="children_programs">
+          <CrmFactColumnGrid grid={{ headers: [programHdr], rows: [[p]] }} />
+        </div>
+      );
+    }
   }
 
-  if (slots.crmCompactTimingValueLine?.trim()) {
+  let timingHandled = false;
+  if (slots.desiredStartDateDisplay != null || slots.tourContext != null) {
+    const th: string[] = [];
+    const tv: string[] = [];
+    if (slots.desiredStartDateDisplay != null) {
+      th.push(slots.rowPreviewLabelDesiredStartDate ?? DL.desired_start_date);
+      tv.push(slots.desiredStartDateDisplay ?? "—");
+    }
+    if (slots.tourContext != null) {
+      th.push(slots.rowPreviewLabelTourDate ?? DL.tour_date);
+      tv.push(slots.tourContext ?? "—");
+    }
+    if (th.length) {
+      nodes.push(
+        <div key="timing" className="adminv2-ws-queue-fact-group" data-fact-kind="timing">
+          <CrmFactColumnGrid grid={{ headers: th, rows: [tv] }} />
+        </div>
+      );
+      timingHandled = true;
+    }
+  }
+
+  if (!timingHandled && slots.crmCompactTimingValueLine?.trim()) {
     nodes.push(
-      <div key="timing" className="adminv2-ws-queue-fact-group" data-fact-kind="timing">
+      <div key="timing-flat" className="adminv2-ws-queue-fact-group" data-fact-kind="timing">
         <div className="adminv2-ws-queue-fact-label">{displayCrmFactGroupLabel(timingLabel)}</div>
         <CrmFactLineRow
           line={factLineFromMiddotString(slots.crmCompactTimingValueLine.trim())}
@@ -371,11 +468,13 @@ function LegacyCrmCompactQueueMiddle({ slots }: { slots: CrmCompactRowSemanticSl
         />
       </div>
     );
+    timingHandled = true;
   }
+
   if (slots.roomContext?.trim()) {
     nodes.push(
       <div key="room" className="adminv2-ws-queue-fact-group" data-fact-kind="meta">
-        <div className="adminv2-ws-queue-fact-label">{displayCrmFactGroupLabel(DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS.room)}</div>
+        <div className="adminv2-ws-queue-fact-label">{displayCrmFactGroupLabel(DL.room)}</div>
         <div className="adminv2-ws-queue-fact-value adminv2-ws-queue-fact-line">{slots.roomContext.trim()}</div>
       </div>
     );
@@ -389,27 +488,26 @@ function LegacyCrmCompactQueueMiddle({ slots }: { slots: CrmCompactRowSemanticSl
     );
   }
 
-  const timingLine = slots.crmCompactTimingValueLine?.trim() ?? "";
-  const timingPartsLegacy: string[] = [];
-  if (!timingLine) {
-    if (slots.ageContext?.trim()) timingPartsLegacy.push(slots.ageContext.trim());
-    if (slots.tourContext?.trim() && slots.tourContext.trim() !== "—") {
-      const t = slots.tourContext.trim();
-      timingPartsLegacy.push(t.startsWith("Tour:") ? t : `Tour: ${t}`);
+  if (!timingHandled) {
+    const timingLine = slots.crmCompactTimingValueLine?.trim() ?? "";
+    const timingPartsLegacy: string[] = [];
+    if (!timingLine) {
+      if (slots.ageContext?.trim()) timingPartsLegacy.push(slots.ageContext.trim());
+      if (slots.tourContext?.trim() && slots.tourContext.trim() !== "—") {
+        const t = slots.tourContext.trim();
+        timingPartsLegacy.push(t.startsWith("Tour:") ? t : `Tour: ${t}`);
+      }
     }
-  }
-  const timingLineLegacyRaw = timingPartsLegacy.length ? timingPartsLegacy.join(CRM_COMPACT_VALUE_DOT_SEP) : null;
-  const timingLineLegacy = timingLineLegacyRaw ? normalizePreviewLooseDateTokens(timingLineLegacyRaw) : null;
-  if (timingLineLegacy) {
-    nodes.push(
-      <div key="leg" className="adminv2-ws-queue-fact-group" data-fact-kind="timing">
-        <div className="adminv2-ws-queue-fact-label">{displayCrmFactGroupLabel(timingLabel)}</div>
-        <CrmFactLineRow
-          line={factLineFromMiddotString(timingLineLegacy)}
-          groupKind="timing"
-        />
-      </div>
-    );
+    const timingLineLegacyRaw = timingPartsLegacy.length ? timingPartsLegacy.join(CRM_COMPACT_VALUE_DOT_SEP) : null;
+    const timingLineLegacy = timingLineLegacyRaw ? normalizePreviewLooseDateTokens(timingLineLegacyRaw) : null;
+    if (timingLineLegacy) {
+      nodes.push(
+        <div key="leg" className="adminv2-ws-queue-fact-group" data-fact-kind="timing">
+          <div className="adminv2-ws-queue-fact-label">{displayCrmFactGroupLabel(timingLabel)}</div>
+          <CrmFactLineRow line={factLineFromMiddotString(timingLineLegacy)} groupKind="timing" />
+        </div>
+      );
+    }
   }
 
   return <>{nodes}</>;

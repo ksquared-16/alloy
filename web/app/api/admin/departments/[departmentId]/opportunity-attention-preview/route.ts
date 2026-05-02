@@ -24,7 +24,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
     }
 
     try {
-        const { items, rules } = await buildOpportunityAttentionQueueItems({
+        const { items, rules, attention_reason_counts } = await buildOpportunityAttentionQueueItems({
             supabase,
             orgId: ctx.orgId,
             rules: DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1,
@@ -57,6 +57,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
             total: itemsOut.length,
             items: itemsOut,
             rules,
+            attention_reason_counts,
             source: "department_attention_preview",
         });
     } catch (e) {

@@ -105,22 +105,22 @@ This subsection is the **presentation doctrine** for **`crm_compact`** queue row
 **Three zones (left → middle → right):**
 
 1. **Left — identity / next step** — family or opportunity title, status pill, next-step strip, attention or stale cue when present.
-2. **Middle — fact groups** — reusable **label above, value below** blocks. No mixed placement (no random inline field labels except the **timing** row pattern below).
+2. **Middle — fact groups** — **field-column grids** for contact, timing, and children/program (each configured field is a column: muted label above, value below). Optional **meta** lines remain label + value (`room`, `age_band`). No sentence-style middots in the primary CRM fact layout.
 3. **Right — actions** — Open / Call / Email / configured row actions; alignment and behavior stay independent of fact groups.
 
 **Fact group pattern (middle zone):**
 
-- Each group has a **muted small label** (`row_preview.field_labels` merged with defaults from `DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS` in `web/lib/ui-v2/queueUiConfig.ts`).
-- **Values** sit on one or more lines **below** the label.
-- **Contact:** one middot-separated line — e.g. `Parent Name · 415-795-4019 · parent@example.com`. No `Phone:` / `Email:` / `Program:` prefixes in the value row. Built by `buildCrmContactDotLine` in `web/lib/ui-v2/crmQueueRowPreviewPresentation.ts`.
-- **Children / programs:** group label from `children_programs`. One line per child: `Name (age) · program slice`. Program text is deduped when age is redundant (`dedupeRedundantProgramAgeInPreview`). Multiple children stack as separate value lines.
-- **Timing:** single value row under label `timing`. Inline **field names** (e.g. `Desired Start Date:`) may be **semibold** in CSS; **values** share the same baseline size/weight as other fact values. Segments join with ` · `. **Empty or missing** configured fields render as **`—`**. **Date-only** values use **`MM-DD-YYYY`** (formatters in `web/lib/adminFormatters.ts`).
+- **Column layout (contact, timing, children):** `WorkUnitQueueCrmFactGroupVm.columnGrid` carries `{ headers[], rows[][] }`. Each header uses **`row_preview.field_labels`** keys (`primary_contact`, `phone`, `email`, `desired_start_date`, `tour_date`, `child_name`, `program`) merged with `DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS`. **No** section title row for **Timing**; desired start and tour are **peer columns** with their own labels. **Empty** gated fields show **`—`**. Multi-child: **Child** and **Program** columns with one value row per child (extra children collapse to `+N more`). Program-only (single column): header **Program** via `program` label, not `children_programs`.
+- **Flat contact only:** When enrichment cannot split name/phone/email but supplies a snippet, the group uses a single **legacy** value line under the **Contact** label (middots allowed in that fallback only).
+- **Children / programs:** Built in `buildCrmCompactWorkUnitFactGroups` (`web/lib/ui-v2/crmQueueRowPreviewPresentation.ts`). Program text is still deduped when age is redundant (`dedupeRedundantProgramAgeInPreview`).
+- **Timing:** Date-only values use **`MM-DD-YYYY`** where applicable (formatters in `web/lib/adminFormatters.ts`).
+- **Meta:** `room` / `age_band` keep **group `label` + `lines`** (no column grid).
 
 Optional **meta** groups (`room`, `age_band`) may append when non-empty; they use the same label-above-value classes.
 
-**Structured VM:** `CrmCompactRowSemanticSlots.crmFactGroups` is an ordered list of `WorkUnitQueueCrmFactGroupVm` (`web/lib/ui-v2/workspace-types.ts`). **`QueueBlock`** (`web/app/adminV2/components/workspace/blocks/QueueBlock.tsx`) renders them with **`CrmWorkUnitFactGroup`**. If `crmFactGroups` is absent (older payloads), **`LegacyCrmCompactQueueMiddle`** mirrors the same visual grammar where possible.
+**Structured VM:** `CrmCompactRowSemanticSlots.crmFactGroups` is an ordered list of `WorkUnitQueueCrmFactGroupVm` (`web/lib/ui-v2/workspace-types.ts`). **`QueueBlock`** (`web/app/adminV2/components/workspace/blocks/QueueBlock.tsx`) renders them with **`CrmWorkUnitFactGroup`** / **`CrmFactColumnGrid`**. If `crmFactGroups` is absent (older payloads), **`LegacyCrmCompactQueueMiddle`** prefers the same column layout when slots expose structured fields; otherwise middot/string fallbacks remain.
 
-**CSS:** Reusable classes under `.adminv2-ws-crm-queue-preview` — `adminv2-ws-queue-fact-group`, `adminv2-ws-queue-fact-label`, `adminv2-ws-queue-fact-value`, `adminv2-ws-queue-fact-line`, `adminv2-ws-queue-fact-sep`, plus timing key/value (`adminv2-ws-queue-fact-timing-k` / `-v`). Fact label/value sizes and CRM row title weight use shared tokens on workspace surfaces: `--ws-type-fact-group-label-size`, `--ws-type-fact-value-size`, `--ws-type-crm-record-title-size`, etc. (see `:root` block on `[data-ws-surface="department|work_unit|company|record"].adminv2-ws-*` in `web/app/adminV2/components/workspace/workspace.css`). Company workspace department tiles reference `--ws-type-dept-tile-name-size` and `--ws-type-dept-tile-desc-size` for the same hierarchy family.
+**CSS:** Column layout: `adminv2-ws-queue-fact-column-grid`, `adminv2-ws-queue-fact-field-col`, `adminv2-ws-queue-fact-col-head`, plus existing `adminv2-ws-queue-fact-value` / `-line`. Legacy parts layout retains `adminv2-ws-queue-fact-line--parts`, `adminv2-ws-queue-fact-part-sep` (middots). Shared type tokens: `--ws-type-fact-group-label-size`, `--ws-type-fact-value-size`, `--ws-type-crm-record-title-size`, etc. (see `web/app/adminV2/components/workspace/workspace.css`). Company workspace department tiles reference `--ws-type-dept-tile-name-size` and `--ws-type-dept-tile-desc-size` for the same hierarchy family.
 
 ### CRM queue row — notes footer (latest note only)
 

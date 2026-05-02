@@ -31,6 +31,7 @@ Clarify where **authoritative record payloads** come from for admin UI and why *
 ## Guardrails
 
 - **Never** treat queue preview rows as the full truth for financials, legal text, or lifecycle.
+- **Queue rows are preview projections only.** Any business logic, workflow execution, lifecycle transition, financial calculation, identity resolution, or drawer authority must refetch via resolver / entity GET — never hydrate authoritative sections from queue list payloads or infer outcomes from preview fields alone.
 - **Do not** duplicate pricing, allocation, or lifecycle rules in drawer-only code — align with resolver and server helpers.
 - **Do** use entity GET / resolver outputs when building summaries that must match the drawer.
 

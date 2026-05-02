@@ -281,6 +281,11 @@ export type WorkspaceOpportunityQueueRuntime = {
             threshold_minutes: number;
         } | null;
     }>;
+    /**
+     * **Needs-attention queues only:** authoritative histogram from the attention-builder (`attention_reason_counts`
+     * on GET …/opportunity-attention-queue / …/opportunity-attention-preview). Never derive these counts by iterating `items`.
+     */
+    attention_reason_counts?: Array<{ reason_key: string; label: string; count: number }>;
 };
 
 /** Runtime values fetched by the page and passed into blocks (keeps blocks mostly presentational). */

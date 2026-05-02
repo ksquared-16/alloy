@@ -56,7 +56,7 @@ export type QueueItemWaitStatusVm = "safe" | "approaching" | "breached";
 export type WorkUnitQueueCrmFactGroupKind = "contact" | "children_programs" | "timing" | "meta";
 
 export type WorkUnitQueueCrmTimingSegmentVm = {
-  /** Includes trailing colon when appropriate, e.g. `Desired Start Date:` */
+  /** Field label (no trailing colon — column headers use this text as-is). */
   label: string;
   value: string;
 };
@@ -74,14 +74,29 @@ export type WorkUnitQueueCrmFactPartVm =
  */
 export type WorkUnitQueueCrmFactLineVm = string | { parts: WorkUnitQueueCrmFactPartVm[] };
 
+/**
+ * Field-column layout for CRM compact middle zone: each column has a muted header and one or more value rows.
+ * Used for contact, timing, and children/program; avoids middot sentence fragments.
+ */
+export type WorkUnitQueueCrmFactColumnGridVm = {
+  headers: string[];
+  /** One array per row; each row length must match `headers.length` */
+  rows: string[][];
+};
+
 export type WorkUnitQueueCrmFactGroupVm = {
   kind: WorkUnitQueueCrmFactGroupKind;
-  /** Muted group title (from `field_labels` + defaults). */
+  /** Muted section title (from `field_labels` + defaults). Empty when `columnGrid` carries all headings. */
   label: string;
-  /** Value rows: string and/or `{ parts }` (contact, children/programs, timing, meta). */
+  /**
+   * Compact field columns (preferred for contact / timing / children when built by current presenter).
+   * When set, UI ignores `lines` / `timingSegments` unless renderer falls back.
+   */
+  columnGrid?: WorkUnitQueueCrmFactColumnGridVm;
+  /** Value rows: string and/or `{ parts }` (legacy / meta / flat contact snippet). */
   lines?: WorkUnitQueueCrmFactLineVm[];
   /**
-   * Legacy timing payload when `lines` omitted (older `crmFactGroups`). Prefer `lines` with `{ parts }`.
+   * Legacy timing payload when `lines` omitted (older `crmFactGroups`). Prefer `columnGrid` or `lines` with `{ parts }`.
    */
   timingSegments?: WorkUnitQueueCrmTimingSegmentVm[];
 };

@@ -198,10 +198,10 @@ function computeCrmTimingSegments(
 
     const segments: WorkUnitQueueCrmTimingSegmentVm[] = [];
     if (wantD && labels.desired_start_date) {
-        segments.push({ label: `${labels.desired_start_date}:`, value: desiredVal });
+        segments.push({ label: labels.desired_start_date, value: desiredVal });
     }
     if (wantT && labels.tour_date) {
-        segments.push({ label: `${labels.tour_date}:`, value: tourVal });
+        segments.push({ label: labels.tour_date, value: tourVal });
     }
     return segments.length ? segments : null;
 }
@@ -217,60 +217,122 @@ export type BuildCrmCompactWorkUnitFactGroupsParams = {
     ageBandContext?: string | null;
 };
 
+function buildContactFactGroupColumnOrLegacy(
+    row: Record<string, unknown>,
+    want: (f: QueueUiRowPreviewField) => boolean,
+    labels: Record<string, string>
+): WorkUnitQueueCrmFactGroupVm | null {
+    if (!want("primary_contact") && !want("phone") && !want("email")) return null;
+    const c = deriveStructuredContactFromQueueRow(row, want);
+    const structuredAny = Boolean(
+        (c.contactDisplayName?.trim() ?? "") || c.contactPhoneDisplay || c.contactEmail
+    );
+    if (!structuredAny && c.contactSnippet?.trim()) {
+        return {
+            kind: "contact",
+            label: labels.primary_contact ?? "Contact",
+            lines: [c.contactSnippet.trim()],
+        };
+    }
+    const cols: { header: string; value: string }[] = [];
+    if (want("primary_contact")) {
+        cols.push({
+            header: labels.primary_contact ?? "Contact",
+            value: (c.contactDisplayName?.trim() ?? "") || "—",
+        });
+    }
+    if (want("phone")) {
+        cols.push({
+            header: labels.phone ?? "Phone",
+            value: (c.contactPhoneDisplay?.trim() ?? "") || "—",
+        });
+    }
+    if (want("email")) {
+        cols.push({
+            header: labels.email ?? "Email",
+            value: (c.contactEmail?.trim() ?? "") || "—",
+        });
+    }
+    if (!cols.length) return null;
+    return {
+        kind: "contact",
+        label: "",
+        columnGrid: {
+            headers: cols.map((x) => x.header),
+            rows: [cols.map((x) => x.value)],
+        },
+    };
+}
+
 /**
  * Work-unit queue record row — middle-zone fact groups (doctrine).
- * Label above, value below; timing uses `{ parts: [{ label, value }] }` for flex layout.
+ * Contact / timing / children use field columns; meta stays label + line; legacy flat contact uses one line.
  */
 export function buildCrmCompactWorkUnitFactGroups(params: BuildCrmCompactWorkUnitFactGroupsParams): WorkUnitQueueCrmFactGroupVm[] {
     const labels = mergeQueueRowPreviewFieldLabels(params.rowPreviewFieldLabels);
     const { want, row } = params;
     const out: WorkUnitQueueCrmFactGroupVm[] = [];
 
-    const contactLine = buildCrmContactFactLine(row, want);
-    if (contactLine) {
-        out.push({
-            kind: "contact",
-            label: labels.primary_contact ?? "Contact",
-            lines: [contactLine],
-        });
-    }
+    const contactGroup = buildContactFactGroupColumnOrLegacy(row, want, labels);
+    if (contactGroup) out.push(contactGroup);
 
-    const childLabel = labels.children_programs ?? "Children / Programs";
-    const childLines: WorkUnitQueueCrmFactLineVm[] = [];
+    const childLabelChild = labels.child_name ?? "Child";
+    const childLabelProgram = labels.program ?? "Program";
     const multi = params.childrenLines && params.childrenLines.length >= 2;
 
     if (want("child_name") && multi) {
         const list = params.childrenLines!;
         const visible = list.slice(0, 4);
         const overflow = Math.max(0, list.length - visible.length);
-        for (const ch of visible) {
-            const prog = ch.programInline?.trim() ?? "";
-            if (prog) childLines.push({ parts: [ch.primary, prog] });
-            else childLines.push(ch.primary);
+        const headers = want("program") ? [childLabelChild, childLabelProgram] : [childLabelChild];
+        const rows: string[][] = visible.map((ch) => {
+            if (want("program")) {
+                const prog = ch.programInline?.trim() ?? "";
+                return [ch.primary, prog || "—"];
+            }
+            return [ch.primary];
+        });
+        if (overflow > 0) {
+            const pad = want("program") ? 2 : 1;
+            rows.push([`+${overflow} more`, ...Array(Math.max(0, pad - 1)).fill("")]);
         }
-        if (overflow > 0) childLines.push(`+${overflow} more`);
+        out.push({ kind: "children_programs", label: "", columnGrid: { headers, rows } });
     } else if (want("child_name") || want("program")) {
-        const name = (params.childNameSingle ?? "").trim();
+        const name = want("child_name") ? (params.childNameSingle ?? "").trim() : "";
         const prog = want("program") ? (params.programSingle ?? "").trim() : "";
-        if (name && prog) childLines.push({ parts: [name, prog] });
-        else if (name) childLines.push(name);
-        else if (prog) childLines.push(prog);
-    }
-
-    if (childLines.length) {
-        out.push({ kind: "children_programs", label: childLabel, lines: childLines });
+        if (want("child_name") && want("program")) {
+            out.push({
+                kind: "children_programs",
+                label: "",
+                columnGrid: {
+                    headers: [childLabelChild, childLabelProgram],
+                    rows: [[name || "—", prog || "—"]],
+                },
+            });
+        } else if (want("child_name")) {
+            out.push({
+                kind: "children_programs",
+                label: "",
+                columnGrid: { headers: [childLabelChild], rows: [[name || "—"]] },
+            });
+        } else {
+            out.push({
+                kind: "children_programs",
+                label: "",
+                columnGrid: { headers: [childLabelProgram], rows: [[prog || "—"]] },
+            });
+        }
     }
 
     const timingSegments = computeCrmTimingSegments(row, want, labels);
     if (timingSegments?.length) {
-        const timingParts: WorkUnitQueueCrmFactPartVm[] = timingSegments.map((s) => ({
-            label: s.label,
-            value: s.value,
-        }));
         out.push({
             kind: "timing",
-            label: labels.timing ?? "Timing",
-            lines: [{ parts: timingParts }],
+            label: "",
+            columnGrid: {
+                headers: timingSegments.map((s) => s.label),
+                rows: [timingSegments.map((s) => s.value)],
+            },
         });
     }
 
@@ -345,7 +407,7 @@ export function buildCrmQueueRowPreviewPresentation(
 
     const timingSegments = computeCrmTimingSegments(row, want, labels);
     const crmCompactTimingValueLine = timingSegments?.length
-        ? timingSegments.map((s) => `${s.label} ${s.value}`.trim()).join(CRM_COMPACT_VALUE_DOT_SEP)
+        ? timingSegments.map((s) => `${s.label}: ${s.value}`.trim()).join(CRM_COMPACT_VALUE_DOT_SEP)
         : null;
 
     return {

@@ -21,6 +21,7 @@ import type {
     WorkUnitWorkspaceModel,
 } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
+import { parseAttentionReasonCountsPayload } from "@/lib/workspace/attentionReasonCountsSummary";
 import { buildRealOpportunityWorkUnitWorkspaceModel } from "@/lib/ui-v2/adapters/realWorkUnitFromOpportunities";
 import {
     buildCrmCompactWorkUnitFactGroups,
@@ -1087,6 +1088,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             error?: string;
                             total?: number;
                             items?: WorkspaceOpportunityQueueRuntime["items"];
+                            attention_reason_counts?: unknown;
                         };
                         if (!oqRes.ok) {
                             oqRuntime = {
@@ -1095,10 +1097,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 items: [],
                             };
                         } else {
+                            const arc = parseAttentionReasonCountsPayload(oqJson.attention_reason_counts);
                             oqRuntime = {
                                 total: typeof oqJson.total === "number" ? oqJson.total : 0,
                                 error: null,
                                 items: oqJson.items ?? [],
+                                ...(arc ? { attention_reason_counts: arc } : {}),
                             };
                         }
                     } catch (e) {
@@ -1919,6 +1923,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             total: filteredItems.length,
             error: oq.error,
             items: filteredItems,
+            attention_reason_counts: oq.attention_reason_counts,
         };
         return buildRealOpportunityWorkUnitWorkspaceModel({
             workUnitId: workUnit.id,

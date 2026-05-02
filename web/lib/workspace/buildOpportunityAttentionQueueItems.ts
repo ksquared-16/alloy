@@ -13,8 +13,14 @@ import {
 } from "@/lib/workspace/opportunityExecutionEligibility";
 import { enrichOpportunityRowsWithCrmProjection } from "@/lib/workspace/enrichOpportunityQueueProjection";
 import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
+import {
+    summarizeAttentionReasonCounts,
+    type AttentionReasonCountSummary,
+} from "@/lib/workspace/attentionReasonCountsSummary";
 
 const MAX_ROWS = 500;
+
+export type { AttentionReasonCountSummary } from "@/lib/workspace/attentionReasonCountsSummary";
 
 type AttentionCandidateRow = OpportunityAttentionInputRow & {
     name: string | null;
@@ -38,6 +44,7 @@ export async function buildOpportunityAttentionQueueItems(params: {
 }): Promise<{
     items: WorkspaceOpportunityQueueRuntime["items"];
     rules: OpportunityAttentionRuleConfigV1;
+    attention_reason_counts: AttentionReasonCountSummary[];
 }> {
     const { supabase, orgId, rules } = params;
 
@@ -135,5 +142,7 @@ export async function buildOpportunityAttentionQueueItems(params: {
         };
     });
 
-    return { items, rules };
+    const attention_reason_counts = summarizeAttentionReasonCounts(withReason);
+
+    return { items, rules, attention_reason_counts };
 }

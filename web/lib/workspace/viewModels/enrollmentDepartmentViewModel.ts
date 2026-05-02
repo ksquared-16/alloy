@@ -259,25 +259,22 @@ export function buildEnrollmentNeedsAttentionGroupsVm(
     departmentId: string
 ): EnrollmentNeedsAttentionGroupVm[] {
     const oq = runtime.opportunityQueues?.needs_attention;
-    const items = oq?.items ?? [];
-    const m = new Map<string, number>();
-    for (const it of items as Array<{ _attention_reason_label?: string | null }>) {
-        const label = String(it._attention_reason_label ?? "").trim() || "Needs attention";
-        m.set(label, (m.get(label) ?? 0) + 1);
-    }
-    const groups = [...m.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .map(([label, count]) => ({ label, count }));
-
+    const summary = oq?.attention_reason_counts;
     const base = `${workspaceBasePath.replace(/\/$/, "")}/dept/${encodeURIComponent(departmentId)}`;
     const wu = runtime.workUnits?.find((w) => String(w.key ?? "").trim().toLowerCase() === "needs_attention");
-    return groups.map((g) => ({
-        label: g.label,
-        count: g.count,
-        openQueueHref: wu?.id
-            ? `${base}/work-unit/${encodeURIComponent(wu.id)}?attention_reason=${encodeURIComponent(g.label)}`
-            : base,
-    }));
+
+    if (!summary?.length) return [];
+
+    return summary.map((row) => {
+        const label = row.label.trim() || String(row.reason_key ?? "").trim() || "Needs attention";
+        return {
+            label,
+            count: Math.max(0, Math.floor(Number(row.count) || 0)),
+            openQueueHref: wu?.id
+                ? `${base}/work-unit/${encodeURIComponent(wu.id)}?attention_reason=${encodeURIComponent(label)}`
+                : base,
+        };
+    });
 }
 
 export function buildEnrollmentDepartmentActionLinks(params?: {
