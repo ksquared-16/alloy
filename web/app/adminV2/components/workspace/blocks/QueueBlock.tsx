@@ -245,12 +245,16 @@ function CrmFactLineRow({
 }
 
 function CrmFactColumnGrid({ grid }: { grid: WorkUnitQueueCrmFactColumnGridVm }) {
-  const { headers, rows } = grid;
+  const { headers, rows, columnKeys } = grid;
   if (!headers.length || !rows.length) return null;
   return (
     <div className="adminv2-ws-queue-fact-column-grid">
       {headers.map((header, colIdx) => (
-        <div key={`col-${colIdx}`} className="adminv2-ws-queue-fact-field-col">
+        <div
+          key={`col-${colIdx}`}
+          className="adminv2-ws-queue-fact-field-col"
+          data-fact-col-key={columnKeys?.[colIdx]}
+        >
           <div className="adminv2-ws-queue-fact-col-head">{displayCrmFactGroupLabel(header)}</div>
           {rows.map((row, rowIdx) => (
             <div key={`${rowIdx}-${colIdx}`} className="adminv2-ws-queue-fact-value adminv2-ws-queue-fact-line">
@@ -373,6 +377,7 @@ function LegacyCrmCompactQueueMiddle({ slots }: { slots: CrmCompactRowSemanticSl
                   slots.contactEmail?.trim() || "—",
                 ],
               ],
+              columnKeys: ["primary_contact", "phone", "email"],
             }}
           />
         </div>
@@ -409,7 +414,13 @@ function LegacyCrmCompactQueueMiddle({ slots }: { slots: CrmCompactRowSemanticSl
     }
     nodes.push(
       <div key="ch" className="adminv2-ws-queue-fact-group" data-fact-kind="children_programs">
-        <CrmFactColumnGrid grid={{ headers, rows }} />
+        <CrmFactColumnGrid
+          grid={{
+            headers,
+            rows,
+            columnKeys: useProgramCol ? ["child_name", "program"] : ["child_name"],
+          }}
+        />
       </div>
     );
   } else {
@@ -418,19 +429,21 @@ function LegacyCrmCompactQueueMiddle({ slots }: { slots: CrmCompactRowSemanticSl
     if (n && p) {
       nodes.push(
         <div key="ch" className="adminv2-ws-queue-fact-group" data-fact-kind="children_programs">
-          <CrmFactColumnGrid grid={{ headers: [childHdr, programHdr], rows: [[n, p]] }} />
+          <CrmFactColumnGrid
+            grid={{ headers: [childHdr, programHdr], rows: [[n, p]], columnKeys: ["child_name", "program"] }}
+          />
         </div>
       );
     } else if (n) {
       nodes.push(
         <div key="ch" className="adminv2-ws-queue-fact-group" data-fact-kind="children_programs">
-          <CrmFactColumnGrid grid={{ headers: [childHdr], rows: [[n]] }} />
+          <CrmFactColumnGrid grid={{ headers: [childHdr], rows: [[n]], columnKeys: ["child_name"] }} />
         </div>
       );
     } else if (p) {
       nodes.push(
         <div key="ch" className="adminv2-ws-queue-fact-group" data-fact-kind="children_programs">
-          <CrmFactColumnGrid grid={{ headers: [programHdr], rows: [[p]] }} />
+          <CrmFactColumnGrid grid={{ headers: [programHdr], rows: [[p]], columnKeys: ["program"] }} />
         </div>
       );
     }
@@ -451,7 +464,9 @@ function LegacyCrmCompactQueueMiddle({ slots }: { slots: CrmCompactRowSemanticSl
     if (th.length) {
       nodes.push(
         <div key="timing" className="adminv2-ws-queue-fact-group" data-fact-kind="timing">
-          <CrmFactColumnGrid grid={{ headers: th, rows: [tv] }} />
+          <CrmFactColumnGrid
+            grid={{ headers: th, rows: [tv], columnKeys: th.map((_, i) => `timing_${i}`) }}
+          />
         </div>
       );
       timingHandled = true;

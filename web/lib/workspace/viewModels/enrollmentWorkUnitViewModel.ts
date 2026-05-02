@@ -1,6 +1,5 @@
 import type {
     ActionsVm,
-    CrmCompactChildLineVm,
     CrmCompactRowSemanticSlots,
     QueueItemQuickActionVm,
     QueueItemVm,
@@ -13,7 +12,9 @@ import {
     buildCrmCompactWorkUnitFactGroups,
     buildCrmQueueRowPreviewPresentation,
     dedupeRedundantProgramAgeInPreview,
-    refineCrmCompactChildLinesForPreview,
+    deriveCrmCompactChildrenLinesForWorkUnitRow,
+    extractCrmChildDisplayLineFromQueueRow,
+    parseQueueRowCrmChildrenStructured,
 } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
 import type { QueueUiRowPreviewField } from "@/lib/ui-v2/queueUiConfig";
 import { normalizePhone } from "@/lib/contactNormalize";
@@ -116,31 +117,6 @@ function laneQuickActionsForAttentionRow(row: OppRow, workUnitKey: string): Queu
     return opportunityQuickActionsForLane(workUnitKey);
 }
 
-function parseCrmChildrenFromStructuredRow(row: OppRow): CrmCompactChildLineVm[] {
-    const raw = (row as { _crm_compact_children?: unknown })._crm_compact_children;
-    if (!Array.isArray(raw)) return [];
-    const out: CrmCompactChildLineVm[] = [];
-    for (const x of raw) {
-        if (x === null || typeof x !== "object") continue;
-        const o = x as Record<string, unknown>;
-        const primary =
-            typeof o.primary === "string"
-                ? o.primary.trim()
-                : typeof o.line === "string"
-                  ? o.line.trim()
-                  : "";
-        if (!primary) continue;
-        const secondary =
-            typeof o.secondary === "string"
-                ? o.secondary.trim()
-                : typeof o.detail === "string"
-                  ? o.detail.trim()
-                  : null;
-        out.push({ primary, secondary: secondary || null });
-    }
-    return out;
-}
-
 function crmContactQuickActions(row: OppRow): QueueItemQuickActionVm[] {
     const cap = enrollmentCrmContactCapabilityForRow(row);
     const email = (row as { _primary_email?: string | null })._primary_email?.trim();
@@ -167,13 +143,16 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
     const titleBase = (row.name ?? "").trim();
     const primaryIdentity = customer || titleBase || row.id.slice(-8);
 
-    const structuredChildren = parseCrmChildrenFromStructuredRow(row);
+    const rowRec = row as unknown as Record<string, unknown>;
+    const structuredChildren = parseQueueRowCrmChildrenStructured(rowRec._crm_compact_children);
     const multiChild = structuredChildren.length >= 2;
-    const childNameFlat = (row as { _child_display_name?: string | null })._child_display_name?.trim() || null;
+    const childDisplayLine = extractCrmChildDisplayLineFromQueueRow(rowRec);
     const childName =
         multiChild
             ? null
-            : childNameFlat ?? (structuredChildren.length === 1 ? structuredChildren[0]!.primary.trim() || null : null);
+            : structuredChildren.length === 1
+                ? structuredChildren[0]!.primary.trim() || null
+                : childDisplayLine || null;
 
     const stageLabel = row._lifecycle_stage_title?.trim() || null;
     const statusLabel = (row._status_display ?? "").trim() || (row.status_key ?? "").trim() || null;
@@ -222,12 +201,12 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
     const programContextDeduped = programRaw ? dedupeRedundantProgramAgeInPreview(programRaw) : null;
 
     const want = options?.previewWant ?? ((_f: QueueUiRowPreviewField) => true);
-    const childrenLinesRefined =
-        want("child_name") && structuredChildren.length >= 1
-            ? refineCrmCompactChildLinesForPreview(structuredChildren, want("program") ? programContextDeduped : null, {
-                  attachFamilyWhenMissing: want("program"),
-              })
-            : null;
+    const childrenLinesRefined = deriveCrmCompactChildrenLinesForWorkUnitRow({
+        want,
+        crmChildrenParsed: structuredChildren,
+        childDisplayLine,
+        programFamily: programContextDeduped,
+    });
 
     const previewPresentation = buildCrmQueueRowPreviewPresentation(
         row as Record<string, unknown>,
@@ -240,7 +219,7 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
         want,
         rowPreviewFieldLabels: options?.rowPreviewFieldLabels,
         childrenLines: childrenLinesRefined?.length ? childrenLinesRefined : null,
-        childNameSingle: childrenLinesRefined?.length ? null : !multiChild ? childNameFlat : null,
+        childNameSingle: childrenLinesRefined?.length ? null : !multiChild ? childDisplayLine || null : null,
         programSingle: childrenLinesRefined?.length ? null : multiChild ? null : want("program") ? programContextDeduped : null,
         roomContext,
         ageBandContext: previewPresentation.ageBandContext ?? null,

@@ -5930,9 +5930,9 @@
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview .adminv2-ws-queue-fact-field-col,
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview .adminv2-ws-queue-fact-field-col {
-  flex: 0 1 auto;
-  min-width: min(5.25rem, 100%);
-  max-width: 11rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: none;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -5942,13 +5942,111 @@
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2
   .adminv2-ws-crm-queue-preview
   .adminv2-ws-queue-fact-group[data-fact-kind="contact"]
-  .adminv2-ws-queue-fact-field-col,
+  .adminv2-ws-queue-fact-field-col[data-fact-col-key="primary_contact"],
 [data-ws-surface="work_unit"].adminv2-ws-work-unit
   .adminv2-ws-crm-queue-preview
   .adminv2-ws-queue-fact-group[data-fact-kind="contact"]
+  .adminv2-ws-queue-fact-field-col[data-fact-col-key="primary_contact"] {
+  flex: 0 1 12rem;
+  min-width: min(12rem, 100%);
+  max-width: 18rem;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2
+  .adminv2-ws-crm-queue-preview
+  .adminv2-ws-queue-fact-group[data-fact-kind="contact"]
+  .adminv2-ws-queue-fact-field-col[data-fact-col-key="phone"],
+[data-ws-surface="work_unit"].adminv2-ws-work-unit
+  .adminv2-ws-crm-queue-preview
+  .adminv2-ws-queue-fact-group[data-fact-kind="contact"]
+  .adminv2-ws-queue-fact-field-col[data-fact-col-key="phone"] {
+  flex: 0 1 9rem;
+  min-width: min(9rem, 100%);
+  max-width: 11rem;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2
+  .adminv2-ws-crm-queue-preview
+  .adminv2-ws-queue-fact-group[data-fact-kind="contact"]
+  .adminv2-ws-queue-fact-field-col[data-fact-col-key="email"],
+[data-ws-surface="work_unit"].adminv2-ws-work-unit
+  .adminv2-ws-crm-queue-preview
+  .adminv2-ws-queue-fact-group[data-fact-kind="contact"]
+  .adminv2-ws-queue-fact-field-col[data-fact-col-key="email"] {
+  flex: 1 1 20rem;
+  min-width: min(20rem, 100%);
+  max-width: none;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2
+  .adminv2-ws-crm-queue-preview
+  .adminv2-ws-queue-fact-group[data-fact-kind="children_programs"]
+  .adminv2-ws-queue-fact-field-col[data-fact-col-key="child_name"],
+[data-ws-surface="work_unit"].adminv2-ws-work-unit
+  .adminv2-ws-crm-queue-preview
+  .adminv2-ws-queue-fact-group[data-fact-kind="children_programs"]
+  .adminv2-ws-queue-fact-field-col[data-fact-col-key="child_name"] {
+  flex: 0 1 14rem;
+  min-width: min(14rem, 100%);
+  max-width: 22rem;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2
+  .adminv2-ws-crm-queue-preview
+  .adminv2-ws-queue-fact-group[data-fact-kind="children_programs"]
+  .adminv2-ws-queue-fact-field-col[data-fact-col-key="program"],
+[data-ws-surface="work_unit"].adminv2-ws-work-unit
+  .adminv2-ws-crm-queue-preview
+  .adminv2-ws-queue-fact-group[data-fact-kind="children_programs"]
+  .adminv2-ws-queue-fact-field-col[data-fact-col-key="program"] {
+  flex: 1 1 18rem;
+  min-width: min(18rem, 100%);
+  max-width: none;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2
+  .adminv2-ws-crm-queue-preview
+  .adminv2-ws-queue-fact-group[data-fact-kind="timing"]
+  .adminv2-ws-queue-fact-field-col,
+[data-ws-surface="work_unit"].adminv2-ws-work-unit
+  .adminv2-ws-crm-queue-preview
+  .adminv2-ws-queue-fact-group[data-fact-kind="timing"]
   .adminv2-ws-queue-fact-field-col {
-  max-width: 12.5rem;
-  min-width: min(6rem, 100%);
+  flex: 0 1 9.5rem;
+  min-width: min(7rem, 100%);
+  max-width: 12rem;
+}
+
+@media (min-width: 1100px) {
+  [data-ws-surface="work_unit"].adminv2-ws-wu-v2
+    .adminv2-ws-crm-queue-preview
+    .adminv2-ws-queue-fact-group[data-fact-kind="contact"]
+    .adminv2-ws-queue-fact-field-col[data-fact-col-key="email"]
+    .adminv2-ws-queue-fact-line,
+  [data-ws-surface="work_unit"].adminv2-ws-work-unit
+    .adminv2-ws-crm-queue-preview
+    .adminv2-ws-queue-fact-group[data-fact-kind="contact"]
+    .adminv2-ws-queue-fact-field-col[data-fact-col-key="email"]
+    .adminv2-ws-queue-fact-line {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  [data-ws-surface="work_unit"].adminv2-ws-wu-v2
+    .adminv2-ws-crm-queue-preview
+    .adminv2-ws-queue-fact-group[data-fact-kind="children_programs"]
+    .adminv2-ws-queue-fact-field-col[data-fact-col-key="program"]
+    .adminv2-ws-queue-fact-line,
+  [data-ws-surface="work_unit"].adminv2-ws-work-unit
+    .adminv2-ws-crm-queue-preview
+    .adminv2-ws-queue-fact-group[data-fact-kind="children_programs"]
+    .adminv2-ws-queue-fact-field-col[data-fact-col-key="program"]
+    .adminv2-ws-queue-fact-line {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview .adminv2-ws-queue-fact-col-head,

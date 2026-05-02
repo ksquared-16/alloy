@@ -519,3 +519,64 @@ export function buildCrmQueueRowPreviewPresentation(
         rowPreviewLabelAgeBand: labels.age_band ?? null,
     };
 }
+
+export type WorkUnitQueueCrmCompactRowSlice = {
+    multiChildren: boolean;
+    childrenLinesForVm: CrmCompactChildLineVm[] | null;
+    programDeduped: string | null;
+    childDisplayLine: string;
+    crmPresentation: ReturnType<typeof buildCrmQueueRowPreviewPresentation>;
+    crmFactGroups: WorkUnitQueueCrmFactGroupVm[];
+};
+
+/**
+ * Live adapter for work-unit queue rows (`page.tsx` CRM compact path): structured children, display fallbacks,
+ * fact groups, and dev-only consistency warn when Program is non-empty but Child resolves empty.
+ */
+export function buildWorkUnitQueueCrmCompactRowSlice(
+    row: Record<string, unknown>,
+    want: (f: QueueUiRowPreviewField) => boolean,
+    rowPreviewFieldLabels?: Record<string, string> | null
+): WorkUnitQueueCrmCompactRowSlice {
+    const crmChildrenParsed = parseQueueRowCrmChildrenStructured(row._crm_compact_children);
+    const multiChildren = Boolean(want("child_name") && crmChildrenParsed.length >= 2);
+    const programRaw = typeof row._requested_program === "string" ? row._requested_program.trim() : "";
+    const programDeduped =
+        programRaw && want("program") ? dedupeRedundantProgramAgeInPreview(programRaw) : null;
+    const childDisplayLine = extractCrmChildDisplayLineFromQueueRow(row);
+    const childrenLinesForVm = deriveCrmCompactChildrenLinesForWorkUnitRow({
+        want,
+        crmChildrenParsed,
+        childDisplayLine,
+        programFamily: programDeduped,
+    });
+    const crmPresentation = buildCrmQueueRowPreviewPresentation(row, want, rowPreviewFieldLabels);
+    const childNameSingleForFacts =
+        childrenLinesForVm?.length ? null : !multiChildren ? childDisplayLine || null : null;
+    const crmFactGroups = buildCrmCompactWorkUnitFactGroups({
+        row,
+        want,
+        rowPreviewFieldLabels,
+        childrenLines: childrenLinesForVm?.length ? childrenLinesForVm : null,
+        childNameSingle: childNameSingleForFacts,
+        programSingle:
+            childrenLinesForVm?.length ? null : multiChildren ? null : want("program") ? programDeduped : null,
+        roomContext: null,
+        ageBandContext: crmPresentation.ageBandContext ?? null,
+    });
+    devWarnIfCrmCompactChildMissingWithProgramDev(
+        row,
+        want,
+        childrenLinesForVm,
+        childNameSingleForFacts,
+        programDeduped
+    );
+    return {
+        multiChildren,
+        childrenLinesForVm,
+        programDeduped,
+        childDisplayLine,
+        crmPresentation,
+        crmFactGroups,
+    };
+}

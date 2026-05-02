@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildCrmCompactWorkUnitFactGroups } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
+import {
+    buildCrmCompactWorkUnitFactGroups,
+    buildWorkUnitQueueCrmCompactRowSlice,
+} from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
 import type { QueueUiRowPreviewField } from "@/lib/ui-v2/queueUiConfig";
 
 const allFields: QueueUiRowPreviewField[] = [
@@ -106,5 +109,53 @@ describe("buildCrmCompactWorkUnitFactGroups (child columns)", () => {
         });
         const ch = groups.find((g) => g.kind === "children_programs");
         expect(ch?.columnGrid?.rows).toEqual([["—", "—"]]);
+    });
+});
+
+describe("buildWorkUnitQueueCrmCompactRowSlice (work-unit page path)", () => {
+    it("fills Child from metadata.child_name when structured children are absent", () => {
+        const slice = buildWorkUnitQueueCrmCompactRowSlice(
+            {
+                id: "wu-row-1",
+                _requested_program: "Young Toddler (12–24 mo)",
+                metadata: { child_name: "Case Stale (2y)" },
+            },
+            wantAll,
+            null
+        );
+        const ch = slice.crmFactGroups.find((g) => g.kind === "children_programs");
+        expect(ch?.columnGrid?.columnKeys).toEqual(["child_name", "program"]);
+        expect(ch?.columnGrid?.rows?.[0]?.[0]).toBe("Case Stale (2y)");
+        expect(slice.childrenLinesForVm?.[0]?.primary).toBe("Case Stale (2y)");
+    });
+
+    it("fills Child from _child_display_name when _crm_compact_children is empty", () => {
+        const slice = buildWorkUnitQueueCrmCompactRowSlice(
+            {
+                id: "wu-row-2",
+                _child_display_name: "Alex Chen (5y)",
+                _requested_program: "Pre-K · Ages 4–5",
+                _crm_compact_children: [],
+            },
+            wantAll,
+            null
+        );
+        const ch = slice.crmFactGroups.find((g) => g.kind === "children_programs");
+        expect(ch?.columnGrid?.rows?.[0]?.[0]).toBe("Alex Chen (5y)");
+    });
+
+    it("exposes contact column keys for CSS width rules", () => {
+        const slice = buildWorkUnitQueueCrmCompactRowSlice(
+            {
+                id: "wu-row-3",
+                _primary_contact_line: "Sam Nguyen",
+                _primary_phone: "+15551234567",
+                _primary_email: "long.contact.name@parentschooldemo.org",
+            },
+            wantAll,
+            null
+        );
+        const contact = slice.crmFactGroups.find((g) => g.kind === "contact");
+        expect(contact?.columnGrid?.columnKeys).toEqual(["primary_contact", "phone", "email"]);
     });
 });

@@ -16,19 +16,13 @@ import { REGISTRY_RIGHT_RAIL_ACTION_ID_PREFIX } from "@/lib/workspace/viewModels
 import { executeOpportunityRecordAction } from "@/lib/recordChrome/executeOpportunityRecordAction";
 import type { WorkspaceAction } from "@/lib/ui-v2/workspace-actions";
 import type {
-    CrmCompactChildLineVm,
     QueueItemQuickActionVm,
     WorkUnitWorkspaceModel,
 } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
 import { parseAttentionReasonCountsPayload } from "@/lib/workspace/attentionReasonCountsSummary";
 import { buildRealOpportunityWorkUnitWorkspaceModel } from "@/lib/ui-v2/adapters/realWorkUnitFromOpportunities";
-import {
-    buildCrmCompactWorkUnitFactGroups,
-    buildCrmQueueRowPreviewPresentation,
-    dedupeRedundantProgramAgeInPreview,
-    refineCrmCompactChildLinesForPreview,
-} from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
+import { buildWorkUnitQueueCrmCompactRowSlice } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
 import { mergeEnrollmentRightRailActions } from "@/lib/workspace/viewModels/enrollmentRightRailMerge";
 import { rightRailResolvedFromActionsPayload } from "@/lib/workspace/rightRailResolvedFromActionsPayload";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
@@ -255,30 +249,6 @@ const DEFAULT_WF_KPIS: WorkflowKpis = {
 
 function isRowPreviewFieldEnabled(fields: QueueUiRowPreviewField[], f: QueueUiRowPreviewField): boolean {
     return fields.includes(f);
-}
-
-function parseQueueRowCrmChildren(raw: unknown): CrmCompactChildLineVm[] {
-    if (!Array.isArray(raw)) return [];
-    const out: CrmCompactChildLineVm[] = [];
-    for (const x of raw) {
-        if (x === null || typeof x !== "object") continue;
-        const o = x as Record<string, unknown>;
-        const primary =
-            typeof o.primary === "string"
-                ? o.primary.trim()
-                : typeof o.line === "string"
-                  ? o.line.trim()
-                  : "";
-        if (!primary) continue;
-        const secondary =
-            typeof o.secondary === "string"
-                ? o.secondary.trim()
-                : typeof o.detail === "string"
-                  ? o.detail.trim()
-                  : null;
-        out.push({ primary, secondary: secondary || null });
-    }
-    return out;
 }
 
 export default function AdminV2OpportunityWorkUnitPage() {
@@ -1589,8 +1559,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     typeof r?._primary_contact_line === "string" ? r._primary_contact_line.trim() : "";
                 const phone = typeof r?._primary_phone === "string" ? r._primary_phone.trim() : "";
                 const email = typeof r?._primary_email === "string" ? r._primary_email.trim() : "";
-                const childName = typeof r?._child_display_name === "string" ? r._child_display_name.trim() : "";
-                const program = typeof r?._requested_program === "string" ? r._requested_program.trim() : "";
                 const notePreview = formatOpportunityQueueNotesPreviewParts(
                     typeof r?._notes_preview === "string" ? r._notes_preview : null,
                     viewerTz
@@ -1664,17 +1632,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
                 const want = (f: QueueUiRowPreviewField) => isRowPreviewFieldEnabled(previewFields, f);
 
-                const crmChildrenParsed = parseQueueRowCrmChildren(r?._crm_compact_children);
-                const multiChildren = Boolean(want("child_name") && crmChildrenParsed.length >= 2);
-                const programDeduped =
-                    program.trim() && want("program") ? dedupeRedundantProgramAgeInPreview(program) : null;
-                const childrenLinesForVm =
-                    want("child_name") && crmChildrenParsed.length >= 1
-                        ? refineCrmCompactChildLinesForPreview(crmChildrenParsed, want("program") ? programDeduped : null, {
-                              attachFamilyWhenMissing: want("program"),
-                          })
-                        : null;
-
                 const basicSubtitleParts: string[] = [];
                 if (want("status") && statusLabel) basicSubtitleParts.push(`Status: ${statusLabel}`);
                 if (want("primary_contact") && contactName) basicSubtitleParts.push(contactName);
@@ -1699,28 +1656,26 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     semanticCrmCompact:
                         previewCfg.variant === "crm_compact"
                             ? (() => {
-                                  const crmPresentation = buildCrmQueueRowPreviewPresentation(
+                                  const slice = buildWorkUnitQueueCrmCompactRowSlice(
                                       r as Record<string, unknown>,
                                       want,
                                       queueUi?.row_preview.fieldLabels
                                   );
-                                  const crmFactGroups = buildCrmCompactWorkUnitFactGroups({
-                                      row: r as Record<string, unknown>,
-                                      want,
-                                      rowPreviewFieldLabels: queueUi?.row_preview.fieldLabels,
-                                      childrenLines: childrenLinesForVm?.length ? childrenLinesForVm : null,
-                                      childNameSingle: childrenLinesForVm?.length ? null : !multiChildren ? childName || null : null,
-                                      programSingle: childrenLinesForVm?.length ? null : multiChildren ? null : want("program") ? programDeduped : null,
-                                      roomContext: null,
-                                      ageBandContext: crmPresentation.ageBandContext ?? null,
-                                  });
+                                  const {
+                                      crmPresentation,
+                                      crmFactGroups,
+                                      childrenLinesForVm,
+                                      multiChildren,
+                                      programDeduped,
+                                      childDisplayLine,
+                                  } = slice;
                                   return {
                                       primaryIdentity: familyTitle,
                                       childrenLines: childrenLinesForVm,
                                       childName: want("child_name")
                                           ? multiChildren
                                               ? null
-                                              : childName || childrenLinesForVm?.[0]?.primary || null
+                                              : childDisplayLine || childrenLinesForVm?.[0]?.primary || null
                                           : null,
                                       stageLabel: null,
                                       statusLabel: want("status") ? statusLabel || null : null,
