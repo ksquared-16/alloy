@@ -123,7 +123,7 @@ export function DepartmentJobsQueuePage({
             {loading ? (
                 <p className="text-sm text-alloy-midnight/60 py-4">Loading lane…</p>
             ) : (
-                <WorkUnitWorkspace model={model} onAction={onWorkspaceAction} />
+                <WorkUnitWorkspace model={model} onAction={onWorkspaceAction} kpiStripPlaceholder={false} />
             )}
         </WorkspaceChrome>
     );

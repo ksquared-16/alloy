@@ -13,8 +13,11 @@ type Props = {
   onAction: WorkspaceActionHandler;
   /** Compact queue pills in the control-deck header (below lane headline). Body starts with queue rows only. */
   headerQueuePicker?: ReactNode;
-  /** Non-numeric placeholder while KPI placements load (Phase 3). */
-  kpiStripPlaceholder?: boolean;
+  /**
+   * When true, show the KPI strip skeleton while placement rows are still loading (work unit page).
+   * Pass false when KPIs are not loaded asynchronously.
+   */
+  kpiStripPlaceholder: boolean;
   /** Optional footer content constrained to the primary column width. */
   primaryFooterSlot?: ReactNode;
 };
@@ -27,7 +30,7 @@ export default function WorkUnitWorkspace({
   model,
   onAction,
   headerQueuePicker,
-  kpiStripPlaceholder = false,
+  kpiStripPlaceholder,
   primaryFooterSlot,
 }: Props) {
   const wuShellStyle: CSSProperties = useMemo(
