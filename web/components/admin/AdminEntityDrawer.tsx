@@ -1641,9 +1641,10 @@ export default function AdminEntityDrawer() {
 
     useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
-        if (!drawerReady) return;
+        const visKey = `${drawer.type}:${drawer.id}`;
+        if (postDrawerVisibleKey !== visKey) return;
         prefetchWorkspaceChildcareInquiryOptionSets();
-    }, [drawer.type, drawer.id, drawerReady]);
+    }, [drawer.type, drawer.id, postDrawerVisibleKey]);
 
     useEffect(() => {
         if (drawerTab !== "activity") return;
@@ -1924,6 +1925,11 @@ export default function AdminEntityDrawer() {
             setOppRefFieldSelectOptions({});
             return;
         }
+        const visKey = `${drawer.type}:${drawer.id}`;
+        if (postDrawerVisibleKey !== visKey) {
+            setOppRefFieldSelectOptions({});
+            return;
+        }
         if (!entityRowReady) {
             setOppRefFieldSelectOptions({});
             return;
@@ -2008,10 +2014,15 @@ export default function AdminEntityDrawer() {
         return () => {
             cancelled = true;
         };
-    }, [drawer.type, drawer.id, data, entityRowReady]);
+    }, [drawer.type, drawer.id, data, entityRowReady, postDrawerVisibleKey]);
 
     useEffect(() => {
         if (drawer.type !== "opportunities" || !data || (data as { _create?: boolean })._create || drawer.id === "new") {
+            setOppPipelineStageOptions([]);
+            return;
+        }
+        const visKey = `${drawer.type}:${drawer.id}`;
+        if (postDrawerVisibleKey !== visKey) {
             setOppPipelineStageOptions([]);
             return;
         }
@@ -2047,7 +2058,7 @@ export default function AdminEntityDrawer() {
         return () => {
             cancelled = true;
         };
-    }, [drawer.type, drawer.id, data, entityRowReady]);
+    }, [drawer.type, drawer.id, data, entityRowReady, postDrawerVisibleKey]);
 
     useEffect(() => {
         if (drawer.type !== "service_offerings" || !drawer.id) {
@@ -2731,6 +2742,15 @@ export default function AdminEntityDrawer() {
             setOppVerticalOptions([]);
             return;
         }
+        if (!drawer.id || drawer.id === "new") {
+            setOppVerticalOptions([]);
+            return;
+        }
+        const visKey = `${drawer.type}:${drawer.id}`;
+        if (postDrawerVisibleKey !== visKey) {
+            setOppVerticalOptions([]);
+            return;
+        }
         const init = workspaceDataFetchInit();
         dedupeAdminFetchWithTtl("/api/admin/verticals", init, 1500)
             .then((r) => (r.ok ? r.json() : []))
@@ -2739,7 +2759,7 @@ export default function AdminEntityDrawer() {
                 setOppVerticalOptions(vlist.map((v) => ({ id: v.id, name: (v.name ?? v.id).trim() || v.id })));
             })
             .catch(() => setOppVerticalOptions([]));
-    }, [drawer.type]);
+    }, [drawer.type, drawer.id, postDrawerVisibleKey]);
 
     useEffect(() => {
         if (drawer.type !== "locations") {

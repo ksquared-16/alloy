@@ -79,11 +79,13 @@ export default function AdminV2PerfOverlay() {
         `DEPT: ${fmtMs(m.department_ready, m.department_start)}`,
         `WU Shell: ${fmtMs(m.work_unit_shell_ready, wu)}`,
         `WU Summ req: ${fmtMs(m.work_unit_summaries_request_start, wu)}`,
-        `WU Summ resp: ${fmtMs(m.work_unit_summaries_response, wu)}`,
-        `WU Summ applied: ${fmtMs(m.work_unit_summaries_applied, wu)}`,
+        `WU Summ hdr: ${fmtMs(m.work_unit_summaries_response_headers, m.work_unit_summaries_request_start)}`,
+        `WU Summ json: ${fmtMs(m.work_unit_summaries_json_parse_done, m.work_unit_summaries_response_headers)}`,
+        `WU Summ state: ${fmtMs(m.work_unit_summaries_state_applied, m.work_unit_summaries_json_parse_done)}`,
         `Rows req: ${fmtMs(m.queue_rows_request_start, wu)}`,
-        `Rows resp: ${fmtMs(m.queue_rows_response, wu)}`,
-        `Rows applied: ${fmtMs(m.queue_rows_applied, wu)}`,
+        `Rows hdr: ${fmtMs(m.queue_rows_response_headers, m.queue_rows_request_start)}`,
+        `Rows json: ${fmtMs(m.queue_rows_json_parse_done, m.queue_rows_response_headers)}`,
+        `Rows state: ${fmtMs(m.queue_rows_state_applied, m.queue_rows_json_parse_done)}`,
     ];
 
     const dOpen = m.drawer_open_start;

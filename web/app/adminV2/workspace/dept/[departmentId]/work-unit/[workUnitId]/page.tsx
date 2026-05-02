@@ -255,6 +255,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
      * Cleared on work-unit navigation; bypass with fetchQueueItems(..., { force: true }) for invalidation.
      */
     const queueItemsLastFetchSigRef = useRef<string | null>(null);
+    /** One-shot per work-unit navigation: workflow KPIs, row/right-rail actions after first row attempt settles. */
+    const workUnitDeferredScheduledRef = useRef(false);
 
     const [workflowKpis, setWorkflowKpis] = useState<WorkflowKpis>(DEFAULT_WF_KPIS);
     const [workflowKpisLoading, setWorkflowKpisLoading] = useState(true);
@@ -396,345 +398,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
     }, [actionFeedback]);
 
     useEffect(() => {
-        if (!departmentId || !workUnitId) {
-            setLoading(false);
-            setWorkUnit(null);
-            setDept(null);
-            setOq(null);
-            setNeedsAttentionWorkUnitId(null);
-            setQueueSummaries(null);
-            setQueueSummariesError(null);
-            setQueueSummariesRoute(null);
-            setSelectedQueueKey(null);
-            setQueueItems(null);
-            setQueueItemsError(null);
-            setQueueItemsRoute(null);
-            setQueueItemsLoading(false);
-            setOpportunityQueueRowActions(null);
-            setEnrollmentRightRailResolved(null);
-            setWuPlacementRows(undefined);
-            setWuScopeHasPlacements(false);
-            setError("Missing department or work unit in the URL.");
-            queueItemsLastFetchSigRef.current = null;
-            return;
-        }
-
-        let cancelled = false;
-        void (async () => {
-            const routeStart = typeof performance !== "undefined" ? performance.now() : 0;
-            if (typeof performance !== "undefined" && typeof window !== "undefined") {
-                alloyPerfSet("work_unit_start", routeStart);
-            }
-            setLoading(true);
-            setError(null);
-            const init = workspaceDataFetchInit();
-            try {
-                if (!cancelled) {
-                    setWorkUnit(null);
-                    setDept(null);
-                    setOq(null);
-                    setNeedsAttentionWorkUnitId(null);
-                    setQueueSummaries(null);
-                    setQueueSummariesError(null);
-                    setQueueSummariesRoute(null);
-                    setSelectedQueueKey(null);
-                    setQueueItems(null);
-                    setQueueItemsError(null);
-                    setQueueItemsRoute(null);
-                    setQueueItemsLoading(false);
-                    setOpportunityQueueRowActions(null);
-                    setEnrollmentRightRailResolved(null);
-                    queueItemsLastFetchSigRef.current = null;
-                    setWuPlacementRows(undefined);
-                    setWuScopeHasPlacements(false);
-                }
-
-                const [wuRes, deptRes, deptWusRes] = await Promise.all([
-                    fetch(`/api/admin/work-units/${encodeURIComponent(workUnitId)}`, init),
-                    fetch(`/api/admin/departments/${encodeURIComponent(departmentId)}`, init),
-                    fetch(`/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`, init),
-                ]);
-
-                const [wuJson, deptJson, deptWusJson] = await Promise.all([
-                    wuRes.json().catch(() => ({})),
-                    deptRes.json().catch(() => ({})),
-                    deptWusRes.json().catch(() => ({})),
-                ]) as [
-                    { error?: string } & Partial<WorkUnitRow>,
-                    { error?: string } & Partial<DeptRow>,
-                    { error?: string; items?: Array<{ id: string; key?: string | null }> },
-                ];
-
-                if (!wuRes.ok) throw new Error(wuJson.error ?? "Failed to load work unit");
-                if (!deptRes.ok) throw new Error(deptJson.error ?? "Failed to load department");
-
-                const wu = wuJson as WorkUnitRow;
-                if (wu.department_id !== departmentId) {
-                    throw new Error("Work unit does not belong to this department");
-                }
-
-                const naListEarly = deptWusRes.ok ? (deptWusJson.items ?? []) : [];
-                const naWuEarly = naListEarly.find((r) => String(r.key ?? "").trim().toLowerCase() === "needs_attention");
-
-                if (!cancelled) {
-                    setWorkUnit(wu);
-                    setDept(deptJson as DeptRow);
-                    setNeedsAttentionWorkUnitId(naWuEarly?.id ?? null);
-                }
-
-                const qFromUrlEarly = queueParamFromWindow();
-                const provisionalKey = resolveProvisionalQueueKey(wu, qFromUrlEarly);
-                if (!cancelled) {
-                    if (provisionalKey) setSelectedQueueKey(provisionalKey);
-                    setLoading(false);
-                    if (typeof window !== "undefined" && typeof performance !== "undefined") {
-                        alloyPerfSet("work_unit_shell_ready", performance.now());
-                    }
-                }
-
-                const isAttention = (wu.key ?? "").trim().toLowerCase() === "needs_attention";
-                // Prefer the new QueueService-backed queues. Only fall back to legacy opportunity runtime on 501 or
-                // network/runtime failures that indicate the new queue API isn't usable.
-                let usedNewQueueApi = false;
-                let shouldFallbackToLegacy = false;
-                let fallbackReason: string | null = null;
-
-                const queueQs = new URLSearchParams({
-                    include_previews: "false",
-                    count_mode: "exact",
-                    limit: "3",
-                    summary_mode: "priority",
-                });
-                const pk = (provisionalKey ?? "").trim();
-                if (pk) queueQs.set("focus_queue", pk);
-                const queueListRoute = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?${queueQs.toString()}`;
-
-                const actionsListRoute =
-                    `/api/admin/actions?` +
-                    new URLSearchParams({
-                        surface: "queue_row",
-                        entity_type: "opportunity",
-                        work_unit_id: workUnitId,
-                        department_id: departmentId,
-                    }).toString();
-                const rightRailActionsRoute =
-                    `/api/admin/actions?` +
-                    new URLSearchParams({
-                        surface: "right_rail",
-                        entity_type: "opportunity",
-                        work_unit_id: workUnitId,
-                        department_id: departmentId,
-                    }).toString();
-
-                let parsedQueueRowQuick: QueueItemQuickActionVm[] | null = null;
-                let parsedRightRail: ResolvedActionForClient[] = [];
-                if (typeof window !== "undefined" && typeof performance !== "undefined") {
-                    alloyPerfSet("work_unit_summaries_request_start", performance.now());
-                }
-                const [queuesSettled, actionsSettled, rightRailSettled] = await Promise.allSettled([
-                    fetch(queueListRoute, init),
-                    dedupeAdminFetchWithTtl(actionsListRoute, init, 1500),
-                    dedupeAdminFetchWithTtl(rightRailActionsRoute, init, 1500),
-                ]);
-
-                if (actionsSettled.status === "fulfilled") {
-                    try {
-                        const ar = actionsSettled.value;
-                        const aj = (await ar.json().catch(() => ({}))) as { actions?: ResolvedActionsBySlot };
-                        if (ar.ok) {
-                            const rowInline = aj.actions?.row_inline ?? [];
-                            const overflow = aj.actions?.overflow ?? [];
-                            const combined = [...rowInline, ...overflow];
-                            if (!cancelled) setOpportunityQueueRowResolved(combined);
-                            if (combined.length) parsedQueueRowQuick = registryQuickActionsFromResolved(combined);
-                        }
-                    } catch {
-                        /* non-fatal */
-                    }
-                }
-
-                if (rightRailSettled.status === "fulfilled") {
-                    try {
-                        const ar = rightRailSettled.value;
-                        const aj = (await ar.json().catch(() => ({}))) as { actions?: ResolvedActionsBySlot; error?: string };
-                        if (ar.ok) {
-                            parsedRightRail = rightRailResolvedFromActionsPayload(aj.actions);
-                        }
-                    } catch {
-                        /* non-fatal */
-                    }
-                }
-
-                if (queuesSettled.status === "fulfilled") {
-                    try {
-                        const res = queuesSettled.value;
-                        const j = (await res.json().catch(() => ({}))) as {
-                            error?: string;
-                            queues?: QueueSummary[];
-                            deferred_queue_keys?: string[];
-                            work_unit_scope_total?: number | null;
-                            work_unit_scope_queue_key?: string | null;
-                        };
-                        const route = queueListRoute;
-                        if (res.ok && typeof window !== "undefined" && typeof performance !== "undefined") {
-                            alloyPerfSet("work_unit_summaries_response", performance.now());
-                        }
-                        if (res.ok) {
-                            usedNewQueueApi = true;
-                            if (!cancelled) {
-                                const qs = (j.queues ?? []) as QueueSummary[];
-                                setQueueSummaries(qs);
-                                setQueueSummariesError(null);
-                                setQueueSummariesRoute(route);
-                                if (typeof window !== "undefined") {
-                                    console.warn("[pipeline-count-unify]", {
-                                        source: "work-unit",
-                                        work_unit_id: workUnitId,
-                                        queue_key: j.work_unit_scope_queue_key ?? null,
-                                        count: typeof j.work_unit_scope_total === "number" ? j.work_unit_scope_total : null,
-                                    });
-                                }
-                                const qFromUrl = queueParamFromWindow().trim();
-                                let allKeyFromDef: string | null = null;
-                                try {
-                                    const defBoot = validateQueueDefinition(wu.queue_definition);
-                                    const uiBoot = getQueueUiConfig(defBoot);
-                                    allKeyFromDef = findAllRecordsQueueKey(defBoot, uiBoot);
-                                } catch {
-                                    allKeyFromDef = null;
-                                }
-                                const uiOrder = (() => {
-                                    try {
-                                        const def = validateQueueDefinition(wu.queue_definition);
-                                        const ui = getQueueUiConfig(def);
-                                        return ui.sections.flatMap((s) => s.queue_keys);
-                                    } catch {
-                                        return qs.map((x) => x.key);
-                                    }
-                                })();
-                                const firstByUi = uiOrder.find((k) => qs.some((x) => x.key === k)) ?? qs[0]?.key ?? null;
-                                const initial =
-                                    qFromUrl && qs.some((x) => x.key === qFromUrl)
-                                        ? qFromUrl
-                                        : allKeyFromDef && qs.some((x) => x.key === allKeyFromDef)
-                                          ? allKeyFromDef
-                                          : firstByUi;
-                                setSelectedQueueKey(initial);
-                                if (typeof window !== "undefined" && typeof performance !== "undefined") {
-                                    requestAnimationFrame(() => {
-                                        requestAnimationFrame(() => alloyPerfSet("work_unit_summaries_applied", performance.now()));
-                                    });
-                                }
-                            }
-                        } else if (res.status === 501) {
-                            shouldFallbackToLegacy = true;
-                            fallbackReason = "queue_api_501_not_supported";
-                            if (!cancelled) {
-                                setQueueSummaries(null);
-                                setQueueSummariesError("Queue type not supported yet");
-                                setQueueSummariesRoute(route);
-                            }
-                        } else {
-                            shouldFallbackToLegacy = false;
-                            fallbackReason = `queue_api_${res.status}`;
-                            if (!cancelled) {
-                                setQueueSummaries(null);
-                                setQueueSummariesError(j.error ?? "Failed to load queues");
-                                setQueueSummariesRoute(route);
-                            }
-                        }
-                    } catch (e) {
-                        shouldFallbackToLegacy = true;
-                        fallbackReason = "queue_api_exception";
-                        if (!cancelled) {
-                            setQueueSummaries(null);
-                            setQueueSummariesError(e instanceof Error ? e.message : "Failed to load queues");
-                            setQueueSummariesRoute(queueListRoute);
-                        }
-                    }
-                } else {
-                    shouldFallbackToLegacy = true;
-                    fallbackReason = "queue_api_exception";
-                    const reason =
-                        queuesSettled.status === "rejected"
-                            ? queuesSettled.reason instanceof Error
-                                ? queuesSettled.reason.message
-                                : "Queue request failed"
-                            : "Queue request failed";
-                    if (!cancelled) {
-                        setQueueSummaries(null);
-                        setQueueSummariesError(reason);
-                        setQueueSummariesRoute(queueListRoute);
-                    }
-                }
-
-                let oqRuntime: WorkspaceOpportunityQueueRuntime | null = null;
-                if (!usedNewQueueApi && shouldFallbackToLegacy) {
-                    try {
-                        const oqRes = await fetch(
-                            `/api/admin/work-units/${encodeURIComponent(workUnitId)}/${isAttention ? "opportunity-attention-queue" : "opportunity-queue"}`,
-                            init
-                        );
-                        const oqJson = (await oqRes.json().catch(() => ({}))) as {
-                            error?: string;
-                            total?: number;
-                            items?: WorkspaceOpportunityQueueRuntime["items"];
-                        };
-                        if (!oqRes.ok) {
-                            oqRuntime = {
-                                total: 0,
-                                error: oqJson.error ?? "Failed to load queue",
-                                items: [],
-                            };
-                        } else {
-                            oqRuntime = {
-                                total: typeof oqJson.total === "number" ? oqJson.total : 0,
-                                error: null,
-                                items: oqJson.items ?? [],
-                            };
-                        }
-                    } catch (e) {
-                        const msg = e instanceof Error ? e.message : "Queue request failed";
-                        oqRuntime = { total: 0, error: msg, items: [] };
-                    }
-                } else if (!usedNewQueueApi) {
-                    // No-op: legacy fallback not used.
-                }
-
-                if (!cancelled) {
-                    setOq(oqRuntime);
-                    setOpportunityQueueRowActions(parsedQueueRowQuick);
-                    setEnrollmentRightRailResolved(parsedRightRail);
-                }
-            } catch (e) {
-                if (!cancelled) {
-                    setError((e as Error).message);
-                    setWorkUnit(null);
-                    setDept(null);
-                    setOq(null);
-                    setNeedsAttentionWorkUnitId(null);
-                    setQueueSummaries(null);
-                    setQueueSummariesError(null);
-                    setQueueSummariesRoute(null);
-                    setSelectedQueueKey(null);
-                    setQueueItems(null);
-                    setQueueItemsError(null);
-                    setQueueItemsRoute(null);
-                    setQueueItemsLoading(false);
-                    setOpportunityQueueRowActions(null);
-                    setOpportunityQueueRowResolved(null);
-                    setEnrollmentRightRailResolved(null);
-                }
-            } finally {
-                if (!cancelled) setLoading(false);
-            }
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, [departmentId, workUnitId]);
-
-    useEffect(() => {
         const gated =
             Boolean(workUnitId) &&
             Boolean(selectedQueueKey) &&
@@ -758,6 +421,99 @@ export default function AdminV2OpportunityWorkUnitPage() {
         if (!qFromUrl || !queueSummaries.some((x) => x.key === qFromUrl)) return;
         setSelectedQueueKey((prev) => (prev !== qFromUrl ? qFromUrl : prev));
     }, [queueSummaries, searchParams]);
+
+    const loadWorkUnitDeferredSupplement = useCallback(async () => {
+        if (!workUnitId || !departmentId) return;
+        const init = workspaceDataFetchInit();
+        let parsedQueueRowQuick: QueueItemQuickActionVm[] | null = null;
+        let parsedRightRail: ResolvedActionForClient[] = [];
+
+        const actionsListRoute =
+            `/api/admin/actions?` +
+            new URLSearchParams({
+                surface: "queue_row",
+                entity_type: "opportunity",
+                work_unit_id: workUnitId,
+                department_id: departmentId,
+            }).toString();
+        const rightRailActionsRoute =
+            `/api/admin/actions?` +
+            new URLSearchParams({
+                surface: "right_rail",
+                entity_type: "opportunity",
+                work_unit_id: workUnitId,
+                department_id: departmentId,
+            }).toString();
+
+        const [actionsSettled, rightRailSettled] = await Promise.allSettled([
+            dedupeAdminFetchWithTtl(actionsListRoute, init, 1500),
+            dedupeAdminFetchWithTtl(rightRailActionsRoute, init, 1500),
+        ]);
+
+        if (actionsSettled.status === "fulfilled") {
+            try {
+                const ar = actionsSettled.value;
+                const aj = (await ar.json().catch(() => ({}))) as { actions?: ResolvedActionsBySlot };
+                if (ar.ok) {
+                    const rowInline = aj.actions?.row_inline ?? [];
+                    const overflow = aj.actions?.overflow ?? [];
+                    const combined = [...rowInline, ...overflow];
+                    setOpportunityQueueRowResolved(combined);
+                    if (combined.length) parsedQueueRowQuick = registryQuickActionsFromResolved(combined);
+                }
+            } catch {
+                /* non-fatal */
+            }
+        }
+
+        if (rightRailSettled.status === "fulfilled") {
+            try {
+                const ar = rightRailSettled.value;
+                const aj = (await ar.json().catch(() => ({}))) as { actions?: ResolvedActionsBySlot; error?: string };
+                if (ar.ok) {
+                    parsedRightRail = rightRailResolvedFromActionsPayload(aj.actions);
+                }
+            } catch {
+                /* non-fatal */
+            }
+        }
+
+        setOpportunityQueueRowActions(parsedQueueRowQuick);
+        setEnrollmentRightRailResolved(parsedRightRail);
+
+        setWorkflowKpisLoading(true);
+        try {
+            const [kRes, sRes] = await Promise.all([
+                fetch("/api/admin/workflow-runs?list=kpis", init),
+                fetch("/api/admin/workflows/summary?variant=workspace", init),
+            ]);
+            const kBody = (await kRes.json().catch(() => ({}))) as { kpis?: Partial<WorkflowKpis> };
+            const sJson = (await sRes.json().catch(() => ({}))) as { workflows?: WorkflowSummaryRow[] };
+            if (kRes.ok && kBody.kpis) setWorkflowKpis({ ...DEFAULT_WF_KPIS, ...kBody.kpis });
+            if (sRes.ok) {
+                const all = Array.isArray(sJson.workflows) ? sJson.workflows : [];
+                const relevant = all.filter((w) => (w.entity_type ?? "").toLowerCase() === "opportunity");
+                setWorkflowsSummary(relevant);
+            }
+        } catch {
+            // non-fatal
+        } finally {
+            setWorkflowKpisLoading(false);
+        }
+    }, [departmentId, workUnitId]);
+
+    const scheduleWorkUnitDeferredSupplement = useCallback(() => {
+        if (workUnitDeferredScheduledRef.current) return;
+        workUnitDeferredScheduledRef.current = true;
+        const run = () => {
+            void loadWorkUnitDeferredSupplement();
+        };
+        if (typeof window !== "undefined" && typeof requestIdleCallback !== "undefined") {
+            requestIdleCallback(run, { timeout: 2000 });
+        } else {
+            setTimeout(run, 0);
+        }
+    }, [loadWorkUnitDeferredSupplement]);
 
     const fetchQueueItems = useCallback(
         async (
@@ -799,16 +555,19 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     alloyPerfSet("queue_rows_request_start", performance.now());
                 }
                 const res = await fetch(route, init);
+                if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                    alloyPerfSet("queue_rows_response_headers", performance.now());
+                }
                 const json = (await res.json().catch(() => ({}))) as { error?: string };
+                if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                    alloyPerfSet("queue_rows_json_parse_done", performance.now());
+                }
                 if (!res.ok) {
                     if (res.status === 501) throw new Error("Queue type not supported yet");
                     throw new Error(json.error ?? "Failed to load queue items");
                 }
                 const payload = json as unknown as QueueItemsResult;
                 if (seq === queueItemsRequestSeq.current) {
-                    if (typeof window !== "undefined" && typeof performance !== "undefined") {
-                        alloyPerfSet("queue_rows_response", performance.now());
-                    }
                     setQueueItems(payload);
                     if (typeof window !== "undefined") {
                         console.warn("[pipeline-count-unify]", {
@@ -822,7 +581,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         requestAnimationFrame(() => {
                             requestAnimationFrame(() => {
                                 const t = performance.now();
-                                alloyPerfSet("queue_rows_applied", t);
+                                alloyPerfSet("queue_rows_state_applied", t);
                                 alloyPerfSet("queue_rows_ready", t);
                             });
                         });
@@ -834,10 +593,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     setQueueItemsError(e instanceof Error ? e.message : "Failed to load queue items");
                 }
             } finally {
-                if (seq === queueItemsRequestSeq.current) setQueueItemsLoading(false);
+                if (seq === queueItemsRequestSeq.current) {
+                    setQueueItemsLoading(false);
+                    scheduleWorkUnitDeferredSupplement();
+                }
             }
         },
-        []
+        [scheduleWorkUnitDeferredSupplement]
     );
 
     const fetchQueueSummaries = useCallback(async (wuId: string, focusQueueKey: string | null) => {
@@ -859,24 +621,27 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 alloyPerfSet("work_unit_summaries_request_start", performance.now());
             }
             const res = await fetch(route, init);
+            if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                alloyPerfSet("work_unit_summaries_response_headers", performance.now());
+            }
             const json = (await res.json().catch(() => ({}))) as {
                 error?: string;
                 queues?: QueueSummary[];
                 work_unit_scope_total?: number | null;
                 work_unit_scope_queue_key?: string | null;
             };
+            if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                alloyPerfSet("work_unit_summaries_json_parse_done", performance.now());
+            }
             if (!res.ok) {
                 throw new Error(json.error ?? "Failed to load queues");
             }
             const qsOut = (json.queues ?? []) as QueueSummary[];
             if (seq === queueSummariesRequestSeq.current) {
-                if (typeof window !== "undefined" && typeof performance !== "undefined") {
-                    alloyPerfSet("work_unit_summaries_response", performance.now());
-                }
                 setQueueSummaries(qsOut);
                 if (typeof window !== "undefined" && typeof performance !== "undefined") {
                     requestAnimationFrame(() => {
-                        requestAnimationFrame(() => alloyPerfSet("work_unit_summaries_applied", performance.now()));
+                        requestAnimationFrame(() => alloyPerfSet("work_unit_summaries_state_applied", performance.now()));
                     });
                 }
                 if (typeof window !== "undefined") {
@@ -895,6 +660,299 @@ export default function AdminV2OpportunityWorkUnitPage() {
             }
         }
     }, []);
+
+    useEffect(() => {
+        if (!departmentId || !workUnitId) {
+            setLoading(false);
+            setWorkUnit(null);
+            setDept(null);
+            setOq(null);
+            setNeedsAttentionWorkUnitId(null);
+            setQueueSummaries(null);
+            setQueueSummariesError(null);
+            setQueueSummariesRoute(null);
+            setSelectedQueueKey(null);
+            setQueueItems(null);
+            setQueueItemsError(null);
+            setQueueItemsRoute(null);
+            setQueueItemsLoading(false);
+            setOpportunityQueueRowActions(null);
+            setOpportunityQueueRowResolved(null);
+            setEnrollmentRightRailResolved(null);
+            setWuPlacementRows(undefined);
+            setWuScopeHasPlacements(false);
+            setError("Missing department or work unit in the URL.");
+            queueItemsLastFetchSigRef.current = null;
+            workUnitDeferredScheduledRef.current = false;
+            return;
+        }
+
+        let cancelled = false;
+        void (async () => {
+            const routeStart = typeof performance !== "undefined" ? performance.now() : 0;
+            if (typeof performance !== "undefined" && typeof window !== "undefined") {
+                alloyPerfSet("work_unit_start", routeStart);
+            }
+            setLoading(true);
+            setError(null);
+            const init = workspaceDataFetchInit();
+            workUnitDeferredScheduledRef.current = false;
+            try {
+                if (!cancelled) {
+                    setWorkUnit(null);
+                    setDept(null);
+                    setOq(null);
+                    setNeedsAttentionWorkUnitId(null);
+                    setQueueSummaries(null);
+                    setQueueSummariesError(null);
+                    setQueueSummariesRoute(null);
+                    setSelectedQueueKey(null);
+                    setQueueItems(null);
+                    setQueueItemsError(null);
+                    setQueueItemsRoute(null);
+                    setQueueItemsLoading(false);
+                    setOpportunityQueueRowActions(null);
+                    setOpportunityQueueRowResolved(null);
+                    setEnrollmentRightRailResolved(null);
+                    queueItemsLastFetchSigRef.current = null;
+                    setWuPlacementRows(undefined);
+                    setWuScopeHasPlacements(false);
+                }
+
+                const [wuRes, deptRes] = await Promise.all([
+                    fetch(`/api/admin/work-units/${encodeURIComponent(workUnitId)}`, init),
+                    fetch(`/api/admin/departments/${encodeURIComponent(departmentId)}`, init),
+                ]);
+
+                const [wuJson, deptJson] = await Promise.all([
+                    wuRes.json().catch(() => ({})),
+                    deptRes.json().catch(() => ({})),
+                ]) as [{ error?: string } & Partial<WorkUnitRow>, { error?: string } & Partial<DeptRow>];
+
+                if (!wuRes.ok) throw new Error(wuJson.error ?? "Failed to load work unit");
+                if (!deptRes.ok) throw new Error(deptJson.error ?? "Failed to load department");
+
+                const wu = wuJson as WorkUnitRow;
+                if (wu.department_id !== departmentId) {
+                    throw new Error("Work unit does not belong to this department");
+                }
+
+                if (!cancelled) {
+                    setWorkUnit(wu);
+                    setDept(deptJson as DeptRow);
+                }
+
+                void (async () => {
+                    try {
+                        const res = await fetch(
+                            `/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`,
+                            init
+                        );
+                        const j = (await res.json().catch(() => ({}))) as {
+                            items?: Array<{ id: string; key?: string | null }>;
+                        };
+                        if (cancelled || !res.ok) return;
+                        const naWu = (j.items ?? []).find(
+                            (r) => String(r.key ?? "").trim().toLowerCase() === "needs_attention"
+                        );
+                        setNeedsAttentionWorkUnitId(naWu?.id ?? null);
+                    } catch {
+                        /* non-fatal */
+                    }
+                })();
+
+                const qFromUrlEarly = queueParamFromWindow();
+                const provisionalKey = resolveProvisionalQueueKey(wu, qFromUrlEarly);
+                if (!cancelled) {
+                    if (provisionalKey) setSelectedQueueKey(provisionalKey);
+                    setLoading(false);
+                    if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                        alloyPerfSet("work_unit_shell_ready", performance.now());
+                    }
+                }
+
+                const isAttention = (wu.key ?? "").trim().toLowerCase() === "needs_attention";
+                let usedNewQueueApi = false;
+                let shouldFallbackToLegacy = false;
+
+                const queueQs = new URLSearchParams({
+                    include_previews: "false",
+                    count_mode: "exact",
+                    limit: "3",
+                    summary_mode: "priority",
+                });
+                const pk = (provisionalKey ?? "").trim();
+                if (pk) queueQs.set("focus_queue", pk);
+                const queueListRoute = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?${queueQs.toString()}`;
+
+                if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                    alloyPerfSet("work_unit_summaries_request_start", performance.now());
+                }
+                if (provisionalKey) void fetchQueueItems(workUnitId, provisionalKey, null);
+                let queuesRes: Response;
+                try {
+                    queuesRes = await fetch(queueListRoute, init);
+                } catch {
+                    shouldFallbackToLegacy = true;
+                    if (!cancelled) {
+                        setQueueSummaries(null);
+                        setQueueSummariesError("Queue request failed");
+                        setQueueSummariesRoute(queueListRoute);
+                    }
+                    queuesRes = new Response(null, { status: 0, statusText: "Network Error" });
+                }
+
+                try {
+                    if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                        alloyPerfSet("work_unit_summaries_response_headers", performance.now());
+                    }
+                    const j = (await queuesRes.json().catch(() => ({}))) as {
+                        error?: string;
+                        queues?: QueueSummary[];
+                        deferred_queue_keys?: string[];
+                        work_unit_scope_total?: number | null;
+                        work_unit_scope_queue_key?: string | null;
+                    };
+                    if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                        alloyPerfSet("work_unit_summaries_json_parse_done", performance.now());
+                    }
+                    const route = queueListRoute;
+                    if (queuesRes.ok) {
+                        usedNewQueueApi = true;
+                        if (!cancelled) {
+                            const qs = (j.queues ?? []) as QueueSummary[];
+                            setQueueSummaries(qs);
+                            setQueueSummariesError(null);
+                            setQueueSummariesRoute(route);
+                            if (typeof window !== "undefined") {
+                                console.warn("[pipeline-count-unify]", {
+                                    source: "work-unit",
+                                    work_unit_id: workUnitId,
+                                    queue_key: j.work_unit_scope_queue_key ?? null,
+                                    count: typeof j.work_unit_scope_total === "number" ? j.work_unit_scope_total : null,
+                                });
+                            }
+                            const qFromUrl = queueParamFromWindow().trim();
+                            let allKeyFromDef: string | null = null;
+                            try {
+                                const defBoot = validateQueueDefinition(wu.queue_definition);
+                                const uiBoot = getQueueUiConfig(defBoot);
+                                allKeyFromDef = findAllRecordsQueueKey(defBoot, uiBoot);
+                            } catch {
+                                allKeyFromDef = null;
+                            }
+                            const uiOrder = (() => {
+                                try {
+                                    const def = validateQueueDefinition(wu.queue_definition);
+                                    const ui = getQueueUiConfig(def);
+                                    return ui.sections.flatMap((s) => s.queue_keys);
+                                } catch {
+                                    return qs.map((x) => x.key);
+                                }
+                            })();
+                            const firstByUi = uiOrder.find((k) => qs.some((x) => x.key === k)) ?? qs[0]?.key ?? null;
+                            const initial =
+                                qFromUrl && qs.some((x) => x.key === qFromUrl)
+                                    ? qFromUrl
+                                    : allKeyFromDef && qs.some((x) => x.key === allKeyFromDef)
+                                      ? allKeyFromDef
+                                      : firstByUi;
+                            setSelectedQueueKey(initial);
+                            if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                                requestAnimationFrame(() => {
+                                    requestAnimationFrame(() =>
+                                        alloyPerfSet("work_unit_summaries_state_applied", performance.now())
+                                    );
+                                });
+                            }
+                        }
+                    } else if (queuesRes.status === 501) {
+                        shouldFallbackToLegacy = true;
+                        if (!cancelled) {
+                            setQueueSummaries(null);
+                            setQueueSummariesError("Queue type not supported yet");
+                            setQueueSummariesRoute(route);
+                        }
+                    } else if (queuesRes.status !== 0) {
+                        shouldFallbackToLegacy = false;
+                        if (!cancelled) {
+                            setQueueSummaries(null);
+                            setQueueSummariesError(j.error ?? "Failed to load queues");
+                            setQueueSummariesRoute(route);
+                        }
+                    }
+                } catch (e) {
+                    shouldFallbackToLegacy = true;
+                    if (!cancelled) {
+                        setQueueSummaries(null);
+                        setQueueSummariesError(e instanceof Error ? e.message : "Failed to load queues");
+                        setQueueSummariesRoute(queueListRoute);
+                    }
+                }
+
+                if (!provisionalKey && !cancelled) {
+                    scheduleWorkUnitDeferredSupplement();
+                }
+
+                let oqRuntime: WorkspaceOpportunityQueueRuntime | null = null;
+                if (!usedNewQueueApi && shouldFallbackToLegacy) {
+                    try {
+                        const oqRes = await fetch(
+                            `/api/admin/work-units/${encodeURIComponent(workUnitId)}/${isAttention ? "opportunity-attention-queue" : "opportunity-queue"}`,
+                            init
+                        );
+                        const oqJson = (await oqRes.json().catch(() => ({}))) as {
+                            error?: string;
+                            total?: number;
+                            items?: WorkspaceOpportunityQueueRuntime["items"];
+                        };
+                        if (!oqRes.ok) {
+                            oqRuntime = {
+                                total: 0,
+                                error: oqJson.error ?? "Failed to load queue",
+                                items: [],
+                            };
+                        } else {
+                            oqRuntime = {
+                                total: typeof oqJson.total === "number" ? oqJson.total : 0,
+                                error: null,
+                                items: oqJson.items ?? [],
+                            };
+                        }
+                    } catch (e) {
+                        const msg = e instanceof Error ? e.message : "Queue request failed";
+                        oqRuntime = { total: 0, error: msg, items: [] };
+                    }
+                }
+
+                if (!cancelled) setOq(oqRuntime);
+            } catch (e) {
+                if (!cancelled) {
+                    setError((e as Error).message);
+                    setWorkUnit(null);
+                    setDept(null);
+                    setOq(null);
+                    setNeedsAttentionWorkUnitId(null);
+                    setQueueSummaries(null);
+                    setQueueSummariesError(null);
+                    setQueueSummariesRoute(null);
+                    setSelectedQueueKey(null);
+                    setQueueItems(null);
+                    setQueueItemsError(null);
+                    setQueueItemsRoute(null);
+                    setQueueItemsLoading(false);
+                    setOpportunityQueueRowActions(null);
+                    setOpportunityQueueRowResolved(null);
+                    setEnrollmentRightRailResolved(null);
+                }
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [departmentId, workUnitId, fetchQueueItems, scheduleWorkUnitDeferredSupplement]);
 
     const invalidate = useCallback(
         (opts?: { entity_type?: string; entity_id?: string; action_key?: string }) => {
@@ -929,37 +987,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
         if (!workUnitId || !selectedQueueKey || loading || !workUnit) return;
         void fetchQueueItems(workUnitId, selectedQueueKey, null);
     }, [fetchQueueItems, selectedQueueKey, workUnitId, workUnit, loading]);
-
-    useEffect(() => {
-        let cancelled = false;
-        setWorkflowKpisLoading(true);
-        (async () => {
-            try {
-                const init = workspaceDataFetchInit();
-                const [kRes, sRes] = await Promise.all([
-                    fetch("/api/admin/workflow-runs?list=kpis", init),
-                    fetch("/api/admin/workflows/summary?variant=workspace", init),
-                ]);
-                const kBody = (await kRes.json().catch(() => ({}))) as { kpis?: Partial<WorkflowKpis> };
-                const sJson = (await sRes.json().catch(() => ({}))) as { workflows?: WorkflowSummaryRow[] };
-                if (!cancelled) {
-                    if (kRes.ok && kBody.kpis) setWorkflowKpis({ ...DEFAULT_WF_KPIS, ...kBody.kpis });
-                    if (sRes.ok) {
-                        const all = Array.isArray(sJson.workflows) ? sJson.workflows : [];
-                        const relevant = all.filter((w) => (w.entity_type ?? "").toLowerCase() === "opportunity");
-                        setWorkflowsSummary(relevant);
-                    }
-                }
-            } catch {
-                // non-fatal
-            } finally {
-                if (!cancelled) setWorkflowKpisLoading(false);
-            }
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, []);
 
     const queuePicker = useMemo(() => {
         if (!workUnitId) return null;
