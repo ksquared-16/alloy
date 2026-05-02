@@ -6,7 +6,7 @@
 ## Canonical event layer
 
 - **`emitEvent`** (`web/lib/emitEvent.ts`): Inserts into `workflow_events` using the service-role admin client. This is the single supported TypeScript entry point for new audit rows.
-- **`emitStatusChangedEvent`** (`web/lib/admin/emitStatusChangedEvent.ts`): Bridges status_key transitions; **as of this audit** it delegates inserts to **`emitEvent`** (previously it wrote `workflow_events` directly). Payload shape and event types (`entity_status_changed` vs `opportunity_status_changed`) are unchanged.
+- **`emitStatusChangedEvent`** (`web/lib/admin/emitStatusChangedEvent.ts`): Bridges status_key transitions via **`emitEvent`**, then fans out to enabled workflows (`executeWorkflowRun` + `event_id`). For table **`opportunities`**, **`workflow_events.event_type`** is **`opportunity_status_changed`** — workflow definitions must match that **`event_type`** (not `entity_status_changed`) to run on opportunity status edits.
 - **`enqueueCanonicalOutboundMessage`** (`web/lib/communications/canonicalOutboundEnqueue.ts`): Inserts thread/message rows, then calls **`emitEvent`** with `message_queued` where applicable.
 - **`executeAdminAction`**: Uses **`emitEvent`** for workflow-start and `action_executed` paths; uses **`emitStatusChangedEvent`** for opportunity status updates (thus **`emitEvent`**).
 - **Workflow execution:** After emitting, routes that fan out to automations call **`executeWorkflowRun`** (`web/lib/workflowRun.ts`) with `options.event_id` when an event was created.
@@ -15,7 +15,7 @@
 
 | Area | File(s) | Change |
 |------|---------|--------|
-| Status transitions | `web/lib/admin/emitStatusChangedEvent.ts` | Writes via **`emitEvent`** instead of duplicating `workflow_events` insert logic. |
+| Status transitions | `web/lib/admin/emitStatusChangedEvent.ts` | Writes via **`emitEvent`**; fans out to matching **`executeWorkflowRun`** (with **`event_id`**) after insert. |
 | Job actions | `web/app/api/admin/jobs/[id]/route.ts` | `job_action` path now **`emitEvent`** (`job_action`) before **`executeWorkflowRun`**, with **`event_id`** on runs. |
 | Apply default vendor to upcoming | `web/app/api/admin/jobs/[id]/apply-vendor-to-upcoming/route.ts` | Same pattern for `job_default_vendor_applied`. |
 | Schedule vendor assign | `web/app/api/admin/schedules/[id]/assign/route.ts` | Same pattern for `schedule_vendor_assigned`. |
@@ -235,5 +235,6 @@ Coverage legend:
 ## Related documentation
 
 - `docs/system/actions-and-workflows.md`
+- `docs/audits/workflow-execution-consistency-audit.md` — event → workflow fan-out for status, messaging, scheduling
 - `docs/system/api-contracts.md`
 - `docs/execution/known-gaps.md`

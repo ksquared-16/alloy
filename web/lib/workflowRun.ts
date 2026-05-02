@@ -1448,7 +1448,10 @@ function validateWorkflowEventMatch(
                 return "event_type_mismatch";
             }
         }
-        if (payloadEventType === "entity_status_changed") {
+        if (
+            payloadEventType === "entity_status_changed" ||
+            payloadEventType === "opportunity_status_changed"
+        ) {
             const nested = payload.payload as Record<string, unknown> | null | undefined;
             const newStatusKey =
                 (payload.new_status_key != null ? String(payload.new_status_key) : null) ||

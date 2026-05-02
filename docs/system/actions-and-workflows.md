@@ -41,6 +41,7 @@ Explain how **business facts** become **`workflow_events`**, trigger **workflows
 ## Known gaps / risks
 
 - **Verified (2026-05-02):** Exhaustive route/mutation inventory and **`emitEvent`** coverage — see **`docs/audits/event-integrity-audit.md`**. Remaining high-risk gaps (e.g. GL posting routes, book-v2 discount path, contact create) are listed there.
+- **Verified (2026-05-02):** Workflow fan-out consistency for **status changes**, **message send**, and **scheduling** — see **`docs/audits/workflow-execution-consistency-audit.md`** (includes intentional deviations such as manual workflow run without `event_id` and cancellation fee side effects).
 - Workflow payload still includes **`contact`** alongside **`person`** in `executeWorkflowRun` — treat **`person`** as preferred for new payload enrichment.
 
 ## When this doc must be updated

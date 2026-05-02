@@ -195,23 +195,64 @@ export async function enqueueCanonicalOutboundMessage(params: {
     }
 
     if (mid && (params.emitMessageQueued !== false)) {
+        const occurredAt = new Date().toISOString();
+        const nestedPayload = {
+            communication_message_id: mid,
+            thread_id: threadId,
+            channel: mc,
+            direction: "outbound" as const,
+            workflow_run_id: workflowRunUuid,
+        };
+        let eventId: string | null = null;
         try {
-            await emitEvent({
+            eventId = await emitEvent({
                 org_id: orgIdTrim,
                 event_type: "message_queued",
                 entity_type: params.primaryEntityType,
                 entity_id: params.primaryEntityId,
                 action_type: null,
-                payload: {
-                    communication_message_id: mid,
-                    thread_id: threadId,
-                    channel: mc,
-                    direction: "outbound",
-                    workflow_run_id: workflowRunUuid,
-                },
+                occurred_at: occurredAt,
+                payload: nestedPayload,
             });
         } catch (e) {
             console.warn("[communications] message_queued emit failed", e instanceof Error ? e.message : e);
+        }
+        if (eventId) {
+            const eventPayload: Record<string, unknown> = {
+                event_type: "message_queued",
+                occurred_at: occurredAt,
+                org_id: orgIdTrim,
+                entity_type: params.primaryEntityType,
+                entity_id: params.primaryEntityId,
+                ...nestedPayload,
+            };
+            try {
+                const { executeWorkflowRun } = await import("@/lib/workflowRun");
+                let wq = params.supabase
+                    .from("workflows")
+                    .select("id")
+                    .eq("enabled", true)
+                    .eq("event_type", "message_queued")
+                    .eq("entity_type", params.primaryEntityType);
+                wq = wq.or(`org_id.eq.${orgIdTrim},org_id.is.null`);
+                const { data: wfs } = await wq;
+                for (const wf of wfs ?? []) {
+                    try {
+                        await executeWorkflowRun(params.supabase, (wf as { id: string }).id, eventPayload, {
+                            event_id: eventId,
+                            org_id: orgIdTrim,
+                        });
+                    } catch (err) {
+                        console.warn(
+                            "[communications] message_queued executeWorkflowRun",
+                            (wf as { id: string }).id,
+                            err instanceof Error ? err.message : err
+                        );
+                    }
+                }
+            } catch (e) {
+                console.warn("[communications] message_queued workflow dispatch", e instanceof Error ? e.message : e);
+            }
         }
     }
 

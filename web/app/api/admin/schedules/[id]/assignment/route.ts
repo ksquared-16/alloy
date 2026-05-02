@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAuthCached, requireAdminOrOps } from "@/lib/adminAuth";
 import { emitEvent } from "@/lib/emitEvent";
+import { executeWorkflowRun } from "@/lib/workflowRun";
 
 /** PATCH: set assignment status (e.g. accepted, declined). Body: { status_key }. */
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -48,22 +49,50 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const oldNorm = oldStatusKey == null ? null : String(oldStatusKey).trim();
     const newNorm = String(resolvedKey).trim();
     if (oldNorm !== newNorm) {
+        const occurredAt = new Date().toISOString();
+        const eventPayload: Record<string, unknown> = {
+            event_type: "assignment_status_changed",
+            occurred_at: occurredAt,
+            org_id: ctx.orgId,
+            entity_type: "schedule",
+            entity_id: scheduleId,
+            assignment_id: assignId,
+            old_status_key: oldStatusKey,
+            new_status_key: resolvedKey,
+        };
+        let eventId: string | null = null;
         try {
-            await emitEvent({
+            eventId = await emitEvent({
                 org_id: ctx.orgId,
                 event_type: "assignment_status_changed",
                 entity_type: "schedule",
                 entity_id: scheduleId,
-                occurred_at: new Date().toISOString(),
+                occurred_at: occurredAt,
                 payload: {
-                    assignment_id: assignId,
-                    old_status_key: oldStatusKey,
-                    new_status_key: resolvedKey,
+                    ...eventPayload,
                     actor_user_id: auth.user.id,
                 },
             });
         } catch (e) {
             console.warn("[schedule/assignment] emitEvent", e instanceof Error ? e.message : e);
+        }
+        let wq = supabase
+            .from("workflows")
+            .select("id")
+            .eq("enabled", true)
+            .eq("event_type", "assignment_status_changed")
+            .eq("entity_type", "schedule");
+        wq = wq.or(`org_id.eq.${ctx.orgId},org_id.is.null`);
+        const { data: wfs } = await wq;
+        for (const wf of wfs ?? []) {
+            try {
+                await executeWorkflowRun(supabase, (wf as { id: string }).id, eventPayload, {
+                    event_id: eventId,
+                    org_id: ctx.orgId,
+                });
+            } catch {
+                /* best-effort — match schedule assign route */
+            }
         }
     }
     return NextResponse.json({ ok: true });
