@@ -20,7 +20,7 @@ import {
 import { resolveKpisForWorkspace } from "@/lib/kpi/resolver";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { AdminV2RouteLoadingState } from "@/components/admin/workspace/AdminV2RouteLoadingState";
-import { recordAdminV2PerfMark } from "@/lib/perf/adminV2PerfCapture";
+import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 
 async function loadWorkspaceRollup(
     departments: WorkspaceRootDepartmentRow[],
@@ -163,6 +163,9 @@ export default function AdminV2WorkspaceIndexPage() {
 
         void (async () => {
             const routeStart = typeof performance !== "undefined" ? performance.now() : 0;
+            if (typeof performance !== "undefined" && typeof window !== "undefined") {
+                alloyPerfSet("workspace_start", routeStart);
+            }
             try {
                 const perfDebug =
                     typeof window !== "undefined" &&
@@ -211,7 +214,6 @@ export default function AdminV2WorkspaceIndexPage() {
                             departments: active.length,
                         };
                         void (async () => {
-                            const tPlace0 = typeof performance !== "undefined" ? performance.now() : 0;
                             type PlacementBody = {
                                 items?: WorkspaceKpiPlacementRow[];
                                 scope_has_placements?: boolean;
@@ -238,18 +240,6 @@ export default function AdminV2WorkspaceIndexPage() {
                                     setWorkspaceKpiStrip(placementStrip);
                                     setWorkspaceKpiPlacementPending(false);
                                 }
-                                if (typeof performance !== "undefined" && typeof window !== "undefined") {
-                                    const duration_ms = Math.round(performance.now() - tPlace0);
-                                    console.log("[page-timing]", {
-                                        route: "workspace",
-                                        phase: "kpi_placement",
-                                        duration_ms,
-                                    });
-                                    recordAdminV2PerfMark("workspace_kpi_placement", {
-                                        phase: "kpi_placement",
-                                        duration_ms,
-                                    });
-                                }
                             }
                         })();
                     } catch {
@@ -269,16 +259,7 @@ export default function AdminV2WorkspaceIndexPage() {
                 }
 
                 if (typeof performance !== "undefined" && typeof window !== "undefined") {
-                    const duration_ms = Math.round(performance.now() - routeStart);
-                    console.log("[page-timing]", {
-                        route: "workspace",
-                        phase: "first_paint",
-                        duration_ms,
-                    });
-                    recordAdminV2PerfMark("workspace_page_ready", {
-                        phase: "first_paint",
-                        duration_ms,
-                    });
+                    alloyPerfSet("workspace_ready", performance.now());
                 }
 
                 if (perfDebug) {

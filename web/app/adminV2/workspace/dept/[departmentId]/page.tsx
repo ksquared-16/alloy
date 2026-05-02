@@ -29,7 +29,7 @@ import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedu
 import { AutomationWorkflowsBlock } from "@/app/adminV2/components/workspace/blocks/AutomationWorkflowsBlock";
 import { resolveKpisForDepartment } from "@/lib/kpi/resolver";
 import type { WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
-import { recordAdminV2PerfMark } from "@/lib/perf/adminV2PerfCapture";
+import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 
 const WORKSPACE_BASE = "/adminV2/workspace";
 
@@ -166,6 +166,9 @@ export default function AdminV2WorkspaceDepartmentPage() {
         setDeptQueueSummariesError(null);
         void (async () => {
             const routeStart = typeof performance !== "undefined" ? performance.now() : 0;
+            if (typeof performance !== "undefined" && typeof window !== "undefined") {
+                alloyPerfSet("department_start", routeStart);
+            }
             try {
                 const init = workspaceDataFetchInit();
                 const deptRoute = `/api/admin/departments/${encodeURIComponent(departmentId)}`;
@@ -281,17 +284,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     setDeptQueueSummariesLoading(false);
                     setDeptLoading(false);
                     if (typeof performance !== "undefined" && typeof window !== "undefined") {
-                        const duration_ms = Math.round(performance.now() - routeStart);
-                        console.log("[page-timing]", {
-                            route: "department",
-                            phase: "first_paint",
-                            duration_ms,
-                        });
-                        recordAdminV2PerfMark("department_page_ready", {
-                            department_id: departmentId,
-                            phase: "first_paint",
-                            duration_ms,
-                        });
+                        alloyPerfSet("department_ready", performance.now());
                     }
                 }
             }
@@ -308,7 +301,6 @@ export default function AdminV2WorkspaceDepartmentPage() {
         let cancelled = false;
         const init = workspaceDataFetchInit();
         void (async () => {
-            const tPlace0 = typeof performance !== "undefined" ? performance.now() : 0;
             try {
                 const res = await fetch(
                     `/api/admin/workspace-kpi-placements?surface=department&department_id=${encodeURIComponent(departmentId)}`,
@@ -334,20 +326,6 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 if (!cancelled) {
                     setDeptPlacementRows([]);
                     setDeptScopeHasPlacements(false);
-                }
-            } finally {
-                if (typeof performance !== "undefined" && typeof window !== "undefined") {
-                    const duration_ms = Math.round(performance.now() - tPlace0);
-                    console.log("[page-timing]", {
-                        route: "department",
-                        phase: "kpi_placement",
-                        duration_ms,
-                    });
-                    recordAdminV2PerfMark("department_kpi_placement", {
-                        department_id: departmentId,
-                        phase: "kpi_placement",
-                        duration_ms,
-                    });
                 }
             }
         })();
