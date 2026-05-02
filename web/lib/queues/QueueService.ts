@@ -367,13 +367,16 @@ function opportunityNeedsAttentionReasonLabel(row: OpportunityNeedsAttentionRow,
     return null;
 }
 
-/** Lines for CRM compact multi-child grouping (serialized as `_crm_compact_children` on queue rows). */
+/** Structured lines for CRM compact child/program columns (`_crm_compact_children` on queue rows). */
 type OpportunityQueueCrmChildLine = {
     primary: string;
     secondary: string | null;
 };
 
-/** When ≥2 canonical children exists, CRM compact renders a stacked group instead of a single merged line. */
+/**
+ * One row per child for CRM compact. Emits 2+ rows when stacking; **also 1 row** for single enrolled/inquiry
+ * child so queue preview (which may skip OCM join) still gets a structured primary for the Child column.
+ */
 function buildStructuredCrmCompactChildren(joinChildNames: string[], inquiryChildren: unknown[]): OpportunityQueueCrmChildLine[] | undefined {
     if (joinChildNames.length >= 2) {
         return joinChildNames
@@ -383,26 +386,38 @@ function buildStructuredCrmCompactChildren(joinChildNames: string[], inquiryChil
             })
             .filter((x): x is OpportunityQueueCrmChildLine => x != null);
     }
+    if (joinChildNames.length === 1) {
+        const primary = joinChildNames[0]!.trim();
+        return primary ? [{ primary, secondary: null }] : undefined;
+    }
     const icRaw = inquiryChildren.filter((x) => x != null && typeof x === "object");
+    const lineFromInquiryRow = (raw: unknown): OpportunityQueueCrmChildLine | null => {
+        const row = raw as Record<string, unknown>;
+        const disp = typeof row.display_name === "string" ? row.display_name.trim() : "";
+        const pl =
+            typeof row.program_label === "string"
+                ? row.program_label.trim()
+                : typeof row.program_short === "string"
+                  ? String(row.program_short).trim()
+                  : "";
+        const ag = typeof row.age_group === "string" ? row.age_group.trim() : "";
+        const detail = [pl || null, ag || null].filter(Boolean).join(" · ") || null;
+        const primary = (disp || detail || "").trim();
+        if (!primary) return null;
+        const secondary = disp && detail ? detail : null;
+        return { primary, secondary };
+    };
     if (icRaw.length >= 2) {
         const out: OpportunityQueueCrmChildLine[] = [];
         for (const raw of icRaw) {
-            const row = raw as Record<string, unknown>;
-            const disp = typeof row.display_name === "string" ? row.display_name.trim() : "";
-            const pl =
-                typeof row.program_label === "string"
-                    ? row.program_label.trim()
-                    : typeof row.program_short === "string"
-                      ? String(row.program_short).trim()
-                      : "";
-            const ag = typeof row.age_group === "string" ? row.age_group.trim() : "";
-            const detail = [pl || null, ag || null].filter(Boolean).join(" · ") || null;
-            const primary = (disp || detail || "").trim();
-            if (!primary) continue;
-            const secondary = disp && detail ? detail : null;
-            out.push({ primary, secondary });
+            const line = lineFromInquiryRow(raw);
+            if (line) out.push(line);
         }
         return out.length >= 2 ? out : undefined;
+    }
+    if (icRaw.length === 1) {
+        const line = lineFromInquiryRow(icRaw[0]);
+        return line ? [line] : undefined;
     }
     return undefined;
 }
@@ -630,7 +645,13 @@ async function enrichOpportunityRows(params: {
         const attentionReason = opportunityNeedsAttentionReasonLabel(r, nowForAttention);
         const tourContext = tourDate ? `Tour: ${formatTourDateTime(tourDate, tourTime).display}` : null;
 
-        const crmCompactChildrenStructured = buildStructuredCrmCompactChildren(joinChildNames, inquiryChildren);
+        const structuredChildren = buildStructuredCrmCompactChildren(joinChildNames, inquiryChildren);
+        const crmCompactChildrenStructured =
+            structuredChildren && structuredChildren.length > 0
+                ? structuredChildren
+                : childDisplay?.trim()
+                  ? [{ primary: childDisplay.trim(), secondary: null as string | null }]
+                  : undefined;
 
         return {
             ...r,

@@ -2286,6 +2286,44 @@
   transition: opacity 400ms ease-out;
 }
 
+/* Workspace root KPI: placeholder + live strip share one grid cell — crossfade without width jump */
+.adminv2-ws-kpi-orient-crossfade {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  min-height: 3.25rem;
+}
+
+.adminv2-ws-kpi-orient-crossfade-layer {
+  grid-row: 1;
+  grid-column: 1;
+  min-width: 0;
+  transition: opacity 340ms ease-out;
+}
+
+.adminv2-ws-kpi-orient-crossfade-layer--ph[data-active="true"] {
+  opacity: 1;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.adminv2-ws-kpi-orient-crossfade-layer--ph[data-active="false"] {
+  opacity: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.adminv2-ws-kpi-orient-crossfade-layer--data[data-active="true"] {
+  opacity: 1;
+  z-index: 2;
+}
+
+.adminv2-ws-kpi-orient-crossfade-layer--data[data-active="false"] {
+  opacity: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
 /* Opportunity drawer: one-shot soft emphasis when full hydration replaces `drawer_initial`. */
 @keyframes adminv2-opportunity-hydrate-flash {
   0% {
@@ -2472,6 +2510,22 @@
   .adminv2-ws-soft-content-reveal {
     animation: none;
     opacity: 1;
+  }
+
+  .adminv2-ws-kpi-orient-crossfade-layer {
+    transition: none;
+  }
+
+  .adminv2-ws-kpi-orient-crossfade-layer--ph[data-active="false"],
+  .adminv2-ws-kpi-orient-crossfade-layer--data[data-active="false"] {
+    opacity: 0;
+    visibility: hidden;
+  }
+
+  .adminv2-ws-kpi-orient-crossfade-layer--ph[data-active="true"],
+  .adminv2-ws-kpi-orient-crossfade-layer--data[data-active="true"] {
+    opacity: 1;
+    visibility: visible;
   }
 
   .adminv2-ws-deferred-surface--coarse,

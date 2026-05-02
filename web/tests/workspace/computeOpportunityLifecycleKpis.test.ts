@@ -58,4 +58,29 @@ describe("computeOpportunityLifecycleKpis", () => {
         expect(r.positiveQuoteSumByNonTerminalStatus.quoted).toBe(100);
         expect(r.positiveQuoteSumByNonTerminalStatus.booked).toBeUndefined();
     });
+
+    it("classifies and values rows using estimated_price_cents when quote_total is null (drawer quote parity)", () => {
+        const defs = [
+            def("new", "intake"),
+            def("needs_a_quote", "execution"),
+            def("quoted", "execution"),
+        ];
+
+        const rows = [
+            {
+                status_key: "needs_a_quote",
+                quote_total: null,
+                estimated_price_cents: 5000,
+                monetary_value_cents: null,
+            },
+        ];
+
+        const r = computeOpportunityLifecycleKpis(rows, defs);
+        expect(r.counts.total).toBe(1);
+        expect(r.counts.decision).toBe(1);
+        expect(r.counts.execution).toBe(0);
+        expect(r.values.openPipeline).toBe(50);
+        expect(r.values.pricedInMotion).toBe(50);
+        expect(r.positiveQuoteSumByNonTerminalStatus.needs_a_quote).toBe(50);
+    });
 });

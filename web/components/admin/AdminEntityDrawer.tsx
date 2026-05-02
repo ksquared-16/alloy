@@ -7623,8 +7623,7 @@ export default function AdminEntityDrawer() {
             {error && <p className="text-alloy-ember">Error: {error}</p>}
             {drawerReady && data && dataMatchesDrawer && (
                 <div
-                    key={`body:${drawer.type}:${drawer.id}`}
-                    className={`adminv2-ws-soft-content-reveal ${isJobDrawerV2 && drawer.type === "jobs" ? "space-y-3 max-w-none" : showScheduleRecordModalV2 || showOpportunityRecordModalV2 ? "space-y-3 max-w-none" : "space-y-6"}${showOpportunityRecordModalV2 ? " pb-24 sm:pb-28" : ""}`}
+                    className={`${isJobDrawerV2 && drawer.type === "jobs" ? "space-y-3 max-w-none" : showScheduleRecordModalV2 || showOpportunityRecordModalV2 ? "space-y-3 max-w-none" : "space-y-6"}${showOpportunityRecordModalV2 ? " pb-24 sm:pb-28" : ""}`}
                     data-adminv2-job-drawer-body={isJobDrawerV2 && drawer.type === "jobs" ? "true" : undefined}
                     data-adminv2-schedule-drawer-body={showScheduleRecordModalV2 ? "true" : undefined}
                     data-adminv2-opportunity-drawer-body={showOpportunityRecordModalV2 ? "true" : undefined}
@@ -9841,6 +9840,10 @@ export default function AdminEntityDrawer() {
                                                                                 ) : (
                                                                                     <div className="mt-1 text-[13px] font-semibold text-alloy-midnight/85">{household}</div>
                                                                                 )
+                                                                            ) : opportunityFullHydrateFailed ? (
+                                                                                <div className="mt-1 text-[12px] text-alloy-midnight/55">
+                                                                                    Household could not be confirmed — try refreshing the drawer.
+                                                                                </div>
                                                                             ) : opportunityFullHydratePending ? (
                                                                                 <div
                                                                                     className="mt-1 h-9 w-full max-w-[14rem] skeleton-pulse rounded-md bg-alloy-stone/15"
@@ -9852,7 +9855,11 @@ export default function AdminEntityDrawer() {
                                                                             <div className={`${tinyLabel} mt-2.5`}>
                                                                                 {commRoleLabel ? `Primary contact (${commRoleLabel})` : "Primary contact"}
                                                                             </div>
-                                                                            {primaryContactNamePending ? (
+                                                                            {opportunityFullHydrateFailed && !primaryContactLabelLine ? (
+                                                                                <div className="mt-0.5 text-[12px] text-alloy-midnight/55">
+                                                                                    Primary contact could not be loaded — try refreshing the drawer.
+                                                                                </div>
+                                                                            ) : primaryContactNamePending ? (
                                                                                 <div
                                                                                     className="mt-0.5 h-9 w-full max-w-[14rem] skeleton-pulse rounded-md bg-alloy-stone/15"
                                                                                     aria-hidden
@@ -10122,7 +10129,12 @@ export default function AdminEntityDrawer() {
                                                             <div className="min-w-0">
                                                                 <div className={tinyLabel}>{commRoleLabel || ""}</div>
                                                                 <div className="rounded-lg border border-alloy-stone/25 bg-white px-2 py-1.5">
-                                                                    {opportunityFullHydratePending &&
+                                                                    {opportunityFullHydrateFailed &&
+                                                                    !(commName || primaryContact || primaryPerson || household).trim() ? (
+                                                                        <div className="text-[12px] text-alloy-midnight/55">
+                                                                            Contact summary unavailable — try refreshing the drawer.
+                                                                        </div>
+                                                                    ) : opportunityFullHydratePending &&
                                                                     !(commName || primaryContact || primaryPerson || household).trim() ? (
                                                                         <div
                                                                             className="h-8 w-full max-w-[14rem] skeleton-pulse rounded-md bg-alloy-stone/15"

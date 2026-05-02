@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { buildOpportunityLifecycleFields } from "@/lib/admin/opportunityLifecyclePresentation";
+import { buildOpportunityLifecycleFields, effectiveOpportunityQuoteDollars } from "@/lib/admin/opportunityLifecyclePresentation";
 import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import {
     attentionReasonLabel,
@@ -105,13 +105,10 @@ export async function buildOpportunityAttentionQueueItems(params: {
     }
 
     const items: WorkspaceOpportunityQueueRuntime["items"] = withReason.map(({ row, reason }) => {
-        const quoteNum =
-            row.quote_total != null && !Number.isNaN(Number(row.quote_total)) && Number(row.quote_total) > 0
-                ? Number(row.quote_total)
-                : null;
+        const quoteForLifecycle = effectiveOpportunityQuoteDollars(row);
         const lifecycle = buildOpportunityLifecycleFields({
             statusKey: row.status_key,
-            quoteTotalDollars: quoteNum,
+            quoteTotalDollars: quoteForLifecycle,
             defs: oppDefs,
         });
         const sk = row.status_key ? String(row.status_key).trim() : "";

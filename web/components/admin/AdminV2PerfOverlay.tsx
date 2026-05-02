@@ -52,10 +52,10 @@ export default function AdminV2PerfOverlay() {
             /* private mode */
         }
 
-        const isDev = process.env.NODE_ENV === "development";
         const fromUrl = perf === "1";
         const fromLs = readLocalOverlayFlag();
-        setVisible(isDev || fromUrl || fromLs);
+        /** Black timing box is opt-in only (`?perf=1` or localStorage), never shown by default in dev/prod. */
+        setVisible(fromUrl || fromLs);
     }, [pathname, searchParams]);
 
     useEffect(() => {

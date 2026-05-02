@@ -1,6 +1,6 @@
 import type { StatusDefinitionRow } from "@/lib/admin/statusDefinitionsResolve";
 import {
-    opportunityQuoteTotalForLifecycle,
+    effectiveOpportunityQuoteDollars,
     resolveEffectiveOpportunityLifecycleStage,
 } from "@/lib/admin/opportunityLifecyclePresentation";
 import type { OpportunityLifecycleStage } from "@/lib/admin/statusDefinitionLifecycle";
@@ -18,9 +18,9 @@ export type OpportunityLifecycleKpiCounts = {
 };
 
 export type OpportunityLifecycleKpiValues = {
-    /** Sum of quote_total for opportunities not in terminal success/failure (still “in play”). */
+    /** Sum of positive effective quote dollars (same source as lifecycle “priced”) for opportunities not in terminal success/failure (still “in play”). */
     openPipeline: number;
-    /** Subset of open pipeline where quote_total is positive (priced motion). */
+    /** Subset of open pipeline where effective quote dollars are positive (priced motion). */
     pricedInMotion: number;
 };
 
@@ -28,7 +28,7 @@ export type OpportunityLifecycleKpiSnapshot = {
     counts: OpportunityLifecycleKpiCounts;
     values: OpportunityLifecycleKpiValues;
     /**
-     * Positive `quote_total` sums for **non-terminal** opportunities only, keyed by lowercase `status_key`.
+     * Positive effective quote dollars for **non-terminal** opportunities only, keyed by lowercase `status_key`.
      * Same row scope as `counts` / `values` (department KPI query — not queue preview lists).
      */
     positiveQuoteSumByNonTerminalStatus: Record<string, number>;
@@ -44,6 +44,8 @@ export type OpportunityLifecycleKpiSnapshot = {
 type OppRow = {
     status_key: string | null;
     quote_total: number | string | null;
+    estimated_price_cents?: number | string | null;
+    monetary_value_cents?: number | string | null;
 };
 
 function bumpStage(
@@ -102,12 +104,13 @@ export function computeOpportunityLifecycleKpis(
     const positiveQuoteSumByNonTerminalStatus: Record<string, number> = {};
 
     for (const row of rows) {
-        const quoteNum = opportunityQuoteTotalForLifecycle(row);
+        const effective = effectiveOpportunityQuoteDollars(row);
         const stage = resolveEffectiveOpportunityLifecycleStage({
             statusKey: row.status_key,
-            quoteTotalDollars: quoteNum,
+            quoteTotalDollars: effective,
             defs,
         });
+        const quoteNum = effective != null && effective > 0 ? effective : null;
 
         bumpStage(counts, stage);
 

@@ -27,7 +27,14 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
             .eq("key", "pipeline_overview")
             .maybeSingle();
 
-        let rows: Array<{ status_key: string | null; quote_total: number | string | null }> = [];
+        /** Matches entity GET / drawer: `effectiveOpportunityQuoteDollars` (quote_total → cent fallbacks). */
+        type KpiOppRow = {
+            status_key: string | null;
+            quote_total: number | string | null;
+            estimated_price_cents: number | string | null;
+            monetary_value_cents: number | string | null;
+        };
+        let rows: KpiOppRow[] = [];
         if (wuErr) {
             return NextResponse.json({ error: wuErr.message || "Failed to load KPI scope work unit" }, { status: 500 });
         }
@@ -46,7 +53,10 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
             // IMPORTANT: queue interpreter applies a `limit` for list rendering.
             // KPI counts must reflect the full filtered dataset, not the preview slice.
             const def = resolved.definition;
-            let q = supabase.from("opportunities").select("status_key, quote_total").eq("org_id", ctx.orgId);
+            let q = supabase
+                .from("opportunities")
+                .select("status_key, quote_total, estimated_price_cents, monetary_value_cents")
+                .eq("org_id", ctx.orgId);
             const f = def.filters ?? {};
             if (f.status_keys?.length) q = q.in("status_key", f.status_keys);
             if (f.pipeline_stage_ids?.length) q = q.in("pipeline_stage_id", f.pipeline_stage_ids);
@@ -73,18 +83,18 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
             if (allErr) {
                 return NextResponse.json({ error: allErr.message || "Failed to load KPI scoped opportunities" }, { status: 500 });
             }
-            rows = (allRows ?? []) as Array<{ status_key: string | null; quote_total: number | string | null }>;
+            rows = (allRows ?? []) as KpiOppRow[];
         } else {
             // Fallback: org-wide opportunities (still useful as a visibility layer).
             const { data, error } = await supabase
                 .from("opportunities")
-                .select("status_key, quote_total")
+                .select("status_key, quote_total, estimated_price_cents, monetary_value_cents")
                 .eq("org_id", ctx.orgId)
                 .limit(5000);
             if (error) {
                 return NextResponse.json({ error: error.message || "Failed to load opportunities" }, { status: 500 });
             }
-            rows = data ?? [];
+            rows = (data ?? []) as KpiOppRow[];
         }
 
         const defs = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "opportunities", { activeOnly: true });

@@ -5,8 +5,7 @@ import { useMemo } from "react";
 import Link from "next/link";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
 import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
-import KPIBlock from "@/app/adminV2/components/workspace/blocks/KPIBlock";
-import { KpiStripSkeleton } from "@/components/admin/workspace/KpiStripSkeleton";
+import { WorkspaceKpiOrientationCrossfade } from "@/components/admin/workspace/WorkspaceKpiOrientationCrossfade";
 import type { KPIVm } from "@/lib/ui-v2/workspace-types";
 import {
   WorkspaceRootDepartmentGrid,
@@ -170,13 +169,7 @@ export function WorkspaceRootShell({
                 </p>
               </div>
             </div>
-            {kpiStripPlaceholder ? (
-              <KpiStripSkeleton id="ws-root-kpi-skeleton" />
-            ) : (
-              <div className="adminv2-ws-soft-content-reveal" data-workspace-zone="kpi-banner">
-                <KPIBlock kpis={kpis} maxVisible={5} />
-              </div>
-            )}
+            <WorkspaceKpiOrientationCrossfade kpis={kpis} placeholderPending={kpiStripPlaceholder} maxVisible={5} />
           </div>
 
           <section

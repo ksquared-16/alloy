@@ -1,6 +1,7 @@
 /**
  * Effective opportunity lifecycle for UI — driven by status_definitions.metadata.lifecycle_stage
- * plus a derived "decision" stage when quote_total is positive (see product rules).
+ * plus a derived "decision" stage when the effective quote in dollars is positive
+ * (see {@link effectiveOpportunityQuoteDollars}, matching `_quote_total_display`).
  * No vertical-specific branching; status keys remain configurable in the database.
  */
 
@@ -22,17 +23,42 @@ export type OpportunityLifecycleFields = {
     _lifecycle_next_step: OpportunityLifecycleNextStep;
 };
 
-/** Positive `opportunities.quote_total` only (matches queue “priced” semantics). */
-export function opportunityQuoteTotalForLifecycle(opp: { quote_total?: unknown }): number | null {
-    const v = opp.quote_total;
-    if (v == null || v === "") return null;
-    const n = typeof v === "number" ? v : Number(v);
-    return Number.isFinite(n) && n > 0 ? n : null;
+/** Row slice used for `_quote_total_display` and lifecycle “priced” evaluation. */
+export type OpportunityQuoteSourceRow = {
+    quote_total?: unknown;
+    estimated_price_cents?: unknown;
+    monetary_value_cents?: unknown;
+};
+
+/**
+ * Effective quote in dollars for display and lifecycle — same fallback order as `_quote_total_display`
+ * on `GET /api/admin/entity/opportunities/:id`.
+ */
+export function effectiveOpportunityQuoteDollars(opp: OpportunityQuoteSourceRow): number | null {
+    if (opp.quote_total != null && !Number.isNaN(Number(opp.quote_total))) {
+        return Number(opp.quote_total);
+    }
+    if (opp.estimated_price_cents != null && !Number.isNaN(Number(opp.estimated_price_cents))) {
+        return Number(opp.estimated_price_cents) / 100;
+    }
+    if (opp.monetary_value_cents != null && !Number.isNaN(Number(opp.monetary_value_cents))) {
+        return Number(opp.monetary_value_cents) / 100;
+    }
+    return null;
+}
+
+/**
+ * Positive effective quote dollars only (for KPI sums / “priced” aggregates where null means not priced).
+ * For lifecycle stage resolution, pass {@link effectiveOpportunityQuoteDollars} so zero stays explicit.
+ */
+export function opportunityQuoteTotalForLifecycle(opp: OpportunityQuoteSourceRow): number | null {
+    const d = effectiveOpportunityQuoteDollars(opp);
+    return d != null && d > 0 ? d : null;
 }
 
 /**
  * 1) If configured lifecycle for current status is success or failure → use that.
- * 2) Else if quote_total > 0 → decision (derived).
+ * 2) Else if effective quote dollars > 0 → decision (derived).
  * 3) Else → configured lifecycle from status_definitions.metadata.lifecycle_stage.
  */
 export function resolveEffectiveOpportunityLifecycleStage(input: {

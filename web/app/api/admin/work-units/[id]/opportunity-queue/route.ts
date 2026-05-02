@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { buildOpportunityLifecycleFields } from "@/lib/admin/opportunityLifecyclePresentation";
+import { buildOpportunityLifecycleFields, effectiveOpportunityQuoteDollars } from "@/lib/admin/opportunityLifecyclePresentation";
 import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import { getQueueDefinitionStoredVersion } from "@/lib/rrs/queue/queueDefinitionV1";
 import { resolveOpportunityQueueFromDefinition } from "@/lib/rrs/queue/resolveOpportunityQueue";
@@ -89,13 +89,10 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     const enrichById = await enrichOpportunityRowsWithCrmProjection(supabase, ctx.orgId, filtered);
 
     const itemsBase = filtered.map((row) => {
-        const quoteNum =
-            row.quote_total != null && !Number.isNaN(Number(row.quote_total)) && Number(row.quote_total) > 0
-                ? Number(row.quote_total)
-                : null;
+        const quoteForLifecycle = effectiveOpportunityQuoteDollars(row);
         const lifecycle = buildOpportunityLifecycleFields({
             statusKey: row.status_key,
-            quoteTotalDollars: quoteNum,
+            quoteTotalDollars: quoteForLifecycle,
             defs: oppDefs,
         });
         const sk = row.status_key ? String(row.status_key).trim() : "";

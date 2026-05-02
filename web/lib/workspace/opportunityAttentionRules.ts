@@ -1,5 +1,8 @@
 import type { StatusDefinitionRow } from "@/lib/admin/statusDefinitionsResolve";
-import { opportunityQuoteTotalForLifecycle, resolveEffectiveOpportunityLifecycleStage } from "@/lib/admin/opportunityLifecyclePresentation";
+import {
+    effectiveOpportunityQuoteDollars,
+    resolveEffectiveOpportunityLifecycleStage,
+} from "@/lib/admin/opportunityLifecyclePresentation";
 
 export type OpportunityAttentionReason =
     | "stale_new_inquiry"
@@ -68,6 +71,8 @@ export type OpportunityAttentionInputRow = {
     id: string;
     status_key: string | null;
     quote_total: number | string | null;
+    estimated_price_cents?: number | string | null;
+    monetary_value_cents?: number | string | null;
     created_at: string | null;
     updated_at: string | null;
 };
@@ -85,10 +90,10 @@ export function computeOpportunityAttentionReason(input: {
     rules: OpportunityAttentionRuleConfigV1;
     nowMs: number;
 }): OpportunityAttentionReason | null {
-    const quoteNum = opportunityQuoteTotalForLifecycle({ quote_total: input.row.quote_total });
+    const effective = effectiveOpportunityQuoteDollars(input.row);
     const stage = resolveEffectiveOpportunityLifecycleStage({
         statusKey: input.row.status_key,
-        quoteTotalDollars: quoteNum,
+        quoteTotalDollars: effective,
         defs: input.defs,
     });
 
@@ -104,7 +109,7 @@ export function computeOpportunityAttentionReason(input: {
         if (sinceHours >= input.rules.thresholdsHours.stale_qualified) return "stale_qualified";
     }
     if (stage === "execution") {
-        // Effective stage already accounts for positive quote → decision, so here quote_total is <= 0.
+        // Effective stage already accounts for positive effective quote → decision, so here pricing is absent or non-positive.
         if (sinceHours >= input.rules.thresholdsHours.missing_quote_after_execution) return "missing_quote_after_execution";
     }
     if (stage === "decision") {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     buildOpportunityLifecycleFields,
+    effectiveOpportunityQuoteDollars,
     resolveEffectiveOpportunityLifecycleStage,
 } from "@/lib/admin/opportunityLifecyclePresentation";
 import type { StatusDefinitionRow } from "@/lib/admin/statusDefinitionsResolve";
@@ -78,5 +79,51 @@ describe("buildOpportunityLifecycleFields", () => {
         expect(f._effective_lifecycle_stage).toBe("intake");
         expect(f._lifecycle_stage_title).toBe("Intake");
         expect(f._lifecycle_next_step.lines.length).toBeGreaterThan(0);
+    });
+});
+
+describe("effectiveOpportunityQuoteDollars", () => {
+    it("matches _quote_total_display fallback order (quote_total → estimated cents → monetary cents)", () => {
+        expect(effectiveOpportunityQuoteDollars({ quote_total: 12.5 })).toBe(12.5);
+        expect(effectiveOpportunityQuoteDollars({ quote_total: null, estimated_price_cents: 4999 })).toBe(49.99);
+        expect(
+            effectiveOpportunityQuoteDollars({
+                quote_total: null,
+                estimated_price_cents: null,
+                monetary_value_cents: 100,
+            }),
+        ).toBe(1);
+        expect(effectiveOpportunityQuoteDollars({})).toBeNull();
+    });
+
+    it("uses quote_total even when zero (cent fields ignored)", () => {
+        expect(
+            effectiveOpportunityQuoteDollars({
+                quote_total: 0,
+                estimated_price_cents: 5000,
+            }),
+        ).toBe(0);
+    });
+});
+
+describe("lifecycle quote parity (display source = lifecycle input)", () => {
+    it("derives decision from estimated_price_cents when quote_total is empty", () => {
+        const defs = [def("needs_a_quote", { lifecycle_stage: "execution" })];
+        const row = { quote_total: null, estimated_price_cents: 2500, monetary_value_cents: null };
+        const q = effectiveOpportunityQuoteDollars(row);
+        expect(q).toBe(25);
+        expect(
+            resolveEffectiveOpportunityLifecycleStage({
+                statusKey: "needs_a_quote",
+                quoteTotalDollars: q,
+                defs,
+            }),
+        ).toBe("decision");
+        const fields = buildOpportunityLifecycleFields({
+            statusKey: "needs_a_quote",
+            quoteTotalDollars: q,
+            defs,
+        });
+        expect(fields._effective_lifecycle_stage).toBe("decision");
     });
 });

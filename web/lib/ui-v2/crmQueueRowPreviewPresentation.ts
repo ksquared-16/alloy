@@ -9,6 +9,7 @@ import type {
     WorkUnitQueueCrmFactGroupVm,
     WorkUnitQueueCrmFactLineVm,
     WorkUnitQueueCrmFactPartVm,
+    WorkUnitQueueCrmFactColumnGridVm,
     WorkUnitQueueCrmTimingSegmentVm,
 } from "@/lib/ui-v2/workspace-types";
 import { formatDateUsShortHyphenUtc, formatPhoneUS, formatQueuePreviewTourTimingUtc } from "@/lib/adminFormatters";
@@ -72,6 +73,84 @@ export function refineCrmCompactChildLinesForPreview(
         if (!programInline && opts.attachFamilyWhenMissing && fam) programInline = fam;
         return { ...line, programInline: programInline || null };
     });
+}
+
+/** Parse `_crm_compact_children` / drawer-shaped line objects on queue rows. */
+export function parseQueueRowCrmChildrenStructured(raw: unknown): CrmCompactChildLineVm[] {
+    if (!Array.isArray(raw)) return [];
+    const out: CrmCompactChildLineVm[] = [];
+    for (const x of raw) {
+        if (x === null || typeof x !== "object") continue;
+        const o = x as Record<string, unknown>;
+        const primary =
+            typeof o.primary === "string"
+                ? o.primary.trim()
+                : typeof o.line === "string"
+                  ? o.line.trim()
+                  : "";
+        if (!primary) continue;
+        const secondary =
+            typeof o.secondary === "string"
+                ? o.secondary.trim()
+                : typeof o.detail === "string"
+                  ? o.detail.trim()
+                  : null;
+        out.push({ primary, secondary: secondary || null });
+    }
+    return out;
+}
+
+/** `_child_display_name` from enrichment, else `metadata.child_name` (queue preview may omit structured children). */
+export function extractCrmChildDisplayLineFromQueueRow(row: Record<string, unknown>): string {
+    const a = typeof row._child_display_name === "string" ? row._child_display_name.trim() : "";
+    if (a) return a;
+    const md = row.metadata;
+    if (md && typeof md === "object" && md !== null && "child_name" in md) {
+        const cn = (md as { child_name?: unknown }).child_name;
+        if (typeof cn === "string" && cn.trim()) return cn.trim();
+    }
+    return "";
+}
+
+/**
+ * Live work-unit row: prefer parsed structured children; otherwise a single display line so the Child column
+ * matches Program when preview join skips OCM.
+ */
+export function deriveCrmCompactChildrenLinesForWorkUnitRow(params: {
+    want: (f: QueueUiRowPreviewField) => boolean;
+    crmChildrenParsed: CrmCompactChildLineVm[];
+    childDisplayLine: string;
+    programFamily: string | null;
+}): CrmCompactChildLineVm[] | null {
+    if (!params.want("child_name")) return null;
+    const fam = params.want("program") ? params.programFamily : null;
+    const opts = { attachFamilyWhenMissing: params.want("program") };
+    if (params.crmChildrenParsed.length >= 1) {
+        return refineCrmCompactChildLinesForPreview(params.crmChildrenParsed, fam, opts);
+    }
+    const c = params.childDisplayLine.trim();
+    if (!c) return null;
+    return refineCrmCompactChildLinesForPreview([{ primary: c, secondary: null }], fam, opts);
+}
+
+export function devWarnIfCrmCompactChildMissingWithProgramDev(
+    row: Record<string, unknown>,
+    want: (f: QueueUiRowPreviewField) => boolean,
+    childrenLines: CrmCompactChildLineVm[] | null | undefined,
+    childNameSingle: string | null | undefined,
+    programDeduped: string | null | undefined
+): void {
+    if (typeof process !== "undefined" && process.env.NODE_ENV === "production") return;
+    if (!want("child_name") || !want("program")) return;
+    const prog = (programDeduped ?? "").trim();
+    if (!prog) return;
+    const hasChild = (childrenLines?.length ?? 0) > 0 || Boolean((childNameSingle ?? "").trim());
+    if (hasChild) return;
+    const rid = typeof row.id === "string" ? row.id : "?";
+    console.warn(
+        "[crm-compact][dev] Child column empty while Program has text — check `_child_display_name`, `metadata.child_name`, `_crm_compact_children`.",
+        { rowId: rid }
+    );
 }
 
 function deriveStructuredContactFromQueueRow(
@@ -234,33 +313,38 @@ function buildContactFactGroupColumnOrLegacy(
             lines: [c.contactSnippet.trim()],
         };
     }
-    const cols: { header: string; value: string }[] = [];
+    const cols: { key: string; header: string; value: string }[] = [];
     if (want("primary_contact")) {
         cols.push({
+            key: "primary_contact",
             header: labels.primary_contact ?? "Contact",
             value: (c.contactDisplayName?.trim() ?? "") || "—",
         });
     }
     if (want("phone")) {
         cols.push({
+            key: "phone",
             header: labels.phone ?? "Phone",
             value: (c.contactPhoneDisplay?.trim() ?? "") || "—",
         });
     }
     if (want("email")) {
         cols.push({
+            key: "email",
             header: labels.email ?? "Email",
             value: (c.contactEmail?.trim() ?? "") || "—",
         });
     }
     if (!cols.length) return null;
+    const grid: WorkUnitQueueCrmFactColumnGridVm = {
+        headers: cols.map((x) => x.header),
+        rows: [cols.map((x) => x.value)],
+        columnKeys: cols.map((x) => x.key),
+    };
     return {
         kind: "contact",
         label: "",
-        columnGrid: {
-            headers: cols.map((x) => x.header),
-            rows: [cols.map((x) => x.value)],
-        },
+        columnGrid: grid,
     };
 }
 
@@ -296,7 +380,12 @@ export function buildCrmCompactWorkUnitFactGroups(params: BuildCrmCompactWorkUni
         if (overflow > 0) {
             rows.push([`+${overflow} more`, ...(want("program") ? [""] : [])]);
         }
-        out.push({ kind: "children_programs", label: "", columnGrid: { headers, rows } });
+        const columnKeys = want("program") ? (["child_name", "program"] as const) : (["child_name"] as const);
+        out.push({
+            kind: "children_programs",
+            label: "",
+            columnGrid: { headers, rows, columnKeys: [...columnKeys] },
+        });
     } else if (want("child_name") || want("program")) {
         const name = want("child_name") ? (params.childNameSingle ?? "").trim() : "";
         const prog = want("program") ? (params.programSingle ?? "").trim() : "";
@@ -307,19 +396,20 @@ export function buildCrmCompactWorkUnitFactGroups(params: BuildCrmCompactWorkUni
                 columnGrid: {
                     headers: [childLabelChild, childLabelProgram],
                     rows: [[name || "—", prog || "—"]],
+                    columnKeys: ["child_name", "program"],
                 },
             });
         } else if (want("child_name")) {
             out.push({
                 kind: "children_programs",
                 label: "",
-                columnGrid: { headers: [childLabelChild], rows: [[name || "—"]] },
+                columnGrid: { headers: [childLabelChild], rows: [[name || "—"]], columnKeys: ["child_name"] },
             });
         } else {
             out.push({
                 kind: "children_programs",
                 label: "",
-                columnGrid: { headers: [childLabelProgram], rows: [[prog || "—"]] },
+                columnGrid: { headers: [childLabelProgram], rows: [[prog || "—"]], columnKeys: ["program"] },
             });
         }
     }
@@ -332,6 +422,7 @@ export function buildCrmCompactWorkUnitFactGroups(params: BuildCrmCompactWorkUni
             columnGrid: {
                 headers: timingSegments.map((s) => s.label),
                 rows: [timingSegments.map((s) => s.value)],
+                columnKeys: timingSegments.map((_, i) => `timing_${i}`),
             },
         });
     }

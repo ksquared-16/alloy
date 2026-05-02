@@ -82,6 +82,8 @@ export type WorkUnitQueueCrmFactColumnGridVm = {
   headers: string[];
   /** One array per row; each row length must match `headers.length` */
   rows: string[][];
+  /** Stable keys for column width CSS (`data-fact-col-key`), parallel to `headers`. */
+  columnKeys?: string[];
 };
 
 export type WorkUnitQueueCrmFactGroupVm = {
