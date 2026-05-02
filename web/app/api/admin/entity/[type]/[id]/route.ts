@@ -137,6 +137,7 @@ export async function GET(
             return NextResponse.json({ ...resolved.flat, _rrs: resolved.rrs });
         }
         if (type === "opportunities") {
+            const opportunityRouteStartedAt = Date.now();
             const { data, error } = await supabase.from("opportunities").select("*").eq("id", id).eq("org_id", orgId).single();
             if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
             const opp = data as Record<string, unknown> & { status_key?: string | null; status?: string | null; customer_id?: string | null; primary_contact_id?: string | null; primary_person_id?: string | null; location_id?: string | null; quote_total?: number | null; estimated_price_cents?: number | null; monetary_value_cents?: number | null };
@@ -822,8 +823,12 @@ export async function GET(
                     ? JSON.stringify({ total_ms: enrichTotalMs, phases_ms: enrichPhaseMs })
                     : JSON.stringify({ total_ms: enrichTotalMs, phases_ms: {} });
 
+            const serverRouteMs = Date.now() - opportunityRouteStartedAt;
             return NextResponse.json(out, {
-                headers: { "X-Alloy-Opp-Enrich": enrichHeader },
+                headers: {
+                    "X-Alloy-Opp-Enrich": enrichHeader,
+                    "X-Alloy-Server-Duration": String(serverRouteMs),
+                },
             });
         }
         if (type === "contacts") {

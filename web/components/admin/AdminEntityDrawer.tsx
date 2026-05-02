@@ -846,6 +846,25 @@ function logOpportunityEnrichHeaderFromResponse(res: Response): void {
     }
 }
 
+/** Perf overlay: server vs client time for entity GET (opportunities). */
+function captureDrawerEntityResponsePerf(res: Response): void {
+    if (typeof window === "undefined" || typeof performance === "undefined") return;
+    const srv = res.headers.get("X-Alloy-Server-Duration");
+    if (srv != null && srv.trim() !== "") {
+        const n = Number(srv);
+        if (!Number.isNaN(n)) alloyPerfSet("drawer_entity_x_alloy_server_duration_ms", n);
+    }
+    const enr = res.headers.get("X-Alloy-Opp-Enrich");
+    if (enr) {
+        try {
+            const p = JSON.parse(enr) as { total_ms?: number };
+            if (typeof p.total_ms === "number") alloyPerfSet("drawer_entity_x_alloy_opp_enrich_ms", p.total_ms);
+        } catch {
+            /* ignore */
+        }
+    }
+}
+
 function buildAdminEntityFetchUrl(
     type: AdminDrawerEntityType | null,
     id: string | null,
@@ -1411,6 +1430,7 @@ export default function AdminEntityDrawer() {
         }
         fetch(url)
             .then((res) => {
+                captureDrawerEntityResponsePerf(res);
                 if (!res.ok) throw new Error(res.status === 404 ? "Not found" : "Failed to load");
                 if (drawer.type === "opportunities") logOpportunityEnrichHeaderFromResponse(res);
                 return res.json();
@@ -1616,6 +1636,7 @@ export default function AdminEntityDrawer() {
         }
         fetch(url)
             .then((res) => {
+                captureDrawerEntityResponsePerf(res);
                 if (!res.ok) throw new Error(res.status === 404 ? "Not found" : "Failed to load");
                 if (drawer.type === "opportunities") logOpportunityEnrichHeaderFromResponse(res);
                 return res.json();

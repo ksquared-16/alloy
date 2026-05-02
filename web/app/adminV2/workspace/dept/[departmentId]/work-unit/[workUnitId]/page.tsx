@@ -97,6 +97,45 @@ function resolveProvisionalQueueKey(wu: WorkUnitRow, qFromUrl: string): string |
     }
 }
 
+function buildWorkUnitQueuesListRoute(workUnitId: string, focusQueueKey: string | null): string {
+    const queueQs = new URLSearchParams({
+        include_previews: "false",
+        count_mode: "exact",
+        limit: "3",
+        summary_mode: "priority",
+    });
+    const fk = (focusQueueKey ?? "").trim();
+    if (fk) queueQs.set("focus_queue", fk);
+    return `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?${queueQs.toString()}`;
+}
+
+/** Derives selected lane from summaries + work-unit definition + URL (same rules as post-summaries bootstrap). */
+function deriveSelectedQueueKeyFromSummaries(wu: WorkUnitRow, qs: QueueSummary[], qFromUrl: string): string | null {
+    if (!qs.length) return null;
+    const qTrim = qFromUrl.trim();
+    let allKeyFromDef: string | null = null;
+    try {
+        const defBoot = validateQueueDefinition(wu.queue_definition);
+        const uiBoot = getQueueUiConfig(defBoot);
+        allKeyFromDef = findAllRecordsQueueKey(defBoot, uiBoot);
+    } catch {
+        allKeyFromDef = null;
+    }
+    const uiOrder = (() => {
+        try {
+            const def = validateQueueDefinition(wu.queue_definition);
+            const ui = getQueueUiConfig(def);
+            return ui.sections.flatMap((s) => s.queue_keys);
+        } catch {
+            return qs.map((x) => x.key);
+        }
+    })();
+    const firstByUi = uiOrder.find((k) => qs.some((x) => x.key === k)) ?? qs[0]?.key ?? null;
+    if (qTrim && qs.some((x) => x.key === qTrim)) return qTrim;
+    if (allKeyFromDef && qs.some((x) => x.key === allKeyFromDef)) return allKeyFromDef;
+    return firstByUi;
+}
+
 function registryQuickActionsFromResolved(rowInline: { key: string; label: string; action_type: string }[]): QueueItemQuickActionVm[] {
     return rowInline.map((a) => ({
         id: a.key,
@@ -257,6 +296,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const queueItemsLastFetchSigRef = useRef<string | null>(null);
     /** One-shot per work-unit navigation: workflow KPIs, row/right-rail actions after first row attempt settles. */
     const workUnitDeferredScheduledRef = useRef(false);
+    /** Work-unit JSON validated in bootstrap; deferred supplement must wait (rows may finish first). */
+    const workUnitDetailReadyRef = useRef(false);
+    const pendingDeferredAfterWudRef = useRef(false);
+    const bootstrapWuRef = useRef<WorkUnitRow | null>(null);
+    const firstUsefulPaintMarkedRef = useRef(false);
 
     const [workflowKpis, setWorkflowKpis] = useState<WorkflowKpis>(DEFAULT_WF_KPIS);
     const [workflowKpisLoading, setWorkflowKpisLoading] = useState(true);
@@ -500,11 +544,65 @@ export default function AdminV2OpportunityWorkUnitPage() {
         } finally {
             setWorkflowKpisLoading(false);
         }
+
+        try {
+            const res = await fetch(`/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`, init);
+            const j = (await res.json().catch(() => ({}))) as { items?: Array<{ id: string; key?: string | null }> };
+            if (res.ok) {
+                const naWu = (j.items ?? []).find((r) => String(r.key ?? "").trim().toLowerCase() === "needs_attention");
+                setNeedsAttentionWorkUnitId(naWu?.id ?? null);
+            }
+        } catch {
+            /* non-fatal */
+        }
+
+        const wuK = bootstrapWuRef.current;
+        if (!wuK) return;
+        let suppress = false;
+        try {
+            const def = wuK.queue_definition ? validateQueueDefinition(wuK.queue_definition) : null;
+            const ui = def ? getQueueUiConfig(def) : null;
+            suppress = shouldSuppressWorkUnitKpiStrip({ def, ui });
+        } catch {
+            suppress = false;
+        }
+        if (suppress) {
+            setWuPlacementRows([]);
+            setWuScopeHasPlacements(true);
+            return;
+        }
+        try {
+            const res = await fetch(
+                `/api/admin/workspace-kpi-placements?surface=work_unit&department_id=${encodeURIComponent(
+                    departmentId
+                )}&work_unit_id=${encodeURIComponent(workUnitId)}`,
+                { ...(init ?? {}), cache: "no-store" }
+            );
+            if (!res.ok) {
+                setWuPlacementRows([]);
+                setWuScopeHasPlacements(false);
+                return;
+            }
+            const j = (await res.json().catch(() => ({}))) as {
+                items?: WorkspaceKpiPlacementRow[];
+                scope_has_placements?: boolean;
+            };
+            setWuPlacementRows(j.items ?? []);
+            setWuScopeHasPlacements(j.scope_has_placements === true);
+        } catch {
+            setWuPlacementRows([]);
+            setWuScopeHasPlacements(false);
+        }
     }, [departmentId, workUnitId]);
 
-    const scheduleWorkUnitDeferredSupplement = useCallback(() => {
+    const requestWorkUnitDeferredSupplement = useCallback(() => {
         if (workUnitDeferredScheduledRef.current) return;
+        if (!workUnitDetailReadyRef.current) {
+            pendingDeferredAfterWudRef.current = true;
+            return;
+        }
         workUnitDeferredScheduledRef.current = true;
+        pendingDeferredAfterWudRef.current = false;
         const run = () => {
             void loadWorkUnitDeferredSupplement();
         };
@@ -514,6 +612,14 @@ export default function AdminV2OpportunityWorkUnitPage() {
             setTimeout(run, 0);
         }
     }, [loadWorkUnitDeferredSupplement]);
+
+    const markFirstUsefulPaintOnce = useCallback(() => {
+        if (firstUsefulPaintMarkedRef.current || typeof window === "undefined" || typeof performance === "undefined") return;
+        firstUsefulPaintMarkedRef.current = true;
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => alloyPerfSet("first_useful_paint", performance.now()));
+        });
+    }, []);
 
     const fetchQueueItems = useCallback(
         async (
@@ -553,10 +659,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 const init = workspaceDataFetchInit();
                 if (typeof window !== "undefined" && typeof performance !== "undefined") {
                     alloyPerfSet("queue_rows_request_start", performance.now());
+                    alloyPerfSet("rows_req", performance.now());
                 }
                 const res = await fetch(route, init);
                 if (typeof window !== "undefined" && typeof performance !== "undefined") {
                     alloyPerfSet("queue_rows_response_headers", performance.now());
+                    alloyPerfSet("rows_resp", performance.now());
                 }
                 const json = (await res.json().catch(() => ({}))) as { error?: string };
                 if (typeof window !== "undefined" && typeof performance !== "undefined") {
@@ -586,6 +694,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             });
                         });
                     }
+                    markFirstUsefulPaintOnce();
                 }
             } catch (e) {
                 if (seq === queueItemsRequestSeq.current) {
@@ -595,11 +704,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
             } finally {
                 if (seq === queueItemsRequestSeq.current) {
                     setQueueItemsLoading(false);
-                    scheduleWorkUnitDeferredSupplement();
+                    requestWorkUnitDeferredSupplement();
                 }
             }
         },
-        [scheduleWorkUnitDeferredSupplement]
+        [requestWorkUnitDeferredSupplement, markFirstUsefulPaintOnce]
     );
 
     const fetchQueueSummaries = useCallback(async (wuId: string, focusQueueKey: string | null) => {
@@ -684,6 +793,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
             setError("Missing department or work unit in the URL.");
             queueItemsLastFetchSigRef.current = null;
             workUnitDeferredScheduledRef.current = false;
+            workUnitDetailReadyRef.current = false;
+            pendingDeferredAfterWudRef.current = false;
+            bootstrapWuRef.current = null;
+            firstUsefulPaintMarkedRef.current = false;
             return;
         }
 
@@ -691,12 +804,23 @@ export default function AdminV2OpportunityWorkUnitPage() {
         void (async () => {
             const routeStart = typeof performance !== "undefined" ? performance.now() : 0;
             if (typeof performance !== "undefined" && typeof window !== "undefined") {
+                alloyPerfSet("route_nav_start", routeStart);
                 alloyPerfSet("work_unit_start", routeStart);
             }
             setLoading(true);
             setError(null);
             const init = workspaceDataFetchInit();
             workUnitDeferredScheduledRef.current = false;
+            workUnitDetailReadyRef.current = false;
+            pendingDeferredAfterWudRef.current = false;
+            bootstrapWuRef.current = null;
+            firstUsefulPaintMarkedRef.current = false;
+
+            const qFromUrlEffective = (
+                queueParamFromWindow() ||
+                (typeof searchParams !== "undefined" ? (searchParams?.get("queue") ?? "") : "")
+            ).trim();
+
             try {
                 if (!cancelled) {
                     setWorkUnit(null);
@@ -717,96 +841,27 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     queueItemsLastFetchSigRef.current = null;
                     setWuPlacementRows(undefined);
                     setWuScopeHasPlacements(false);
+                    if (qFromUrlEffective) setSelectedQueueKey(qFromUrlEffective);
                 }
 
-                const [wuRes, deptRes] = await Promise.all([
-                    fetch(`/api/admin/work-units/${encodeURIComponent(workUnitId)}`, init),
-                    fetch(`/api/admin/departments/${encodeURIComponent(departmentId)}`, init),
-                ]);
+                const wuUrl = `/api/admin/work-units/${encodeURIComponent(workUnitId)}`;
+                const deptUrl = `/api/admin/departments/${encodeURIComponent(departmentId)}`;
+                const queueListRoute = buildWorkUnitQueuesListRoute(workUnitId, qFromUrlEffective || null);
 
-                const [wuJson, deptJson] = await Promise.all([
-                    wuRes.json().catch(() => ({})),
-                    deptRes.json().catch(() => ({})),
-                ]) as [{ error?: string } & Partial<WorkUnitRow>, { error?: string } & Partial<DeptRow>];
-
-                if (!wuRes.ok) throw new Error(wuJson.error ?? "Failed to load work unit");
-                if (!deptRes.ok) throw new Error(deptJson.error ?? "Failed to load department");
-
-                const wu = wuJson as WorkUnitRow;
-                if (wu.department_id !== departmentId) {
-                    throw new Error("Work unit does not belong to this department");
-                }
-
-                if (!cancelled) {
-                    setWorkUnit(wu);
-                    setDept(deptJson as DeptRow);
-                }
-
-                void (async () => {
-                    try {
-                        const res = await fetch(
-                            `/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`,
-                            init
-                        );
-                        const j = (await res.json().catch(() => ({}))) as {
-                            items?: Array<{ id: string; key?: string | null }>;
-                        };
-                        if (cancelled || !res.ok) return;
-                        const naWu = (j.items ?? []).find(
-                            (r) => String(r.key ?? "").trim().toLowerCase() === "needs_attention"
-                        );
-                        setNeedsAttentionWorkUnitId(naWu?.id ?? null);
-                    } catch {
-                        /* non-fatal */
-                    }
-                })();
-
-                const qFromUrlEarly = queueParamFromWindow();
-                const provisionalKey = resolveProvisionalQueueKey(wu, qFromUrlEarly);
-                if (!cancelled) {
-                    if (provisionalKey) setSelectedQueueKey(provisionalKey);
-                    setLoading(false);
-                    if (typeof window !== "undefined" && typeof performance !== "undefined") {
-                        alloyPerfSet("work_unit_shell_ready", performance.now());
-                    }
-                }
-
-                const isAttention = (wu.key ?? "").trim().toLowerCase() === "needs_attention";
-                let usedNewQueueApi = false;
-                let shouldFallbackToLegacy = false;
-
-                const queueQs = new URLSearchParams({
-                    include_previews: "false",
-                    count_mode: "exact",
-                    limit: "3",
-                    summary_mode: "priority",
-                });
-                const pk = (provisionalKey ?? "").trim();
-                if (pk) queueQs.set("focus_queue", pk);
-                const queueListRoute = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?${queueQs.toString()}`;
+                if (!cancelled) setQueueSummariesRoute(queueListRoute);
 
                 if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                    alloyPerfSet("summaries_req", performance.now());
                     alloyPerfSet("work_unit_summaries_request_start", performance.now());
                 }
-                if (provisionalKey) void fetchQueueItems(workUnitId, provisionalKey, null);
-                let queuesRes: Response;
-                try {
-                    queuesRes = await fetch(queueListRoute, init);
-                } catch {
-                    shouldFallbackToLegacy = true;
-                    if (!cancelled) {
-                        setQueueSummaries(null);
-                        setQueueSummariesError("Queue request failed");
-                        setQueueSummariesRoute(queueListRoute);
-                    }
-                    queuesRes = new Response(null, { status: 0, statusText: "Network Error" });
-                }
 
-                try {
+                const summariesP = fetch(queueListRoute, init).then(async (res) => {
+                    const hdrT = performance.now();
                     if (typeof window !== "undefined" && typeof performance !== "undefined") {
-                        alloyPerfSet("work_unit_summaries_response_headers", performance.now());
+                        alloyPerfSet("summaries_resp", hdrT);
+                        alloyPerfSet("work_unit_summaries_response_headers", hdrT);
                     }
-                    const j = (await queuesRes.json().catch(() => ({}))) as {
+                    const j = (await res.json().catch(() => ({}))) as {
                         error?: string;
                         queues?: QueueSummary[];
                         deferred_queue_keys?: string[];
@@ -816,7 +871,104 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     if (typeof window !== "undefined" && typeof performance !== "undefined") {
                         alloyPerfSet("work_unit_summaries_json_parse_done", performance.now());
                     }
-                    const route = queueListRoute;
+                    return { res, j, route: queueListRoute };
+                });
+
+                if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                    alloyPerfSet("work_unit_detail_req", performance.now());
+                }
+                const wuP = fetch(wuUrl, init).then(async (res) => {
+                    if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                        alloyPerfSet("work_unit_detail_resp", performance.now());
+                    }
+                    const j = (await res.json().catch(() => ({}))) as { error?: string } & Partial<WorkUnitRow>;
+                    return { res, j };
+                });
+
+                if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                    alloyPerfSet("dept_req", performance.now());
+                }
+                const deptP = fetch(deptUrl, init).then(async (res) => {
+                    if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                        alloyPerfSet("dept_resp", performance.now());
+                    }
+                    const j = (await res.json().catch(() => ({}))) as { error?: string } & Partial<DeptRow>;
+                    return { res, j };
+                });
+
+                let rowKickInvoked = false;
+                if (qFromUrlEffective) {
+                    rowKickInvoked = true;
+                    void fetchQueueItems(workUnitId, qFromUrlEffective, null);
+                }
+
+                const [wuR, deptR] = await Promise.all([wuP, deptP]);
+
+                if (!wuR.res.ok) throw new Error(wuR.j.error ?? "Failed to load work unit");
+                if (!deptR.res.ok) throw new Error(deptR.j.error ?? "Failed to load department");
+
+                const wu = wuR.j as WorkUnitRow;
+                if (wu.department_id !== departmentId) {
+                    throw new Error("Work unit does not belong to this department");
+                }
+
+                if (!cancelled) {
+                    setWorkUnit(wu);
+                    setDept(deptR.j as DeptRow);
+                }
+
+                workUnitDetailReadyRef.current = true;
+                bootstrapWuRef.current = wu;
+                if (pendingDeferredAfterWudRef.current) {
+                    pendingDeferredAfterWudRef.current = false;
+                    requestWorkUnitDeferredSupplement();
+                }
+
+                if (!cancelled) {
+                    setLoading(false);
+                    if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                        const shellAt = performance.now();
+                        alloyPerfSet("shell_ready", shellAt);
+                        alloyPerfSet("work_unit_shell_ready", shellAt);
+                    }
+                }
+
+                const isAttention = (wu.key ?? "").trim().toLowerCase() === "needs_attention";
+                let usedNewQueueApi = false;
+                let shouldFallbackToLegacy = false;
+
+                let sumR: {
+                    res: Response;
+                    j: {
+                        error?: string;
+                        queues?: QueueSummary[];
+                        deferred_queue_keys?: string[];
+                        work_unit_scope_total?: number | null;
+                        work_unit_scope_queue_key?: string | null;
+                    };
+                    route: string;
+                };
+                try {
+                    sumR = await summariesP;
+                } catch {
+                    shouldFallbackToLegacy = true;
+                    if (!cancelled) {
+                        setQueueSummaries(null);
+                        setQueueSummariesError("Queue request failed");
+                        setQueueSummariesRoute(queueListRoute);
+                    }
+                    sumR = {
+                        res: new Response(null, { status: 0, statusText: "Network Error" }),
+                        j: {},
+                        route: queueListRoute,
+                    };
+                }
+
+                const queuesRes = sumR.res;
+                const j = sumR.j;
+                const route = sumR.route;
+
+                try {
                     if (queuesRes.ok) {
                         usedNewQueueApi = true;
                         if (!cancelled) {
@@ -832,32 +984,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                     count: typeof j.work_unit_scope_total === "number" ? j.work_unit_scope_total : null,
                                 });
                             }
-                            const qFromUrl = queueParamFromWindow().trim();
-                            let allKeyFromDef: string | null = null;
-                            try {
-                                const defBoot = validateQueueDefinition(wu.queue_definition);
-                                const uiBoot = getQueueUiConfig(defBoot);
-                                allKeyFromDef = findAllRecordsQueueKey(defBoot, uiBoot);
-                            } catch {
-                                allKeyFromDef = null;
+                            const initial = deriveSelectedQueueKeyFromSummaries(wu, qs, qFromUrlEffective);
+                            if (initial) setSelectedQueueKey(initial);
+                            if (!rowKickInvoked && initial) {
+                                void fetchQueueItems(workUnitId, initial, null);
+                                rowKickInvoked = true;
                             }
-                            const uiOrder = (() => {
-                                try {
-                                    const def = validateQueueDefinition(wu.queue_definition);
-                                    const ui = getQueueUiConfig(def);
-                                    return ui.sections.flatMap((s) => s.queue_keys);
-                                } catch {
-                                    return qs.map((x) => x.key);
-                                }
-                            })();
-                            const firstByUi = uiOrder.find((k) => qs.some((x) => x.key === k)) ?? qs[0]?.key ?? null;
-                            const initial =
-                                qFromUrl && qs.some((x) => x.key === qFromUrl)
-                                    ? qFromUrl
-                                    : allKeyFromDef && qs.some((x) => x.key === allKeyFromDef)
-                                      ? allKeyFromDef
-                                      : firstByUi;
-                            setSelectedQueueKey(initial);
                             if (typeof window !== "undefined" && typeof performance !== "undefined") {
                                 requestAnimationFrame(() => {
                                     requestAnimationFrame(() =>
@@ -865,6 +997,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                     );
                                 });
                             }
+                            markFirstUsefulPaintOnce();
                         }
                     } else if (queuesRes.status === 501) {
                         shouldFallbackToLegacy = true;
@@ -886,12 +1019,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     if (!cancelled) {
                         setQueueSummaries(null);
                         setQueueSummariesError(e instanceof Error ? e.message : "Failed to load queues");
-                        setQueueSummariesRoute(queueListRoute);
+                        setQueueSummariesRoute(route);
                     }
                 }
 
-                if (!provisionalKey && !cancelled) {
-                    scheduleWorkUnitDeferredSupplement();
+                if (!rowKickInvoked && !cancelled) {
+                    requestWorkUnitDeferredSupplement();
                 }
 
                 let oqRuntime: WorkspaceOpportunityQueueRuntime | null = null;
@@ -952,7 +1085,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         return () => {
             cancelled = true;
         };
-    }, [departmentId, workUnitId, fetchQueueItems, scheduleWorkUnitDeferredSupplement]);
+    }, [departmentId, workUnitId, searchParams, fetchQueueItems, requestWorkUnitDeferredSupplement, markFirstUsefulPaintOnce]);
 
     const invalidate = useCallback(
         (opts?: { entity_type?: string; entity_id?: string; action_key?: string }) => {
@@ -1803,53 +1936,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
         queueItemsError,
         model,
     ]);
-
-    useEffect(() => {
-        if (!departmentId || !workUnit?.id) return;
-        if (suppressWorkUnitKpiStrip) {
-            setWuPlacementRows([]);
-            setWuScopeHasPlacements(true);
-            return;
-        }
-        let cancelled = false;
-        setWuPlacementRows(undefined);
-        setWuScopeHasPlacements(false);
-        const init = workspaceDataFetchInit();
-        void (async () => {
-            try {
-                const res = await fetch(
-                    `/api/admin/workspace-kpi-placements?surface=work_unit&department_id=${encodeURIComponent(
-                        departmentId
-                    )}&work_unit_id=${encodeURIComponent(workUnit.id)}`,
-                    { ...(init ?? {}), cache: "no-store" }
-                );
-                if (!res.ok) {
-                    if (!cancelled) {
-                        setWuPlacementRows([]);
-                        setWuScopeHasPlacements(false);
-                    }
-                    return;
-                }
-                const j = (await res.json().catch(() => ({}))) as {
-                    items?: WorkspaceKpiPlacementRow[];
-                    scope_has_placements?: boolean;
-                };
-                if (cancelled) return;
-                if (!cancelled) {
-                    setWuPlacementRows(j.items ?? []);
-                    setWuScopeHasPlacements(j.scope_has_placements === true);
-                }
-            } catch {
-                if (!cancelled) {
-                    setWuPlacementRows([]);
-                    setWuScopeHasPlacements(false);
-                }
-            }
-        })();
-        return () => {
-            cancelled = true;
-        };
-    }, [departmentId, workUnit?.id, suppressWorkUnitKpiStrip]);
 
     const wuResolvedPlacementKpis = useMemo(() => {
         if (suppressWorkUnitKpiStrip) return [];

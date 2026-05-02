@@ -14,6 +14,11 @@ function fmtMs(end: number | undefined, start: number | undefined): string {
     return `${Math.round(end - start)}ms`;
 }
 
+function fmtHdrMs(n: number | undefined): string {
+    if (typeof n !== "number" || !Number.isFinite(n)) return "...";
+    return `${Math.round(n)}ms`;
+}
+
 function readLocalOverlayFlag(): boolean {
     if (typeof window === "undefined") return false;
     try {
@@ -73,11 +78,20 @@ export default function AdminV2PerfOverlay() {
 
     const m = ensureAlloyPerf()?.marks ?? ({} as Record<string, number>);
     const wu = m.work_unit_start;
+    const nav = m.route_nav_start ?? wu;
 
     const lines: string[] = [
         `WS: ${fmtMs(m.workspace_ready, m.workspace_start)}`,
         `DEPT: ${fmtMs(m.department_ready, m.department_start)}`,
-        `WU Shell: ${fmtMs(m.work_unit_shell_ready, wu)}`,
+        `nav→summ_req: ${fmtMs(m.summaries_req, nav)}`,
+        `nav→summ_resp: ${fmtMs(m.summaries_resp, nav)}`,
+        `nav→wu_detail_resp: ${fmtMs(m.work_unit_detail_resp, nav)}`,
+        `nav→dept_resp: ${fmtMs(m.dept_resp, nav)}`,
+        `nav→rows_req: ${fmtMs(m.rows_req, nav)}`,
+        `nav→rows_resp: ${fmtMs(m.rows_resp, nav)}`,
+        `nav→shell_ready: ${fmtMs(m.shell_ready, nav)}`,
+        `nav→first_useful_paint: ${fmtMs(m.first_useful_paint, nav)}`,
+        `WU Shell (legacy): ${fmtMs(m.work_unit_shell_ready, wu)}`,
         `WU Summ req: ${fmtMs(m.work_unit_summaries_request_start, wu)}`,
         `WU Summ hdr: ${fmtMs(m.work_unit_summaries_response_headers, m.work_unit_summaries_request_start)}`,
         `WU Summ json: ${fmtMs(m.work_unit_summaries_json_parse_done, m.work_unit_summaries_response_headers)}`,
@@ -106,6 +120,9 @@ export default function AdminV2PerfOverlay() {
         if (typeof m.drawer_header_actions_response === "number") {
             lines.push(`  header resp: ${fmtMs(m.drawer_header_actions_response, dOpen)}`);
         }
+        lines.push(`  X-Alloy-Server-Duration: ${fmtHdrMs(m.drawer_entity_x_alloy_server_duration_ms)}`);
+        lines.push(`  X-Alloy-Opp-Enrich: ${fmtHdrMs(m.drawer_entity_x_alloy_opp_enrich_ms)}`);
+        lines.push(`  entity client RTT: ${fmtMs(m.drawer_entity_response, m.drawer_entity_request_start)}`);
     }
 
     const text = lines.join("\n");
