@@ -38,7 +38,7 @@ Document **Admin V2 workspace**: departments, work units, queues, and how operat
 ## Known gaps / risks
 
 - **Needs verification:** Full map of all workspace API routes vs UI entry points for each vertical.
-- **Needs verification:** Attendance/staffing depth (may be thin or vertical-specific — see `product/scheduling.md`).
+- **Needs verification:** Attendance/staffing depth (may be thin or vertical-specific — see **Scheduling** in `product/crm-system.md`).
 
 ## When this doc must be updated
 

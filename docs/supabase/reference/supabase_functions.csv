@@ -1,0 +1,675 @@
+routine_schema,routine_name,routine_kind,language,volatility,security_definer,identity_args,result_data_type,definition
+public,current_org_id,function,sql,STABLE,true,,uuid,"CREATE OR REPLACE FUNCTION public.current_org_id()
+ RETURNS uuid
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select
+    case
+      when (select count(*) from public.orgs) = 1
+        then (select id from public.orgs order by created_at asc limit 1)
+      else null
+    end;
+$function$
+"
+public,discounted_cents,function,plpgsql,VOLATILE,false,"base_cents integer, pct numeric",integer,"CREATE OR REPLACE FUNCTION public.discounted_cents(base_cents integer, pct numeric)
+ RETURNS integer
+ LANGUAGE plpgsql
+AS $function$
+declare
+  cents int;
+begin
+  cents := round(base_cents * pct)::int;
+  return public.round_to_nearest_5_cents(cents);
+end;
+$function$
+"
+public,ensure_vendor_primary_contact_link,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.ensure_vendor_primary_contact_link()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  if new.primary_contact_id is not null then
+    update public.contacts
+    set vendor_id = new.id,
+        vendor_contact_role = 'primary'
+    where id = new.primary_contact_id;
+  end if;
+
+  return new;
+end;
+$function$
+"
+public,fn_job_split_bps,function,plpgsql,VOLATILE,false,p_job_number integer,record,"CREATE OR REPLACE FUNCTION public.fn_job_split_bps(p_job_number integer)
+ RETURNS TABLE(contractor_bps integer, alloy_bps integer)
+ LANGUAGE plpgsql
+AS $function$
+begin
+  if p_job_number is null or p_job_number <= 1 then
+    return query select 7000, 3000; -- job 1
+  elsif p_job_number between 2 and 10 then
+    return query select 8000, 2000; -- jobs 2-10
+  else
+    return query select 9000, 1000; -- job 11+
+  end if;
+end;
+$function$
+"
+public,get_quote_pricing,function,plpgsql,VOLATILE,true,"p_vertical_slug text, p_service_key text, p_sqft_key text, p_frequency_key text, p_addon_keys text[]",record,"CREATE OR REPLACE FUNCTION public.get_quote_pricing(p_vertical_slug text, p_service_key text, p_sqft_key text, p_frequency_key text, p_addon_keys text[] DEFAULT '{}'::text[])
+ RETURNS TABLE(out_vertical_slug text, out_service_key text, out_sqft_key text, out_frequency_key text, first_clean_cents integer, recurring_cents integer, addons_total_cents integer, total_first_visit_cents integer, price_breakdown text, is_manual_quote boolean)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  v_vertical_id uuid;
+  v_service_id uuid;
+  v_sqft_tier_id uuid;
+  v_frequency_id uuid;
+  v_first integer;
+  v_recurring integer;
+  v_addons integer;
+  v_freq_label text;
+  v_discount_label text;
+begin
+  -- Manual quote rule
+  if lower(p_service_key) in ('move_out_heavy', 'move-out', 'move_out', 'heavy_clean', 'moveout') then
+    out_vertical_slug := p_vertical_slug;
+    out_service_key := p_service_key;
+    out_sqft_key := p_sqft_key;
+    out_frequency_key := p_frequency_key;
+    first_clean_cents := null;
+    recurring_cents := null;
+    addons_total_cents := null;
+    total_first_visit_cents := null;
+    price_breakdown := 'Manual quote required';
+    is_manual_quote := true;
+    return next;
+    return;
+  end if;
+
+  select id into v_vertical_id
+  from public.verticals
+  where slug = p_vertical_slug and is_active = true
+  limit 1;
+
+  if v_vertical_id is null then
+    raise exception 'Unknown vertical slug: %', p_vertical_slug;
+  end if;
+
+  select ps.id into v_service_id
+  from public.pricing_services ps
+  where ps.vertical_id = v_vertical_id
+    and ps.service_key = p_service_key
+    and ps.is_active = true
+  limit 1;
+
+  if v_service_id is null then
+    raise exception 'Unknown service_key for %: %', p_vertical_slug, p_service_key;
+  end if;
+
+  select st.id into v_sqft_tier_id
+  from public.pricing_square_footage_tiers st
+  where st.vertical_id = v_vertical_id
+    and st.sqft_key = p_sqft_key
+    and st.is_active = true
+  limit 1;
+
+  if v_sqft_tier_id is null then
+    raise exception 'Unknown sqft_key for %: %', p_vertical_slug, p_sqft_key;
+  end if;
+
+  -- First clean price (service + sqft)
+  select f.amount_cents into v_first
+  from public.pricing_first_clean_prices f
+  where f.vertical_id = v_vertical_id
+    and f.service_id = v_service_id
+    and f.sqft_tier_id = v_sqft_tier_id
+    and f.is_active = true
+  limit 1;
+
+  if v_first is null then
+    raise exception 'Missing first_clean price for % / % / %', p_vertical_slug, p_service_key, p_sqft_key;
+  end if;
+
+  -- Frequency (optional)
+  v_recurring := null;
+  v_freq_label := null;
+  v_discount_label := null;
+
+  if coalesce(trim(p_frequency_key), '') <> '' then
+    select pf.id, pf.frequency_label, pf.discount_label
+      into v_frequency_id, v_freq_label, v_discount_label
+    from public.pricing_frequencies pf
+    where pf.vertical_id = v_vertical_id
+      and pf.frequency_key = p_frequency_key
+      and pf.is_active = true
+    limit 1;
+
+    if v_frequency_id is not null then
+      select r.amount_cents into v_recurring
+      from public.pricing_recurring_prices r
+      where r.vertical_id = v_vertical_id
+        and r.frequency_id = v_frequency_id
+        and r.sqft_tier_id = v_sqft_tier_id
+        and r.is_active = true
+      limit 1;
+    end if;
+  end if;
+
+  -- Add-ons
+  select coalesce(sum(pa.amount_cents), 0) into v_addons
+  from public.pricing_addons pa
+  where pa.vertical_id = v_vertical_id
+    and pa.is_active = true
+    and (coalesce(array_length(p_addon_keys, 1), 0) > 0 and pa.addon_key = any(p_addon_keys));
+
+  out_vertical_slug := p_vertical_slug;
+  out_service_key := p_service_key;
+  out_sqft_key := p_sqft_key;
+  out_frequency_key := p_frequency_key;
+
+  first_clean_cents := v_first;
+  recurring_cents := v_recurring;
+  addons_total_cents := v_addons;
+  total_first_visit_cents := v_first + v_addons;
+
+  price_breakdown :=
+    'Sq Ft: ' || p_sqft_key ||
+    ' | Service: ' || p_service_key ||
+    ' | First cleaning (base): $' || to_char(v_first/100.0, 'FM999990.00') ||
+    case when v_addons > 0 then
+      ' | Add-ons: $' || to_char(v_addons/100.0, 'FM999990.00')
+    else '' end ||
+    ' | First visit total: $' || to_char((v_first + v_addons)/100.0, 'FM999990.00') ||
+    case when v_recurring is not null then
+      ' | Recurring (' || coalesce(v_freq_label,'') || '): $' ||
+      to_char(v_recurring/100.0, 'FM999990.00') || ' / visit' ||
+      case when v_discount_label is not null then ' (' || v_discount_label || ')' else '' end
+    else '' end;
+
+  is_manual_quote := false;
+  return next;
+end $function$
+"
+public,handle_new_user,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.handle_new_user()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  insert into public.user_profiles (id, role)
+  values (new.id, 'ops');
+  return new;
+end;
+$function$
+"
+public,has_org_role,function,sql,STABLE,false,"_org_id uuid, _roles text[]",boolean,"CREATE OR REPLACE FUNCTION public.has_org_role(_org_id uuid, _roles text[])
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE
+AS $function$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.user_roles ur
+    WHERE ur.user_id = auth.uid()
+      AND ur.org_id = _org_id
+      AND ur.role = ANY(_roles)
+  );
+$function$
+"
+public,is_admin,function,sql,STABLE,false,,boolean,"CREATE OR REPLACE FUNCTION public.is_admin()
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE
+AS $function$
+  select exists (
+    select 1
+    from public.app_users
+    where id = auth.uid()
+      and role = 'admin'
+  );
+$function$
+"
+public,is_org_member,function,sql,STABLE,true,p_org_id uuid,boolean,"CREATE OR REPLACE FUNCTION public.is_org_member(p_org_id uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+AS $function$
+  select exists (
+    select 1
+    from public.user_roles ur
+    where ur.org_id = p_org_id
+      and ur.user_id = auth.uid()
+  );
+$function$
+"
+public,locations_parent_same_org,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.locations_parent_same_org()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+declare
+  parent_org uuid;
+begin
+  if new.parent_location_id is null then
+    return new;
+  end if;
+
+  select org_id into parent_org
+  from public.locations
+  where id = new.parent_location_id;
+
+  if parent_org is null then
+    raise exception 'Parent location % not found', new.parent_location_id;
+  end if;
+
+  if parent_org <> new.org_id then
+    raise exception 'Parent location org_id % does not match child org_id %', parent_org, new.org_id;
+  end if;
+
+  return new;
+end;
+$function$
+"
+public,post_ledger_transaction,function,plpgsql,VOLATILE,true,p_ledger_tx_id uuid,uuid,"CREATE OR REPLACE FUNCTION public.post_ledger_transaction(p_ledger_tx_id uuid)
+ RETURNS uuid
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+declare
+  v_tx public.ledger_transactions%rowtype;
+  v_entry_id uuid;
+  v_cash_acct uuid;
+  v_clearing_acct uuid;
+  v_ar_acct uuid;
+  v_rev_acct uuid;
+  v_contractor_payable_acct uuid;
+  v_contractor_cogs_acct uuid;
+  v_fees_acct uuid;
+begin
+  select * into v_tx
+  from public.ledger_transactions
+  where id = p_ledger_tx_id;
+
+  if not found then
+    raise exception 'ledger tx not found: %', p_ledger_tx_id;
+  end if;
+
+  -- idempotent: if already posted, return existing
+  if v_tx.journal_entry_id is not null then
+    return v_tx.journal_entry_id;
+  end if;
+
+  -- required mappings
+  select gl_account_id into v_cash_acct
+  from public.gl_account_mappings
+  where org_id = v_tx.org_id and key = 'cash' and is_active = true;
+
+  select gl_account_id into v_clearing_acct
+  from public.gl_account_mappings
+  where org_id = v_tx.org_id and key = 'stripe_clearing' and is_active = true;
+
+  select gl_account_id into v_ar_acct
+  from public.gl_account_mappings
+  where org_id = v_tx.org_id and key = 'accounts_receivable' and is_active = true;
+
+  select gl_account_id into v_rev_acct
+  from public.gl_account_mappings
+  where org_id = v_tx.org_id and key = 'revenue_gross' and is_active = true;
+
+  select gl_account_id into v_contractor_payable_acct
+  from public.gl_account_mappings
+  where org_id = v_tx.org_id and key = 'contractor_payable' and is_active = true;
+
+  select gl_account_id into v_contractor_cogs_acct
+  from public.gl_account_mappings
+  where org_id = v_tx.org_id and key = 'contractor_cogs' and is_active = true;
+
+  select gl_account_id into v_fees_acct
+  from public.gl_account_mappings
+  where org_id = v_tx.org_id and key = 'processing_fees' and is_active = true;
+
+  if v_cash_acct is null or v_clearing_acct is null or v_ar_acct is null or v_rev_acct is null then
+    raise exception 'missing required GL mappings for org %', v_tx.org_id;
+  end if;
+
+  -- create journal entry (source = ledger tx)
+  insert into public.gl_journal_entries (
+    org_id, entry_date, description, status, posted_at, source_type, source_id, metadata
+  ) values (
+    v_tx.org_id,
+    (v_tx.occurred_at at time zone 'utc')::date,
+    coalesce(v_tx.metadata->>'description', v_tx.type),
+    'posted',
+    now(),
+    'ledger_transaction',
+    v_tx.id,
+    jsonb_build_object('ledger_transaction_id', v_tx.id)
+  )
+  returning id into v_entry_id;
+
+  -- Posting rules (GROSS DEFAULT)
+  -- customer_charge (Stripe): Dr Stripe Clearing, Cr Revenue (Gross)
+  if v_tx.type = 'customer_charge' then
+    insert into public.gl_journal_lines
+      (org_id, entry_id, line_no, account_id, debit_cents, credit_cents, currency, job_id, schedule_id, payment_id, customer_id, vendor_id, metadata)
+    values
+      (v_tx.org_id, v_entry_id, 1, v_clearing_acct, v_tx.amount_cents, 0, v_tx.currency, v_tx.job_id, v_tx.schedule_id, v_tx.payment_id, v_tx.customer_id, v_tx.vendor_id, '{}'::jsonb),
+      (v_tx.org_id, v_entry_id, 2, v_rev_acct, 0, v_tx.amount_cents, v_tx.currency, v_tx.job_id, v_tx.schedule_id, v_tx.payment_id, v_tx.customer_id, v_tx.vendor_id, '{}'::jsonb);
+
+  -- contractor_payout: Dr Contractor COGS, Cr Contractor Payable (or Cash if you pay immediately)
+  elsif v_tx.type = 'contractor_payout' then
+    if v_contractor_payable_acct is null or v_contractor_cogs_acct is null then
+      raise exception 'missing contractor mappings (contractor_payable/contractor_cogs) for org %', v_tx.org_id;
+    end if;
+
+    insert into public.gl_journal_lines
+      (org_id, entry_id, line_no, account_id, debit_cents, credit_cents, currency, job_id, schedule_id, payment_id, customer_id, vendor_id, metadata)
+    values
+      (v_tx.org_id, v_entry_id, 1, v_contractor_cogs_acct, v_tx.amount_cents, 0, v_tx.currency, v_tx.job_id, v_tx.schedule_id, v_tx.payment_id, v_tx.customer_id, v_tx.vendor_id, '{}'::jsonb),
+      (v_tx.org_id, v_entry_id, 2, v_contractor_payable_acct, 0, v_tx.amount_cents, v_tx.currency, v_tx.job_id, v_tx.schedule_id, v_tx.payment_id, v_tx.customer_id, v_tx.vendor_id, '{}'::jsonb);
+
+  -- processing_fee: Dr Processing Fees, Cr Stripe Clearing
+  elsif v_tx.type = 'processing_fee' then
+    if v_fees_acct is null then
+      raise exception 'missing processing_fees mapping for org %', v_tx.org_id;
+    end if;
+
+    insert into public.gl_journal_lines
+      (org_id, entry_id, line_no, account_id, debit_cents, credit_cents, currency, job_id, schedule_id, payment_id, customer_id, vendor_id, metadata)
+    values
+      (v_tx.org_id, v_entry_id, 1, v_fees_acct, v_tx.amount_cents, 0, v_tx.currency, v_tx.job_id, v_tx.schedule_id, v_tx.payment_id, v_tx.customer_id, v_tx.vendor_id, '{}'::jsonb),
+      (v_tx.org_id, v_entry_id, 2, v_clearing_acct, 0, v_tx.amount_cents, v_tx.currency, v_tx.job_id, v_tx.schedule_id, v_tx.payment_id, v_tx.customer_id, v_tx.vendor_id, '{}'::jsonb);
+
+  else
+    raise exception 'unsupported ledger tx type: %', v_tx.type;
+  end if;
+
+  -- link ledger tx -> journal entry
+  update public.ledger_transactions
+  set journal_entry_id = v_entry_id
+  where id = v_tx.id;
+
+  return v_entry_id;
+end;
+$function$
+"
+public,post_payment_to_ledger,function,plpgsql,VOLATILE,true,payment_id uuid,void,"CREATE OR REPLACE FUNCTION public.post_payment_to_ledger(payment_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  -- Minimal safe behavior: mark as posted so the trigger chain completes.
+  update public.payments
+  set posted_to_ledger_at = now()
+  where id = payment_id
+    and posted_to_ledger_at is null;
+end;
+$function$
+"
+public,prevent_completed_schedule_history_rewrite,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.prevent_completed_schedule_history_rewrite()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  -- Only enforce for updates
+  if (tg_op <> 'UPDATE') then
+    return new;
+  end if;
+
+  -- If the OLD row is completed, block historical rewrites
+  if (old.status_key = 'completed') then
+
+    -- Block changing assigned_vendor_id
+    if (new.assigned_vendor_id is distinct from old.assigned_vendor_id) then
+      raise exception 'Cannot change assigned vendor for a completed schedule.';
+    end if;
+
+    -- Block changing job_id
+    if (new.job_id is distinct from old.job_id) then
+      raise exception 'Cannot change job for a completed schedule.';
+    end if;
+
+  end if;
+
+  return new;
+end;
+$function$
+"
+public,round_to_nearest_5_cents,function,plpgsql,VOLATILE,false,p_cents integer,integer,"CREATE OR REPLACE FUNCTION public.round_to_nearest_5_cents(p_cents integer)
+ RETURNS integer
+ LANGUAGE plpgsql
+AS $function$
+begin
+  return (round(p_cents / 500.0) * 500)::int;
+end;
+$function$
+"
+public,scaled_base_cents,function,plpgsql,VOLATILE,false,old_dollars numeric,integer,"CREATE OR REPLACE FUNCTION public.scaled_base_cents(old_dollars numeric)
+ RETURNS integer
+ LANGUAGE plpgsql
+AS $function$
+declare
+  scaled numeric;
+  cents int;
+begin
+  scaled := old_dollars * (200.0 / 180.0);
+  cents := (scaled * 100)::int;
+  return public.round_to_nearest_5_cents(cents);
+end;
+$function$
+"
+public,seed_default_rbac,function,plpgsql,VOLATILE,true,p_org_id uuid,void,"CREATE OR REPLACE FUNCTION public.seed_default_rbac(p_org_id uuid)
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+begin
+  -- Permission catalog (add as we expand; start with what we enforce now)
+  insert into public.permission_keys (key, label, group_key, description)
+  values
+    ('admin.users.read', 'View users', 'system', null),
+    ('admin.users.write', 'Manage users', 'system', null),
+    ('admin.roles.read', 'View roles & permissions', 'system', null),
+    ('admin.roles.write', 'Manage roles & permissions', 'system', null),
+
+    ('ops.customers.read', 'View customers', 'operations', null),
+    ('ops.customers.write', 'Manage customers', 'operations', null),
+    ('ops.contacts.read', 'View contacts', 'operations', null),
+    ('ops.contacts.write', 'Manage contacts', 'operations', null),
+    ('ops.opportunities.read', 'View opportunities', 'operations', null),
+    ('ops.opportunities.write', 'Manage opportunities', 'operations', null),
+    ('ops.jobs.read', 'View jobs', 'operations', null),
+    ('ops.jobs.write', 'Manage jobs', 'operations', null),
+    ('ops.schedules.read', 'View schedules', 'operations', null),
+    ('ops.schedules.write', 'Manage schedules', 'operations', null),
+    ('ops.locations.read', 'View locations', 'operations', null),
+    ('ops.locations.write', 'Manage locations', 'operations', null),
+
+    ('ops.workflows.read', 'View workflows', 'operations', null),
+    ('ops.workflows.write', 'Manage workflows', 'operations', null),
+    ('ops.messaging.read', 'View messaging/outbox', 'operations', null),
+    ('ops.messaging.write', 'Send/manage messages', 'operations', null),
+
+    ('fin.read', 'View financials', 'financials', null),
+    ('fin.write', 'Manage financials', 'financials', null)
+  on conflict (key) do nothing;
+
+  -- Default roles for the org (matches your existing admin/ops reality)
+  insert into public.role_definitions (org_id, role_key, role_label, description, is_system)
+  values
+    (p_org_id, 'admin', 'Admin', 'Full access', true),
+    (p_org_id, 'ops', 'Operations', 'Operational access', true)
+  on conflict (org_id, role_key) do nothing;
+
+  -- Grants for admin: everything
+  insert into public.role_permission_grants (org_id, role_key, permission_key, allowed)
+  select p_org_id, 'admin', pk.key, true
+  from public.permission_keys pk
+  where pk.is_active = true
+  on conflict (org_id, role_key, permission_key) do nothing;
+
+  -- Grants for ops: no system user/role write
+  insert into public.role_permission_grants (org_id, role_key, permission_key, allowed)
+  select p_org_id, 'ops', pk.key, true
+  from public.permission_keys pk
+  where pk.is_active = true
+    and pk.key not in ('admin.users.write','admin.roles.write')
+  on conflict (org_id, role_key, permission_key) do nothing;
+
+end$function$
+"
+public,set_person_full_name,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.set_person_full_name()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  new.full_name := nullif(trim(concat_ws(' ', new.first_name, new.last_name)), '');
+  return new;
+end;
+$function$
+"
+public,set_updated_at,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.set_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$function$
+"
+public,trg_jobs_assign_pricing_tier,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.trg_jobs_assign_pricing_tier()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+declare
+  v_completed_count integer;
+  v_job_number integer;
+  v_contractor_bps integer;
+  v_alloy_bps integer;
+  v_gross integer;
+begin
+  -- Require customer_id + vertical_id to compute tier
+  if new.customer_id is null or new.vertical_id is null then
+    return new;
+  end if;
+
+  -- Ensure a counter row exists
+  insert into public.customer_vertical_job_counters (customer_id, vertical_id, completed_count)
+  values (new.customer_id, new.vertical_id, 0)
+  on conflict (customer_id, vertical_id) do nothing;
+
+  select completed_count
+    into v_completed_count
+  from public.customer_vertical_job_counters
+  where customer_id = new.customer_id
+    and vertical_id = new.vertical_id;
+
+  -- Job number is ""next"" based on completed count
+  v_job_number := coalesce(v_completed_count, 0) + 1;
+
+  -- Only set job_number if not provided explicitly
+  if new.job_number_for_customer is null then
+    new.job_number_for_customer := v_job_number;
+  end if;
+
+  -- Compute split from job_number
+  select contractor_bps, alloy_bps
+    into v_contractor_bps, v_alloy_bps
+  from public.fn_job_split_bps(new.job_number_for_customer);
+
+  new.contractor_split_bps := v_contractor_bps;
+  new.alloy_split_bps := v_alloy_bps;
+
+  -- Determine gross price for payout math:
+  -- prefer gross_price_cents if provided, else fall back to estimated_total_cents.
+  v_gross := coalesce(new.gross_price_cents, new.estimated_total_cents);
+
+  if v_gross is not null then
+    new.gross_price_cents := v_gross;
+
+    -- Integer math (round down cents)
+    new.contractor_payout_cents := (v_gross * v_contractor_bps) / 10000;
+    new.alloy_fee_cents := v_gross - new.contractor_payout_cents;
+  end if;
+
+  return new;
+end;
+$function$
+"
+public,trg_jobs_increment_completed_counter,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.trg_jobs_increment_completed_counter()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  -- Only when completed_at transitions from null -> not null
+  if (old.completed_at is null) and (new.completed_at is not null) then
+    if new.customer_id is not null and new.vertical_id is not null then
+      insert into public.customer_vertical_job_counters (customer_id, vertical_id, completed_count)
+      values (new.customer_id, new.vertical_id, 1)
+      on conflict (customer_id, vertical_id)
+      do update set
+        completed_count = public.customer_vertical_job_counters.completed_count + 1,
+        updated_at = now();
+    end if;
+  end if;
+
+  return new;
+end;
+$function$
+"
+public,trg_post_payment_to_ledger,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.trg_post_payment_to_ledger()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  if new.posted_to_ledger_at is not null then
+    return new;
+  end if;
+
+  if (new.posted_at is not null)
+     and (old.posted_at is distinct from new.posted_at)
+  then
+    perform public.post_payment_to_ledger(new.id);
+    return new;
+  end if;
+
+  if (new.paid_at is not null)
+     and (old.paid_at is distinct from new.paid_at)
+  then
+    perform public.post_payment_to_ledger(new.id);
+  end if;
+
+  return new;
+end;
+$function$
+"
+public,user_belongs_to_org,function,sql,STABLE,true,target_org_id uuid,boolean,"CREATE OR REPLACE FUNCTION public.user_belongs_to_org(target_org_id uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select exists (
+    select 1
+    from public.app_users au
+    where au.id = auth.uid()
+      and au.org_id = target_org_id
+  );
+$function$
+"
+public,workflow_runs_set_org_id,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.workflow_runs_set_org_id()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  if new.org_id is null then
+    new.org_id := nullif(new.event_payload->>'org_id','')::uuid;
+  end if;
+  return new;
+end;
+$function$
+"

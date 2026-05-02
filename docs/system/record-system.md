@@ -8,7 +8,7 @@ Clarify where **authoritative record payloads** come from for admin UI and why *
 
 - **`GET /api/admin/entity/[type]/[id]`** is the generic drawer loader for many entity types.
 - **Jobs** use the **record resolution system (RRS)** via `resolveJobRecord` (`web/lib/rrs/entities/job.ts`) with **`surface`** query param (`resolveRecordSurfaceParam`).
-- **Opportunities** have specialized **surface** behavior today (drawer/entity route), but **full RRS parity with jobs** still **needs verification** — see `docs/product/crm-system.md` and `docs/execution/known-gaps.md`.
+- **Opportunities** have specialized **surface** behavior today (drawer/entity route), but **full RRS parity with jobs** still **needs verification** — see `docs/product/crm-system.md` and `docs/execution/roadmap-and-gaps.md`.
 - For **jobs** (RRS), responses may include **`_rrs`** metadata and a **flat** shape suitable for the drawer and overview layout.
 - Other types may still be “select * + hydration” in the same route; check the branch for the type.
 

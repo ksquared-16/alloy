@@ -2,7 +2,13 @@
 
 **Purpose:** Single compact source of truth for Cursor, GPT, and engineers. Prefer these files over chat memory or archived material under `docs/archive/`.
 
-For any merge that changes behavior, include `docs/execution/documentation-doctrine.md` in context.
+For any merge that changes behavior, include `docs/execution/operating-doctrine.md` in context.
+
+## Source pack (markdown + Supabase reference)
+
+- **Active markdown:** **15** files (this README plus **14** topic files). Cap: **15** `.md` unless intentionally approved (`docs/execution/operating-doctrine.md`).
+- **Supabase reference CSVs:** **8** generated files under `docs/supabase/reference/` — **do not edit by hand**; regenerate with `npm run export:supabase-schema` and `DATABASE_URL`.
+- **Total GPT/Cursor stack:** target **25 or fewer** files — **currently 15 + 8 = 23**.
 
 ## Load order for AI / onboarding
 
@@ -15,31 +21,34 @@ For any merge that changes behavior, include `docs/execution/documentation-doctr
 7. **`system/configuration-system.md`** — What config may steer vs what must stay in code/workflows.
 8. **`system/api-contracts.md`** — Representative admin/public API boundaries.
 
-**Product verticals (load when touching that area):**
+**Product (load when touching that area):**
 
-- `product/crm-system.md`
-- `product/communications.md`
+- `product/crm-system.md` — Opportunities, CRM, communications in the lead loop, scheduling (CRM/tour focus).
 - `product/documents-and-forms.md`
-- `product/scheduling.md`
 - `product/billing-and-financials.md`
 - `product/ai-system.md`
 
 **Execution / change management:**
 
-- `execution/documentation-doctrine.md` — **Read before merging** behavior changes.
-- `execution/known-gaps.md` — Confirmed unknowns and verification debt.
-- `execution/roadmap.md` — Working roadmap buckets.
-- `execution/deployment-and-tenancy.md` — Deploy, tenancy, env, performance notes.
+- `execution/operating-doctrine.md` — Documentation + source-pack rules, deploy/tenancy, performance, production guardrails; **read before merging** behavior changes.
+- `execution/roadmap-and-gaps.md` — Roadmap buckets, confirmed gaps, verification debt, suggested sprint cards.
+
+**Schema reference (when touching DB / RLS / triggers):**
+
+- `docs/supabase/reference/supabase_schema_columns.csv`
+- `docs/supabase/reference/supabase_constraints.csv`
+- `docs/supabase/reference/supabase_indexes.csv`
+- `docs/supabase/reference/supabase_rls_policies.csv`
+- `docs/supabase/reference/supabase_triggers.csv`
+- `docs/supabase/reference/supabase_functions.csv`
+- `docs/supabase/reference/supabase_tables.csv`
+- `docs/supabase/reference/supabase_views.csv`
 
 ## Archive and sprints
 
 - **Archived docs (2026-05-02 reset):** `docs/archive/2026-05-02-docs-reset/` (prior `architecture/`, `audits/`, `implementation/`, `specs/`, root `README`, and former `archive/` shard).
 - **Sprints:** `docs/sprints/` — intentionally **not** moved.
 
-## File count
-
-**19** total `.md` files: this README plus **18** topic files in `core/`, `system/`, `product/`, and `execution/`. Principles live in **`core/system-overview.md`**; workspace/client perf notes live in **`execution/deployment-and-tenancy.md`** (replaces a separate `principles.md` / `performance.md` to stay under twenty files).
-
 ## When this README must be updated
 
-When the load order changes, a new top-level doc is added (should be rare per doctrine), or the archive date / structure changes.
+Load order changes, source-pack totals change, new topic file approved, or archive path changes.

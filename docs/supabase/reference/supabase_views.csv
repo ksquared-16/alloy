@@ -1,0 +1,73 @@
+table_schema,table_name,view_definition
+public,discount_programs_admin_v," SELECT dp.id,
+    dp.org_id,
+    dp.name,
+    dp.code,
+    dp.description,
+    dp.status,
+    dp.program_type,
+    dp.stacking_mode,
+    dp.priority,
+    dp.valid_from,
+    dp.valid_to,
+    dp.first_time_customer_only,
+    dp.auto_apply,
+    dp.applies_to_entity_type,
+    dp.legacy_discount_code_id,
+    dp.legacy_discount_code_id IS NOT NULL AS is_legacy_migrated,
+    dp.metadata,
+    dp.created_at,
+    dp.updated_at,
+    b.id AS primary_benefit_id,
+    b.benefit_type AS primary_benefit_type,
+    b.applies_to AS primary_benefit_applies_to,
+    b.service_index AS primary_benefit_service_index,
+    b.amount_cents AS primary_benefit_amount_cents,
+    b.percent_basis_points AS primary_benefit_percent_basis_points,
+    b.max_discount_cents AS primary_benefit_max_discount_cents,
+    r.id AS commitment_rule_id,
+    r.enrollment_mode,
+    r.commitment_start_mode,
+    r.benefit_grant_timing,
+    r.required_service_count,
+    r.timeframe_days,
+    r.qualifying_service_status,
+    r.breach_policy,
+    r.max_redemptions_per_customer,
+    COALESCE(q.qualifiers, '[]'::jsonb) AS qualifiers,
+    COALESCE(bb.benefits, '[]'::jsonb) AS benefits
+   FROM discount_programs dp
+     LEFT JOIN LATERAL ( SELECT x.id,
+            x.benefit_type,
+            x.applies_to,
+            x.service_index,
+            x.amount_cents,
+            x.percent_basis_points,
+            x.max_discount_cents
+           FROM discount_program_benefits x
+          WHERE x.discount_program_id = dp.id
+          ORDER BY x.created_at, x.id
+         LIMIT 1) b ON true
+     LEFT JOIN discount_program_commitment_rules r ON r.discount_program_id = dp.id
+     LEFT JOIN LATERAL ( SELECT jsonb_agg(jsonb_build_object('id', x.id, 'qualifier_type', x.qualifier_type, 'operator', x.operator, 'value_json', x.value_json, 'sort_order', x.sort_order, 'metadata', x.metadata) ORDER BY x.sort_order, x.created_at, x.id) AS qualifiers
+           FROM discount_program_qualifiers x
+          WHERE x.discount_program_id = dp.id) q ON true
+     LEFT JOIN LATERAL ( SELECT jsonb_agg(jsonb_build_object('id', x.id, 'benefit_type', x.benefit_type, 'applies_to', x.applies_to, 'service_index', x.service_index, 'amount_cents', x.amount_cents, 'percent_basis_points', x.percent_basis_points, 'max_discount_cents', x.max_discount_cents, 'metadata', x.metadata) ORDER BY x.created_at, x.id) AS benefits
+           FROM discount_program_benefits x
+          WHERE x.discount_program_id = dp.id) bb ON true;"
+public,workflow_run_events," SELECT r.id AS run_id,
+    r.workflow_id,
+    r.status,
+    r.error,
+    r.started_at,
+    r.completed_at,
+    r.org_id AS run_org_id,
+    r.event_id,
+    e.org_id AS event_org_id,
+    e.event_type,
+    e.entity_type,
+    e.entity_id,
+    e.action_type,
+    e.occurred_at
+   FROM workflow_runs r
+     LEFT JOIN workflow_events e ON e.id = r.event_id;"
