@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAuthCached, requireAdminOrOps } from "@/lib/adminAuth";
+import { emitEvent } from "@/lib/emitEvent";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 
 /** POST: assign a vendor to this schedule. Body: { vendor_id }. Workflow(s) with event_type "schedule_vendor_assigned" create/update assignment with status "offered". */
@@ -38,19 +39,39 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     let wq = supabase.from("workflows").select("id").eq("enabled", true).eq("event_type", "schedule_vendor_assigned").eq("entity_type", "schedule");
     wq = wq.or(`org_id.eq.${ctx.orgId},org_id.is.null`);
     const { data: wfs } = await wq;
+    const occurredAt = new Date().toISOString();
     const eventPayload: Record<string, unknown> = {
         event_type: "schedule_vendor_assigned",
-        occurred_at: new Date().toISOString(),
+        occurred_at: occurredAt,
         org_id: ctx.orgId,
         schedule_id: scheduleId,
         job_id: jobId,
         vendor_id: vendorId,
         schedule,
     };
+    let eventId: string | null = null;
+    try {
+        eventId = await emitEvent({
+            org_id: ctx.orgId,
+            event_type: "schedule_vendor_assigned",
+            entity_type: "schedule",
+            entity_id: scheduleId,
+            occurred_at: occurredAt,
+            payload: {
+                ...eventPayload,
+                actor_user_id: auth.user?.id ?? null,
+            },
+        });
+    } catch (e) {
+        console.error("[schedule/assign] emitEvent", e);
+    }
     for (const wf of wfs ?? []) {
         try {
-            await executeWorkflowRun(supabase, (wf as { id: string }).id, eventPayload);
-        } catch (_) {
+            await executeWorkflowRun(supabase, (wf as { id: string }).id, eventPayload, {
+                event_id: eventId,
+                org_id: ctx.orgId,
+            });
+        } catch {
             // log and continue
         }
     }

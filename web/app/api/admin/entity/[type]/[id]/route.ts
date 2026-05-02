@@ -142,19 +142,12 @@ export async function GET(
             if (error || !data) return NextResponse.json(error?.message || "Not found", { status: error?.code === "PGRST116" ? 404 : 500 });
             const opp = data as Record<string, unknown> & { status_key?: string | null; status?: string | null; customer_id?: string | null; primary_contact_id?: string | null; primary_person_id?: string | null; location_id?: string | null; quote_total?: number | null; estimated_price_cents?: number | null; monetary_value_cents?: number | null };
             const out: Record<string, unknown> = { ...data };
-            const enrichStartedAt = Date.now();
-            const enrichPhaseMs: Record<string, number> = {};
-            const markPhase = (key: string) => {
-                enrichPhaseMs[key] = Date.now() - enrichStartedAt;
-            };
+            const surfaceParamEarly = (request.nextUrl.searchParams.get("surface") ?? "").trim().toLowerCase();
             const wuidForDept = trimOrNull((opp as { work_unit_id?: string | null }).work_unit_id);
             const oppPipelineStageId = (opp as { pipeline_stage_id?: string | null }).pipeline_stage_id ?? null;
             const oppPipelineId = (opp as { pipeline_id?: string | null }).pipeline_id ?? null;
             const oppDprogId = (opp as { discount_program_id?: string | null }).discount_program_id ?? null;
             const oppOrgIdForDefs = (opp as { org_id?: string }).org_id;
-            const opportunityDefsP = oppOrgIdForDefs
-                ? fetchEffectiveStatusDefinitions(supabase, oppOrgIdForDefs, "opportunities", { activeOnly: true })
-                : Promise.resolve([]);
             const personDisplayName = (p: { full_name?: string | null; first_name?: string | null; last_name?: string | null } | null) =>
                 p ? ((p.full_name && p.full_name.trim()) || [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || null) : null;
             const primaryPersonContactP = (async (): Promise<Record<string, unknown>> => {
@@ -225,6 +218,166 @@ export async function GET(
                 }
                 return patch;
             })();
+
+            if (surfaceParamEarly === "drawer_visible") {
+                const enrichStartedAt = Date.now();
+                const enrichPhaseMs: Record<string, number> = {};
+                const markVisiblePhase = (key: string) => {
+                    enrichPhaseMs[key] = Date.now() - enrichStartedAt;
+                };
+                const [wuDeptRowV, customerRowV, stRowV, primaryPatchV] = await Promise.all([
+                    wuidForDept
+                        ? supabase
+                              .from("work_units")
+                              .select("department_id")
+                              .eq("id", wuidForDept)
+                              .eq("org_id", orgId)
+                              .maybeSingle()
+                        : Promise.resolve({ data: null }),
+                    opp.customer_id
+                        ? supabase.from("customers").select("name").eq("id", opp.customer_id).eq("org_id", orgId).single()
+                        : Promise.resolve({ data: null }),
+                    oppPipelineStageId
+                        ? supabase.from("pipeline_stages").select("name").eq("id", oppPipelineStageId).maybeSingle()
+                        : Promise.resolve({ data: null }),
+                    primaryPersonContactP,
+                ]);
+                markVisiblePhase("visible_after_parallel");
+                const vis: Record<string, unknown> = { ...data };
+                vis._work_unit_department_id = wuidForDept
+                    ? trimOrNull((wuDeptRowV.data as { department_id?: string | null } | null)?.department_id ?? null)
+                    : null;
+                vis._customer_name = (customerRowV.data as { name?: string | null } | null)?.name ?? null;
+                if (oppPipelineStageId) {
+                    const stName = (stRowV.data as { name?: string | null } | null)?.name ?? null;
+                    vis._pipeline_stage_name = stName;
+                    vis._stage_name = stName;
+                } else {
+                    vis._pipeline_stage_name = null;
+                    vis._stage_name = null;
+                }
+                vis._pipeline_name = null;
+                vis._discount_program_label = null;
+                vis._vertical_name = null;
+                if (opp.location_id) {
+                    vis._location_id = opp.location_id;
+                    vis._location_name = null;
+                    vis._location_label = null;
+                } else {
+                    vis._location_id = null;
+                    vis._location_name = null;
+                    vis._location_label = null;
+                }
+                Object.assign(vis, primaryPatchV);
+                markVisiblePhase("visible_after_primary_person_contact");
+                const oppLegacyStatusV = (opp as { status?: string | null }).status;
+                const oppSkRawV =
+                    opp.status_key != null && String(opp.status_key).trim() !== ""
+                        ? String(opp.status_key).trim()
+                        : oppLegacyStatusV != null && String(oppLegacyStatusV).trim() !== ""
+                          ? String(oppLegacyStatusV).trim()
+                          : null;
+                const stageLabelV =
+                    vis._pipeline_stage_name != null && String(vis._pipeline_stage_name).trim() !== ""
+                        ? String(vis._pipeline_stage_name).trim()
+                        : null;
+                let oppStatusDisplayV: string | null = null;
+                if (oppPipelineStageId && oppSkRawV && String(oppSkRawV) === String(oppPipelineStageId) && stageLabelV) {
+                    oppStatusDisplayV = stageLabelV;
+                } else if (oppSkRawV && !isUuidLike(oppSkRawV)) {
+                    oppStatusDisplayV = oppSkRawV;
+                } else if (stageLabelV) {
+                    oppStatusDisplayV = stageLabelV;
+                } else {
+                    oppStatusDisplayV = oppSkRawV;
+                }
+                vis._status_display = oppStatusDisplayV;
+                const qtV =
+                    opp.quote_total != null && !Number.isNaN(Number(opp.quote_total))
+                        ? Number(opp.quote_total)
+                        : opp.estimated_price_cents != null && !Number.isNaN(Number(opp.estimated_price_cents))
+                          ? Number(opp.estimated_price_cents) / 100
+                          : opp.monetary_value_cents != null && !Number.isNaN(Number(opp.monetary_value_cents))
+                            ? Number(opp.monetary_value_cents) / 100
+                            : null;
+                vis._quote_total_display = qtV;
+                Object.assign(
+                    vis,
+                    buildOpportunityLifecycleFields({
+                        statusKey: oppSkRawV,
+                        quoteTotalDollars: opportunityQuoteTotalForLifecycle(opp),
+                        defs: [],
+                    })
+                );
+                markVisiblePhase("visible_after_status_shell");
+                vis._field_definitions = [];
+                vis._record_surface = "drawer_visible";
+                vis._inquiry_children = [];
+                vis._opportunity_persons = [];
+                vis._relationship_displays = {};
+                const householdIdV =
+                    typeof opp.customer_id === "string" && opp.customer_id.trim() ? opp.customer_id.trim() : null;
+                const householdLabelV = trimOrNull(vis._customer_name) ?? "—";
+                const inquiryTitleEarlyV = trimOrNull(vis.name) ?? trimOrNull(vis.title) ?? "—";
+                vis._identity = {
+                    household: householdIdV ? { id: householdIdV, label: householdLabelV } : null,
+                    primary_person: opp.primary_person_id
+                        ? {
+                              id: String(opp.primary_person_id),
+                              label: trimOrNull(vis._primary_person_name) ?? "—",
+                              email: trimOrNull(vis._primary_person_email),
+                              phone: trimOrNull(vis._primary_person_phone),
+                              role_key: null,
+                              role_label: null,
+                          }
+                        : null,
+                    primary_contact: opp.primary_contact_id
+                        ? {
+                              id: String(opp.primary_contact_id),
+                              label: trimOrNull(vis._primary_contact_name) ?? "—",
+                              email: trimOrNull(vis._primary_contact_email),
+                              phone: trimOrNull(vis._primary_contact_phone),
+                              role_key: null,
+                              role_label: null,
+                          }
+                        : null,
+                    primary_child: null,
+                    inquiry: { title: inquiryTitleEarlyV, lines: [], section_key: "quote" },
+                };
+                markVisiblePhase("visible_after_identity_block");
+                const enrichTotalMsV = Date.now() - enrichStartedAt;
+                const enrichHeaderV =
+                    JSON.stringify({ total_ms: enrichTotalMsV, phases_ms: enrichPhaseMs }).length < 3900
+                        ? JSON.stringify({ total_ms: enrichTotalMsV, phases_ms: enrichPhaseMs })
+                        : JSON.stringify({ total_ms: enrichTotalMsV, phases_ms: {} });
+                const serverRouteMsV = Date.now() - opportunityRouteStartedAt;
+                const visibleLogMs = enrichTotalMsV;
+                if (process.env.NODE_ENV !== "production" || visibleLogMs > 200) {
+                    console.warn("[timing][opportunity-api-visible]", {
+                        opportunity_id: id,
+                        enrich_ms: enrichTotalMsV,
+                        enrich_phases_ms: enrichPhaseMs,
+                        server_route_ms: serverRouteMsV,
+                        surface: "drawer_visible",
+                    });
+                }
+                return NextResponse.json(vis, {
+                    headers: {
+                        "X-Alloy-Entity-Surface": "drawer_visible",
+                        "X-Alloy-Opp-Enrich": enrichHeaderV,
+                        "X-Alloy-Server-Duration": String(serverRouteMsV),
+                    },
+                });
+            }
+
+            const enrichStartedAt = Date.now();
+            const enrichPhaseMs: Record<string, number> = {};
+            const markPhase = (key: string) => {
+                enrichPhaseMs[key] = Date.now() - enrichStartedAt;
+            };
+            const opportunityDefsP = oppOrgIdForDefs
+                ? fetchEffectiveStatusDefinitions(supabase, oppOrgIdForDefs, "opportunities", { activeOnly: true })
+                : Promise.resolve([]);
             const [
                 wuDeptRow,
                 customerRow,
@@ -367,67 +520,7 @@ export async function GET(
                 })
             );
             markPhase("after_status_defs_and_financial");
-            const surfaceParam = (request.nextUrl.searchParams.get("surface") ?? "").trim().toLowerCase();
-            const drawerInitial = surfaceParam === "drawer_initial";
-            const drawerVisible = surfaceParam === "drawer_visible";
-            if (drawerVisible) {
-                markPhase("drawer_visible_skip_field_defs_rel_inquiry");
-                out._field_definitions = [];
-                out._record_surface = "drawer_visible";
-                out._inquiry_children = [];
-                out._opportunity_persons = [];
-                out._relationship_displays = {};
-                const householdId =
-                    typeof opp.customer_id === "string" && opp.customer_id.trim() ? opp.customer_id.trim() : null;
-                const householdLabel = trimOrNull(out._customer_name) ?? "—";
-                const inquiryTitleEarly = trimOrNull(out.name) ?? trimOrNull(out.title) ?? "—";
-                out._identity = {
-                    household: householdId ? { id: householdId, label: householdLabel } : null,
-                    primary_person: opp.primary_person_id
-                        ? {
-                              id: String(opp.primary_person_id),
-                              label: trimOrNull(out._primary_person_name) ?? "—",
-                              email: trimOrNull(out._primary_person_email),
-                              phone: trimOrNull(out._primary_person_phone),
-                              role_key: null,
-                              role_label: null,
-                          }
-                        : null,
-                    primary_contact: opp.primary_contact_id
-                        ? {
-                              id: String(opp.primary_contact_id),
-                              label: trimOrNull(out._primary_contact_name) ?? "—",
-                              email: trimOrNull(out._primary_contact_email),
-                              phone: trimOrNull(out._primary_contact_phone),
-                              role_key: null,
-                              role_label: null,
-                          }
-                        : null,
-                    primary_child: null,
-                    inquiry: { title: inquiryTitleEarly, lines: [], section_key: "quote" },
-                };
-                markPhase("after_identity_block");
-                const enrichTotalMs = Date.now() - enrichStartedAt;
-                const enrichHeader =
-                    JSON.stringify({ total_ms: enrichTotalMs, phases_ms: enrichPhaseMs }).length < 3900
-                        ? JSON.stringify({ total_ms: enrichTotalMs, phases_ms: enrichPhaseMs })
-                        : JSON.stringify({ total_ms: enrichTotalMs, phases_ms: {} });
-                const serverRouteMs = Date.now() - opportunityRouteStartedAt;
-                if (process.env.NODE_ENV !== "production") {
-                    console.warn("[timing][opportunity-api]", {
-                        opportunity_id: id,
-                        enrich_ms: enrichTotalMs,
-                        enrich_phases_ms: enrichPhaseMs,
-                        surface: "drawer_visible",
-                    });
-                }
-                return NextResponse.json(out, {
-                    headers: {
-                        "X-Alloy-Opp-Enrich": enrichHeader,
-                        "X-Alloy-Server-Duration": String(serverRouteMs),
-                    },
-                });
-            }
+            const drawerInitial = surfaceParamEarly === "drawer_initial";
             await attachFieldDefinitionsAndValues(supabase, out, "opportunities", id, { mergeValues: !drawerInitial });
             markPhase("after_field_definitions_values");
             if (drawerInitial) {
@@ -465,15 +558,27 @@ export async function GET(
                     inquiry: { title: inquiryTitleEarly, lines: [], section_key: "quote" },
                 };
                 markPhase("after_identity_block");
+                const enrichTotalMsDi = Date.now() - enrichStartedAt;
+                const enrichHeaderDi =
+                    JSON.stringify({ total_ms: enrichTotalMsDi, phases_ms: enrichPhaseMs }).length < 3900
+                        ? JSON.stringify({ total_ms: enrichTotalMsDi, phases_ms: enrichPhaseMs })
+                        : JSON.stringify({ total_ms: enrichTotalMsDi, phases_ms: {} });
+                const serverRouteMsDi = Date.now() - opportunityRouteStartedAt;
                 if (process.env.NODE_ENV !== "production") {
                     console.info("[timing][opportunity-api]", {
                         opportunity_id: id,
-                        enrich_ms: Date.now() - enrichStartedAt,
+                        enrich_ms: enrichTotalMsDi,
                         enrich_phases_ms: enrichPhaseMs,
                         surface: "drawer_initial",
                     });
                 }
-                return NextResponse.json(out);
+                return NextResponse.json(out, {
+                    headers: {
+                        "X-Alloy-Entity-Surface": "drawer_initial",
+                        "X-Alloy-Opp-Enrich": enrichHeaderDi,
+                        "X-Alloy-Server-Duration": String(serverRouteMsDi),
+                    },
+                });
             }
 
             await attachDirectFkRelationshipDisplays(supabase, orgId, "opportunities", out);
@@ -887,6 +992,7 @@ export async function GET(
             const serverRouteMs = Date.now() - opportunityRouteStartedAt;
             return NextResponse.json(out, {
                 headers: {
+                    "X-Alloy-Entity-Surface": "full",
                     "X-Alloy-Opp-Enrich": enrichHeader,
                     "X-Alloy-Server-Duration": String(serverRouteMs),
                 },

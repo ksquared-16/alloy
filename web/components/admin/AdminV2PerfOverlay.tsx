@@ -104,15 +104,33 @@ export default function AdminV2PerfOverlay() {
 
     const dOpen = m.drawer_open_start;
     if (typeof dOpen === "number") {
-        lines.push(`Drawer visible: ${fmtMs(m.drawer_visible_ready, dOpen)}`);
+        lines.push(`Drawer shell ready: ${fmtMs(m.drawer_visible_ready, dOpen)}`);
+        if (typeof m.drawer_opportunity_visible_req === "number") {
+            lines.push(`  opp visible req: ${fmtMs(m.drawer_opportunity_visible_req, dOpen)}`);
+        }
+        if (typeof m.drawer_opportunity_visible_resp === "number") {
+            lines.push(`  opp visible resp: ${fmtMs(m.drawer_opportunity_visible_resp, dOpen)}`);
+        }
+        if (typeof m.drawer_opportunity_visible_applied === "number") {
+            lines.push(`  opp visible applied: ${fmtMs(m.drawer_opportunity_visible_applied, dOpen)}`);
+        }
+        if (typeof m.drawer_opportunity_full_req === "number") {
+            lines.push(`  opp full hydrate req: ${fmtMs(m.drawer_opportunity_full_req, dOpen)}`);
+        }
+        if (typeof m.drawer_opportunity_full_resp === "number") {
+            lines.push(`  opp full hydrate resp: ${fmtMs(m.drawer_opportunity_full_resp, dOpen)}`);
+        }
+        if (typeof m.drawer_opportunity_full_applied === "number") {
+            lines.push(`  opp full hydrate applied: ${fmtMs(m.drawer_opportunity_full_applied, dOpen)}`);
+        }
         if (typeof m.drawer_entity_request_start === "number") {
-            lines.push(`  entity req: ${fmtMs(m.drawer_entity_request_start, dOpen)}`);
+            lines.push(`  entity req (all types): ${fmtMs(m.drawer_entity_request_start, dOpen)}`);
         }
         if (typeof m.drawer_entity_response === "number") {
-            lines.push(`  entity resp: ${fmtMs(m.drawer_entity_response, dOpen)}`);
+            lines.push(`  entity resp (all types): ${fmtMs(m.drawer_entity_response, dOpen)}`);
         }
         if (typeof m.drawer_entity_applied === "number") {
-            lines.push(`  entity applied: ${fmtMs(m.drawer_entity_applied, dOpen)}`);
+            lines.push(`  entity applied (all types): ${fmtMs(m.drawer_entity_applied, dOpen)}`);
         }
         if (typeof m.drawer_header_actions_request_start === "number") {
             lines.push(`  header req: ${fmtMs(m.drawer_header_actions_request_start, dOpen)}`);
@@ -120,9 +138,15 @@ export default function AdminV2PerfOverlay() {
         if (typeof m.drawer_header_actions_response === "number") {
             lines.push(`  header resp: ${fmtMs(m.drawer_header_actions_response, dOpen)}`);
         }
-        lines.push(`  X-Alloy-Server-Duration: ${fmtHdrMs(m.drawer_entity_x_alloy_server_duration_ms)}`);
-        lines.push(`  X-Alloy-Opp-Enrich: ${fmtHdrMs(m.drawer_entity_x_alloy_opp_enrich_ms)}`);
-        lines.push(`  entity client RTT: ${fmtMs(m.drawer_entity_response, m.drawer_entity_request_start)}`);
+        lines.push(
+            `  visible X-Alloy-Server: ${fmtHdrMs(m.drawer_opportunity_visible_x_alloy_server_duration_ms)} · enrich: ${fmtHdrMs(m.drawer_opportunity_visible_x_alloy_opp_enrich_ms)}`
+        );
+        lines.push(
+            `  full hydrate X-Alloy-Server: ${fmtHdrMs(m.drawer_opportunity_full_x_alloy_server_duration_ms)} · enrich: ${fmtHdrMs(m.drawer_opportunity_full_x_alloy_opp_enrich_ms)}`
+        );
+        lines.push(`  visible client RTT: ${fmtMs(m.drawer_opportunity_visible_resp, m.drawer_opportunity_visible_req)}`);
+        lines.push(`  full hydrate client RTT: ${fmtMs(m.drawer_opportunity_full_resp, m.drawer_opportunity_full_req)}`);
+        lines.push(`  legacy overlay entity RTT: ${fmtMs(m.drawer_entity_response, m.drawer_entity_request_start)}`);
     }
 
     const text = lines.join("\n");

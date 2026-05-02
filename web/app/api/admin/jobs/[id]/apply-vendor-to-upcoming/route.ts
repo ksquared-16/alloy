@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAuthCached, requireAdminOrOps } from "@/lib/adminAuth";
+import { emitEvent } from "@/lib/emitEvent";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 
 /**
@@ -34,16 +35,36 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
     let wq = supabase.from("workflows").select("id").eq("enabled", true).eq("event_type", "job_default_vendor_applied").eq("entity_type", "job");
     wq = wq.or(`org_id.eq.${ctx.orgId},org_id.is.null`);
     const { data: wfs } = await wq;
+    const occurredAt = new Date().toISOString();
     const eventPayload: Record<string, unknown> = {
         event_type: "job_default_vendor_applied",
-        occurred_at: new Date().toISOString(),
+        occurred_at: occurredAt,
         org_id: ctx.orgId,
         job,
     };
+    let eventId: string | null = null;
+    try {
+        eventId = await emitEvent({
+            org_id: ctx.orgId,
+            event_type: "job_default_vendor_applied",
+            entity_type: "job",
+            entity_id: jobId,
+            occurred_at: occurredAt,
+            payload: {
+                ...eventPayload,
+                actor_user_id: auth.user.id,
+            },
+        });
+    } catch (e) {
+        console.error("[apply-vendor-to-upcoming] emitEvent", e);
+    }
     for (const wf of wfs ?? []) {
         try {
-            await executeWorkflowRun(supabase, (wf as { id: string }).id, eventPayload);
-        } catch (_) {
+            await executeWorkflowRun(supabase, (wf as { id: string }).id, eventPayload, {
+                event_id: eventId,
+                org_id: ctx.orgId,
+            });
+        } catch {
             // log and continue
         }
     }

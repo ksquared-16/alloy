@@ -836,33 +836,89 @@ function JobDrawerRelationshipsSection(props: {
 /** `drawer_visible` = fast shell; client hydrates `full` in background. `full` = single bundle (refetch, mutations). */
 type OpportunityEntitySurface = "full" | "drawer_visible";
 
+/** Merge full opportunity hydrate without clobbering visible fields with null/empty from partial responses. */
+function mergeOpportunityFullHydrate(prev: Record<string, unknown>, full: Record<string, unknown>): Record<string, unknown> {
+    const o: Record<string, unknown> = { ...prev };
+    for (const [k, v] of Object.entries(full)) {
+        if (v === undefined) continue;
+        if ((v === null || v === "") && o[k] != null && o[k] !== "") continue;
+        o[k] = v;
+    }
+    return o;
+}
+
+function appendOpportunityRecordHeaderHints(qs: URLSearchParams, data: Record<string, unknown> | null | undefined, drawerId: string): void {
+    if (!data || typeof data !== "object") return;
+    if (String((data as { id?: unknown }).id ?? "") !== String(drawerId)) return;
+    const sk = (data as { status_key?: unknown }).status_key;
+    if (typeof sk === "string" && sk.trim()) qs.set("hint_opportunity_status_key", sk.trim());
+    const meta = (data as { metadata?: unknown }).metadata;
+    if (meta && typeof meta === "object") {
+        try {
+            qs.set("hint_opportunity_metadata", JSON.stringify(meta));
+        } catch {
+            /* ignore */
+        }
+    }
+}
+
 function logOpportunityEnrichHeaderFromResponse(res: Response): void {
+    const surface = res.headers.get("X-Alloy-Entity-Surface") ?? "";
     const h = res.headers.get("X-Alloy-Opp-Enrich");
     if (!h) return;
     try {
         const ph = JSON.parse(h) as { total_ms?: number; phases_ms?: Record<string, number> };
-        console.info("[timing][drawer][opportunity-api]", ph);
+        console.info("[timing][drawer][opportunity-api]", { surface, ...ph });
     } catch {
         /* ignore malformed */
     }
 }
 
-/** Perf overlay: server vs client time for entity GET (opportunities). */
+/** Opportunity entity GET only: uses `X-Alloy-Entity-Surface` to split visible vs full hydrate overlay marks. */
 function captureDrawerEntityResponsePerf(res: Response): void {
     if (typeof window === "undefined" || typeof performance === "undefined") return;
+    const surface = (res.headers.get("X-Alloy-Entity-Surface") ?? "").trim().toLowerCase();
+    if (!surface) return;
     const srv = res.headers.get("X-Alloy-Server-Duration");
-    if (srv != null && srv.trim() !== "") {
-        const n = Number(srv);
-        if (!Number.isNaN(n)) alloyPerfSet("drawer_entity_x_alloy_server_duration_ms", n);
-    }
     const enr = res.headers.get("X-Alloy-Opp-Enrich");
-    if (enr) {
-        try {
-            const p = JSON.parse(enr) as { total_ms?: number };
-            if (typeof p.total_ms === "number") alloyPerfSet("drawer_entity_x_alloy_opp_enrich_ms", p.total_ms);
-        } catch {
-            /* ignore */
+    const now = performance.now();
+
+    const applySrvEnr = (srvKey: string, enrKey: string) => {
+        if (srv != null && srv.trim() !== "") {
+            const n = Number(srv);
+            if (!Number.isNaN(n)) alloyPerfSet(srvKey, n);
         }
+        if (enr) {
+            try {
+                const p = JSON.parse(enr) as { total_ms?: number };
+                if (typeof p.total_ms === "number") alloyPerfSet(enrKey, p.total_ms);
+            } catch {
+                /* ignore */
+            }
+        }
+    };
+
+    if (surface === "drawer_visible") {
+        applySrvEnr(
+            "drawer_opportunity_visible_x_alloy_server_duration_ms",
+            "drawer_opportunity_visible_x_alloy_opp_enrich_ms"
+        );
+        alloyPerfSet("drawer_opportunity_visible_resp", now);
+        if (srv != null && srv.trim() !== "") {
+            const n = Number(srv);
+            if (!Number.isNaN(n)) alloyPerfSet("drawer_entity_x_alloy_server_duration_ms", n);
+        }
+        if (enr) {
+            try {
+                const p = JSON.parse(enr) as { total_ms?: number };
+                if (typeof p.total_ms === "number") alloyPerfSet("drawer_entity_x_alloy_opp_enrich_ms", p.total_ms);
+            } catch {
+                /* ignore */
+            }
+        }
+    } else if (surface === "full" || surface === "drawer_initial") {
+        applySrvEnr("drawer_opportunity_full_x_alloy_server_duration_ms", "drawer_opportunity_full_x_alloy_opp_enrich_ms");
+        alloyPerfSet("drawer_opportunity_full_resp", now);
     }
 }
 
@@ -1437,7 +1493,11 @@ export default function AdminEntityDrawer() {
         setLoading(true);
         const t0 = timingEnabled ? performance.now() : 0;
         if (typeof window !== "undefined" && typeof performance !== "undefined") {
-            alloyPerfSet("drawer_entity_request_start", performance.now());
+            const now = performance.now();
+            alloyPerfSet("drawer_entity_request_start", now);
+            if (drawer.type === "opportunities") {
+                alloyPerfSet("drawer_opportunity_full_req", now);
+            }
         }
         fetch(url)
             .then((res) => {
@@ -1463,7 +1523,11 @@ export default function AdminEntityDrawer() {
                 if (typeof window !== "undefined" && typeof performance !== "undefined") {
                     requestAnimationFrame(() => {
                         requestAnimationFrame(() => {
-                            alloyPerfSet("drawer_entity_applied", performance.now());
+                            const tap = performance.now();
+                            alloyPerfSet("drawer_entity_applied", tap);
+                            if (drawer.type === "opportunities") {
+                                alloyPerfSet("drawer_opportunity_full_applied", tap);
+                            }
                         });
                     });
                 }
@@ -1649,7 +1713,9 @@ export default function AdminEntityDrawer() {
         const url = buildAdminEntityFetchUrl(drawer.type, drawer.id, drawer.jobRecordSurface);
         if (!url) return;
         if (typeof window !== "undefined" && typeof performance !== "undefined") {
-            alloyPerfSet("drawer_entity_request_start", performance.now());
+            const now = performance.now();
+            alloyPerfSet("drawer_entity_request_start", now);
+            if (drawer.type === "opportunities") alloyPerfSet("drawer_opportunity_visible_req", now);
         }
         fetch(url)
             .then((res) => {
@@ -1666,7 +1732,14 @@ export default function AdminEntityDrawer() {
                 if (typeof window !== "undefined" && typeof performance !== "undefined") {
                     requestAnimationFrame(() => {
                         requestAnimationFrame(() => {
-                            alloyPerfSet("drawer_entity_applied", performance.now());
+                            const t = performance.now();
+                            alloyPerfSet("drawer_entity_applied", t);
+                            if (
+                                drawer.type === "opportunities" &&
+                                (json as { _record_surface?: string })._record_surface === "drawer_visible"
+                            ) {
+                                alloyPerfSet("drawer_opportunity_visible_applied", t);
+                            }
                         });
                     });
                 }
@@ -1686,6 +1759,9 @@ export default function AdminEntityDrawer() {
         if (!url) return;
         opportunityFullHydrateInFlightRef.current = drawer.id;
         const ac = new AbortController();
+        if (typeof window !== "undefined" && typeof performance !== "undefined") {
+            alloyPerfSet("drawer_opportunity_full_req", performance.now());
+        }
         fetch(url, { signal: ac.signal })
             .then((res) => {
                 captureDrawerEntityResponsePerf(res);
@@ -1701,8 +1777,15 @@ export default function AdminEntityDrawer() {
                     if (!prev || String((prev as { id?: unknown }).id ?? "") !== String(drawer.id)) {
                         return json as Record<string, unknown>;
                     }
-                    return { ...prev, ...(json as Record<string, unknown>) };
+                    return mergeOpportunityFullHydrate(prev as Record<string, unknown>, json as Record<string, unknown>);
                 });
+                if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                            alloyPerfSet("drawer_opportunity_full_applied", performance.now());
+                        });
+                    });
+                }
             })
             .catch((e) => {
                 opportunityFullHydrateInFlightRef.current = null;
@@ -2518,8 +2601,9 @@ export default function AdminEntityDrawer() {
         const fromState = opportunityWorkUnitDepartmentId?.trim() ?? "";
         if (fromState) return fromState;
         if (drawer.type !== "opportunities" || !data || typeof data !== "object") return "";
+        if (String((data as { id?: unknown }).id ?? "") !== String(drawer.id)) return "";
         return String((data as { _work_unit_department_id?: unknown })._work_unit_department_id ?? "").trim();
-    }, [drawer.type, drawer.opportunityWorkspaceContext?.department_id, opportunityWorkUnitDepartmentId, data]);
+    }, [drawer.type, drawer.opportunityWorkspaceContext?.department_id, opportunityWorkUnitDepartmentId, data, drawer.id]);
 
     useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
@@ -2527,6 +2611,14 @@ export default function AdminEntityDrawer() {
             opportunityHeaderResolvedSigRef.current = null;
         }
     }, [drawer.type, drawer.id]);
+
+    useEffect(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+        if (!data || typeof data !== "object") return;
+        if (String((data as { id?: unknown }).id ?? "") !== String(drawer.id)) return;
+        const dept = String((data as { _work_unit_department_id?: unknown })._work_unit_department_id ?? "").trim();
+        if (dept) setOpportunityWorkUnitDepartmentId(dept);
+    }, [drawer.type, drawer.id, data]);
 
     useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
@@ -2537,12 +2629,13 @@ export default function AdminEntityDrawer() {
         }
         const ctxWu = (drawer.opportunityWorkspaceContext?.work_unit_id ?? "").trim();
         const ctxDept = (drawer.opportunityWorkspaceContext?.department_id ?? "").trim();
-        const departmentIdFromRecord =
-            data && typeof data === "object"
-                ? String((data as { _work_unit_department_id?: unknown })._work_unit_department_id ?? "").trim()
-                : "";
+        const dataIdMatchesDrawer =
+            !!data && typeof data === "object" && String((data as { id?: unknown }).id ?? "") === String(drawer.id);
+        const departmentIdFromRecord = dataIdMatchesDrawer
+            ? String((data as { _work_unit_department_id?: unknown })._work_unit_department_id ?? "").trim()
+            : "";
         const dataWu =
-            data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
+            dataIdMatchesDrawer && (data as { work_unit_id?: unknown }).work_unit_id != null
                 ? String((data as { work_unit_id?: unknown }).work_unit_id).trim()
                 : "";
         const workUnitId = ctxWu || dataWu;
@@ -2561,15 +2654,6 @@ export default function AdminEntityDrawer() {
             return;
         }
 
-        const sig = `${drawer.id}|${workUnitId}|${departmentId}`;
-        if (opportunityHeaderResolvedSigRef.current === sig) {
-            setOpportunityResolvedHeaderLoading(false);
-            return;
-        }
-
-        let cancelled = false;
-        setOpportunityResolvedHeaderLoading(true);
-        const t0 = timingEnabled ? performance.now() : 0;
         const qs = new URLSearchParams({
             surface: "record_header",
             entity_type: "opportunity",
@@ -2577,7 +2661,16 @@ export default function AdminEntityDrawer() {
         });
         qs.set("work_unit_id", workUnitId);
         qs.set("department_id", departmentId);
+        appendOpportunityRecordHeaderHints(qs, data as Record<string, unknown> | undefined, drawer.id);
         const actionsUrl = `/api/admin/actions?${qs.toString()}`;
+        if (opportunityHeaderResolvedSigRef.current === actionsUrl) {
+            setOpportunityResolvedHeaderLoading(false);
+            return;
+        }
+
+        let cancelled = false;
+        setOpportunityResolvedHeaderLoading(true);
+        const t0 = timingEnabled ? performance.now() : 0;
         if (typeof window !== "undefined" && typeof performance !== "undefined") {
             alloyPerfSet("drawer_header_actions_request_start", performance.now());
         }
@@ -2589,7 +2682,7 @@ export default function AdminEntityDrawer() {
                     alloyPerfSet("drawer_header_actions_response", performance.now());
                 }
                 setOpportunityResolvedHeaderActions(j.actions ?? null);
-                opportunityHeaderResolvedSigRef.current = sig;
+                opportunityHeaderResolvedSigRef.current = actionsUrl;
                 if (timingEnabled) {
                     console.info("[timing][drawer]", {
                         key: `opportunities:${drawer.id}`,
@@ -2638,12 +2731,13 @@ export default function AdminEntityDrawer() {
             // Also refetch resolved header actions so conditional actions swap (schedule ↔ reschedule).
             const ctxWu = (drawer.opportunityWorkspaceContext?.work_unit_id ?? "").trim();
             const ctxDept = (drawer.opportunityWorkspaceContext?.department_id ?? "").trim();
-            const departmentIdFromRecord =
-                data && typeof data === "object"
-                    ? String((data as { _work_unit_department_id?: unknown })._work_unit_department_id ?? "").trim()
-                    : "";
+            const dataIdMatchesDrawer =
+                !!data && typeof data === "object" && String((data as { id?: unknown }).id ?? "") === String(drawer.id);
+            const departmentIdFromRecord = dataIdMatchesDrawer
+                ? String((data as { _work_unit_department_id?: unknown })._work_unit_department_id ?? "").trim()
+                : "";
             const dataWu =
-                data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
+                dataIdMatchesDrawer && (data as { work_unit_id?: unknown }).work_unit_id != null
                     ? String((data as { work_unit_id?: unknown }).work_unit_id).trim()
                     : "";
             const workUnitId = (ctxWu || dataWu || opportunityWorkUnitId.trim()).trim();
@@ -2659,6 +2753,7 @@ export default function AdminEntityDrawer() {
             });
             qs.set("work_unit_id", workUnitId);
             qs.set("department_id", departmentId);
+            appendOpportunityRecordHeaderHints(qs, data as Record<string, unknown> | undefined, drawer.id);
             const actionsUrl = `/api/admin/actions?${qs.toString()}`;
             if (typeof window !== "undefined" && typeof performance !== "undefined") {
                 alloyPerfSet("drawer_header_actions_request_start", performance.now());
@@ -2670,7 +2765,7 @@ export default function AdminEntityDrawer() {
                         alloyPerfSet("drawer_header_actions_response", performance.now());
                     }
                     setOpportunityResolvedHeaderActions(j.actions ?? null);
-                    opportunityHeaderResolvedSigRef.current = `${drawer.id}|${workUnitId}|${departmentId}`;
+                    opportunityHeaderResolvedSigRef.current = actionsUrl;
                     if (timingEnabled) {
                         console.info("[timing][drawer]", {
                             key: `opportunities:${drawer.id}`,

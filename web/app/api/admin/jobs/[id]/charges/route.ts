@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { emitEvent } from "@/lib/emitEvent";
 
 const ALLOWED_TYPES = new Set(["adjustment", "fee"]);
 
@@ -92,6 +93,40 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     if (insErr) {
         return NextResponse.json({ error: insErr.message }, { status: 400 });
+    }
+
+    const row = inserted as {
+        id: string;
+        job_id: string;
+        charge_type: string;
+        amount_cents: number;
+        status: string;
+        description: string | null;
+        service_date: string | null;
+        due_date: string | null;
+        posted_at: string;
+    };
+    try {
+        await emitEvent({
+            org_id: ctx.orgId,
+            event_type: "charge_posted",
+            entity_type: "job",
+            entity_id: jobId,
+            occurred_at: now,
+            payload: {
+                charge_id: row.id,
+                charge_type: row.charge_type,
+                amount_cents: row.amount_cents,
+                status: row.status,
+                description: row.description,
+                service_date: row.service_date,
+                due_date: row.due_date,
+                posted_at: row.posted_at,
+                actor_user_id: ctx.userId ?? null,
+            },
+        });
+    } catch (e) {
+        console.warn("[jobs/charges] emitEvent charge_posted", e instanceof Error ? e.message : e);
     }
 
     return NextResponse.json(inserted);

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
+import { emitEvent } from "@/lib/emitEvent";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 import { inferJobDiscountSelectionToken, parseJobDiscountSelectionInput, resolveJobDiscountSelection, buildJobDiscountDisplayLabel } from "@/lib/admin/jobDiscountSelection";
 import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
@@ -205,17 +206,37 @@ export async function PATCH(
                 let wq = supabase.from("workflows").select("id").eq("enabled", true).eq("event_type", "job_action").eq("entity_type", "job");
                 wq = wq.or(`org_id.eq.${ctx.orgId},org_id.is.null`);
                 const { data: wfs } = await wq;
+                const occurredAt = new Date().toISOString();
                 const eventPayload: Record<string, unknown> = {
                     event_type: "job_action",
-                    occurred_at: new Date().toISOString(),
+                    occurred_at: occurredAt,
                     org_id: ctx.orgId,
                     action,
                     job: jobRow,
                 };
+                let eventId: string | null = null;
+                try {
+                    eventId = await emitEvent({
+                        org_id: ctx.orgId,
+                        event_type: "job_action",
+                        entity_type: "job",
+                        entity_id: id,
+                        occurred_at: occurredAt,
+                        payload: {
+                            ...eventPayload,
+                            actor_user_id: ctx.userId ?? null,
+                        },
+                    });
+                } catch (e) {
+                    console.error("[ADMIN_PATCH_JOB] job_action emitEvent", e);
+                }
                 for (const wf of wfs ?? []) {
                     try {
-                        await executeWorkflowRun(supabase, (wf as { id: string }).id, eventPayload);
-                    } catch (_) {
+                        await executeWorkflowRun(supabase, (wf as { id: string }).id, eventPayload, {
+                            event_id: eventId,
+                            org_id: ctx.orgId,
+                        });
+                    } catch {
                         // log and continue
                     }
                 }

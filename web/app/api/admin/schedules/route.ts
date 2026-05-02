@@ -9,6 +9,8 @@ import {
 } from "@/lib/admin/scheduleEffectiveStatusKey";
 import { resolveScheduledOnBounds } from "@/lib/admin/orgLocalDayBounds";
 import { fetchOperationalTimezoneForOrg, type OperationalTimezoneSource } from "@/lib/admin/timezoneContract";
+import { emitEvent } from "@/lib/emitEvent";
+import { executeWorkflowRun } from "@/lib/workflowRun";
 
 /** GET: list schedules for current org. Admin/ops. Exclude canceled by default. */
 export async function GET(request: NextRequest) {
@@ -309,5 +311,51 @@ export async function POST(request: NextRequest) {
 
   const { data, error } = await supabase.from("schedules").insert(row).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
+  const newId = (data as { id: string }).id;
+
+  const { data: jobRow } = await supabase.from("jobs").select("id, assigned_vendor_id").eq("id", job_id).eq("org_id", ctx.orgId).single();
+  let wq = supabase.from("workflows").select("id").eq("enabled", true).eq("event_type", "schedule_created").eq("entity_type", "schedule");
+  wq = wq.or(`org_id.eq.${ctx.orgId},org_id.is.null`);
+  const { data: wfs } = await wq;
+  const { data: newScheduleRow } = await supabase.from("schedules").select("*").eq("id", newId).eq("org_id", ctx.orgId).single();
+  const occurredAt = new Date().toISOString();
+  const eventPayload: Record<string, unknown> = {
+    event_type: "schedule_created",
+    occurred_at: occurredAt,
+    org_id: ctx.orgId,
+    schedule_id: newId,
+    job_id,
+    job: jobRow ?? null,
+    schedule: newScheduleRow ?? { id: newId, job_id },
+  };
+  let eventId: string | null = null;
+  try {
+    eventId = await emitEvent({
+      org_id: ctx.orgId,
+      event_type: "schedule_created",
+      entity_type: "schedule",
+      entity_id: newId,
+      action_type: null,
+      occurred_at: occurredAt,
+      payload: {
+        ...eventPayload,
+        actor_user_id: ctx.userId ?? null,
+      },
+    });
+  } catch (emitErr) {
+    console.error("[ADMIN_POST_SCHEDULE] emitEvent", emitErr);
+    eventId = null;
+  }
+  for (const wf of wfs ?? []) {
+    try {
+      await executeWorkflowRun(supabase, (wf as { id: string }).id, eventPayload, {
+        event_id: eventId,
+        org_id: ctx.orgId,
+      });
+    } catch {
+      // continue — same as reschedule route
+    }
+  }
+
   return NextResponse.json(data);
 }

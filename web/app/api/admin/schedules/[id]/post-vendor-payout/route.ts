@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { emitEvent } from "@/lib/emitEvent";
 import { postVendorPayoutCashForSchedule, type PostCashEventError } from "@/lib/admin/postCashEvent";
 
 function isPostError(result: { entry_id?: string; code?: string }): result is PostCashEventError {
@@ -55,6 +56,25 @@ export async function POST(
                 { status: 400 }
             );
         }
+    }
+
+    const okResult = result as { entry_id: string; ledger_transaction_id: string; schedule_id: string; amount_cents: number; mapping_keys_used: string[] };
+    try {
+        await emitEvent({
+            org_id: ctx.orgId,
+            event_type: "schedule_vendor_payout_gl_posted",
+            entity_type: "schedule",
+            entity_id: scheduleId,
+            payload: {
+                gl_journal_entry_id: okResult.entry_id,
+                ledger_transaction_id: okResult.ledger_transaction_id,
+                amount_cents: okResult.amount_cents,
+                mapping_keys_used: okResult.mapping_keys_used,
+                actor_user_id: ctx.userId,
+            },
+        });
+    } catch (e) {
+        console.warn("[post-vendor-payout] emitEvent", e instanceof Error ? e.message : e);
     }
 
     return NextResponse.json(result);

@@ -36,6 +36,17 @@ export async function GET(request: NextRequest) {
     const departmentId = searchParams.get("department_id")?.trim() || null;
     const workUnitId = searchParams.get("work_unit_id")?.trim() || null;
     const sectionKey = searchParams.get("section_key")?.trim() || null;
+    const hintStatusKeyRaw = searchParams.get("hint_opportunity_status_key")?.trim() || null;
+    let hintOpportunityMetadata: Record<string, unknown> | null = null;
+    const hintMetaRaw = searchParams.get("hint_opportunity_metadata")?.trim() || null;
+    if (hintMetaRaw) {
+        try {
+            const parsed = JSON.parse(hintMetaRaw) as unknown;
+            hintOpportunityMetadata = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : null;
+        } catch {
+            hintOpportunityMetadata = null;
+        }
+    }
 
     if (surface === "record_section") {
         if (!entityId || !sectionKey) {
@@ -51,6 +62,7 @@ export async function GET(request: NextRequest) {
         const orgTag = adminActionsOrgTag(ctx.orgId);
         /** Shorter TTL when entity-specific conditions apply; longer for shared queue-row templates. */
         const revalidateSec = entityId ? 6 : 40;
+        const hintMetaKey = hintOpportunityMetadata ? JSON.stringify(hintOpportunityMetadata) : "-";
         const actions = await unstable_cache(
             async () => {
                 const supabase = createAdminClient();
@@ -62,6 +74,8 @@ export async function GET(request: NextRequest) {
                     departmentId,
                     workUnitId,
                     sectionKey,
+                    hintOpportunityStatusKey: hintStatusKeyRaw,
+                    hintOpportunityMetadata,
                 });
             },
             [
@@ -73,6 +87,8 @@ export async function GET(request: NextRequest) {
                 departmentId ?? "-",
                 workUnitId ?? "-",
                 sectionKey ?? "-",
+                hintStatusKeyRaw ?? "-",
+                hintMetaKey,
             ],
             { revalidate: revalidateSec, tags: [orgTag] }
         )();
@@ -83,6 +99,7 @@ export async function GET(request: NextRequest) {
                 surface,
                 entity_id: entityId,
                 work_unit_id: workUnitId,
+                used_hint: Boolean(hintStatusKeyRaw),
             });
         }
         return NextResponse.json({ actions });

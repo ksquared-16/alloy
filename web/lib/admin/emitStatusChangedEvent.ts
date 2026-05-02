@@ -1,9 +1,11 @@
 /**
  * Canonical workflow event bridge: emit entity_status_changed into workflow_events
  * when an entity's status_key changes. Used by admin PATCH routes.
+ * Inserts via `emitEvent` (`web/lib/emitEvent.ts`) so all status transitions share one path.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { emitEvent } from "@/lib/emitEvent";
 
 export type EmitStatusChangedEventParams = {
     supabase: SupabaseClient;
@@ -34,7 +36,7 @@ export type WorkflowEventRow = {
  * Otherwise insert workflow_events row and return it. Throws on insert failure.
  */
 export async function emitStatusChangedEvent(params: EmitStatusChangedEventParams): Promise<WorkflowEventRow | null> {
-    const { supabase, orgId, entityType, entityId, oldStatusKey, newStatusKey, metadata = {}, actorUserId } = params;
+    const { orgId, entityType, entityId, oldStatusKey, newStatusKey, metadata = {}, actorUserId } = params;
 
     const oldNorm = oldStatusKey == null ? null : String(oldStatusKey).trim();
     const newNorm = newStatusKey == null ? null : String(newStatusKey).trim();
@@ -56,25 +58,24 @@ export async function emitStatusChangedEvent(params: EmitStatusChangedEventParam
     const eventType =
         String(entityType).trim().toLowerCase() === "opportunities" ? "opportunity_status_changed" : "entity_status_changed";
 
-    const { data, error } = await supabase
-        .from("workflow_events")
-        .insert({
-            org_id: orgId,
-            event_type: eventType,
-            entity_type: entityType,
-            entity_id: entityId,
-            action_type: null,
-            payload,
-            occurred_at: now,
-        })
-        .select("id, org_id, event_type, entity_type, entity_id, action_type, payload, occurred_at, created_at")
-        .single();
+    const id = await emitEvent({
+        org_id: orgId,
+        event_type: eventType,
+        entity_type: entityType,
+        entity_id: entityId,
+        action_type: null,
+        occurred_at: now,
+        payload,
+    });
 
-    if (error) {
-        throw new Error(`emitStatusChangedEvent: ${error.message}`);
-    }
-    if (!data) {
-        throw new Error("emitStatusChangedEvent: no row returned");
-    }
-    return data as WorkflowEventRow;
+    return {
+        id,
+        org_id: orgId,
+        event_type: eventType,
+        entity_type: entityType,
+        entity_id: entityId,
+        action_type: null,
+        payload,
+        occurred_at: now,
+    };
 }

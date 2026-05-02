@@ -11,6 +11,12 @@ export type ResolveActionsQuery = {
     workUnitId?: string | null;
     /** Required filtering dimension for `record_section` (matches action_placements.section_key). */
     sectionKey?: string | null;
+    /**
+     * When opening from a record drawer, client may pass opportunity condition hints to skip a duplicate
+     * `opportunities` round-trip (must match the row; wrong hints can show transiently wrong actions until refetch).
+     */
+    hintOpportunityStatusKey?: string | null;
+    hintOpportunityMetadata?: Record<string, unknown> | null;
 };
 
 type PlacementRow = {
@@ -130,9 +136,16 @@ export async function resolveActionsForContext(
     let statusKey: string | null = null;
     let oppMetadata: Record<string, unknown> | null = null;
     if (et === "opportunity" && query.entityId?.trim()) {
-        const ctx = await fetchOpportunityConditionContext(supabase, query.orgId, query.entityId.trim());
-        statusKey = ctx.statusKey;
-        oppMetadata = ctx.metadata;
+        const hintSk = (query.hintOpportunityStatusKey ?? "").trim();
+        if (hintSk) {
+            statusKey = hintSk;
+            const hm = query.hintOpportunityMetadata;
+            oppMetadata = hm && typeof hm === "object" ? hm : null;
+        } else {
+            const ctx = await fetchOpportunityConditionContext(supabase, query.orgId, query.entityId.trim());
+            statusKey = ctx.statusKey;
+            oppMetadata = ctx.metadata;
+        }
     }
 
     const { data: rows, error } = await supabase

@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { emitEvent } from "@/lib/emitEvent";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { executeWorkflowRun } from "@/lib/workflowRun";
 
 /**
  * POST /api/action-links/consume-reschedule
@@ -88,14 +90,74 @@ export async function POST(request: NextRequest) {
         .from("schedules")
         .update(scheduleUpdate)
         .eq("id", scheduleId)
-        .select("start_at, end_at")
+        .select("start_at, end_at, org_id")
         .single();
 
     if (updateErr || !schedule) {
         return NextResponse.json({ error: "Failed to update schedule" }, { status: 500 });
     }
 
-    const out = schedule as { start_at: string; end_at: string };
+    const out = schedule as { start_at: string; end_at: string; org_id: string };
+    const orgId = out.org_id;
+    const occurredAt = new Date().toISOString();
+    const eventPayload: Record<string, unknown> = {
+        event_type: "action_link_consumed",
+        occurred_at: occurredAt,
+        org_id: orgId,
+        action_type: r.action_type,
+        entity_type: r.entity_type,
+        entity_id: r.entity_id,
+        schedule_id: scheduleId,
+        start_at: out.start_at,
+        end_at: out.end_at,
+        timezone: timezone ?? null,
+    };
+
+    let eventId: string | null = null;
+    try {
+        eventId = await emitEvent({
+            org_id: orgId,
+            event_type: "action_link_consumed",
+            entity_type: r.entity_type,
+            entity_id: r.entity_id,
+            action_type: r.action_type,
+            occurred_at: occurredAt,
+            payload: eventPayload,
+        });
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error("[consume-reschedule] emitEvent failed", msg);
+        return NextResponse.json({ error: "Event emission failed", message: msg }, { status: 500 });
+    }
+
+    let wq = supabase
+        .from("workflows")
+        .select("id")
+        .eq("enabled", true)
+        .eq("event_type", "action_link_consumed")
+        .eq("entity_type", r.entity_type);
+    wq = wq.or(`org_id.eq.${orgId},org_id.is.null`);
+    const { data: wfs } = await wq;
+    for (const wf of wfs ?? []) {
+        try {
+            await executeWorkflowRun(supabase, (wf as { id: string }).id, eventPayload, {
+                event_id: eventId,
+                org_id: orgId,
+            });
+        } catch (err) {
+            console.error(
+                "[consume-reschedule] executeWorkflowRun failed",
+                (err as Error).message,
+                "workflow_id=",
+                (wf as { id: string }).id
+            );
+            return NextResponse.json(
+                { error: "Workflow execution failed", message: (err as Error).message },
+                { status: 500 }
+            );
+        }
+    }
+
     return NextResponse.json({
         ok: true,
         start_at: out.start_at,

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAuthCached, requireAdminOrOps } from "@/lib/adminAuth";
+import { emitEvent } from "@/lib/emitEvent";
 
 /** PATCH: set assignment status (e.g. accepted, declined). Body: { status_key }. */
 export async function PATCH(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -24,22 +25,46 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
     const { data: assignment, error: aErr } = await supabase
         .from("assignments")
-        .select("id")
+        .select("id, status_key")
         .eq("schedule_id", scheduleId)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
     if (aErr || !assignment) return NextResponse.json({ error: "No assignment for this schedule" }, { status: 404 });
+    const oldStatusKey = (assignment as { status_key?: string | null }).status_key ?? null;
 
     const { data: statusRow } = await supabase.from("assignment_statuses").select("id, key").eq("key", statusKey).maybeSingle();
     const statusId = (statusRow as { id?: string } | null)?.id ?? null;
     if (!statusId) return NextResponse.json({ error: `Unknown status_key: ${statusKey}` }, { status: 400 });
     const resolvedKey = (statusRow as { key?: string } | null)?.key ?? statusKey;
 
+    const assignId = (assignment as { id: string }).id;
     const { error: updErr } = await supabase
         .from("assignments")
         .update({ assignment_status_id: statusId, status_key: resolvedKey, updated_at: new Date().toISOString() })
-        .eq("id", (assignment as { id: string }).id)
+        .eq("id", assignId)
         .eq("org_id", ctx.orgId);
     if (updErr) return NextResponse.json({ error: updErr.message }, { status: 400 });
+
+    const oldNorm = oldStatusKey == null ? null : String(oldStatusKey).trim();
+    const newNorm = String(resolvedKey).trim();
+    if (oldNorm !== newNorm) {
+        try {
+            await emitEvent({
+                org_id: ctx.orgId,
+                event_type: "assignment_status_changed",
+                entity_type: "schedule",
+                entity_id: scheduleId,
+                occurred_at: new Date().toISOString(),
+                payload: {
+                    assignment_id: assignId,
+                    old_status_key: oldStatusKey,
+                    new_status_key: resolvedKey,
+                    actor_user_id: auth.user.id,
+                },
+            });
+        } catch (e) {
+            console.warn("[schedule/assignment] emitEvent", e instanceof Error ? e.message : e);
+        }
+    }
     return NextResponse.json({ ok: true });
 }
