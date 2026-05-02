@@ -1,8 +1,11 @@
 "use client";
 
 import { ALLOY_PERF_TICK_EVENT, ensureAlloyPerf } from "@/lib/perf/alloyPerfGlobal";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
+
+/** localStorage key; set to `"true"` via `?perf=1` or manually. Cleared by `?perf=0`. */
+export const ALLOY_PERF_OVERLAY_LS_KEY = "alloy_perf_overlay";
 
 function fmtMs(end: number | undefined, start: number | undefined): string {
     if (typeof end !== "number" || typeof start !== "number" || !Number.isFinite(end) || !Number.isFinite(start)) {
@@ -11,13 +14,44 @@ function fmtMs(end: number | undefined, start: number | undefined): string {
     return `${Math.round(end - start)}ms`;
 }
 
+function readLocalOverlayFlag(): boolean {
+    if (typeof window === "undefined") return false;
+    try {
+        return window.localStorage.getItem(ALLOY_PERF_OVERLAY_LS_KEY) === "true";
+    } catch {
+        return false;
+    }
+}
+
 export default function AdminV2PerfOverlay() {
     const pathname = usePathname();
+    const searchParams = useSearchParams();
+    const [visible, setVisible] = useState(false);
     const [, setTick] = useState(0);
 
     useEffect(() => {
         ensureAlloyPerf();
     }, []);
+
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+
+        const perf = searchParams.get("perf");
+        try {
+            if (perf === "0") {
+                window.localStorage.removeItem(ALLOY_PERF_OVERLAY_LS_KEY);
+            } else if (perf === "1") {
+                window.localStorage.setItem(ALLOY_PERF_OVERLAY_LS_KEY, "true");
+            }
+        } catch {
+            /* private mode */
+        }
+
+        const isDev = process.env.NODE_ENV === "development";
+        const fromUrl = perf === "1";
+        const fromLs = readLocalOverlayFlag();
+        setVisible(isDev || fromUrl || fromLs);
+    }, [pathname, searchParams]);
 
     useEffect(() => {
         const api = ensureAlloyPerf();
@@ -33,7 +67,7 @@ export default function AdminV2PerfOverlay() {
         return () => window.removeEventListener(ALLOY_PERF_TICK_EVENT, onTick);
     }, []);
 
-    if (process.env.NODE_ENV !== "development") {
+    if (!visible) {
         return null;
     }
 

@@ -1,5 +1,6 @@
 /**
- * Dev-only on-screen perf overlay (see AdminV2PerfOverlay). Stores `performance.now()` samples on `window.__alloyPerf`.
+ * On-screen perf overlay uses `window.__alloyPerf` (see AdminV2PerfOverlay).
+ * Active in development or when overlay is explicitly enabled (URL / localStorage).
  */
 
 export const ALLOY_PERF_TICK_EVENT = "alloy-perf-tick";

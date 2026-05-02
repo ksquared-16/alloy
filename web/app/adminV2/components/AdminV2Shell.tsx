@@ -163,7 +163,9 @@ export default function AdminV2Shell({
               {adminV2AiCommandSurfaceEnabled() ? <AICommandSurfaceShell /> : <AICommandBar />}
             </div>
           </div>
-          <AdminV2PerfOverlay />
+          <Suspense fallback={null}>
+            <AdminV2PerfOverlay />
+          </Suspense>
         </div>
       </div>
     );
@@ -248,7 +250,9 @@ export default function AdminV2Shell({
           </div>
           {adminV2AiCommandSurfaceEnabled() ? <AICommandSurfaceShell /> : <AICommandBar />}
         </div>
-        <AdminV2PerfOverlay />
+        <Suspense fallback={null}>
+          <AdminV2PerfOverlay />
+        </Suspense>
       </div>
     </div>
   );
