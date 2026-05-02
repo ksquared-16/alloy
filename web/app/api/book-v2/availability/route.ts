@@ -6,6 +6,8 @@ import {
   createInstantForLocalClock,
   formatYmdInTimezone,
 } from "@/lib/booking/customerMinBookableDate";
+import { resolvePublicBookingOperationalTimezoneIana } from "@/lib/book-v2/publicOrgOperationalTimezone";
+import { isValidIanaTimeZone, UTC_FALLBACK_IANA } from "@/lib/admin/timezoneContract";
 
 /** Inclusive calendar-day window from "today" in the booking timezone (90 days → offsets 0..89). */
 const AVAILABILITY_CALENDAR_DAYS = 90;
@@ -17,12 +19,17 @@ const AVAILABILITY_CALENDAR_DAYS = 90;
  * requested timezone (weekdays only, after min bookable date).
  *
  * Query params:
- * - timezone: IANA timezone string (default: America/Los_Angeles)
+ * - timezone: IANA timezone string (default: org from ALLOY_PUBLIC_ORG_ID, else UTC)
  */
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
-    const timezone = searchParams.get("timezone") || "America/Los_Angeles";
+    const paramTz = searchParams.get("timezone")?.trim();
+    const defaultTz = await resolvePublicBookingOperationalTimezoneIana();
+    let timezone = paramTz || defaultTz;
+    if (!isValidIanaTimeZone(timezone)) {
+      timezone = UTC_FALLBACK_IANA;
+    }
 
     const slotDurationMinutes = 120; // 2 hours
     const bufferMinutes = 30; // 30 minutes buffer between bookings

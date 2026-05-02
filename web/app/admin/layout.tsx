@@ -8,6 +8,7 @@ import {
 import AdminLayout from "@/components/admin/AdminLayout";
 import type { AdminViewerTimezoneValue } from "@/contexts/AdminViewerTimezoneContext";
 import { loadAdminViewerTimezoneBootstrap } from "@/lib/admin/viewerTimezoneBootstrap";
+import { loadOperationalOrgTimezoneIana } from "@/lib/admin/loadOperationalOrgTimezoneServer";
 
 export const dynamic = 'force-dynamic';
 
@@ -45,12 +46,20 @@ export default async function AdminLayoutWrapper({
         console.error("[admin/layout] viewer timezone bootstrap failed:", e);
     }
 
+    let operationalTimezoneIana = "UTC";
+    try {
+        operationalTimezoneIana = await loadOperationalOrgTimezoneIana(orgId);
+    } catch (e) {
+        console.error("[admin/layout] operational org timezone failed:", e);
+    }
+
     return (
         <AdminLayout
             userEmail={typeof auth.user.email === "string" && auth.user.email ? auth.user.email : "Unknown"}
             role={auth.role}
             initialEntityLabels={initialEntityLabels}
             initialViewerTimezone={viewerTimezone}
+            initialOperationalTimezoneIana={operationalTimezoneIana}
         >
             {children}
         </AdminLayout>

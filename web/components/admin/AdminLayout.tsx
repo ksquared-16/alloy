@@ -29,6 +29,9 @@ import {
     Users,
 } from "lucide-react";
 import { AdminAuthProvider } from "@/contexts/AdminAuthContext";
+import {
+    AdminOrgOperationalTimezoneProvider,
+} from "@/contexts/AdminOrgOperationalTimezoneContext";
 import { AdminViewerTimezoneProvider, type AdminViewerTimezoneValue } from "@/contexts/AdminViewerTimezoneContext";
 import { AdminDrawerProvider } from "@/contexts/AdminDrawerContext";
 import AdminEntityDrawer from "@/components/admin/AdminEntityDrawer";
@@ -263,6 +266,8 @@ interface AdminLayoutProps {
     role: string;
     initialEntityLabels?: EntityLabelsMap;
     initialViewerTimezone?: AdminViewerTimezoneValue;
+    /** Org operational IANA for schedule/booking form defaults (not user display). */
+    initialOperationalTimezoneIana?: string;
 }
 
 function navLinkLabel(link: NavLink, labels: EntityLabelsMap, labelsLoading: boolean): string {
@@ -625,22 +630,29 @@ function AdminLayoutInner({ children, userEmail, role }: Omit<AdminLayoutProps, 
 }
 
 export default function AdminLayout(props: AdminLayoutProps) {
-    const { initialEntityLabels, userEmail, role, children, initialViewerTimezone } = props;
+    const { initialEntityLabels, userEmail, role, children, initialViewerTimezone, initialOperationalTimezoneIana } =
+        props;
     const safeEmail = typeof userEmail === "string" && userEmail.length > 0 ? userEmail : "Unknown";
     const safeRole = typeof role === "string" ? role : "";
     const tzValue: AdminViewerTimezoneValue = initialViewerTimezone ?? {
         iana: "UTC",
         source: "utc_fallback",
     };
+    const operationalTz =
+        typeof initialOperationalTimezoneIana === "string" && initialOperationalTimezoneIana.trim()
+            ? initialOperationalTimezoneIana.trim()
+            : "UTC";
     return (
         <AdminAuthProvider userEmail={safeEmail} role={safeRole}>
             <AdminVerticalProvider>
                 <EntityLabelsProvider initialLabels={initialEntityLabels}>
-                    <AdminViewerTimezoneProvider value={tzValue}>
-                        <AdminLayoutInner userEmail={safeEmail} role={safeRole}>
-                            {children}
-                        </AdminLayoutInner>
-                    </AdminViewerTimezoneProvider>
+                    <AdminOrgOperationalTimezoneProvider iana={operationalTz}>
+                        <AdminViewerTimezoneProvider value={tzValue}>
+                            <AdminLayoutInner userEmail={safeEmail} role={safeRole}>
+                                {children}
+                            </AdminLayoutInner>
+                        </AdminViewerTimezoneProvider>
+                    </AdminOrgOperationalTimezoneProvider>
                 </EntityLabelsProvider>
             </AdminVerticalProvider>
         </AdminAuthProvider>

@@ -11,6 +11,7 @@ import {
 import { filterExcludedCustomerAddonKeys } from "@/lib/book-v2/customerAddonPolicy";
 import { BOOK_V2_ACCESS_METHOD_STABLE_TO_UI } from "@/lib/book-v2/bookingCanonicalMaps";
 import { resolveOptionSetOptions, resolveOptionSetOptionsWithMetadata } from "@/lib/fields/resolveOptionSetOptions";
+import { fetchOperationalTimezoneForOrg, UTC_FALLBACK_IANA } from "@/lib/admin/timezoneContract";
 
 /**
  * GET /api/public/booking-config
@@ -23,6 +24,11 @@ export async function GET() {
         }
         const supabase = createServiceRoleClient();
         const orgId = process.env.ALLOY_PUBLIC_ORG_ID?.trim() || null;
+        let operational_timezone_iana = UTC_FALLBACK_IANA;
+        if (orgId) {
+            const { iana } = await fetchOperationalTimezoneForOrg(supabase, orgId);
+            operational_timezone_iana = iana;
+        }
         const verticalId = await resolveCleaningVerticalId(supabase, "cleaning");
         if (!verticalId) {
             return NextResponse.json({ ok: false, message: "Cleaning vertical not found" }, { status: 500 });
@@ -101,6 +107,8 @@ export async function GET() {
         return NextResponse.json({
             ok: true,
             vertical_id: verticalId,
+            /** Org operational calendar timezone for slot selection (metadata.timezone → time_zone → UTC). */
+            operational_timezone_iana,
             square_footage_tiers,
             home_types,
             bedroom_options: bedroomOptions,

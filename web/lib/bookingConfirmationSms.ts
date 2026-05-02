@@ -1,6 +1,5 @@
 import { formatSmsDateTime } from "@/lib/formatSmsDateTime";
-
-const DEFAULT_BUSINESS_TZ = "America/Los_Angeles";
+import { UTC_FALLBACK_IANA } from "@/lib/admin/timezoneContract";
 
 export function resolveBookingSmsTimeZone(params: {
     scheduleTimezone?: string | null;
@@ -12,7 +11,7 @@ export function resolveBookingSmsTimeZone(params: {
     if (ct) return ct;
     const env = String(process.env.ALLOY_DEFAULT_BUSINESS_TIMEZONE ?? "").trim();
     if (env) return env;
-    return DEFAULT_BUSINESS_TZ;
+    return UTC_FALLBACK_IANA;
 }
 
 /** Single outbound SMS body for booking confirmation + reschedule/cancel links (workflow can use this or template vars). */
