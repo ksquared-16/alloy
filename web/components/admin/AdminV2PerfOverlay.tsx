@@ -73,9 +73,10 @@ export default function AdminV2PerfOverlay() {
 
     const m = ensureAlloyPerf()?.marks ?? ({} as Record<string, number>);
 
-    const drawerTotal = fmtMs(m.drawer_ready, m.drawer_open_start);
-    const drawerEntity = fmtMs(m.drawer_entity_ready, m.drawer_open_start);
-    const drawerHeader = fmtMs(m.drawer_header_actions_ready, m.drawer_entity_ready);
+    const drawerTotal = fmtMs(m.drawer_visible_ready, m.drawer_open_start);
+    const drawerEntityResp = fmtMs(m.drawer_entity_response, m.drawer_open_start);
+    const drawerEntityApplied = fmtMs(m.drawer_entity_applied, m.drawer_open_start);
+    const drawerHeader = fmtMs(m.drawer_header_actions_ready, m.drawer_entity_applied);
 
     const text = [
         `WS: ${fmtMs(m.workspace_ready, m.workspace_start)}`,
@@ -84,8 +85,9 @@ export default function AdminV2PerfOverlay() {
         `WU Summ: ${fmtMs(m.work_unit_summaries_ready, m.work_unit_start)}`,
         `Rows: ${fmtMs(m.queue_rows_ready, m.work_unit_start)}`,
         `Drawer: ${drawerTotal}`,
-        typeof m.drawer_entity_ready === "number" ? `  entity: ${drawerEntity}` : "",
-        typeof m.drawer_header_actions_ready === "number" && typeof m.drawer_entity_ready === "number"
+        typeof m.drawer_entity_response === "number" ? `  entity response: ${drawerEntityResp}` : "",
+        typeof m.drawer_entity_applied === "number" ? `  entity applied: ${drawerEntityApplied}` : "",
+        typeof m.drawer_header_actions_ready === "number" && typeof m.drawer_entity_applied === "number"
             ? `  header Δ: ${drawerHeader}`
             : "",
     ]

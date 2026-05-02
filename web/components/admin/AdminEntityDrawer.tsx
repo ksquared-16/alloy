@@ -1407,6 +1407,9 @@ export default function AdminEntityDrawer() {
                 return res.json();
             })
             .then((json) => {
+                if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                    alloyPerfSet("drawer_entity_response", performance.now());
+                }
                 if (timingEnabled) {
                     const dt = performance.now() - t0;
                     console.info("[timing][drawer]", {
@@ -1418,7 +1421,7 @@ export default function AdminEntityDrawer() {
                 }
                 setData(json);
                 if (typeof window !== "undefined" && typeof performance !== "undefined") {
-                    alloyPerfSet("drawer_entity_ready", performance.now());
+                    alloyPerfSet("drawer_entity_applied", performance.now());
                 }
                 if (timingEnabled && drawer.type === "opportunities" && drawer.id && drawer.id !== "new") {
                     markTiming("record_fetch_json_applied", { url });
@@ -1467,7 +1470,7 @@ export default function AdminEntityDrawer() {
         if (drawerReadyLoggedKeyRef.current === key) return;
         drawerReadyLoggedKeyRef.current = key;
         if (typeof window !== "undefined" && typeof performance !== "undefined") {
-            alloyPerfSet("drawer_ready", performance.now());
+            alloyPerfSet("drawer_visible_ready", performance.now());
         }
     }, [drawer.type, drawer.id, drawerReady, data]);
 
@@ -1591,9 +1594,12 @@ export default function AdminEntityDrawer() {
                 return res.json();
             })
             .then((json) => {
+                if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                    alloyPerfSet("drawer_entity_response", performance.now());
+                }
                 setData(json);
                 if (typeof window !== "undefined" && typeof performance !== "undefined") {
-                    alloyPerfSet("drawer_entity_ready", performance.now());
+                    alloyPerfSet("drawer_entity_applied", performance.now());
                 }
             })
             .catch((e) => setError(e.message))

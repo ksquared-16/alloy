@@ -578,6 +578,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             usedNewQueueApi = true;
                             if (!cancelled) {
                                 const qs = (j.queues ?? []) as QueueSummary[];
+                                if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                                    alloyPerfSet("work_unit_summaries_ready", performance.now());
+                                }
                                 setQueueSummaries(qs);
                                 setQueueSummariesError(null);
                                 setQueueSummariesRoute(route);
@@ -615,9 +618,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                           ? allKeyFromDef
                                           : firstByUi;
                                 setSelectedQueueKey(initial);
-                                if (typeof window !== "undefined" && typeof performance !== "undefined") {
-                                    alloyPerfSet("work_unit_summaries_ready", performance.now());
-                                }
                             }
                         } else if (res.status === 501) {
                             shouldFallbackToLegacy = true;
@@ -844,6 +844,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
             const qsOut = (json.queues ?? []) as QueueSummary[];
             if (seq === queueSummariesRequestSeq.current) {
                 setQueueSummaries(qsOut);
+                if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                    alloyPerfSet("work_unit_summaries_ready", performance.now());
+                }
                 if (typeof window !== "undefined") {
                     console.warn("[pipeline-count-unify]", {
                         source: "work-unit-refresh",
@@ -889,10 +892,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
         return () => window.removeEventListener("adminv2:opportunity-updated", onUpdated as EventListener);
     }, [fetchQueueItems, fetchQueueSummaries, selectedQueueKey, workUnitId]);
 
+    /** One row fetch per selection: wait for summaries (or a summaries error) so omit_total matches the final tab badge semantics — avoids exact-then-omit double GET. */
     useEffect(() => {
         if (!workUnitId || !selectedQueueKey) return;
+        if (queueSummaries === null && !queueSummariesError) return;
         void fetchQueueItems(workUnitId, selectedQueueKey, queueSummaries);
-    }, [fetchQueueItems, queueSummaries, selectedQueueKey, workUnitId]);
+    }, [fetchQueueItems, queueSummaries, queueSummariesError, selectedQueueKey, workUnitId]);
 
     useEffect(() => {
         let cancelled = false;
