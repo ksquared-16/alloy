@@ -13,6 +13,7 @@ import {
 } from "@/lib/admin/statusDefinitionsResolve";
 import { isUuidLike } from "@/lib/admin/overviewRelationshipLabels";
 import { batchOptionItemLabelsForOrg, optionLabelFromBatchMap } from "@/lib/admin/optionItemLabelForOrg";
+import { logDbTiming, withDbTiming } from "@/lib/admin/dbQueryTiming";
 
 type AdminSupabase = ReturnType<typeof createAdminClient>;
 
@@ -84,12 +85,17 @@ export async function respondOpportunityEntityGet(
   request: NextRequest,
 ): Promise<NextResponse> {
   const opportunityRouteStartedAt = Date.now();
-  const { data, error } = await supabase
-    .from("opportunities")
-    .select("*")
-    .eq("id", id)
-    .eq("org_id", orgId)
-    .single();
+  const { data, error } = await withDbTiming(
+    "opportunities.select_by_id",
+    { orgId, id },
+    async () =>
+      supabase
+        .from("opportunities")
+        .select("*")
+        .eq("id", id)
+        .eq("org_id", orgId)
+        .single(),
+  );
   if (error || !data)
     return NextResponse.json(error?.message || "Not found", {
       status: error?.code === "PGRST116" ? 404 : 500,
@@ -215,6 +221,7 @@ export async function respondOpportunityEntityGet(
     const markVisiblePhase = (key: string) => {
       enrichPhaseMs[key] = Date.now() - enrichStartedAt;
     };
+    const tParVis0 = Date.now();
     const [
       wuDeptRowV,
       customerRowV,
@@ -252,6 +259,10 @@ export async function respondOpportunityEntityGet(
           })
         : Promise.resolve([]),
     ]);
+    logDbTiming("opportunityEntity.drawer_visible_parallel", Date.now() - tParVis0, {
+      orgId,
+      id,
+    });
     markVisiblePhase("visible_after_parallel");
     const vis: Record<string, unknown> = { ...data };
     vis._work_unit_department_id = wuidForDept
@@ -403,6 +414,7 @@ export async function respondOpportunityEntityGet(
         { activeOnly: true },
       )
     : Promise.resolve([]);
+  const tParFull0 = Date.now();
   const [
     wuDeptRow,
     customerRow,
@@ -469,6 +481,7 @@ export async function respondOpportunityEntityGet(
     primaryPersonContactP,
     opportunityDefsP,
   ]);
+  logDbTiming("opportunityEntity.full_parallel_lookups", Date.now() - tParFull0, { orgId, id });
   markPhase("after_parallel_context_lookups");
   out._work_unit_department_id = wuidForDept
     ? trimOrNull(

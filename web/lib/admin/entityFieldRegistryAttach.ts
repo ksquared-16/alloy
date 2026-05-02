@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { displayFromFieldValueRow } from "@/lib/admin/typedFieldValues";
+import { withDbTiming } from "@/lib/admin/dbQueryTiming";
 
 export const DRAWER_TYPE_TO_FIELD_ENTITY_TYPE: Record<string, string> = {
     customers: "customer",
@@ -44,14 +45,36 @@ export async function attachFieldDefinitionsAndValues(
         orgId = (out._job as { org_id?: string }).org_id ?? null;
     }
     if (!orgId) return;
-    const { data: defRows } = await supabase
-        .from("field_definitions")
-        .select("id, field_key, field_type, label, section_key, sort_order, is_system, is_visible_in_drawer")
-        .eq("org_id", orgId)
-        .eq("entity_type", entityType)
-        .eq("is_active", true)
-        .order("section_key", { ascending: true })
-        .order("sort_order", { ascending: true });
+    const [defRows, sectionRows] = await Promise.all([
+        withDbTiming(
+            "field_definitions.list_active",
+            { orgId, entityType },
+            async () => {
+                const { data } = await supabase
+                    .from("field_definitions")
+                    .select("id, field_key, field_type, label, section_key, sort_order, is_system, is_visible_in_drawer")
+                    .eq("org_id", orgId)
+                    .eq("entity_type", entityType)
+                    .eq("is_active", true)
+                    .order("section_key", { ascending: true })
+                    .order("sort_order", { ascending: true });
+                return data;
+            }
+        ),
+        withDbTiming(
+            "field_section_definitions.list",
+            { orgId, entityType },
+            async () => {
+                const { data } = await supabase
+                    .from("field_section_definitions")
+                    .select("section_key, label, sort_order")
+                    .eq("org_id", orgId)
+                    .eq("entity_type", entityType)
+                    .order("sort_order", { ascending: true });
+                return data;
+            }
+        ),
+    ]);
     const fieldDefs = (defRows ?? []) as {
         id: string;
         field_key: string;
@@ -64,12 +87,6 @@ export async function attachFieldDefinitionsAndValues(
     }[];
     out._field_definitions = fieldDefs;
 
-    const { data: sectionRows } = await supabase
-        .from("field_section_definitions")
-        .select("section_key, label, sort_order")
-        .eq("org_id", orgId)
-        .eq("entity_type", entityType)
-        .order("sort_order", { ascending: true });
     out._field_sections = (sectionRows ?? []) as { section_key: string; label: string; sort_order: number }[];
 
     if (fieldDefs.length === 0) return;
@@ -78,12 +95,19 @@ export async function attachFieldDefinitionsAndValues(
     const customDefIds = customDefs.map((d) => d.id);
     if (customDefIds.length === 0 || !mergeValues) return;
 
-    const { data: fvRows } = await supabase
-        .from("field_values")
-        .select("field_definition_id, value_text, value_number, value_boolean, value_date, value_json")
-        .eq("entity_type", entityType)
-        .eq("entity_id", entityId)
-        .in("field_definition_id", customDefIds);
+    const fvRows = await withDbTiming(
+        "field_values.by_entity",
+        { orgId, entityType, entityId, def_count: customDefIds.length },
+        async () => {
+            const { data } = await supabase
+                .from("field_values")
+                .select("field_definition_id, value_text, value_number, value_boolean, value_date, value_json")
+                .eq("entity_type", entityType)
+                .eq("entity_id", entityId)
+                .in("field_definition_id", customDefIds);
+            return data;
+        }
+    );
 
     type FvRow = {
         field_definition_id: string;

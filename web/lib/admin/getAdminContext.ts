@@ -71,31 +71,14 @@ async function loadAdminContext(): Promise<AdminContextResult> {
 }
 
 const resolveAdminContextOnce = cache(async (): Promise<AdminContextResult> => {
-    const t0 = Date.now();
-    const result = await loadAdminContext();
-    console.log("[admin-context]", {
-        cache_hit: false,
-        duration_ms: Date.now() - t0,
-    });
-    return result;
+    return loadAdminContext();
 });
-
-const adminContextInvocationCounter = cache(() => ({ n: 0 }));
 
 /**
  * Request-scoped: repeated calls in the same request return the same result with one DB/auth pass.
  */
 export async function getAdminContextCached(): Promise<AdminContextResult> {
-    const ctr = adminContextInvocationCounter();
-    ctr.n += 1;
-    const out = await resolveAdminContextOnce();
-    if (ctr.n > 1) {
-        console.log("[admin-context]", {
-            cache_hit: true,
-            duration_ms: 0,
-        });
-    }
-    return out;
+    return resolveAdminContextOnce();
 }
 
 /** @deprecated Use `getAdminContextCached` in new code — behavior is identical (cached). */

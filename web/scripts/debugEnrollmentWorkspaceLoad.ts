@@ -253,7 +253,7 @@ async function main() {
   line();
   for (const queueKey of EXPECTED_QUEUE_KEYS) {
     try {
-      const items = await getWorkUnitQueueItems({ orgId, workUnitId, queueKey, limit: 5, offset: 0 });
+      const { result: items } = await getWorkUnitQueueItems({ orgId, workUnitId, queueKey, limit: 5, offset: 0 });
       pass(`QueueService items: ${queueKey}`, {
         total: items.total,
         limit: items.limit,

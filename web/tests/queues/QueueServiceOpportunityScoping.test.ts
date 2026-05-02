@@ -147,6 +147,18 @@ describe("QueueService opportunity scoping", () => {
         const supabase: any = {
             from: (table: string) => {
                 if (table === "work_units") return { select: mockWuSelect };
+                if (table === "org_settings") {
+                    return {
+                        select: () => ({
+                            eq: () => ({
+                                maybeSingle: async () => ({
+                                    data: { metadata: null },
+                                    error: null,
+                                }),
+                            }),
+                        }),
+                    };
+                }
                 // Should not be reached; validation should fail before querying items.
                 return {
                     select: () => ({ eq: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }) }),

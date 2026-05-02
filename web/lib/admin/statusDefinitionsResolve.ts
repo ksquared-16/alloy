@@ -1,4 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { logDbTiming } from "@/lib/admin/dbQueryTiming";
+
+const STATUS_EFFECTIVE_CACHE = new Map<string, { at: number; rows: StatusDefinitionRow[] }>();
+const STATUS_EFFECTIVE_TTL_MS = 12_000;
+const STATUS_EFFECTIVE_CACHE_ENABLED = process.env.NODE_ENV !== "test";
+
+function statusEffectiveCacheKey(orgId: string, entityType: string, activeOnly: boolean): string {
+    return `${orgId}\u0001${entityType}\u0001${activeOnly ? "1" : "0"}`;
+}
 
 export {
     OPPORTUNITY_LIFECYCLE_STAGES,
@@ -40,6 +49,7 @@ export async function fetchOrgStatusDefinitions(
     entityType: string,
     opts?: { activeOnly?: boolean }
 ): Promise<StatusDefinitionRow[]> {
+    const t0 = Date.now();
     const activeOnly = opts?.activeOnly !== false;
     let q = supabase
         .from("status_definitions")
@@ -49,10 +59,12 @@ export async function fetchOrgStatusDefinitions(
     if (activeOnly) q = q.eq("is_active", true);
     const { data, error } = await q.order("sort_order", { ascending: true }).order("status_label", { ascending: true });
     if (error) throw new Error(error.message);
-    return ((data ?? []) as StatusDefinitionRow[]).map((r) => ({
+    const rows = ((data ?? []) as StatusDefinitionRow[]).map((r) => ({
         ...r,
         metadata: (r.metadata as Record<string, unknown> | null) ?? null,
     }));
+    logDbTiming("status_definitions.org_select", Date.now() - t0, { orgId, entityType, activeOnly });
+    return rows;
 }
 
 /**
@@ -64,6 +76,7 @@ export async function fetchIndustryDefaultStatusDefinitions(
     orgIndustryKey: string | null,
     opts?: { activeOnly?: boolean }
 ): Promise<StatusDefinitionRow[]> {
+    const t0 = Date.now();
     const activeOnly = opts?.activeOnly !== false;
     let q = supabase
         .from("status_definitions")
@@ -84,17 +97,27 @@ export async function fetchIndustryDefaultStatusDefinitions(
     const byKey = new Map<string, StatusDefinitionRow>();
     for (const r of generic) byKey.set(r.status_key, r);
     for (const r of specific) byKey.set(r.status_key, r);
-    return sortDefs(Array.from(byKey.values()));
+    const out = sortDefs(Array.from(byKey.values()));
+    logDbTiming("status_definitions.industry_defaults_select", Date.now() - t0, { entityType, activeOnly });
+    return out;
 }
 
 /** Resolve org's industry to `industries.key` for matching `status_definitions.industry_key`. */
 export async function getOrgIndustryKey(supabase: SupabaseClient, orgId: string): Promise<string | null> {
+    const t0 = Date.now();
     const { data } = await supabase.from("orgs").select("industry_id").eq("id", orgId).maybeSingle();
     const industryId = (data as { industry_id?: string | null } | null)?.industry_id ?? null;
-    if (!industryId) return null;
+    if (!industryId) {
+        logDbTiming("orgs.industry_key_resolve", Date.now() - t0, { orgId, hit: false });
+        return null;
+    }
     const { data: ind } = await supabase.from("industries").select("key").eq("id", industryId).maybeSingle();
     const k = (ind as { key?: string | null } | null)?.key;
-    if (k == null || String(k).trim() === "") return null;
+    if (k == null || String(k).trim() === "") {
+        logDbTiming("orgs.industry_key_resolve", Date.now() - t0, { orgId, hit: false });
+        return null;
+    }
+    logDbTiming("orgs.industry_key_resolve", Date.now() - t0, { orgId, hit: true });
     return String(k).trim();
 }
 
@@ -104,7 +127,7 @@ export async function getOrgIndustryKey(supabase: SupabaseClient, orgId: string)
  * **Schedules:** merge industry defaults with org rows by `status_key` (org wins). A lone org subset
  * no longer hides keys like `canceled` that exist only on industry `status_definitions` rows.
  */
-export async function fetchEffectiveStatusDefinitions(
+async function fetchEffectiveStatusDefinitionsUncached(
     supabase: SupabaseClient,
     orgId: string,
     entityType: string,
@@ -113,17 +136,16 @@ export async function fetchEffectiveStatusDefinitions(
     // For schedules/opportunities we need *all* org overrides (including inactive) so an inactive org row can
     // explicitly hide an industry default in the effective list.
     const needsMergeDefaults = entityType === "schedules" || entityType === "opportunities";
-    const orgRows = await fetchOrgStatusDefinitions(
-        supabase,
-        orgId,
-        entityType,
-        needsMergeDefaults ? { activeOnly: false } : opts
-    );
 
     // Schedules (and opportunities) must merge defaults with org rows so a partial org override
     // does not hide industry defaults required by workflows/actions.
     if (needsMergeDefaults) {
-        const industryKey = await getOrgIndustryKey(supabase, orgId);
+        const tPar0 = Date.now();
+        const [orgRows, industryKey] = await Promise.all([
+            fetchOrgStatusDefinitions(supabase, orgId, entityType, { activeOnly: false }),
+            getOrgIndustryKey(supabase, orgId),
+        ]);
+        logDbTiming("status_definitions.merge_parallel_boot", Date.now() - tPar0, { orgId, entityType });
         const defaultRows = await fetchIndustryDefaultStatusDefinitions(supabase, entityType, industryKey, opts);
         const activeOnly = opts?.activeOnly !== false;
         const byKey = new Map<string, StatusDefinitionRow>();
@@ -141,9 +163,39 @@ export async function fetchEffectiveStatusDefinitions(
         return sortDefs(Array.from(byKey.values()));
     }
 
+    const orgRows = await fetchOrgStatusDefinitions(supabase, orgId, entityType, opts);
     if (orgRows.length > 0) return sortDefs(orgRows);
     const industryKey = await getOrgIndustryKey(supabase, orgId);
     return fetchIndustryDefaultStatusDefinitions(supabase, entityType, industryKey, opts);
+}
+
+/**
+ * Effective definitions for admin UI: org overrides first; if none, industry defaults (merged for schedules/opportunities).
+ * Short TTL in-process cache (org + entity + activeOnly); disabled in test to avoid cross-example staleness.
+ */
+export async function fetchEffectiveStatusDefinitions(
+    supabase: SupabaseClient,
+    orgId: string,
+    entityType: string,
+    opts?: { activeOnly?: boolean }
+): Promise<StatusDefinitionRow[]> {
+    const activeOnly = opts?.activeOnly !== false;
+    if (STATUS_EFFECTIVE_CACHE_ENABLED) {
+        const ck = statusEffectiveCacheKey(orgId, entityType, activeOnly);
+        const ent = STATUS_EFFECTIVE_CACHE.get(ck);
+        const now = Date.now();
+        if (ent && now - ent.at < STATUS_EFFECTIVE_TTL_MS) {
+            return ent.rows;
+        }
+    }
+    const rows = await fetchEffectiveStatusDefinitionsUncached(supabase, orgId, entityType, opts);
+    if (STATUS_EFFECTIVE_CACHE_ENABLED) {
+        STATUS_EFFECTIVE_CACHE.set(statusEffectiveCacheKey(orgId, entityType, activeOnly), {
+            at: Date.now(),
+            rows,
+        });
+    }
+    return rows;
 }
 
 /** Build a map from pre-fetched effective definitions (batch list enrichment). */

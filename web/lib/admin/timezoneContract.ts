@@ -5,6 +5,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { withDbTiming } from "@/lib/admin/dbQueryTiming";
 
 export const UTC_FALLBACK_IANA = "UTC";
 
@@ -54,11 +55,13 @@ export async function fetchOperationalTimezoneForOrg(
     supabase: SupabaseClient,
     orgId: string
 ): Promise<{ iana: string; source: OperationalTimezoneSource }> {
-    const { data, error } = await supabase.from("org_settings").select("metadata").eq("org_id", orgId).maybeSingle();
-    if (error || !data) {
-        return { iana: UTC_FALLBACK_IANA, source: "utc_fallback" };
-    }
-    return resolveOrgTimezoneFromMetadata((data as { metadata?: unknown }).metadata);
+    return withDbTiming("org_settings.metadata_for_timezone", { orgId }, async () => {
+        const { data, error } = await supabase.from("org_settings").select("metadata").eq("org_id", orgId).maybeSingle();
+        if (error || !data) {
+            return { iana: UTC_FALLBACK_IANA, source: "utc_fallback" };
+        }
+        return resolveOrgTimezoneFromMetadata((data as { metadata?: unknown }).metadata);
+    });
 }
 
 /**

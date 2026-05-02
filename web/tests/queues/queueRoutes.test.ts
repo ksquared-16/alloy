@@ -56,11 +56,22 @@ describe("Queue API routes (thin wrappers)", () => {
 
     it("GET /api/admin/queues/[workUnitId]/[queueKey] caps limit at 100", async () => {
         const getItems = vi.fn(async (p: any) => ({
-            queue: { key: p.queueKey, label: "X", entity_type: "job", priority: "standard", display: "list" },
-            items: [],
-            total: 0,
-            limit: p.limit ?? 0,
-            offset: p.offset ?? 0,
+            result: {
+                queue: { key: p.queueKey, label: "X", entity_type: "job", priority: "standard", display: "list" },
+                items: [],
+                total: 0,
+                limit: p.limit ?? 0,
+                offset: p.offset ?? 0,
+            },
+            rowsPerf: {
+                load_def_ms: 0,
+                operational_day_ms: 0,
+                base_query_ms: 0,
+                count_ms: 0,
+                status_defs_ms: 0,
+                enrichment_ms: 0,
+                service_total_ms: 0,
+            },
         }));
         vi.doMock("@/lib/queues/QueueService", () => ({
             QueueServiceError: class QueueServiceError extends Error {

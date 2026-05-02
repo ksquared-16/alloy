@@ -8,6 +8,7 @@ import {
     displayLabelsFromDefinitions,
     type StatusDefinitionRow,
 } from "@/lib/admin/statusDefinitionsResolve";
+import { logDbTiming, withDbTiming } from "@/lib/admin/dbQueryTiming";
 import { formatTourDateTime } from "@/lib/enrollment/formatTourDateTime";
 import { getOrgLocalTodayUtcBounds, type OrgLocalDayUtcBounds } from "@/lib/admin/orgLocalDayBounds";
 import { fetchOperationalTimezoneForOrg, UTC_FALLBACK_IANA } from "@/lib/admin/timezoneContract";
@@ -568,6 +569,11 @@ async function enrichOpportunityRows(params: {
         defsPromise,
     ]);
     const parallelMainMs = Date.now() - tParallel0;
+    logDbTiming("enrichOpportunityRows.parallel_main", parallelMainMs, {
+        orgId,
+        row_count: rows.length,
+        enrichment,
+    });
 
     const labelByKey = displayLabelsFromDefinitions(defs);
 
@@ -608,14 +614,21 @@ async function enrichOpportunityRows(params: {
     }
     const primaryPersonIdSet = new Set(personIds);
     const childPersonIdsToFetch = [...new Set(childPersonIds)].filter((id) => !primaryPersonIdSet.has(id));
-    const { data: childPersons } =
+    const childPersons =
         childPersonIdsToFetch.length > 0
-            ? await supabase
-                .from("persons")
-                .select("id, date_of_birth")
-                .eq("org_id", orgId)
-                .in("id", childPersonIdsToFetch as any)
-            : { data: [] as any[] };
+            ? await withDbTiming(
+                  "persons.child_dob_batch",
+                  { orgId, n: childPersonIdsToFetch.length },
+                  async () => {
+                      const { data } = await supabase
+                          .from("persons")
+                          .select("id, date_of_birth")
+                          .eq("org_id", orgId)
+                          .in("id", childPersonIdsToFetch as any);
+                      return data ?? [];
+                  }
+              )
+            : ([] as any[]);
     const childDobByPersonId = new Map<string, string>();
     for (const p of (childPersons ?? []) as any[]) {
         const id = String(p.id ?? "").trim();
@@ -830,7 +843,7 @@ async function loadOpportunityNeedsAttentionRows(params: {
     const candidateOr = buildOpportunityNeedsAttentionCandidateOrExpr(params.now);
     let q = params.supabase
         .from("opportunities")
-        .select("id, name, title, status_key, customer_id, primary_person_id, primary_contact_id, work_unit_id, metadata, created_at, updated_at")
+        .select("id, name, status_key, customer_id, primary_person_id, primary_contact_id, work_unit_id, metadata, created_at, updated_at")
         .eq("org_id", params.orgId)
         .eq("work_unit_id", params.workUnitId)
         .or(candidateOr) as any;
@@ -971,14 +984,31 @@ function applySortToJobQuery(
     return out;
 }
 
+const WU_QUEUE_DEF_CACHE = new Map<string, { at: number; def: QueueDefinitionV1 }>();
+const WU_QUEUE_DEF_TTL_MS = 12_000;
+const WU_QUEUE_DEF_CACHE_ENABLED = process.env.NODE_ENV !== "test";
+
 async function loadWorkUnitQueueDefinition(params: { orgId: string; workUnitId: string }): Promise<QueueDefinitionV1> {
+    const cacheKey = `${params.orgId}:${params.workUnitId}`;
+    const now = Date.now();
+    if (WU_QUEUE_DEF_CACHE_ENABLED) {
+        const hit = WU_QUEUE_DEF_CACHE.get(cacheKey);
+        if (hit && now - hit.at < WU_QUEUE_DEF_TTL_MS) {
+            return hit.def;
+        }
+    }
     const supabase = createAdminClient();
-    const { data, error } = await supabase
-        .from("work_units")
-        .select("id, org_id, queue_definition")
-        .eq("id", params.workUnitId)
-        .eq("org_id", params.orgId)
-        .maybeSingle();
+    const { data, error } = await withDbTiming(
+        "work_units.queue_definition_row",
+        { orgId: params.orgId, workUnitId: params.workUnitId },
+        async () =>
+            supabase
+                .from("work_units")
+                .select("id, org_id, queue_definition")
+                .eq("id", params.workUnitId)
+                .eq("org_id", params.orgId)
+                .maybeSingle()
+    );
 
     if (error) {
         throw new QueueServiceError(error.message, 400, "DB_ERROR");
@@ -995,7 +1025,11 @@ async function loadWorkUnitQueueDefinition(params: { orgId: string; workUnitId: 
     if (storedVersion !== null && storedVersion !== 1) {
         throw new QueueServiceError("Unsupported stored queue_definition version", 400, "UNSUPPORTED_VERSION");
     }
-    return loadQueueDefinitionOrThrow(raw);
+    const def = loadQueueDefinitionOrThrow(raw);
+    if (WU_QUEUE_DEF_CACHE_ENABLED) {
+        WU_QUEUE_DEF_CACHE.set(cacheKey, { at: now, def });
+    }
+    return def;
 }
 
 function clampLimit(n: number, min: number, max: number): number {
@@ -1015,12 +1049,24 @@ async function timedBranch<T>(p: Promise<T>): Promise<{ value: T; ms: number }> 
 type PgList = { data: unknown; error: { message: string } | null };
 type PgCount = { count: number | null; error: { message: string } | null };
 
-function logQueueItemsPhase(payload: Record<string, unknown>): void {
-    console.warn("[queue-items-phase]", payload);
-}
-
 /** `planned` uses PostgreSQL planner estimates (faster on large tables; approximate). */
 export type QueueCountAccuracy = "exact" | "planned";
+
+/** Timing breakdown emitted with {@link getWorkUnitQueueItems} (`[perf.queue.rows]` merges auth + serialization in the route). */
+export type QueueRowsPerfBreakdown = {
+    load_def_ms: number;
+    operational_day_ms: number;
+    base_query_ms: number;
+    count_ms: number;
+    status_defs_ms: number;
+    enrichment_ms: number;
+    service_total_ms: number;
+};
+
+export type WorkUnitQueueItemsWithPerf = {
+    result: QueueItemsResult;
+    rowsPerf: QueueRowsPerfBreakdown;
+};
 
 function queueCountSelect(accuracy: QueueCountAccuracy | undefined): "exact" | "planned" {
     return accuracy === "planned" ? "planned" : "exact";
@@ -1624,20 +1670,33 @@ export async function getWorkUnitQueueItems(params: {
     countAccuracy?: QueueCountAccuracy;
     /** Skip COUNT query; list still returns `limit` rows. UI should fall back to tab/summary totals. */
     omitTotalCount?: boolean;
-}): Promise<QueueItemsResult> {
+}): Promise<WorkUnitQueueItemsWithPerf> {
     const tSvc0 = Date.now();
     const supabase = createAdminClient();
     const refUtc = new Date();
-    /** Overlap with queue-definition load (opportunity rows always need these defs; job WUs pay one unused extra round-trip). */
-    const opportunityStatusDefsHeadStart = fetchEffectiveStatusDefinitions(supabase as any, params.orgId, "opportunities", { activeOnly: true });
-    const tBoot0 = Date.now();
-    const [def, operationalDay] = await Promise.all([
-        loadWorkUnitQueueDefinition({ orgId: params.orgId, workUnitId: params.workUnitId }),
-        resolveOperationalDayPlanContext(supabase, params.orgId, refUtc),
+
+    const [defTimed, opsTimed] = await Promise.all([
+        timedBranch(loadWorkUnitQueueDefinition({ orgId: params.orgId, workUnitId: params.workUnitId })),
+        timedBranch(resolveOperationalDayPlanContext(supabase, params.orgId, refUtc)),
     ]);
-    const loadDefMs = Date.now() - tBoot0;
+    const def = defTimed.value;
+    const operationalDay = opsTimed.value;
+    const load_def_ms = defTimed.ms;
+    const operational_day_ms = opsTimed.ms;
+
     assertSupportedEntityType(def);
     const q = findQueueByKey(def, params.queueKey);
+
+    const finalize = (
+        queueItems: QueueItemsResult,
+        timings: Omit<QueueRowsPerfBreakdown, "service_total_ms">
+    ): WorkUnitQueueItemsWithPerf => ({
+        result: queueItems,
+        rowsPerf: {
+            ...timings,
+            service_total_ms: Date.now() - tSvc0,
+        },
+    });
 
     const effectiveLimit = clampLimit(params.limit ?? q.limit ?? 50, 1, 200);
     const effectiveOffset = clampLimit(params.offset ?? 0, 0, 1000000);
@@ -1662,39 +1721,32 @@ export async function getWorkUnitQueueItems(params: {
             if (error) {
                 throw new QueueServiceError(error.message, 400, "DB_ERROR");
             }
-            const totalMs = Date.now() - tSvc0;
-            logQueueItemsPhase({
-                entity: "job",
-                queue_key: q.key,
-                load_def_ms: loadDefMs,
-                base_query_ms: baseQueryMs,
-                count_ms: 0,
-                status_defs_ms: 0,
-                enrich_ms: 0,
-                response_serialize_ms: "see_route",
-                total_ms: totalMs,
-                omit_total: true,
-            });
-            console.log("[queue-opt]", { phase: "rows", duration_ms: totalMs, queue_key: q.key, entity: "job" });
-            if (totalMs > 250) {
-                console.warn("[queue-perf] getWorkUnitQueueItems job", { ms: totalMs, load_def_ms: loadDefMs, omit_total: true, queue_key: q.key });
-            }
-            return {
-                queue: {
-                    key: q.key,
-                    label: q.label,
-                    description: q.description,
-                    entity_type: def.entity_type,
-                    priority: q.priority ?? "standard",
-                    display: q.display ?? "list",
+            return finalize(
+                {
+                    queue: {
+                        key: q.key,
+                        label: q.label,
+                        description: q.description,
+                        entity_type: def.entity_type,
+                        priority: q.priority ?? "standard",
+                        display: q.display ?? "list",
+                    },
+                    items: (data ?? []) as unknown[],
+                    total: 0,
+                    limit: effectiveLimit,
+                    offset: effectiveOffset,
+                    total_omitted: true,
+                    ...(calendar_meta ? { calendar_meta } : {}),
                 },
-                items: (data ?? []) as unknown[],
-                total: 0,
-                limit: effectiveLimit,
-                offset: effectiveOffset,
-                total_omitted: true,
-                ...(calendar_meta ? { calendar_meta } : {}),
-            };
+                {
+                    load_def_ms,
+                    operational_day_ms,
+                    base_query_ms: baseQueryMs,
+                    count_ms: 0,
+                    status_defs_ms: 0,
+                    enrichment_ms: 0,
+                }
+            );
         }
 
         const countBase = supabase
@@ -1717,51 +1769,40 @@ export async function getWorkUnitQueueItems(params: {
             throw new QueueServiceError(error.message, 400, "DB_ERROR");
         }
 
-        const totalMs = Date.now() - tSvc0;
-        logQueueItemsPhase({
-            entity: "job",
-            queue_key: q.key,
-            load_def_ms: loadDefMs,
-            base_query_ms: baseQueryMs,
-            count_ms: countMs,
-            status_defs_ms: 0,
-            enrich_ms: 0,
-            response_serialize_ms: "see_route",
-            total_ms: totalMs,
-            omit_total: false,
-            count_accuracy: countSel,
-        });
-        console.log("[queue-opt]", { phase: "rows", duration_ms: totalMs, queue_key: q.key, entity: "job" });
-        if (totalMs > 250) {
-            console.warn("[queue-perf] getWorkUnitQueueItems job", {
-                ms: totalMs,
-                load_def_ms: loadDefMs,
-                queue_key: q.key,
-                count_accuracy: countSel,
-            });
-        }
-
-        return {
-            queue: {
-                key: q.key,
-                label: q.label,
-                description: q.description,
-                entity_type: def.entity_type,
-                priority: q.priority ?? "standard",
-                display: q.display ?? "list",
+        return finalize(
+            {
+                queue: {
+                    key: q.key,
+                    label: q.label,
+                    description: q.description,
+                    entity_type: def.entity_type,
+                    priority: q.priority ?? "standard",
+                    display: q.display ?? "list",
+                },
+                items: (data ?? []) as unknown[],
+                total: count ?? 0,
+                limit: effectiveLimit,
+                offset: effectiveOffset,
+                ...(calendar_meta ? { calendar_meta } : {}),
             },
-            items: (data ?? []) as unknown[],
-            total: count ?? 0,
-            limit: effectiveLimit,
-            offset: effectiveOffset,
-            ...(calendar_meta ? { calendar_meta } : {}),
-        };
+            {
+                load_def_ms,
+                operational_day_ms,
+                base_query_ms: baseQueryMs,
+                count_ms: countMs,
+                status_defs_ms: 0,
+                enrichment_ms: 0,
+            }
+        );
     }
 
-    // opportunity
-    const { ops, sort, calendar_meta } = buildOpportunityPlan(q, refUtc, operationalDay);
+    /** Opportunity statuses: start only after we know entity type (avoid wasted round-trip on job queues). */
+    const oppStatusDefsPromise = fetchEffectiveStatusDefinitions(supabase as any, params.orgId, "opportunities", {
+        activeOnly: true,
+    });
 
-    const oppStatusDefsPromise = opportunityStatusDefsHeadStart;
+    // opportunity entity
+    const { ops, sort, calendar_meta } = buildOpportunityPlan(q, refUtc, operationalDay);
 
     if (params.queueKey === "needs_attention") {
         const [{ value: matched, ms: naLoadMs }, { value: effectiveStatusDefs, ms: statusDefsMs }] = await Promise.all([
@@ -1785,47 +1826,31 @@ export async function getWorkUnitQueueItems(params: {
             effectiveStatusDefs,
             enrichment: "queue_list",
         });
-        const enrichMs = Date.now() - tEn0;
-        const totalMs = Date.now() - tSvc0;
-        logQueueItemsPhase({
-            entity: "opportunity",
-            queue_key: q.key,
-            variant: "needs_attention",
-            load_def_ms: loadDefMs,
-            base_query_ms: naLoadMs,
-            count_ms: 0,
-            status_defs_ms: statusDefsMs,
-            enrich_ms: enrichMs,
-            matched_all: matched.length,
-            row_count: slice.length,
-            response_serialize_ms: "see_route",
-            total_ms: totalMs,
-            omit_total: false,
-        });
-        console.log("[queue-opt]", { phase: "rows", duration_ms: totalMs, queue_key: q.key, entity: "opportunity" });
-        if (totalMs > 250) {
-            console.warn("[queue-perf] getWorkUnitQueueItems opportunity needs_attention", {
-                ms: totalMs,
-                load_def_ms: loadDefMs,
-                na_load_ms: naLoadMs,
-                enrich_ms: enrichMs,
-                row_count: slice.length,
-            });
-        }
-        return {
-            queue: {
-                key: q.key,
-                label: q.label,
-                description: q.description,
-                entity_type: def.entity_type,
-                priority: q.priority ?? "standard",
-                display: q.display ?? "list",
+        const enrichment_ms = Date.now() - tEn0;
+        return finalize(
+            {
+                queue: {
+                    key: q.key,
+                    label: q.label,
+                    description: q.description,
+                    entity_type: def.entity_type,
+                    priority: q.priority ?? "standard",
+                    display: q.display ?? "list",
+                },
+                items: items as unknown[],
+                total: matched.length,
+                limit: effectiveLimit,
+                offset: effectiveOffset,
             },
-            items: items as unknown[],
-            total: matched.length,
-            limit: effectiveLimit,
-            offset: effectiveOffset,
-        };
+            {
+                load_def_ms,
+                operational_day_ms,
+                base_query_ms: naLoadMs,
+                count_ms: 0,
+                status_defs_ms: statusDefsMs,
+                enrichment_ms,
+            }
+        );
     }
 
     const itemsBase = supabase
@@ -1855,48 +1880,33 @@ export async function getWorkUnitQueueItems(params: {
             effectiveStatusDefs,
             enrichment: "queue_list",
         });
-        const enrichMs = Date.now() - tEn0;
-        const totalMs = Date.now() - tSvc0;
-        logQueueItemsPhase({
-            entity: "opportunity",
-            queue_key: q.key,
-            load_def_ms: loadDefMs,
-            base_query_ms: baseQueryMs,
-            count_ms: 0,
-            status_defs_ms: statusDefsMs,
-            enrich_ms: enrichMs,
-            row_count: itemRows.length,
-            response_serialize_ms: "see_route",
-            total_ms: totalMs,
-            omit_total: true,
-        });
-        console.log("[queue-opt]", { phase: "rows", duration_ms: totalMs, queue_key: q.key, entity: "opportunity" });
-        if (totalMs > 250) {
-            console.warn("[queue-perf] getWorkUnitQueueItems opportunity", {
-                ms: totalMs,
-                load_def_ms: loadDefMs,
-                enrich_ms: enrichMs,
-                row_count: itemRows.length,
-                omit_total: true,
-                queue_key: q.key,
-               });
-        }
-        return {
-            queue: {
-                key: q.key,
-                label: q.label,
-                description: q.description,
-                entity_type: def.entity_type,
-                priority: q.priority ?? "standard",
-                display: q.display ?? "list",
+        const enrichment_ms = Date.now() - tEn0;
+        return finalize(
+            {
+                queue: {
+                    key: q.key,
+                    label: q.label,
+                    description: q.description,
+                    entity_type: def.entity_type,
+                    priority: q.priority ?? "standard",
+                    display: q.display ?? "list",
+                },
+                items: items as unknown[],
+                total: 0,
+                limit: effectiveLimit,
+                offset: effectiveOffset,
+                total_omitted: true,
+                ...(calendar_meta ? { calendar_meta } : {}),
             },
-            items: items as unknown[],
-            total: 0,
-            limit: effectiveLimit,
-            offset: effectiveOffset,
-            total_omitted: true,
-            ...(calendar_meta ? { calendar_meta } : {}),
-        };
+            {
+                load_def_ms,
+                operational_day_ms,
+                base_query_ms: baseQueryMs,
+                count_ms: 0,
+                status_defs_ms: statusDefsMs,
+                enrichment_ms,
+            }
+        );
     }
 
     const countBase = supabase
@@ -1929,49 +1939,33 @@ export async function getWorkUnitQueueItems(params: {
         effectiveStatusDefs,
         enrichment: "queue_list",
     });
-    const enrichMs = Date.now() - tEn0;
-    const totalMs = Date.now() - tSvc0;
-    logQueueItemsPhase({
-        entity: "opportunity",
-        queue_key: q.key,
-        load_def_ms: loadDefMs,
-        base_query_ms: baseQueryMs,
-        count_ms: countMs,
-        status_defs_ms: statusDefsMs,
-        enrich_ms: enrichMs,
-        row_count: itemRows.length,
-        response_serialize_ms: "see_route",
-        total_ms: totalMs,
-        omit_total: false,
-        count_accuracy: countSel,
-    });
-    console.log("[queue-opt]", { phase: "rows", duration_ms: totalMs, queue_key: q.key, entity: "opportunity" });
-    if (totalMs > 250) {
-        console.warn("[queue-perf] getWorkUnitQueueItems opportunity", {
-            ms: totalMs,
-            load_def_ms: loadDefMs,
-            enrich_ms: enrichMs,
-            row_count: itemRows.length,
-            queue_key: q.key,
-            count_accuracy: countSel,
-        });
-    }
+    const enrichment_ms = Date.now() - tEn0;
 
-    return {
-        queue: {
-            key: q.key,
-            label: q.label,
-            description: q.description,
-            entity_type: def.entity_type,
-            priority: q.priority ?? "standard",
-            display: q.display ?? "list",
+    return finalize(
+        {
+            queue: {
+                key: q.key,
+                label: q.label,
+                description: q.description,
+                entity_type: def.entity_type,
+                priority: q.priority ?? "standard",
+                display: q.display ?? "list",
+            },
+            items: items as unknown[],
+            total: count ?? 0,
+            limit: effectiveLimit,
+            offset: effectiveOffset,
+            ...(calendar_meta ? { calendar_meta } : {}),
         },
-        items: items as unknown[],
-        total: count ?? 0,
-        limit: effectiveLimit,
-        offset: effectiveOffset,
-        ...(calendar_meta ? { calendar_meta } : {}),
-    };
+        {
+            load_def_ms,
+            operational_day_ms,
+            base_query_ms: baseQueryMs,
+            count_ms: countMs,
+            status_defs_ms: statusDefsMs,
+            enrichment_ms,
+        }
+    );
 }
 
 export const __testing = {

@@ -291,6 +291,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
      * Cleared on work-unit navigation; bypass with fetchQueueItems(..., { force: true }) for invalidation.
      */
     const queueItemsLastFetchSigRef = useRef<string | null>(null);
+    /** Dedupes same-tab duplicate starts (effects + prefetch) until the in-flight GET settles. */
+    const queueRowLeaseSigsRef = useRef(new Set<string>());
     /** One-shot per work-unit navigation: workflow KPIs, row/right-rail actions after first row attempt settles. */
     const workUnitDeferredScheduledRef = useRef(false);
     /** Work-unit JSON validated in bootstrap; deferred supplement must wait (rows may finish first). */
@@ -628,7 +630,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
             void _summaries;
             /** Tab totals come from summaries; list fetch always omits row-route total work — avoids refetch when summaries land. */
             const fetchSig = `${workUnitId}|${queueKey}|omit`;
+            const lease = queueRowLeaseSigsRef.current;
+            if (options?.force) {
+                lease.delete(fetchSig);
+            } else if (lease.has(fetchSig)) {
+                return;
+            } else {
+                lease.add(fetchSig);
+            }
             if (!options?.force && fetchSig === queueItemsLastFetchSigRef.current) {
+                lease.delete(fetchSig);
                 return;
             }
             queueItemsLastFetchSigRef.current = fetchSig;
@@ -699,6 +710,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     setQueueItemsError(e instanceof Error ? e.message : "Failed to load queue items");
                 }
             } finally {
+                queueRowLeaseSigsRef.current.delete(fetchSig);
                 if (seq === queueItemsRequestSeq.current) {
                     setQueueItemsLoading(false);
                     requestWorkUnitDeferredSupplement();
@@ -789,6 +801,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             setWuScopeHasPlacements(false);
             setError("Missing department or work unit in the URL.");
             queueItemsLastFetchSigRef.current = null;
+            queueRowLeaseSigsRef.current.clear();
             workUnitDeferredScheduledRef.current = false;
             workUnitDetailReadyRef.current = false;
             pendingDeferredAfterWudRef.current = false;
@@ -836,6 +849,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     setOpportunityQueueRowResolved(null);
                     setEnrollmentRightRailResolved(null);
                     queueItemsLastFetchSigRef.current = null;
+                    queueRowLeaseSigsRef.current.clear();
                     setWuPlacementRows(undefined);
                     setWuScopeHasPlacements(false);
                     if (qFromUrlEffective) setSelectedQueueKey(qFromUrlEffective);
