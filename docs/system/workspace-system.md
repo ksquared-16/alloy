@@ -4,6 +4,37 @@
 
 Document **Admin V2 workspace**: departments, work units, queues, and how operators navigate work — without confusing queue UI data for canonical records.
 
+## Queue truth boundary (critical rule)
+
+Queue rows are **selection and preview surfaces only**.
+
+They may be used for:
+
+- Rendering labels, badges, timestamps, and preview fields
+- Sorting and filtering rows
+- Selecting an entity (`entity_type`, `entity_id`)
+- Navigating to a record (e.g. opening the drawer)
+
+Queue rows must **never** be used for:
+
+- Business logic or lifecycle decisions
+- Workflow condition evaluation
+- Action payload construction
+- Financial calculations (e.g. quote totals, balances)
+- Identity resolution (person/contact/customer)
+- Drawer or record authority
+- Aggregates or KPI computation
+
+All authoritative reads must come from:
+
+- Entity GET endpoints (`GET /api/admin/entity/[type]/[id]`)
+- Resolver-based record system (RRS)
+- Server-side summary endpoints
+
+**Rule:** Queue → select entity → refetch authoritative data → execute logic.
+
+**Never:** Queue → execute logic directly.
+
 ## Current state
 
 - Routes under **`web/app/adminV2/`** compose the shell (`AdminV2Shell.tsx`) with workspace navigation and embedded perf overlay.
@@ -32,8 +63,8 @@ Document **Admin V2 workspace**: departments, work units, queues, and how operat
 
 ## Guardrails
 
-- **Queues = preview:** Sorting/filtering is allowlisted in `QueueService`; fields not in previews may still exist on the entity — load entity GET when needed.
-- **Queue rows are preview projections only.** Any business logic, workflow execution, lifecycle transition, financial calculation, identity resolution, or drawer authority must refetch via resolver / entity GET (`GET /api/admin/entity/[type]/[id]` or RRS). Pass **`entityType` + `entityId` (+ action/work-unit keys)** from queue gestures — never treat preview payloads as source of truth.
+- **Queues = preview:** Follow **[Queue truth boundary (critical rule)](#queue-truth-boundary-critical-rule)** above. Sorting/filtering is allowlisted in `QueueService`; fields not in previews may still exist on the entity — load entity GET when needed.
+- From queue gestures, pass **`entityType` + `entityId` (+ action/work-unit keys)** only — never attach full row snapshots for mutations or workflows.
 - **Do not** bypass org scope when listing work units or queue items (service uses admin client — callers must enforce org context).
 
 ## Known gaps / risks

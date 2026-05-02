@@ -4,6 +4,39 @@
 
 Clarify where **authoritative record payloads** come from for admin UI and why **queue list rows** are not equivalent.
 
+## Queue truth boundary (critical rule)
+
+Queue rows are **selection and preview surfaces only**.
+
+They may be used for:
+
+- Rendering labels, badges, timestamps, and preview fields
+- Sorting and filtering rows
+- Selecting an entity (`entity_type`, `entity_id`)
+- Navigating to a record (e.g. opening the drawer)
+
+Queue rows must **never** be used for:
+
+- Business logic or lifecycle decisions
+- Workflow condition evaluation
+- Action payload construction
+- Financial calculations (e.g. quote totals, balances)
+- Identity resolution (person/contact/customer)
+- Drawer or record authority
+- Aggregates or KPI computation
+
+All authoritative reads must come from:
+
+- Entity GET endpoints (`GET /api/admin/entity/[type]/[id]`)
+- Resolver-based record system (RRS)
+- Server-side summary endpoints
+
+**Rule:** Queue → select entity → refetch authoritative data → execute logic.
+
+**Never:** Queue → execute logic directly.
+
+Workspace navigation context for queues: **`docs/system/workspace-system.md`**.
+
 ## Current state
 
 - **`GET /api/admin/entity/[type]/[id]`** is the generic drawer loader for many entity types.
@@ -30,8 +63,7 @@ Clarify where **authoritative record payloads** come from for admin UI and why *
 
 ## Guardrails
 
-- **Never** treat queue preview rows as the full truth for financials, legal text, or lifecycle.
-- **Queue rows are preview projections only.** Any business logic, workflow execution, lifecycle transition, financial calculation, identity resolution, or drawer authority must refetch via resolver / entity GET — never hydrate authoritative sections from queue list payloads or infer outcomes from preview fields alone.
+- **Queue vs authority:** Obey **[Queue truth boundary (critical rule)](#queue-truth-boundary-critical-rule)** above — drawer and record summaries must hydrate from entity GET / RRS, not from queue list payloads.
 - **Do not** duplicate pricing, allocation, or lifecycle rules in drawer-only code — align with resolver and server helpers.
 - **Do** use entity GET / resolver outputs when building summaries that must match the drawer.
 
