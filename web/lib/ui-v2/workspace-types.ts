@@ -405,7 +405,7 @@ export type RecordSectionLineVm = {
   tone?: "default" | "primary" | "muted";
   /** When set, entire line is a drillable link (`record.body.link`) */
   linkId?: string;
-  /** Compact uppercase pill before text (e.g. INVOICE, WORK ORDER) — document / artifact rows */
+  /** Compact type pill before text (e.g. Invoice, Work order) — document / artifact rows */
   typeBadge?: string;
   /**
    * Subtle row semantics for record body typography (scheduling vs financial vs document vs tags).

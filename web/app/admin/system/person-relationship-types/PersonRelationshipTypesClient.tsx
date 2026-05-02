@@ -181,7 +181,7 @@ export default function PersonRelationshipTypesClient({
                 ) : null
             ) : (
                 <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-                    <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-alloy-midnight/50">Person-to-person types</h3>
+                    <h3 className="text-[10px] font-semibold tracking-[0.14em] text-alloy-midnight/50">Person-to-person types</h3>
                     {addRelBtn}
                 </div>
             )

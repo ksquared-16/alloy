@@ -42,7 +42,7 @@ export default function AiActivityDetailPanel(props: Props) {
 
             <dl className="mt-4 grid gap-2 text-xs" style={{ color: neutral.textPrimary }}>
                 <div>
-                    <dt className="font-semibold uppercase tracking-wide" style={{ color: derived.inspectorSectionMuted }}>
+                    <dt className="font-semibold tracking-wide" style={{ color: derived.inspectorSectionMuted }}>
                         Request (command)
                     </dt>
                     <dd className="mt-0.5">
@@ -52,7 +52,7 @@ export default function AiActivityDetailPanel(props: Props) {
                     </dd>
                 </div>
                 <div>
-                    <dt className="font-semibold uppercase tracking-wide" style={{ color: derived.inspectorSectionMuted }}>
+                    <dt className="font-semibold tracking-wide" style={{ color: derived.inspectorSectionMuted }}>
                         Target
                     </dt>
                     <dd className="mt-0.5">
@@ -60,7 +60,7 @@ export default function AiActivityDetailPanel(props: Props) {
                     </dd>
                 </div>
                 <div>
-                    <dt className="font-semibold uppercase tracking-wide" style={{ color: derived.inspectorSectionMuted }}>
+                    <dt className="font-semibold tracking-wide" style={{ color: derived.inspectorSectionMuted }}>
                         User / org
                     </dt>
                     <dd className="mt-0.5 font-mono text-[11px]">
@@ -68,7 +68,7 @@ export default function AiActivityDetailPanel(props: Props) {
                     </dd>
                 </div>
                 <div>
-                    <dt className="font-semibold uppercase tracking-wide" style={{ color: derived.inspectorSectionMuted }}>
+                    <dt className="font-semibold tracking-wide" style={{ color: derived.inspectorSectionMuted }}>
                         IDs
                     </dt>
                     <dd className="mt-0.5 break-all font-mono text-[10px]" style={{ color: derived.textSecondary }}>

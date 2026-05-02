@@ -78,7 +78,7 @@ export default function RecentAiActionsStrip() {
                 }}
             >
                 <div className="mb-1 flex items-center justify-between gap-2">
-                    <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color: derived.inspectorSectionMuted }}>
+                    <span className="text-[10px] font-bold tracking-wider" style={{ color: derived.inspectorSectionMuted }}>
                         Recent AI actions
                     </span>
                     <Link

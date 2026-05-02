@@ -160,19 +160,24 @@ export default function AdminV2WorkspaceIndexPage() {
                     void (async () => {
                         try {
                             const fetchInit = workspaceDataFetchInit();
-                            const { metrics: m, deptTileStats: stats, orgOpportunityKpis: roll, growthSnapshots } =
-                                await loadWorkspaceRollup(active);
-                            let placementStrip: KPIVm[] | undefined = undefined;
-                            try {
-                                const pres = await fetch("/api/admin/workspace-kpi-placements?surface=workspace", {
+                            type PlacementBody = {
+                                items?: WorkspaceKpiPlacementRow[];
+                                scope_has_placements?: boolean;
+                            };
+                            const [rollupResult, placementRes] = await Promise.all([
+                                loadWorkspaceRollup(active),
+                                fetch("/api/admin/workspace-kpi-placements?surface=workspace", {
                                     ...(fetchInit ?? {}),
                                     cache: "no-store",
-                                });
-                                if (pres.ok) {
-                                    const body = (await pres.json().catch(() => ({}))) as {
-                                        items?: WorkspaceKpiPlacementRow[];
-                                        scope_has_placements?: boolean;
-                                    };
+                                }).catch(() => null as Response | null),
+                            ]);
+                            const { metrics: m, deptTileStats: stats, orgOpportunityKpis: roll, growthSnapshots } =
+                                rollupResult;
+
+                            let placementStrip: KPIVm[] | undefined = undefined;
+                            try {
+                                if (placementRes?.ok) {
+                                    const body = (await placementRes.json().catch(() => ({}))) as PlacementBody;
                                     const metricsForResolve: WorkspaceRootMetrics = {
                                         ...m,
                                         departments: active.length,

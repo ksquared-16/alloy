@@ -3,7 +3,8 @@
  * Entity-specific label maps are passed via options — no workflow_events changes.
  */
 
-import { formatDateTimeLocal } from "@/lib/adminFormatters";
+import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
+import { UTC_FALLBACK_IANA } from "@/lib/admin/timezoneContract";
 
 export type ActivityTimelineEventInput = {
     event_type: string | null;
@@ -221,11 +222,11 @@ export function formatActivityTimelineEvent(
 
 // --- Queue / CRM note line primitives (storage-agnostic) ---
 
-/** MM/DD/YYYY h:mm AM/PM in the viewer's local timezone */
-export function formatQueueNoteDateTime(ms: number): string {
+/** MM/DD/YYYY h:mm AM/PM in the given IANA timezone (default UTC for tests / server VMs). */
+export function formatQueueNoteDateTime(ms: number, timeZoneIana: string = UTC_FALLBACK_IANA): string {
     const d = new Date(ms);
     if (!Number.isFinite(d.getTime())) return "";
-    const s = formatDateTimeLocal(d);
+    const s = formatDateTimeForUserDisplay(d, timeZoneIana);
     return s === "-" ? "" : s;
 }
 
@@ -296,14 +297,15 @@ export function truncateNoteLine(text: string, maxLen: number = NOTE_LINE_MAX): 
 }
 
 /** When dated: default `{note} · {local datetime}`; with `dateFirst`, `{datetime} · {note}` (queue row scan). */
-export function formatDatedNoteLinePreview(line: string, opts?: { dateFirst?: boolean }): string | null {
+export function formatDatedNoteLinePreview(line: string, opts?: { dateFirst?: boolean; displayTimeZone?: string }): string | null {
     const trimmed = line.trim().replace(/\s+/g, " ");
     if (!trimmed) return null;
     const dateFirst = Boolean(opts?.dateFirst);
+    const tz = opts?.displayTimeZone ?? UTC_FALLBACK_IANA;
 
     const bracket = parseBracketedTimestamp(trimmed);
     if (bracket) {
-        const dateStr = formatQueueNoteDateTime(bracket.ms);
+        const dateStr = formatQueueNoteDateTime(bracket.ms, tz);
         const body = bracket.rest;
         if (!body) return dateStr || null;
         const bodyShort = truncateNoteLine(body);
@@ -313,7 +315,7 @@ export function formatDatedNoteLinePreview(line: string, opts?: { dateFirst?: bo
 
     const parsed = parseLineLeadingDate(trimmed);
     if (parsed) {
-        const dateStr = formatQueueNoteDateTime(parsed.ms);
+        const dateStr = formatQueueNoteDateTime(parsed.ms, tz);
         const body = parsed.rest;
         if (body) {
             const bodyShort = truncateNoteLine(body);
@@ -331,7 +333,7 @@ export function formatDatedNoteLinePreview(line: string, opts?: { dateFirst?: bo
  */
 export function formatActivityQueueNotesBlobPreview(
     raw: string | null | undefined,
-    opts?: { dateFirst?: boolean }
+    opts?: { dateFirst?: boolean; displayTimeZone?: string }
 ): string | null {
     const blob = (raw ?? "").trim();
     if (!blob) return null;

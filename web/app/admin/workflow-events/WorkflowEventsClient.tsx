@@ -241,7 +241,7 @@ export default function WorkflowEventsClient() {
                             <div className="col-span-2"><span className="text-alloy-midnight/60">ID</span><br /><span className="font-mono text-xs break-all">{selected.id}</span></div>
                         </div>
                         <div>
-                            <p className="text-xs font-semibold uppercase tracking-wider text-alloy-midnight/60 mb-2">Payload</p>
+                            <p className="text-xs font-semibold tracking-wider text-alloy-midnight/60 mb-2">Payload</p>
                             <pre className="bg-alloy-stone/20 rounded p-3 text-xs overflow-x-auto max-h-[60vh] overflow-y-auto font-mono whitespace-pre-wrap break-words">
                                 {JSON.stringify(selected.payload, null, 2)}
                             </pre>

@@ -158,7 +158,7 @@ function JrmSnapCell(props: { label: string; children: ReactNode; className?: st
     return (
         <div className={`min-w-0 ${props.className ?? ""}`}>
             <div
-                className="mb-0.5 text-[9px] font-semibold uppercase leading-none tracking-[0.1em]"
+                className="mb-0.5 text-[9px] font-semibold leading-none tracking-[0.1em]"
                 style={{ color: derived.textSecondary }}
             >
                 {props.label}
@@ -256,7 +256,7 @@ export default function JobRecordModalV2(props: JobRecordModalV2Props) {
                 data-jrm-strip="account"
                 className="adminv2-jrm-account-strip flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-xl px-3 py-1.5"
             >
-                <span className="text-[10px] font-semibold uppercase tracking-[0.1em]" style={{ color: derived.textSecondary }}>
+                <span className="text-[10px] font-semibold tracking-[0.1em]" style={{ color: derived.textSecondary }}>
                     Account
                 </span>
                 <span className="text-sm font-medium" style={{ color: neutral.textPrimary }}>
@@ -279,7 +279,7 @@ export default function JobRecordModalV2(props: JobRecordModalV2Props) {
                 style={shell}
             >
                 <p
-                    className="px-0.5 pb-1 text-[9px] font-semibold uppercase tracking-[0.12em] leading-none"
+                    className="px-0.5 pb-1 text-[9px] font-semibold tracking-[0.12em] leading-none"
                     style={{ color: derived.textSecondary }}
                 >
                     Record snapshot
@@ -410,7 +410,7 @@ export default function JobRecordModalV2(props: JobRecordModalV2Props) {
                     <div className="grid grid-cols-2 gap-x-2.5 gap-y-1 border-t border-solid border-[rgba(39,63,82,0.06)] pt-1.5 sm:grid-cols-3 xl:grid-cols-5">
                         <div className="min-w-0">
                             <div
-                                className="mb-0.5 text-[9px] font-semibold uppercase leading-none tracking-[0.1em]"
+                                className="mb-0.5 text-[9px] font-semibold leading-none tracking-[0.1em]"
                                 style={{ color: derived.textSecondary }}
                             >
                                 Total
@@ -421,7 +421,7 @@ export default function JobRecordModalV2(props: JobRecordModalV2Props) {
                         </div>
                         <div className="min-w-0">
                             <div
-                                className="mb-0.5 text-[9px] font-semibold uppercase leading-none tracking-[0.1em]"
+                                className="mb-0.5 text-[9px] font-semibold leading-none tracking-[0.1em]"
                                 style={{ color: derived.textSecondary }}
                             >
                                 Outstanding
@@ -432,7 +432,7 @@ export default function JobRecordModalV2(props: JobRecordModalV2Props) {
                         </div>
                         <div className="min-w-0 xl:col-span-1">
                             <div
-                                className="mb-0.5 text-[9px] font-semibold uppercase leading-none tracking-[0.1em]"
+                                className="mb-0.5 text-[9px] font-semibold leading-none tracking-[0.1em]"
                                 style={{ color: derived.textSecondary }}
                             >
                                 Service
@@ -447,7 +447,7 @@ export default function JobRecordModalV2(props: JobRecordModalV2Props) {
                         </div>
                         <div className="min-w-0">
                             <div
-                                className="mb-0.5 text-[9px] font-semibold uppercase leading-none tracking-[0.1em]"
+                                className="mb-0.5 text-[9px] font-semibold leading-none tracking-[0.1em]"
                                 style={{ color: derived.textSecondary }}
                             >
                                 Frequency
@@ -458,7 +458,7 @@ export default function JobRecordModalV2(props: JobRecordModalV2Props) {
                         </div>
                         <div className="min-w-0 col-span-2 sm:col-span-1 xl:col-span-1">
                             <div
-                                className="mb-0.5 text-[9px] font-semibold uppercase leading-none tracking-[0.1em]"
+                                className="mb-0.5 text-[9px] font-semibold leading-none tracking-[0.1em]"
                                 style={{ color: derived.textSecondary }}
                             >
                                 Recurring

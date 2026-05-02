@@ -25,7 +25,7 @@ export default function BusinessKPIStrip({ scope }: Props) {
           fontSize: 11,
           fontWeight: 600,
           color: derived.textSecondary,
-          textTransform: "uppercase",
+          textTransform: "none",
           letterSpacing: "0.02em",
           flexShrink: 0,
         }}

@@ -182,7 +182,7 @@ export function JobDrawerV2SignalsStrip(props: {
                             boxShadow: cleaning ? signalShadow : undefined,
                         }}
                     >
-                        <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: t.kickerColor }}>
+                        <div className="text-[10px] font-semibold tracking-wide" style={{ color: t.kickerColor }}>
                             {c.kicker}
                         </div>
                         <div className="mt-0.5 text-sm font-medium leading-snug" style={{ color: neutral.textPrimary }}>
@@ -264,7 +264,7 @@ function formatServiceFrequencyReadLabel(k: unknown): string {
 
 const primaryPanelFieldClass =
     "adminv2-job-record-primary-input w-full rounded-lg border px-2 py-1.5 text-sm text-alloy-forge transition-colors duration-150 focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60";
-const primaryPanelLabelClass = "block text-[10px] font-semibold uppercase tracking-wide mb-0.5";
+const primaryPanelLabelClass = "block text-[10px] font-semibold tracking-wide mb-0.5";
 const primaryPanelReadClass = "text-sm font-medium leading-snug break-words tabular-nums";
 
 /** Top curated panel: editable ownership + read-only plan/pricing summary (Admin V2 cleaning job Record tab). */
@@ -325,7 +325,7 @@ export function JobRecordPrimaryPanel(props: {
             style={{ borderColor: derived.border, backgroundColor: neutral.surface, boxShadow: derived.cardShadow, ...shell }}
             data-adminv2-job-primary-panel="true"
         >
-            <p className="text-[10px] font-semibold uppercase tracking-wide mb-2" style={{ color: derived.textSecondary }}>
+            <p className="text-[10px] font-semibold tracking-wide mb-2" style={{ color: derived.textSecondary }}>
                 Job summary
             </p>
             <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(240px,300px)] lg:gap-5">
@@ -517,7 +517,7 @@ export function JobRecordPrimaryPanel(props: {
                         borderColor: derived.border,
                     }}
                 >
-                    <p className="text-[10px] font-semibold uppercase tracking-wide mb-0.5" style={{ color: derived.textSecondary }}>
+                    <p className="text-[10px] font-semibold tracking-wide mb-0.5" style={{ color: derived.textSecondary }}>
                         Summary
                     </p>
                     <div className="grid grid-cols-1 gap-y-1.5">
@@ -766,7 +766,7 @@ export function JobDrawerV2TimelineCard(props: { data: Record<string, unknown> |
                 boxShadow: derived.cardShadow,
             }}
         >
-            <h3 className="text-xs font-semibold uppercase tracking-wide" style={{ color: derived.textSecondary }}>
+            <h3 className="text-xs font-semibold tracking-wide" style={{ color: derived.textSecondary }}>
                 Timeline
             </h3>
             {rows.length === 0 ? (

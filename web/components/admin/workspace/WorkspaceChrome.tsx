@@ -79,7 +79,7 @@ export function WorkspaceChrome({
             </nav>
             {variant !== "bridge" ? (
                 <header>
-                    <p className="text-xs font-semibold uppercase tracking-wide text-alloy-forge/70">Workspace (V2 slice)</p>
+                    <p className="text-xs font-semibold tracking-wide text-alloy-forge/70">Workspace (V2 slice)</p>
                     <h1 className="text-2xl font-semibold text-alloy-midnight mt-1">{title}</h1>
                     {subtitle ? <p className="text-sm text-alloy-midnight/65 mt-2 max-w-3xl">{subtitle}</p> : null}
                 </header>

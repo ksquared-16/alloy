@@ -109,7 +109,7 @@ export function WorkUnitLifecycleCoveragePanel({
                         ) : null}
                         {Object.keys(diagnostic.statusKeyCounts).length > 0 ? (
                             <div>
-                                <p className="m-0 mb-1 text-[10px] font-semibold uppercase tracking-wide text-alloy-forge/48">
+                                <p className="m-0 mb-1 text-[10px] font-semibold tracking-wide text-alloy-forge/48">
                                     Unmapped status keys (this sample)
                                 </p>
                                 <ul className="m-0 list-none space-y-0.5 p-0">

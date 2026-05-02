@@ -63,8 +63,11 @@ export { formatQueueNoteDateTime } from "@/lib/admin/activityTimelineFormat";
 
 /** Opportunity CRM queue: composed from generic note blob formatter */
 /** Queue row: date/time before note body for triage scan. */
-export function formatOpportunityQueueNotesPreview(raw: string | null | undefined): string | null {
-    return formatActivityQueueNotesBlobPreview(raw, { dateFirst: true });
+export function formatOpportunityQueueNotesPreview(
+    raw: string | null | undefined,
+    displayTimeZone?: string
+): string | null {
+    return formatActivityQueueNotesBlobPreview(raw, { dateFirst: true, displayTimeZone });
 }
 
 /** Humanize with enrollment status key map (for callers/tests) */

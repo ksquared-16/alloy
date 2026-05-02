@@ -3,6 +3,8 @@ import { getAdminAuth } from "@/lib/adminAuth";
 import { getAdminOrgIdForUser } from "@/lib/admin/entityLabelsServer";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import AdminV2WorkspaceClientProviders from "./AdminV2WorkspaceClientProviders";
+import type { AdminViewerTimezoneValue } from "@/contexts/AdminViewerTimezoneContext";
+import { loadAdminViewerTimezoneBootstrap } from "@/lib/admin/viewerTimezoneBootstrap";
 
 export const dynamic = "force-dynamic";
 
@@ -36,11 +38,19 @@ export default async function AdminV2WorkspaceLayout({
     console.error("[adminV2/workspace/layout] org name load failed:", e);
   }
 
+  let viewerTimezone: AdminViewerTimezoneValue = { iana: "UTC", source: "utc_fallback" };
+  try {
+    viewerTimezone = await loadAdminViewerTimezoneBootstrap(auth.user.id);
+  } catch (e) {
+    console.error("[adminV2/workspace/layout] viewer timezone bootstrap failed:", e);
+  }
+
   return (
     <AdminV2WorkspaceClientProviders
       userEmail={typeof auth.user.email === "string" && auth.user.email ? auth.user.email : "Unknown"}
       role={auth.role}
       orgName={orgName}
+      initialViewerTimezone={viewerTimezone}
     >
       {children}
     </AdminV2WorkspaceClientProviders>

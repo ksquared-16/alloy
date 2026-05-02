@@ -451,7 +451,7 @@ export default function JobDetailClient({
                             </div>
                         </div>
                         <div className="pt-4 border-t border-alloy-stone/20">
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-3">
+                            <h3 className="text-xs font-semibold tracking-wider text-[#59678b] mb-3">
                                 Pricing breakdown
                             </h3>
                             <JobPricingBreakdown record={job} />
@@ -469,21 +469,21 @@ export default function JobDetailClient({
                 {tab === "related" && (
                     <div className="space-y-6">
                         <div>
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Customer</h3>
+                            <h3 className="text-xs font-semibold tracking-wider text-[#59678b] mb-2">Customer</h3>
                             <p className="text-sm text-alloy-midnight">{customerName}</p>
                         </div>
                         {((job as { _primary_person_name?: string | null })._primary_person_name ?? (job._primary_contact_name as string)) && (
                             <div>
-                                <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Person</h3>
+                                <h3 className="text-xs font-semibold tracking-wider text-[#59678b] mb-2">Person</h3>
                                 <p className="text-sm text-alloy-midnight">{(job as { _primary_person_name?: string | null })._primary_person_name ?? (job._primary_contact_name as string)}</p>
                             </div>
                         )}
                         <div>
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Assigned {vendorSingular}</h3>
+                            <h3 className="text-xs font-semibold tracking-wider text-[#59678b] mb-2">Assigned {vendorSingular}</h3>
                             <p className="text-sm text-alloy-midnight">{vendorName ?? "Unassigned"}</p>
                         </div>
                         <div>
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-3">Schedules</h3>
+                            <h3 className="text-xs font-semibold tracking-wider text-[#59678b] mb-3">Schedules</h3>
                             {loadingSchedules ? (
                                 <p className="text-sm text-alloy-midnight/60">Loading schedules…</p>
                             ) : (
@@ -579,7 +579,7 @@ export default function JobDetailClient({
                             )}
                         </div>
                         <div>
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-3">Payments</h3>
+                            <h3 className="text-xs font-semibold tracking-wider text-[#59678b] mb-3">Payments</h3>
                             {loadingPayments ? (
                                 <p className="text-sm text-alloy-midnight/60">Loading payments…</p>
                             ) : paymentsFetchError ? (

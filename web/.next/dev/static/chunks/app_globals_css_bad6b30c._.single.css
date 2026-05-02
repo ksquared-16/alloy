@@ -8955,8 +8955,8 @@ body {
 }
 
 .public-form-section-title {
-  text-transform: uppercase;
-  letter-spacing: .12em;
+  letter-spacing: .06em;
+  text-transform: none;
   color: var(--color-alloy-pine);
   border-left: 4px solid var(--color-alloy-blue);
   background: linear-gradient(90deg, #00458c1a 0%, #00a2830a 55%, #0000 100%);

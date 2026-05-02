@@ -35,7 +35,7 @@ export default function AICommandBar() {
           </span>
         </div>
         <span
-          className="text-[11px] font-bold shrink-0 uppercase tracking-widest px-3 py-2 rounded-lg text-white"
+          className="text-[11px] font-bold shrink-0 tracking-widest px-3 py-2 rounded-lg text-white"
           style={{
             backgroundColor: brand.secondary,
             letterSpacing: "0.14em",

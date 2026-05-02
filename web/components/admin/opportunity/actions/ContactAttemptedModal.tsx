@@ -27,7 +27,7 @@ export function ContactAttemptedModal(props: {
     const overlay = "fixed inset-0 z-[80] bg-black/20 backdrop-blur-[1px]";
     const panel =
         "fixed left-1/2 top-1/2 z-[81] w-[92vw] max-w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-admin-border bg-white shadow-xl";
-    const label = "text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/50";
+    const label = "text-[11px] font-semibold tracking-wide text-alloy-forge/50";
     const input =
         "w-full rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 text-sm text-alloy-midnight focus:border-alloy-blue/45 focus:outline-none focus:ring-2 focus:ring-alloy-blue/15 disabled:opacity-60";
 

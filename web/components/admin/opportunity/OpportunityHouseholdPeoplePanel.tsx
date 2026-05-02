@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import OpportunityRecordSectionRegistryActions from "@/components/admin/opportunity/OpportunityRecordSectionRegistryActions";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
+import { formatPhoneUS } from "@/lib/adminFormatters";
 
 type PersonRow = {
     id: string;
@@ -77,7 +78,7 @@ export function OpportunityHouseholdPeoplePanel(props: {
         });
     }, [people]);
 
-    const tinyLabel = "text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/55";
+    const tinyLabel = "text-[11px] font-semibold tracking-wide text-alloy-forge/55";
 
     return (
         <div className="space-y-2">
@@ -145,7 +146,7 @@ export function OpportunityHouseholdPeoplePanel(props: {
                             </div>
                             {(r._person_email || r._person_phone) ? (
                                 <div className="mt-1 text-[12px] text-alloy-midnight/65">
-                                    {[r._person_email, r._person_phone].filter(Boolean).join(" · ")}
+                                    {[r._person_email, r._person_phone ? formatPhoneUS(r._person_phone) : null].filter(Boolean).join(" · ")}
                                 </div>
                             ) : (
                                 <div className="mt-1 text-[12px] text-alloy-midnight/45">No contact info.</div>

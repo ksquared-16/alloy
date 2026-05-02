@@ -518,7 +518,7 @@ async function AdminV2WorkspaceLayout({ children }) {
             children: "Loading context..."
         }, void 0, false, {
             fileName: "[project]/app/adminV2/workspace/layout.tsx",
-            lineNumber: 23,
+            lineNumber: 24,
             columnNumber: 7
         }, this);
     }
@@ -538,7 +538,7 @@ async function AdminV2WorkspaceLayout({ children }) {
         children: children
     }, void 0, false, {
         fileName: "[project]/app/adminV2/workspace/layout.tsx",
-        lineNumber: 40,
+        lineNumber: 41,
         columnNumber: 5
     }, this);
 }

@@ -2463,13 +2463,15 @@ __turbopack_context__.s([
 ]);
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/dist/compiled/react/jsx-dev-runtime.js [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/dist/compiled/react/index.js [app-client] (ecmascript)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$contexts$2f$AdminViewerTimezoneContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/contexts/AdminViewerTimezoneContext.tsx [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$adminFormatters$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/adminFormatters.ts [app-client] (ecmascript)");
 ;
 var _s = __turbopack_context__.k.signature();
 "use client";
 ;
 ;
-const COMPOSER_LABEL = "mb-1 text-[8px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45";
+;
+const COMPOSER_LABEL = "mb-1 text-[8px] font-semibold tracking-[0.12em] text-alloy-midnight/45";
 /** Map POST /communications/send notes to concise operator copy (honest vs optimistic). */ function userFriendlySendNote(processNote) {
     const n = processNote.trim().toLowerCase();
     if (!n) return "Email queued for delivery.";
@@ -2483,6 +2485,7 @@ function communicationMessageInstant(m) {
 }
 function CommunicationsDrawerSection({ apiEntityType, entityId, active = true, embedded = true, className = "" }) {
     _s();
+    const viewerTz = (0, __TURBOPACK__imported__module__$5b$project$5d2f$contexts$2f$AdminViewerTimezoneContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useAdminViewerTimezone"])();
     const [threads, setThreads] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])([]);
     const [thrErr, setThrErr] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(null);
     const [loadingThreads, setLoadingThreads] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(false);
@@ -2799,7 +2802,7 @@ function CommunicationsDrawerSection({ apiEntityType, entityId, active = true, e
         children: "Communications"
     }, void 0, false, {
         fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-        lineNumber: 344,
+        lineNumber: 346,
         columnNumber: 9
     }, this) : null;
     const description = !embedded ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -2807,7 +2810,7 @@ function CommunicationsDrawerSection({ apiEntityType, entityId, active = true, e
         children: "Canonical SMS, email, and in-app threads for this record (read-only)."
     }, void 0, false, {
         fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-        lineNumber: 348,
+        lineNumber: 350,
         columnNumber: 9
     }, this) : null;
     const threadList = (variant)=>/*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2820,7 +2823,7 @@ function CommunicationsDrawerSection({ apiEntityType, entityId, active = true, e
                             children: t.channel
                         }, void 0, false, {
                             fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                            lineNumber: 361,
+                            lineNumber: 363,
                             columnNumber: 25
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -2831,23 +2834,23 @@ function CommunicationsDrawerSection({ apiEntityType, entityId, active = true, e
                                     className: "ml-1.5 tabular-nums text-[11px] text-alloy-midnight/45",
                                     children: [
                                         "· ",
-                                        (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$adminFormatters$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatDateTimeLocal"])(t.updated_at)
+                                        (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$adminFormatters$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatDateTimeForUserDisplay"])(t.updated_at, viewerTz)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                                    lineNumber: 365,
+                                    lineNumber: 367,
                                     columnNumber: 33
                                 }, this) : null
                             ]
                         }, void 0, true, {
                             fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                            lineNumber: 362,
+                            lineNumber: 364,
                             columnNumber: 25
                         }, this)
                     ]
                 }, t.id, true, {
                     fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                    lineNumber: 357,
+                    lineNumber: 359,
                     columnNumber: 21
                 }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
                     type: "button",
@@ -2859,7 +2862,7 @@ function CommunicationsDrawerSection({ apiEntityType, entityId, active = true, e
                             children: t.channel
                         }, void 0, false, {
                             fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                            lineNumber: 382,
+                            lineNumber: 384,
                             columnNumber: 25
                         }, this),
                         t.recipient_key ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2867,18 +2870,18 @@ function CommunicationsDrawerSection({ apiEntityType, entityId, active = true, e
                             children: t.recipient_key
                         }, void 0, false, {
                             fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                            lineNumber: 384,
+                            lineNumber: 386,
                             columnNumber: 29
                         }, this) : null
                     ]
                 }, t.id, true, {
                     fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                    lineNumber: 372,
+                    lineNumber: 374,
                     columnNumber: 21
                 }, this))
         }, void 0, false, {
             fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-            lineNumber: 354,
+            lineNumber: 356,
             columnNumber: 9
         }, this);
     const messagesPanel = /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2888,28 +2891,28 @@ function CommunicationsDrawerSection({ apiEntityType, entityId, active = true, e
             children: "Select a thread."
         }, void 0, false, {
             fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-            lineNumber: 395,
+            lineNumber: 397,
             columnNumber: 17
         }, this) : loadingMsgs ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
             className: "text-sm text-alloy-midnight/60",
             children: "Loading messages…"
         }, void 0, false, {
             fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-            lineNumber: 397,
+            lineNumber: 399,
             columnNumber: 17
         }, this) : msgErr ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
             className: "text-sm text-alloy-ember",
             children: msgErr
         }, void 0, false, {
             fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-            lineNumber: 399,
+            lineNumber: 401,
             columnNumber: 17
         }, this) : msgs.length === 0 ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
             className: "text-sm text-alloy-midnight/60",
             children: "No messages in this thread."
         }, void 0, false, {
             fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-            lineNumber: 401,
+            lineNumber: 403,
             columnNumber: 17
         }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("ul", {
             className: "space-y-2",
@@ -2932,21 +2935,21 @@ function CommunicationsDrawerSection({ apiEntityType, entityId, active = true, e
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                                    lineNumber: 409,
+                                    lineNumber: 411,
                                     columnNumber: 33
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                     className: "tabular-nums text-[11px]",
-                                    children: msgWhen ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$adminFormatters$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatDateTimeLocal"])(msgWhen) : ""
+                                    children: msgWhen ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$adminFormatters$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatDateTimeForUserDisplay"])(msgWhen, viewerTz) : ""
                                 }, void 0, false, {
                                     fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                                    lineNumber: 412,
+                                    lineNumber: 414,
                                     columnNumber: 33
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                            lineNumber: 408,
+                            lineNumber: 410,
                             columnNumber: 29
                         }, this),
                         (m.from_address || m.to_address) && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2959,7 +2962,7 @@ function CommunicationsDrawerSection({ apiEntityType, entityId, active = true, e
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                                    lineNumber: 418,
+                                    lineNumber: 420,
                                     columnNumber: 55
                                 }, this) : null,
                                 m.from_address && m.to_address ? " · " : null,
@@ -2970,13 +2973,13 @@ function CommunicationsDrawerSection({ apiEntityType, entityId, active = true, e
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                                    lineNumber: 420,
+                                    lineNumber: 422,
                                     columnNumber: 53
                                 }, this) : null
                             ]
                         }, void 0, true, {
                             fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                            lineNumber: 417,
+                            lineNumber: 419,
                             columnNumber: 33
                         }, this),
                         m.body ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2984,24 +2987,24 @@ function CommunicationsDrawerSection({ apiEntityType, entityId, active = true, e
                             children: m.body
                         }, void 0, false, {
                             fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                            lineNumber: 424,
+                            lineNumber: 426,
                             columnNumber: 33
                         }, this) : null
                     ]
                 }, m.id, true, {
                     fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                    lineNumber: 407,
+                    lineNumber: 409,
                     columnNumber: 29
                 }, this);
             })
         }, void 0, false, {
             fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-            lineNumber: 403,
+            lineNumber: 405,
             columnNumber: 17
         }, this)
     }, void 0, false, {
         fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-        lineNumber: 393,
+        lineNumber: 395,
         columnNumber: 9
     }, this);
     const emptyThreadsClass = embedded ? "text-[12px] text-alloy-midnight/60" : "text-sm text-alloy-midnight/60";
@@ -3010,7 +3013,7 @@ function CommunicationsDrawerSection({ apiEntityType, entityId, active = true, e
         children: "No communication threads for this record yet."
     }, void 0, false, {
         fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-        lineNumber: 435,
+        lineNumber: 437,
         columnNumber: 30
     }, this);
     const expandCollapseBtnClass = "text-left text-[12px] font-semibold underline-offset-2 bg-transparent border-0 p-0 cursor-pointer";
@@ -3022,7 +3025,7 @@ function CommunicationsDrawerSection({ apiEntityType, entityId, active = true, e
                 children: "Email (queued send)"
             }, void 0, false, {
                 fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                lineNumber: 443,
+                lineNumber: 445,
                 columnNumber: 17
             }, this),
             loadingBindings ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -3030,42 +3033,42 @@ function CommunicationsDrawerSection({ apiEntityType, entityId, active = true, e
                 children: "Checking org email setup…"
             }, void 0, false, {
                 fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                lineNumber: 445,
+                lineNumber: 447,
                 columnNumber: 21
             }, this) : bindingsErr ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
                 className: "text-[11px] text-alloy-ember",
                 children: bindingsErr
             }, void 0, false, {
                 fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                lineNumber: 447,
+                lineNumber: 449,
                 columnNumber: 21
             }, this) : !channelsAvailable.includes("email") ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
                 className: "text-[11px] text-alloy-midnight/65",
                 children: "Email outbound is not configured for this organization (missing active Resend binding)."
             }, void 0, false, {
                 fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                lineNumber: 449,
+                lineNumber: 451,
                 columnNumber: 21
             }, this) : loadingRecipients ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
                 className: "text-[11px] text-alloy-midnight/55",
                 children: "Loading person recipients…"
             }, void 0, false, {
                 fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                lineNumber: 453,
+                lineNumber: 455,
                 columnNumber: 21
             }, this) : recipientsErr ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
                 className: "text-[11px] text-alloy-ember",
                 children: recipientsErr
             }, void 0, false, {
                 fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                lineNumber: 455,
+                lineNumber: 457,
                 columnNumber: 21
             }, this) : recipients.length === 0 ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
                 className: "text-[11px] text-alloy-midnight/65",
                 children: "No person with email on this record — add or link a person with email on the household to send."
             }, void 0, false, {
                 fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                lineNumber: 457,
+                lineNumber: 459,
                 columnNumber: 21
             }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                 className: "mt-1.5 space-y-2",
@@ -3083,7 +3086,7 @@ function CommunicationsDrawerSection({ apiEntityType, entityId, active = true, e
                                         className: "mt-0.5 shrink-0"
                                     }, void 0, false, {
                                         fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                                        lineNumber: 468,
+                                        lineNumber: 470,
                                         columnNumber: 37
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -3094,7 +3097,7 @@ function CommunicationsDrawerSection({ apiEntityType, entityId, active = true, e
                                                 children: r.display_name
                                             }, void 0, false, {
                                                 fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                                                lineNumber: 476,
+                                                lineNumber: 478,
                                                 columnNumber: 41
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -3105,7 +3108,7 @@ function CommunicationsDrawerSection({ apiEntityType, entityId, active = true, e
                                                 ]
                                             }, void 0, true, {
                                                 fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                                                lineNumber: 477,
+                                                lineNumber: 479,
                                                 columnNumber: 41
                                             }, this),
                                             r.relationship_hint ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -3113,24 +3116,24 @@ function CommunicationsDrawerSection({ apiEntityType, entityId, active = true, e
                                                 children: r.relationship_hint
                                             }, void 0, false, {
                                                 fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                                                lineNumber: 479,
+                                                lineNumber: 481,
                                                 columnNumber: 45
                                             }, this) : null
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                                        lineNumber: 475,
+                                        lineNumber: 477,
                                         columnNumber: 37
                                     }, this)
                                 ]
                             }, r.person_id, true, {
                                 fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                                lineNumber: 464,
+                                lineNumber: 466,
                                 columnNumber: 33
                             }, this))
                     }, void 0, false, {
                         fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                        lineNumber: 462,
+                        lineNumber: 464,
                         columnNumber: 25
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("label", {
@@ -3141,7 +3144,7 @@ function CommunicationsDrawerSection({ apiEntityType, entityId, active = true, e
                                 children: "Subject"
                             }, void 0, false, {
                                 fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                                lineNumber: 486,
+                                lineNumber: 488,
                                 columnNumber: 29
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("input", {
@@ -3155,13 +3158,13 @@ function CommunicationsDrawerSection({ apiEntityType, entityId, active = true, e
                                 autoComplete: "off"
                             }, void 0, false, {
                                 fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                                lineNumber: 487,
+                                lineNumber: 489,
                                 columnNumber: 33
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                        lineNumber: 485,
+                        lineNumber: 487,
                         columnNumber: 25
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("textarea", {
@@ -3174,7 +3177,7 @@ function CommunicationsDrawerSection({ apiEntityType, entityId, active = true, e
                         "aria-label": "Email body"
                     }, void 0, false, {
                         fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                        lineNumber: 498,
+                        lineNumber: 500,
                         columnNumber: 25
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3187,12 +3190,12 @@ function CommunicationsDrawerSection({ apiEntityType, entityId, active = true, e
                             children: sendBusy ? "Sending…" : `Send (${selectedRecipientIds.size})`
                         }, void 0, false, {
                             fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                            lineNumber: 508,
+                            lineNumber: 510,
                             columnNumber: 29
                         }, this)
                     }, void 0, false, {
                         fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                        lineNumber: 507,
+                        lineNumber: 509,
                         columnNumber: 25
                     }, this),
                     sendErr ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -3200,7 +3203,7 @@ function CommunicationsDrawerSection({ apiEntityType, entityId, active = true, e
                         children: sendErr
                     }, void 0, false, {
                         fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                        lineNumber: 522,
+                        lineNumber: 524,
                         columnNumber: 36
                     }, this) : null,
                     sendOkNote ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -3208,19 +3211,19 @@ function CommunicationsDrawerSection({ apiEntityType, entityId, active = true, e
                         children: sendOkNote
                     }, void 0, false, {
                         fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                        lineNumber: 523,
+                        lineNumber: 525,
                         columnNumber: 39
                     }, this) : null
                 ]
             }, void 0, true, {
                 fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                lineNumber: 461,
+                lineNumber: 463,
                 columnNumber: 21
             }, this)
         ]
     }, void 0, true, {
         fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-        lineNumber: 442,
+        lineNumber: 444,
         columnNumber: 13
     }, this) : null;
     return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -3238,14 +3241,14 @@ function CommunicationsDrawerSection({ apiEntityType, entityId, active = true, e
                             children: "Loading threads…"
                         }, void 0, false, {
                             fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                            lineNumber: 541,
+                            lineNumber: 543,
                             columnNumber: 33
                         }, this) : thrErr ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
                             className: "text-[12px] text-alloy-ember",
                             children: thrErr
                         }, void 0, false, {
                             fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                            lineNumber: 543,
+                            lineNumber: 545,
                             columnNumber: 33
                         }, this) : threads.length === 0 ? emptyThreadsBody : threadList("compact"),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -3255,13 +3258,13 @@ function CommunicationsDrawerSection({ apiEntityType, entityId, active = true, e
                             children: "Expand thread space"
                         }, void 0, false, {
                             fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                            lineNumber: 549,
+                            lineNumber: 551,
                             columnNumber: 29
                         }, this)
                     ]
                 }, void 0, true, {
                     fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                    lineNumber: 539,
+                    lineNumber: 541,
                     columnNumber: 25
                 }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                     className: "space-y-2",
@@ -3273,21 +3276,21 @@ function CommunicationsDrawerSection({ apiEntityType, entityId, active = true, e
                                 children: "Loading threads…"
                             }, void 0, false, {
                                 fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                                lineNumber: 561,
+                                lineNumber: 563,
                                 columnNumber: 37
                             }, this) : thrErr ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
                                 className: "min-h-[120px] flex-1 rounded-lg border border-alloy-stone/15 bg-white p-3 text-[12px] text-alloy-ember",
                                 children: thrErr
                             }, void 0, false, {
                                 fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                                lineNumber: 565,
+                                lineNumber: 567,
                                 columnNumber: 37
                             }, this) : threads.length === 0 ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                 className: "min-h-[120px] flex-1 rounded-lg border border-alloy-stone/15 bg-white p-3",
                                 children: emptyThreadsBody
                             }, void 0, false, {
                                 fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                                lineNumber: 569,
+                                lineNumber: 571,
                                 columnNumber: 37
                             }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Fragment"], {
                                 children: [
@@ -3297,7 +3300,7 @@ function CommunicationsDrawerSection({ apiEntityType, entityId, active = true, e
                             }, void 0, true)
                         }, void 0, false, {
                             fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                            lineNumber: 559,
+                            lineNumber: 561,
                             columnNumber: 29
                         }, this),
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
@@ -3310,27 +3313,27 @@ function CommunicationsDrawerSection({ apiEntityType, entityId, active = true, e
                             children: "Collapse thread space"
                         }, void 0, false, {
                             fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                            lineNumber: 579,
+                            lineNumber: 581,
                             columnNumber: 29
                         }, this)
                     ]
                 }, void 0, true, {
                     fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                    lineNumber: 558,
+                    lineNumber: 560,
                     columnNumber: 25
                 }, this) : loadingThreads ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
                     className: "text-sm text-alloy-midnight/60",
                     children: "Loading threads…"
                 }, void 0, false, {
                     fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                    lineNumber: 592,
+                    lineNumber: 594,
                     columnNumber: 21
                 }, this) : thrErr ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
                     className: "text-sm text-alloy-ember",
                     children: thrErr
                 }, void 0, false, {
                     fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                    lineNumber: 594,
+                    lineNumber: 596,
                     columnNumber: 21
                 }, this) : threads.length === 0 ? emptyThreadsBody : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                     className: "flex flex-col gap-3 sm:flex-row",
@@ -3340,24 +3343,28 @@ function CommunicationsDrawerSection({ apiEntityType, entityId, active = true, e
                     ]
                 }, void 0, true, {
                     fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-                    lineNumber: 598,
+                    lineNumber: 600,
                     columnNumber: 21
                 }, this)
             ]
         }, void 0, true, {
             fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-            lineNumber: 531,
+            lineNumber: 533,
             columnNumber: 13
         }, this)
     }, void 0, false, {
         fileName: "[project]/components/admin/communications/CommunicationsDrawerSection.tsx",
-        lineNumber: 530,
+        lineNumber: 532,
         columnNumber: 9
     }, this);
 }
-_s(CommunicationsDrawerSection, "cErLpErMXb0lQWEP2cFc2ViA0yk=");
+_s(CommunicationsDrawerSection, "S6X0hy6Yr0v0KxwsAOjkKfEB7XI=", false, function() {
+    return [
+        __TURBOPACK__imported__module__$5b$project$5d2f$contexts$2f$AdminViewerTimezoneContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useAdminViewerTimezone"]
+    ];
+});
 _c = CommunicationsDrawerSection;
-const DRAWER_SECTION_HEADER_CLASS = "text-xs font-semibold uppercase tracking-wider text-[#59678b] border-b border-[#e6e8ec] pb-2 mb-4";
+const DRAWER_SECTION_HEADER_CLASS = "text-xs font-semibold tracking-wider text-[#59678b] border-b border-[#e6e8ec] pb-2 mb-4";
 var _c;
 __turbopack_context__.k.register(_c, "CommunicationsDrawerSection");
 if (typeof globalThis.$RefreshHelpers$ === 'object' && globalThis.$RefreshHelpers !== null) {
@@ -3613,7 +3620,7 @@ function formatQty(q) {
 }
 function lineTypeBadgeClass(lineType) {
     const t = String(lineType || "").toLowerCase();
-    const base = "inline-flex shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide";
+    const base = "inline-flex shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide";
     if (t === "discount") return `${base} bg-red-50 text-red-800 border border-red-200/80`;
     if (t === "tax") return `${base} bg-violet-50 text-violet-900 border border-violet-200/80`;
     if (t === "fee") return `${base} bg-slate-100 text-slate-800 border border-slate-200`;
@@ -3678,7 +3685,7 @@ function JobPricingBreakdown({ record }) {
                 className: "rounded border border-admin-border bg-white/60 px-3 py-2.5 space-y-1.5",
                 children: [
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                        className: "text-[10px] font-semibold uppercase tracking-wider text-alloy-forge/80 mb-1",
+                        className: "text-[10px] font-semibold tracking-wider text-alloy-forge/80 mb-1",
                         children: "Summary (from job)"
                     }, void 0, false, {
                         fileName: "[project]/components/admin/JobPricingBreakdown.tsx",
@@ -3924,7 +3931,7 @@ function JobPricingBreakdown({ record }) {
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                 children: [
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                        className: "text-[10px] font-semibold uppercase tracking-wider text-alloy-forge/80 mb-2",
+                        className: "text-[10px] font-semibold tracking-wider text-alloy-forge/80 mb-2",
                         children: "Line items (active)"
                     }, void 0, false, {
                         fileName: "[project]/components/admin/JobPricingBreakdown.tsx",
@@ -3971,7 +3978,7 @@ function JobPricingBreakdown({ record }) {
                                                         columnNumber: 23
                                                     }, this),
                                                     li.is_manual_override ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
-                                                        className: "text-[10px] font-semibold uppercase text-amber-800",
+                                                        className: "text-[10px] font-semibold text-amber-800",
                                                         children: "Override"
                                                     }, void 0, false, {
                                                         fileName: "[project]/components/admin/JobPricingBreakdown.tsx",
@@ -4219,7 +4226,7 @@ function JobRrsOverviewTab({ jobId, variant = "legacy" }) {
                 } : undefined,
                 children: [
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("h3", {
-                        className: `text-xs font-semibold uppercase tracking-wide pb-2 mb-3 ${v2 ? "" : "text-alloy-forge/75 border-b border-admin-border"}`,
+                        className: `text-xs font-semibold tracking-wide pb-2 mb-3 ${v2 ? "" : "text-alloy-forge/75 border-b border-admin-border"}`,
                         style: v2 ? {
                             color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["derived"].textSecondary,
                             borderBottomWidth: 1,
@@ -4280,7 +4287,7 @@ function JobRrsOverviewTab({ jobId, variant = "legacy" }) {
                 className: "space-y-4",
                 children: [
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("h3", {
-                        className: `text-xs font-semibold uppercase tracking-wide pb-2 ${v2 ? "" : "text-alloy-forge/75 border-b border-admin-border"}`,
+                        className: `text-xs font-semibold tracking-wide pb-2 ${v2 ? "" : "text-alloy-forge/75 border-b border-admin-border"}`,
                         style: v2 ? {
                             color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["derived"].textSecondary,
                             borderBottomWidth: 1,
@@ -4629,7 +4636,7 @@ function JobReceivableChargesPanel({ receivableSource, chargeRows, openChargeCou
                     children: [
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("thead", {
                             children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("tr", {
-                                className: "border-b border-alloy-stone/25 text-left text-alloy-midnight/60 uppercase tracking-wide",
+                                className: "border-b border-alloy-stone/25 text-left text-alloy-midnight/60 tracking-wide",
                                 children: [
                                     !compact && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("th", {
                                         className: th,
@@ -4730,7 +4737,7 @@ function JobReceivableChargesPanel({ receivableSource, chargeRows, openChargeCou
                                                             columnNumber: 45
                                                         }, this),
                                                         linkedVisit ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
-                                                            className: "text-[10px] font-medium uppercase tracking-wide text-alloy-blue bg-alloy-blue/10 px-1.5 py-0.5 rounded",
+                                                            className: "text-[10px] font-medium tracking-wide text-alloy-blue bg-alloy-blue/10 px-1.5 py-0.5 rounded",
                                                             children: "This visit"
                                                         }, void 0, false, {
                                                             fileName: "[project]/components/admin/JobReceivableChargesPanel.tsx",
@@ -5362,7 +5369,7 @@ function AdminCollectPaymentModal({ isOpen, onClose, context, disabled, onAfterR
                             className: "rounded-lg border border-alloy-stone/35 bg-gradient-to-b from-alloy-stone/5 to-transparent px-4 py-3 space-y-2.5",
                             children: [
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                    className: "text-[11px] font-semibold uppercase tracking-wider text-alloy-forge/75",
+                                    className: "text-[11px] font-semibold tracking-wider text-alloy-forge/75",
                                     children: "Receivables summary"
                                 }, void 0, false, {
                                     fileName: "[project]/components/admin/AdminCollectPaymentModal.tsx",
@@ -5490,7 +5497,7 @@ function AdminCollectPaymentModal({ isOpen, onClose, context, disabled, onAfterR
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                             children: [
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
-                                    className: "block text-[11px] font-semibold uppercase tracking-wider text-alloy-forge/75 mb-2",
+                                    className: "block text-[11px] font-semibold tracking-wider text-alloy-forge/75 mb-2",
                                     children: "Charge type"
                                 }, void 0, false, {
                                     fileName: "[project]/components/admin/AdminCollectPaymentModal.tsx",
@@ -5582,7 +5589,7 @@ function AdminCollectPaymentModal({ isOpen, onClose, context, disabled, onAfterR
                         target === "adhoc" && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                             children: [
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("label", {
-                                    className: "block text-xs font-semibold uppercase tracking-wide text-alloy-forge/90 mb-1",
+                                    className: "block text-xs font-semibold tracking-wide text-alloy-forge/90 mb-1",
                                     children: [
                                         "Charge type / reason ",
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -5625,7 +5632,7 @@ function AdminCollectPaymentModal({ isOpen, onClose, context, disabled, onAfterR
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                             children: [
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("label", {
-                                    className: "block text-xs font-semibold uppercase tracking-wide text-alloy-forge/90 mb-1",
+                                    className: "block text-xs font-semibold tracking-wide text-alloy-forge/90 mb-1",
                                     children: [
                                         "Amount (USD)",
                                         target === "adhoc" && /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -5666,7 +5673,7 @@ function AdminCollectPaymentModal({ isOpen, onClose, context, disabled, onAfterR
                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                             children: [
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
-                                    className: "block text-xs font-semibold uppercase tracking-wide text-alloy-forge/90 mb-2",
+                                    className: "block text-xs font-semibold tracking-wide text-alloy-forge/90 mb-2",
                                     children: "Payment method"
                                 }, void 0, false, {
                                     fileName: "[project]/components/admin/AdminCollectPaymentModal.tsx",

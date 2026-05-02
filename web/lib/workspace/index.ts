@@ -21,6 +21,7 @@ export {
     filterJobsScheduledToday,
     filterJobsNeedsAttention,
     type JobRowForWorkspaceMetrics,
+    type ComputeOperationsSignalCountsOptions,
 } from "./deriveDepartmentJobMetrics";
 export {
     NEEDS_ATTENTION_EXCEPTIONS,

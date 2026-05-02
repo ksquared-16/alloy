@@ -350,7 +350,7 @@ export default function KpiPlacementsSettingsClient() {
                         <div className="overflow-x-auto rounded-lg border border-alloy-forge/12 bg-white/40">
                             <table className="min-w-[720px] w-full text-left text-xs">
                                 <thead>
-                                    <tr className="border-b border-alloy-forge/10 bg-alloy-midnight/[0.03] text-[10px] uppercase tracking-wide text-alloy-midnight/55">
+                                    <tr className="border-b border-alloy-forge/10 bg-alloy-midnight/[0.03] text-[10px] tracking-wide text-alloy-midnight/55">
                                         <th className="px-3 py-2 font-medium">Visible</th>
                                         <th className="px-3 py-2 font-medium">Order</th>
                                         <th className="px-3 py-2 font-medium">Label override</th>

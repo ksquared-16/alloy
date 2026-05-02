@@ -1,3 +1,5 @@
+import { UTC_FALLBACK_IANA, isValidIanaTimeZone } from "@/lib/admin/timezoneContract";
+
 /**
  * Shared formatting helpers for admin portal.
  * Use these for consistent date and currency display in tables and drawers.
@@ -54,8 +56,8 @@ export function formatPayoutPercent(value: number | string | null | undefined | 
     return `${display}%`;
 }
 
-/** Display as MM/DD/YYYY. Uses UTC so server and client output match (avoids hydration #418). */
-export function formatDate(value: string | number | Date | null | undefined): string {
+/** MM/DD/YYYY in UTC — audit trail parity / stable server–client comparison. */
+export function formatDateUtcAudit(value: string | number | Date | null | undefined): string {
     if (value === null || value === undefined) return "-";
     const d = typeof value === "object" ? value : new Date(value);
     if (Number.isNaN((d as Date).getTime())) return "-";
@@ -67,27 +69,8 @@ export function formatDate(value: string | number | Date | null | undefined): st
     }).format(d as Date);
 }
 
-/** Format subscription cadence + interval as label, e.g. "Every 1 week", "Every 2 weeks", "Every 3 months". */
-export function formatFrequencyLabel(cadence: string | null | undefined, interval: number | string | null | undefined): string {
-    const c = (cadence ?? "month").toLowerCase();
-    const n = Math.max(1, Number(interval) || 1);
-    if (c === "week") return n === 1 ? "Every 1 week" : `Every ${n} weeks`;
-    return n === 1 ? "Every 1 month" : `Every ${n} months`;
-}
-
-/** Format US phone for display: (541) 654-3217. Accepts E.164, digits-only, or already formatted. */
-export function formatPhoneUS(value: string | null | undefined): string {
-    if (value == null || value === "") return "—";
-    const digits = String(value).replace(/\D/g, "");
-    if (digits.length < 10) return String(value);
-    const area = digits.slice(-10, -7);
-    const mid = digits.slice(-7, -4);
-    const last = digits.slice(-4);
-    return `(${area}) ${mid}-${last}`;
-}
-
-/** Display as MM/DD/YYYY, h:mm A. Uses UTC so server and client output match (avoids hydration #418). */
-export function formatDateTime(value: string | number | Date | null | undefined): string {
+/** MM/DD/YYYY, h:mm A in UTC — audit trail parity / stable server–client comparison. */
+export function formatDateTimeUtcAudit(value: string | number | Date | null | undefined): string {
     if (value === null || value === undefined) return "-";
     const d = typeof value === "object" ? value : new Date(value);
     if (Number.isNaN((d as Date).getTime())) return "-";
@@ -102,9 +85,88 @@ export function formatDateTime(value: string | number | Date | null | undefined)
     }).format(d as Date);
 }
 
+/** @deprecated Prefer formatDateUtcAudit. */
+export function formatDate(value: string | number | Date | null | undefined): string {
+    return formatDateUtcAudit(value);
+}
+
+/** Format subscription cadence + interval as label, e.g. "Every 1 week", "Every 2 weeks", "Every 3 months". */
+export function formatFrequencyLabel(cadence: string | null | undefined, interval: number | string | null | undefined): string {
+    const c = (cadence ?? "month").toLowerCase();
+    const n = Math.max(1, Number(interval) || 1);
+    if (c === "week") return n === 1 ? "Every 1 week" : `Every ${n} weeks`;
+    return n === 1 ? "Every 1 month" : `Every ${n} months`;
+}
+
+/** Format US phone for display: 541-654-3217. Accepts E.164, digits-only, or already formatted (uses last 10 digits for country code 1). */
+export function formatPhoneUS(value: string | null | undefined): string {
+    if (value == null || value === "") return "—";
+    const digits = String(value).replace(/\D/g, "");
+    if (digits.length < 10) return String(value);
+    const area = digits.slice(-10, -7);
+    const mid = digits.slice(-7, -4);
+    const last = digits.slice(-4);
+    return `${area}-${mid}-${last}`;
+}
+
+/** @deprecated Prefer formatDateTimeUtcAudit. */
+export function formatDateTime(value: string | number | Date | null | undefined): string {
+    return formatDateTimeUtcAudit(value);
+}
+
+function resolveDisplayTimeZone(iana: string): string {
+    const t = (iana ?? "").trim();
+    return t && isValidIanaTimeZone(t) ? t : UTC_FALLBACK_IANA;
+}
+
+/** User-facing date in resolved profile/org timezone (explicit IANA — not browser default). */
+export function formatDateForUserDisplay(
+    value: string | number | Date | null | undefined,
+    timeZoneIana: string
+): string {
+    if (value === null || value === undefined) return "-";
+    const d = typeof value === "object" ? value : new Date(value);
+    if (Number.isNaN((d as Date).getTime())) return "-";
+    const tz = resolveDisplayTimeZone(timeZoneIana);
+    try {
+        return new Intl.DateTimeFormat("en-US", {
+            month: "2-digit",
+            day: "2-digit",
+            year: "numeric",
+            timeZone: tz,
+        }).format(d as Date);
+    } catch {
+        return formatDateUtcAudit(d);
+    }
+}
+
+/** User-facing datetime in resolved profile/org timezone (explicit IANA — not browser default). */
+export function formatDateTimeForUserDisplay(
+    value: string | number | Date | null | undefined,
+    timeZoneIana: string
+): string {
+    if (value === null || value === undefined) return "-";
+    const d = typeof value === "object" ? value : new Date(value);
+    if (Number.isNaN((d as Date).getTime())) return "-";
+    const tz = resolveDisplayTimeZone(timeZoneIana);
+    try {
+        return new Intl.DateTimeFormat("en-US", {
+            month: "2-digit",
+            day: "2-digit",
+            year: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+            hour12: true,
+            timeZone: tz,
+        }).format(d as Date);
+    } catch {
+        return formatDateTimeUtcAudit(d);
+    }
+}
+
 /**
- * MM/DD/YYYY h:mm AM/PM in the **runtime default timezone** (browser local on the client).
- * Prefer for UI that should reflect the viewer's local wall clock. Not for UTC-stable SSR hydration.
+ * System-default timezone (often browser local on the client). Avoid for Timezone Contract v1;
+ * prefer formatDateTimeForUserDisplay with resolved profile/org IANA.
  */
 export function formatDateTimeLocal(value: string | number | Date | null | undefined): string {
     if (value === null || value === undefined) return "-";

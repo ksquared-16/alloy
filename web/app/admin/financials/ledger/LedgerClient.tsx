@@ -315,7 +315,7 @@ export default function LedgerClient() {
                                     <div><span className="block text-xs font-medium text-alloy-muted">Provider ref</span><span className="text-sm text-alloy-forge">{txn.provider_ref ?? "—"}</span></div>
                                 </div>
                                 <div className="border-t border-admin-border pt-3">
-                                    <span className="block text-xs font-semibold uppercase text-alloy-muted mb-2">Linked records</span>
+                                    <span className="block text-xs font-semibold text-alloy-muted mb-2">Linked records</span>
                                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                                         {txn.customer_id && (
                                             <div>

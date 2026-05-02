@@ -90,7 +90,7 @@ export default function JobRrsOverviewTab({
                 style={v2 ? { borderColor: derived.border, backgroundColor: neutral.surface } : undefined}
             >
                 <h3
-                    className={`text-xs font-semibold uppercase tracking-wide pb-2 mb-3 ${v2 ? "" : "text-alloy-forge/75 border-b border-admin-border"}`}
+                    className={`text-xs font-semibold tracking-wide pb-2 mb-3 ${v2 ? "" : "text-alloy-forge/75 border-b border-admin-border"}`}
                     style={v2 ? { color: derived.textSecondary, borderBottomWidth: 1, borderBottomStyle: "solid", ...sectionBorder } : undefined}
                 >
                     Record
@@ -117,7 +117,7 @@ export default function JobRrsOverviewTab({
             {payload.relationship_groups.length > 0 ? (
                 <div className="space-y-4">
                     <h3
-                        className={`text-xs font-semibold uppercase tracking-wide pb-2 ${v2 ? "" : "text-alloy-forge/75 border-b border-admin-border"}`}
+                        className={`text-xs font-semibold tracking-wide pb-2 ${v2 ? "" : "text-alloy-forge/75 border-b border-admin-border"}`}
                         style={v2 ? { color: derived.textSecondary, borderBottomWidth: 1, borderBottomStyle: "solid", ...sectionBorder } : undefined}
                     >
                         Relationships

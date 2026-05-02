@@ -289,7 +289,7 @@ export default function CleaningQuoteForm({
     ]);
 
     const labelClass =
-        "block text-xs font-semibold uppercase tracking-wide mb-1 " +
+        "block text-xs font-semibold tracking-wide mb-1 " +
         (isDark ? "text-white/80" : "text-alloy-midnight/70");
     const consentLabelClass =
         "flex items-start gap-2 text-xs " +

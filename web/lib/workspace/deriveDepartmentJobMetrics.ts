@@ -10,17 +10,6 @@ import type { WorkspaceAttentionCategoryKey, WorkspaceAttentionCategoryRuntime }
 
 export type { JobRowForWorkspaceMetrics } from "./jobMetricsRow";
 
-function localDayKey(d: Date): string {
-    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
-}
-
-/** True when the ISO timestamp falls on the same local calendar day as `now`. */
-export function isScheduledLocalDay(iso: string | null | undefined, now: Date): boolean {
-    if (!iso) return false;
-    const t = new Date(iso);
-    return localDayKey(t) === localDayKey(now);
-}
-
 /** Jobs that should surface for follow-up: overdue next visit, or money owed. */
 export function jobNeedsAttention(j: JobRowForWorkspaceMetrics): boolean {
     const outstanding = j.receivable_outstanding_cents ?? 0;
@@ -52,20 +41,36 @@ export function mergeJobListsById(
     return [...map.values()];
 }
 
-export function computeOperationsSignalCounts(merged: JobRowForWorkspaceMetrics[], now: Date) {
-    let scheduledToday = 0;
+export type ComputeOperationsSignalCountsOptions = {
+    /**
+     * Count of schedules on the org operational calendar day from GET /api/admin/schedules?scheduled_on=today
+     * (`total` field). Required for accurate `scheduledToday` — do not infer from browser-local calendar.
+     */
+    operationalDayScheduledCount?: number;
+};
+
+export function computeOperationsSignalCounts(
+    merged: JobRowForWorkspaceMetrics[],
+    now: Date,
+    options?: ComputeOperationsSignalCountsOptions
+) {
+    const scheduledToday =
+        options?.operationalDayScheduledCount !== undefined ? options.operationalDayScheduledCount : 0;
     let needsAttention = 0;
     let highTouch = 0;
     for (const j of merged) {
-        if (isScheduledLocalDay(j._next_schedule ?? null, now)) scheduledToday += 1;
         if (jobNeedsAttention(j)) needsAttention += 1;
         if (jobHighTouchAttention(j)) highTouch += 1;
     }
     return { scheduledToday, needsAttention, highTouch };
 }
 
-export function filterJobsScheduledToday<T extends JobRowForWorkspaceMetrics>(rows: T[], now: Date): T[] {
-    return rows.filter((j) => isScheduledLocalDay(j._next_schedule ?? null, now));
+/**
+ * @deprecated Operational "today" is org-defined. Use schedule rows from
+ * `GET /api/admin/schedules?scheduled_on=today` instead of client-side job _next_schedule filtering.
+ */
+export function filterJobsScheduledToday<T extends JobRowForWorkspaceMetrics>(_rows: T[], _now: Date): T[] {
+    return [];
 }
 
 export function filterJobsNeedsAttention<T extends JobRowForWorkspaceMetrics>(rows: T[]): T[] {

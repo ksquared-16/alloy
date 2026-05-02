@@ -570,7 +570,7 @@ export default function OptionSetsClient({
 
                             <div className="border-t border-[#e6e8ec] pt-3">
                                 <div className="mb-2 flex items-center justify-between gap-2">
-                                    <span className="text-xs font-semibold uppercase tracking-wide text-[#59678b]">
+                                    <span className="text-xs font-semibold tracking-wide text-[#59678b]">
                                         Initial options
                                     </span>
                                     {canMutate && (

@@ -270,15 +270,15 @@ export default function SchedulesClient() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-alloy-stone/30 bg-alloy-stone/40">
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Start</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">End</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Job</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Customer</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Location</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Assigned {vendorSingular}</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Status</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Canceled?</th>
-                  <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Cancel visit</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold tracking-wider text-alloy-slate">Start</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold tracking-wider text-alloy-slate">End</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold tracking-wider text-alloy-slate">Job</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold tracking-wider text-alloy-slate">Customer</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold tracking-wider text-alloy-slate">Location</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold tracking-wider text-alloy-slate">Assigned {vendorSingular}</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold tracking-wider text-alloy-slate">Status</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold tracking-wider text-alloy-slate">Canceled?</th>
+                  <th className="px-5 py-3.5 text-left text-xs font-semibold tracking-wider text-alloy-slate">Cancel visit</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-alloy-stone/30">

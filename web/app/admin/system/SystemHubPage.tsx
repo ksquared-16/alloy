@@ -71,7 +71,7 @@ export default function SystemHubPage() {
             <div className="mt-8 space-y-10">
                 {sections.map((section) => (
                     <section key={section.title} className="border-b border-admin-border pb-8 last:border-0 last:pb-0">
-                        <h2 className="text-sm font-semibold uppercase tracking-wide text-alloy-midnight/80">{section.title}</h2>
+                        <h2 className="text-sm font-semibold tracking-wide text-alloy-midnight/80">{section.title}</h2>
                         {section.description ? (
                             <p className="mt-1 text-sm text-alloy-midnight/65">{section.description}</p>
                         ) : null}

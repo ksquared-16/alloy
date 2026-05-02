@@ -251,7 +251,7 @@ export default function ContextBlock({
           {model.title}
         </div>
       )}
-      <div style={{ fontSize: 11, fontWeight: 700, color: brand.secondary, textTransform: "uppercase", marginBottom: 8 }}>
+      <div style={{ fontSize: 11, fontWeight: 700, color: brand.secondary, textTransform: "none", marginBottom: 8 }}>
         Context
       </div>
       {sorted.length === 0 && (

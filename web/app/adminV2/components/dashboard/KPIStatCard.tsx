@@ -53,7 +53,7 @@ export default function KPIStatCard({
           color: derived.textSecondary,
           marginBottom: 8,
           fontWeight: 600,
-          textTransform: "uppercase",
+          textTransform: "none",
           letterSpacing: "0.06em",
         }}
       >

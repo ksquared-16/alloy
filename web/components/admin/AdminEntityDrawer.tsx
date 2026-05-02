@@ -13,6 +13,7 @@ import {
     type JobPrefill,
 } from "@/contexts/AdminDrawerContext";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import { useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext";
 import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
 import EntityDocumentsSection from "@/components/admin/EntityDocumentsSection";
@@ -22,6 +23,8 @@ import {
     formatMoneyFromDollars,
     formatDate,
     formatDateTime,
+    formatDateForUserDisplay,
+    formatDateTimeForUserDisplay,
     formatPhoneUS,
     formatPayoutPercent,
     personDisplayName,
@@ -365,7 +368,7 @@ function canEditInDrawer(type: string): type is (typeof EDITABLE_TYPES)[number] 
 }
 
 /** Shared spacing: 24px container (drawer body has p-6), 16px between rows, section title with divider */
-const DRAWER_SECTION_HEADER_CLASS = "text-xs font-semibold uppercase tracking-wider text-[#59678b] border-b border-[#e6e8ec] pb-2 mb-4";
+const DRAWER_SECTION_HEADER_CLASS = "text-xs font-semibold tracking-wider text-[#59678b] border-b border-[#e6e8ec] pb-2 mb-4";
 const DRAWER_ROW_SPACING = "space-y-4";
 
 /** Curated collapsible sections for Admin V2 cleaning job Record tab (no RRS section; People & places = opportunity + work unit only). */
@@ -723,7 +726,7 @@ function JobDrawerRelationshipsSection(props: {
                 className={
                     v2
                         ? "w-full flex items-center justify-between px-3 py-2.5 text-left text-sm font-semibold"
-                        : "w-full flex items-center justify-between py-2 text-left text-xs font-semibold uppercase tracking-wider text-[#59678b]"
+                        : "w-full flex items-center justify-between py-2 text-left text-xs font-semibold tracking-wider text-[#59678b]"
                 }
                 style={v2 ? { color: "rgba(39, 63, 82, 0.65)" } : undefined}
             >
@@ -877,6 +880,15 @@ export default function AdminEntityDrawer() {
     const subscriptionSingular = labels.subscriptions?.singular ?? "Subscription";
     const router = useRouter();
     const pathname = usePathname();
+    const viewerTz = useAdminViewerTimezone();
+    const displayDateTime = useCallback(
+        (v: string | number | Date | null | undefined) => formatDateTimeForUserDisplay(v, viewerTz),
+        [viewerTz]
+    );
+    const displayDate = useCallback(
+        (v: string | number | Date | null | undefined) => formatDateForUserDisplay(v, viewerTz),
+        [viewerTz]
+    );
     /** `/admin/workspace` uses the same V2 record surfaces as `/adminV2/workspace` (modal + schedule/job chrome). */
     const drawerShellVariant =
         pathname?.startsWith("/adminV2") || pathname?.startsWith("/admin/workspace") ? "adminV2" : "legacy";
@@ -2171,12 +2183,12 @@ export default function AdminEntityDrawer() {
             setCollectPaymentContext({
                 jobId: paymentParentJobId,
                 scheduleId: drawer.id,
-                scheduleLabel: d.start_at ? formatDateTime(d.start_at) : undefined,
+                scheduleLabel: d.start_at ? displayDateTime(d.start_at) : undefined,
                 jobLabel: String(d._job_title ?? "").trim() || undefined,
             });
             setCollectPaymentOpen(true);
         }
-    }, [drawer.type, drawer.id, data, paymentParentJobId]);
+    }, [drawer.type, drawer.id, data, paymentParentJobId, displayDateTime]);
 
     const handleRecordChromeJobAction = useCallback(
         (eventKey: string) => {
@@ -5385,7 +5397,9 @@ export default function AdminEntityDrawer() {
                                     {personDisplayName(primaryContact) === "—" ? String(primaryContact.id).slice(0, 8) + "…" : personDisplayName(primaryContact)}
                                 </button>
                                 {(primaryContact.email || primaryContact.phone) && (
-                                    <span className="text-alloy-forge/80 text-sm ml-1">({[primaryContact.email, primaryContact.phone].filter(Boolean).join(" · ")})</span>
+                                    <span className="text-alloy-forge/80 text-sm ml-1">
+                                        ({[primaryContact.email, primaryContact.phone ? formatPhoneUS(primaryContact.phone) : null].filter(Boolean).join(" · ")})
+                                    </span>
                                 )}
                             </div>
                         )}
@@ -5544,7 +5558,7 @@ export default function AdminEntityDrawer() {
                     _role_label?: string | null;
                     role_type?: string | null;
                 }[]) ?? [];
-            const subheading = "text-xs font-semibold uppercase tracking-wide text-alloy-midnight/50 mb-2";
+            const subheading = "text-xs font-semibold tracking-wide text-alloy-midnight/50 mb-2";
             return {
                 relationships: (
                     <div className="space-y-5">
@@ -5649,7 +5663,7 @@ export default function AdminEntityDrawer() {
                     is_primary?: boolean;
                     relationship_type?: string | null;
                 }[]) ?? [];
-            const locSubheading = "text-xs font-semibold uppercase tracking-wide text-alloy-midnight/50 mb-2";
+            const locSubheading = "text-xs font-semibold tracking-wide text-alloy-midnight/50 mb-2";
             const customPropertyGrid =
                 locDefs.length > 0 ? (
                     <div className="grid grid-cols-1 gap-x-6 gap-y-4 md:grid-cols-2">
@@ -5877,7 +5891,7 @@ export default function AdminEntityDrawer() {
                                     <li key={s.id} className="border border-[#e6e8ec] rounded p-2 text-sm">
                                         <div className="flex items-center justify-between gap-2">
                                             <span>
-                                                #{s.subscription_sequence} — {formatDateTime(s.start_at)}
+                                                #{s.subscription_sequence} — {displayDateTime(s.start_at)}
                                             </span>
                                             <button
                                                 type="button"
@@ -5892,7 +5906,7 @@ export default function AdminEntityDrawer() {
                                         ) : null}
                                         {s.canceled_at ? (
                                             <div className="text-red-600/80 text-xs mt-0.5">
-                                                Canceled {formatDateTime(s.canceled_at)}
+                                                Canceled {displayDateTime(s.canceled_at)}
                                                 {s.canceled_by ? ` by ${s.canceled_by}` : ""}
                                                 {s.cancel_reason ? ` — ${s.cancel_reason}` : ""}
                                             </div>
@@ -5947,7 +5961,7 @@ export default function AdminEntityDrawer() {
                         )}
                         {allocs.length > 0 ? (
                             <div>
-                                <p className="text-xs font-semibold uppercase tracking-wider text-alloy-forge/80 mb-2">Allocation rows</p>
+                                <p className="text-xs font-semibold tracking-wider text-alloy-forge/80 mb-2">Allocation rows</p>
                                 <ul className="space-y-0 list-none rounded-md border border-[#e6e8ec] divide-y divide-alloy-stone/20">
                                     {allocs.map((a) => (
                                         <li key={a.id} className="px-3 py-2">
@@ -7514,9 +7528,9 @@ export default function AdminEntityDrawer() {
                                 const contactItem = opp?.primary_contact_id ? [{ id: opp.primary_contact_id, entityType: "contacts" as const, label: (opp._primary_contact_name ?? opp._contact_name as string)?.trim() || contactSingular, meta: undefined }] : [];
                                 const locationId = (opp?.location_id ?? opp?._location_id) as string | null | undefined;
                                 const locationItem = locationId ? [{ id: locationId, entityType: "locations" as const, label: (opp?._location_name as string)?.trim() || "Location", meta: undefined }] : [];
-                                const jobItems = (d?.jobs ?? []).map((j) => ({ id: j.id, entityType: "jobs" as const, label: (j.title as string) || "Job", meta: [j.scheduled_at ? formatDateTime(j.scheduled_at as string) : null, j.created_at ? formatDate(j.created_at as string) : null].filter(Boolean).join(" · ") || undefined }));
-                                const quoteItems = (d?.quotes ?? []).map((q) => ({ id: q.id, label: "Quote", meta: q.created_at ? formatDate(q.created_at) : undefined }));
-                                const discountItems = (d?.discount_redemptions ?? []).map((r) => ({ id: r.id, label: "Redemption", meta: r.created_at ? formatDate(r.created_at as string) : undefined }));
+                                const jobItems = (d?.jobs ?? []).map((j) => ({ id: j.id, entityType: "jobs" as const, label: (j.title as string) || "Job", meta: [j.scheduled_at ? displayDateTime(j.scheduled_at as string) : null, j.created_at ? displayDate(j.created_at as string) : null].filter(Boolean).join(" · ") || undefined }));
+                                const quoteItems = (d?.quotes ?? []).map((q) => ({ id: q.id, label: "Quote", meta: q.created_at ? displayDate(q.created_at) : undefined }));
+                                const discountItems = (d?.discount_redemptions ?? []).map((r) => ({ id: r.id, label: "Redemption", meta: r.created_at ? displayDate(r.created_at as string) : undefined }));
                                 type Sec = { key: string; title: string; defaultExpanded: boolean; items: { id: string; entityType?: AdminDrawerEntityType; label: string; meta?: string }[]; addAction?: { label: string; onClick: () => void } };
                                 const sections: Sec[] = [
                                     { key: "person", title: "Person", defaultExpanded: true, items: personItem },
@@ -7745,7 +7759,7 @@ export default function AdminEntityDrawer() {
                                                         <span className="text-alloy-muted ml-1">
                                                             {o.status_key ? `· ${o.status_key}` : ""}
                                                             {o.quote_total != null ? ` · ${formatMoneyFromDollars(Number(o.quote_total))}` : ""}
-                                                            {o.job_date ? ` · ${formatDate(String(o.job_date))}` : ""}
+                                                            {o.job_date ? ` · ${displayDate(String(o.job_date))}` : ""}
                                                         </span>
                                                     </li>
                                                 ))}
@@ -7872,7 +7886,7 @@ export default function AdminEntityDrawer() {
                                                             {(doc as { document_type?: string | null }).document_type && <span className="text-alloy-muted">{(doc as { document_type: string }).document_type}</span>}
                                                             {(doc as { status?: string | null }).status && <span className="text-alloy-muted">{(doc as { status: string }).status}</span>}
                                                             {((doc as { uploaded_at?: string | null }).uploaded_at || (doc as { created_at?: string | null }).created_at) && (
-                                                                <span className="text-alloy-muted text-xs">{formatDateTime((doc as { uploaded_at?: string | null }).uploaded_at || (doc as { created_at?: string }).created_at || "")}</span>
+                                                                <span className="text-alloy-muted text-xs">{displayDateTime((doc as { uploaded_at?: string | null }).uploaded_at || (doc as { created_at?: string }).created_at || "")}</span>
                                                             )}
                                                         </li>
                                                     ))}
@@ -7891,7 +7905,7 @@ export default function AdminEntityDrawer() {
                         <div className="pt-2 space-y-4 mb-4">
                             <section>
                                 <div className="flex items-center justify-between gap-2 mb-2">
-                                    <h4 className="text-xs font-semibold uppercase tracking-wider text-[#59678b]">Linked contacts (Guardians)</h4>
+                                    <h4 className="text-xs font-semibold tracking-wider text-[#59678b]">Linked contacts (Guardians)</h4>
                                     {canMutate && data && (data?.customer_id as string) && drawer.id && drawer.id !== "new" && (
                                         <button
                                             type="button"
@@ -7947,7 +7961,9 @@ export default function AdminEntityDrawer() {
                                                                         {name}
                                                                     </button>
                                                                     {c && (c.email || c.phone) && (
-                                                                        <span className="text-xs text-[#59678b]">{[c.email, c.phone].filter(Boolean).join(" · ")}</span>
+                                                                        <span className="text-xs text-[#59678b]">
+                                                                            {[c.email, c.phone ? formatPhoneUS(c.phone) : null].filter(Boolean).join(" · ")}
+                                                                        </span>
                                                                     )}
                                                                     {canMutate && (
                                                                         <button
@@ -8015,7 +8031,7 @@ export default function AdminEntityDrawer() {
                                                             {contactRelatedData.opportunities.map((o) => (
                                                                 <li key={o.id} className="flex flex-col gap-0.5 py-1">
                                                                     <button type="button" onClick={() => openDrawer({ type: "opportunities", id: o.id })} className="text-alloy-blue hover:underline text-left">{o.name ?? "Opportunity"}</button>
-                                                                    <span className="text-xs text-alloy-muted">{o.job_date ? formatDate(o.job_date) : ""}{o.status ? ` · ${o.status}` : ""}</span>
+                                                                    <span className="text-xs text-alloy-muted">{o.job_date ? displayDate(o.job_date) : ""}{o.status ? ` · ${o.status}` : ""}</span>
                                                                 </li>
                                                             ))}
                                                         </ul>
@@ -8031,7 +8047,7 @@ export default function AdminEntityDrawer() {
                                                             {contactRelatedData.jobs.map((j) => (
                                                                 <li key={j.id} className="flex flex-col gap-0.5 py-1">
                                                                     <button type="button" onClick={() => openDrawer({ type: "jobs", id: j.id })} className="text-alloy-blue hover:underline text-left">{j.title ?? "Job"}</button>
-                                                                    <span className="text-xs text-alloy-muted">{j.scheduled_at ? formatDateTime(j.scheduled_at) : ""}</span>
+                                                                    <span className="text-xs text-alloy-muted">{j.scheduled_at ? displayDateTime(j.scheduled_at) : ""}</span>
                                                                 </li>
                                                             ))}
                                                         </ul>
@@ -8044,7 +8060,7 @@ export default function AdminEntityDrawer() {
                                                             {contactRelatedData.customer_subscriptions.map((s) => (
                                                                 <li key={s.id} className="flex flex-col">
                                                                     <button type="button" onClick={() => openDrawer({ type: "subscriptions", id: s.id })} className="text-alloy-blue hover:underline text-left text-sm">
-                                                                        {s.status ?? "Subscription"} {s.start_date ? ` · ${formatDate(s.start_date)}` : ""}
+                                                                        {s.status ?? "Subscription"} {s.start_date ? ` · ${displayDate(s.start_date)}` : ""}
                                                                     </button>
                                                                     <span className="text-xs text-alloy-muted">Subscription</span>
                                                                 </li>
@@ -8075,19 +8091,19 @@ export default function AdminEntityDrawer() {
                                                 {contactRelatedData.messages.length > 0 && contactRelatedData.messages.slice(0, 10).map((m) => (
                                                     <li key={m.id} className="flex flex-col gap-0.5 py-1">
                                                         <span className="text-alloy-forge/90">Message</span>
-                                                        <span className="text-xs text-alloy-muted">{m.created_at ? formatDateTime(m.created_at) : ""}{m.status ? ` · ${m.status}` : ""}</span>
+                                                        <span className="text-xs text-alloy-muted">{m.created_at ? displayDateTime(m.created_at) : ""}{m.status ? ` · ${m.status}` : ""}</span>
                                                     </li>
                                                 ))}
                                                 {contactRelatedData.documents.length > 0 && contactRelatedData.documents.map((doc) => (
                                                     <li key={doc.id} className="flex flex-col gap-0.5 py-1">
                                                         <span className="text-alloy-forge/90">{doc.name ?? "Document"}</span>
-                                                        <span className="text-xs text-alloy-muted">{doc.document_type ?? ""}{doc.uploaded_at ? ` · ${formatDateTime(doc.uploaded_at)}` : ""}</span>
+                                                        <span className="text-xs text-alloy-muted">{doc.document_type ?? ""}{doc.uploaded_at ? ` · ${displayDateTime(doc.uploaded_at)}` : ""}</span>
                                                     </li>
                                                 ))}
                                                 {contactRelatedData.discount_redemptions.length > 0 && contactRelatedData.discount_redemptions.slice(0, 5).map((r) => (
                                                     <li key={r.id} className="flex flex-col gap-0.5 py-1">
                                                         <span className="text-alloy-forge/90">Discount redemption</span>
-                                                        <span className="text-xs text-alloy-muted">{r.created_at ? formatDateTime(r.created_at) : ""}</span>
+                                                        <span className="text-xs text-alloy-muted">{r.created_at ? displayDateTime(r.created_at) : ""}</span>
                                                     </li>
                                                 ))}
                                             </ul>
@@ -8121,17 +8137,17 @@ export default function AdminEntityDrawer() {
                                     id: p.person_id,
                                     entityType: "persons" as const,
                                     label: (p._person_name as string) || "Person",
-                                    meta: [p.role_label, p._person_email, p._person_phone].filter(Boolean).join(" · ") || undefined,
+                                    meta: [p.role_label, p._person_email, p._person_phone ? formatPhoneUS(p._person_phone) : null].filter(Boolean).join(" · ") || undefined,
                                 }));
                                 const sections: Sec[] = [
                                     { key: "people", title: "People", defaultExpanded: true, items: peopleItems },
                                     { key: "opportunities", title: "Opportunities", defaultExpanded: false, items: (d.opportunities ?? []).map((o) => ({ id: o.id, entityType: "opportunities" as const, label: (o.name as string) || "Opportunity", meta: [o.status, o.quote_total != null ? formatMoneyFromDollars(Number(o.quote_total)) : null].filter(Boolean).join(" · ") || undefined })), addAction: { label: "New Opportunity", onClick: () => openDrawer({ type: "opportunities", id: "new", defaultCustomerId: customerId }) } },
-                                    { key: "jobs", title: jobPlural, defaultExpanded: false, items: (d.jobs ?? []).map((j) => ({ id: j.id, entityType: "jobs" as const, label: (j.title as string) || "Job", meta: [j.scheduled_at ? formatDateTime(j.scheduled_at as string) : null].filter(Boolean).join(" · ") || undefined })) },
-                                    { key: "schedules", title: scheduleSingular + "s", defaultExpanded: false, items: (d.schedules ?? []).map((s) => ({ id: s.id, entityType: "schedules" as const, label: s.start_at ? formatDateTime(s.start_at) : "Schedule", meta: s.end_at ? `to ${formatDateTime(s.end_at)}` : undefined })) },
+                                    { key: "jobs", title: jobPlural, defaultExpanded: false, items: (d.jobs ?? []).map((j) => ({ id: j.id, entityType: "jobs" as const, label: (j.title as string) || "Job", meta: [j.scheduled_at ? displayDateTime(j.scheduled_at as string) : null].filter(Boolean).join(" · ") || undefined })) },
+                                    { key: "schedules", title: scheduleSingular + "s", defaultExpanded: false, items: (d.schedules ?? []).map((s) => ({ id: s.id, entityType: "schedules" as const, label: s.start_at ? displayDateTime(s.start_at) : "Schedule", meta: s.end_at ? `to ${displayDateTime(s.end_at)}` : undefined })) },
                                     { key: "locations", title: "Locations", defaultExpanded: false, items: (d.locations ?? []).map((l) => ({ id: l.id, entityType: "locations" as const, label: (l.label as string) || [l.address1, l.city, l.state].filter(Boolean).join(", ") || "Location", meta: [l.location_type, l.city, l.state].filter(Boolean).join(" · ") || undefined })), addAction: { label: "Add Location", onClick: () => openDrawer({ type: "locations", id: "new", defaultCustomerId: customerId }) } },
-                                    { key: "subscriptions", title: "Subscriptions", defaultExpanded: false, items: (d.customer_subscriptions ?? []).map((s) => ({ id: s.id, entityType: "subscriptions" as const, label: (s.status as string) || "Subscription", meta: s.start_date ? formatDate(s.start_date as string) : undefined })) },
-                                    { key: "discounts", title: "Discounts / Promotions", defaultExpanded: false, items: (d.discount_redemptions ?? []).map((r) => ({ id: r.id, entityType: "discount_redemptions" as const, label: "Redemption", meta: r.created_at ? formatDate(r.created_at as string) : undefined })) },
-                                    { key: "messages", title: "Messages", defaultExpanded: false, items: (d.messages ?? []).map((m) => ({ id: m.id, label: (m.body as string)?.slice(0, 50) || (m.to_phone as string) || "Message", meta: m.created_at ? formatDateTime(m.created_at as string) : undefined })) },
+                                    { key: "subscriptions", title: "Subscriptions", defaultExpanded: false, items: (d.customer_subscriptions ?? []).map((s) => ({ id: s.id, entityType: "subscriptions" as const, label: (s.status as string) || "Subscription", meta: s.start_date ? displayDate(s.start_date as string) : undefined })) },
+                                    { key: "discounts", title: "Discounts / Promotions", defaultExpanded: false, items: (d.discount_redemptions ?? []).map((r) => ({ id: r.id, entityType: "discount_redemptions" as const, label: "Redemption", meta: r.created_at ? displayDate(r.created_at as string) : undefined })) },
+                                    { key: "messages", title: "Messages", defaultExpanded: false, items: (d.messages ?? []).map((m) => ({ id: m.id, label: (m.body as string)?.slice(0, 50) || (m.to_phone ? formatPhoneUS(m.to_phone as string) : "") || "Message", meta: m.created_at ? displayDateTime(m.created_at as string) : undefined })) },
                                     { key: "tags", title: "Tags", defaultExpanded: false, items: (d.customer_tags ?? []).map((t) => ({ id: t.id, label: (t.name as string) || "Tag" })) },
                                 ];
                                 const withAdd = sections.filter((s) => s.items.length > 0 || s.addAction);
@@ -8203,7 +8219,10 @@ export default function AdminEntityDrawer() {
                                     id: p.id,
                                     entityType: "persons" as const,
                                     label: [p.first_name, p.last_name].filter(Boolean).join(" ").trim() || (p.email as string) || "Person",
-                                    meta: [p.email, p.phone].filter(Boolean).join(" · ") || undefined,
+                                    meta: [
+                                        p.email,
+                                        p.phone ? formatPhoneUS(p.phone as string) : null,
+                                    ].filter(Boolean).join(" · ") || undefined,
                                     isPrimary: !!(p as { _is_primary?: boolean })._is_primary,
                                 }));
                                 const jobItems = (d.jobs ?? []).map((j) => ({
@@ -8211,11 +8230,11 @@ export default function AdminEntityDrawer() {
                                     entityType: "jobs" as const,
                                     label: (j.title as string) || "Job",
                                     meta: [
-                                        j.scheduled_at ? formatDateTime(j.scheduled_at as string) : null,
+                                        j.scheduled_at ? displayDateTime(j.scheduled_at as string) : null,
                                         (j.display_total_cents != null ? j.display_total_cents : j.gross_price_cents) != null
                                             ? formatMoneyFromCents(Number(j.display_total_cents ?? j.gross_price_cents))
                                             : null,
-                                        j.created_at ? formatDate(j.created_at as string) : null,
+                                        j.created_at ? displayDate(j.created_at as string) : null,
                                     ]
                                         .filter(Boolean)
                                         .join(" · ") || undefined,
@@ -8223,8 +8242,8 @@ export default function AdminEntityDrawer() {
                                 const schedItems = (d.schedules ?? []).map((s) => ({
                                     id: s.id,
                                     entityType: "schedules" as const,
-                                    label: s.start_at ? formatDateTime(String(s.start_at)) : "Visit",
-                                    meta: [s.end_at ? formatDateTime(String(s.end_at)) : null, s.status_key ? String(s.status_key) : null, s.price_cents != null ? formatMoneyFromCents(s.price_cents) : null]
+                                    label: s.start_at ? displayDateTime(String(s.start_at)) : "Visit",
+                                    meta: [s.end_at ? displayDateTime(String(s.end_at)) : null, s.status_key ? String(s.status_key) : null, s.price_cents != null ? formatMoneyFromCents(s.price_cents) : null]
                                         .filter(Boolean)
                                         .join(" · ") || undefined,
                                 }));
@@ -8247,7 +8266,7 @@ export default function AdminEntityDrawer() {
                                     { key: "jobs", title: "Jobs", defaultExpanded: true, items: jobItems },
                                     { key: "schedules", title: "Schedules", defaultExpanded: false, items: schedItems },
                                     { key: "financials", title: "Financials (summary)", defaultExpanded: false, items: finItems },
-                                    { key: "assignments", title: "Assignments", defaultExpanded: false, items: (d.assignments ?? []).map((a) => ({ id: a.id, label: "Assignment", meta: a.created_at ? formatDateTime(a.created_at as string) : undefined })) },
+                                    { key: "assignments", title: "Assignments", defaultExpanded: false, items: (d.assignments ?? []).map((a) => ({ id: a.id, label: "Assignment", meta: a.created_at ? displayDateTime(a.created_at as string) : undefined })) },
                                 ];
                                 const visible = sections.filter((s) => s.items.length > 0);
                                 if (visible.length === 0) return <p className="text-sm text-alloy-midnight/60">No related records.</p>;
@@ -8312,20 +8331,20 @@ export default function AdminEntityDrawer() {
                                     id: s.id,
                                     entityType: "schedules" as const,
                                     label: (s as { _visit_label?: string })._visit_label ?? "Visit",
-                                    meta: [s.start_at ? formatDateTime(s.start_at) : null, s.end_at ? formatDateTime(s.end_at) : null, (s as { _vendor_name?: string | null })._vendor_name, (s as { status_key?: string | null }).status_key].filter(Boolean).join(" · ") || undefined,
+                                    meta: [s.start_at ? displayDateTime(s.start_at) : null, s.end_at ? displayDateTime(s.end_at) : null, (s as { _vendor_name?: string | null })._vendor_name, (s as { status_key?: string | null }).status_key].filter(Boolean).join(" · ") || undefined,
                                 }));
                                 const opp = d.opportunity;
                                 const messageItems = (d.messages ?? []).map((m: unknown) => {
                                     const x = m as { id: string; created_at?: string };
-                                    return { id: x.id, label: "Message", meta: x.created_at ? formatDateTime(x.created_at) : undefined };
+                                    return { id: x.id, label: "Message", meta: x.created_at ? displayDateTime(x.created_at) : undefined };
                                 });
-                                const discountItems = (d.discounts ?? []).map((r) => ({ id: r.id, label: (r as { _code?: string | null })._code ?? "Discount", meta: r.created_at ? formatDate(r.created_at) : undefined }));
+                                const discountItems = (d.discounts ?? []).map((r) => ({ id: r.id, label: (r as { _code?: string | null })._code ?? "Discount", meta: r.created_at ? displayDate(r.created_at) : undefined }));
                                 const jobId = drawer.id;
                                 const dataForPrefill = data as { customer_id?: string | null; location_id?: string | null; assigned_vendor_id?: string | null } | null | undefined;
                                 type Sec = { key: string; title: string; defaultExpanded: boolean; items: { id: string; entityType?: AdminDrawerEntityType; label: string; meta?: string }[]; addAction?: { label: string; onClick: () => void } };
                                 const sections: Sec[] = [
                                     { key: "schedules", title: "Schedules", defaultExpanded: true, items: scheduleItems, addAction: { label: "Add Schedule", onClick: async () => { let status_key: string | null = null; try { const r = await fetch("/api/admin/status-options?entity_type=schedules"); const j = await r.json().catch(() => ({})); const opts = (j.options ?? []) as { value: string }[]; status_key = opts[0]?.value ?? null; } catch { /* ignore */ } openDrawer({ type: "schedules", id: "new", defaultSchedulePrefill: { job_id: jobId, customer_id: dataForPrefill?.customer_id ?? null, location_id: dataForPrefill?.location_id ?? null, assigned_vendor_id: jobAssignedVendorId ?? dataForPrefill?.assigned_vendor_id ?? null, status_key } }); } } },
-                                    { key: "opportunity", title: "Opportunity", defaultExpanded: !!opp, items: opp ? [{ id: opp.id, entityType: "opportunities" as const, label: (opp.name as string) || "Opportunity", meta: opp.created_at ? formatDate(opp.created_at as string) : undefined }] : [] },
+                                    { key: "opportunity", title: "Opportunity", defaultExpanded: !!opp, items: opp ? [{ id: opp.id, entityType: "opportunities" as const, label: (opp.name as string) || "Opportunity", meta: opp.created_at ? displayDate(opp.created_at as string) : undefined }] : [] },
                                     { key: "messages", title: "Messages", defaultExpanded: false, items: messageItems },
                                     { key: "discounts", title: "Discounts", defaultExpanded: false, items: discountItems },
                                 ];
@@ -8396,7 +8415,7 @@ export default function AdminEntityDrawer() {
                                             <EntityDrawerSection key="customer" config={{ key: "customer", title: "Customer", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [] }} defaultExpanded>
                                                 <button type="button" onClick={() => openDrawer({ type: "customers", id: d.customer!.id })} className="w-full text-left rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors border-0 bg-transparent">
                                                     <div className="font-medium text-alloy-forge/90 text-sm">{(d.customer as { name?: string | null }).name ?? "Customer"}</div>
-                                                    {d.customer?.created_at && <div className="text-xs text-alloy-muted mt-0.5">{formatDateTime(d.customer.created_at)}</div>}
+                                                    {d.customer?.created_at && <div className="text-xs text-alloy-muted mt-0.5">{displayDateTime(d.customer.created_at)}</div>}
                                                 </button>
                                             </EntityDrawerSection>
                                         )}
@@ -8404,7 +8423,7 @@ export default function AdminEntityDrawer() {
                                             <EntityDrawerSection key="job" config={{ key: "job", title: "Job", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [] }} defaultExpanded>
                                                 <button type="button" onClick={() => openDrawer({ type: "jobs", id: (d.job as { id: string }).id })} className="w-full text-left rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors border-0 bg-transparent">
                                                     <div className="font-medium text-alloy-forge/90 text-sm">{(d.job as { _job_label?: string | null })._job_label ?? (d.job as { title?: string | null }).title ?? "Job"}</div>
-                                                    {(d.job as { created_at?: string })?.created_at && <div className="text-xs text-alloy-muted mt-0.5">{formatDateTime((d.job as { created_at: string }).created_at)}</div>}
+                                                    {(d.job as { created_at?: string })?.created_at && <div className="text-xs text-alloy-muted mt-0.5">{displayDateTime((d.job as { created_at: string }).created_at)}</div>}
                                                 </button>
                                             </EntityDrawerSection>
                                         )}
@@ -8414,7 +8433,7 @@ export default function AdminEntityDrawer() {
                                                     {(d.ledger_transactions ?? []).map((lt) => (
                                                         <li key={lt.id} className="rounded-lg px-3 py-2 text-sm text-alloy-forge/90">
                                                             <div className="font-medium">{(lt.type ?? "Transaction")} · {(lt.direction ?? "")} {lt.amount_cents != null ? formatMoneyFromCents(lt.amount_cents) : ""}</div>
-                                                            {lt.occurred_at && <div className="text-xs text-alloy-muted mt-0.5">{formatDateTime(lt.occurred_at)}</div>}
+                                                            {lt.occurred_at && <div className="text-xs text-alloy-muted mt-0.5">{displayDateTime(lt.occurred_at)}</div>}
                                                         </li>
                                                     ))}
                                                 </ul>
@@ -8426,7 +8445,7 @@ export default function AdminEntityDrawer() {
                                                     {(d.gl_journal_lines ?? []).map((line) => (
                                                         <li key={line.id} className="rounded-lg px-3 py-2 text-sm text-alloy-forge/90">
                                                             <div className="font-medium">Line {line.line_no ?? ""} {line.amount_cents != null ? formatMoneyFromCents(line.amount_cents) : ""}</div>
-                                                            {line.created_at && <div className="text-xs text-alloy-muted mt-0.5">{formatDateTime(line.created_at)}</div>}
+                                                            {line.created_at && <div className="text-xs text-alloy-muted mt-0.5">{displayDateTime(line.created_at)}</div>}
                                                         </li>
                                                     ))}
                                                 </ul>
@@ -8454,7 +8473,7 @@ export default function AdminEntityDrawer() {
                                                     {(d.ledger_transactions ?? []).map((lt) => (
                                                         <li key={lt.id} className="rounded-lg px-3 py-2 text-sm text-alloy-forge/90">
                                                             <div className="font-medium">{(lt.type ?? "Transaction")} · {(lt.direction ?? "")} {lt.amount_cents != null ? formatMoneyFromCents(lt.amount_cents) : ""}</div>
-                                                            {lt.occurred_at && <div className="text-xs text-alloy-muted mt-0.5">{formatDateTime(lt.occurred_at)}</div>}
+                                                            {lt.occurred_at && <div className="text-xs text-alloy-muted mt-0.5">{displayDateTime(lt.occurred_at)}</div>}
                                                         </li>
                                                     ))}
                                                 </ul>
@@ -8466,7 +8485,7 @@ export default function AdminEntityDrawer() {
                                                     {(d.gl_journal_lines ?? []).map((line) => (
                                                         <li key={line.id} className="rounded-lg px-3 py-2 text-sm text-alloy-forge/90">
                                                             <div className="font-medium">Line {line.line_no ?? ""} {line.amount_cents != null ? formatMoneyFromCents(line.amount_cents) : ""}</div>
-                                                            {line.created_at && <div className="text-xs text-alloy-muted mt-0.5">{formatDateTime(line.created_at)}</div>}
+                                                            {line.created_at && <div className="text-xs text-alloy-muted mt-0.5">{displayDateTime(line.created_at)}</div>}
                                                         </li>
                                                     ))}
                                                 </ul>
@@ -8495,7 +8514,7 @@ export default function AdminEntityDrawer() {
                                             <EntityDrawerSection key="customer" config={{ key: "customer", title: "Customer", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [] }} defaultExpanded>
                                                 <button type="button" onClick={() => openDrawer({ type: "customers", id: d.customer!.id })} className="w-full text-left rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors border-0 bg-transparent">
                                                     <div className="font-medium text-alloy-forge/90 text-sm">{(d.customer as { name?: string | null }).name ?? "Customer"}</div>
-                                                    {d.customer?.created_at && <div className="text-xs text-alloy-muted mt-0.5">{formatDateTime(d.customer.created_at)}</div>}
+                                                    {d.customer?.created_at && <div className="text-xs text-alloy-muted mt-0.5">{displayDateTime(d.customer.created_at)}</div>}
                                                 </button>
                                             </EntityDrawerSection>
                                         )}
@@ -8503,7 +8522,7 @@ export default function AdminEntityDrawer() {
                                             <EntityDrawerSection key="contact" config={{ key: "contact", title: "Contact", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [] }} defaultExpanded>
                                                 <button type="button" onClick={() => openDrawer({ type: "contacts", id: d.contact!.id })} className="w-full text-left rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors border-0 bg-transparent">
                                                     <div className="font-medium text-alloy-forge/90 text-sm">{[d.contact.first_name, d.contact.last_name].filter(Boolean).join(" ") || "Contact"}</div>
-                                                    {d.contact.created_at && <div className="text-xs text-alloy-muted mt-0.5">{formatDateTime(d.contact.created_at)}</div>}
+                                                    {d.contact.created_at && <div className="text-xs text-alloy-muted mt-0.5">{displayDateTime(d.contact.created_at)}</div>}
                                                 </button>
                                             </EntityDrawerSection>
                                         )}
@@ -8511,7 +8530,7 @@ export default function AdminEntityDrawer() {
                                             <EntityDrawerSection key="opportunity" config={{ key: "opportunity", title: "Opportunity", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [] }} defaultExpanded>
                                                 <button type="button" onClick={() => openDrawer({ type: "opportunities", id: (d.opportunity as { id: string }).id })} className="w-full text-left rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors border-0 bg-transparent">
                                                     <div className="font-medium text-alloy-forge/90 text-sm">{(d.opportunity as { name?: string | null }).name ?? "Opportunity"}</div>
-                                                    {(d.opportunity as { created_at?: string }).created_at && <div className="text-xs text-alloy-muted mt-0.5">{formatDateTime((d.opportunity as { created_at: string }).created_at)}</div>}
+                                                    {(d.opportunity as { created_at?: string }).created_at && <div className="text-xs text-alloy-muted mt-0.5">{displayDateTime((d.opportunity as { created_at: string }).created_at)}</div>}
                                                 </button>
                                             </EntityDrawerSection>
                                         )}
@@ -8519,7 +8538,7 @@ export default function AdminEntityDrawer() {
                                             <EntityDrawerSection key="job" config={{ key: "job", title: "Job", defaultExpanded: true, collapsible: true, gridCols: 1, fields: [] }} defaultExpanded>
                                                 <button type="button" onClick={() => openDrawer({ type: "jobs", id: (d.job as { id: string }).id })} className="w-full text-left rounded-lg px-3 py-2 hover:bg-alloy-stone/30 transition-colors border-0 bg-transparent">
                                                     <div className="font-medium text-alloy-forge/90 text-sm">{(d.job as { _job_label?: string | null })._job_label ?? (d.job as { title?: string | null }).title ?? "Job"}</div>
-                                                    {(d.job as { created_at?: string })?.created_at && <div className="text-xs text-alloy-muted mt-0.5">{formatDateTime((d.job as { created_at: string }).created_at)}</div>}
+                                                    {(d.job as { created_at?: string })?.created_at && <div className="text-xs text-alloy-muted mt-0.5">{displayDateTime((d.job as { created_at: string }).created_at)}</div>}
                                                 </button>
                                             </EntityDrawerSection>
                                         )}
@@ -8550,7 +8569,7 @@ export default function AdminEntityDrawer() {
                                             {offeringRelatedData.pricing_services.map((ps: Record<string, unknown>) => (
                                                 <li key={String(ps.id)} className="py-1">
                                                     {ps.id != null ? String(ps.id).slice(0, 8) + "…" : "—"}
-                                                    {ps.created_at != null ? ` · ${formatDateTime(String(ps.created_at))}` : ""}
+                                                    {ps.created_at != null ? ` · ${displayDateTime(String(ps.created_at))}` : ""}
                                                 </li>
                                             ))}
                                         </ul>
@@ -8575,7 +8594,7 @@ export default function AdminEntityDrawer() {
                                             {planTemplateRelatedData.pricing_frequencies.map((pf: Record<string, unknown>) => (
                                                 <li key={String(pf.id)} className="py-1">
                                                     {(pf.frequency_key ?? pf.frequency_label ?? pf.id) != null ? String(pf.frequency_key ?? pf.frequency_label ?? pf.id) : "—"}
-                                                    {pf.created_at != null ? ` · ${formatDateTime(String(pf.created_at))}` : ""}
+                                                    {pf.created_at != null ? ` · ${displayDateTime(String(pf.created_at))}` : ""}
                                                 </li>
                                             ))}
                                         </ul>
@@ -8680,8 +8699,8 @@ export default function AdminEntityDrawer() {
                                             (p.processor_transaction_id != null && String(p.processor_transaction_id).trim() !== ""
                                                 ? String(p.processor_transaction_id).trim()
                                                 : null) ?? (p.provider_payment_id?.trim() || null);
-                                        const recv = p.received_at ? formatDateTime(p.received_at) : null;
-                                        const posted = p.posted_at ? formatDateTime(p.posted_at) : p.paid_at ? formatDateTime(p.paid_at) : null;
+                                        const recv = p.received_at ? displayDateTime(p.received_at) : null;
+                                        const posted = p.posted_at ? displayDateTime(p.posted_at) : p.paid_at ? displayDateTime(p.paid_at) : null;
                                         return (
                                             <li key={p.id} className="text-sm border-b border-alloy-stone/15 pb-2 last:border-0">
                                                 <div>
@@ -8712,7 +8731,7 @@ export default function AdminEntityDrawer() {
                             {jobPayoutLoading ? <p className="text-sm text-alloy-midnight/60 mt-4">Loading payout…</p> : jobPayout && (data as { assigned_vendor_id?: string | null })?.assigned_vendor_id ? (
                                 <div className="mt-4 space-y-2">
                                     <p className="text-sm"><strong>Payout policy:</strong> {jobPayout.policy.mode === "tiered" ? "Tiered" : "Flat"}{jobPayout.policy.mode === "flat" && jobPayout.policy.value != null && ` · ${jobPayout.policy.value}%`}</p>
-                                    {jobPayout.schedules.length > 0 && <div className="overflow-x-auto"><table className="w-full text-sm border border-alloy-stone/20"><thead><tr className="border-b text-left text-alloy-midnight/70"><th className="py-1 pr-2">Scheduled</th><th className="py-1 pr-2">Price</th><th className="py-1 pr-2">Payout</th></tr></thead><tbody>{jobPayout.schedules.map((s) => <tr key={s.schedule_id} className="border-b border-alloy-stone/10"><td className="py-1 pr-2">{s.scheduled_at ? formatDateTime(s.scheduled_at) : "—"}</td><td className="py-1 pr-2">{s.price_cents != null ? formatMoneyFromCents(s.price_cents) : "—"}</td><td className="py-1 pr-2">{s.payout_cents != null ? formatMoneyFromCents(s.payout_cents) : "—"}</td></tr>)}</tbody></table></div>}</div>
+                                    {jobPayout.schedules.length > 0 && <div className="overflow-x-auto"><table className="w-full text-sm border border-alloy-stone/20"><thead><tr className="border-b text-left text-alloy-midnight/70"><th className="py-1 pr-2">Scheduled</th><th className="py-1 pr-2">Price</th><th className="py-1 pr-2">Payout</th></tr></thead><tbody>{jobPayout.schedules.map((s) => <tr key={s.schedule_id} className="border-b border-alloy-stone/10"><td className="py-1 pr-2">{s.scheduled_at ? displayDateTime(s.scheduled_at) : "—"}</td><td className="py-1 pr-2">{s.price_cents != null ? formatMoneyFromCents(s.price_cents) : "—"}</td><td className="py-1 pr-2">{s.payout_cents != null ? formatMoneyFromCents(s.payout_cents) : "—"}</td></tr>)}</tbody></table></div>}</div>
                             ) : (data as { assigned_vendor_id?: string | null })?.assigned_vendor_id ? <p className="text-sm text-alloy-midnight/60 mt-4">Could not load payout.</p> : null}
                             {!jobFinancialsLoading && jobFinancials && (
                                 <>
@@ -8780,7 +8799,7 @@ export default function AdminEntityDrawer() {
                                                 <tbody>
                                                     {jobFinancials.schedules.map((s) => (
                                                         <tr key={s.id} className="border-b border-alloy-stone/10">
-                                                            <td className="py-1 pr-2">{s.start_at ? formatDateTime(s.start_at) : "—"}</td>
+                                                            <td className="py-1 pr-2">{s.start_at ? displayDateTime(s.start_at) : "—"}</td>
                                                             <td className="py-1 pr-2">
                                                                 {s.visit_kind === "recurring"
                                                                     ? "Recurring"
@@ -8917,7 +8936,7 @@ export default function AdminEntityDrawer() {
                                         <li key={p.id} className="text-sm flex flex-wrap items-center gap-x-3 gap-y-1">
                                             <span className="font-medium text-alloy-forge/90">{formatMoneyFromCents(p.amount_cents ?? 0)}</span>
                                             <span className="text-alloy-midnight/70">{p.status_key ?? "—"}</span>
-                                            <span className="text-alloy-muted text-xs">{p.paid_at ? formatDateTime(p.paid_at) : p.created_at ? formatDateTime(p.created_at) : ""}</span>
+                                            <span className="text-alloy-muted text-xs">{p.paid_at ? displayDateTime(p.paid_at) : p.created_at ? displayDateTime(p.created_at) : ""}</span>
                                         </li>
                                     ))}
                                 </ul>
@@ -9054,16 +9073,16 @@ export default function AdminEntityDrawer() {
                                                 <li>Status (canonical): {paymentRowStatusDisplayLabel(data as PaymentRowLike)}</li>
                                             ) : null}
                                             {(data as { received_at?: string | null })?.received_at != null ? (
-                                                <li>Received: {formatDateTime(String((data as { received_at: string }).received_at))}</li>
+                                                <li>Received: {displayDateTime(String((data as { received_at: string }).received_at))}</li>
                                             ) : null}
                                             {(data as { posted_at?: string | null })?.posted_at != null ? (
-                                                <li>Posted: {formatDateTime(String((data as { posted_at: string }).posted_at))}</li>
+                                                <li>Posted: {displayDateTime(String((data as { posted_at: string }).posted_at))}</li>
                                             ) : null}
-                                            {data?.created_at != null ? <li>Created: {formatDateTime(String(data.created_at))}</li> : null}
-                                            {data?.updated_at != null ? <li>Updated: {formatDateTime(String(data.updated_at))}</li> : null}
-                                            {data?.paid_at != null ? <li>Paid at (legacy): {formatDateTime(String(data.paid_at))}</li> : null}
+                                            {data?.created_at != null ? <li>Created: {displayDateTime(String(data.created_at))}</li> : null}
+                                            {data?.updated_at != null ? <li>Updated: {displayDateTime(String(data.updated_at))}</li> : null}
+                                            {data?.paid_at != null ? <li>Paid at (legacy): {displayDateTime(String(data.paid_at))}</li> : null}
                                             {data?.posted_to_ledger_at != null ? (
-                                                <li>Posted to ledger: {formatDateTime(String(data.posted_to_ledger_at))}</li>
+                                                <li>Posted to ledger: {displayDateTime(String(data.posted_to_ledger_at))}</li>
                                             ) : null}
                                         </ul>
                                         {!data?.created_at &&
@@ -9082,8 +9101,8 @@ export default function AdminEntityDrawer() {
                                     <section>
                                         <h3 className={DRAWER_SECTION_HEADER_CLASS}>Timeline</h3>
                                         <ul className="space-y-1.5 text-sm text-alloy-forge/90">
-                                            {data?.created_at != null ? <li>Created: {formatDateTime(String(data.created_at))}</li> : null}
-                                            {data?.updated_at != null ? <li>Updated: {formatDateTime(String(data.updated_at))}</li> : null}
+                                            {data?.created_at != null ? <li>Created: {displayDateTime(String(data.created_at))}</li> : null}
+                                            {data?.updated_at != null ? <li>Updated: {displayDateTime(String(data.updated_at))}</li> : null}
                                         </ul>
                                         {!data?.created_at && !data?.updated_at && (
                                             <p className="text-sm text-alloy-midnight/60">No activity recorded.</p>
@@ -9098,7 +9117,7 @@ export default function AdminEntityDrawer() {
                                             <ul className="space-y-2">
                                                 {(contactRelatedData?.messages ?? []).map((m) => (
                                                     <li key={m.id} className="text-sm text-alloy-forge/90">
-                                                        {m.created_at ? formatDateTime(m.created_at) : ""}
+                                                        {m.created_at ? displayDateTime(m.created_at) : ""}
                                                         {m.to_phone ? ` · ${m.to_phone}` : ""}
                                                         {m.status ? ` · ${m.status}` : ""}
                                                     </li>
@@ -9109,9 +9128,9 @@ export default function AdminEntityDrawer() {
                                     <section>
                                         <h3 className={DRAWER_SECTION_HEADER_CLASS}>Timeline</h3>
                                         <ul className="space-y-1.5 text-sm text-alloy-forge/90">
-                                            {data?.created_at != null ? <li>Created: {formatDateTime(String(data.created_at))}</li> : null}
-                                            {data?.updated_at != null ? <li>Updated: {formatDateTime(String(data.updated_at))}</li> : null}
-                                            {(data as { archived_at?: string | null })?.archived_at != null ? <li>Archived: {formatDateTime(String((data as { archived_at: string }).archived_at))}</li> : null}
+                                            {data?.created_at != null ? <li>Created: {displayDateTime(String(data.created_at))}</li> : null}
+                                            {data?.updated_at != null ? <li>Updated: {displayDateTime(String(data.updated_at))}</li> : null}
+                                            {(data as { archived_at?: string | null })?.archived_at != null ? <li>Archived: {displayDateTime(String((data as { archived_at: string }).archived_at))}</li> : null}
                                         </ul>
                                         {!data?.created_at && !data?.updated_at && !(data as { archived_at?: string | null })?.archived_at && (
                                             <p className="text-sm text-alloy-midnight/60">No timeline events.</p>
@@ -9127,8 +9146,8 @@ export default function AdminEntityDrawer() {
                                     <section>
                                         <h3 className={DRAWER_SECTION_HEADER_CLASS}>Timeline</h3>
                                         <ul className="space-y-1.5 text-sm text-alloy-forge/90">
-                                            {data?.created_at != null ? <li>Created: {formatDateTime(String(data.created_at))}</li> : null}
-                                            {data?.updated_at != null ? <li>Updated: {formatDateTime(String(data.updated_at))}</li> : null}
+                                            {data?.created_at != null ? <li>Created: {displayDateTime(String(data.created_at))}</li> : null}
+                                            {data?.updated_at != null ? <li>Updated: {displayDateTime(String(data.updated_at))}</li> : null}
                                         </ul>
                                         {!data?.created_at && !data?.updated_at && (
                                             <p className="text-sm text-alloy-midnight/60">No activity recorded.</p>
@@ -9140,9 +9159,9 @@ export default function AdminEntityDrawer() {
                                     <section>
                                         <h3 className={DRAWER_SECTION_HEADER_CLASS}>Timeline</h3>
                                         <ul className="space-y-1.5 text-sm text-alloy-forge/90">
-                                            {data?.created_at != null ? <li>Created: {formatDateTime(String(data.created_at))}</li> : null}
-                                            {data?.updated_at != null ? <li>Updated: {formatDateTime(String(data.updated_at))}</li> : null}
-                                            {(data as { submitted_at?: string | null })?.submitted_at != null ? <li>Submitted: {formatDateTime(String((data as { submitted_at: string }).submitted_at))}</li> : null}
+                                            {data?.created_at != null ? <li>Created: {displayDateTime(String(data.created_at))}</li> : null}
+                                            {data?.updated_at != null ? <li>Updated: {displayDateTime(String(data.updated_at))}</li> : null}
+                                            {(data as { submitted_at?: string | null })?.submitted_at != null ? <li>Submitted: {displayDateTime(String((data as { submitted_at: string }).submitted_at))}</li> : null}
                                         </ul>
                                         {!data?.created_at && !data?.updated_at && !(data as { submitted_at?: string | null })?.submitted_at && (
                                             <p className="text-sm text-alloy-midnight/60">No activity recorded.</p>
@@ -9183,7 +9202,7 @@ export default function AdminEntityDrawer() {
                                                                 </div>
                                                             ) : null}
                                                             <div className="mt-0.5 text-[12px] text-alloy-forge/65">
-                                                                {formatDateTime(ev.occurred_at)} · {act.actorLabel}
+                                                                {displayDateTime(ev.occurred_at)} · {act.actorLabel}
                                                             </div>
                                                             {preview ? (
                                                                 <div className="mt-1.5 text-[13px] text-alloy-forge/85 whitespace-pre-wrap">
@@ -9224,7 +9243,7 @@ export default function AdminEntityDrawer() {
                                                                     {r.workflow_name ?? r.workflow_id}
                                                                 </div>
                                                                 <div className="truncate text-[12px] text-alloy-forge/60">
-                                                                    {formatDateTime(r.started_at)} ·{" "}
+                                                                    {displayDateTime(r.started_at)} ·{" "}
                                                                     <span className={bad ? "text-alloy-ember font-semibold" : ""}>
                                                                         {bad ? "Failed" : r.status}
                                                                     </span>
@@ -9242,8 +9261,8 @@ export default function AdminEntityDrawer() {
                                     <section>
                                         <h3 className={DRAWER_SECTION_HEADER_CLASS}>Record</h3>
                                         <ul className="space-y-1.5 text-sm text-alloy-forge/90">
-                                            {data?.created_at != null ? <li>Created: {formatDateTime(String(data.created_at))}</li> : null}
-                                            {data?.updated_at != null ? <li>Updated: {formatDateTime(String(data.updated_at))}</li> : null}
+                                            {data?.created_at != null ? <li>Created: {displayDateTime(String(data.created_at))}</li> : null}
+                                            {data?.updated_at != null ? <li>Updated: {displayDateTime(String(data.updated_at))}</li> : null}
                                         </ul>
                                         {!data?.created_at && !data?.updated_at && (
                                             <p className="text-sm text-alloy-midnight/60">No record timestamps.</p>
@@ -9258,8 +9277,8 @@ export default function AdminEntityDrawer() {
                                         <section>
                                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Timeline</h3>
                                             <ul className="space-y-1.5 text-sm text-alloy-forge/90">
-                                                {data?.created_at != null ? <li>Job created: {formatDateTime(String(data.created_at))}</li> : null}
-                                                {data?.updated_at != null ? <li>Updated: {formatDateTime(String(data.updated_at))}</li> : null}
+                                                {data?.created_at != null ? <li>Job created: {displayDateTime(String(data.created_at))}</li> : null}
+                                                {data?.updated_at != null ? <li>Updated: {displayDateTime(String(data.updated_at))}</li> : null}
                                             </ul>
                                             {!data?.created_at && !data?.updated_at && (
                                                 <p className="text-sm text-alloy-midnight/60">No activity recorded.</p>
@@ -9273,7 +9292,7 @@ export default function AdminEntityDrawer() {
                                         <h3 className={DRAWER_SECTION_HEADER_CLASS}>Timeline</h3>
                                         <ul className="space-y-1.5 text-sm text-alloy-forge/90">
                                             {data?.created_at != null ? (
-                                                <li>Redemption created: {formatDateTime(String(data.created_at))}</li>
+                                                <li>Redemption created: {displayDateTime(String(data.created_at))}</li>
                                             ) : null}
                                         </ul>
                                         {!data?.created_at && (
@@ -9286,8 +9305,8 @@ export default function AdminEntityDrawer() {
                                     <section>
                                         <h3 className={DRAWER_SECTION_HEADER_CLASS}>Timeline</h3>
                                         <ul className="space-y-1.5 text-sm text-alloy-forge/90">
-                                            {data?.created_at != null ? <li>Created: {formatDateTime(String(data.created_at))}</li> : null}
-                                            {data?.updated_at != null ? <li>Updated: {formatDateTime(String(data.updated_at))}</li> : null}
+                                            {data?.created_at != null ? <li>Created: {displayDateTime(String(data.created_at))}</li> : null}
+                                            {data?.updated_at != null ? <li>Updated: {displayDateTime(String(data.updated_at))}</li> : null}
                                         </ul>
                                         {!data?.created_at && !data?.updated_at && (
                                             <p className="text-sm text-alloy-midnight/60">No activity recorded.</p>
@@ -9299,8 +9318,8 @@ export default function AdminEntityDrawer() {
                                     <section>
                                         <h3 className={DRAWER_SECTION_HEADER_CLASS}>Timeline</h3>
                                         <ul className="space-y-1.5 text-sm text-alloy-forge/90">
-                                            {data?.created_at != null ? <li>Created: {formatDateTime(String(data.created_at))}</li> : null}
-                                            {data?.updated_at != null ? <li>Updated: {formatDateTime(String(data.updated_at))}</li> : null}
+                                            {data?.created_at != null ? <li>Created: {displayDateTime(String(data.created_at))}</li> : null}
+                                            {data?.updated_at != null ? <li>Updated: {displayDateTime(String(data.updated_at))}</li> : null}
                                         </ul>
                                         {!data?.created_at && !data?.updated_at && (
                                             <p className="text-sm text-alloy-midnight/60">No activity recorded.</p>
@@ -9312,8 +9331,8 @@ export default function AdminEntityDrawer() {
                                     <section>
                                         <h3 className={DRAWER_SECTION_HEADER_CLASS}>Timeline</h3>
                                         <ul className="space-y-1.5 text-sm text-alloy-forge/90">
-                                            {data?.created_at != null ? <li>Created: {formatDateTime(String(data.created_at))}</li> : null}
-                                            {data?.updated_at != null ? <li>Updated: {formatDateTime(String(data.updated_at))}</li> : null}
+                                            {data?.created_at != null ? <li>Created: {displayDateTime(String(data.created_at))}</li> : null}
+                                            {data?.updated_at != null ? <li>Updated: {displayDateTime(String(data.updated_at))}</li> : null}
                                         </ul>
                                         {!data?.created_at && !data?.updated_at && (
                                             <p className="text-sm text-alloy-midnight/60">No activity recorded.</p>
@@ -9515,7 +9534,7 @@ export default function AdminEntityDrawer() {
                                                     ];
                                                 }
 
-                                                const tinyLabel = "mb-0.5 text-[8px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45";
+                                                const tinyLabel = "mb-0.5 text-[8px] font-semibold tracking-[0.12em] text-alloy-midnight/45";
                                                 const strong = "text-[13px] font-semibold leading-snug text-alloy-midnight/90";
                                                 const monoLink = "text-[12px] font-semibold text-alloy-blue hover:underline underline-offset-2";
                                                 const openPrimaryContactRecord = () => {
@@ -9551,7 +9570,7 @@ export default function AdminEntityDrawer() {
                                                             <div className="flex flex-wrap items-end justify-between gap-2 border-b border-alloy-stone/12 pb-2">
                                                                 <span className={tinyLabel}>Inquiry summary</span>
                                                                 {stageLabel && stageLabel !== "—" ? (
-                                                                    <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-alloy-midnight/40">
+                                                                    <span className="text-[10px] font-medium tracking-[0.08em] text-alloy-midnight/40">
                                                                         Status · <span className="text-alloy-midnight/60">{stageLabel}</span>
                                                                     </span>
                                                                 ) : null}
@@ -9841,7 +9860,7 @@ export default function AdminEntityDrawer() {
                                                 return (
                                                     <div className="space-y-2">
                                                         <div className="min-w-0">
-                                                            <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45">
+                                                            <div className="text-[10px] font-semibold tracking-[0.12em] text-alloy-midnight/45">
                                                                 Opportunity
                                                             </div>
                                                             <div className={`mt-0.5 ${strong} truncate`}>
@@ -10220,7 +10239,16 @@ export default function AdminEntityDrawer() {
                                                     </button>
                                                     {((data._primary_contact as { email?: string }).email || (data._primary_contact as { phone?: string }).phone) && (
                                                         <span className="text-[#31394d] text-sm ml-1">
-                                                            ({[((data._primary_contact as { email?: string }).email), ((data._primary_contact as { phone?: string }).phone)].filter(Boolean).join(" · ")})
+                                                            (
+                                                            {[
+                                                                (data._primary_contact as { email?: string }).email,
+                                                                (data._primary_contact as { phone?: string }).phone
+                                                                    ? formatPhoneUS((data._primary_contact as { phone: string }).phone)
+                                                                    : null,
+                                                            ]
+                                                                .filter(Boolean)
+                                                                .join(" · ")}
+                                                            )
                                                         </span>
                                                     )}
                                                 </div>
@@ -10251,10 +10279,10 @@ export default function AdminEntityDrawer() {
                                 <>
                                     <div className="space-y-0">
                                         <details open className="border-b border-[#e6e8ec] pb-5 pt-1">
-                                            <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-3">Overview</summary>
+                                            <summary className="cursor-pointer list-none text-xs font-semibold tracking-wider text-[#59678b] mb-3">Overview</summary>
                                             <div className="space-y-0">
                                                 <Field label="ID" value={String(data?.id ?? "")} />
-                                                <Field label="Submitted" value={data.submitted_at ? formatDateTime(String(data.submitted_at)) : formatDateTime(String(data?.created_at ?? ""))} />
+                                                <Field label="Submitted" value={data.submitted_at ? displayDateTime(String(data.submitted_at)) : displayDateTime(String(data?.created_at ?? ""))} />
                                                 <div className="space-y-4">
                                                     <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Name</label><input value={String(formData.name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, name: e.target.value }))} onBlur={() => { if (drawer.type === "vendors" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                                     <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Company name</label><input value={String(formData.company_name ?? "")} onChange={(e) => setFormData((f) => ({ ...f, company_name: e.target.value }))} onBlur={() => { if (drawer.type === "vendors" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate} className={INLINE_EDIT_INPUT_CLASS} placeholder="Optional" /></div>
@@ -10307,7 +10335,7 @@ export default function AdminEntityDrawer() {
                                             </div>
                                         </details>
                                         <details className="border-b border-[#e6e8ec] pb-5 pt-4">
-                                            <summary className="cursor-pointer list-none mb-3 text-xs font-semibold uppercase tracking-wider text-[#59678b]">Payout</summary>
+                                            <summary className="cursor-pointer list-none mb-3 text-xs font-semibold tracking-wider text-[#59678b]">Payout</summary>
                                             <div className="space-y-2">
                                                 {vendorPayoutLoading ? (
                                                     <p className="text-sm text-alloy-midnight/60">Loading…</p>
@@ -10430,7 +10458,7 @@ export default function AdminEntityDrawer() {
                                             </div>
                                         </details>
                                         <details className="border-b border-[#e6e8ec] pb-5 pt-4">
-                                            <summary className="cursor-pointer list-none mb-3 text-xs font-semibold uppercase tracking-wider text-[#59678b]">Documents</summary>
+                                            <summary className="cursor-pointer list-none mb-3 text-xs font-semibold tracking-wider text-[#59678b]">Documents</summary>
                                             <div className="space-y-2">
                                                 {(() => {
                                                     const insurancePath = typeof data.insurance_doc_path === "string" ? data.insurance_doc_path : null;
@@ -10461,7 +10489,7 @@ export default function AdminEntityDrawer() {
                                             </div>
                                         </details>
                                         <details className="border-b border-[#e6e8ec] pb-5 pt-4">
-                                            <summary className="cursor-pointer list-none mb-3 text-xs font-semibold uppercase tracking-wider text-[#59678b]">{jobPlural} & Schedule</summary>
+                                            <summary className="cursor-pointer list-none mb-3 text-xs font-semibold tracking-wider text-[#59678b]">{jobPlural} & Schedule</summary>
                                             {((data._vendor_jobs as VendorDrawerJob[]) ?? []).length === 0 ? (
                                                 <p className="text-sm text-alloy-midnight/60">No jobs assigned yet.</p>
                                             ) : (
@@ -10471,7 +10499,7 @@ export default function AdminEntityDrawer() {
                                                         return (
                                                             <li key={job.id} className="border border-[#e6e8ec] rounded p-2 text-sm">
                                                                 <button type="button" onClick={() => openDrawer({ type: "jobs", id: job.id })} className="text-alloy-blue hover:underline font-medium">{job.title || job.id.slice(0, 8)}</button>
-                                                                <div className="text-alloy-midnight/70 mt-0.5">Scheduled: {job.scheduled_at ? formatDateTime(job.scheduled_at) : "-"} · Status: {job._job_status_label ?? "—"}</div>
+                                                                <div className="text-alloy-midnight/70 mt-0.5">Scheduled: {job.scheduled_at ? displayDateTime(job.scheduled_at) : "-"} · Status: {job._job_status_label ?? "—"}</div>
                                                                 {(job.display_total_cents != null || job.gross_price_cents != null) && (
                                                                     <div>
                                                                         Total:{" "}
@@ -10482,7 +10510,7 @@ export default function AdminEntityDrawer() {
                                                                 )}
                                                                 {job.recurring_total_cents != null && <div>Recurring: {formatMoneyFromCents(job.recurring_total_cents)}</div>}
                                                                 {job.opportunity_id && <button type="button" onClick={() => openDrawer({ type: "opportunities", id: job.opportunity_id })} className="text-alloy-blue hover:underline text-xs">Opportunity</button>}
-                                                                {scheds.length > 0 && <div className="mt-1 text-xs"><strong>Schedules:</strong> {scheds.map((s) => `${formatDateTime(s.start_at)} – ${formatDateTime(s.end_at)} (${s.timezone || "-"})`).join("; ")}</div>}
+                                                                {scheds.length > 0 && <div className="mt-1 text-xs"><strong>Schedules:</strong> {scheds.map((s) => `${displayDateTime(s.start_at)} – ${displayDateTime(s.end_at)} (${s.timezone || "-"})`).join("; ")}</div>}
                                                             </li>
                                                         );
                                                     })}
@@ -10490,7 +10518,7 @@ export default function AdminEntityDrawer() {
                                             )}
                                         </details>
                                         <details className="pt-4 pb-2">
-                                            <summary className="cursor-pointer list-none mb-3 text-xs font-semibold uppercase tracking-wider text-[#59678b]">Operational / Settings</summary>
+                                            <summary className="cursor-pointer list-none mb-3 text-xs font-semibold tracking-wider text-[#59678b]">Operational / Settings</summary>
                                             <div className="space-y-2 mt-2">
                                                 {isEditing ? (
                                                     <>
@@ -10616,7 +10644,7 @@ export default function AdminEntityDrawer() {
                                         saveJobAssignedVendor={saveJobAssignedVendor}
                                     />
                                     <div key="financials" className="border-b border-[#e6e8ec]">
-                                        <button type="button" onClick={() => setJobExpandedSections((s) => ({ ...s, financials: !s.financials }))} className="w-full flex items-center justify-between py-2 text-left text-xs font-semibold uppercase tracking-wider text-[#59678b]">
+                                        <button type="button" onClick={() => setJobExpandedSections((s) => ({ ...s, financials: !s.financials }))} className="w-full flex items-center justify-between py-2 text-left text-xs font-semibold tracking-wider text-[#59678b]">
                                             Financials
                                             <span className="text-alloy-midnight opacity-60">{jobExpandedSections.financials ? "▼" : "▶"}</span>
                                         </button>
@@ -10626,13 +10654,13 @@ export default function AdminEntityDrawer() {
                                                 <div><label className="block text-sm text-alloy-midnight/70 mb-0.5">Discount</label><select value={String(formData.discount_code_id ?? "")} onChange={(e) => setFormData((f) => ({ ...f, discount_code_id: e.target.value || null }))} disabled={!canMutate} className="w-full px-2 py-1.5 border rounded text-sm disabled:opacity-60"><option value="">(none)</option>{jobDiscountOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select></div>
                                                 {(() => { const gross = Number(formData.gross_price_cents ?? 0); const token = typeof formData.discount_code_id === "string" ? formData.discount_code_id : ""; const selectedOpt = token ? jobDiscountOptions.find((o) => o.value === token) ?? null : null; const discountCents = selectedOpt ? computeJobDiscountOptionPreviewCents(selectedOpt, gross) : 0; const netCents = Math.max(0, gross - discountCents); return (<><p className="text-sm text-alloy-midnight/80"><strong>Discount amount:</strong> {discountCents > 0 ? `-${formatMoneyFromCents(discountCents)}` : formatMoneyFromCents(0)}</p><p className="text-sm text-alloy-midnight/80"><strong>Net price:</strong> {formatMoneyFromCents(netCents)}</p></>); })()}
                                                 <details className="pt-2" open>
-                                                    <summary className="cursor-pointer list-none text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Payout</summary>
+                                                    <summary className="cursor-pointer list-none text-xs font-semibold tracking-wider text-[#59678b] mb-2">Payout</summary>
                                                     {jobPayoutLoading ? <p className="text-sm text-alloy-midnight/60">Loading…</p> : !(data as { assigned_vendor_id?: string | null })?.assigned_vendor_id ? <p className="text-sm text-alloy-midnight/70">No {vendorSingular} assigned.</p> : jobPayout ? (
                                                         <div className="space-y-2">
                                                             <p className="text-sm text-alloy-midnight/80"><strong>Policy:</strong> {jobPayout.policy.mode === "tiered" ? "Tiered" : "Flat"}{jobPayout.policy.mode === "flat" && jobPayout.policy.value != null && ` · ${jobPayout.policy.value}%`}</p>
                                                             <p className="text-xs text-alloy-midnight/60">Source: {jobPayout.source === "vendor" ? "Vendor override" : jobPayout.source === "org" ? "Org default" : "Legacy"}</p>
                                                             <p className="text-sm">Completed: <strong>{jobPayout.job.completed_occurrences_total}</strong> · Payout: <strong>{formatPayoutPercent(jobPayout.job.current_payout_percent)}</strong></p>
-                                                            {jobPayout.schedules.length > 0 && <div className="overflow-x-auto"><table className="w-full text-sm border border-alloy-stone/20"><thead><tr className="border-b text-left text-alloy-midnight/70"><th className="py-1 pr-2">Scheduled</th><th className="py-1 pr-2">Price</th><th className="py-1 pr-2">Payout $</th></tr></thead><tbody>{jobPayout.schedules.map((s) => <tr key={s.schedule_id} className="border-b border-alloy-stone/10"><td className="py-1 pr-2">{s.scheduled_at ? formatDateTime(s.scheduled_at) : "—"}</td><td className="py-1 pr-2">{s.price_cents != null ? formatMoneyFromCents(s.price_cents) : "—"}</td><td className="py-1 pr-2">{s.payout_cents != null ? formatMoneyFromCents(s.payout_cents) : "—"}</td></tr>)}</tbody></table></div>}
+                                                            {jobPayout.schedules.length > 0 && <div className="overflow-x-auto"><table className="w-full text-sm border border-alloy-stone/20"><thead><tr className="border-b text-left text-alloy-midnight/70"><th className="py-1 pr-2">Scheduled</th><th className="py-1 pr-2">Price</th><th className="py-1 pr-2">Payout $</th></tr></thead><tbody>{jobPayout.schedules.map((s) => <tr key={s.schedule_id} className="border-b border-alloy-stone/10"><td className="py-1 pr-2">{s.scheduled_at ? displayDateTime(s.scheduled_at) : "—"}</td><td className="py-1 pr-2">{s.price_cents != null ? formatMoneyFromCents(s.price_cents) : "—"}</td><td className="py-1 pr-2">{s.payout_cents != null ? formatMoneyFromCents(s.payout_cents) : "—"}</td></tr>)}</tbody></table></div>}
                                                         </div>
                                                     ) : <p className="text-sm text-alloy-midnight/60">Could not load payout.</p>}
                                                 </details>
@@ -10640,7 +10668,7 @@ export default function AdminEntityDrawer() {
                                         )}
                                     </div>
                                     <div className="border-b border-[#e6e8ec]">
-                                        <button type="button" onClick={() => setJobExpandedSections((s) => ({ ...s, scheduling: !s.scheduling }))} className="w-full flex items-center justify-between py-2 text-left text-xs font-semibold uppercase tracking-wider text-[#59678b]">
+                                        <button type="button" onClick={() => setJobExpandedSections((s) => ({ ...s, scheduling: !s.scheduling }))} className="w-full flex items-center justify-between py-2 text-left text-xs font-semibold tracking-wider text-[#59678b]">
                                             Scheduling
                                             <span className="text-alloy-midnight opacity-60">{jobExpandedSections.scheduling ? "▼" : "▶"}</span>
                                         </button>
@@ -10679,7 +10707,7 @@ export default function AdminEntityDrawer() {
                                         )}
                                     </div>
                                     <div className="border-b border-[#e6e8ec]">
-                                        <button type="button" onClick={() => setJobExpandedSections((s) => ({ ...s, ledger: !s.ledger }))} className="w-full flex items-center justify-between py-2 text-left text-xs font-semibold uppercase tracking-wider text-[#59678b]">
+                                        <button type="button" onClick={() => setJobExpandedSections((s) => ({ ...s, ledger: !s.ledger }))} className="w-full flex items-center justify-between py-2 text-left text-xs font-semibold tracking-wider text-[#59678b]">
                                             Ledger
                                             <span className="text-alloy-midnight opacity-60">{jobExpandedSections.ledger ? "▼" : "▶"}</span>
                                         </button>
@@ -10690,7 +10718,7 @@ export default function AdminEntityDrawer() {
                                                     <>
                                                         {jobFinancials.booking_economics && (
                                                             <div className="rounded border border-alloy-stone/25 bg-alloy-stone/5 px-3 py-3 space-y-2 mb-3">
-                                                                <p className="text-xs font-semibold uppercase tracking-wider text-[#59678b]">Booking pricing</p>
+                                                                <p className="text-xs font-semibold tracking-wider text-[#59678b]">Booking pricing</p>
                                                                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-alloy-midnight/80">
                                                                     <span>First visit (gross)</span>
                                                                     <span>
@@ -10744,7 +10772,7 @@ export default function AdminEntityDrawer() {
                                                                     <tbody>
                                                                         {jobFinancials.schedules.map((s) => (
                                                                             <tr key={s.id} className="border-b border-alloy-stone/10">
-                                                                                <td className="py-1 pr-2">{s.start_at ? formatDateTime(s.start_at) : "—"}</td>
+                                                                                <td className="py-1 pr-2">{s.start_at ? displayDateTime(s.start_at) : "—"}</td>
                                                                                 <td className="py-1 pr-2">
                                                                                     {s.visit_kind === "recurring"
                                                                                         ? "Recurring"
@@ -10848,7 +10876,7 @@ export default function AdminEntityDrawer() {
                                     ) : (
                                         <>
                                             <Field label="Recurring" value={data.is_recurring ? "Yes" : "No"} />
-                                            <Field label="Scheduled at" value={formatDateTime(String(data?.scheduled_at ?? ""))} />
+                                            <Field label="Scheduled at" value={displayDateTime(String(data?.scheduled_at ?? ""))} />
                                             <div className="py-1.5">
                                                 <strong className="text-[#45506c] text-sm">Status</strong>
                                                 {statusDefsLoading ? <p className="text-sm text-alloy-midnight/60 mt-0.5">Loading…</p> : (() => { const key = data.status_key as string | null | undefined; const label = getStatusLabel(key); if (label) return <p className="text-sm text-alloy-midnight/80 mt-0.5">{label}</p>; return <p className="text-sm text-alloy-midnight/80 mt-0.5">Unknown <Link href="/admin/system/statuses?entity_type=jobs" className="text-alloy-blue hover:underline">Configure statuses</Link></p>; })()}
@@ -10885,7 +10913,7 @@ export default function AdminEntityDrawer() {
                                                 <div className="space-y-1">
                                                     {jobSchedules.slice(0, 3).map((s) => (
                                                         <div key={s.id} className="flex items-center justify-between gap-2 py-1">
-                                                            <span className="text-sm">{formatDateTime(s.start_at)} – {formatDateTime(s.end_at)} ({s.timezone || "—"})</span>
+                                                            <span className="text-sm">{displayDateTime(s.start_at)} – {displayDateTime(s.end_at)} ({s.timezone || "—"})</span>
                                                             <button type="button" onClick={() => openReschedule(s)} className="text-sm text-alloy-blue hover:underline">Reschedule</button>
                                                         </div>
                                                     ))}
@@ -10970,7 +10998,7 @@ export default function AdminEntityDrawer() {
                                                                 const when = p.posted_at || p.received_at || p.created_at;
                                                                 return (
                                                                     <li key={p.id} className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
-                                                                        <span>{formatDateTime(when)}</span>
+                                                                        <span>{displayDateTime(when)}</span>
                                                                         <span>{formatMoneyFromCents(p.amount_cents)}</span>
                                                                         <span className="text-alloy-midnight/70">{paymentRowStatusDisplayLabel(p)}</span>
                                                                         {refId ? (
@@ -11003,7 +11031,7 @@ export default function AdminEntityDrawer() {
                                 <>
                                     <div className="rounded-md border border-alloy-stone/40 bg-alloy-stone/10 px-3 py-2.5 mb-3 space-y-2">
                                         <div className="flex flex-wrap items-center justify-between gap-2">
-                                            <h4 className="text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/80">Current status</h4>
+                                            <h4 className="text-[11px] font-semibold tracking-wide text-alloy-forge/80">Current status</h4>
                                             <Link
                                                 href="/admin/system/statuses?entity_type=schedules"
                                                 className="text-[11px] text-alloy-blue hover:underline shrink-0"
@@ -11020,7 +11048,7 @@ export default function AdminEntityDrawer() {
                                                 </p>
                                                 <p className="text-xs text-alloy-midnight/70">
                                                     <span className="text-alloy-midnight/50">Canceled at:</span>{" "}
-                                                    {formatDateTime(String(data.canceled_at))}
+                                                    {displayDateTime(String(data.canceled_at))}
                                                 </p>
                                                 <p className="text-xs text-alloy-midnight/70">
                                                     <span className="text-alloy-midnight/50">Cancel reason:</span>{" "}
@@ -11104,7 +11132,7 @@ export default function AdminEntityDrawer() {
                                         <div><label className="block text-xs font-medium text-alloy-midnight/60 mb-0.5">Timezone</label><input value={String(formData.timezone ?? "")} onChange={(e) => setFormData((f) => ({ ...f, timezone: e.target.value }))} onBlur={() => { if (drawer.type === "schedules" && nonJobFormDirty) saveEdit(); }} disabled={!canMutate || !!(data.canceled_at as string)} className={INLINE_EDIT_INPUT_CLASS} /></div>
                                     </div>
                                     <div className="rounded-md border border-alloy-stone/35 bg-white px-3 py-2.5 mt-3 space-y-2">
-                                        <h4 className="text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/80">Change workflow status</h4>
+                                        <h4 className="text-[11px] font-semibold tracking-wide text-alloy-forge/80">Change workflow status</h4>
                                         <p className="text-[11px] text-alloy-midnight/55 leading-snug max-w-xl">
                                             Options match{" "}
                                             <Link href="/admin/system/statuses?entity_type=schedules" className="text-alloy-blue hover:underline">
@@ -11736,7 +11764,7 @@ export default function AdminEntityDrawer() {
                             {drawer.type === "discount_redemptions" && (
                                 <>
                                     <Field label="ID" value={String(data?.id ?? "")} />
-                                    <Field label="Created" value={formatDateTime(data.created_at as string)} />
+                                    <Field label="Created" value={displayDateTime(data.created_at as string)} />
                                     <Field label="Discount Code" value={String(data?.discount_code ?? "")} />
                                     <Field label="Subtotal" value={formatMoneyFromDollars(data.quote_subtotal as number)} />
                                     <Field label="Discount Amount" value={formatMoneyFromDollars(data.discount_amount as number)} />

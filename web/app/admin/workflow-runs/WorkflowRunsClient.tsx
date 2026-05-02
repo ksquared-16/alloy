@@ -340,12 +340,12 @@ export default function WorkflowRunsClient() {
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="border-b border-admin-border bg-alloy-blue/[0.08]">
-                                        <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Started at</th>
-                                        <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Workflow</th>
-                                        <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Event</th>
-                                        <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Entity</th>
-                                        <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Status</th>
-                                        <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-slate">Duration</th>
+                                        <th className="px-5 py-3.5 text-left text-xs font-semibold tracking-wider text-alloy-slate">Started at</th>
+                                        <th className="px-5 py-3.5 text-left text-xs font-semibold tracking-wider text-alloy-slate">Workflow</th>
+                                        <th className="px-5 py-3.5 text-left text-xs font-semibold tracking-wider text-alloy-slate">Event</th>
+                                        <th className="px-5 py-3.5 text-left text-xs font-semibold tracking-wider text-alloy-slate">Entity</th>
+                                        <th className="px-5 py-3.5 text-left text-xs font-semibold tracking-wider text-alloy-slate">Status</th>
+                                        <th className="px-5 py-3.5 text-left text-xs font-semibold tracking-wider text-alloy-slate">Duration</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-alloy-stone/30">
@@ -498,7 +498,7 @@ export default function WorkflowRunsClient() {
                         </div>
                         {selected.error && (
                             <div>
-                                <p className="text-xs font-semibold uppercase tracking-wider text-alloy-midnight/60 mb-2">Run error</p>
+                                <p className="text-xs font-semibold tracking-wider text-alloy-midnight/60 mb-2">Run error</p>
                                 <pre className="bg-red-50 text-red-800 rounded p-3 text-xs overflow-x-auto font-mono whitespace-pre-wrap break-words border border-red-200">
                                     {selected.error}
                                 </pre>
@@ -506,7 +506,7 @@ export default function WorkflowRunsClient() {
                         )}
 
                         <div>
-                            <p className="text-xs font-semibold uppercase tracking-wider text-alloy-midnight/60 mb-2">Actions timeline</p>
+                            <p className="text-xs font-semibold tracking-wider text-alloy-midnight/60 mb-2">Actions timeline</p>
                             {actionRunsLoading ? (
                                 <p className="text-sm text-alloy-midnight/60">Loading actions…</p>
                             ) : actionRuns.length === 0 ? (
@@ -521,7 +521,7 @@ export default function WorkflowRunsClient() {
                         </div>
 
                         <div>
-                            <p className="text-xs font-semibold uppercase tracking-wider text-alloy-midnight/60 mb-2">event_payload</p>
+                            <p className="text-xs font-semibold tracking-wider text-alloy-midnight/60 mb-2">event_payload</p>
                             <pre className="bg-alloy-stone/20 rounded p-3 text-xs overflow-x-auto max-h-[40vh] overflow-y-auto font-mono whitespace-pre-wrap break-words">
                                 {JSON.stringify(selected.event_payload, null, 2)}
                             </pre>

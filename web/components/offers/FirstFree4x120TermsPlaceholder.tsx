@@ -27,7 +27,7 @@ const TERMS_ITEMS: ReactNode[] = [
 export default function FirstFree4x120TermsPlaceholder() {
   return (
     <div className="rounded-lg border border-alloy-stone/30 bg-alloy-stone/5 p-4 md:p-6 text-sm text-alloy-midnight/90 max-h-[50vh] overflow-y-auto">
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-alloy-juniper mb-3">Terms of service</h3>
+      <h3 className="text-xs font-semibold tracking-wide text-alloy-juniper mb-3">Terms of service</h3>
       <ul className="list-disc pl-4 sm:pl-5 space-y-2.5 text-alloy-midnight/90 leading-relaxed marker:text-alloy-juniper">
         {TERMS_ITEMS.map((text, idx) => (
           <li key={`terms-${idx}`}>{text}</li>

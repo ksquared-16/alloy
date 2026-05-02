@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { formatPhoneUS } from "@/lib/adminFormatters";
+
 /** Raw opportunity columns used for CRM-style workspace queue projection (not a new config system). */
 export type OpportunityRowCrmSource = {
     id: string;
@@ -128,8 +130,9 @@ export async function enrichOpportunityRowsWithCrmProjection(
             e._primary_email = person.email?.trim() || null;
             e._primary_phone = person.phone?.trim() || null;
             const nm = [person.first_name, person.last_name].filter(Boolean).join(" ").trim();
-            const parts = [nm || null, e._primary_email, e._primary_phone].filter(Boolean) as string[];
-            e._primary_contact_line = parts.length ? parts.join(" · ") : null;
+            const phoneDisp = e._primary_phone ? formatPhoneUS(e._primary_phone) : null;
+            const filtered = [nm || null, e._primary_email, phoneDisp].filter(Boolean) as string[];
+            e._primary_contact_line = filtered.length ? filtered.join(" · ") : null;
         }
 
         if (r.location_id) {

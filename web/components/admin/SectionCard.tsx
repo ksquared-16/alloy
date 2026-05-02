@@ -26,7 +26,7 @@ export default function SectionCard({
     const headerBorder = surfaceTone === "settingsPanel" ? "border-alloy-forge/10" : "border-admin-border/80";
     return (
         <section className={`${surface} overflow-hidden ${className}`}>
-            <h2 className={`border-b ${headerBorder} px-5 py-3.5 text-sm font-semibold uppercase tracking-wider text-alloy-muted`}>
+            <h2 className={`border-b ${headerBorder} px-5 py-3.5 text-sm font-semibold tracking-wider text-alloy-muted`}>
                 {title}
             </h2>
             <div className="p-5">{children}</div>

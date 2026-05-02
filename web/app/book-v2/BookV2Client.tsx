@@ -2462,7 +2462,7 @@ export default function BookV2Client() {
                         <form onSubmit={handleQuoteStartSubmit} className="space-y-4">
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">First name *</label>
+                                    <label className="block text-xs font-semibold text-alloy-midnight/70 tracking-wide mb-1">First name *</label>
                                     <input
                                         type="text"
                                         value={quoteStartForm.first_name}
@@ -2473,7 +2473,7 @@ export default function BookV2Client() {
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Last name *</label>
+                                    <label className="block text-xs font-semibold text-alloy-midnight/70 tracking-wide mb-1">Last name *</label>
                                     <input
                                         type="text"
                                         value={quoteStartForm.last_name}
@@ -2485,7 +2485,7 @@ export default function BookV2Client() {
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">ZIP code *</label>
+                                <label className="block text-xs font-semibold text-alloy-midnight/70 tracking-wide mb-1">ZIP code *</label>
                                 <input
                                     type="text"
                                     value={quoteStartForm.zip}
@@ -2496,7 +2496,7 @@ export default function BookV2Client() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Approximate square footage *</label>
+                                <label className="block text-xs font-semibold text-alloy-midnight/70 tracking-wide mb-1">Approximate square footage *</label>
                                 <select
                                     value={quoteStartForm.square_footage}
                                     onChange={(e) => setQuoteStartForm((f) => ({ ...f, square_footage: e.target.value }))}
@@ -2511,7 +2511,7 @@ export default function BookV2Client() {
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Cleaning frequency</label>
+                                <label className="block text-xs font-semibold text-alloy-midnight/70 tracking-wide mb-1">Cleaning frequency</label>
                                 <select
                                     value={
                                         quoteStartForm.cleaning_frequency_key ||
@@ -2541,7 +2541,7 @@ export default function BookV2Client() {
                                 (separate from this booking flow).
                             </p>
                             <div>
-                                <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Email (so we can save your quote)</label>
+                                <label className="block text-xs font-semibold text-alloy-midnight/70 tracking-wide mb-1">Email (so we can save your quote)</label>
                                 <input
                                     type="email"
                                     value={quoteStartForm.email}
@@ -2551,7 +2551,7 @@ export default function BookV2Client() {
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Phone *</label>
+                                <label className="block text-xs font-semibold text-alloy-midnight/70 tracking-wide mb-1">Phone *</label>
                                 <input
                                     type="tel"
                                     required
@@ -2591,7 +2591,7 @@ export default function BookV2Client() {
 
                         {/* Quote breakdown: prominent at top */}
                         <div className="mb-6 p-4 bg-alloy-stone/10 rounded-lg space-y-2">
-                            <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide">Quote breakdown</p>
+                            <p className="text-xs font-semibold text-alloy-midnight/60 tracking-wide">Quote breakdown</p>
                             <div className="flex items-baseline justify-between">
                                 <span className="text-alloy-midnight">Base cleaning (first clean)</span>
                                 <span className="font-semibold text-alloy-midnight">
@@ -2893,7 +2893,7 @@ export default function BookV2Client() {
 
                                 {/* First Cleaning */}
                                 <div>
-                                    <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
+                                    <p className="text-xs font-semibold text-alloy-midnight/60 tracking-wide mb-1">
                                         First Cleaning
                                     </p>
                                     {(() => {
@@ -2989,7 +2989,7 @@ export default function BookV2Client() {
                                         </div>
                                     ) : (
                                         <div className="space-y-2">
-                                            <label className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide">
+                                            <label className="text-xs font-semibold text-alloy-midnight/60 tracking-wide">
                                                 Discount Code
                                             </label>
                                             <div className="flex gap-2">
@@ -3030,7 +3030,7 @@ export default function BookV2Client() {
                                     quote.recurring_price > 0 &&
                                     quote.frequency_label && (
                                         <div>
-                                            <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-1">
+                                            <p className="text-xs font-semibold text-alloy-midnight/60 tracking-wide mb-1">
                                                 {quote.frequency_label.toUpperCase()} CLEANING
                                                 {quote.discount_label && (
                                                     <span className="normal-case text-[11px] text-alloy-midnight/70 ml-1">
@@ -3052,7 +3052,7 @@ export default function BookV2Client() {
                                 {/* Add-ons */}
                                 {quote?.addons && quote.addons.length > 0 && (
                                     <div>
-                                        <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide mb-2">
+                                        <p className="text-xs font-semibold text-alloy-midnight/60 tracking-wide mb-2">
                                             Add-ons
                                         </p>
                                         <div className="space-y-1.5">
@@ -3246,7 +3246,7 @@ export default function BookV2Client() {
                                     </p>
                                     <form onSubmit={handlePaymentIdentityContinue} className="space-y-3">
                                         <div>
-                                            <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Email</label>
+                                            <label className="block text-xs font-semibold text-alloy-midnight/70 tracking-wide mb-1">Email</label>
                                             <input
                                                 type="email"
                                                 value={paymentIdentityEmail}
@@ -3257,7 +3257,7 @@ export default function BookV2Client() {
                                             />
                                         </div>
                                         <div>
-                                            <label className="block text-xs font-semibold text-alloy-midnight/70 uppercase tracking-wide mb-1">Phone *</label>
+                                            <label className="block text-xs font-semibold text-alloy-midnight/70 tracking-wide mb-1">Phone *</label>
                                             <input
                                                 type="tel"
                                                 required
@@ -3288,7 +3288,7 @@ export default function BookV2Client() {
                                             grossFirstVisit > 0 ? (discountData?.quote_total ?? grossFirstVisit) : null;
                                         return (
                                             <div className="mb-6 p-4 bg-alloy-stone/10 rounded-lg border border-alloy-stone/20 space-y-2">
-                                                <p className="text-xs font-semibold text-alloy-midnight/60 uppercase tracking-wide">
+                                                <p className="text-xs font-semibold text-alloy-midnight/60 tracking-wide">
                                                     This job total
                                                 </p>
                                                 {firstVisitTotal != null ? (

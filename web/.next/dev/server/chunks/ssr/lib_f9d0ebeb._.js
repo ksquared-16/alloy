@@ -90,7 +90,7 @@ function formatPhoneUS(value) {
     const area = digits.slice(-10, -7);
     const mid = digits.slice(-7, -4);
     const last = digits.slice(-4);
-    return `(${area}) ${mid}-${last}`;
+    return `${area}-${mid}-${last}`;
 }
 function formatDateTime(value) {
     if (value === null || value === undefined) return "-";
@@ -6450,6 +6450,8 @@ async function fetchJobDiscountOptionsForAdmin(supabase, orgId, verticalSlug) {
     "vendorsToSelectOptions",
     ()=>vendorsToSelectOptions
 ]);
+var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$adminFormatters$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/adminFormatters.ts [app-ssr] (ecmascript)");
+;
 function formatVendorOptionLabel(v) {
     const company = v.company_name?.trim();
     if (company) return company;
@@ -6463,7 +6465,7 @@ function formatVendorOptionLabel(v) {
     const email = v.email?.trim();
     if (email) return email;
     const phone = v.phone?.trim();
-    if (phone) return phone;
+    if (phone) return (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$adminFormatters$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["formatPhoneUS"])(phone);
     return `${v.id.slice(0, 8)}…`;
 }
 function buildVendorIdToLabelMap(vendorRows, persons) {

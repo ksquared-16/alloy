@@ -141,7 +141,7 @@
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-paired-oper-panel__body .adminv2-ws-wu-queue-action-chip--open {
   letter-spacing: .045em;
-  text-transform: uppercase;
+  text-transform: none;
   border: 1px solid color-mix(in srgb, var(--d-pine) 55%, var(--d-border));
   background: color-mix(in srgb, var(--d-pine) 92%, #0f172a);
   color: #fff;
@@ -292,7 +292,7 @@
 
 .adminv2-ws-root-departments-zone .adminv2-ws-root-zone-kicker {
   letter-spacing: .12em;
-  text-transform: uppercase;
+  text-transform: none;
   color: color-mix(in srgb, var(--d-muted) 28%, var(--d-brand));
   margin: 0;
   font-size: 10px;
@@ -355,7 +355,7 @@
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-brief-kicker, [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-brief-kicker, [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-brief-kicker, [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-brief-kicker {
   letter-spacing: .08em;
-  text-transform: uppercase;
+  text-transform: none;
   color: color-mix(in srgb, var(--vc-label-accent, var(--d-pine)) 58%, var(--d-muted));
   margin: 0 0 1px;
   font-size: 9px;
@@ -369,7 +369,7 @@
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-brief-focus-label, [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-brief-focus-label, [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-brief-focus-label, [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-brief-focus-label {
   letter-spacing: .14em;
-  text-transform: uppercase;
+  text-transform: none;
   color: color-mix(in srgb, var(--d-muted) 82%, var(--vc-label-accent, var(--d-pine)));
   margin: 0 0 3px;
   font-size: 8px;
@@ -438,7 +438,7 @@
   background: color-mix(in srgb, #fff 82%, var(--d-panel-quiet));
   color: var(--d-muted);
   letter-spacing: .04em;
-  text-transform: uppercase;
+  text-transform: none;
   cursor: help;
   border-radius: 999px;
   flex-shrink: 0;
@@ -535,7 +535,7 @@
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-signal-card .adminv2-ws-signal-label, [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-signal-card .adminv2-ws-signal-label, [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-signal-card .adminv2-ws-signal-label, [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-signal-card .adminv2-ws-signal-label {
   letter-spacing: .07em;
-  text-transform: uppercase;
+  text-transform: none;
   color: var(--d-muted);
   margin-bottom: 0;
   font-size: 7px;
@@ -686,7 +686,7 @@
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-kpi-measurement-strip .adminv2-ws-dept-v2-kpi-rail-heading, [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-kpi-measurement-strip .adminv2-ws-dept-v2-kpi-rail-heading, [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-kpi-measurement-strip .adminv2-ws-dept-v2-kpi-rail-heading, [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-kpi-measurement-strip .adminv2-ws-dept-v2-kpi-rail-heading {
-  text-transform: uppercase;
+  text-transform: none;
   letter-spacing: .12em;
   color: color-mix(in srgb, var(--d-muted) 35%, var(--d-pine));
   flex-shrink: 0;
@@ -717,7 +717,7 @@
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-kpi-rail-heading, [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-kpi-rail-heading, [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-kpi-rail-heading, [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-kpi-rail-heading {
-  text-transform: uppercase;
+  text-transform: none;
   letter-spacing: .11em;
   flex-shrink: 0;
   margin-bottom: 0;
@@ -791,7 +791,7 @@
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-kpi-rail .adminv2-ws-kpi-label, [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-kpi-rail .adminv2-ws-kpi-label, [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-kpi-rail .adminv2-ws-kpi-label, [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-kpi-rail .adminv2-ws-kpi-label {
-  text-transform: uppercase;
+  text-transform: none;
   letter-spacing: .08em;
   color: color-mix(in srgb, var(--d-muted) 72%, var(--d-pine));
   margin-bottom: 4px;
@@ -976,7 +976,7 @@
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-kpi-cell--orientation .adminv2-ws-kpi-label, [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-kpi-cell--orientation .adminv2-ws-kpi-label, [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-kpi-cell--orientation .adminv2-ws-kpi-label, [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-kpi-cell--orientation .adminv2-ws-kpi-label {
   letter-spacing: .06em;
-  text-transform: uppercase;
+  text-transform: none;
   color: color-mix(in srgb, var(--d-muted) 65%, var(--d-pine));
   margin-bottom: 0;
   font-size: 8px;
@@ -1054,7 +1054,7 @@
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 [data-workspace-zone="kpi-banner"] .adminv2-ws-kpi-cell--single-band .adminv2-ws-kpi-label, [data-ws-surface="work_unit"].adminv2-ws-wu-v2 [data-workspace-zone="kpi-banner"] .adminv2-ws-kpi-cell--single-band .adminv2-ws-kpi-label, [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-kpi-cell--single-band .adminv2-ws-kpi-label {
   letter-spacing: .1em;
-  text-transform: uppercase;
+  text-transform: none;
   color: color-mix(in srgb, var(--d-muted) 35%, var(--d-pine));
   margin-bottom: 0;
   font-size: 9px;
@@ -1195,7 +1195,7 @@
 
 [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-workspace-orientation-meta-k {
   letter-spacing: .1em;
-  text-transform: uppercase;
+  text-transform: none;
   color: color-mix(in srgb, var(--d-muted) 55%, var(--d-brand));
   font-size: 8px;
   font-weight: 800;
@@ -1348,7 +1348,7 @@
 
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-workflow-activity-lead-kicker {
   letter-spacing: .11em;
-  text-transform: uppercase;
+  text-transform: none;
   color: color-mix(in srgb, var(--d-muted) 28%, var(--d-text-primary, var(--d-pine)));
   margin: 0 0 5px;
   font-size: 8px;
@@ -1407,7 +1407,7 @@
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-workflows-toolbar-kicker, [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-workflows-toolbar-kicker, [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-workflows-toolbar-kicker, [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-workflows-toolbar-kicker {
   letter-spacing: .12em;
-  text-transform: uppercase;
+  text-transform: none;
   color: var(--d-brand);
   white-space: nowrap;
   margin: 0;
@@ -1448,7 +1448,7 @@
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-workflows-toolbar-metric-label, [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-workflows-toolbar-metric-label, [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-workflows-toolbar-metric-label, [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-workflows-toolbar-metric-label {
   letter-spacing: .06em;
-  text-transform: uppercase;
+  text-transform: none;
   color: color-mix(in srgb, var(--d-muted) 90%, transparent);
   font-size: 7px;
   font-weight: 700;
@@ -1511,7 +1511,7 @@
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-workflows-list-head, [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-workflows-list-head, [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-workflows-list-head, [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-workflows-list-head {
   letter-spacing: .08em;
-  text-transform: uppercase;
+  text-transform: none;
   color: color-mix(in srgb, var(--d-muted) 72%, var(--d-text-primary, #273f52));
   border-bottom: 1px solid color-mix(in srgb, var(--d-border) 75%, transparent);
   background: color-mix(in srgb, #fff 88%, var(--d-panel-quiet));
@@ -1557,7 +1557,7 @@
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-workflows-run-status, [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-workflows-run-status, [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-workflows-run-status, [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-workflows-run-status {
-  text-transform: uppercase;
+  text-transform: none;
   letter-spacing: .04em;
   white-space: nowrap;
   color: var(--d-muted);
@@ -1937,7 +1937,7 @@
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-attention-panel-kicker, [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-attention-panel-kicker, [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-attention-panel-kicker, [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-attention-panel-kicker {
   letter-spacing: .12em;
-  text-transform: uppercase;
+  text-transform: none;
   color: color-mix(in srgb, #8c3300 82%, var(--d-muted));
   margin: 0 0 4px;
   font-size: 9px;
@@ -2026,7 +2026,7 @@
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-attention-card-flag, [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-attention-card-flag, [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-attention-card-flag, [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-attention-card-flag {
-  text-transform: uppercase;
+  text-transform: none;
   letter-spacing: .05em;
   color: #8c3300;
   border: 1px solid color-mix(in srgb, #bc4300 35%, var(--d-border));
@@ -2149,7 +2149,7 @@
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-rollup-kicker, [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-rollup-kicker, [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-rollup-kicker, [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-rollup-kicker {
   letter-spacing: .12em;
-  text-transform: uppercase;
+  text-transform: none;
   color: color-mix(in srgb, var(--d-pine) 88%, var(--d-muted));
   margin: 0 0 4px;
   font-size: 9px;
@@ -2300,7 +2300,7 @@
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-rollup-examples-label, [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-rollup-examples-label, [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-rollup-examples-label, [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-rollup-examples-label {
   letter-spacing: .08em;
-  text-transform: uppercase;
+  text-transform: none;
   color: color-mix(in srgb, var(--d-muted) 90%, transparent);
   margin-right: 6px;
   font-weight: 800;
@@ -2426,7 +2426,7 @@
 
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-band-label {
   letter-spacing: .12em;
-  text-transform: uppercase;
+  text-transform: none;
   color: color-mix(in srgb, var(--d-muted) 55%, var(--d-text-primary, var(--d-pine)));
   border-bottom: 1px solid color-mix(in srgb, var(--d-border) 80%, transparent);
   margin: 0;
@@ -2496,7 +2496,7 @@
 
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-field-k {
   letter-spacing: .06em;
-  text-transform: uppercase;
+  text-transform: none;
   color: color-mix(in srgb, var(--d-muted) 72%, var(--d-text-primary, #273f52));
   font-size: 9px;
   font-weight: 800;
@@ -2602,7 +2602,7 @@
 
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-interaction-panel-title {
   letter-spacing: .1em;
-  text-transform: uppercase;
+  text-transform: none;
   color: color-mix(in srgb, var(--d-muted) 48%, var(--d-text-primary, var(--d-pine)));
   margin: 0 0 4px;
   font-size: 9px;
@@ -2734,7 +2734,7 @@
 
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-related-kind {
   letter-spacing: .04em;
-  text-transform: uppercase;
+  text-transform: none;
   color: color-mix(in srgb, var(--d-muted) 50%, var(--d-text-primary, var(--d-pine)));
   font-weight: 800;
 }
@@ -2824,7 +2824,7 @@
 
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-section-title {
   letter-spacing: .1em;
-  text-transform: uppercase;
+  text-transform: none;
   color: color-mix(in srgb, var(--d-muted) 34%, var(--d-text-primary, var(--d-pine)));
   border: none;
   margin: 0 0 5px;
@@ -2948,7 +2948,7 @@
 
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-type-badge {
   letter-spacing: .08em;
-  text-transform: uppercase;
+  text-transform: none;
   color: color-mix(in srgb, var(--d-text-primary, var(--d-pine)) 85%, var(--d-muted));
   background: color-mix(in srgb, var(--d-text-primary, var(--d-pine)) 5%, var(--d-surface));
   border: 1px solid color-mix(in srgb, var(--d-border) 78%, var(--d-text-primary, var(--d-pine)));
@@ -3120,7 +3120,7 @@
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-queue-tool, [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-tool, [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-queue-tool, [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-queue-tool {
-  text-transform: uppercase;
+  text-transform: none;
   letter-spacing: .04em;
   border: 1px solid var(--d-border);
   color: var(--d-muted);
@@ -3232,7 +3232,7 @@
 }
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-queue-chip, [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-chip, [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-queue-chip, [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-queue-chip {
-  text-transform: uppercase;
+  text-transform: none;
   letter-spacing: .04em;
   border: 1px solid color-mix(in srgb, var(--d-pine) 35%, var(--d-border));
   color: var(--d-pine);
@@ -3322,7 +3322,7 @@
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-rail--command-shell .adminv2-ws-command-section-title, [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-rail--command-shell .adminv2-ws-command-section-title, [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-rail--command-shell .adminv2-ws-command-section-title, [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-rail--command-shell .adminv2-ws-command-section-title {
   letter-spacing: .12em;
-  text-transform: uppercase;
+  text-transform: none;
   color: color-mix(in srgb, var(--d-muted) 18%, var(--d-pine));
   border: none;
   margin: 0 0 4px;
@@ -3460,7 +3460,7 @@
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-command-row-ai-badge, [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-command-row-ai-badge, [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-command-row-ai-badge, [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-command-row-ai-badge {
   letter-spacing: .08em;
-  text-transform: uppercase;
+  text-transform: none;
   border: 1px solid color-mix(in srgb, var(--d-brand) 32%, var(--d-border));
   color: var(--d-brand);
   background: color-mix(in srgb, var(--d-brand) 7%, transparent);
@@ -3492,7 +3492,7 @@
   box-sizing: border-box;
   cursor: pointer;
   letter-spacing: .06em;
-  text-transform: uppercase;
+  text-transform: none;
   text-align: left;
   width: 100%;
   color: color-mix(in srgb, var(--d-muted) 26%, var(--d-text-primary, #273f52));
@@ -3600,7 +3600,7 @@
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-rail--command-shell .adminv2-ws-actions-rail-title, [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-rail--command-shell .adminv2-ws-actions-rail-title, [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-rail--command-shell .adminv2-ws-actions-rail-title, [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-rail--command-shell .adminv2-ws-actions-rail-title {
   letter-spacing: .12em;
-  text-transform: uppercase;
+  text-transform: none;
   color: color-mix(in srgb, var(--d-muted) 18%, var(--d-pine));
   border-bottom: 1px solid color-mix(in srgb, var(--d-border) 65%, transparent);
   margin-bottom: 6px;
@@ -3639,7 +3639,7 @@
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-dept-v2-rail--command-shell .adminv2-ws-context-rail-kicker, [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-dept-v2-rail--command-shell .adminv2-ws-context-rail-kicker, [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-dept-v2-rail--command-shell .adminv2-ws-context-rail-kicker, [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-dept-v2-rail--command-shell .adminv2-ws-context-rail-kicker {
   letter-spacing: .11em;
-  text-transform: uppercase;
+  text-transform: none;
   color: color-mix(in srgb, var(--d-muted) 35%, var(--d-pine));
   border-bottom: 1px solid color-mix(in srgb, var(--d-border) 72%, transparent);
   opacity: .9;
@@ -3723,7 +3723,7 @@
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-actions-rail-title, [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-actions-rail-title, [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-actions-rail-title, [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-actions-rail-title {
   letter-spacing: .1em;
-  text-transform: uppercase;
+  text-transform: none;
   color: var(--d-muted);
   margin-bottom: 6px;
   font-size: 8px;
@@ -3802,7 +3802,7 @@
 
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-context-rail-kicker, [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-context-rail-kicker, [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-context-rail-kicker, [data-ws-surface="company"].adminv2-ws-company-v2 .adminv2-ws-context-rail-kicker {
   letter-spacing: .08em;
-  text-transform: uppercase;
+  text-transform: none;
   color: var(--d-muted);
   opacity: .88;
   margin-bottom: 4px;
@@ -4368,7 +4368,7 @@
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-section-label {
   letter-spacing: .12em;
-  text-transform: uppercase;
+  text-transform: none;
   color: color-mix(in srgb, var(--d-muted) 78%, var(--d-text-primary, #273f52));
   margin: 4px 2px 0;
   font-size: 8px;
@@ -4586,7 +4586,7 @@
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__next-caption {
   letter-spacing: .04em;
-  text-transform: uppercase;
+  text-transform: none;
   color: color-mix(in srgb, var(--d-muted) 72%, transparent);
   margin-top: 2px;
   font-size: 8px;
@@ -4698,7 +4698,7 @@
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__gk {
   letter-spacing: .035em;
-  text-transform: uppercase;
+  text-transform: none;
   color: color-mix(in srgb, var(--d-muted) 58%, transparent);
   font-size: 8px;
   font-weight: 670;
@@ -4901,7 +4901,7 @@
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card-tag {
   letter-spacing: .02em;
-  text-transform: uppercase;
+  text-transform: none;
   background: color-mix(in srgb, var(--d-pine) 12%, var(--d-surface));
   color: color-mix(in srgb, var(--d-text-primary) 88%, var(--d-muted));
   border-radius: 4px;
@@ -4988,7 +4988,7 @@
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-action-chip--open {
   letter-spacing: .05em;
-  text-transform: uppercase;
+  text-transform: none;
   border: 1px solid color-mix(in srgb, var(--d-pine) 55%, var(--d-border));
   background: color-mix(in srgb, var(--d-pine) 92%, #0f172a);
   color: #fff;
@@ -5052,7 +5052,7 @@
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-open-record {
   letter-spacing: .07em;
-  text-transform: uppercase;
+  text-transform: none;
   border: 1px solid color-mix(in srgb, var(--d-border) 96%, transparent);
   color: var(--d-brand);
   cursor: pointer;
@@ -5088,7 +5088,7 @@
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-midline-k {
   letter-spacing: .08em;
-  text-transform: uppercase;
+  text-transform: none;
   color: color-mix(in srgb, var(--d-muted) 90%, transparent);
   font-size: 7px;
   font-weight: 800;
@@ -5196,7 +5196,7 @@
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-meta-row dt {
   letter-spacing: .08em;
-  text-transform: uppercase;
+  text-transform: none;
   color: color-mix(in srgb, var(--d-muted) 92%, transparent);
   margin: 0;
   font-size: 7px;
@@ -5268,7 +5268,7 @@
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-action-chip.adminv2-ws-wu-queue-action-chip--open {
   letter-spacing: .05em;
-  text-transform: uppercase;
+  text-transform: none;
   border: 1px solid color-mix(in srgb, var(--d-pine) 55%, var(--d-border));
   background: color-mix(in srgb, var(--d-pine) 92%, #0f172a);
   color: #fff;
@@ -5386,6 +5386,7 @@
 
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__gv {
   font-size: 12px;
+  font-weight: 520;
   line-height: 1.36;
 }
 
@@ -5396,7 +5397,32 @@
 
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__footer-activity {
   font-size: 10.5px;
+  font-weight: 500;
   line-height: 1.38;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__next-value {
+  font-weight: 560;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__commercial {
+  font-weight: 520;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__attention, [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-queue-preview-stale {
+  font-weight: 560;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__child-mini-primary {
+  font-weight: 530;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__child-mini-secondary {
+  font-weight: 500;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__child-mini--more {
+  font-weight: 560;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-card-title--compact {
@@ -5406,11 +5432,13 @@
 
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-card-sub--compact {
   font-size: 12px;
+  font-weight: 520;
   line-height: 1.28;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-card-compact-aside > .adminv2-ws-wu-queue-value--compact {
   font-size: 10.5px;
+  font-weight: 520;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-enrollment-crm-row .adminv2-ws-wu-queue-action-chip.adminv2-ws-wu-queue-action-chip--quiet {
@@ -5427,6 +5455,7 @@
 
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-value--compact {
   font-size: 10.5px;
+  font-weight: 520;
   line-height: 1.26;
 }
 
@@ -5437,11 +5466,13 @@
 
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-value {
   font-size: 12px;
+  font-weight: 520;
   line-height: 1.26;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-card-sub {
   font-size: 12px;
+  font-weight: 520;
   line-height: 1.34;
 }
 
@@ -5455,13 +5486,24 @@
   line-height: 1.28;
 }
 
-[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-midline-v, [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-wait-text {
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-midline-v {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-wait-text {
   font-size: 12px;
   line-height: 1.3;
 }
 
+[data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-wait-v {
+  font-weight: 520;
+}
+
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-tag {
   font-size: 10.5px;
+  font-weight: 520;
   line-height: 1.24;
 }
 
@@ -5472,6 +5514,7 @@
 
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-wu-queue-meta-row dd {
   font-size: 13px;
+  font-weight: 520;
   line-height: 1.26;
 }
 
@@ -5555,7 +5598,7 @@
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-lane-strip-k {
   letter-spacing: .06em;
-  text-transform: uppercase;
+  text-transform: none;
   min-width: 5.25rem;
   color: color-mix(in srgb, var(--d-muted) 65%, var(--d-text-primary));
   flex: none;
@@ -5702,7 +5745,7 @@
 
 [data-ws-surface="record"].adminv2-ws-record-v2 .adminv2-ws-record-decision-anchor-k {
   letter-spacing: .06em;
-  text-transform: uppercase;
+  text-transform: none;
   color: color-mix(in srgb, var(--d-muted) 35%, var(--d-pine));
   flex-shrink: 0;
   font-weight: 800;
@@ -6015,7 +6058,7 @@
 [data-adminv2-record-modal-tone="cleaning-v2"] [data-adminv2-job-record-modal-v2] .adminv2-jrm-fielddeck-chapters [data-entity-field] label {
   padding-top: .35rem;
   letter-spacing: .07em !important;
-  text-transform: uppercase !important;
+  text-transform: none !important;
   color: #20405c74 !important;
   margin-bottom: 0 !important;
   font-size: 10px !important;
@@ -6179,7 +6222,7 @@
 
 .adminv2-ws-automation-telemetry__kicker {
   letter-spacing: .11em;
-  text-transform: uppercase;
+  text-transform: none;
   color: color-mix(in srgb, var(--d-muted) 28%, var(--d-brand));
   margin: 0 0 4px;
   font-size: 9px;
@@ -6252,7 +6295,7 @@
 
 .adminv2-ws-automation-telemetry__group-title {
   letter-spacing: .14em;
-  text-transform: uppercase;
+  text-transform: none;
   color: color-mix(in srgb, var(--d-muted) 35%, var(--d-brand));
   margin: 0 0 8px;
   font-size: 8px;
@@ -6285,7 +6328,7 @@
 
 .adminv2-ws-automation-telemetry__metric-label {
   letter-spacing: .06em;
-  text-transform: uppercase;
+  text-transform: none;
   color: color-mix(in srgb, var(--d-muted) 55%, var(--d-text-primary, #273f52));
   font-size: 9px;
   font-weight: 650;
@@ -6338,7 +6381,7 @@
 
 .adminv2-ws-automation-telemetry__workflows-kicker {
   letter-spacing: .12em;
-  text-transform: uppercase;
+  text-transform: none;
   color: color-mix(in srgb, var(--d-muted) 22%, var(--d-brand));
   font-size: 9px;
   font-weight: 800;
@@ -6415,7 +6458,7 @@
 
 .adminv2-ws-automation-workflow-row__chip {
   letter-spacing: .08em;
-  text-transform: uppercase;
+  text-transform: none;
   border: 1px solid #0000;
   border-radius: 999px;
   flex-shrink: 0;

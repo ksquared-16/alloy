@@ -4,13 +4,13 @@ import { ReactNode, useState } from "react";
 import type { EntityDrawerSectionConfig } from "@/lib/entityPresentation";
 
 const SECTION_HEADER_CLASS =
-  "rounded-t-md bg-alloy-stone/30 border-b border-admin-border px-3 py-2 mb-3 text-xs font-semibold uppercase tracking-wider text-alloy-forge";
+  "rounded-t-md bg-alloy-stone/30 border-b border-admin-border px-3 py-2 mb-3 text-xs font-semibold tracking-wider text-alloy-forge";
 
 /** Pine accent — aligned with inquiry workflow snapshot header cards. */
 const PREMIUM_SECTION =
   "rounded-lg border border-alloy-stone/20 border-l-[3px] border-l-[rgb(0,162,131)] bg-white/90 shadow-sm shadow-alloy-stone/10 ring-1 ring-alloy-stone/10 overflow-hidden";
 const PREMIUM_HEADER_STATIC =
-  "border-b border-alloy-stone/15 bg-alloy-stone/[0.05] px-3 py-2.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-alloy-forge/80";
+  "border-b border-alloy-stone/15 bg-alloy-stone/[0.05] px-3 py-2.5 text-[10px] font-semibold tracking-[0.1em] text-alloy-forge/80";
 
 interface EntityDrawerSectionProps {
   config: EntityDrawerSectionConfig;
@@ -57,7 +57,7 @@ export default function EntityDrawerSection({
           className={
             isPremium
               ? "flex w-full min-w-0 items-stretch border-b border-alloy-stone/15 bg-alloy-stone/[0.05]"
-              : `flex w-full min-w-0 items-stretch rounded-t-md bg-alloy-stone/30 border-b border-admin-border mb-3 text-xs font-semibold uppercase tracking-wider text-alloy-forge`
+              : `flex w-full min-w-0 items-stretch rounded-t-md bg-alloy-stone/30 border-b border-admin-border mb-3 text-xs font-semibold tracking-wider text-alloy-forge`
           }
         >
           <button
@@ -65,7 +65,7 @@ export default function EntityDrawerSection({
             onClick={() => setExpanded((e) => !e)}
             className={`entity-drawer-section-toggle flex min-h-0 min-w-0 flex-1 items-center justify-between gap-2 text-left transition-colors duration-150 ${
               isPremium
-                ? "border-0 bg-transparent px-3 py-2.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-alloy-forge/80 hover:bg-alloy-stone/10"
+                ? "border-0 bg-transparent px-3 py-2.5 text-[10px] font-semibold tracking-[0.1em] text-alloy-forge/80 hover:bg-alloy-stone/10"
                 : "border-0 bg-transparent px-3 py-2 hover:bg-alloy-stone/25"
             }`}
             aria-expanded={expanded}

@@ -12,7 +12,7 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist
 function ScheduleSnapCell(props) {
     const tier = props.tier ?? "secondary";
     const shell = tier === "primary" ? "min-w-0 rounded-lg border border-admin-border/50 bg-white/95 px-2.5 py-1.5 shadow-[0_1px_0_rgba(15,23,42,0.04)]" : tier === "supporting" ? "min-w-0 rounded-md border border-dashed border-admin-border/28 bg-alloy-stone/[0.03] px-1.5 py-1" : "min-w-0 rounded-md border border-admin-border/35 bg-alloy-stone/[0.06] px-2 py-1";
-    const labelClass = tier === "primary" ? "mb-1 text-[9px] font-semibold uppercase leading-none tracking-[0.1em] text-alloy-midnight/55" : tier === "supporting" ? "mb-0.5 text-[8px] font-semibold uppercase leading-none tracking-[0.12em] text-alloy-forge/55" : "mb-1 text-[9px] font-semibold uppercase leading-none tracking-[0.1em] text-alloy-forge/65";
+    const labelClass = tier === "primary" ? "mb-1 text-[9px] font-semibold leading-none tracking-[0.1em] text-alloy-midnight/55" : tier === "supporting" ? "mb-0.5 text-[8px] font-semibold leading-none tracking-[0.12em] text-alloy-forge/55" : "mb-1 text-[9px] font-semibold leading-none tracking-[0.1em] text-alloy-forge/65";
     return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
         className: `${shell} ${props.className ?? ""}`,
         children: [
@@ -245,7 +245,7 @@ function JobDrawerV2SignalsStrip(props) {
                 },
                 children: [
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                        className: "text-[10px] font-semibold uppercase tracking-wide",
+                        className: "text-[10px] font-semibold tracking-wide",
                         style: {
                             color: t.kickerColor
                         },
@@ -329,7 +329,7 @@ function formatServiceFrequencyReadLabel(k) {
     return String(k).replace(/_/g, " ");
 }
 const primaryPanelFieldClass = "adminv2-job-record-primary-input w-full rounded-lg border px-2 py-1.5 text-sm text-alloy-forge transition-colors duration-150 focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60";
-const primaryPanelLabelClass = "block text-[10px] font-semibold uppercase tracking-wide mb-0.5";
+const primaryPanelLabelClass = "block text-[10px] font-semibold tracking-wide mb-0.5";
 const primaryPanelReadClass = "text-sm font-medium leading-snug break-words tabular-nums";
 function JobRecordPrimaryPanel(props) {
     const r = props.record ?? {};
@@ -374,7 +374,7 @@ function JobRecordPrimaryPanel(props) {
         "data-adminv2-job-primary-panel": "true",
         children: [
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                className: "text-[10px] font-semibold uppercase tracking-wide mb-2",
+                className: "text-[10px] font-semibold tracking-wide mb-2",
                 style: {
                     color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["derived"].textSecondary
                 },
@@ -819,7 +819,7 @@ function JobRecordPrimaryPanel(props) {
                         },
                         children: [
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                className: "text-[10px] font-semibold uppercase tracking-wide mb-0.5",
+                                className: "text-[10px] font-semibold tracking-wide mb-0.5",
                                 style: {
                                     color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["derived"].textSecondary
                                 },
@@ -1232,7 +1232,7 @@ function JobDrawerV2TimelineCard(props) {
         },
         children: [
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("h3", {
-                className: "text-xs font-semibold uppercase tracking-wide",
+                className: "text-xs font-semibold tracking-wide",
                 style: {
                     color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["derived"].textSecondary
                 },
@@ -1507,7 +1507,7 @@ const textActionMutedClass = "adminv2-jrm-text-action text-[11px] font-medium te
         className: `min-w-0 ${props.className ?? ""}`,
         children: [
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                className: "mb-0.5 text-[9px] font-semibold uppercase leading-none tracking-[0.1em]",
+                className: "mb-0.5 text-[9px] font-semibold leading-none tracking-[0.1em]",
                 style: {
                     color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["derived"].textSecondary
                 },
@@ -1578,7 +1578,7 @@ function JobRecordModalV2(props) {
                 className: "adminv2-jrm-account-strip flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-xl px-3 py-1.5",
                 children: [
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
-                        className: "text-[10px] font-semibold uppercase tracking-[0.1em]",
+                        className: "text-[10px] font-semibold tracking-[0.1em]",
                         style: {
                             color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["derived"].textSecondary
                         },
@@ -1631,7 +1631,7 @@ function JobRecordModalV2(props) {
                 style: shell,
                 children: [
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                        className: "px-0.5 pb-1 text-[9px] font-semibold uppercase tracking-[0.12em] leading-none",
+                        className: "px-0.5 pb-1 text-[9px] font-semibold tracking-[0.12em] leading-none",
                         style: {
                             color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["derived"].textSecondary
                         },
@@ -1942,7 +1942,7 @@ function JobRecordModalV2(props) {
                                         className: "min-w-0",
                                         children: [
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                className: "mb-0.5 text-[9px] font-semibold uppercase leading-none tracking-[0.1em]",
+                                                className: "mb-0.5 text-[9px] font-semibold leading-none tracking-[0.1em]",
                                                 style: {
                                                     color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["derived"].textSecondary
                                                 },
@@ -1973,7 +1973,7 @@ function JobRecordModalV2(props) {
                                         className: "min-w-0",
                                         children: [
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                className: "mb-0.5 text-[9px] font-semibold uppercase leading-none tracking-[0.1em]",
+                                                className: "mb-0.5 text-[9px] font-semibold leading-none tracking-[0.1em]",
                                                 style: {
                                                     color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["derived"].textSecondary
                                                 },
@@ -2004,7 +2004,7 @@ function JobRecordModalV2(props) {
                                         className: "min-w-0 xl:col-span-1",
                                         children: [
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                className: "mb-0.5 text-[9px] font-semibold uppercase leading-none tracking-[0.1em]",
+                                                className: "mb-0.5 text-[9px] font-semibold leading-none tracking-[0.1em]",
                                                 style: {
                                                     color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["derived"].textSecondary
                                                 },
@@ -2036,7 +2036,7 @@ function JobRecordModalV2(props) {
                                         className: "min-w-0",
                                         children: [
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                className: "mb-0.5 text-[9px] font-semibold uppercase leading-none tracking-[0.1em]",
+                                                className: "mb-0.5 text-[9px] font-semibold leading-none tracking-[0.1em]",
                                                 style: {
                                                     color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["derived"].textSecondary
                                                 },
@@ -2067,7 +2067,7 @@ function JobRecordModalV2(props) {
                                         className: "min-w-0 col-span-2 sm:col-span-1 xl:col-span-1",
                                         children: [
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                                className: "mb-0.5 text-[9px] font-semibold uppercase leading-none tracking-[0.1em]",
+                                                className: "mb-0.5 text-[9px] font-semibold leading-none tracking-[0.1em]",
                                                 style: {
                                                     color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["derived"].textSecondary
                                                 },

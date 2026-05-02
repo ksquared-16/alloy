@@ -7,7 +7,8 @@ import {
   effectiveScheduleStatusKey,
   resolveScheduleStatusRowByKey,
 } from "@/lib/admin/scheduleEffectiveStatusKey";
-import { fetchOrgTimeZoneIana, resolveScheduledOnBounds } from "@/lib/admin/orgLocalDayBounds";
+import { resolveScheduledOnBounds } from "@/lib/admin/orgLocalDayBounds";
+import { fetchOperationalTimezoneForOrg, type OperationalTimezoneSource } from "@/lib/admin/timezoneContract";
 
 /** GET: list schedules for current org. Admin/ops. Exclude canceled by default. */
 export async function GET(request: NextRequest) {
@@ -23,7 +24,7 @@ export async function GET(request: NextRequest) {
   const statusKey = (searchParams.get("status_key") ?? "").trim();
   const from = (searchParams.get("from") ?? "").trim();
   const to = (searchParams.get("to") ?? "").trim();
-  /** Org-local calendar day: `today` or `YYYY-MM-DD` (IANA TZ from org_settings.metadata). */
+  /** Org operational calendar day: `today` or `YYYY-MM-DD` (IANA from org_settings.metadata; see meta.calendar_type). */
   const scheduledOnRaw = (searchParams.get("scheduled_on") ?? "").trim();
   const limit = Math.min(Number(searchParams.get("limit")) || 200, 200);
 
@@ -36,7 +37,16 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  let dayMeta: { scheduled_on: string; timezone: string } | undefined;
+  let dayMeta:
+    | {
+        scheduled_on: string;
+        /** @deprecated Use meta.timezone_effective */
+        timezone: string;
+        timezone_effective: string;
+        timezone_source: OperationalTimezoneSource;
+        calendar_type: "operational_day";
+      }
+    | undefined;
 
   let rows: unknown[] | null = null;
   let queryError: { message: string } | null = null;
@@ -49,8 +59,11 @@ export async function GET(request: NextRequest) {
     }
     let bounds: { dayStartUtc: Date; dayEndExclusiveUtc: Date };
     let tz: string;
+    let tzSource: OperationalTimezoneSource;
     try {
-      tz = await fetchOrgTimeZoneIana(supabase, ctx.orgId);
+      const op = await fetchOperationalTimezoneForOrg(supabase, ctx.orgId);
+      tz = op.iana;
+      tzSource = op.source;
       bounds = resolveScheduledOnBounds(scheduledOnRaw, tz);
     } catch (e) {
       return NextResponse.json(
@@ -58,7 +71,13 @@ export async function GET(request: NextRequest) {
         { status: 400 }
       );
     }
-    dayMeta = { scheduled_on: scheduledOnRaw, timezone: tz };
+    dayMeta = {
+      scheduled_on: scheduledOnRaw,
+      timezone: tz,
+      timezone_effective: tz,
+      timezone_source: tzSource,
+      calendar_type: "operational_day",
+    };
     /** Inner join non-archived jobs so totals and rows match the former jobs-based “today” lane. */
     let dayQ = supabase
       .from("schedules")
@@ -191,7 +210,7 @@ export async function GET(request: NextRequest) {
   const payload: {
     schedules: typeof schedules;
     total: number;
-    meta?: { scheduled_on: string; timezone: string };
+    meta?: NonNullable<typeof dayMeta>;
   } = {
     schedules,
     total: count ?? schedules.length,

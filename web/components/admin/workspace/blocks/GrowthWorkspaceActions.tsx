@@ -94,7 +94,7 @@ function GrowthWorkspaceActionsInner({
                     Priced · open
                 </Link>
             </div>
-            <p className={presentation === "bridge" ? "text-[10px] uppercase tracking-wide opacity-60 mb-1" : "text-[11px] font-semibold text-alloy-midnight/55 mb-1"}>
+            <p className={presentation === "bridge" ? "text-[10px] tracking-wide opacity-60 mb-1" : "text-[11px] font-semibold text-alloy-midnight/55 mb-1"}>
                 Surface actions
             </p>
             <div className={presentation === "bridge" ? "space-y-1.5" : "flex flex-wrap gap-2"}>

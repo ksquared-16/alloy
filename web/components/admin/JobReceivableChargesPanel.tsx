@@ -123,7 +123,7 @@ export function JobReceivableChargesPanel({
             <div className="overflow-x-auto -mx-1">
                 <table className={`w-full ${compact ? "" : "min-w-[520px]"}`}>
                     <thead>
-                        <tr className="border-b border-alloy-stone/25 text-left text-alloy-midnight/60 uppercase tracking-wide">
+                        <tr className="border-b border-alloy-stone/25 text-left text-alloy-midnight/60 tracking-wide">
                             {!compact && <th className={th}>ID</th>}
                             <th className={th}>Type</th>
                             <th className={th}>Status</th>
@@ -152,7 +152,7 @@ export function JobReceivableChargesPanel({
                                         <span className="flex flex-wrap items-center gap-1.5">
                                             <span className="font-medium text-alloy-midnight">{labelChargeType(r.charge_type)}</span>
                                             {linkedVisit ? (
-                                                <span className="text-[10px] font-medium uppercase tracking-wide text-alloy-blue bg-alloy-blue/10 px-1.5 py-0.5 rounded">
+                                                <span className="text-[10px] font-medium tracking-wide text-alloy-blue bg-alloy-blue/10 px-1.5 py-0.5 rounded">
                                                     This visit
                                                 </span>
                                             ) : null}

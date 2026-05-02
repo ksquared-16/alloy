@@ -264,7 +264,7 @@ export default function ScheduleDetailClient({
                 {tab === "related" && (
                     <div className="space-y-6">
                         <div>
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Job</h3>
+                            <h3 className="text-xs font-semibold tracking-wider text-[#59678b] mb-2">Job</h3>
                             <p className="text-sm text-alloy-midnight">
                                 {jobId ? (
                                     <Link href={`/admin/jobs/${jobId}`} className="text-alloy-blue hover:underline">
@@ -276,15 +276,15 @@ export default function ScheduleDetailClient({
                             </p>
                         </div>
                         <div>
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Customer</h3>
+                            <h3 className="text-xs font-semibold tracking-wider text-[#59678b] mb-2">Customer</h3>
                             <p className="text-sm text-alloy-midnight">{(schedule._customer_name as string) ?? "—"}</p>
                         </div>
                         <div>
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-2">Assigned {vendorSingular}</h3>
+                            <h3 className="text-xs font-semibold tracking-wider text-[#59678b] mb-2">Assigned {vendorSingular}</h3>
                             <p className="text-sm text-alloy-midnight">{vendorName ?? "Unassigned"}</p>
                         </div>
                         <div>
-                            <h3 className="text-xs font-semibold uppercase tracking-wider text-[#59678b] mb-1">Payments (job)</h3>
+                            <h3 className="text-xs font-semibold tracking-wider text-[#59678b] mb-1">Payments (job)</h3>
                             <p className="text-xs text-alloy-midnight/55 mb-3">
                                 Figures are for the linked job. Charges linked to this visit are highlighted in the table below.
                             </p>

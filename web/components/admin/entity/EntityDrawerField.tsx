@@ -4,7 +4,7 @@ import { ReactNode } from "react";
 
 const LABEL_DEFAULT = "block text-xs font-medium text-alloy-midnight/80 mb-1";
 /** Schedule/job record snapshot rows — subtle label, emphasized value (aligned with JobRecordModalV2 snapshot cells). */
-const LABEL_COMPACT = "block text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-forge/65 mb-0.5";
+const LABEL_COMPACT = "block text-[10px] font-semibold tracking-[0.08em] text-alloy-forge/65 mb-0.5";
 const VALUE_DEFAULT = "text-sm text-alloy-forge min-h-[2rem] flex items-center";
 const VALUE_COMPACT = "text-sm font-medium text-alloy-midnight/90 min-h-[1.375rem] flex items-center leading-snug";
 /** Schedule snapshot row tiers — aligns with JobRecordModalV2 snapshot rhythm */

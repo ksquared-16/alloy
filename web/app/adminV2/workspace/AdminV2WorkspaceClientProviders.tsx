@@ -6,6 +6,7 @@ import { AdminVerticalProvider } from "@/contexts/AdminVerticalContext";
 import { EntityLabelsProvider, type EntityLabelsMap } from "@/contexts/EntityLabelsContext";
 import AdminEntityDrawer from "@/components/admin/AdminEntityDrawer";
 import type { EntityLabelsBootstrapMap } from "@/lib/admin/entityLabelsServer";
+import { AdminViewerTimezoneProvider, type AdminViewerTimezoneValue } from "@/contexts/AdminViewerTimezoneContext";
 import { WorkspaceOrgProvider } from "@/contexts/WorkspaceOrgContext";
 import type { CSSProperties, ReactNode } from "react";
 
@@ -17,6 +18,8 @@ interface AdminV2WorkspaceClientProvidersProps {
   initialEntityLabels?: EntityLabelsBootstrapMap;
   /** Display name from `orgs.name` (server-loaded). */
   orgName?: string | null;
+  /** Server-resolved user → org → UTC display timezone. */
+  initialViewerTimezone?: AdminViewerTimezoneValue;
 }
 
 export default function AdminV2WorkspaceClientProviders({
@@ -25,9 +28,14 @@ export default function AdminV2WorkspaceClientProviders({
   role,
   initialEntityLabels,
   orgName = null,
+  initialViewerTimezone,
 }: AdminV2WorkspaceClientProvidersProps) {
   const safeEmail = typeof userEmail === "string" && userEmail.length > 0 ? userEmail : "Unknown";
   const safeRole = typeof role === "string" ? role : "";
+  const tzValue: AdminViewerTimezoneValue = initialViewerTimezone ?? {
+    iana: "UTC",
+    source: "utc_fallback",
+  };
 
   const labels: EntityLabelsMap | undefined = initialEntityLabels
     ? (initialEntityLabels as EntityLabelsMap)
@@ -42,7 +50,8 @@ export default function AdminV2WorkspaceClientProviders({
     <AdminAuthProvider userEmail={safeEmail} role={safeRole}>
       <AdminVerticalProvider>
         <EntityLabelsProvider initialLabels={labels}>
-          <WorkspaceOrgProvider orgName={orgName}>
+          <AdminViewerTimezoneProvider value={tzValue}>
+            <WorkspaceOrgProvider orgName={orgName}>
             <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
               <AdminDrawerProvider>
                 <div
@@ -55,6 +64,7 @@ export default function AdminV2WorkspaceClientProviders({
               </AdminDrawerProvider>
             </div>
           </WorkspaceOrgProvider>
+          </AdminViewerTimezoneProvider>
         </EntityLabelsProvider>
       </AdminVerticalProvider>
     </AdminAuthProvider>

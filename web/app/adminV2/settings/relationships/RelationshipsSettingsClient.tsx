@@ -68,7 +68,7 @@ export default function RelationshipsSettingsClient() {
                 )}
             </div>
             <section className="rounded-xl border border-alloy-forge/12 border-l-[3px] border-l-alloy-forge/25 bg-white/65 px-5 py-4 text-xs leading-snug text-alloy-midnight/60 shadow-[0_2px_10px_rgba(39,63,82,0.06)] backdrop-blur-[2px]">
-                <p className="font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45">Live data</p>
+                <p className="font-semibold tracking-[0.12em] text-alloy-midnight/45">Live data</p>
                 <p className="mt-1 max-w-3xl">
                     Inspect actual <code className="rounded bg-alloy-midnight/5 px-1 py-0.5 font-mono text-[11px]">customer_persons</code> and{" "}
                     <code className="rounded bg-alloy-midnight/5 px-1 py-0.5 font-mono text-[11px]">person_relationships</code> rows (viewer coming next in

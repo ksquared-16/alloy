@@ -683,7 +683,7 @@ export default function EntityDrawerOverview({
             : "text-sm font-medium text-alloy-midnight/88";
       return (
         <div key={field.key} className="min-w-0" data-schedule-flat-field={field.key}>
-          <div className="mb-0.5 text-[8px] font-semibold uppercase tracking-[0.1em] text-alloy-forge/50">{field.label}</div>
+          <div className="mb-0.5 text-[8px] font-semibold tracking-[0.1em] text-alloy-forge/50">{field.label}</div>
           <div className={`${valClass} leading-snug`}>{showFieldEdit ? <>{editNode}</> : <>{displayValue}</>}</div>
         </div>
       );
@@ -765,7 +765,7 @@ export default function EntityDrawerOverview({
                   className="rounded-lg border border-admin-border/40 bg-white px-2 py-1.5 shadow-sm sm:px-2.5 sm:py-2"
                 >
                   {block.title ? (
-                    <p className="mb-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-alloy-forge/60">
+                    <p className="mb-1.5 text-[9px] font-semibold tracking-[0.12em] text-alloy-forge/60">
                       {block.title}
                     </p>
                   ) : null}
@@ -775,7 +775,7 @@ export default function EntityDrawerOverview({
                         key={`${block.key}-g-${gi}`}
                         className="flex flex-col gap-1.5 py-2 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:gap-3"
                       >
-                        <span className="shrink-0 pt-0.5 text-[8px] font-semibold uppercase tracking-[0.12em] text-alloy-forge/45 sm:w-[7.5rem]">
+                        <span className="shrink-0 pt-0.5 text-[8px] font-semibold tracking-[0.12em] text-alloy-forge/45 sm:w-[7.5rem]">
                           {group.label}
                         </span>
                         <div
@@ -819,7 +819,7 @@ export default function EntityDrawerOverview({
                       const text = scheduleSnapshot.service.label?.trim() || "—";
                       return (
                         <div key={`${block.key}-svc`} className="min-w-0">
-                          <span className="mr-2 text-[8px] font-semibold uppercase tracking-[0.1em] text-alloy-forge/45">
+                          <span className="mr-2 text-[8px] font-semibold tracking-[0.1em] text-alloy-forge/45">
                             Service
                           </span>
                           <span className="text-[13px] font-medium text-alloy-midnight/90">{text}</span>
@@ -832,7 +832,7 @@ export default function EntityDrawerOverview({
                         cents != null && Number.isFinite(cents) ? formatMoneyFromCents(cents) : "—";
                       return (
                         <div key={`${block.key}-price`} className="min-w-0">
-                          <span className="mr-2 text-[8px] font-semibold uppercase tracking-[0.1em] text-alloy-forge/45">
+                          <span className="mr-2 text-[8px] font-semibold tracking-[0.1em] text-alloy-forge/45">
                             Price
                           </span>
                           <span className="text-[13px] font-semibold tabular-nums text-alloy-midnight">{text}</span>
@@ -857,7 +857,7 @@ export default function EntityDrawerOverview({
           data-schedule-overview-rows="true"
           data-schedule-layout-version="1"
         >
-          <p className="px-0.5 pb-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-alloy-forge/70">
+          <p className="px-0.5 pb-1.5 text-[9px] font-semibold tracking-[0.12em] text-alloy-forge/70">
             Visit details
           </p>
           <div className="space-y-3">
@@ -890,8 +890,8 @@ export default function EntityDrawerOverview({
 
         const subsectionTitleClass =
           sectionSurface === "premium"
-            ? "text-[10px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/50 border-b border-alloy-stone/15 pb-1.5 mb-2.5"
-            : "text-xs font-semibold uppercase tracking-wider text-alloy-forge/80 border-b border-admin-border pb-2 mb-3";
+            ? "text-[10px] font-semibold tracking-[0.1em] text-alloy-midnight/50 border-b border-alloy-stone/15 pb-1.5 mb-2.5"
+            : "text-xs font-semibold tracking-wider text-alloy-forge/80 border-b border-admin-border pb-2 mb-3";
 
         const children: ReactNode =
           customContent ??

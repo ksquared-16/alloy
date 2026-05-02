@@ -240,7 +240,7 @@ export default function OpportunityInquiryChildrenSection({
             <div className={tableWrap}>
                 <table className="w-full min-w-[760px] text-left text-sm">
                     <thead className={theadRow}>
-                        <tr className="text-[11px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/55">
+                        <tr className="text-[11px] font-semibold tracking-[0.12em] text-alloy-midnight/55">
                             <th className="px-3 py-2">Child</th>
                             <th className="px-3 py-2">DOB / Age</th>
                             <th className="px-3 py-2">Desired program</th>

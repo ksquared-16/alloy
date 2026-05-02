@@ -99,8 +99,12 @@ export default function AdminV2WorkspaceDepartmentPage() {
     const [deptQueueSummariesError, setDeptQueueSummariesError] = useState<string | null>(null);
     const [deptSummariesWaitTimedOut, setDeptSummariesWaitTimedOut] = useState(false);
 
-    /** `undefined` = use baseline strip (placement fetch pending/failed); otherwise resolver output after successful placement fetch. */
-    const [deptPlacementStrip, setDeptPlacementStrip] = useState<KPIVm[] | undefined>(undefined);
+    /**
+     * `undefined` = placement config not loaded yet → baseline strip.
+     * When loaded, resolver output is derived in `kpis` (summaries may still update without refetching placement).
+     */
+    const [deptPlacementRows, setDeptPlacementRows] = useState<WorkspaceKpiPlacementRow[] | undefined>(undefined);
+    const [deptScopeHasPlacements, setDeptScopeHasPlacements] = useState(false);
 
     const [workflowKpis, setWorkflowKpis] = useState<WorkflowKpis>(DEFAULT_WF_KPIS);
     const [workflowKpisLoading, setWorkflowKpisLoading] = useState(true);
@@ -227,8 +231,8 @@ export default function AdminV2WorkspaceDepartmentPage() {
         void (async () => {
             try {
                 const init = workspaceDataFetchInit();
-                // Match work-unit queue badges: exact head counts (not PostgreSQL planned estimates).
-                const route = `/api/admin/departments/${encodeURIComponent(departmentId)}/work-unit-queue-summaries?include_previews=false&count_mode=exact`;
+                // Planned counts for department rollup cards (align with work-unit summary strategy).
+                const route = `/api/admin/departments/${encodeURIComponent(departmentId)}/work-unit-queue-summaries?include_previews=false&count_mode=planned`;
                 const res = await fetch(route, init);
                 const j = (await res.json().catch(() => ({}))) as {
                     error?: string;
@@ -283,11 +287,9 @@ export default function AdminV2WorkspaceDepartmentPage() {
     }, [departmentId, deptWorkUnits]);
 
     useEffect(() => {
-        setDeptPlacementStrip(undefined);
-    }, [departmentId]);
-
-    useEffect(() => {
         if (!departmentId) return;
+        setDeptPlacementRows(undefined);
+        setDeptScopeHasPlacements(false);
         let cancelled = false;
         const init = workspaceDataFetchInit();
         void (async () => {
@@ -297,7 +299,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     { ...(init ?? {}), cache: "no-store" }
                 );
                 if (!res.ok) {
-                    if (!cancelled) setDeptPlacementStrip(undefined);
+                    if (!cancelled) setDeptPlacementRows(undefined);
                     return;
                 }
                 const j = (await res.json().catch(() => ({}))) as {
@@ -305,25 +307,18 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     scope_has_placements?: boolean;
                 };
                 if (cancelled) return;
-                const wuList = deptWorkUnits ?? [];
-                const { items } = resolveKpisForDepartment({
-                    placementRows: j.items ?? [],
-                    scopeHasPlacementRows: j.scope_has_placements === true,
-                    departmentSurface: "department",
-                    deptWorkUnits: wuList,
-                    deptWorkUnitSummaries,
-                    deptQueueSummariesLoading,
-                    deptQueueSummariesError,
-                });
-                if (!cancelled) setDeptPlacementStrip(items);
+                if (!cancelled) {
+                    setDeptPlacementRows(j.items ?? []);
+                    setDeptScopeHasPlacements(j.scope_has_placements === true);
+                }
             } catch {
-                if (!cancelled) setDeptPlacementStrip(undefined);
+                if (!cancelled) setDeptPlacementRows(undefined);
             }
         })();
         return () => {
             cancelled = true;
         };
-    }, [departmentId, deptWorkUnits, deptWorkUnitSummaries, deptQueueSummariesLoading, deptQueueSummariesError]);
+    }, [departmentId]);
 
     useEffect(() => {
         if (!deptQueueSummariesLoading) {
@@ -384,15 +379,27 @@ export default function AdminV2WorkspaceDepartmentPage() {
     }, [enrollmentDeptRightRail]);
 
     const kpis = useMemo(() => {
-        if (deptPlacementStrip !== undefined) return deptPlacementStrip;
-        return buildDefaultDepartmentKpis({
-            deptWorkUnits: deptWorkUnits ?? [],
+        const wuList = deptWorkUnits ?? [];
+        if (deptPlacementRows === undefined) {
+            return buildDefaultDepartmentKpis({
+                deptWorkUnits: wuList,
+                deptWorkUnitSummaries,
+                deptQueueSummariesLoading,
+                deptQueueSummariesError,
+            });
+        }
+        return resolveKpisForDepartment({
+            placementRows: deptPlacementRows,
+            scopeHasPlacementRows: deptScopeHasPlacements,
+            departmentSurface: "department",
+            deptWorkUnits: wuList,
             deptWorkUnitSummaries,
             deptQueueSummariesLoading,
             deptQueueSummariesError,
-        });
+        }).items;
     }, [
-        deptPlacementStrip,
+        deptPlacementRows,
+        deptScopeHasPlacements,
         deptQueueSummariesError,
         deptQueueSummariesLoading,
         deptWorkUnitSummaries,

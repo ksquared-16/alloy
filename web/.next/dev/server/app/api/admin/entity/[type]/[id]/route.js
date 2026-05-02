@@ -1,6 +1,6 @@
 var R=require("../../../../../../chunks/[turbopack]_runtime.js")("server/app/api/admin/entity/[type]/[id]/route.js")
 R.c("server/chunks/lib_adminFormatters_ts_735b064b._.js")
-R.c("server/chunks/[root-of-the-server]__af92073b._.js")
+R.c("server/chunks/[root-of-the-server]__ed6e9635._.js")
 R.c("server/chunks/node_modules_next_a4bb4686._.js")
 R.c("server/chunks/node_modules_@supabase_auth-js_dist_module_02e1b12e._.js")
 R.c("server/chunks/node_modules_3dccb458._.js")

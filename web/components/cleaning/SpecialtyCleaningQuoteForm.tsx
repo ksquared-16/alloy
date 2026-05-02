@@ -265,7 +265,7 @@ export default function SpecialtyCleaningQuoteForm({ cleaningType, onSuccess }: 
   };
 
   const labelBase =
-    "block text-xs font-semibold text-alloy-midnight/80 uppercase tracking-wider mb-1.5";
+    "block text-xs font-semibold text-alloy-midnight/80 tracking-wider mb-1.5";
 
   if (done) {
     return (

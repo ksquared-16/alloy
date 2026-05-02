@@ -5,6 +5,7 @@ import OpportunityRecordSectionRegistryActions from "@/components/admin/opportun
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
 import { formatPhoneUS } from "@/lib/adminFormatters";
+import { normalizePhone } from "@/lib/contactNormalize";
 import { AdminV2DrawerLoadingState } from "@/components/admin/workspace/AdminV2DrawerLoadingState";
 
 export type OpportunityPersonRow = {
@@ -120,8 +121,8 @@ export function FamilyContactsPanel(props: {
 
     const tinyLabel =
         variant === "summary"
-            ? "mb-0.5 text-[8px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45"
-            : "text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/55";
+            ? "mb-0.5 text-[8px] font-semibold tracking-[0.12em] text-alloy-midnight/45"
+            : "text-[11px] font-semibold tracking-wide text-alloy-forge/55";
     const cardPad = variant === "summary" ? "px-2 py-1.5" : "px-3 py-2.5";
     const nameLink =
         variant === "summary"
@@ -138,7 +139,7 @@ export function FamilyContactsPanel(props: {
             : "font-semibold text-alloy-blue hover:underline underline-offset-2";
     const roleBadge =
         variant === "summary"
-            ? "inline-flex max-w-[9.5rem] items-center rounded-full border border-alloy-stone/20 bg-alloy-stone/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/70"
+            ? "inline-flex max-w-[9.5rem] items-center rounded-full border border-alloy-stone/20 bg-alloy-stone/10 px-2 py-0.5 text-[9px] font-semibold tracking-wide text-alloy-midnight/70"
             : "inline-flex max-w-[11rem] items-center rounded-full border border-alloy-blue/20 bg-alloy-blue/[0.07] px-2.5 py-0.5 text-[11px] font-semibold text-alloy-midnight/85";
 
     return (
@@ -244,7 +245,10 @@ export function FamilyContactsPanel(props: {
                                 {r.phone ? (
                                     <span className="tabular-nums">
                                         <span className={contactMuted}>Phone </span>
-                                        <a className={contactLink} href={`tel:${r.phone}`}>
+                                        <a
+                                            className={contactLink}
+                                            href={`tel:${normalizePhone(r.phone) ?? r.phone.replace(/\D/g, "")}`}
+                                        >
                                             {formatPhoneUS(r.phone)}
                                         </a>
                                     </span>

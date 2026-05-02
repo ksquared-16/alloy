@@ -464,7 +464,7 @@ export default function StatusesClient({
                                                     className={`h-4 w-4 shrink-0 text-[#59678b] transition-transform ${isExpanded ? "rotate-180" : ""}`}
                                                     aria-hidden
                                                 />
-                                                <span className="text-sm font-semibold uppercase tracking-wider text-[#31394d]">
+                                                <span className="text-sm font-semibold tracking-wider text-[#31394d]">
                                                     {label}
                                                 </span>
                                                 <span className="text-sm text-[#59678b]">

@@ -764,7 +764,7 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
                             </label>
                             <div className="rounded-lg border border-admin-border/60 bg-white/70 px-3 py-2">
                                 <div className="flex items-center justify-between gap-2">
-                                    <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/55">
+                                    <div className="text-[11px] font-semibold tracking-wide text-alloy-forge/55">
                                         Queue Definition Editor (beta)
                                     </div>
                                     <label className="flex items-center gap-2 text-xs text-alloy-forge/70">
@@ -861,7 +861,7 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
                                                     </div>
 
                                                     <div className="mt-2">
-                                                        <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/55">
+                                                        <div className="text-[11px] font-semibold tracking-wide text-alloy-forge/55">
                                                             Status mappings
                                                         </div>
                                                         {statusOptionsOpp.length === 0 ? (
@@ -926,7 +926,7 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
                                         </button>
 
                                         <div className="rounded-md border border-admin-border/60 bg-white px-2.5 py-2">
-                                            <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/55">
+                                            <div className="text-[11px] font-semibold tracking-wide text-alloy-forge/55">
                                                 Excluded statuses (intentional)
                                             </div>
                                             <div className="mt-1 grid grid-cols-2 md:grid-cols-3 gap-1">
@@ -957,7 +957,7 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
                                 )}
                             </div>
                             <div className="rounded-lg border border-admin-border/60 bg-white/70 px-3 py-2">
-                                <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/55">
+                                <div className="text-[11px] font-semibold tracking-wide text-alloy-forge/55">
                                     Queue buckets (read-only summary)
                                 </div>
                                 {!modalQueueBuckets.ok ? (
@@ -999,7 +999,7 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
                                                 ))}
                                             </div>
                                             <div className="mt-2 rounded-md border border-admin-border/50 bg-white/60 px-2.5 py-2">
-                                                <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/55">
+                                                <div className="text-[11px] font-semibold tracking-wide text-alloy-forge/55">
                                                     Status filters by bucket
                                                 </div>
                                                 <div className="mt-1 space-y-1">

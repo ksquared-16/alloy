@@ -20,7 +20,7 @@ export function ContextBlock({
                     color: "var(--d-muted)",
                 }}
             >
-                <h2 className="text-xs font-bold uppercase tracking-wide" style={{ color: "var(--d-text-primary)" }}>
+                <h2 className="text-xs font-bold tracking-wide" style={{ color: "var(--d-text-primary)" }}>
                     {block.title ?? "Context"}
                 </h2>
                 <div className="mt-2 space-y-2 leading-relaxed">

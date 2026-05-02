@@ -73,7 +73,7 @@ function Group({
 }) {
     return (
         <div className={`space-y-2 border-l-2 pl-3 ${accentClass}`}>
-            <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-alloy-midnight/50">{label}</h3>
+            <h3 className="text-[10px] font-semibold tracking-[0.14em] text-alloy-midnight/50">{label}</h3>
             {children}
         </div>
     );
@@ -166,7 +166,7 @@ export default function AdminV2SettingsIndexPage() {
             </div>
 
             <footer className="border-t border-alloy-forge/10 pt-2.5">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-alloy-midnight/35">Later</p>
+                <p className="text-[10px] font-semibold tracking-[0.14em] text-alloy-midnight/35">Later</p>
                 <div className="mt-1 flex flex-wrap gap-x-5 gap-y-0.5 text-[10px] text-alloy-midnight/40">
                     <span>Automation</span>
                     <span>Financial configuration</span>

@@ -23,7 +23,7 @@ export default function CustomerPersonRolesClient({
     adminV2Chrome?: boolean;
     /** When true with adminV2Chrome, skip page header (parent Settings page provides it). */
     omitOuterHeader?: boolean;
-    /** With omitOuterHeader + adminV2Chrome: hide the small uppercase section title (e.g. when tabs label the panel). */
+    /** With omitOuterHeader + adminV2Chrome: hide the small section title (e.g. when tabs label the panel). */
     hideEyebrowTitle?: boolean;
 } = {}) {
     const { canMutate } = useAdminAuth();
@@ -183,7 +183,7 @@ export default function CustomerPersonRolesClient({
                 ) : null
             ) : (
                 <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
-                    <h3 className="text-[10px] font-semibold uppercase tracking-[0.14em] text-alloy-midnight/50">Family / person roles</h3>
+                    <h3 className="text-[10px] font-semibold tracking-[0.14em] text-alloy-midnight/50">Family / person roles</h3>
                     {addRoleBtn}
                 </div>
             )

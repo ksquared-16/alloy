@@ -240,7 +240,7 @@ export default function DataTable<T extends Record<string, any>>({
                                     <th
                                         key={String(column.key)}
                                         className={`
-                                            px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-alloy-forge
+                                            px-5 py-3.5 text-left text-xs font-semibold tracking-wider text-alloy-forge
                                             ${isSorted ? "text-alloy-pine" : ""}
                                             ${column.sortable ? "cursor-pointer select-none hover:bg-alloy-pine/5" : ""}
                                         `}

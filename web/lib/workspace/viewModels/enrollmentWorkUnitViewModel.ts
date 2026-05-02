@@ -5,7 +5,9 @@ import type {
     QueueItemQuickActionVm,
     QueueItemVm,
 } from "@/lib/ui-v2/workspace-types";
+import { formatPhoneUS } from "@/lib/adminFormatters";
 import { formatOpportunityQueueNotesPreview } from "@/lib/admin/opportunityActivityTimelineFormat";
+import { normalizePhone } from "@/lib/contactNormalize";
 import { formatWorkspaceUsdGrouped } from "@/lib/ui-v2/formatWorkspaceCurrency";
 import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
 
@@ -139,8 +141,8 @@ function crmContactQuickActions(row: OppRow): QueueItemQuickActionVm[] {
         out.push({ id: "crm_mailto", label: "Email", payload: { href: `mailto:${email}` } });
     }
     if (cap.phoneTel && phone) {
-        const digits = phone.replace(/\D/g, "");
-        out.push({ id: "crm_tel", label: "Call", payload: { href: `tel:${digits}` } });
+        const tel = normalizePhone(phone) ?? `+1${phone.replace(/\D/g, "").slice(-10)}`;
+        out.push({ id: "crm_tel", label: "Call", payload: { href: `tel:${tel}` } });
     }
     return out;
 }
@@ -188,7 +190,11 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow): CrmCompactRowSe
     const contactLine = (row as { _primary_contact_line?: string | null })._primary_contact_line?.trim() || "";
     const email = ((row as { _primary_email?: string | null })._primary_email ?? "").trim();
     const phone = ((row as { _primary_phone?: string | null })._primary_phone ?? "").trim();
-    const contactSnippet = [contactLine, phone, email].filter(Boolean).join(" · ") || null;
+    const phoneFmt = phone ? formatPhoneUS(phone) : "";
+    const contactSnippet =
+        contactLine ||
+        [phoneFmt && phoneFmt !== "—" ? phoneFmt : "", email].filter(Boolean).join(" · ") ||
+        null;
 
     const programContext = (row as { _requested_program?: string | null })._requested_program?.trim() || null;
     const roomContext = (row as { _room_label?: string | null })._room_label?.trim() || null;

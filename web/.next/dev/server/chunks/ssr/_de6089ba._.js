@@ -775,7 +775,7 @@ function Sidebar({ collapsed, onToggle }) {
                 },
                 children: [
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                        className: "pt-1 font-semibold text-[11px] uppercase tracking-wide",
+                        className: "pt-1 font-semibold text-[11px] tracking-wide",
                         style: {
                             color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["neutral"].textSecondary
                         },
@@ -849,7 +849,7 @@ function Sidebar({ collapsed, onToggle }) {
                         className: "pt-2",
                         children: [
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                                className: "mb-1 flex items-center justify-between px-2 text-[11px] font-semibold uppercase tracking-wide",
+                                className: "mb-1 flex items-center justify-between px-2 text-[11px] font-semibold tracking-wide",
                                 style: {
                                     color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["neutral"].textSecondary
                                 },
@@ -1831,7 +1831,7 @@ function sectionTitle(text, accent) {
             fontSize: 10,
             fontWeight: 700,
             color: accent ?? __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["derived"].inspectorSectionMuted,
-            textTransform: "uppercase",
+            textTransform: "none",
             letterSpacing: "0.1em",
             marginBottom: 12,
             marginTop: 0
@@ -1923,7 +1923,7 @@ function NextStepBlock({ departmentName, nextBestAction }) {
                     fontSize: 10,
                     fontWeight: 700,
                     color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["brand"].primary,
-                    textTransform: "uppercase",
+                    textTransform: "none",
                     letterSpacing: "0.08em",
                     marginBottom: 6
                 },
@@ -2237,7 +2237,7 @@ function DepartmentInspector({ departmentKey }) {
                                 style: {
                                     fontSize: 9,
                                     color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["derived"].inspectorSectionMuted,
-                                    textTransform: "uppercase",
+                                    textTransform: "none",
                                     letterSpacing: "0.06em",
                                     marginBottom: 6
                                 },
@@ -2480,7 +2480,7 @@ function AICommandBar() {
                     columnNumber: 9
                 }, this),
                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
-                    className: "text-[11px] font-bold shrink-0 uppercase tracking-widest px-3 py-2 rounded-lg text-white",
+                    className: "text-[11px] font-bold shrink-0 tracking-widest px-3 py-2 rounded-lg text-white",
                     style: {
                         backgroundColor: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["brand"].secondary,
                         letterSpacing: "0.14em",
@@ -4324,7 +4324,7 @@ function AiActivityDetailPanel(props) {
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                         children: [
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("dt", {
-                                className: "font-semibold uppercase tracking-wide",
+                                className: "font-semibold tracking-wide",
                                 style: {
                                     color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["derived"].inspectorSectionMuted
                                 },
@@ -4351,7 +4351,7 @@ function AiActivityDetailPanel(props) {
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                         children: [
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("dt", {
-                                className: "font-semibold uppercase tracking-wide",
+                                className: "font-semibold tracking-wide",
                                 style: {
                                     color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["derived"].inspectorSectionMuted
                                 },
@@ -4384,7 +4384,7 @@ function AiActivityDetailPanel(props) {
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                         children: [
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("dt", {
-                                className: "font-semibold uppercase tracking-wide",
+                                className: "font-semibold tracking-wide",
                                 style: {
                                     color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["derived"].inspectorSectionMuted
                                 },
@@ -4416,7 +4416,7 @@ function AiActivityDetailPanel(props) {
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                         children: [
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("dt", {
-                                className: "font-semibold uppercase tracking-wide",
+                                className: "font-semibold tracking-wide",
                                 style: {
                                     color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["derived"].inspectorSectionMuted
                                 },
@@ -4744,7 +4744,7 @@ function RecentAiActionsStrip() {
                         className: "mb-1 flex items-center justify-between gap-2",
                         children: [
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
-                                className: "text-[10px] font-bold uppercase tracking-wider",
+                                className: "text-[10px] font-bold tracking-wider",
                                 style: {
                                     color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["derived"].inspectorSectionMuted
                                 },
@@ -5062,7 +5062,7 @@ function OutcomeZone(props) {
                 },
                 children: [
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
-                        className: "font-semibold uppercase tracking-wide text-[10px]",
+                        className: "font-semibold tracking-wide text-[10px]",
                         style: {
                             color: CMD.textLabel
                         },
@@ -5108,7 +5108,7 @@ function AIActionsRow(props) {
                 type: "button",
                 disabled: !canApply || applying,
                 onClick: onApply,
-                className: "rounded-md px-3.5 py-2 text-[12px] font-bold uppercase tracking-wide disabled:opacity-45 disabled:cursor-not-allowed",
+                className: "rounded-md px-3.5 py-2 text-[12px] font-bold tracking-wide disabled:opacity-45 disabled:cursor-not-allowed",
                 style: {
                     backgroundColor: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["brand"].secondary,
                     color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["neutral"].surface,
@@ -5304,7 +5304,6 @@ function AdvancedDrawer(props) {
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                         "aria-hidden": true,
-                        className: "uppercase",
                         children: open ? "Hide" : "Show"
                     }, void 0, false, {
                         fileName: "[project]/app/adminV2/components/aiCommandSurface/AICommandSurfaceShell.tsx",
@@ -5862,7 +5861,7 @@ function AICommandSurfaceShell() {
                         type: "button",
                         disabled: busy || !commandText.trim(),
                         onClick: ()=>void runPreview(),
-                        className: "shrink-0 rounded-xl px-3.5 py-2.5 text-xs font-bold uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed",
+                        className: "shrink-0 rounded-xl px-3.5 py-2.5 text-xs font-bold tracking-widest disabled:opacity-50 disabled:cursor-not-allowed",
                         style: {
                             backgroundColor: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["brand"].secondary,
                             color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["neutral"].surface,
@@ -6013,7 +6012,7 @@ function KPIStatCard({ label, value, delta, trend = "neutral", variant = "ai" })
                     color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["derived"].textSecondary,
                     marginBottom: 8,
                     fontWeight: 600,
-                    textTransform: "uppercase",
+                    textTransform: "none",
                     letterSpacing: "0.06em"
                 },
                 children: label
@@ -6395,7 +6394,7 @@ function KPIBand({ scope }) {
                             fontSize: 10,
                             fontWeight: 700,
                             color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["brand"].secondary,
-                            textTransform: "uppercase",
+                            textTransform: "none",
                             letterSpacing: "0.11em",
                             marginBottom: 12,
                             flexShrink: 0
@@ -6460,7 +6459,7 @@ function KPIBand({ scope }) {
                             fontSize: 10,
                             fontWeight: 700,
                             color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["brand"].primary,
-                            textTransform: "uppercase",
+                            textTransform: "none",
                             letterSpacing: "0.11em",
                             marginBottom: 12,
                             flexShrink: 0
@@ -7063,7 +7062,7 @@ function SystemTileContent({ data, quickActions, id, onQuickActionClick, fill })
                             style: {
                                 fontSize: 10,
                                 fontWeight: 700,
-                                textTransform: "uppercase",
+                                textTransform: "none",
                                 letterSpacing: "0.06em",
                                 color: HEALTH_COLOR[data.health]
                             },
@@ -7500,7 +7499,7 @@ function ActionPanelNodeComponent({ data }) {
                             fontSize: 11,
                             fontWeight: 700,
                             color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["derived"].textSecondary,
-                            textTransform: "uppercase",
+                            textTransform: "none",
                             letterSpacing: "0.06em",
                             marginBottom: 8
                         },
@@ -7714,7 +7713,7 @@ function ManagerNodeComponent({ data, selected }) {
                                 style: {
                                     fontSize: 10,
                                     color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["derived"].textSecondary,
-                                    textTransform: "uppercase",
+                                    textTransform: "none",
                                     letterSpacing: "0.06em",
                                     marginBottom: 4
                                 },
@@ -7749,7 +7748,7 @@ function ManagerNodeComponent({ data, selected }) {
                                 style: {
                                     fontSize: 10,
                                     color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["derived"].textSecondary,
-                                    textTransform: "uppercase",
+                                    textTransform: "none",
                                     letterSpacing: "0.06em",
                                     marginBottom: 4
                                 },
@@ -11639,7 +11638,7 @@ function SystemCanvas({ zoomLevel, selectedDepartmentKey, selectedNodeId, onDepa
                                                         fontSize: 10,
                                                         fontWeight: 700,
                                                         color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["derived"].textSecondary,
-                                                        textTransform: "uppercase",
+                                                        textTransform: "none",
                                                         letterSpacing: "0.08em"
                                                     },
                                                     children: "Overview"
@@ -12107,7 +12106,7 @@ function RecordsPanel({ scope, title, embedded }) {
                     fontSize: 12,
                     fontWeight: 600,
                     color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["derived"].textSecondary,
-                    textTransform: "uppercase",
+                    textTransform: "none",
                     letterSpacing: "0.02em"
                 },
                 children: displayTitle

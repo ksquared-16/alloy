@@ -156,7 +156,7 @@ function WorkspaceChrome({ breadcrumbs, title, subtitle, variant = "default", ch
             variant !== "bridge" ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("header", {
                 children: [
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                        className: "text-xs font-semibold uppercase tracking-wide text-alloy-forge/70",
+                        className: "text-xs font-semibold tracking-wide text-alloy-forge/70",
                         children: "Workspace (V2 slice)"
                     }, void 0, false, {
                         fileName: "[project]/components/admin/workspace/WorkspaceChrome.tsx",
@@ -3804,7 +3804,11 @@ function AdminV2WorkspaceDepartmentPage() {
     const [deptQueueSummariesLoading, setDeptQueueSummariesLoading] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useState"])(false);
     const [deptQueueSummariesError, setDeptQueueSummariesError] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useState"])(null);
     const [deptSummariesWaitTimedOut, setDeptSummariesWaitTimedOut] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useState"])(false);
-    /** `undefined` = use baseline strip (placement fetch pending/failed); otherwise resolver output after successful placement fetch. */ const [deptPlacementStrip, setDeptPlacementStrip] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useState"])(undefined);
+    /**
+     * `undefined` = placement config not loaded yet → baseline strip.
+     * When loaded, resolver output is derived in `kpis` (summaries may still update without refetching placement).
+     */ const [deptPlacementRows, setDeptPlacementRows] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useState"])(undefined);
+    const [deptScopeHasPlacements, setDeptScopeHasPlacements] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useState"])(false);
     const [workflowKpis, setWorkflowKpis] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useState"])(DEFAULT_WF_KPIS);
     const [workflowKpisLoading, setWorkflowKpisLoading] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useState"])(true);
     const [workflowsSummary, setWorkflowsSummary] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useState"])(null);
@@ -3930,8 +3934,8 @@ function AdminV2WorkspaceDepartmentPage() {
         void (async ()=>{
             try {
                 const init = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$workspace$2f$workspaceDataFetch$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["workspaceDataFetchInit"])();
-                // Match work-unit queue badges: exact head counts (not PostgreSQL planned estimates).
-                const route = `/api/admin/departments/${encodeURIComponent(departmentId)}/work-unit-queue-summaries?include_previews=false&count_mode=exact`;
+                // Planned counts for department rollup cards (align with work-unit summary strategy).
+                const route = `/api/admin/departments/${encodeURIComponent(departmentId)}/work-unit-queue-summaries?include_previews=false&count_mode=planned`;
                 const res = await fetch(route, init);
                 const j = await res.json().catch(()=>({}));
                 if (cancelled) return;
@@ -3980,12 +3984,9 @@ function AdminV2WorkspaceDepartmentPage() {
         deptWorkUnits
     ]);
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useEffect"])(()=>{
-        setDeptPlacementStrip(undefined);
-    }, [
-        departmentId
-    ]);
-    (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useEffect"])(()=>{
         if (!departmentId) return;
+        setDeptPlacementRows(undefined);
+        setDeptScopeHasPlacements(false);
         let cancelled = false;
         const init = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$workspace$2f$workspaceDataFetch$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["workspaceDataFetchInit"])();
         void (async ()=>{
@@ -3995,35 +3996,24 @@ function AdminV2WorkspaceDepartmentPage() {
                     cache: "no-store"
                 });
                 if (!res.ok) {
-                    if (!cancelled) setDeptPlacementStrip(undefined);
+                    if (!cancelled) setDeptPlacementRows(undefined);
                     return;
                 }
                 const j = await res.json().catch(()=>({}));
                 if (cancelled) return;
-                const wuList = deptWorkUnits ?? [];
-                const { items } = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$kpi$2f$resolver$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["resolveKpisForDepartment"])({
-                    placementRows: j.items ?? [],
-                    scopeHasPlacementRows: j.scope_has_placements === true,
-                    departmentSurface: "department",
-                    deptWorkUnits: wuList,
-                    deptWorkUnitSummaries,
-                    deptQueueSummariesLoading,
-                    deptQueueSummariesError
-                });
-                if (!cancelled) setDeptPlacementStrip(items);
+                if (!cancelled) {
+                    setDeptPlacementRows(j.items ?? []);
+                    setDeptScopeHasPlacements(j.scope_has_placements === true);
+                }
             } catch  {
-                if (!cancelled) setDeptPlacementStrip(undefined);
+                if (!cancelled) setDeptPlacementRows(undefined);
             }
         })();
         return ()=>{
             cancelled = true;
         };
     }, [
-        departmentId,
-        deptWorkUnits,
-        deptWorkUnitSummaries,
-        deptQueueSummariesLoading,
-        deptQueueSummariesError
+        departmentId
     ]);
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useEffect"])(()=>{
         if (!deptQueueSummariesLoading) {
@@ -4089,15 +4079,27 @@ function AdminV2WorkspaceDepartmentPage() {
         enrollmentDeptRightRail
     ]);
     const kpis = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useMemo"])(()=>{
-        if (deptPlacementStrip !== undefined) return deptPlacementStrip;
-        return (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$kpi$2f$baseline$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["buildDefaultDepartmentKpis"])({
-            deptWorkUnits: deptWorkUnits ?? [],
+        const wuList = deptWorkUnits ?? [];
+        if (deptPlacementRows === undefined) {
+            return (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$kpi$2f$baseline$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["buildDefaultDepartmentKpis"])({
+                deptWorkUnits: wuList,
+                deptWorkUnitSummaries,
+                deptQueueSummariesLoading,
+                deptQueueSummariesError
+            });
+        }
+        return (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$kpi$2f$resolver$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["resolveKpisForDepartment"])({
+            placementRows: deptPlacementRows,
+            scopeHasPlacementRows: deptScopeHasPlacements,
+            departmentSurface: "department",
+            deptWorkUnits: wuList,
             deptWorkUnitSummaries,
             deptQueueSummariesLoading,
             deptQueueSummariesError
-        });
+        }).items;
     }, [
-        deptPlacementStrip,
+        deptPlacementRows,
+        deptScopeHasPlacements,
         deptQueueSummariesError,
         deptQueueSummariesLoading,
         deptWorkUnitSummaries,
@@ -4172,12 +4174,12 @@ function AdminV2WorkspaceDepartmentPage() {
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                                lineNumber: 453,
+                                lineNumber: 460,
                                 columnNumber: 29
                             }, this)
                         }, void 0, false, {
                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                            lineNumber: 452,
+                            lineNumber: 459,
                             columnNumber: 25
                         }, this) : null,
                         (deptWorkUnits ?? []).map((wu)=>{
@@ -4200,7 +4202,7 @@ function AdminV2WorkspaceDepartmentPage() {
                                                     children: wu.name?.trim() || "Work unit"
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                                                    lineNumber: 470,
+                                                    lineNumber: 477,
                                                     columnNumber: 41
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4216,7 +4218,7 @@ function AdminV2WorkspaceDepartmentPage() {
                                                                     children: "Total"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                                                                    lineNumber: 478,
+                                                                    lineNumber: 485,
                                                                     columnNumber: 49
                                                                 }, this),
                                                                 " ",
@@ -4225,13 +4227,13 @@ function AdminV2WorkspaceDepartmentPage() {
                                                                     children: total ?? "—"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                                                                    lineNumber: 479,
+                                                                    lineNumber: 486,
                                                                     columnNumber: 49
                                                                 }, this)
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                                                            lineNumber: 477,
+                                                            lineNumber: 484,
                                                             columnNumber: 45
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4242,7 +4244,7 @@ function AdminV2WorkspaceDepartmentPage() {
                                                                     children: "Needs attention"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                                                                    lineNumber: 482,
+                                                                    lineNumber: 489,
                                                                     columnNumber: 49
                                                                 }, this),
                                                                 " ",
@@ -4251,25 +4253,25 @@ function AdminV2WorkspaceDepartmentPage() {
                                                                     children: needs ?? "—"
                                                                 }, void 0, false, {
                                                                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                                                                    lineNumber: 485,
+                                                                    lineNumber: 492,
                                                                     columnNumber: 49
                                                                 }, this)
                                                             ]
                                                         }, void 0, true, {
                                                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                                                            lineNumber: 481,
+                                                            lineNumber: 488,
                                                             columnNumber: 45
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                                                    lineNumber: 473,
+                                                    lineNumber: 480,
                                                     columnNumber: 41
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                                            lineNumber: 469,
+                                            lineNumber: 476,
                                             columnNumber: 37
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4279,35 +4281,35 @@ function AdminV2WorkspaceDepartmentPage() {
                                                 children: "Open"
                                             }, void 0, false, {
                                                 fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                                                lineNumber: 490,
+                                                lineNumber: 497,
                                                 columnNumber: 41
                                             }, this)
                                         }, void 0, false, {
                                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                                            lineNumber: 489,
+                                            lineNumber: 496,
                                             columnNumber: 37
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                                    lineNumber: 464,
+                                    lineNumber: 471,
                                     columnNumber: 33
                                 }, this)
                             }, `wu:${wu.id}`, false, {
                                 fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                                lineNumber: 463,
+                                lineNumber: 470,
                                 columnNumber: 29
                             }, this);
                         })
                     ]
                 }, void 0, true, {
                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                    lineNumber: 450,
+                    lineNumber: 457,
                     columnNumber: 17
                 }, this)
             }, void 0, false, {
                 fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                lineNumber: 449,
+                lineNumber: 456,
                 columnNumber: 13
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$admin$2f$workspace$2f$WorkspacePairedOperPanels$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["WorkspacePairedOperPanel"], {
@@ -4334,7 +4336,7 @@ function AdminV2WorkspaceDepartmentPage() {
                                             children: "Needs attention"
                                         }, void 0, false, {
                                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                                            lineNumber: 514,
+                                            lineNumber: 521,
                                             columnNumber: 33
                                         }, this),
                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4350,7 +4352,7 @@ function AdminV2WorkspaceDepartmentPage() {
                                                             children: "Total"
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                                                            lineNumber: 522,
+                                                            lineNumber: 529,
                                                             columnNumber: 41
                                                         }, this),
                                                         " ",
@@ -4359,13 +4361,13 @@ function AdminV2WorkspaceDepartmentPage() {
                                                             children: needsAttentionSummary.total ?? "—"
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                                                            lineNumber: 523,
+                                                            lineNumber: 530,
                                                             columnNumber: 41
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                                                    lineNumber: 521,
+                                                    lineNumber: 528,
                                                     columnNumber: 37
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4376,7 +4378,7 @@ function AdminV2WorkspaceDepartmentPage() {
                                                             children: "Needs attention"
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                                                            lineNumber: 526,
+                                                            lineNumber: 533,
                                                             columnNumber: 41
                                                         }, this),
                                                         " ",
@@ -4385,25 +4387,25 @@ function AdminV2WorkspaceDepartmentPage() {
                                                             children: needsAttentionSummary.total ?? "—"
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                                                            lineNumber: 529,
+                                                            lineNumber: 536,
                                                             columnNumber: 41
                                                         }, this)
                                                     ]
                                                 }, void 0, true, {
                                                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                                                    lineNumber: 525,
+                                                    lineNumber: 532,
                                                     columnNumber: 37
                                                 }, this)
                                             ]
                                         }, void 0, true, {
                                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                                            lineNumber: 517,
+                                            lineNumber: 524,
                                             columnNumber: 33
                                         }, this)
                                     ]
                                 }, void 0, true, {
                                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                                    lineNumber: 513,
+                                    lineNumber: 520,
                                     columnNumber: 29
                                 }, this),
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4413,39 +4415,39 @@ function AdminV2WorkspaceDepartmentPage() {
                                         children: "Open"
                                     }, void 0, false, {
                                         fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                                        lineNumber: 534,
+                                        lineNumber: 541,
                                         columnNumber: 33
                                     }, this)
                                 }, void 0, false, {
                                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                                    lineNumber: 533,
+                                    lineNumber: 540,
                                     columnNumber: 29
                                 }, this)
                             ]
                         }, void 0, true, {
                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                            lineNumber: 508,
+                            lineNumber: 515,
                             columnNumber: 25
                         }, this)
                     }, void 0, false, {
                         fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                        lineNumber: 507,
+                        lineNumber: 514,
                         columnNumber: 21
                     }, this)
                 }, void 0, false, {
                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                    lineNumber: 506,
+                    lineNumber: 513,
                     columnNumber: 17
                 }, this)
             }, void 0, false, {
                 fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                lineNumber: 500,
+                lineNumber: 507,
                 columnNumber: 13
             }, this)
         ]
     }, void 0, true, {
         fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-        lineNumber: 448,
+        lineNumber: 455,
         columnNumber: 9
     }, this);
     if (deptLoading) {
@@ -4466,12 +4468,12 @@ function AdminV2WorkspaceDepartmentPage() {
                 variant: "department"
             }, void 0, false, {
                 fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                lineNumber: 554,
+                lineNumber: 561,
                 columnNumber: 17
             }, this)
         }, void 0, false, {
             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-            lineNumber: 545,
+            lineNumber: 552,
             columnNumber: 13
         }, this);
     }
@@ -4494,7 +4496,7 @@ function AdminV2WorkspaceDepartmentPage() {
                 label: "Loading queue summaries"
             }, void 0, false, {
                 fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                lineNumber: 570,
+                lineNumber: 577,
                 columnNumber: 17
             }, this) : null,
             deptWorkUnitsError && dept ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -4502,7 +4504,7 @@ function AdminV2WorkspaceDepartmentPage() {
                 children: deptWorkUnitsError
             }, void 0, false, {
                 fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                lineNumber: 572,
+                lineNumber: 579,
                 columnNumber: 43
             }, this) : null,
             deptQueueSummariesError && dept ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -4510,7 +4512,7 @@ function AdminV2WorkspaceDepartmentPage() {
                 children: deptQueueSummariesError
             }, void 0, false, {
                 fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                lineNumber: 573,
+                lineNumber: 580,
                 columnNumber: 48
             }, this) : null,
             !dept ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -4521,7 +4523,7 @@ function AdminV2WorkspaceDepartmentPage() {
                 children: deptError ?? "This department could not be loaded. Use the workspace link above to pick another department."
             }, void 0, false, {
                 fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                lineNumber: 575,
+                lineNumber: 582,
                 columnNumber: 17
             }, this) : primaryWorkUnit ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$admin$2f$workspace$2f$DepartmentWorkspaceBridgeShell$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["DepartmentWorkspaceBridgeShell"], {
                 departmentKey: deptKey,
@@ -4533,7 +4535,7 @@ function AdminV2WorkspaceDepartmentPage() {
                     maxVisible: 5
                 }, void 0, false, {
                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                    lineNumber: 588,
+                    lineNumber: 595,
                     columnNumber: 44
                 }, void 0) : null,
                 throughputSlot: throughputPairedPanels,
@@ -4554,12 +4556,12 @@ function AdminV2WorkspaceDepartmentPage() {
                         href: "/adminV2/workflows"
                     }, void 0, false, {
                         fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                        lineNumber: 596,
+                        lineNumber: 603,
                         columnNumber: 29
                     }, void 0)
                 }, void 0, false, {
                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                    lineNumber: 592,
+                    lineNumber: 599,
                     columnNumber: 25
                 }, void 0),
                 railSlot: deptKey === "enrollment" && (enrollmentDepartmentRailModel?.systemActions?.length ?? 0) > 0 ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$app$2f$adminV2$2f$components$2f$workspace$2f$blocks$2f$ActionsBlock$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["default"], {
@@ -4569,12 +4571,12 @@ function AdminV2WorkspaceDepartmentPage() {
                     surface: "department"
                 }, void 0, false, {
                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                    lineNumber: 613,
+                    lineNumber: 620,
                     columnNumber: 29
                 }, void 0) : null
             }, void 0, false, {
                 fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                lineNumber: 583,
+                lineNumber: 590,
                 columnNumber: 17
             }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                 className: "rounded-xl border px-4 py-10 text-center text-sm text-alloy-midnight/55",
@@ -4584,13 +4586,13 @@ function AdminV2WorkspaceDepartmentPage() {
                 children: "No configured Work Unit UI was found for this department."
             }, void 0, false, {
                 fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-                lineNumber: 623,
+                lineNumber: 630,
                 columnNumber: 17
             }, this)
         ]
     }, void 0, true, {
         fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/page.tsx",
-        lineNumber: 560,
+        lineNumber: 567,
         columnNumber: 9
     }, this);
 }

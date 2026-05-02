@@ -29,6 +29,7 @@ import {
     Users,
 } from "lucide-react";
 import { AdminAuthProvider } from "@/contexts/AdminAuthContext";
+import { AdminViewerTimezoneProvider, type AdminViewerTimezoneValue } from "@/contexts/AdminViewerTimezoneContext";
 import { AdminDrawerProvider } from "@/contexts/AdminDrawerContext";
 import AdminEntityDrawer from "@/components/admin/AdminEntityDrawer";
 import { AdminVerticalProvider, useAdminVertical } from "@/contexts/AdminVerticalContext";
@@ -261,6 +262,7 @@ interface AdminLayoutProps {
     userEmail: string;
     role: string;
     initialEntityLabels?: EntityLabelsMap;
+    initialViewerTimezone?: AdminViewerTimezoneValue;
 }
 
 function navLinkLabel(link: NavLink, labels: EntityLabelsMap, labelsLoading: boolean): string {
@@ -536,7 +538,7 @@ function AdminLayoutInner({ children, userEmail, role }: Omit<AdminLayoutProps, 
                                     <button
                                         type="button"
                                         onClick={() => toggleGroup(group.label)}
-                                        className="flex items-center justify-between w-full px-3 py-2 text-xs font-semibold uppercase tracking-wider text-alloy-midnight hover:bg-alloy-stone/50 rounded-md gap-2"
+                                        className="flex items-center justify-between w-full px-3 py-2 text-xs font-semibold tracking-wider text-alloy-midnight hover:bg-alloy-stone/50 rounded-md gap-2"
                                     >
                                         <span className="flex items-center gap-2">
                                             {GroupIcon && <GroupIcon className={iconClassSidebar} />}
@@ -623,16 +625,22 @@ function AdminLayoutInner({ children, userEmail, role }: Omit<AdminLayoutProps, 
 }
 
 export default function AdminLayout(props: AdminLayoutProps) {
-    const { initialEntityLabels, userEmail, role, children } = props;
+    const { initialEntityLabels, userEmail, role, children, initialViewerTimezone } = props;
     const safeEmail = typeof userEmail === "string" && userEmail.length > 0 ? userEmail : "Unknown";
     const safeRole = typeof role === "string" ? role : "";
+    const tzValue: AdminViewerTimezoneValue = initialViewerTimezone ?? {
+        iana: "UTC",
+        source: "utc_fallback",
+    };
     return (
         <AdminAuthProvider userEmail={safeEmail} role={safeRole}>
             <AdminVerticalProvider>
                 <EntityLabelsProvider initialLabels={initialEntityLabels}>
-                    <AdminLayoutInner userEmail={safeEmail} role={safeRole}>
-                        {children}
-                    </AdminLayoutInner>
+                    <AdminViewerTimezoneProvider value={tzValue}>
+                        <AdminLayoutInner userEmail={safeEmail} role={safeRole}>
+                            {children}
+                        </AdminLayoutInner>
+                    </AdminViewerTimezoneProvider>
                 </EntityLabelsProvider>
             </AdminVerticalProvider>
         </AdminAuthProvider>

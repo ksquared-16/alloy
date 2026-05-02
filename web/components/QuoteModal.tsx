@@ -254,7 +254,7 @@ export default function QuoteModal({
                         className="w-12 h-12 object-contain"
                       />
                     </div>
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-alloy-juniper mb-2 inline-block">
+                    <span className="text-[11px] font-semibold tracking-wider text-alloy-juniper mb-2 inline-block">
                       Available now
                     </span>
                     <h3 className="text-xl font-bold text-alloy-pine mb-2 tracking-tight">
@@ -289,7 +289,7 @@ export default function QuoteModal({
                         className="w-12 h-12 object-contain"
                       />
                     </div>
-                    <span className="text-[11px] font-semibold uppercase tracking-wider text-alloy-muted mb-2 inline-block">
+                    <span className="text-[11px] font-semibold tracking-wider text-alloy-muted mb-2 inline-block">
                       Early access
                     </span>
                     <h3 className="text-xl font-bold text-alloy-pine mb-2 tracking-tight">

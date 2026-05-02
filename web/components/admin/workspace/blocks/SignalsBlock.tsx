@@ -57,7 +57,7 @@ export function SignalsBlock({
                         <li key={s.id} className="text-sm text-alloy-forge/90 flex justify-between gap-4">
                             <span>
                                 {s.eyebrow ? (
-                                    <span className="block text-[10px] font-semibold uppercase text-alloy-midnight/45">{s.eyebrow}</span>
+                                    <span className="block text-[10px] font-semibold text-alloy-midnight/45">{s.eyebrow}</span>
                                 ) : null}
                                 {s.label}
                             </span>

@@ -420,7 +420,7 @@ export default function AdminV2WorkflowsPage() {
                             className="rounded-xl border border-admin-border bg-white/90 px-3 py-2 shadow-sm"
                             style={{ borderColor: derived.border }}
                         >
-                            <div className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                            <div className="text-[10px] font-semibold tracking-wide text-alloy-midnight/45">
                                 {x.k}
                             </div>
                             <div className="mt-0.5 text-lg font-semibold text-alloy-midnight">
@@ -446,7 +446,7 @@ export default function AdminV2WorkflowsPage() {
                         <div className="mt-2 overflow-auto rounded-lg border border-alloy-stone/15">
                             <table className="w-full min-w-[860px] text-left text-sm">
                                 <thead className="border-b border-alloy-stone/15 bg-alloy-stone/[0.04]">
-                                    <tr className="text-[11px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/55">
+                                    <tr className="text-[11px] font-semibold tracking-[0.12em] text-alloy-midnight/55">
                                         <th className="px-3 py-2">Workflow</th>
                                         <th className="px-3 py-2">Enabled</th>
                                         <th className="px-3 py-2">Entity</th>
@@ -501,7 +501,7 @@ export default function AdminV2WorkflowsPage() {
                                                         <button
                                                             type="button"
                                                             onClick={() => openRun(last.id)}
-                                                            className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${statusBadgeClass(
+                                                            className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${statusBadgeClass(
                                                                 last.status,
                                                                 last.has_failed_action
                                                             )}`}
@@ -522,7 +522,7 @@ export default function AdminV2WorkflowsPage() {
                         </div>
 
                         <div className="mt-3">
-                            <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                            <div className="text-[11px] font-semibold tracking-wide text-alloy-midnight/45">
                                 Selected workflow (what it does)
                             </div>
                             {selectedWorkflowDetailLoading ? (
@@ -544,7 +544,7 @@ export default function AdminV2WorkflowsPage() {
                                             </div>
                                         </div>
                                         <span
-                                            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${
+                                            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
                                                 selectedWorkflowDetail.enabled === false
                                                     ? "bg-alloy-stone/15 text-alloy-midnight/60"
                                                     : "bg-alloy-pine/15 text-alloy-midnight"
@@ -556,7 +556,7 @@ export default function AdminV2WorkflowsPage() {
 
                                     <div className="mt-3 grid grid-cols-1 gap-3">
                                         <div>
-                                            <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                            <div className="text-[11px] font-semibold tracking-wide text-alloy-midnight/45">
                                                 Conditions
                                             </div>
                                             {(selectedWorkflowConditions ?? []).filter((c) => c.enabled !== false).length === 0 ? (
@@ -575,7 +575,7 @@ export default function AdminV2WorkflowsPage() {
                                             )}
                                         </div>
                                         <div>
-                                            <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                            <div className="text-[11px] font-semibold tracking-wide text-alloy-midnight/45">
                                                 Steps
                                             </div>
                                             {(selectedWorkflowActions ?? []).length === 0 ? (
@@ -620,7 +620,7 @@ export default function AdminV2WorkflowsPage() {
                                 <p className="mt-1 text-sm text-alloy-midnight/55">Select a workflow to inspect.</p>
                             )}
 
-                            <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                            <div className="text-[11px] font-semibold tracking-wide text-alloy-midnight/45">
                                 Recent runs (selected workflow)
                             </div>
                             {runsLoading ? <p className="mt-1 text-sm text-alloy-midnight/60">Loading…</p> : null}
@@ -640,7 +640,7 @@ export default function AdminV2WorkflowsPage() {
                                             {r.id}
                                         </span>
                                         <span
-                                            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${statusBadgeClass(
+                                            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${statusBadgeClass(
                                                 r.status,
                                                 r.has_failed_action
                                             )}`}
@@ -685,7 +685,7 @@ export default function AdminV2WorkflowsPage() {
                                 <div className="rounded-lg border border-alloy-stone/15 bg-white px-3 py-2">
                                     <div className="flex flex-wrap items-center justify-between gap-2">
                                         <div className="min-w-0">
-                                            <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                            <div className="text-[11px] font-semibold tracking-wide text-alloy-midnight/45">
                                                 Workflow
                                             </div>
                                             <div className="truncate text-sm font-semibold text-alloy-midnight">
@@ -693,7 +693,7 @@ export default function AdminV2WorkflowsPage() {
                                             </div>
                                         </div>
                                         <span
-                                            className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${statusBadgeClass(
+                                            className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${statusBadgeClass(
                                                 runDetail.status,
                                                 runDetail.has_failed_action
                                             )}`}
@@ -747,7 +747,7 @@ export default function AdminV2WorkflowsPage() {
                                 </div>
 
                                 <div>
-                                    <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                    <div className="text-[11px] font-semibold tracking-wide text-alloy-midnight/45">
                                         Action steps
                                     </div>
                                     {(runActionRuns ?? []).length === 0 ? (
@@ -768,7 +768,7 @@ export default function AdminV2WorkflowsPage() {
                                                             </div>
                                                         </div>
                                                         <span
-                                                            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase ${statusBadgeClass(
+                                                            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${statusBadgeClass(
                                                                 a.status
                                                             )}`}
                                                         >

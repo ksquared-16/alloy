@@ -188,7 +188,7 @@ export default function Sidebar({
                     className="flex flex-col flex-1 min-h-0 px-2 pb-3 gap-2 text-[13px] overflow-y-auto"
                     style={{ color: neutral.textSecondary }}
                 >
-                    <div className="pt-1 font-semibold text-[11px] uppercase tracking-wide" style={{ color: neutral.textSecondary }}>
+                    <div className="pt-1 font-semibold text-[11px] tracking-wide" style={{ color: neutral.textSecondary }}>
                         Navigate
                     </div>
                     <AdminV2NavLink
@@ -216,7 +216,7 @@ export default function Sidebar({
 
                     <div className="pt-2">
                         <div
-                            className="mb-1 flex items-center justify-between px-2 text-[11px] font-semibold uppercase tracking-wide"
+                            className="mb-1 flex items-center justify-between px-2 text-[11px] font-semibold tracking-wide"
                             style={{ color: neutral.textSecondary }}
                         >
                             <span>Departments</span>

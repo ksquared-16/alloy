@@ -47,7 +47,7 @@ export default function OpportunityLifecyclePanel({ record }: Props) {
         >
             <div className="flex flex-wrap items-start justify-between gap-2">
                 <div className="min-w-0">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/55">Lifecycle</p>
+                    <p className="text-[11px] font-semibold tracking-wide text-alloy-midnight/55">Lifecycle</p>
                     <div className="mt-1 flex flex-wrap items-center gap-2">
                         <span
                             className={`inline-flex items-center rounded-md border px-2 py-0.5 text-xs font-semibold ${stageBadgeClass(stage)}`}
@@ -66,7 +66,7 @@ export default function OpportunityLifecyclePanel({ record }: Props) {
             </div>
             {nextStep?.lines?.length ? (
                 <div className="mt-3 rounded-md border border-alloy-stone/25 bg-alloy-stone/10 px-2.5 py-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/55">
+                    <p className="text-[11px] font-semibold tracking-wide text-alloy-midnight/55">
                         {nextStep.title?.trim() || "Next step"}
                     </p>
                     <ul className="mt-1 list-disc pl-4 text-sm text-alloy-midnight/85 space-y-0.5">

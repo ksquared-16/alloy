@@ -12,9 +12,9 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist
 var _s = __turbopack_context__.k.signature();
 "use client";
 ;
-const SECTION_HEADER_CLASS = "rounded-t-md bg-alloy-stone/30 border-b border-admin-border px-3 py-2 mb-3 text-xs font-semibold uppercase tracking-wider text-alloy-forge";
+const SECTION_HEADER_CLASS = "rounded-t-md bg-alloy-stone/30 border-b border-admin-border px-3 py-2 mb-3 text-xs font-semibold tracking-wider text-alloy-forge";
 /** Pine accent — aligned with inquiry workflow snapshot header cards. */ const PREMIUM_SECTION = "rounded-lg border border-alloy-stone/20 border-l-[3px] border-l-[rgb(0,162,131)] bg-white/90 shadow-sm shadow-alloy-stone/10 ring-1 ring-alloy-stone/10 overflow-hidden";
-const PREMIUM_HEADER_STATIC = "border-b border-alloy-stone/15 bg-alloy-stone/[0.05] px-3 py-2.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-alloy-forge/80";
+const PREMIUM_HEADER_STATIC = "border-b border-alloy-stone/15 bg-alloy-stone/[0.05] px-3 py-2.5 text-[10px] font-semibold tracking-[0.1em] text-alloy-forge/80";
 function EntityDrawerSection({ config, children, headerRight, defaultExpanded, className = "", surface = "default" }) {
     _s();
     const isPremium = surface === "premium";
@@ -29,12 +29,12 @@ function EntityDrawerSection({ config, children, headerRight, defaultExpanded, c
         "data-section-surface": surface,
         children: [
             isCollapsible ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                className: isPremium ? "flex w-full min-w-0 items-stretch border-b border-alloy-stone/15 bg-alloy-stone/[0.05]" : `flex w-full min-w-0 items-stretch rounded-t-md bg-alloy-stone/30 border-b border-admin-border mb-3 text-xs font-semibold uppercase tracking-wider text-alloy-forge`,
+                className: isPremium ? "flex w-full min-w-0 items-stretch border-b border-alloy-stone/15 bg-alloy-stone/[0.05]" : `flex w-full min-w-0 items-stretch rounded-t-md bg-alloy-stone/30 border-b border-admin-border mb-3 text-xs font-semibold tracking-wider text-alloy-forge`,
                 children: [
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("button", {
                         type: "button",
                         onClick: ()=>setExpanded((e)=>!e),
-                        className: `entity-drawer-section-toggle flex min-h-0 min-w-0 flex-1 items-center justify-between gap-2 text-left transition-colors duration-150 ${isPremium ? "border-0 bg-transparent px-3 py-2.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-alloy-forge/80 hover:bg-alloy-stone/10" : "border-0 bg-transparent px-3 py-2 hover:bg-alloy-stone/25"}`,
+                        className: `entity-drawer-section-toggle flex min-h-0 min-w-0 flex-1 items-center justify-between gap-2 text-left transition-colors duration-150 ${isPremium ? "border-0 bg-transparent px-3 py-2.5 text-[10px] font-semibold tracking-[0.1em] text-alloy-forge/80 hover:bg-alloy-stone/10" : "border-0 bg-transparent px-3 py-2 hover:bg-alloy-stone/25"}`,
                         "aria-expanded": expanded,
                         children: [
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -139,7 +139,7 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist
 "use client";
 ;
 const LABEL_DEFAULT = "block text-xs font-medium text-alloy-midnight/80 mb-1";
-/** Schedule/job record snapshot rows — subtle label, emphasized value (aligned with JobRecordModalV2 snapshot cells). */ const LABEL_COMPACT = "block text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-forge/65 mb-0.5";
+/** Schedule/job record snapshot rows — subtle label, emphasized value (aligned with JobRecordModalV2 snapshot cells). */ const LABEL_COMPACT = "block text-[10px] font-semibold tracking-[0.08em] text-alloy-forge/65 mb-0.5";
 const VALUE_DEFAULT = "text-sm text-alloy-forge min-h-[2rem] flex items-center";
 const VALUE_COMPACT = "text-sm font-medium text-alloy-midnight/90 min-h-[1.375rem] flex items-center leading-snug";
 /** Schedule snapshot row tiers — aligns with JobRecordModalV2 snapshot rhythm */ const VALUE_COMPACT_PRIMARY = "text-[15px] font-semibold tracking-tight text-alloy-midnight min-h-[1.5rem] flex items-center leading-snug";
@@ -822,7 +822,7 @@ function EntityDrawerOverview({ entityType, data, customSectionContent = {}, cus
                 "data-schedule-flat-field": field.key,
                 children: [
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
-                        className: "mb-0.5 text-[8px] font-semibold uppercase tracking-[0.1em] text-alloy-forge/50",
+                        className: "mb-0.5 text-[8px] font-semibold tracking-[0.1em] text-alloy-forge/50",
                         children: field.label
                     }, void 0, false, {
                         fileName: "[project]/components/admin/entity/EntityDrawerOverview.tsx",
@@ -921,7 +921,7 @@ function EntityDrawerOverview({ entityType, data, customSectionContent = {}, cus
                             className: "rounded-lg border border-admin-border/40 bg-white px-2 py-1.5 shadow-sm sm:px-2.5 sm:py-2",
                             children: [
                                 block.title ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                    className: "mb-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-alloy-forge/60",
+                                    className: "mb-1.5 text-[9px] font-semibold tracking-[0.12em] text-alloy-forge/60",
                                     children: block.title
                                 }, void 0, false, {
                                     fileName: "[project]/components/admin/entity/EntityDrawerOverview.tsx",
@@ -934,7 +934,7 @@ function EntityDrawerOverview({ entityType, data, customSectionContent = {}, cus
                                             className: "flex flex-col gap-1.5 py-2 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:gap-3",
                                             children: [
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
-                                                    className: "shrink-0 pt-0.5 text-[8px] font-semibold uppercase tracking-[0.12em] text-alloy-forge/45 sm:w-[7.5rem]",
+                                                    className: "shrink-0 pt-0.5 text-[8px] font-semibold tracking-[0.12em] text-alloy-forge/45 sm:w-[7.5rem]",
                                                     children: group.label
                                                 }, void 0, false, {
                                                     fileName: "[project]/components/admin/entity/EntityDrawerOverview.tsx",
@@ -989,7 +989,7 @@ function EntityDrawerOverview({ entityType, data, customSectionContent = {}, cus
                                         className: "min-w-0",
                                         children: [
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
-                                                className: "mr-2 text-[8px] font-semibold uppercase tracking-[0.1em] text-alloy-forge/45",
+                                                className: "mr-2 text-[8px] font-semibold tracking-[0.1em] text-alloy-forge/45",
                                                 children: "Service"
                                             }, void 0, false, {
                                                 fileName: "[project]/components/admin/entity/EntityDrawerOverview.tsx",
@@ -1018,7 +1018,7 @@ function EntityDrawerOverview({ entityType, data, customSectionContent = {}, cus
                                         className: "min-w-0",
                                         children: [
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
-                                                className: "mr-2 text-[8px] font-semibold uppercase tracking-[0.1em] text-alloy-forge/45",
+                                                className: "mr-2 text-[8px] font-semibold tracking-[0.1em] text-alloy-forge/45",
                                                 children: "Price"
                                             }, void 0, false, {
                                                 fileName: "[project]/components/admin/entity/EntityDrawerOverview.tsx",
@@ -1063,7 +1063,7 @@ function EntityDrawerOverview({ entityType, data, customSectionContent = {}, cus
                 "data-schedule-layout-version": "1",
                 children: [
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                        className: "px-0.5 pb-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-alloy-forge/70",
+                        className: "px-0.5 pb-1.5 text-[9px] font-semibold tracking-[0.12em] text-alloy-forge/70",
                         children: "Visit details"
                     }, void 0, false, {
                         fileName: "[project]/components/admin/entity/EntityDrawerOverview.tsx",
@@ -1105,7 +1105,7 @@ function EntityDrawerOverview({ entityType, data, customSectionContent = {}, cus
                 const customContent = customSectionContent[section.key];
                 const headerRight = customSectionHeaderRight[section.key];
                 const gridInner = section.gridCols === 2 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1";
-                const subsectionTitleClass = sectionSurface === "premium" ? "text-[10px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/50 border-b border-alloy-stone/15 pb-1.5 mb-2.5" : "text-xs font-semibold uppercase tracking-wider text-alloy-forge/80 border-b border-admin-border pb-2 mb-3";
+                const subsectionTitleClass = sectionSurface === "premium" ? "text-[10px] font-semibold tracking-[0.1em] text-alloy-midnight/50 border-b border-alloy-stone/15 pb-1.5 mb-2.5" : "text-xs font-semibold tracking-wider text-alloy-forge/80 border-b border-admin-border pb-2 mb-3";
                 const children = customContent ?? (hasSubsections ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                     className: `${section.gridCols === 2 ? "md:col-span-2" : ""} w-full ${sectionSurface === "premium" ? "space-y-5" : "space-y-6"}`,
                     children: section.subsections.map((sub)=>/*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -1442,7 +1442,7 @@ function OpportunityInquiryChildrenSection({ rows, canEdit, onOpenChild, /** Whe
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("thead", {
                         className: theadRow,
                         children: /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("tr", {
-                            className: "text-[11px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/55",
+                            className: "text-[11px] font-semibold tracking-[0.12em] text-alloy-midnight/55",
                             children: [
                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("th", {
                                     className: "px-3 py-2",

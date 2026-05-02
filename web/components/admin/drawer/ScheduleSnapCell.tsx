@@ -24,10 +24,10 @@ export default function ScheduleSnapCell(props: {
 
     const labelClass =
         tier === "primary"
-            ? "mb-1 text-[9px] font-semibold uppercase leading-none tracking-[0.1em] text-alloy-midnight/55"
+            ? "mb-1 text-[9px] font-semibold leading-none tracking-[0.1em] text-alloy-midnight/55"
             : tier === "supporting"
-              ? "mb-0.5 text-[8px] font-semibold uppercase leading-none tracking-[0.12em] text-alloy-forge/55"
-              : "mb-1 text-[9px] font-semibold uppercase leading-none tracking-[0.1em] text-alloy-forge/65";
+              ? "mb-0.5 text-[8px] font-semibold leading-none tracking-[0.12em] text-alloy-forge/55"
+              : "mb-1 text-[9px] font-semibold leading-none tracking-[0.1em] text-alloy-forge/65";
 
     return (
         <div className={`${shell} ${props.className ?? ""}`}>

@@ -83,7 +83,7 @@ function ActionPanelNodeComponent({ data }: NodeProps<ActionPanelNodeData>) {
               fontSize: 11,
               fontWeight: 700,
               color: derived.textSecondary,
-              textTransform: "uppercase",
+              textTransform: "none",
               letterSpacing: "0.06em",
               marginBottom: 8,
             }}

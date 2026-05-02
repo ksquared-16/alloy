@@ -375,7 +375,11 @@ export function useOperationsWorkspaceData(departmentId: string) {
 
                 const mergedRows = mergeJobListsById(deptRows, unRows);
                 const now = new Date();
-                const counts = computeOperationsSignalCounts(mergedRows, now);
+                const scheduledTodayOperational =
+                    stMeta.ok && typeof stj.total === "number" ? stj.total : undefined;
+                const counts = computeOperationsSignalCounts(mergedRows, now, {
+                    operationalDayScheduledCount: scheduledTodayOperational,
+                });
                 const att = computeAttentionCategoryRuntime(mergedRows, now);
                 if (!cancelled) {
                     setNeedsAttentionCount(counts.needsAttention);

@@ -239,7 +239,7 @@ function ContactAttemptedModal(props) {
     ]);
     const overlay = "fixed inset-0 z-[80] bg-black/20 backdrop-blur-[1px]";
     const panel = "fixed left-1/2 top-1/2 z-[81] w-[92vw] max-w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-admin-border bg-white shadow-xl";
-    const label = "text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/50";
+    const label = "text-[11px] font-semibold tracking-wide text-alloy-forge/50";
     const input = "w-full rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 text-sm text-alloy-midnight focus:border-alloy-blue/45 focus:outline-none focus:ring-2 focus:ring-alloy-blue/15 disabled:opacity-60";
     if (!open) return null;
     return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["Fragment"], {
@@ -612,7 +612,7 @@ function UpdateStatusAddNoteModal(props) {
     ]);
     const overlay = "fixed inset-0 z-[80] bg-black/20 backdrop-blur-[1px]";
     const panel = "fixed left-1/2 top-1/2 z-[81] w-[92vw] max-w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-admin-border bg-white shadow-xl";
-    const label = "text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/50";
+    const label = "text-[11px] font-semibold tracking-wide text-alloy-forge/50";
     const input = "w-full rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 text-sm text-alloy-midnight focus:border-alloy-blue/45 focus:outline-none focus:ring-2 focus:ring-alloy-blue/15 disabled:opacity-60";
     const statusOptionsResolved = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useMemo"])(()=>{
         const base = statusOptions ?? [];
@@ -993,7 +993,7 @@ function AddRelatedPersonModal(props) {
     ]);
     const overlay = "fixed inset-0 z-[80] bg-black/20 backdrop-blur-[1px]";
     const panel = "fixed left-1/2 top-1/2 z-[81] w-[92vw] max-w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-admin-border bg-white shadow-xl";
-    const label = "text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/50";
+    const label = "text-[11px] font-semibold tracking-wide text-alloy-forge/50";
     const input = "w-full rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 text-sm text-alloy-midnight focus:border-alloy-blue/45 focus:outline-none focus:ring-2 focus:ring-alloy-blue/15 disabled:opacity-60";
     const roleOptions = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useMemo"])(()=>[
             ...ROLE_OPTIONS
@@ -1349,7 +1349,7 @@ function AddFamilyMemberModal(props) {
     ]);
     const overlay = "fixed inset-0 z-[80] bg-black/20 backdrop-blur-[1px]";
     const panel = "fixed left-1/2 top-1/2 z-[81] w-[92vw] max-w-[520px] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-admin-border bg-white shadow-xl";
-    const label = "text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/50";
+    const label = "text-[11px] font-semibold tracking-wide text-alloy-forge/50";
     const input = "w-full rounded-lg border border-alloy-stone/20 bg-white px-3 py-2 text-sm text-alloy-midnight focus:border-alloy-blue/45 focus:outline-none focus:ring-2 focus:ring-alloy-blue/15 disabled:opacity-60";
     const roleOptions = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["useMemo"])(()=>[
             ...ROLE_OPTIONS
@@ -2183,7 +2183,9 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist
 var __TURBOPACK__imported__module__$5b$project$5d2f$components$2f$admin$2f$workspace$2f$AdminV2DrawerLoadingState$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/components/admin/workspace/AdminV2DrawerLoadingState.tsx [app-ssr] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/dist/server/route-modules/app-page/vendored/ssr/react.js [app-ssr] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$components$2f$admin$2f$opportunity$2f$OpportunityRecordSectionRegistryActions$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/components/admin/opportunity/OpportunityRecordSectionRegistryActions.tsx [app-ssr] (ecmascript)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$adminFormatters$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/adminFormatters.ts [app-ssr] (ecmascript)");
 "use client";
+;
 ;
 ;
 ;
@@ -2240,7 +2242,7 @@ function OpportunityHouseholdPeoplePanel(props) {
     }, [
         people
     ]);
-    const tinyLabel = "text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/55";
+    const tinyLabel = "text-[11px] font-semibold tracking-wide text-alloy-forge/55";
     return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
         className: "space-y-2",
         children: [
@@ -2251,7 +2253,7 @@ function OpportunityHouseholdPeoplePanel(props) {
                         children: "Household people"
                     }, void 0, false, {
                         fileName: "[project]/components/admin/opportunity/OpportunityHouseholdPeoplePanel.tsx",
-                        lineNumber: 85,
+                        lineNumber: 86,
                         columnNumber: 17
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2259,13 +2261,13 @@ function OpportunityHouseholdPeoplePanel(props) {
                         children: "People linked to this household (via customer_persons)."
                     }, void 0, false, {
                         fileName: "[project]/components/admin/opportunity/OpportunityHouseholdPeoplePanel.tsx",
-                        lineNumber: 86,
+                        lineNumber: 87,
                         columnNumber: 17
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/components/admin/opportunity/OpportunityHouseholdPeoplePanel.tsx",
-                lineNumber: 84,
+                lineNumber: 85,
                 columnNumber: 13
             }, this),
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$admin$2f$opportunity$2f$OpportunityRecordSectionRegistryActions$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["default"], {
@@ -2280,7 +2282,7 @@ function OpportunityHouseholdPeoplePanel(props) {
                 onApplied: ()=>void load()
             }, void 0, false, {
                 fileName: "[project]/components/admin/opportunity/OpportunityHouseholdPeoplePanel.tsx",
-                lineNumber: 91,
+                lineNumber: 92,
                 columnNumber: 13
             }, this),
             error ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2288,7 +2290,7 @@ function OpportunityHouseholdPeoplePanel(props) {
                 children: error
             }, void 0, false, {
                 fileName: "[project]/components/admin/opportunity/OpportunityHouseholdPeoplePanel.tsx",
-                lineNumber: 104,
+                lineNumber: 105,
                 columnNumber: 17
             }, this) : null,
             loading ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$admin$2f$workspace$2f$AdminV2DrawerLoadingState$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["AdminV2DrawerLoadingState"], {
@@ -2298,7 +2300,7 @@ function OpportunityHouseholdPeoplePanel(props) {
                 className: "border-0 bg-transparent px-0 py-2 shadow-none ring-0"
             }, void 0, false, {
                 fileName: "[project]/components/admin/opportunity/OpportunityHouseholdPeoplePanel.tsx",
-                lineNumber: 110,
+                lineNumber: 111,
                 columnNumber: 17
             }, this) : rows.length === 0 && recordHydrationPending ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$admin$2f$workspace$2f$AdminV2DrawerLoadingState$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["AdminV2DrawerLoadingState"], {
                 density: "inline",
@@ -2307,14 +2309,14 @@ function OpportunityHouseholdPeoplePanel(props) {
                 className: "border-0 bg-transparent px-0 py-2 shadow-none ring-0"
             }, void 0, false, {
                 fileName: "[project]/components/admin/opportunity/OpportunityHouseholdPeoplePanel.tsx",
-                lineNumber: 117,
+                lineNumber: 118,
                 columnNumber: 17
             }, this) : rows.length === 0 ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                 className: "text-sm text-alloy-forge/60",
                 children: "No linked people yet."
             }, void 0, false, {
                 fileName: "[project]/components/admin/opportunity/OpportunityHouseholdPeoplePanel.tsx",
-                lineNumber: 124,
+                lineNumber: 125,
                 columnNumber: 17
             }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                 className: "space-y-2",
@@ -2334,7 +2336,7 @@ function OpportunityHouseholdPeoplePanel(props) {
                                         children: r._person_name?.trim() || "Person"
                                     }, void 0, false, {
                                         fileName: "[project]/components/admin/opportunity/OpportunityHouseholdPeoplePanel.tsx",
-                                        lineNumber: 133,
+                                        lineNumber: 134,
                                         columnNumber: 33
                                     }, this),
                                     r.role_label || r.role_type ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -2342,48 +2344,48 @@ function OpportunityHouseholdPeoplePanel(props) {
                                         children: String(r.role_label ?? r.role_type)
                                     }, void 0, false, {
                                         fileName: "[project]/components/admin/opportunity/OpportunityHouseholdPeoplePanel.tsx",
-                                        lineNumber: 141,
+                                        lineNumber: 142,
                                         columnNumber: 37
                                     }, this) : null
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/components/admin/opportunity/OpportunityHouseholdPeoplePanel.tsx",
-                                lineNumber: 132,
+                                lineNumber: 133,
                                 columnNumber: 29
                             }, this),
                             r._person_email || r._person_phone ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                 className: "mt-1 text-[12px] text-alloy-midnight/65",
                                 children: [
                                     r._person_email,
-                                    r._person_phone
+                                    r._person_phone ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$adminFormatters$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["formatPhoneUS"])(r._person_phone) : null
                                 ].filter(Boolean).join(" · ")
                             }, void 0, false, {
                                 fileName: "[project]/components/admin/opportunity/OpportunityHouseholdPeoplePanel.tsx",
-                                lineNumber: 147,
+                                lineNumber: 148,
                                 columnNumber: 33
                             }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                 className: "mt-1 text-[12px] text-alloy-midnight/45",
                                 children: "No contact info."
                             }, void 0, false, {
                                 fileName: "[project]/components/admin/opportunity/OpportunityHouseholdPeoplePanel.tsx",
-                                lineNumber: 151,
+                                lineNumber: 152,
                                 columnNumber: 33
                             }, this)
                         ]
                     }, r.id, true, {
                         fileName: "[project]/components/admin/opportunity/OpportunityHouseholdPeoplePanel.tsx",
-                        lineNumber: 128,
+                        lineNumber: 129,
                         columnNumber: 25
                     }, this))
             }, void 0, false, {
                 fileName: "[project]/components/admin/opportunity/OpportunityHouseholdPeoplePanel.tsx",
-                lineNumber: 126,
+                lineNumber: 127,
                 columnNumber: 17
             }, this)
         ]
     }, void 0, true, {
         fileName: "[project]/components/admin/opportunity/OpportunityHouseholdPeoplePanel.tsx",
-        lineNumber: 83,
+        lineNumber: 84,
         columnNumber: 9
     }, this);
 }
@@ -2399,8 +2401,10 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist
 var __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/node_modules/next/dist/server/route-modules/app-page/vendored/ssr/react.js [app-ssr] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$components$2f$admin$2f$opportunity$2f$OpportunityRecordSectionRegistryActions$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/components/admin/opportunity/OpportunityRecordSectionRegistryActions.tsx [app-ssr] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$adminFormatters$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/adminFormatters.ts [app-ssr] (ecmascript)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$contactNormalize$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/contactNormalize.ts [app-ssr] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$components$2f$admin$2f$workspace$2f$AdminV2DrawerLoadingState$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/components/admin/workspace/AdminV2DrawerLoadingState.tsx [app-ssr] (ecmascript)");
 "use client";
+;
 ;
 ;
 ;
@@ -2470,13 +2474,13 @@ function FamilyContactsPanel(props) {
         rows,
         primaryPersonId
     ]);
-    const tinyLabel = variant === "summary" ? "mb-0.5 text-[8px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45" : "text-[11px] font-semibold uppercase tracking-wide text-alloy-forge/55";
+    const tinyLabel = variant === "summary" ? "mb-0.5 text-[8px] font-semibold tracking-[0.12em] text-alloy-midnight/45" : "text-[11px] font-semibold tracking-wide text-alloy-forge/55";
     const cardPad = variant === "summary" ? "px-2 py-1.5" : "px-3 py-2.5";
     const nameLink = variant === "summary" ? "text-left text-[12px] font-semibold text-alloy-blue hover:underline" : "text-left text-[15px] font-semibold leading-snug text-alloy-blue hover:underline";
     const contactRow = variant === "summary" ? "mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-alloy-midnight/70" : "mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px] text-alloy-midnight/80";
     const contactMuted = variant === "summary" ? "text-alloy-midnight/45" : "text-alloy-midnight/50";
     const contactLink = variant === "summary" ? "font-semibold text-alloy-blue hover:underline underline-offset-2" : "font-semibold text-alloy-blue hover:underline underline-offset-2";
-    const roleBadge = variant === "summary" ? "inline-flex max-w-[9.5rem] items-center rounded-full border border-alloy-stone/20 bg-alloy-stone/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-alloy-midnight/70" : "inline-flex max-w-[11rem] items-center rounded-full border border-alloy-blue/20 bg-alloy-blue/[0.07] px-2.5 py-0.5 text-[11px] font-semibold text-alloy-midnight/85";
+    const roleBadge = variant === "summary" ? "inline-flex max-w-[9.5rem] items-center rounded-full border border-alloy-stone/20 bg-alloy-stone/10 px-2 py-0.5 text-[9px] font-semibold tracking-wide text-alloy-midnight/70" : "inline-flex max-w-[11rem] items-center rounded-full border border-alloy-blue/20 bg-alloy-blue/[0.07] px-2.5 py-0.5 text-[11px] font-semibold text-alloy-midnight/85";
     return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
         className: variant === "summary" ? "space-y-2" : "space-y-3",
         "data-family-contacts-panel": sectionKey,
@@ -2488,7 +2492,7 @@ function FamilyContactsPanel(props) {
                         children: "Primary person"
                     }, void 0, false, {
                         fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                        lineNumber: 147,
+                        lineNumber: 148,
                         columnNumber: 42
                     }, this) : null,
                     primaryPersonId ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2504,7 +2508,7 @@ function FamilyContactsPanel(props) {
                                 children: primaryName && primaryName !== "—" ? primaryName : "View person"
                             }, void 0, false, {
                                 fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                                lineNumber: 150,
+                                lineNumber: 151,
                                 columnNumber: 25
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2518,7 +2522,7 @@ function FamilyContactsPanel(props) {
                                                 children: "Phone "
                                             }, void 0, false, {
                                                 fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                                                lineNumber: 156,
+                                                lineNumber: 157,
                                                 columnNumber: 37
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("a", {
@@ -2527,20 +2531,20 @@ function FamilyContactsPanel(props) {
                                                 children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$adminFormatters$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["formatPhoneUS"])(primaryPhone)
                                             }, void 0, false, {
                                                 fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                                                lineNumber: 157,
+                                                lineNumber: 158,
                                                 columnNumber: 37
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                                        lineNumber: 155,
+                                        lineNumber: 156,
                                         columnNumber: 33
                                     }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                         className: contactMuted,
                                         children: "Phone —"
                                     }, void 0, false, {
                                         fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                                        lineNumber: 162,
+                                        lineNumber: 163,
                                         columnNumber: 33
                                     }, this),
                                     primaryEmail ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -2551,7 +2555,7 @@ function FamilyContactsPanel(props) {
                                                 children: "Email "
                                             }, void 0, false, {
                                                 fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                                                lineNumber: 166,
+                                                lineNumber: 167,
                                                 columnNumber: 37
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("a", {
@@ -2560,32 +2564,32 @@ function FamilyContactsPanel(props) {
                                                 children: primaryEmail
                                             }, void 0, false, {
                                                 fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                                                lineNumber: 167,
+                                                lineNumber: 168,
                                                 columnNumber: 37
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                                        lineNumber: 165,
+                                        lineNumber: 166,
                                         columnNumber: 33
                                     }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                         className: contactMuted,
                                         children: "Email —"
                                     }, void 0, false, {
                                         fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                                        lineNumber: 172,
+                                        lineNumber: 173,
                                         columnNumber: 33
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                                lineNumber: 153,
+                                lineNumber: 154,
                                 columnNumber: 25
                             }, this)
                         ]
                     }, void 0, true, {
                         fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                        lineNumber: 149,
+                        lineNumber: 150,
                         columnNumber: 21
                     }, this) : recordHydrationPending ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$admin$2f$workspace$2f$AdminV2DrawerLoadingState$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["AdminV2DrawerLoadingState"], {
                         density: "micro",
@@ -2595,20 +2599,20 @@ function FamilyContactsPanel(props) {
                         className: "mt-1 border-0 bg-transparent px-0 py-1 shadow-none ring-0"
                     }, void 0, false, {
                         fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                        lineNumber: 177,
+                        lineNumber: 178,
                         columnNumber: 21
                     }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
                         className: `mt-1 ${variant === "summary" ? "text-[12px] text-alloy-midnight/55" : "text-sm text-alloy-forge/60"}`,
                         children: "No primary person on this opportunity."
                     }, void 0, false, {
                         fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                        lineNumber: 185,
+                        lineNumber: 186,
                         columnNumber: 21
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                lineNumber: 146,
+                lineNumber: 147,
                 columnNumber: 13
             }, this),
             variant === "default" ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2618,7 +2622,7 @@ function FamilyContactsPanel(props) {
                         children: "Opportunity people"
                     }, void 0, false, {
                         fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                        lineNumber: 193,
+                        lineNumber: 194,
                         columnNumber: 21
                     }, this),
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -2626,13 +2630,13 @@ function FamilyContactsPanel(props) {
                         children: "Linked on this inquiry only (opportunity_persons)."
                     }, void 0, false, {
                         fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                        lineNumber: 194,
+                        lineNumber: 195,
                         columnNumber: 21
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                lineNumber: 192,
+                lineNumber: 193,
                 columnNumber: 17
             }, this) : null,
             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$admin$2f$opportunity$2f$OpportunityRecordSectionRegistryActions$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["default"], {
@@ -2648,7 +2652,7 @@ function FamilyContactsPanel(props) {
                 onApplied: onRegistryApplied
             }, void 0, false, {
                 fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                lineNumber: 198,
+                lineNumber: 199,
                 columnNumber: 13
             }, this),
             sorted.length === 0 ? recordHydrationPending ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$admin$2f$workspace$2f$AdminV2DrawerLoadingState$2e$tsx__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["AdminV2DrawerLoadingState"], {
@@ -2658,14 +2662,14 @@ function FamilyContactsPanel(props) {
                 className: "border-0 bg-transparent px-0 py-2 shadow-none ring-0"
             }, void 0, false, {
                 fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                lineNumber: 213,
+                lineNumber: 214,
                 columnNumber: 21
             }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                 className: variant === "summary" ? "text-[12px] text-alloy-midnight/55" : "text-sm text-alloy-forge/60",
                 children: "No additional people linked yet."
             }, void 0, false, {
                 fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                lineNumber: 220,
+                lineNumber: 221,
                 columnNumber: 21
             }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("ul", {
                 className: `${variant === "summary" ? "space-y-1.5" : "space-y-2.5"} list-none`,
@@ -2685,7 +2689,7 @@ function FamilyContactsPanel(props) {
                                         children: r.name && r.name.trim() ? r.name : "View person"
                                     }, void 0, false, {
                                         fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                                        lineNumber: 232,
+                                        lineNumber: 233,
                                         columnNumber: 33
                                     }, this),
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -2694,13 +2698,13 @@ function FamilyContactsPanel(props) {
                                         children: formatRoleTypeLabel(r.role_type)
                                     }, void 0, false, {
                                         fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                                        lineNumber: 239,
+                                        lineNumber: 240,
                                         columnNumber: 33
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                                lineNumber: 231,
+                                lineNumber: 232,
                                 columnNumber: 29
                             }, this),
                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
@@ -2714,29 +2718,29 @@ function FamilyContactsPanel(props) {
                                                 children: "Phone "
                                             }, void 0, false, {
                                                 fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                                                lineNumber: 246,
+                                                lineNumber: 247,
                                                 columnNumber: 41
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("a", {
                                                 className: contactLink,
-                                                href: `tel:${r.phone}`,
+                                                href: `tel:${(0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$contactNormalize$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["normalizePhone"])(r.phone) ?? r.phone.replace(/\D/g, "")}`,
                                                 children: (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$adminFormatters$2e$ts__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["formatPhoneUS"])(r.phone)
                                             }, void 0, false, {
                                                 fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                                                lineNumber: 247,
+                                                lineNumber: 248,
                                                 columnNumber: 41
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                                        lineNumber: 245,
+                                        lineNumber: 246,
                                         columnNumber: 37
                                     }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                         className: contactMuted,
                                         children: "Phone —"
                                     }, void 0, false, {
                                         fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                                        lineNumber: 252,
+                                        lineNumber: 256,
                                         columnNumber: 37
                                     }, this),
                                     r.email ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -2747,7 +2751,7 @@ function FamilyContactsPanel(props) {
                                                 children: "Email "
                                             }, void 0, false, {
                                                 fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                                                lineNumber: 256,
+                                                lineNumber: 260,
                                                 columnNumber: 41
                                             }, this),
                                             /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("a", {
@@ -2756,43 +2760,43 @@ function FamilyContactsPanel(props) {
                                                 children: r.email
                                             }, void 0, false, {
                                                 fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                                                lineNumber: 257,
+                                                lineNumber: 261,
                                                 columnNumber: 41
                                             }, this)
                                         ]
                                     }, void 0, true, {
                                         fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                                        lineNumber: 255,
+                                        lineNumber: 259,
                                         columnNumber: 37
                                     }, this) : /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$server$2f$route$2d$modules$2f$app$2d$page$2f$vendored$2f$ssr$2f$react$2d$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$ssr$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
                                         className: contactMuted,
                                         children: "Email —"
                                     }, void 0, false, {
                                         fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                                        lineNumber: 262,
+                                        lineNumber: 266,
                                         columnNumber: 37
                                     }, this)
                                 ]
                             }, void 0, true, {
                                 fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                                lineNumber: 243,
+                                lineNumber: 244,
                                 columnNumber: 29
                             }, this)
                         ]
                     }, r.id, true, {
                         fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                        lineNumber: 227,
+                        lineNumber: 228,
                         columnNumber: 25
                     }, this))
             }, void 0, false, {
                 fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-                lineNumber: 225,
+                lineNumber: 226,
                 columnNumber: 17
             }, this)
         ]
     }, void 0, true, {
         fileName: "[project]/components/admin/opportunity/FamilyContactsPanel.tsx",
-        lineNumber: 145,
+        lineNumber: 146,
         columnNumber: 9
     }, this);
 }

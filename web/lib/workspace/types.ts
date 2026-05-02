@@ -48,7 +48,7 @@ export type WorkspaceSignalItem = {
     id: string;
     label: string;
     metric: WorkspaceSignalMetricKey;
-    /** Small uppercase line above the label in bridge signals (e.g. "Volume", "Today"). */
+    /** Small eyebrow line above the label in bridge signals (e.g. "Volume", "Today"). */
     eyebrow?: string;
 };
 

@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { formatDateTimeLocal } from "@/lib/adminFormatters";
+import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
+import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
 
 type ThreadRow = {
     id: string;
@@ -45,7 +46,7 @@ export interface CommunicationsDrawerSectionProps {
     className?: string;
 }
 
-const COMPOSER_LABEL = "mb-1 text-[8px] font-semibold uppercase tracking-[0.12em] text-alloy-midnight/45";
+const COMPOSER_LABEL = "mb-1 text-[8px] font-semibold tracking-[0.12em] text-alloy-midnight/45";
 
 /** Map POST /communications/send notes to concise operator copy (honest vs optimistic). */
 function userFriendlySendNote(processNote: string): string {
@@ -74,6 +75,7 @@ export default function CommunicationsDrawerSection({
     embedded = true,
     className = "",
 }: CommunicationsDrawerSectionProps) {
+    const viewerTz = useAdminViewerTimezone();
     const [threads, setThreads] = useState<ThreadRow[]>([]);
     const [thrErr, setThrErr] = useState<string | null>(null);
     const [loadingThreads, setLoadingThreads] = useState(false);
@@ -363,7 +365,7 @@ export default function CommunicationsDrawerSection({
                             {t.recipient_key ? t.recipient_key : "—"}
                             {t.updated_at ? (
                                 <span className="ml-1.5 tabular-nums text-[11px] text-alloy-midnight/45">
-                                    · {formatDateTimeLocal(t.updated_at)}
+                                    · {formatDateTimeForUserDisplay(t.updated_at, viewerTz)}
                                 </span>
                             ) : null}
                         </span>
@@ -410,7 +412,7 @@ export default function CommunicationsDrawerSection({
                                     {m.direction} · {m.channel ?? "—"} · {m.status ?? "—"}
                                 </span>
                                 <span className="tabular-nums text-[11px]">
-                                    {msgWhen ? formatDateTimeLocal(msgWhen) : ""}
+                                    {msgWhen ? formatDateTimeForUserDisplay(msgWhen, viewerTz) : ""}
                                 </span>
                             </div>
                             {(m.from_address || m.to_address) && (
@@ -606,4 +608,4 @@ export default function CommunicationsDrawerSection({
 }
 
 const DRAWER_SECTION_HEADER_CLASS =
-    "text-xs font-semibold uppercase tracking-wider text-[#59678b] border-b border-[#e6e8ec] pb-2 mb-4";
+    "text-xs font-semibold tracking-wider text-[#59678b] border-b border-[#e6e8ec] pb-2 mb-4";

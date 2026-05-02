@@ -123,7 +123,7 @@ export function ConfigSnapshotBlock({ block }: { block: WorkspaceConfigSnapshotB
 
             <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <div>
-                    <div className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/70">Statuses (opportunities)</div>
+                    <div className="text-xs font-semibold tracking-wide text-alloy-midnight/70">Statuses (opportunities)</div>
                     <div className="mt-2 overflow-auto rounded-lg border border-admin-border">
                         <table className="w-full text-xs">
                             <thead className="bg-alloy-stone/15 text-alloy-midnight/70">
@@ -154,7 +154,7 @@ export function ConfigSnapshotBlock({ block }: { block: WorkspaceConfigSnapshotB
                 </div>
 
                 <div>
-                    <div className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/70">Departments → Work units</div>
+                    <div className="text-xs font-semibold tracking-wide text-alloy-midnight/70">Departments → Work units</div>
                     <div className="mt-2 space-y-3">
                         {departments
                             .slice()

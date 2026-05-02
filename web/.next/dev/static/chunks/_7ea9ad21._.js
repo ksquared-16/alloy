@@ -806,7 +806,7 @@ function Navbar() {
                                 className: "pb-2 border-b border-white/10",
                                 children: [
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                        className: "text-xs font-semibold uppercase tracking-wide text-white/50 mb-2",
+                                        className: "text-xs font-semibold tracking-wide text-white/50 mb-2",
                                         children: "Services"
                                     }, void 0, false, {
                                         fileName: "[project]/components/Navbar.tsx",
@@ -2796,7 +2796,7 @@ function CleaningQuickQuoteForm({ onComplete, campaignQuoteMode, onSwitchToStand
             if (!succeeded) setSubmitting(false);
         }
     };
-    const labelBase = "block text-xs font-semibold text-alloy-midnight/80 uppercase tracking-wider mb-1.5";
+    const labelBase = "block text-xs font-semibold text-alloy-midnight/80 tracking-wider mb-1.5";
     if (specialtyDone) {
         return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
             className: "rounded-xl border border-alloy-juniper/30 bg-alloy-juniper/10 p-6 text-alloy-midnight",
@@ -3879,7 +3879,7 @@ function GutterLeadForm({ onSuccess } = {}) {
         }
     };
     // Match cleaning form styling exactly
-    const labelClass = "block text-xs font-semibold uppercase tracking-wide mb-1 text-alloy-midnight/70";
+    const labelClass = "block text-xs font-semibold tracking-wide mb-1 text-alloy-midnight/70";
     const inputBase = "w-full rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2";
     const inputClass = inputBase + " border border-alloy-stone/80 bg-white focus:ring-alloy-blue focus:border-alloy-blue";
     const errorInputClass = inputBase + " border-red-500 bg-white focus:ring-red-500 focus:border-red-500";
@@ -4598,7 +4598,7 @@ function QuoteModal({ isOpen, onClose, openModal, defaultService, campaignQuoteF
                                                     columnNumber: 21
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
-                                                    className: "text-[11px] font-semibold uppercase tracking-wider text-alloy-juniper mb-2 inline-block",
+                                                    className: "text-[11px] font-semibold tracking-wider text-alloy-juniper mb-2 inline-block",
                                                     children: "Available now"
                                                 }, void 0, false, {
                                                     fileName: "[project]/components/QuoteModal.tsx",
@@ -4670,7 +4670,7 @@ function QuoteModal({ isOpen, onClose, openModal, defaultService, campaignQuoteF
                                                     columnNumber: 21
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
-                                                    className: "text-[11px] font-semibold uppercase tracking-wider text-alloy-muted mb-2 inline-block",
+                                                    className: "text-[11px] font-semibold tracking-wider text-alloy-muted mb-2 inline-block",
                                                     children: "Early access"
                                                 }, void 0, false, {
                                                     fileName: "[project]/components/QuoteModal.tsx",

@@ -213,7 +213,7 @@ function OutcomeZone(props: { headline: string; subline?: string; confidence: AI
           className="mt-2 border-t pt-2 text-[12px] leading-snug"
           style={{ borderColor: isEmber ? "rgba(188, 67, 0, 0.15)" : "rgba(0, 162, 131, 0.15)" }}
         >
-          <span className="font-semibold uppercase tracking-wide text-[10px]" style={{ color: CMD.textLabel }}>
+          <span className="font-semibold tracking-wide text-[10px]" style={{ color: CMD.textLabel }}>
             Your request
           </span>
           <p className="mt-0.5 line-clamp-3" style={{ color: CMD.textBody }} title={submittedCommand}>
@@ -257,7 +257,7 @@ function AIActionsRow(props: {
           type="button"
           disabled={!canApply || applying}
           onClick={onApply}
-          className="rounded-md px-3.5 py-2 text-[12px] font-bold uppercase tracking-wide disabled:opacity-45 disabled:cursor-not-allowed"
+          className="rounded-md px-3.5 py-2 text-[12px] font-bold tracking-wide disabled:opacity-45 disabled:cursor-not-allowed"
           style={{
             backgroundColor: brand.secondary,
             color: neutral.surface,
@@ -378,7 +378,7 @@ function AdvancedDrawer(props: {
         }}
       >
         <span>Advanced (JSON)</span>
-        <span aria-hidden className="uppercase">
+        <span aria-hidden>
           {open ? "Hide" : "Show"}
         </span>
       </button>
@@ -829,7 +829,7 @@ export default function AICommandSurfaceShell() {
           type="button"
           disabled={busy || !commandText.trim()}
           onClick={() => void runPreview()}
-          className="shrink-0 rounded-xl px-3.5 py-2.5 text-xs font-bold uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
+          className="shrink-0 rounded-xl px-3.5 py-2.5 text-xs font-bold tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
           style={{
             backgroundColor: brand.secondary,
             color: neutral.surface,

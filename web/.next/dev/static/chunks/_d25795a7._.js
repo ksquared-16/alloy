@@ -90,7 +90,7 @@ function WorkspaceChrome({ breadcrumbs, title, subtitle, variant = "default", ch
             variant !== "bridge" ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("header", {
                 children: [
                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                        className: "text-xs font-semibold uppercase tracking-wide text-alloy-forge/70",
+                        className: "text-xs font-semibold tracking-wide text-alloy-forge/70",
                         children: "Workspace (V2 slice)"
                     }, void 0, false, {
                         fileName: "[project]/components/admin/workspace/WorkspaceChrome.tsx",
@@ -2723,7 +2723,7 @@ function ContextBlock({ model, onAction, surface = "default", layout = "rail" })
                     fontSize: 11,
                     fontWeight: 700,
                     color: __TURBOPACK__imported__module__$5b$project$5d2f$styles$2f$tokens$2f$colors$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["brand"].secondary,
-                    textTransform: "uppercase",
+                    textTransform: "none",
                     marginBottom: 8
                 },
                 children: "Context"
@@ -5972,8 +5972,12 @@ __turbopack_context__.s([
     "enrollmentCrmContactCapabilityForRow",
     ()=>enrollmentCrmContactCapabilityForRow
 ]);
+var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$adminFormatters$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/adminFormatters.ts [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$opportunityActivityTimelineFormat$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__ = __turbopack_context__.i("[project]/lib/admin/opportunityActivityTimelineFormat.ts [app-client] (ecmascript) <locals>");
+var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$contactNormalize$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/contactNormalize.ts [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$ui$2d$v2$2f$formatWorkspaceCurrency$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/ui-v2/formatWorkspaceCurrency.ts [app-client] (ecmascript)");
+;
+;
 ;
 ;
 const ENROLLMENT_CRM_QUEUE_PAYLOAD_GAPS = [
@@ -6147,12 +6151,12 @@ function crmContactQuickActions(row) {
         });
     }
     if (cap.phoneTel && phone) {
-        const digits = phone.replace(/\D/g, "");
+        const tel = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$contactNormalize$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["normalizePhone"])(phone) ?? `+1${phone.replace(/\D/g, "").slice(-10)}`;
         out.push({
             id: "crm_tel",
             label: "Call",
             payload: {
-                href: `tel:${digits}`
+                href: `tel:${tel}`
             }
         });
     }
@@ -6187,9 +6191,9 @@ function buildEnrollmentCrmRowSemanticSlots(row) {
     const contactLine = row._primary_contact_line?.trim() || "";
     const email = (row._primary_email ?? "").trim();
     const phone = (row._primary_phone ?? "").trim();
-    const contactSnippet = [
-        contactLine,
-        phone,
+    const phoneFmt = phone ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$adminFormatters$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatPhoneUS"])(phone) : "";
+    const contactSnippet = contactLine || [
+        phoneFmt && phoneFmt !== "—" ? phoneFmt : "",
         email
     ].filter(Boolean).join(" · ") || null;
     const programContext = row._requested_program?.trim() || null;
@@ -8051,7 +8055,7 @@ function WorkUnitLifecycleCoveragePanel({ hasLifecycleThroughput, showOtherPill,
                             Object.keys(diagnostic.statusKeyCounts).length > 0 ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("div", {
                                 children: [
                                     /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
-                                        className: "m-0 mb-1 text-[10px] font-semibold uppercase tracking-wide text-alloy-forge/48",
+                                        className: "m-0 mb-1 text-[10px] font-semibold tracking-wide text-alloy-forge/48",
                                         children: "Unmapped status keys (this sample)"
                                     }, void 0, false, {
                                         fileName: "[project]/components/admin/workspace/WorkUnitLifecycleCoveragePanel.tsx",
@@ -8253,6 +8257,7 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$components$2f$admin$2f$works
 var __TURBOPACK__imported__module__$5b$project$5d2f$app$2f$adminV2$2f$components$2f$workspace$2f$shells$2f$WorkUnitWorkspace$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/app/adminV2/components/workspace/shells/WorkUnitWorkspace.tsx [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$app$2f$adminV2$2f$components$2f$workspace$2f$blocks$2f$AutomationWorkflowsBlock$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/app/adminV2/components/workspace/blocks/AutomationWorkflowsBlock.tsx [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$contexts$2f$AdminDrawerContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/contexts/AdminDrawerContext.tsx [app-client] (ecmascript)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$contexts$2f$AdminViewerTimezoneContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/contexts/AdminViewerTimezoneContext.tsx [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$components$2f$admin$2f$workspace$2f$AdminV2RouteLoadingState$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/components/admin/workspace/AdminV2RouteLoadingState.tsx [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$actions$2f$applyRegistryResolvedActionClient$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/admin/actions/applyRegistryResolvedActionClient.ts [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$workspace$2f$viewModels$2f$enrollmentRightRailMerge$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/workspace/viewModels/enrollmentRightRailMerge.ts [app-client] (ecmascript)");
@@ -8270,12 +8275,17 @@ var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$workspace$2f$workspac
 var __TURBOPACK__imported__module__$5b$project$5d2f$components$2f$admin$2f$opportunity$2f$actions$2f$UpdateStatusAddNoteModal$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/components/admin/opportunity/actions/UpdateStatusAddNoteModal.tsx [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$components$2f$admin$2f$opportunity$2f$actions$2f$ContactAttemptedModal$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/components/admin/opportunity/actions/ContactAttemptedModal.tsx [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$activitySignals$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/admin/activitySignals.ts [app-client] (ecmascript)");
+var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$adminFormatters$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/adminFormatters.ts [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$opportunityActivityTimelineFormat$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__ = __turbopack_context__.i("[project]/lib/admin/opportunityActivityTimelineFormat.ts [app-client] (ecmascript) <locals>");
+var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$contactNormalize$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/contactNormalize.ts [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$components$2f$admin$2f$workspace$2f$WorkUnitLifecycleCoveragePanel$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/components/admin/workspace/WorkUnitLifecycleCoveragePanel.tsx [app-client] (ecmascript)");
 var __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$workspace$2f$workUnitQueueDerived$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__ = __turbopack_context__.i("[project]/lib/workspace/workUnitQueueDerived.ts [app-client] (ecmascript)");
 ;
 var _s = __turbopack_context__.k.signature();
 "use client";
+;
+;
+;
 ;
 ;
 ;
@@ -8375,6 +8385,7 @@ function AdminV2OpportunityWorkUnitPage() {
     const searchParams = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$navigation$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useSearchParams"])();
     const router = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$navigation$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useRouter"])();
     const { openDrawer } = (0, __TURBOPACK__imported__module__$5b$project$5d2f$contexts$2f$AdminDrawerContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useAdminDrawer"])();
+    const viewerTz = (0, __TURBOPACK__imported__module__$5b$project$5d2f$contexts$2f$AdminViewerTimezoneContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useAdminViewerTimezone"])();
     const [loading, setLoading] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(true);
     const [error, setError] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(null);
     const [workUnit, setWorkUnit] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(null);
@@ -8394,8 +8405,8 @@ function AdminV2OpportunityWorkUnitPage() {
     const [queueItemsRoute, setQueueItemsRoute] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(null);
     const [queueItemsLoading, setQueueItemsLoading] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(false);
     const [wuPrimaryLaneTimedOut, setWuPrimaryLaneTimedOut] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(false);
-    /** `undefined` = placement fetch pending/failed → use queue baseline; otherwise resolver output. */ const [wuPlacementStrip, setWuPlacementStrip] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(undefined);
-    /** First primary-queue items response for this work unit (not reset on tab change — tab uses in-lane loading). */ const [wuBootPrimarySettled, setWuBootPrimarySettled] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(false);
+    /** `undefined` = placement config not loaded → baseline strip; values are derived in `wuResolvedPlacementKpis`. */ const [wuPlacementRows, setWuPlacementRows] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(undefined);
+    const [wuScopeHasPlacements, setWuScopeHasPlacements] = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useState"])(false);
     const queueItemsRequestSeq = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useRef"])(0);
     const queueSummariesRequestSeq = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useRef"])(0);
     /**
@@ -8602,7 +8613,8 @@ function AdminV2OpportunityWorkUnitPage() {
                 setQueueItemsLoading(false);
                 setOpportunityQueueRowActions(null);
                 setEnrollmentRightRailResolved(null);
-                setWuPlacementStrip(undefined);
+                setWuPlacementRows(undefined);
+                setWuScopeHasPlacements(false);
                 setError("Missing department or work unit in the URL.");
                 queueItemsLastFetchSigRef.current = null;
                 return;
@@ -8630,7 +8642,8 @@ function AdminV2OpportunityWorkUnitPage() {
                             setOpportunityQueueRowActions(null);
                             setEnrollmentRightRailResolved(null);
                             queueItemsLastFetchSigRef.current = null;
-                            setWuPlacementStrip(undefined);
+                            setWuPlacementRows(undefined);
+                            setWuScopeHasPlacements(false);
                         }
                         const [wuRes, deptRes, deptWusRes] = await Promise.all([
                             fetch(`/api/admin/work-units/${encodeURIComponent(workUnitId)}`, init),
@@ -8652,6 +8665,16 @@ function AdminV2OpportunityWorkUnitPage() {
                         if (wu.department_id !== departmentId) {
                             throw new Error("Work unit does not belong to this department");
                         }
+                        const naListEarly = deptWusRes.ok ? deptWusJson.items ?? [] : [];
+                        const naWuEarly = naListEarly.find({
+                            "AdminV2OpportunityWorkUnitPage.useEffect.naWuEarly": (r)=>String(r.key ?? "").trim().toLowerCase() === "needs_attention"
+                        }["AdminV2OpportunityWorkUnitPage.useEffect.naWuEarly"]);
+                        if (!cancelled) {
+                            setWorkUnit(wu);
+                            setDept(deptJson);
+                            setNeedsAttentionWorkUnitId(naWuEarly?.id ?? null);
+                            setLoading(false);
+                        }
                         const isAttention = (wu.key ?? "").trim().toLowerCase() === "needs_attention";
                         // Prefer the new QueueService-backed queues. Only fall back to legacy opportunity runtime on 501 or
                         // network/runtime failures that indicate the new queue API isn't usable.
@@ -8659,7 +8682,7 @@ function AdminV2OpportunityWorkUnitPage() {
                         let shouldFallbackToLegacy = false;
                         let fallbackReason = null;
                         const qFromUrlEarly = queueParamFromWindow().trim();
-                        const queueListRoute = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?include_previews=false&count_mode=exact&limit=3&summary_mode=initial&focus_queue=${encodeURIComponent(qFromUrlEarly)}`;
+                        const queueListRoute = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?include_previews=false&count_mode=planned&limit=3&summary_mode=initial&focus_queue=${encodeURIComponent(qFromUrlEarly)}`;
                         const actionsListRoute = `/api/admin/actions?` + new URLSearchParams({
                             surface: "queue_row",
                             entity_type: "opportunity",
@@ -8728,7 +8751,7 @@ function AdminV2OpportunityWorkUnitPage() {
                                         if (dk && dk.length) {
                                             const fill = {
                                                 "AdminV2OpportunityWorkUnitPage.useEffect.fill": ()=>{
-                                                    const fillRoute = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?include_previews=false&count_mode=exact&limit=3&summary_mode=partial&only_queue_keys=${encodeURIComponent(dk.join(","))}`;
+                                                    const fillRoute = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?include_previews=false&count_mode=planned&limit=3&summary_mode=partial&only_queue_keys=${encodeURIComponent(dk.join(","))}`;
                                                     fetch(fillRoute, init).then({
                                                         "AdminV2OpportunityWorkUnitPage.useEffect.fill": (r)=>r.ok ? r.json() : null
                                                     }["AdminV2OpportunityWorkUnitPage.useEffect.fill"]).then({
@@ -8854,15 +8877,8 @@ function AdminV2OpportunityWorkUnitPage() {
                         } else if (!usedNewQueueApi) {
                         // No-op: legacy fallback not used.
                         }
-                        const naList = deptWusRes.ok ? deptWusJson.items ?? [] : [];
-                        const naWu = naList.find({
-                            "AdminV2OpportunityWorkUnitPage.useEffect.naWu": (r)=>String(r.key ?? "").trim().toLowerCase() === "needs_attention"
-                        }["AdminV2OpportunityWorkUnitPage.useEffect.naWu"]);
                         if (!cancelled) {
-                            setWorkUnit(wu);
-                            setDept(deptJson);
                             setOq(oqRuntime);
-                            setNeedsAttentionWorkUnitId(naWu?.id ?? null);
                             setOpportunityQueueRowActions(parsedQueueRowQuick);
                             setEnrollmentRightRailResolved(parsedRightRail);
                         }
@@ -8921,46 +8937,6 @@ function AdminV2OpportunityWorkUnitPage() {
         queueItemsLoading,
         queueItems,
         queueItemsError
-    ]);
-    (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
-        "AdminV2OpportunityWorkUnitPage.useEffect": ()=>{
-            setWuBootPrimarySettled(false);
-        }
-    }["AdminV2OpportunityWorkUnitPage.useEffect"], [
-        workUnitId
-    ]);
-    (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
-        "AdminV2OpportunityWorkUnitPage.useEffect": ()=>{
-            if (!workUnitId) return;
-            if (loading) return;
-            const multi = Boolean(queueSummaries && queueSummaries.length > 0);
-            if (!multi) {
-                setWuBootPrimarySettled(true);
-                return;
-            }
-            if (queueSummariesError) {
-                setWuBootPrimarySettled(true);
-                return;
-            }
-            const key = selectedQueueKey ?? queueSummaries?.[0]?.key ?? null;
-            if (!key) return;
-            if (queueItemsError || wuPrimaryLaneTimedOut) {
-                setWuBootPrimarySettled(true);
-                return;
-            }
-            if (queueItems != null && String(queueItems.queue?.key ?? "") === key) {
-                setWuBootPrimarySettled(true);
-            }
-        }
-    }["AdminV2OpportunityWorkUnitPage.useEffect"], [
-        workUnitId,
-        loading,
-        queueSummaries,
-        queueSummariesError,
-        selectedQueueKey,
-        queueItems,
-        queueItemsError,
-        wuPrimaryLaneTimedOut
     ]);
     /** Browser back/forward: sync selected queue with `?queue=` without re-running bootstrap. */ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
         "AdminV2OpportunityWorkUnitPage.useEffect": ()=>{
@@ -9028,9 +9004,17 @@ function AdminV2OpportunityWorkUnitPage() {
         }
     }["AdminV2OpportunityWorkUnitPage.useCallback[fetchQueueItems]"], []);
     const fetchQueueSummaries = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useCallback"])({
-        "AdminV2OpportunityWorkUnitPage.useCallback[fetchQueueSummaries]": async (workUnitId)=>{
+        "AdminV2OpportunityWorkUnitPage.useCallback[fetchQueueSummaries]": async (wuId, focusQueueKey)=>{
             const seq = ++queueSummariesRequestSeq.current;
-            const route = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?include_previews=false&count_mode=exact&limit=3`;
+            const qs = new URLSearchParams({
+                include_previews: "false",
+                count_mode: "planned",
+                limit: "3",
+                summary_mode: "initial"
+            });
+            const fq = (focusQueueKey ?? "").trim();
+            if (fq) qs.set("focus_queue", fq);
+            const route = `/api/admin/work-units/${encodeURIComponent(wuId)}/queues?${qs.toString()}`;
             setQueueSummariesError(null);
             setQueueSummariesRoute(route);
             try {
@@ -9042,8 +9026,8 @@ function AdminV2OpportunityWorkUnitPage() {
                 if (!res.ok) {
                     throw new Error(json.error ?? "Failed to load queues");
                 }
-                const qs = json.queues ?? [];
-                if (seq === queueSummariesRequestSeq.current) setQueueSummaries(qs);
+                const qsOut = json.queues ?? [];
+                if (seq === queueSummariesRequestSeq.current) setQueueSummaries(qsOut);
             } catch (e) {
                 if (seq === queueSummariesRequestSeq.current) {
                     setQueueSummaries(null);
@@ -9060,7 +9044,7 @@ function AdminV2OpportunityWorkUnitPage() {
                 fetchQueueItems(workUnitId, selectedQueueKey, queueSummaries, {
                     force: true
                 }),
-                fetchQueueSummaries(workUnitId)
+                fetchQueueSummaries(workUnitId, selectedQueueKey)
             ]);
         }
     }["AdminV2OpportunityWorkUnitPage.useCallback[invalidate]"], [
@@ -9082,7 +9066,7 @@ function AdminV2OpportunityWorkUnitPage() {
                         fetchQueueItems(workUnitId, selectedQueueKey, summaries, {
                             force: true
                         }),
-                        fetchQueueSummaries(workUnitId)
+                        fetchQueueSummaries(workUnitId, selectedQueueKey)
                     ]);
                 }
             }["AdminV2OpportunityWorkUnitPage.useEffect.onUpdated"];
@@ -9171,13 +9155,13 @@ function AdminV2OpportunityWorkUnitPage() {
                             ]
                         }, void 0, true, {
                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                            lineNumber: 855,
+                            lineNumber: 835,
                             columnNumber: 25
                         }, this) : null
                     ]
                 }, void 0, true, {
                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                    lineNumber: 852,
+                    lineNumber: 832,
                     columnNumber: 17
                 }, this);
             }
@@ -9194,13 +9178,13 @@ function AdminV2OpportunityWorkUnitPage() {
                             ]
                         }, void 0, true, {
                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                            lineNumber: 865,
+                            lineNumber: 845,
                             columnNumber: 25
                         }, this) : null
                     ]
                 }, void 0, true, {
                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                    lineNumber: 862,
+                    lineNumber: 842,
                     columnNumber: 17
                 }, this);
             }
@@ -9250,11 +9234,11 @@ function AdminV2OpportunityWorkUnitPage() {
                                     "aria-label": section.label,
                                     children: [
                                         multiSection ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
-                                            className: "w-full text-[10px] font-semibold uppercase tracking-wide text-alloy-forge/50 sm:w-auto sm:mr-1",
+                                            className: "w-full text-[10px] font-semibold tracking-wide text-alloy-forge/50 sm:w-auto sm:mr-1",
                                             children: section.label
                                         }, void 0, false, {
                                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                                            lineNumber: 938,
+                                            lineNumber: 918,
                                             columnNumber: 33
                                         }, this) : null,
                                         section.queues.map({
@@ -9288,7 +9272,7 @@ function AdminV2OpportunityWorkUnitPage() {
                                                             children: q.label
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                                                            lineNumber: 981,
+                                                            lineNumber: 961,
                                                             columnNumber: 41
                                                         }, this),
                                                         /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -9296,13 +9280,13 @@ function AdminV2OpportunityWorkUnitPage() {
                                                             children: queuePillBadgeCount(q)
                                                         }, void 0, false, {
                                                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                                                            lineNumber: 982,
+                                                            lineNumber: 962,
                                                             columnNumber: 41
                                                         }, this)
                                                     ]
                                                 }, q.key, true, {
                                                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                                                    lineNumber: 965,
+                                                    lineNumber: 945,
                                                     columnNumber: 37
                                                 }, this);
                                             }
@@ -9333,7 +9317,7 @@ function AdminV2OpportunityWorkUnitPage() {
                                                     children: "Other"
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                                                    lineNumber: 1013,
+                                                    lineNumber: 993,
                                                     columnNumber: 37
                                                 }, this),
                                                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("span", {
@@ -9341,25 +9325,25 @@ function AdminV2OpportunityWorkUnitPage() {
                                                     children: unmappedPillCount ?? "—"
                                                 }, void 0, false, {
                                                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                                                    lineNumber: 1014,
+                                                    lineNumber: 994,
                                                     columnNumber: 37
                                                 }, this)
                                             ]
                                         }, "__derived_other__", true, {
                                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                                            lineNumber: 993,
+                                            lineNumber: 973,
                                             columnNumber: 33
                                         }, this) : null
                                     ]
                                 }, section.key, true, {
                                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                                    lineNumber: 936,
+                                    lineNumber: 916,
                                     columnNumber: 25
                                 }, this)
                         }["AdminV2OpportunityWorkUnitPage.useMemo[queuePicker]"])
                     }, void 0, false, {
                         fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                        lineNumber: 934,
+                        lineNumber: 914,
                         columnNumber: 17
                     }, this),
                     activeSummary?.description?.trim() && isOperatorFacingQueueSummaryDescription(activeSummary.description) ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])("p", {
@@ -9367,13 +9351,13 @@ function AdminV2OpportunityWorkUnitPage() {
                         children: activeSummary.description.trim()
                     }, void 0, false, {
                         fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                        lineNumber: 1029,
+                        lineNumber: 1009,
                         columnNumber: 21
                     }, this) : null
                 ]
             }, void 0, true, {
                 fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                lineNumber: 933,
+                lineNumber: 913,
                 columnNumber: 13
             }, this);
         }
@@ -9397,6 +9381,90 @@ function AdminV2OpportunityWorkUnitPage() {
     const queueModel = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useMemo"])({
         "AdminV2OpportunityWorkUnitPage.useMemo[queueModel]": ()=>{
             if (!workUnit || !dept) return null;
+            const enrollmentActionsRail = {
+                "AdminV2OpportunityWorkUnitPage.useMemo[queueModel].enrollmentActionsRail": ()=>{
+                    const isEnrollmentDept = (dept.key ?? "").trim().toLowerCase() === "enrollment";
+                    const emptyBase = {
+                        primaries: [],
+                        systemActions: [],
+                        quickOperations: [],
+                        overflow: []
+                    };
+                    return isEnrollmentDept ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$workspace$2f$viewModels$2f$enrollmentRightRailMerge$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["mergeEnrollmentRightRailActions"])(enrollmentRightRailResolved ?? [], emptyBase) : emptyBase;
+                }
+            }["AdminV2OpportunityWorkUnitPage.useMemo[queueModel].enrollmentActionsRail"];
+            if (!queueSummaries && !queueSummariesError && !oq) {
+                return {
+                    workspaceLevel: "work_unit",
+                    workUnitId: workUnit.id,
+                    departmentKey: dept.key ?? undefined,
+                    laneKey: "queue:loading",
+                    focusLabel: dept.name ?? "Department",
+                    aiSummary: {
+                        headline: workUnit.name ?? "Queue",
+                        subline: dept.name ?? "Department",
+                        aiAwarenessLine: undefined
+                    },
+                    laneInterpretation: {
+                        laneStatusLine: "Loading queues…",
+                        recommendedActionLine: "Records will appear here when the queue is ready."
+                    },
+                    signals: [],
+                    kpis: [],
+                    primaryQueue: {
+                        id: `wu:${workUnit.id}:queue:loading`,
+                        title: "",
+                        laneQueueLabel: "Loading queues",
+                        countBadge: undefined,
+                        items: [],
+                        rowsLoading: true,
+                        sortCaption: undefined,
+                        rollupSummary: undefined
+                    },
+                    workSummary: null,
+                    actionsRail: enrollmentActionsRail(),
+                    contextRail: {
+                        title: "About",
+                        groups: []
+                    }
+                };
+            }
+            if (queueSummariesError && !queueSummaries && !oq) {
+                return {
+                    workspaceLevel: "work_unit",
+                    workUnitId: workUnit.id,
+                    departmentKey: dept.key ?? undefined,
+                    laneKey: "queue:error",
+                    focusLabel: dept.name ?? "Department",
+                    aiSummary: {
+                        headline: workUnit.name ?? "Queue",
+                        subline: dept.name ?? "Department",
+                        aiAwarenessLine: undefined
+                    },
+                    laneInterpretation: {
+                        laneStatusLine: "Queue summaries could not be loaded.",
+                        recommendedActionLine: "Try reloading the page or pick another lane."
+                    },
+                    signals: [],
+                    kpis: [],
+                    primaryQueue: {
+                        id: `wu:${workUnit.id}:queue:error`,
+                        title: "",
+                        laneQueueLabel: "Error",
+                        countBadge: undefined,
+                        items: [],
+                        rowsLoading: false,
+                        sortCaption: queueSummariesError,
+                        rollupSummary: undefined
+                    },
+                    workSummary: null,
+                    actionsRail: enrollmentActionsRail(),
+                    contextRail: {
+                        title: "About",
+                        groups: []
+                    }
+                };
+            }
             if (!queueSummaries) return null;
             const activeQueue = selectedQueueKey ? queueSummaries.find({
                 "AdminV2OpportunityWorkUnitPage.useMemo[queueModel]": (q)=>q.key === selectedQueueKey
@@ -9439,7 +9507,7 @@ function AdminV2OpportunityWorkUnitPage() {
                     const program = typeof r?._requested_program === "string" ? r._requested_program.trim() : "";
                     const desiredStart = typeof r?._desired_start_date === "string" ? r._desired_start_date.trim() : "";
                     const tourCtx = typeof r?._tour_context === "string" ? r._tour_context.trim() : "";
-                    const note = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$opportunityActivityTimelineFormat$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["formatOpportunityQueueNotesPreview"])(typeof r?._notes_preview === "string" ? r._notes_preview : null) ?? "";
+                    const note = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$admin$2f$opportunityActivityTimelineFormat$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__$3c$locals$3e$__["formatOpportunityQueueNotesPreview"])(typeof r?._notes_preview === "string" ? r._notes_preview : null, viewerTz) ?? "";
                     const attentionReason = typeof r?._attention_reason_label === "string" ? r._attention_reason_label.trim() : "";
                     const wfAt = typeof r?.last_activity_at === "string" && r.last_activity_at.trim() ? r.last_activity_at.trim() : null;
                     const wfSummary = typeof r?.last_activity_summary === "string" && r.last_activity_summary.trim() ? r.last_activity_summary.trim() : null;
@@ -9464,13 +9532,14 @@ function AdminV2OpportunityWorkUnitPage() {
                         ] : []
                     ];
                     if (previewActions.includes("call") && phone) {
+                        const tel = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$contactNormalize$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["normalizePhone"])(phone) ?? `+1${phone.replace(/\D/g, "").slice(-10)}`;
                         quickActions.push({
                             id: "call",
                             label: "Call",
                             actionId: "crm_tel",
                             variant: "secondary",
                             payload: {
-                                href: `tel:${phone}`
+                                href: `tel:${tel}`
                             }
                         });
                     }
@@ -9506,9 +9575,11 @@ function AdminV2OpportunityWorkUnitPage() {
                     if (want("primary_contact") && contactName) basicSubtitleParts.push(contactName);
                     if (want("phone") && phone || want("email") && email) {
                         const bits = [
-                            want("phone") ? phone : "",
+                            want("phone") ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$adminFormatters$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatPhoneUS"])(phone) : "",
                             want("email") ? email : ""
-                        ].filter(Boolean);
+                        ].filter({
+                            "AdminV2OpportunityWorkUnitPage.useMemo[queueModel].vmItems.bits": (s)=>s && s !== "—"
+                        }["AdminV2OpportunityWorkUnitPage.useMemo[queueModel].vmItems.bits"]);
                         if (bits.length) basicSubtitleParts.push(bits.join(" · "));
                     }
                     return {
@@ -9528,9 +9599,11 @@ function AdminV2OpportunityWorkUnitPage() {
                             commercialValue: null,
                             contactSnippet: [
                                 want("primary_contact") ? contactName : "",
-                                want("phone") ? phone : "",
+                                want("phone") ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$adminFormatters$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["formatPhoneUS"])(phone) : "",
                                 want("email") ? email : ""
-                            ].filter(Boolean).join(" · ") || null,
+                            ].filter({
+                                "AdminV2OpportunityWorkUnitPage.useMemo[queueModel].vmItems": (s)=>s && s !== "—"
+                            }["AdminV2OpportunityWorkUnitPage.useMemo[queueModel].vmItems"]).join(" · ") || null,
                             programContext: want("program") ? program || null : null,
                             roomContext: null,
                             ageContext: want("desired_start_date") ? desiredStart || null : null,
@@ -9551,7 +9624,8 @@ function AdminV2OpportunityWorkUnitPage() {
             const rowTotalDisplay = effectiveRowTotal == null ? "—" : String(effectiveRowTotal);
             const activeQueueKey = String(activeQueue?.key ?? "");
             const queueItemsKey = queueItems != null && typeof queueItems.queue === "object" && queueItems.queue != null ? String(queueItems.queue.key ?? "") : "";
-            /** Empty list + in-flight fetch, or tab mismatch — show compact in-lane loading (no tall duplicate skeleton). */ const rowsLoading = Boolean(queueItemsLoading) && (queueItems === null || vmItems.length === 0 || activeQueueKey !== "" && queueItemsKey !== "" && queueItemsKey !== activeQueueKey);
+            const awaitingFirstRows = !queueItemsError && Boolean(queueSummaries?.length) && Boolean(selectedQueueKey) && queueItems === null;
+            /** Empty list + in-flight fetch, tab mismatch, or waiting for first row batch — in-lane loading (no “No records”). */ const rowsLoading = awaitingFirstRows || Boolean(queueItemsLoading) && (queueItems === null || vmItems.length === 0 || activeQueueKey !== "" && queueItemsKey !== "" && queueItemsKey !== activeQueueKey);
             return {
                 workspaceLevel: "work_unit",
                 workUnitId: workUnit.id,
@@ -9581,18 +9655,7 @@ function AdminV2OpportunityWorkUnitPage() {
                     rowsLoading
                 },
                 workSummary: null,
-                actionsRail: ({
-                    "AdminV2OpportunityWorkUnitPage.useMemo[queueModel]": ()=>{
-                        const isEnrollmentDept = (dept.key ?? "").trim().toLowerCase() === "enrollment";
-                        const emptyBase = {
-                            primaries: [],
-                            systemActions: [],
-                            quickOperations: [],
-                            overflow: []
-                        };
-                        return isEnrollmentDept ? (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$workspace$2f$viewModels$2f$enrollmentRightRailMerge$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["mergeEnrollmentRightRailActions"])(enrollmentRightRailResolved ?? [], emptyBase) : emptyBase;
-                    }
-                })["AdminV2OpportunityWorkUnitPage.useMemo[queueModel]"](),
+                actionsRail: enrollmentActionsRail(),
                 contextRail: {
                     title: "About",
                     groups: []
@@ -9602,11 +9665,13 @@ function AdminV2OpportunityWorkUnitPage() {
     }["AdminV2OpportunityWorkUnitPage.useMemo[queueModel]"], [
         dept,
         enrollmentRightRailResolved,
+        oq,
         queueItems,
         queueItemsError,
         queueItemsLoading,
         queueItemsRoute,
         queueSummaries,
+        queueSummariesError,
         selectedQueueKey,
         workUnit,
         queueUi,
@@ -9614,7 +9679,8 @@ function AdminV2OpportunityWorkUnitPage() {
         unmappedOnly,
         allRecordsQueueKey,
         coveredThroughputStatusKeys,
-        unmappedPillCount
+        unmappedPillCount,
+        viewerTz
     ]);
     const showOtherBucketPill = typeof unmappedPillCount === "number" && unmappedPillCount > 0 && Boolean(allRecordsQueueKey) && Boolean(otherPillSectionKey);
     const headerQueuePickerSlot = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useMemo"])({
@@ -9635,13 +9701,13 @@ function AdminV2OpportunityWorkUnitPage() {
                         coveredStatusKeys: coveredThroughputStatusKeys
                     }, void 0, false, {
                         fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                        lineNumber: 1349,
+                        lineNumber: 1417,
                         columnNumber: 17
                     }, this)
                 ]
             }, void 0, true, {
                 fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                lineNumber: 1347,
+                lineNumber: 1415,
                 columnNumber: 13
             }, this);
         }
@@ -9764,13 +9830,15 @@ function AdminV2OpportunityWorkUnitPage() {
     ]);
     (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useEffect"])({
         "AdminV2OpportunityWorkUnitPage.useEffect": ()=>{
-            if (!departmentId || !workUnit?.id || !workUnitKpiContext) return;
+            if (!departmentId || !workUnit?.id) return;
             if (suppressWorkUnitKpiStrip) {
-                setWuPlacementStrip([]);
+                setWuPlacementRows([]);
+                setWuScopeHasPlacements(true);
                 return;
             }
             let cancelled = false;
-            setWuPlacementStrip(undefined);
+            setWuPlacementRows(undefined);
+            setWuScopeHasPlacements(false);
             const init = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$workspace$2f$workspaceDataFetch$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["workspaceDataFetchInit"])();
             void ({
                 "AdminV2OpportunityWorkUnitPage.useEffect": async ()=>{
@@ -9780,21 +9848,19 @@ function AdminV2OpportunityWorkUnitPage() {
                             cache: "no-store"
                         });
                         if (!res.ok) {
-                            if (!cancelled) setWuPlacementStrip(undefined);
+                            if (!cancelled) setWuPlacementRows(undefined);
                             return;
                         }
                         const j = await res.json().catch({
                             "AdminV2OpportunityWorkUnitPage.useEffect": ()=>({})
                         }["AdminV2OpportunityWorkUnitPage.useEffect"]);
                         if (cancelled) return;
-                        const { items } = (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$kpi$2f$resolver$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["resolveKpisForWorkUnit"])({
-                            placementRows: j.items ?? [],
-                            scopeHasPlacementRows: j.scope_has_placements === true,
-                            context: workUnitKpiContext
-                        });
-                        if (!cancelled) setWuPlacementStrip(items);
+                        if (!cancelled) {
+                            setWuPlacementRows(j.items ?? []);
+                            setWuScopeHasPlacements(j.scope_has_placements === true);
+                        }
                     } catch  {
-                        if (!cancelled) setWuPlacementStrip(undefined);
+                        if (!cancelled) setWuPlacementRows(undefined);
                     }
                 }
             })["AdminV2OpportunityWorkUnitPage.useEffect"]();
@@ -9807,8 +9873,24 @@ function AdminV2OpportunityWorkUnitPage() {
     }["AdminV2OpportunityWorkUnitPage.useEffect"], [
         departmentId,
         workUnit?.id,
-        workUnitKpiContext,
         suppressWorkUnitKpiStrip
+    ]);
+    const wuResolvedPlacementKpis = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useMemo"])({
+        "AdminV2OpportunityWorkUnitPage.useMemo[wuResolvedPlacementKpis]": ()=>{
+            if (suppressWorkUnitKpiStrip) return [];
+            if (!workUnitKpiContext) return undefined;
+            if (wuPlacementRows === undefined) return undefined;
+            return (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$kpi$2f$resolver$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["resolveKpisForWorkUnit"])({
+                placementRows: wuPlacementRows,
+                scopeHasPlacementRows: wuScopeHasPlacements,
+                context: workUnitKpiContext
+            }).items;
+        }
+    }["AdminV2OpportunityWorkUnitPage.useMemo[wuResolvedPlacementKpis]"], [
+        suppressWorkUnitKpiStrip,
+        wuPlacementRows,
+        wuScopeHasPlacements,
+        workUnitKpiContext
     ]);
     const enrollmentRightRailByKey = (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$index$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useMemo"])({
         "AdminV2OpportunityWorkUnitPage.useMemo[enrollmentRightRailByKey]": ()=>{
@@ -10100,7 +10182,7 @@ function AdminV2OpportunityWorkUnitPage() {
                     kpis: []
                 };
             }
-            const kpis = wuPlacementStrip !== undefined ? wuPlacementStrip : (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$kpi$2f$baseline$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["buildDefaultWorkUnitKpis"])(workUnitKpiContext);
+            const kpis = wuResolvedPlacementKpis !== undefined ? wuResolvedPlacementKpis : (0, __TURBOPACK__imported__module__$5b$project$5d2f$lib$2f$kpi$2f$baseline$2e$ts__$5b$app$2d$client$5d$__$28$ecmascript$29$__["buildDefaultWorkUnitKpis"])(workUnitKpiContext);
             return {
                 ...base,
                 kpis
@@ -10110,12 +10192,10 @@ function AdminV2OpportunityWorkUnitPage() {
         queueModel,
         model,
         workUnitKpiContext,
-        wuPlacementStrip,
+        wuResolvedPlacementKpis,
         suppressWorkUnitKpiStrip
     ]);
     const effectiveModel = mergedWorkspaceModel;
-    const usingMultiQueue = Boolean(queueSummaries && queueSummaries.length > 0);
-    const wuShowPrimaryTransition = !loading && !error && usingMultiQueue && !queueSummariesError && Boolean(selectedQueueKey ?? queueSummaries?.[0]?.key) && !wuBootPrimarySettled;
     return /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$admin$2f$workspace$2f$WorkspaceChrome$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["WorkspaceChrome"], {
         variant: "bridge",
         breadcrumbs: [
@@ -10137,14 +10217,7 @@ function AdminV2OpportunityWorkUnitPage() {
             variant: "work_unit"
         }, void 0, false, {
             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-            lineNumber: 1795,
-            columnNumber: 17
-        }, this) : wuShowPrimaryTransition ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$admin$2f$workspace$2f$AdminV2RouteLoadingState$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["AdminV2RouteLoadingState"], {
-            variant: "queue",
-            children: headerQueuePickerSlot
-        }, void 0, false, {
-            fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-            lineNumber: 1797,
+            lineNumber: 1865,
             columnNumber: 17
         }, this) : effectiveModel ? /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["Fragment"], {
             children: [
@@ -10160,13 +10233,13 @@ function AdminV2OpportunityWorkUnitPage() {
                             children: "View workflows"
                         }, void 0, false, {
                             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                            lineNumber: 1808,
+                            lineNumber: 1874,
                             columnNumber: 29
                         }, this)
                     ]
                 }, void 0, true, {
                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                    lineNumber: 1803,
+                    lineNumber: 1869,
                     columnNumber: 25
                 }, this) : null,
                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$app$2f$adminV2$2f$components$2f$workspace$2f$shells$2f$WorkUnitWorkspace$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["default"], {
@@ -10186,12 +10259,12 @@ function AdminV2OpportunityWorkUnitPage() {
                         href: "/adminV2/workflows"
                     }, void 0, false, {
                         fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                        lineNumber: 1818,
+                        lineNumber: 1884,
                         columnNumber: 29
                     }, void 0)
                 }, void 0, false, {
                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                    lineNumber: 1813,
+                    lineNumber: 1879,
                     columnNumber: 21
                 }, this),
                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$admin$2f$opportunity$2f$actions$2f$UpdateStatusAddNoteModal$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["UpdateStatusAddNoteModal"], {
@@ -10238,7 +10311,7 @@ function AdminV2OpportunityWorkUnitPage() {
                     }
                 }, void 0, false, {
                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                    lineNumber: 1832,
+                    lineNumber: 1898,
                     columnNumber: 21
                 }, this),
                 /*#__PURE__*/ (0, __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$dist$2f$compiled$2f$react$2f$jsx$2d$dev$2d$runtime$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["jsxDEV"])(__TURBOPACK__imported__module__$5b$project$5d2f$components$2f$admin$2f$opportunity$2f$actions$2f$ContactAttemptedModal$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["ContactAttemptedModal"], {
@@ -10278,7 +10351,7 @@ function AdminV2OpportunityWorkUnitPage() {
                     }
                 }, void 0, false, {
                     fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-                    lineNumber: 1869,
+                    lineNumber: 1935,
                     columnNumber: 21
                 }, this)
             ]
@@ -10287,21 +10360,22 @@ function AdminV2OpportunityWorkUnitPage() {
             children: error ?? "Unable to load this work unit."
         }, void 0, false, {
             fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-            lineNumber: 1905,
+            lineNumber: 1971,
             columnNumber: 17
         }, this)
     }, void 0, false, {
         fileName: "[project]/app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx",
-        lineNumber: 1784,
+        lineNumber: 1854,
         columnNumber: 9
     }, this);
 }
-_s(AdminV2OpportunityWorkUnitPage, "x86Wv6uJuquylQQmT7kWgMCmCk4=", false, function() {
+_s(AdminV2OpportunityWorkUnitPage, "AS+pyNueU8y/6ZA3jN5wK+5SHWw=", false, function() {
     return [
         __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$navigation$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useParams"],
         __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$navigation$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useSearchParams"],
         __TURBOPACK__imported__module__$5b$project$5d2f$node_modules$2f$next$2f$navigation$2e$js__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useRouter"],
-        __TURBOPACK__imported__module__$5b$project$5d2f$contexts$2f$AdminDrawerContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useAdminDrawer"]
+        __TURBOPACK__imported__module__$5b$project$5d2f$contexts$2f$AdminDrawerContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useAdminDrawer"],
+        __TURBOPACK__imported__module__$5b$project$5d2f$contexts$2f$AdminViewerTimezoneContext$2e$tsx__$5b$app$2d$client$5d$__$28$ecmascript$29$__["useAdminViewerTimezone"]
     ];
 });
 _c = AdminV2OpportunityWorkUnitPage;

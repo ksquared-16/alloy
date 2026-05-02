@@ -33,7 +33,7 @@ export default function RecordsPanel({ scope, title, embedded }: Props) {
           fontSize: 12,
           fontWeight: 600,
           color: derived.textSecondary,
-          textTransform: "uppercase",
+          textTransform: "none",
           letterSpacing: "0.02em",
         }}
       >

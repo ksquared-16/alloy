@@ -124,7 +124,7 @@ function LoginForm() {
           <div>
             <label
               htmlFor="email"
-              className="block text-xs font-semibold uppercase tracking-wide mb-1 text-alloy-midnight/70"
+              className="block text-xs font-semibold tracking-wide mb-1 text-alloy-midnight/70"
             >
               Email
             </label>
@@ -142,7 +142,7 @@ function LoginForm() {
           <div>
             <label
               htmlFor="password"
-              className="block text-xs font-semibold uppercase tracking-wide mb-1 text-alloy-midnight/70"
+              className="block text-xs font-semibold tracking-wide mb-1 text-alloy-midnight/70"
             >
               Password
             </label>

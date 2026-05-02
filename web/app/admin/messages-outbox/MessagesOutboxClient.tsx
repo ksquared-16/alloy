@@ -1,6 +1,6 @@
 "use client";
 
-import { formatDateTime } from "@/lib/adminFormatters";
+import { formatDateTime, formatPhoneUS } from "@/lib/adminFormatters";
 
 type OutboxRow = {
     id: string;
@@ -65,7 +65,12 @@ export default function MessagesOutboxClient({ initialData, error }: MessagesOut
                                 <td className="p-2">{row.status}</td>
                                 <td className="p-2">
                                     {row.to_contact_id ? <span title={row.to_contact_id}>{row.to_contact_id.slice(0, 8)}…</span> : "—"}
-                                    {row.to_phone != null && row.to_phone !== "" && <><br /><span className="text-alloy-midnight/70">{row.to_phone}</span></>}
+                                    {row.to_phone != null && row.to_phone !== "" && (
+                                        <>
+                                            <br />
+                                            <span className="text-alloy-midnight/70">{formatPhoneUS(row.to_phone)}</span>
+                                        </>
+                                    )}
                                     {row.to_email != null && row.to_email !== "" && <><br /><span className="text-alloy-midnight/70">{row.to_email}</span></>}
                                 </td>
                                 <td className="p-2 max-w-[200px] truncate" title={row.body}>{row.body?.slice(0, 80)}{(row.body?.length ?? 0) > 80 ? "…" : ""}</td>

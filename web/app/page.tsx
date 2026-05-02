@@ -159,7 +159,7 @@ export default function Home() {
 
             <div className="relative z-10 flex min-h-[480px] md:min-h-[460px] lg:min-h-[520px] items-start py-8 md:py-10 px-5 md:px-12 lg:px-14">
               <div className="max-w-xl space-y-4 md:space-y-5 w-full">
-                <p className="text-xs md:text-sm font-semibold text-white/95 uppercase tracking-widest px-4 py-2 rounded-full inline-block border border-white/25 bg-white/10 backdrop-blur-sm shrink-0">
+                <p className="text-xs md:text-sm font-semibold text-white/95 tracking-widest px-4 py-2 rounded-full inline-block border border-white/25 bg-white/10 backdrop-blur-sm shrink-0">
                   Born in Bend. Built for trust.
                 </p>
                 <h1 className="text-3xl md:text-5xl lg:text-6xl font-bold text-white leading-[1.12] tracking-tight [text-shadow:0_2px_20px_rgba(0,0,0,0.35)]">

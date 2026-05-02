@@ -65,7 +65,7 @@ export default function AiActivityPageClient() {
                     style={{ borderColor: derived.border, backgroundColor: neutral.background }}
                 >
                     <div
-                        className="shrink-0 px-3 py-2 text-[10px] font-bold uppercase tracking-wider"
+                        className="shrink-0 px-3 py-2 text-[10px] font-bold tracking-wider"
                         style={{ color: derived.inspectorSectionMuted }}
                     >
                         Recent
