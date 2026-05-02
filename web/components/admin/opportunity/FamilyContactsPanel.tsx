@@ -47,8 +47,12 @@ export function FamilyContactsPanel(props: {
     onRegistryApplied: () => void;
     /** Bumps when the parent refetches opportunity payload after a successful add. */
     refreshKey: number;
-    /** While `drawer_initial` is active, avoid empty family copy until full payload arrives. */
+    /** While `drawer_initial` / visible shell is active (deprecated — prefer opportunityFullHydrate*). */
     recordHydrationPending?: boolean;
+    /** True while `drawer_visible` is on-screen and background `surface=full` has not merged. */
+    opportunityFullHydratePending?: boolean;
+    opportunityFullHydrateApplied?: boolean;
+    opportunityFullHydrateFailed?: boolean;
     /** Summary card in inquiry header vs overview body (layout-only body mount is deprecated). */
     variant?: "default" | "summary";
 }) {
@@ -66,8 +70,24 @@ export function FamilyContactsPanel(props: {
         onRegistryApplied,
         refreshKey,
         recordHydrationPending = false,
+        opportunityFullHydratePending,
+        opportunityFullHydrateApplied,
+        opportunityFullHydrateFailed = false,
         variant = "default",
     } = props;
+
+    const relationshipRowsAwaitingFullHydrate =
+        !opportunityFullHydrateFailed &&
+        (opportunityFullHydratePending === true ||
+            (opportunityFullHydratePending === undefined &&
+                opportunityFullHydrateApplied !== true &&
+                recordHydrationPending));
+    const primaryContactAwaitingFullHydrate =
+        !opportunityFullHydrateFailed &&
+        (opportunityFullHydratePending === true ||
+            (opportunityFullHydratePending === undefined &&
+                opportunityFullHydrateApplied !== true &&
+                recordHydrationPending));
 
     const timingEnabled =
         typeof window === "undefined"
@@ -174,7 +194,7 @@ export function FamilyContactsPanel(props: {
                             )}
                         </div>
                     </div>
-                ) : recordHydrationPending ? (
+                ) : primaryContactAwaitingFullHydrate ? (
                     <AdminV2DrawerLoadingState
                         density="micro"
                         showTrack={false}
@@ -210,7 +230,18 @@ export function FamilyContactsPanel(props: {
             />
 
             {sorted.length === 0 ? (
-                recordHydrationPending ? (
+                opportunityFullHydrateFailed ? (
+                    <div
+                        className={
+                            variant === "summary"
+                                ? "rounded-md border border-amber-200/80 bg-amber-50/60 px-2 py-1.5 text-[11px] text-amber-950"
+                                : "rounded-lg border border-amber-200/80 bg-amber-50/60 px-3 py-2 text-sm text-amber-950"
+                        }
+                    >
+                        Full record did not load. Relationships may be incomplete — try refreshing the drawer or reopening the
+                        opportunity.
+                    </div>
+                ) : relationshipRowsAwaitingFullHydrate ? (
                     <AdminV2DrawerLoadingState
                         density="inline"
                         title="Loading family & opportunity people"

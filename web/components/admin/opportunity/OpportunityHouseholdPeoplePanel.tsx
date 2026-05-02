@@ -29,10 +29,21 @@ export function OpportunityHouseholdPeoplePanel(props: {
     openForm: (opts: { form_key: string; action: ResolvedActionForClient }) => void;
     /** Increment to force refresh after an action. */
     refreshKey: number;
-    /** While `drawer_initial` is showing, avoid empty copy until full hydration may add household links. */
+    /** @deprecated Prefer opportunityFullHydratePending. */
     recordHydrationPending?: boolean;
+    opportunityFullHydratePending?: boolean;
+    opportunityFullHydrateApplied?: boolean;
+    opportunityFullHydrateFailed?: boolean;
 }) {
-    const { opportunityId, customerId, canMutate, sectionKey, departmentId, workUnitId, router, openDrawer, openForm, refreshKey, recordHydrationPending } = props;
+    const { opportunityId, customerId, canMutate, sectionKey, departmentId, workUnitId, router, openDrawer, openForm, refreshKey, recordHydrationPending, opportunityFullHydratePending, opportunityFullHydrateApplied, opportunityFullHydrateFailed = false } = props;
+
+    const householdEmptyAwaitingFull =
+        !opportunityFullHydrateFailed &&
+        (opportunityFullHydratePending === true ||
+            (opportunityFullHydratePending === undefined &&
+                opportunityFullHydrateApplied !== true &&
+                Boolean(recordHydrationPending)));
+
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [people, setPeople] = useState<PersonRow[]>([]);
@@ -114,13 +125,17 @@ export function OpportunityHouseholdPeoplePanel(props: {
                     description="Fetching people linked to this household."
                     className="border-0 bg-transparent px-0 py-2 shadow-none ring-0"
                 />
-            ) : rows.length === 0 && recordHydrationPending ? (
+            ) : rows.length === 0 && householdEmptyAwaitingFull ? (
                 <AdminV2DrawerLoadingState
                     density="inline"
                     title="Loading household people"
                     description="Additional links may still be merging into the full record."
                     className="border-0 bg-transparent px-0 py-2 shadow-none ring-0"
                 />
+            ) : rows.length === 0 && opportunityFullHydrateFailed ? (
+                <div className="rounded-lg border border-amber-200/80 bg-amber-50/60 px-3 py-2 text-sm text-amber-950">
+                    Full record did not load. Household links may be incomplete — try refreshing the drawer.
+                </div>
             ) : rows.length === 0 ? (
                 <div className="text-sm text-alloy-forge/60">No linked people yet.</div>
             ) : (

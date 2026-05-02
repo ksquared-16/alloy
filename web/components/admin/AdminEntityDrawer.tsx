@@ -1010,6 +1010,18 @@ export default function AdminEntityDrawer() {
         if (String((data as { id?: unknown }).id ?? "") !== String(drawer.id)) return false;
         return (data as { _record_surface?: string })._record_surface === "drawer_visible";
     }, [data, drawer.id, drawer.type]);
+    const [opportunityFullHydrateFailed, setOpportunityFullHydrateFailed] = useState(false);
+    const opportunityFullHydrateApplied = useMemo(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return false;
+        if (!data || typeof data !== "object") return false;
+        if (String((data as { id?: unknown }).id ?? "") !== String(drawer.id)) return false;
+        const s = String((data as { _record_surface?: string })._record_surface ?? "").trim();
+        return s === "full" || s === "drawer_initial";
+    }, [data, drawer.id, drawer.type]);
+    /** Relationship-heavy UI: show placeholders while `drawer_visible` until full merge (or until hydrate fails). */
+    const opportunityFullHydratePending = useMemo(() => {
+        return opportunityRecordHydrationPending && !opportunityFullHydrateFailed;
+    }, [opportunityRecordHydrationPending, opportunityFullHydrateFailed]);
     const [isEditing, setIsEditing] = useState(false);
     const [initialInlineFormSnapshot, setInitialInlineFormSnapshot] = useState<string | null>(null);
     const [formData, setFormData] = useState<Record<string, unknown>>({});
@@ -1519,6 +1531,9 @@ export default function AdminEntityDrawer() {
                         ms: Math.round(dt * 10) / 10,
                     });
                 }
+                if (drawer.type === "opportunities") {
+                    setOpportunityFullHydrateFailed(false);
+                }
                 setData(json);
                 if (typeof window !== "undefined" && typeof performance !== "undefined") {
                     requestAnimationFrame(() => {
@@ -1685,6 +1700,7 @@ export default function AdminEntityDrawer() {
             setOpportunityWorkflowRuns(null);
             setOpportunityWorkflowRunsLoading(false);
             setOpportunityWorkflowRunsError(null);
+            setOpportunityFullHydrateFailed(false);
             return;
         }
         const entityOpenKey = `${drawer.type}:${drawer.id}`;
@@ -1703,6 +1719,7 @@ export default function AdminEntityDrawer() {
         if (drawer.type === "opportunities" && drawer.id !== "new") {
             opportunityFullHydrateInFlightRef.current = null;
             opportunityFullHydrateDoneRef.current = null;
+            setOpportunityFullHydrateFailed(false);
         }
         if ((drawer.type === "locations" || drawer.type === "customers" || drawer.type === "opportunities" || drawer.type === "vendors" || drawer.type === "jobs" || drawer.type === "persons") && drawer.id === "new") {
             setData({ _create: true });
@@ -1773,11 +1790,16 @@ export default function AdminEntityDrawer() {
                 if (String((json as { id?: unknown }).id ?? "") !== String(drawer.id)) return;
                 opportunityFullHydrateInFlightRef.current = null;
                 opportunityFullHydrateDoneRef.current = drawer.id;
+                setOpportunityFullHydrateFailed(false);
                 setData((prev) => {
                     if (!prev || String((prev as { id?: unknown }).id ?? "") !== String(drawer.id)) {
-                        return json as Record<string, unknown>;
+                        const fresh = { ...(json as Record<string, unknown>) };
+                        fresh._record_surface = "full";
+                        return fresh;
                     }
-                    return mergeOpportunityFullHydrate(prev as Record<string, unknown>, json as Record<string, unknown>);
+                    const merged = mergeOpportunityFullHydrate(prev as Record<string, unknown>, json as Record<string, unknown>);
+                    merged._record_surface = "full";
+                    return merged;
                 });
                 if (typeof window !== "undefined" && typeof performance !== "undefined") {
                     requestAnimationFrame(() => {
@@ -1790,6 +1812,8 @@ export default function AdminEntityDrawer() {
             .catch((e) => {
                 opportunityFullHydrateInFlightRef.current = null;
                 if (e instanceof Error && e.name === "AbortError") return;
+                opportunityFullHydrateDoneRef.current = drawer.id;
+                setOpportunityFullHydrateFailed(true);
             });
         return () => {
             ac.abort();
@@ -6219,7 +6243,10 @@ export default function AdminEntityDrawer() {
                         workUnitId={String(d.work_unit_id ?? "").trim() || null}
                         router={router}
                         openDrawer={openDrawer}
-                        recordHydrationPending={opportunityRecordHydrationPending}
+                        recordHydrationPending={false}
+                        opportunityFullHydratePending={opportunityFullHydratePending}
+                        opportunityFullHydrateApplied={opportunityFullHydrateApplied}
+                        opportunityFullHydrateFailed={opportunityFullHydrateFailed}
                         openForm={({ form_key, action }) => {
                             setActionFormState({
                                 form_key,
@@ -6318,7 +6345,9 @@ export default function AdminEntityDrawer() {
         recordChromeOpportunity.layout,
         opportunityWorkUnitDepartmentId,
         opportunityDrawerDepartmentId,
-        opportunityRecordHydrationPending,
+        opportunityFullHydratePending,
+        opportunityFullHydrateApplied,
+        opportunityFullHydrateFailed,
         getStatusLabel,
     ]);
 
@@ -9678,9 +9707,9 @@ export default function AdminEntityDrawer() {
                                                 const commPhone = String((comm as { phone?: string | null } | null)?.phone ?? "").trim();
                                                 const primaryContactLabelLine = String(commName || primaryContact || primaryPerson || "").trim();
                                                 const primaryContactNamePending =
-                                                    opportunityRecordHydrationPending && !primaryContactLabelLine;
+                                                    opportunityFullHydratePending && !primaryContactLabelLine;
                                                 const primaryContactChannelsPending =
-                                                    opportunityRecordHydrationPending &&
+                                                    opportunityFullHydratePending &&
                                                     !!primaryContactLabelLine &&
                                                     (!commPhone || !commEmail);
                                                 const childName = String(ident?.primary_child?.display_name ?? "").trim();
@@ -9772,7 +9801,10 @@ export default function AdminEntityDrawer() {
                                                                                 workUnitId={String(d.work_unit_id ?? "").trim() || null}
                                                                                 router={router}
                                                                                 openDrawer={openDrawer}
-                                                                                recordHydrationPending={opportunityRecordHydrationPending}
+                                                                                recordHydrationPending={false}
+                                                                                opportunityFullHydratePending={opportunityFullHydratePending}
+                                                                                opportunityFullHydrateApplied={opportunityFullHydrateApplied}
+                                                                                opportunityFullHydrateFailed={opportunityFullHydrateFailed}
                                                                                 openForm={({ form_key, action }) => {
                                                                                     setActionFormState({
                                                                                         form_key,
@@ -9805,7 +9837,7 @@ export default function AdminEntityDrawer() {
                                                                                 ) : (
                                                                                     <div className="mt-1 text-[13px] font-semibold text-alloy-midnight/85">{household}</div>
                                                                                 )
-                                                                            ) : opportunityRecordHydrationPending ? (
+                                                                            ) : opportunityFullHydratePending ? (
                                                                                 <div
                                                                                     className="mt-1 h-9 w-full max-w-[14rem] skeleton-pulse rounded-md bg-alloy-stone/15"
                                                                                     aria-hidden
@@ -10086,7 +10118,7 @@ export default function AdminEntityDrawer() {
                                                             <div className="min-w-0">
                                                                 <div className={tinyLabel}>{commRoleLabel || ""}</div>
                                                                 <div className="rounded-lg border border-alloy-stone/25 bg-white px-2 py-1.5">
-                                                                    {opportunityRecordHydrationPending &&
+                                                                    {opportunityFullHydratePending &&
                                                                     !(commName || primaryContact || primaryPerson || household).trim() ? (
                                                                         <div
                                                                             className="h-8 w-full max-w-[14rem] skeleton-pulse rounded-md bg-alloy-stone/15"
@@ -10097,7 +10129,7 @@ export default function AdminEntityDrawer() {
                                                                             <div className="text-[13px] font-semibold text-alloy-midnight/85 truncate">
                                                                                 {commName || primaryContact || primaryPerson || household || "—"}
                                                                             </div>
-                                                                            {opportunityRecordHydrationPending &&
+                                                                            {opportunityFullHydratePending &&
                                                                             !!(commName || primaryContact || primaryPerson || household).trim() &&
                                                                             (!commPhone || !commEmail) ? (
                                                                                 <div

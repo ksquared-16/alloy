@@ -990,6 +990,7 @@ export async function GET(
                     : JSON.stringify({ total_ms: enrichTotalMs, phases_ms: {} });
 
             const serverRouteMs = Date.now() - opportunityRouteStartedAt;
+            out._record_surface = "full";
             return NextResponse.json(out, {
                 headers: {
                     "X-Alloy-Entity-Surface": "full",
