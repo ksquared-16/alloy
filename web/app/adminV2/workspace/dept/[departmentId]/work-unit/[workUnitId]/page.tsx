@@ -70,6 +70,25 @@ function queueParamFromWindow(): string {
     }
 }
 
+function readWorkUnitUrlSearchSnapshot(): URLSearchParams {
+    if (typeof window === "undefined") return new URLSearchParams();
+    try {
+        return new URLSearchParams(window.location.search);
+    } catch {
+        return new URLSearchParams();
+    }
+}
+
+/** Shallow lane query sync — preserves Next `history.state`; avoids App Router navigations that remount this page. */
+function replaceWorkUnitBrowserSearch(next: URLSearchParams, onCommitted?: () => void): void {
+    if (typeof window === "undefined") return;
+    const path = window.location.pathname;
+    const qs = next.toString();
+    const url = qs ? `${path}?${qs}` : path;
+    window.history.replaceState(window.history.state, "", url);
+    onCommitted?.();
+}
+
 /** Lane selection from definition + URL only — before exact summaries (Phase 3.1). */
 function resolveProvisionalQueueKey(wu: WorkUnitRow, qFromUrl: string): string | null {
     if (!wu.queue_definition) {
@@ -300,6 +319,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const pendingDeferredAfterWudRef = useRef(false);
     const bootstrapWuRef = useRef<WorkUnitRow | null>(null);
     const firstUsefulPaintMarkedRef = useRef(false);
+    /** Bumped on shallow `history.replaceState` / `popstate` so lane query mirrors `window.location` without Next navigation. */
+    const [wuLaneSearchRev, setWuLaneSearchRev] = useState(0);
+    /** Queue-tab interaction: emit `queue_tab_rows_ready` once when row fetch finishes. */
+    const pendingQueueTabPerfRef = useRef(false);
 
     const [workflowKpis, setWorkflowKpis] = useState<WorkflowKpis>(DEFAULT_WF_KPIS);
     const [workflowKpisLoading, setWorkflowKpisLoading] = useState(true);
@@ -432,7 +455,39 @@ export default function AdminV2OpportunityWorkUnitPage() {
         });
     }, [queueDef, queueSummaries, allRecordsQueueKey]);
 
-    const unmappedOnly = (searchParams?.get("unmapped") ?? "").trim() === "1";
+    const unmappedOnly = useMemo(() => {
+        const sp =
+            typeof window !== "undefined"
+                ? readWorkUnitUrlSearchSnapshot()
+                : new URLSearchParams(searchParams?.toString() ?? "");
+        return sp.get("unmapped")?.trim() === "1";
+    }, [wuLaneSearchRev, searchParams, departmentId, workUnitId]);
+
+    const commitLaneQueryUrl = useCallback((opts: { queueKey: string; unmappedActive: boolean }) => {
+        if (typeof window === "undefined") return;
+        const sp = readWorkUnitUrlSearchSnapshot();
+        sp.set("queue", opts.queueKey);
+        if (opts.unmappedActive) sp.set("unmapped", "1");
+        else sp.delete("unmapped");
+        replaceWorkUnitBrowserSearch(sp, () => setWuLaneSearchRev((x) => x + 1));
+    }, []);
+
+    const handleQueueTabChange = useCallback((nextKey: string, opts?: { unmappedActive?: boolean }) => {
+        const unmappedActive = opts?.unmappedActive ?? false;
+        if (typeof window !== "undefined" && typeof performance !== "undefined") {
+            pendingQueueTabPerfRef.current = true;
+            alloyPerfSet("queue_tab_change_start", performance.now());
+        }
+        setSelectedQueueKey(nextKey);
+        commitLaneQueryUrl({ queueKey: nextKey, unmappedActive });
+    }, [commitLaneQueryUrl]);
+
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        const bump = () => setWuLaneSearchRev((x) => x + 1);
+        window.addEventListener("popstate", bump);
+        return () => window.removeEventListener("popstate", bump);
+    }, []);
 
     useEffect(() => {
         if (!actionFeedback) return;
@@ -457,13 +512,17 @@ export default function AdminV2OpportunityWorkUnitPage() {
         return () => clearTimeout(t);
     }, [workUnitId, selectedQueueKey, workUnit, loading, queueItemsLoading, queueItems, queueItemsError]);
 
-    /** Browser back/forward: sync selected queue with `?queue=` without re-running bootstrap. */
+    /** Browser back/forward: sync selected queue + `unmapped` from the real location (shallow tabs do not update Next `searchParams`). */
     useEffect(() => {
         if (!queueSummaries?.length) return;
-        const qFromUrl = (searchParams?.get("queue") ?? "").trim();
+        const sp =
+            typeof window !== "undefined"
+                ? readWorkUnitUrlSearchSnapshot()
+                : new URLSearchParams(searchParams?.toString() ?? "");
+        const qFromUrl = (sp.get("queue") ?? "").trim();
         if (!qFromUrl || !queueSummaries.some((x) => x.key === qFromUrl)) return;
         setSelectedQueueKey((prev) => (prev !== qFromUrl ? qFromUrl : prev));
-    }, [queueSummaries, searchParams]);
+    }, [queueSummaries, wuLaneSearchRev, searchParams]);
 
     const loadWorkUnitDeferredSupplement = useCallback(async () => {
         if (!workUnitId || !departmentId) return;
@@ -640,6 +699,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
             }
             if (!options?.force && fetchSig === queueItemsLastFetchSigRef.current) {
                 lease.delete(fetchSig);
+                if (pendingQueueTabPerfRef.current && typeof window !== "undefined" && typeof performance !== "undefined") {
+                    pendingQueueTabPerfRef.current = false;
+                    alloyPerfSet("queue_tab_rows_ready", performance.now());
+                }
                 return;
             }
             queueItemsLastFetchSigRef.current = fetchSig;
@@ -685,6 +748,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 const payload = json as unknown as QueueItemsResult;
                 if (seq === queueItemsRequestSeq.current) {
                     setQueueItems(payload);
+                    if (pendingQueueTabPerfRef.current && typeof window !== "undefined" && typeof performance !== "undefined") {
+                        pendingQueueTabPerfRef.current = false;
+                        requestAnimationFrame(() => {
+                            requestAnimationFrame(() => alloyPerfSet("queue_tab_rows_ready", performance.now()));
+                        });
+                    }
                     if (typeof window !== "undefined") {
                         console.warn("[pipeline-count-unify]", {
                             source: "queue-rows",
@@ -706,6 +775,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 }
             } catch (e) {
                 if (seq === queueItemsRequestSeq.current) {
+                    pendingQueueTabPerfRef.current = false;
                     setQueueItems(null);
                     setQueueItemsError(e instanceof Error ? e.message : "Failed to load queue items");
                 }
@@ -1122,7 +1192,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         return () => {
             cancelled = true;
         };
-    }, [departmentId, workUnitId, searchParams, fetchQueueItems, requestWorkUnitDeferredSupplement, markFirstUsefulPaintOnce]);
+    }, [departmentId, workUnitId, fetchQueueItems, requestWorkUnitDeferredSupplement, markFirstUsefulPaintOnce]);
 
     const invalidate = useCallback(
         (opts?: { entity_type?: string; entity_id?: string; action_key?: string }) => {
@@ -1208,16 +1278,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                         <button
                                             key={q.key}
                                             type="button"
-                                            onClick={() => {
-                                                setSelectedQueueKey(q.key);
-                                                void fetchQueueItems(workUnitId, q.key, null, { force: true });
-                                                if (typeof window !== "undefined") {
-                                                    const url = new URL(window.location.href);
-                                                    url.searchParams.set("queue", q.key);
-                                                    url.searchParams.delete("unmapped");
-                                                    router.replace(`${url.pathname}${url.search}`, { scroll: false });
-                                                }
-                                            }}
+                                            onClick={() => handleQueueTabChange(q.key)}
                                             className={`${pillBase} ${ring}`}
                                             aria-pressed={selected}
                                         >
@@ -1352,16 +1413,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                     <button
                                         key={q.key}
                                         type="button"
-                                        onClick={() => {
-                                            setSelectedQueueKey(q.key);
-                                            void fetchQueueItems(workUnitId, q.key, queueSummaries, { force: true });
-                                            if (typeof window !== "undefined") {
-                                                const url = new URL(window.location.href);
-                                                url.searchParams.set("queue", q.key);
-                                                url.searchParams.delete("unmapped");
-                                                router.replace(`${url.pathname}${url.search}`, { scroll: false });
-                                            }
-                                        }}
+                                        onClick={() => handleQueueTabChange(q.key)}
                                         className={`${pillBase} ${ring}`}
                                         aria-pressed={selected}
                                     >
@@ -1380,16 +1432,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 <button
                                     type="button"
                                     key="__derived_other__"
-                                    onClick={() => {
-                                        setSelectedQueueKey(allRecordsQueueKey);
-                                        void fetchQueueItems(workUnitId, allRecordsQueueKey, queueSummaries, { force: true });
-                                        if (typeof window !== "undefined") {
-                                            const url = new URL(window.location.href);
-                                            url.searchParams.set("queue", allRecordsQueueKey);
-                                            url.searchParams.set("unmapped", "1");
-                                            router.replace(`${url.pathname}${url.search}`, { scroll: false });
-                                        }
-                                    }}
+                                    onClick={() => handleQueueTabChange(allRecordsQueueKey, { unmappedActive: true })}
                                     className={`${pillBase} ${
                                         unmappedOnly && selectedQueueKey === allRecordsQueueKey
                                             ? "border-alloy-blue bg-alloy-blue/[0.07] text-alloy-forge shadow-[inset_0_0_0_1px_rgba(0,69,140,0.12)]"
@@ -1418,7 +1461,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             </div>
         );
     }, [
-        fetchQueueItems,
+        handleQueueTabChange,
         queueSummaries,
         queueSummariesError,
         queueSummariesRoute,
@@ -1428,7 +1471,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
         queueItemsError,
         queueItemsLoading,
         workUnitId,
-        router,
         unmappedOnly,
         allRecordsQueueKey,
         unmappedPillCount,

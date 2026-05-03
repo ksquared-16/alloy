@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
+import { takeCommunicationsDrawerPrefetch } from "@/lib/admin/communications/communicationsDrawerPrefetch";
 
 type ThreadRow = {
     id: string;
@@ -160,6 +161,26 @@ export default function CommunicationsDrawerSection({
         setLoadingThreads(true);
         setThrErr(null);
         try {
+            const prefetch = takeCommunicationsDrawerPrefetch(apiEntityType, entityId);
+            if (prefetch?.threads) {
+                try {
+                    const pr = await prefetch.threads;
+                    if (pr.error) throw new Error(pr.error);
+                    const tList = Array.isArray(pr.threads) ? (pr.threads as ThreadRow[]) : [];
+                    setThreads(tList);
+                    setSelectedId((prev) => {
+                        if (embedded) {
+                            if (prev && tList.some((x) => x.id === prev)) return prev;
+                            return null;
+                        }
+                        if (prev && tList.some((x) => x.id === prev)) return prev;
+                        return tList[0]?.id ?? null;
+                    });
+                    return;
+                } catch (e) {
+                    if (!(e instanceof Error && e.name === "AbortError")) throw e;
+                }
+            }
             const qs = new URLSearchParams({ entity_type: apiEntityType, entity_id: entityId, limit: "40" });
             const r = await fetch(`/api/admin/communications/threads?${qs.toString()}`, { credentials: "include" });
             const j = await r.json().catch(() => ({}));
@@ -198,6 +219,23 @@ export default function CommunicationsDrawerSection({
             setLoadingBindings(true);
             setBindingsErr(null);
             try {
+                const prefetch = takeCommunicationsDrawerPrefetch(apiEntityType, entityId);
+                if (prefetch?.bindings) {
+                    try {
+                        const pb = await prefetch.bindings;
+                        if (cancelled) return;
+                        if (pb.error) {
+                            setBindingsErr(pb.error);
+                            setChannelsAvailable([]);
+                        } else {
+                            setBindingsErr(null);
+                            setChannelsAvailable(pb.channels);
+                        }
+                        return;
+                    } catch (e) {
+                        if (!(e instanceof Error && e.name === "AbortError")) throw e;
+                    }
+                }
                 const r = await fetch(`/api/admin/communications/bindings`, { credentials: "include" });
                 const j = await r.json().catch(() => ({}));
                 if (!r.ok) throw new Error((j as { error?: string }).error ?? `HTTP ${r.status}`);
@@ -213,7 +251,7 @@ export default function CommunicationsDrawerSection({
         return () => {
             cancelled = true;
         };
-    }, [dataLayerActive, showEmailComposerChrome, composerEntity]);
+    }, [dataLayerActive, showEmailComposerChrome, composerEntity, apiEntityType, entityId]);
 
     useEffect(() => {
         if (!dataLayerActive || !showEmailComposerChrome || !composerEntity || loadingBindings || !emailOutboundReady) {
@@ -228,6 +266,23 @@ export default function CommunicationsDrawerSection({
             setLoadingRecipients(true);
             setRecipientsErr(null);
             try {
+                const prefetch = takeCommunicationsDrawerPrefetch(apiEntityType, entityId);
+                if (prefetch?.recipients) {
+                    try {
+                        const pr = await prefetch.recipients;
+                        if (cancelled) return;
+                        if (pr.error) {
+                            setRecipients([]);
+                            setRecipientsErr(pr.error);
+                        } else {
+                            setRecipientsErr(null);
+                            setRecipients(Array.isArray(pr.recipients) ? (pr.recipients as DrawerRecipient[]) : []);
+                        }
+                        return;
+                    } catch (e) {
+                        if (!(e instanceof Error && e.name === "AbortError")) throw e;
+                    }
+                }
                 const qs = new URLSearchParams({
                     entity_type: composerEntity,
                     entity_id: entityId,
@@ -253,6 +308,7 @@ export default function CommunicationsDrawerSection({
         dataLayerActive,
         showEmailComposerChrome,
         composerEntity,
+        apiEntityType,
         entityId,
         emailOutboundReady,
         loadingBindings,

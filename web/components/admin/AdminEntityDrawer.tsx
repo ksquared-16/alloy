@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import "@/app/adminV2/components/workspace/workspace.css";
@@ -19,6 +19,10 @@ import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
 import EntityDocumentsSection from "@/components/admin/EntityDocumentsSection";
 import CommunicationsDrawerSection from "@/components/admin/communications/CommunicationsDrawerSection";
+import {
+    armCommunicationsDrawerPrefetch,
+    invalidateCommunicationsDrawerPrefetch,
+} from "@/lib/admin/communications/communicationsDrawerPrefetch";
 import {
     formatMoneyFromCents,
     formatMoneyFromDollars,
@@ -1100,6 +1104,25 @@ export default function AdminEntityDrawer() {
         setPostDrawerVisibleKey(null);
         opportunityFullHydrateInFlightRef.current = null;
         opportunityFullHydrateDoneRef.current = null;
+    }, [drawer.type, drawer.id]);
+
+    useLayoutEffect(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+        if (!data || typeof data !== "object") return;
+        if (!entityDataMatchesDrawer(data, drawer.id)) return;
+        const surface = String((data as { _record_surface?: unknown })._record_surface ?? "").trim();
+        if (surface !== "drawer_visible") return;
+        armCommunicationsDrawerPrefetch("opportunities", drawer.id);
+    }, [drawer.type, drawer.id, data]);
+
+    useEffect(() => {
+        const t = drawer.type;
+        const eid = drawer.id;
+        return () => {
+            if (t === "opportunities" && eid && eid !== "new") {
+                invalidateCommunicationsDrawerPrefetch("opportunities", eid);
+            }
+        };
     }, [drawer.type, drawer.id]);
 
     const [oppQuoteIntakeOpen, setOppQuoteIntakeOpen] = useState(false);

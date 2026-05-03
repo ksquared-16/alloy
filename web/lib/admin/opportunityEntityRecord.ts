@@ -7,10 +7,11 @@ import {
   effectiveOpportunityQuoteDollars,
 } from "@/lib/admin/opportunityLifecyclePresentation";
 import {
-  fetchEffectiveStatusDefinitions,
+  fetchEffectiveStatusDefinitionsTagged,
   displayLabelsFromDefinitions,
   resolveDisplayFromLabelMap,
 } from "@/lib/admin/statusDefinitionsResolve";
+import type { FieldRegistryAttachMeta } from "@/lib/admin/entityFieldRegistryAttach";
 import { isUuidLike } from "@/lib/admin/overviewRelationshipLabels";
 import { batchOptionItemLabelsForOrg, optionLabelFromBatchMap } from "@/lib/admin/optionItemLabelForOrg";
 import { logDbTiming, withDbTiming } from "@/lib/admin/dbQueryTiming";
@@ -77,6 +78,16 @@ async function resolveCustomerPersonRole(
 /**
  * Opportunity record resolution for `GET /api/admin/entity/opportunities/:id`.
  * Centralizes enrichment, surfaces, lifecycle + quote parity (drawer_visible vs full).
+ *
+ * Data split (drawer UX):
+ * - **drawer_visible (fast shell):** native row + minimal FK labels (pipeline stage placeholder, household name,
+ *   primary person/contact identity strings), lifecycle + quote shells, cached opportunity status defs, empty
+ *   `_relationship_displays`, `_field_definitions`, `_opportunity_persons`, `_inquiry_children` — enough for header + hero.
+ * - **surface=full (background hydrate):** field_definitions + sections + field_values merge, FK relationship stubs,
+ *   inquiry_children (OCM + option labels), `_opportunity_persons`, richer `_identity` roles + child picker, pipelines
+ *   / discount / vertical / location context.
+ * Secondary UI (documents, workflows run lists, enrollment forms, Communications thread list beyond prefetch) pulls
+ * from other routes or mounts lazily inside the drawer.
  */
 export async function respondOpportunityEntityGet(
   supabase: AdminSupabase,
@@ -254,9 +265,9 @@ export async function respondOpportunityEntityGet(
         : Promise.resolve({ data: null }),
       primaryPersonContactP,
       oppOrgIdForDefs
-        ? fetchEffectiveStatusDefinitions(supabase, oppOrgIdForDefs, "opportunities", {
+        ? fetchEffectiveStatusDefinitionsTagged(supabase, oppOrgIdForDefs, "opportunities", {
             activeOnly: true,
-          })
+          }).then((p) => p.rows)
         : Promise.resolve([]),
     ]);
     logDbTiming("opportunityEntity.drawer_visible_parallel", Date.now() - tParVis0, {
@@ -403,17 +414,20 @@ export async function respondOpportunityEntityGet(
 
   const enrichStartedAt = Date.now();
   const enrichPhaseMs: Record<string, number> = {};
+  /** Delta timings (full hydrate); cumulative phases remain in enrichPhaseMs for response header. */
+  const segments_ms: Record<string, number> = {};
+  let segmentLapAt = Date.now();
+  const lapSegment = (name: string) => {
+    const now = Date.now();
+    segments_ms[name] = now - segmentLapAt;
+    segmentLapAt = now;
+  };
   const markPhase = (key: string) => {
     enrichPhaseMs[key] = Date.now() - enrichStartedAt;
   };
-  const opportunityDefsP = oppOrgIdForDefs
-    ? fetchEffectiveStatusDefinitions(
-        supabase,
-        oppOrgIdForDefs,
-        "opportunities",
-        { activeOnly: true },
-      )
-    : Promise.resolve([]);
+  const opportunityDefsTaggedP = oppOrgIdForDefs
+    ? fetchEffectiveStatusDefinitionsTagged(supabase, oppOrgIdForDefs, "opportunities", { activeOnly: true })
+    : Promise.resolve(null);
   const tParFull0 = Date.now();
   const [
     wuDeptRow,
@@ -424,7 +438,7 @@ export async function respondOpportunityEntityGet(
     vertRow,
     locRow,
     primaryPatch,
-    opportunityDefs,
+    opportunityTaggedPack,
   ] = await Promise.all([
     wuidForDept
       ? supabase
@@ -479,10 +493,14 @@ export async function respondOpportunityEntityGet(
           .maybeSingle()
       : Promise.resolve({ data: null }),
     primaryPersonContactP,
-    opportunityDefsP,
+    opportunityDefsTaggedP,
   ]);
   logDbTiming("opportunityEntity.full_parallel_lookups", Date.now() - tParFull0, { orgId, id });
   markPhase("after_parallel_context_lookups");
+  lapSegment("parallel_initial_lookups");
+  const opportunityDefs = opportunityTaggedPack?.rows ?? [];
+  const oppStatusDefsCacheHitFull = opportunityTaggedPack?.combinedCacheHit ?? false;
+  const oppStatusDefsTelemetryFull = opportunityTaggedPack?.telemetry;
   out._work_unit_department_id = wuidForDept
     ? trimOrNull(
         (wuDeptRow.data as { department_id?: string | null } | null)
@@ -601,11 +619,13 @@ export async function respondOpportunityEntityGet(
     }),
   );
   markPhase("after_status_defs_and_financial");
+  lapSegment("status_resolve_and_lifecycle_shell");
   const drawerInitial = surfaceParamEarly === "drawer_initial";
-  await attachFieldDefinitionsAndValues(supabase, out, "opportunities", id, {
+  const fieldRegistryMetaFull = await attachFieldDefinitionsAndValues(supabase, out, "opportunities", id, {
     mergeValues: !drawerInitial,
   });
   markPhase("after_field_definitions_values");
+  lapSegment("field_definitions_and_values_attach");
   if (drawerInitial) {
     markPhase("drawer_initial_skip_rel_inquiry_persons");
     out._inquiry_children = [];
@@ -672,13 +692,9 @@ export async function respondOpportunityEntityGet(
     });
   }
 
-  await attachDirectFkRelationshipDisplays(
-    supabase,
-    orgId,
-    "opportunities",
-    out,
-  );
+  await attachDirectFkRelationshipDisplays(supabase, orgId, "opportunities", out);
   markPhase("after_relationship_displays");
+  lapSegment("relationship_displays_attach");
 
   const oppMeta = (opp.metadata ?? null) as Record<string, unknown> | null;
   const metaDesired =
@@ -724,7 +740,7 @@ export async function respondOpportunityEntityGet(
   const oppDefaultProgramType = trimOrNull(out.program_type);
   const oppDefaultScheduleType = trimOrNull(out.schedule_type);
 
-  const ocmMemberStatusDefsP = fetchEffectiveStatusDefinitions(
+  const ocmMemberDefsTaggedPackP = fetchEffectiveStatusDefinitionsTagged(
     supabase,
     orgId,
     "opportunity_customer_members",
@@ -862,6 +878,7 @@ export async function respondOpportunityEntityGet(
 
   const joinRows = joinRes.data;
   markPhase("after_identity_parallel_fetch");
+  lapSegment("identity_roles_and_ocm_join_parallel");
   const jrows = (joinRows ?? []) as {
     id: string;
     customer_member_id: string;
@@ -920,6 +937,7 @@ export async function respondOpportunityEntityGet(
       }[]
     ).map((p) => [p.id, p]),
   );
+  lapSegment("customer_member_linked_person_lookup");
 
   const oppPersonsRowsP = supabase
     .from("opportunity_persons")
@@ -929,8 +947,6 @@ export async function respondOpportunityEntityGet(
     .order("created_at", { ascending: true });
 
   const tInquiry0 = Date.now();
-  const ocmMemberStatusDefs = await ocmMemberStatusDefsP;
-  const ocmStatusLabelByKey = displayLabelsFromDefinitions(ocmMemberStatusDefs);
   const optionPairs: { setKey: string; itemKey: string }[] = [];
   for (const r of jrows) {
     const desiredProgramType =
@@ -948,11 +964,18 @@ export async function respondOpportunityEntityGet(
         itemKey: desiredScheduleType,
       });
   }
-  const [optionLabelMap, oppPersonsListRes] = await Promise.all([
+  const [ocmMemberDefsTaggedPack, optionLabelMap, oppPersonsListRes] = await Promise.all([
+    ocmMemberDefsTaggedPackP,
     batchOptionItemLabelsForOrg(supabase, orgId, optionPairs),
     oppPersonsRowsP,
   ]);
   const inquiryBatchMs = Date.now() - tInquiry0;
+  lapSegment("inquiry_ocm_defs_options_opportunity_persons_rows");
+
+  const ocmMemberStatusDefs = ocmMemberDefsTaggedPack.rows;
+  const ocmOppStatusDefsCacheHit = ocmMemberDefsTaggedPack.combinedCacheHit;
+  const ocmStatusTelemetry = ocmMemberDefsTaggedPack.telemetry;
+  const ocmStatusLabelByKey = displayLabelsFromDefinitions(ocmMemberStatusDefs);
 
   const inquiryChildren = jrows.map((r) => {
     const m = memberMap.get(r.customer_member_id) ?? null;
@@ -1114,44 +1137,47 @@ export async function respondOpportunityEntityGet(
   }
   out._inquiry_children = inquiryChildrenOut;
   markPhase("after_inquiry_children_resolved");
+  lapSegment("inquiry_children_metadata_fallbacks");
 
   {
     const opRows = oppPersonsListRes.data;
+    type OppPersonLite = {
+      id: string;
+      person_id: string;
+      role_type?: string | null;
+    };
+    type PersonRowAgg = {
+      id: string;
+      first_name?: string | null;
+      last_name?: string | null;
+      full_name?: string | null;
+      date_of_birth?: string | null;
+      email?: string | null;
+      phone?: string | null;
+    };
     const personIdsForOpp = [
       ...new Set(
-        ((opRows ?? []) as { person_id: string }[])
+        ((opRows ?? []) as OppPersonLite[])
           .map((z) => z.person_id)
           .filter(Boolean),
       ),
     ] as string[];
-    const { data: opPeople } =
-      personIdsForOpp.length > 0
-        ? await supabase
-            .from("persons")
-            .select("id, first_name, last_name, full_name, email, phone")
-            .eq("org_id", orgId)
-            .in("id", personIdsForOpp)
-        : { data: [] as { id: string }[] };
-    const oppPersonMap = new Map(
-      (
-        (opPeople ?? []) as {
-          id: string;
-          first_name?: string | null;
-          last_name?: string | null;
-          full_name?: string | null;
-          email?: string | null;
-          phone?: string | null;
-        }[]
-      ).map((p) => [p.id, p]),
-    );
-    out._opportunity_persons = (
-      (opRows ?? []) as {
-        id: string;
-        person_id: string;
-        role_type?: string | null;
-      }[]
-    ).map((r) => {
-      const p = oppPersonMap.get(r.person_id) ?? null;
+    const missingOppPersonIds = personIdsForOpp.filter((pid) => !pmap.has(pid));
+    if (missingOppPersonIds.length > 0) {
+      const { data: extraPeople } = await supabase
+        .from("persons")
+        .select("id, first_name, last_name, full_name, date_of_birth, email, phone")
+        .eq("org_id", orgId)
+        .in("id", missingOppPersonIds);
+      for (const row of (extraPeople ?? []) as PersonRowAgg[]) {
+        pmap.set(row.id, row);
+      }
+    }
+
+    lapSegment("opportunity_persons_person_merge_small_batch");
+
+    out._opportunity_persons = ((opRows ?? []) as OppPersonLite[]).map((r) => {
+      const p = (pmap.get(r.person_id) ?? null) as PersonRowAgg | null;
       return {
         id: r.id,
         person_id: r.person_id,
@@ -1163,6 +1189,7 @@ export async function respondOpportunityEntityGet(
     });
   }
   markPhase("after_opportunity_persons");
+  lapSegment("opportunity_person_list_build");
 
   // Inquiry summary from configured field_definitions in the "quote" section when present.
   const defs =
@@ -1233,6 +1260,7 @@ export async function respondOpportunityEntityGet(
   };
 
   markPhase("after_identity_block");
+  lapSegment("quote_section_identity_aggregate");
   const enrichTotalMs = Date.now() - enrichStartedAt;
   const timingPayload = {
     opportunity_id: id,
@@ -1252,8 +1280,38 @@ export async function respondOpportunityEntityGet(
 
   const serverRouteMs = Date.now() - opportunityRouteStartedAt;
   out._record_surface = "full";
-  return NextResponse.json(out, {
+
+  const tSerialize0 = Date.now();
+  const bodyJson = JSON.stringify(out);
+  const serialization_ms = Date.now() - tSerialize0;
+  const payload_kb = Buffer.byteLength(bodyJson, "utf8") / 1024;
+
+  if (process.env.NODE_ENV !== "production" || enrichTotalMs > 250) {
+    console.warn("[perf.drawer.full_hydrate]", {
+      opportunity_id: id,
+      org_id: orgId,
+      total_route_ms: serverRouteMs,
+      enrichment_total_ms: enrichTotalMs,
+      segments_ms,
+      inquiry_option_batch_wall_ms: inquiryBatchMs,
+      opportunity_status_defs: {
+        combined_cache_hit: oppStatusDefsCacheHitFull,
+        telemetry: oppStatusDefsTelemetryFull,
+      },
+      ocm_status_defs: {
+        combined_cache_hit: ocmOppStatusDefsCacheHit,
+        telemetry: ocmStatusTelemetry,
+      },
+      field_registry: fieldRegistryMetaFull,
+      serialization_ms,
+      payload_kb: Math.round(payload_kb * 10) / 10,
+    });
+  }
+
+  return new NextResponse(bodyJson, {
+    status: 200,
     headers: {
+      "content-type": "application/json; charset=utf-8",
       "X-Alloy-Entity-Surface": "full",
       "X-Alloy-Opp-Enrich": enrichHeader,
       "X-Alloy-Server-Duration": String(serverRouteMs),
