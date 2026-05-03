@@ -49,6 +49,21 @@ export interface CommunicationsDrawerSectionProps {
 
 const COMPOSER_LABEL = "mb-1 text-[8px] font-semibold tracking-[0.12em] text-alloy-midnight/45";
 
+function CommsQuietSkeletonLines({ dense }: { dense?: boolean }) {
+    const rowCls = dense
+        ? "h-[2.875rem] w-full rounded-md border border-alloy-stone/12 bg-alloy-stone/[0.08]"
+        : "h-11 w-full rounded-md border border-alloy-stone/12 bg-alloy-stone/[0.08]";
+    return (
+        <div className="flex min-h-[4.75rem] flex-col gap-1.5" aria-busy="true">
+            <div className={`skeleton-pulse ${rowCls}`} aria-hidden />
+            <div
+                className={`skeleton-pulse ${dense ? "h-9" : "h-11"} w-[min(100%,18rem)] rounded-md bg-alloy-stone/14`}
+                aria-hidden
+            />
+        </div>
+    );
+}
+
 /** Map POST /communications/send notes to concise operator copy (honest vs optimistic). */
 function userFriendlySendNote(processNote: string): string {
     const n = processNote.trim().toLowerCase();
@@ -538,7 +553,10 @@ export default function CommunicationsDrawerSection({
             {selectedId == null ? (
                 <p className="text-sm text-alloy-midnight/60">Select a thread.</p>
             ) : loadingMsgs ? (
-                <p className="text-sm text-alloy-midnight/60">Loading messages…</p>
+                <div className="flex min-h-[140px] flex-col gap-2 pt-1" aria-busy="true">
+                    <div className="skeleton-pulse h-14 w-full rounded-md bg-alloy-stone/12" aria-hidden />
+                    <div className="skeleton-pulse h-14 w-[min(100%,90%)] rounded-md bg-alloy-stone/10" aria-hidden />
+                </div>
             ) : msgErr ? (
                 <p className="text-sm text-alloy-ember">{msgErr}</p>
             ) : msgs.length === 0 ? (
@@ -586,7 +604,10 @@ export default function CommunicationsDrawerSection({
             <div className="mb-3 rounded-md border border-alloy-stone/15 bg-white/[0.98] px-2.5 py-2">
                 <div className={COMPOSER_LABEL}>Email (queued send)</div>
                 {loadingBindings ? (
-                    <p className="text-[11px] text-alloy-midnight/55">Checking org email setup…</p>
+                    <div className="space-y-1.5 py-1" aria-busy="true">
+                        <div className="skeleton-pulse h-3 w-[min(92%,240px)] rounded bg-alloy-stone/14" aria-hidden />
+                        <div className="skeleton-pulse h-9 w-full rounded-md bg-alloy-stone/12" aria-hidden />
+                    </div>
                 ) : bindingsErr ? (
                     <p className="text-[11px] text-alloy-ember">{bindingsErr}</p>
                 ) : !channelsAvailable.includes("email") ? (
@@ -594,7 +615,10 @@ export default function CommunicationsDrawerSection({
                         Email outbound is not configured for this organization (missing active Resend binding).
                     </p>
                 ) : loadingRecipients ? (
-                    <p className="text-[11px] text-alloy-midnight/55">Loading person recipients…</p>
+                    <div className="space-y-1.5 py-1" aria-busy="true">
+                        <div className="skeleton-pulse h-3 w-[min(88%,220px)] rounded bg-alloy-stone/14" aria-hidden />
+                        <div className="skeleton-pulse h-16 w-full rounded-md bg-alloy-stone/12" aria-hidden />
+                    </div>
                 ) : recipientsErr ? (
                     <p className="text-[11px] text-alloy-ember">{recipientsErr}</p>
                 ) : recipients.length === 0 ? (
@@ -682,7 +706,7 @@ export default function CommunicationsDrawerSection({
                     !threadSpaceExpanded ? (
                         <div className="space-y-2">
                             {loadingThreads ? (
-                                <p className="text-[12px] text-alloy-midnight/60">Loading threads…</p>
+                                <CommsQuietSkeletonLines dense />
                             ) : thrErr ? (
                                 <p className="text-[12px] text-alloy-ember">{thrErr}</p>
                             ) : threads.length === 0 ? (
@@ -700,17 +724,17 @@ export default function CommunicationsDrawerSection({
                         </div>
                     ) : (
                         <div className="space-y-2">
-                            <div className="flex flex-col gap-3 sm:flex-row">
+                            <div className="flex min-h-[120px] flex-col gap-3 sm:flex-row">
                                 {loadingThreads ? (
-                                    <p className="min-h-[120px] flex-1 rounded-lg border border-alloy-stone/15 bg-white p-3 text-[12px] text-alloy-midnight/60">
-                                        Loading threads…
-                                    </p>
+                                    <div className="min-h-[120px] flex-1 rounded-lg border border-alloy-stone/15 bg-white p-3">
+                                        <CommsQuietSkeletonLines />
+                                    </div>
                                 ) : thrErr ? (
                                     <p className="min-h-[120px] flex-1 rounded-lg border border-alloy-stone/15 bg-white p-3 text-[12px] text-alloy-ember">
                                         {thrErr}
                                     </p>
                                 ) : threads.length === 0 ? (
-                                    <div className="min-h-[120px] flex-1 rounded-lg border border-alloy-stone/15 bg-white p-3">
+                                    <div className="flex min-h-[120px] flex-1 rounded-lg border border-alloy-stone/15 bg-white p-3">
                                         {emptyThreadsBody}
                                     </div>
                                 ) : (
@@ -733,7 +757,9 @@ export default function CommunicationsDrawerSection({
                         </div>
                     )
                 ) : loadingThreads ? (
-                    <p className="text-sm text-alloy-midnight/60">Loading threads…</p>
+                    <div className="min-h-[5rem] rounded-lg border border-alloy-stone/12 bg-white/80 px-3 py-2">
+                        <CommsQuietSkeletonLines />
+                    </div>
                 ) : thrErr ? (
                     <p className="text-sm text-alloy-ember">{thrErr}</p>
                 ) : threads.length === 0 ? (

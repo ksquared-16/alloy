@@ -74,7 +74,6 @@ import { opportunityOverviewStatusBadgeLabel } from "@/lib/admin/opportunityOver
 import { formatVendorOptionLabel, type AdminVendorSelectOption } from "@/lib/admin/vendorOptionLabel";
 import { mergeUnifiedStatusIntoConfigOverview } from "@/lib/admin/unifiedDrawerStatus";
 import { recordSurfaceContextStyle } from "@/lib/visualContext";
-import { AdminV2DrawerLoadingState } from "@/components/admin/workspace/AdminV2DrawerLoadingState";
 import OpportunityInquiryChildrenSection, { type InquiryChildRow } from "@/components/admin/entity/OpportunityInquiryChildrenSection";
 import { OpportunityInquiryChildrenRegistryActions } from "@/components/admin/opportunity/OpportunityInquiryChildrenRegistryActions";
 import { formatTourDateTime } from "@/lib/enrollment/formatTourDateTime";
@@ -834,6 +833,118 @@ function JobDrawerRelationshipsSection(props: {
                     )}
                 </div>
             )}
+        </div>
+    );
+}
+
+/** Quiet block placeholder — avoids spinners inside the drawer after the shell mounts. */
+function DrawerQuietSkeletonBar({ className = "" }: { className?: string }) {
+    return <div className={`skeleton-pulse rounded-md bg-alloy-stone/15 ${className}`.trim()} aria-hidden />;
+}
+
+function DrawerSubtitleGateSkeleton({ lines = 2 }: { lines?: number }) {
+    return (
+        <div className="mt-0.5 space-y-2 min-h-[2.75rem]" aria-busy="true">
+            <DrawerQuietSkeletonBar className="h-4 w-[min(18rem,100%)]" />
+            {lines > 1 ? <DrawerQuietSkeletonBar className="h-3 w-[min(14rem,100%)]" /> : null}
+        </div>
+    );
+}
+
+function DrawerOpportunityWorkflowSubtitleGateSkeleton() {
+    return (
+        <div className="mt-0.5 space-y-2 min-h-[52px]" aria-busy="true">
+            <div className="flex flex-wrap items-center gap-2">
+                <DrawerQuietSkeletonBar className="h-6 w-20 rounded-full" />
+                <DrawerQuietSkeletonBar className="h-9 flex-1 min-w-[10rem] max-w-[240px] rounded-full" />
+                <DrawerQuietSkeletonBar className="h-6 w-40 rounded-full" />
+            </div>
+            <DrawerQuietSkeletonBar className="h-3 w-[min(20rem,100%)]" />
+        </div>
+    );
+}
+
+function DrawerOpportunityWorkflowTimelineGateSkeleton() {
+    return (
+        <div
+            data-opportunity-workflow-timeline-skeleton="true"
+            className="min-h-[52px] rounded-xl border border-alloy-stone/12 bg-white/60 px-2.5 py-2 shadow-sm ring-1 ring-alloy-stone/10"
+            aria-busy="true"
+        >
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="flex min-w-0 items-center gap-1.5">
+                        <DrawerQuietSkeletonBar className="h-5 w-5 shrink-0 rounded-full" />
+                        <DrawerQuietSkeletonBar className="h-3 w-16" />
+                        {i < 3 ? <DrawerQuietSkeletonBar className="mx-0.5 h-[2px] w-5 rounded-full opacity-70" /> : null}
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function DrawerWorkflowHeaderQuickActionsSkeleton() {
+    return (
+        <div className="flex flex-wrap items-start justify-end gap-2 min-h-[2.375rem]" aria-busy="true">
+            <DrawerQuietSkeletonBar className="h-9 w-[5.25rem]" />
+            <DrawerQuietSkeletonBar className="h-9 w-24" />
+            <DrawerQuietSkeletonBar className="h-9 w-28" />
+        </div>
+    );
+}
+
+/** Record body shown while waiting for first entity JSON — same outer spacing intent as hydrated overview. */
+function DrawerRecordGateSkeleton(props: {
+    modalJob: boolean;
+    modalSchedule: boolean;
+    modalOpportunityWorkflow: boolean;
+    modalOpportunityClassic: boolean;
+}) {
+    const { modalJob, modalSchedule, modalOpportunityWorkflow, modalOpportunityClassic } = props;
+
+    if (modalOpportunityWorkflow) {
+        return (
+            <div className="space-y-3">
+                <div className="mb-3 min-h-[132px] space-y-2 rounded-xl border border-alloy-stone/15 bg-white/80 px-2.5 py-2 shadow-sm">
+                    <DrawerQuietSkeletonBar className="h-3 w-28" />
+                    <DrawerQuietSkeletonBar className="h-6 w-[min(100%,24rem)]" />
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                        <DrawerQuietSkeletonBar className="h-10 rounded-lg" />
+                        <DrawerQuietSkeletonBar className="min-h-[2.875rem] flex-1 rounded-lg sm:col-span-1" />
+                        <div className="col-span-1 sm:col-span-2 rounded-lg border border-alloy-stone/10 bg-alloy-stone/[0.04] p-2">
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr,minmax(0,1fr)]">
+                                <div className="space-y-2">
+                                    <DrawerQuietSkeletonBar className="h-3 w-32" />
+                                    <DrawerQuietSkeletonBar className="h-14 rounded-md" />
+                                </div>
+                                <div className="space-y-2">
+                                    <DrawerQuietSkeletonBar className="h-3 w-28" />
+                                    <DrawerQuietSkeletonBar className="h-28 rounded-lg" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <DrawerQuietSkeletonBar className="min-h-[18rem] w-full rounded-xl border border-alloy-stone/10 bg-white/40" />
+            </div>
+        );
+    }
+
+    if (modalOpportunityClassic || modalSchedule || modalJob) {
+        return (
+            <div className="space-y-3 pt-1">
+                <DrawerQuietSkeletonBar className="h-[5.25rem] w-full rounded-xl border border-alloy-stone/10 bg-white/60" />
+                <DrawerQuietSkeletonBar className="min-h-[16rem] w-full rounded-xl border border-alloy-stone/10 bg-white/60" />
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-4 pt-2">
+            <DrawerQuietSkeletonBar className="h-7 w-[min(320px,100%)]" />
+            <DrawerQuietSkeletonBar className="min-h-[12rem] w-full rounded-lg border border-alloy-stone/10 bg-white/50" />
+            <DrawerQuietSkeletonBar className="min-h-[8rem] w-full rounded-lg border border-alloy-stone/10 bg-white/50" />
         </div>
     );
 }
@@ -5429,6 +5540,24 @@ export default function AdminEntityDrawer() {
         !!overviewData &&
         !(overviewData as { _create?: boolean })._create;
 
+    /** Keep Admin V2 record modal shell geometry during first-byte fetch — prevents min-height accent snap. */
+    const scheduleRecordChromeBodyShell =
+        isScheduleRecordModalTarget &&
+        (drawerGateLoading ||
+            !!(overviewData && !(overviewData as { _create?: boolean })._create));
+    const opportunityRecordChromeBodyShell =
+        isOpportunityRecordModalTarget &&
+        (drawerGateLoading ||
+            !!(overviewData && !(overviewData as { _create?: boolean })._create));
+    /** Matches hydrated record body wrappers so height/width rails stay stable gate → ready. */
+    const drawerRecordBodyRootClassName = `${
+        isJobRecordModalTarget && drawer.type === "jobs"
+            ? "space-y-3 max-w-none"
+            : scheduleRecordChromeBodyShell || opportunityRecordChromeBodyShell
+              ? "space-y-3 max-w-none"
+              : "space-y-6"
+    }${opportunityRecordChromeBodyShell ? " pb-24 sm:pb-28" : ""}`;
+
     const jobDrawerV2SignalsNode = useMemo(() => {
         if (!isJobDrawerV2 || !overviewData) return null;
         const pay = jobPaymentSummaryFromApi;
@@ -7555,19 +7684,24 @@ export default function AdminEntityDrawer() {
                 tabLabels={jobDrawerV2TabLabelsResolved}
                 active={drawerTab}
                 onSelect={setDrawerTab}
+                tabButtonsDisabled={drawerGateLoading}
             />
-        ) : drawerReady &&
-          overviewData &&
-          !loading &&
-          ["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "persons", "vendors", "locations", "payments", "discount_redemptions", "service_offerings", "service_plan_templates", "addons", "subscriptions", "documents"].includes(drawer.type) &&
-          !(overviewData as { _create?: boolean })?._create ? (
-            <div className="flex gap-0.5 rounded-lg border border-admin-border bg-white p-0.5">
+        ) : (drawerReady || drawerGateLoading) &&
+          ["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "persons", "vendors", "locations", "payments", "discount_redemptions", "service_offerings", "service_plan_templates", "addons", "subscriptions", "documents"].includes(
+              drawer.type,
+          ) &&
+          !(overviewData && (overviewData as { _create?: boolean })._create) ? (
+            <div className="flex min-h-[2.875rem] flex-wrap gap-0.5 rounded-lg border border-admin-border bg-white p-0.5">
                 {tabList.map((tab) => (
                     <button
                         key={tab}
                         type="button"
-                        onClick={() => setDrawerTab(tab)}
-                        className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors adminv2-record-modal-tab ${drawerTab === tab ? "adminv2-record-modal-tab--active" : "text-alloy-forge/80 hover:bg-alloy-stone/50"}`}
+                        disabled={drawerGateLoading}
+                        onClick={() => {
+                            if (!drawerGateLoading) setDrawerTab(tab);
+                        }}
+                        className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors adminv2-record-modal-tab ${drawerTab === tab ? "adminv2-record-modal-tab--active" : "text-alloy-forge/80 hover:bg-alloy-stone/50"} ${drawerGateLoading ? "opacity-85 cursor-default" : ""}`}
+                        aria-busy={drawerGateLoading}
                     >
                         {tabLabels[tab] ?? tab}
                     </button>
@@ -7674,56 +7808,111 @@ export default function AdminEntityDrawer() {
             </div>
         ) : undefined;
 
+    const headerSubtitleForDrawer =
+        drawerGateLoading && drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer ? (
+            <DrawerOpportunityWorkflowSubtitleGateSkeleton />
+        ) : drawerGateLoading ? (
+            <DrawerSubtitleGateSkeleton />
+        ) : (
+            headerSubtitleResolved
+        );
+
+    const headerTitleRightForDrawer =
+        drawerGateLoading && drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer ? (
+            <DrawerWorkflowHeaderQuickActionsSkeleton />
+        ) : (
+            workflowHeaderTitleRight
+        );
+
+    const headerSignalsForDrawer =
+        drawerGateLoading && drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer ? (
+            <DrawerOpportunityWorkflowTimelineGateSkeleton />
+        ) : drawerGateLoading && isJobRecordModalTarget && drawer.type === "jobs" ? (
+            <div className="min-h-[3.25rem] w-full" aria-busy="true">
+                <DrawerQuietSkeletonBar className="h-14 w-full rounded-lg opacity-95" />
+            </div>
+        ) : isJobDrawerV2 ? (
+            jobDrawerV2SignalsNode
+        ) : (
+            opportunityInquiryWorkflowHeaderTimeline
+        );
+
+    /** Inquiry workflow anchors primary actions beside the title row — omit empty headerActions row entirely. */
+    const workflowOpportunityUsesTitleRailActions =
+        drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer;
+
+    const headerActionsForDrawer = workflowOpportunityUsesTitleRailActions
+        ? undefined
+        : drawerGateLoading
+          ? (
+                <div
+                    className="flex min-h-[40px] w-full flex-wrap items-center justify-end gap-2"
+                    aria-busy="true"
+                >
+                    {drawerHeaderActions}
+                    <DrawerQuietSkeletonBar className="hidden h-9 w-28 sm:block" />
+                    <DrawerQuietSkeletonBar className="h-9 w-24" />
+                </div>
+            )
+          : drawerHeaderActions;
+
+    const recordCleaningV2Eligible =
+        showJobRecordModalV2 || scheduleRecordChromeBodyShell || opportunityRecordChromeBodyShell;
+
     return (
         <Drawer
             isOpen
             onClose={closeDrawer}
             title={drawerTitleResolved}
-            headerSubtitle={drawerGateLoading ? undefined : headerSubtitleResolved}
-            headerTitleRight={drawerGateLoading ? undefined : workflowHeaderTitleRight}
+            headerSubtitle={headerSubtitleForDrawer}
+            headerTitleRight={headerTitleRightForDrawer}
             statusBadge={
                 drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer ? undefined : drawerStatusBadge
             }
-            headerActions={
-                drawerGateLoading
-                    ? undefined
-                    : drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer
-                      ? undefined
-                      : drawerHeaderActions
-            }
-            headerSignals={
-                drawerGateLoading ? undefined : isJobDrawerV2 ? jobDrawerV2SignalsNode : opportunityInquiryWorkflowHeaderTimeline
-            }
-            headerExtra={drawerGateLoading ? undefined : drawerHeaderExtra}
+            headerActions={headerActionsForDrawer}
+            headerSignals={headerSignalsForDrawer}
+            headerExtra={drawerHeaderExtra}
             zIndexBackdrop={60}
             zIndexPanel={70}
             accentColor={drawer.type ? DRAWER_ACCENT_COLORS[drawer.type] : undefined}
             variant={drawerShellVariant}
             presentation={useAdminV2RecordModalPresentation ? "modal" : "sidebar"}
             panelClassName={useAdminV2RecordModalPresentation ? "max-w-7xl" : undefined}
-            recordModalTone={showJobRecordModalV2 || showScheduleRecordModalV2 || showOpportunityRecordModalV2 ? "cleaning-v2" : undefined}
+            recordModalTone={recordCleaningV2Eligible ? "cleaning-v2" : undefined}
             recordModalContextStyle={
-                showJobRecordModalV2 || showScheduleRecordModalV2 || showOpportunityRecordModalV2
+                recordCleaningV2Eligible
                     ? recordSurfaceContextStyle({
                           ...(drawer.operationalVisualContext ?? {}),
                       })
                     : undefined
             }
         >
-            <div className="adminv2-drawer-content-enter">
-            {drawerGateLoading && (
-                <div className="px-1 py-2">
-                    <AdminV2DrawerLoadingState
-                        density="panel"
-                        title="Loading record"
-                        description="Preparing details and actions…"
+            <div className="">
+            {error && <p className="text-alloy-ember">Error: {error}</p>}
+            {drawerGateLoading ? (
+                <div
+                    className={drawerRecordBodyRootClassName}
+                    data-adminv2-drawer-record-gate-skeleton="true"
+                    data-adminv2-job-drawer-body={
+                        isJobRecordModalTarget && drawer.type === "jobs" ? "true" : undefined
+                    }
+                    data-adminv2-schedule-drawer-body={scheduleRecordChromeBodyShell ? "true" : undefined}
+                    data-adminv2-opportunity-drawer-body={opportunityRecordChromeBodyShell ? "true" : undefined}
+                >
+                    <DrawerRecordGateSkeleton
+                        modalJob={isJobRecordModalTarget && drawer.type === "jobs"}
+                        modalSchedule={Boolean(scheduleRecordChromeBodyShell && drawer.type === "schedules")}
+                        modalOpportunityWorkflow={
+                            !!(opportunityRecordChromeBodyShell && opportunityInquiryWorkflowDrawer)
+                        }
+                        modalOpportunityClassic={
+                            !!(opportunityRecordChromeBodyShell && !opportunityInquiryWorkflowDrawer)
+                        }
                     />
                 </div>
-            )}
-            {error && <p className="text-alloy-ember">Error: {error}</p>}
-            {drawerReady && data && dataMatchesDrawer && (
+            ) : drawerReady && data && dataMatchesDrawer ? (
                 <div
-                    className={`${isJobDrawerV2 && drawer.type === "jobs" ? "space-y-3 max-w-none" : showScheduleRecordModalV2 || showOpportunityRecordModalV2 ? "space-y-3 max-w-none" : "space-y-6"}${showOpportunityRecordModalV2 ? " pb-24 sm:pb-28" : ""}`}
+                    className={drawerRecordBodyRootClassName}
                     data-adminv2-job-drawer-body={isJobDrawerV2 && drawer.type === "jobs" ? "true" : undefined}
                     data-adminv2-schedule-drawer-body={showScheduleRecordModalV2 ? "true" : undefined}
                     data-adminv2-opportunity-drawer-body={showOpportunityRecordModalV2 ? "true" : undefined}
@@ -7833,7 +8022,12 @@ export default function AdminEntityDrawer() {
                     {drawerTab === "related" && drawer.type === "opportunities" && drawer.id && drawer.id !== "new" && (
                         <div className="space-y-0 pt-5" data-entity-drawer-related>
                             {opportunityRelatedLoading ? (
-                                <p className="text-sm text-alloy-midnight/60">Loading related records…</p>
+                                <div className="flex min-h-[12rem] flex-col gap-3 py-2" aria-busy="true">
+                                    <DrawerQuietSkeletonBar className="h-5 w-40" />
+                                    <DrawerQuietSkeletonBar className="h-12 rounded-lg opacity-95" />
+                                    <DrawerQuietSkeletonBar className="h-12 rounded-lg opacity-90" />
+                                    <DrawerQuietSkeletonBar className="h-10 w-52 opacity-95" />
+                                </div>
                             ) : (() => {
                                 const d = opportunityRelatedData;
                                 const opp = data as { customer_id?: string | null; _customer_name?: string | null; primary_person_id?: string | null; primary_contact_id?: string | null; location_id?: string | null; _location_id?: string | null; _location_name?: string | null; _primary_person_name?: string | null; _primary_contact_name?: string | null; _contact_name?: string | null } | null | undefined;
@@ -7981,7 +8175,11 @@ export default function AdminEntityDrawer() {
                     {drawerTab === "related" && drawer.type === "persons" && drawer.id && drawer.id !== "new" && (
                         <div className="pt-2 mb-4">
                             {personRelatedLoading ? (
-                                <p className="text-sm text-alloy-midnight/60">Loading related…</p>
+                                <div className="flex min-h-[10rem] flex-col gap-3 py-1" aria-busy="true">
+                                    <DrawerQuietSkeletonBar className="h-4 w-32" />
+                                    <DrawerQuietSkeletonBar className="h-24 rounded-lg opacity-95" />
+                                    <DrawerQuietSkeletonBar className="h-24 rounded-lg opacity-90" />
+                                </div>
                             ) : personRelatedData ? (
                                 <div className="space-y-6">
                                     {((personRelatedData.customer_persons?.length) ?? 0) > 0 && (
@@ -8097,7 +8295,10 @@ export default function AdminEntityDrawer() {
                     {drawerTab === "related" && drawer.type === "customer_members" && (
                         <div className="pt-2 mb-4">
                             {memberRelatedDataLoading ? (
-                                <p className="text-sm text-alloy-midnight/60">Loading related…</p>
+                                <div className="flex min-h-[11rem] flex-col gap-3 py-1" aria-busy="true">
+                                    <DrawerQuietSkeletonBar className="h-4 w-36" />
+                                    <DrawerQuietSkeletonBar className="h-28 rounded-lg opacity-95" />
+                                </div>
                             ) : memberRelatedData ? (() => {
                                 const { linkedContacts, customer, documents } = memberRelatedData;
                                 const hasContacts = linkedContacts.length > 0;
@@ -12092,7 +12293,7 @@ export default function AdminEntityDrawer() {
                         </>
                     )}
                 </div>
-            )}
+            ) : null}
             {memberLinkModalOpen && (
                 <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-label="Link contact" onClick={() => setMemberLinkModalOpen(false)}>
                     <div className="bg-white rounded-lg shadow-lg border border-alloy-stone/30 p-4 max-w-sm w-full mx-4" onClick={(e) => e.stopPropagation()}>

@@ -23,12 +23,14 @@ export function JobDrawerV2TabBar(props: {
     tabLabels: Record<string, string>;
     active: DrawerTabKey;
     onSelect: (tab: DrawerTabKey) => void;
+    /** Drawer record JSON not ready — preserve tab strip footprint without switching panes */
+    tabButtonsDisabled?: boolean;
 }) {
-    const { tabs, tabLabels, active, onSelect } = props;
+    const { tabs, tabLabels, active, onSelect, tabButtonsDisabled } = props;
     return (
         <div
             data-adminv2-job-record-nav="true"
-            className="flex flex-wrap gap-1 rounded-xl p-1"
+            className={`flex min-h-[2.875rem] flex-wrap gap-1 rounded-xl p-1 ${tabButtonsDisabled ? "opacity-90" : ""}`}
             style={{
                 backgroundColor: derived.maskOverlay,
                 borderWidth: 1,
@@ -44,10 +46,14 @@ export function JobDrawerV2TabBar(props: {
                     <button
                         key={tab}
                         type="button"
+                        disabled={tabButtonsDisabled}
                         role="tab"
                         aria-selected={isOn}
-                        onClick={() => onSelect(tab)}
-                        className="rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+                        aria-busy={tabButtonsDisabled}
+                        onClick={() => {
+                            if (!tabButtonsDisabled) onSelect(tab);
+                        }}
+                        className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${tabButtonsDisabled ? "cursor-default" : ""}`}
                         style={
                             isOn
                                 ? {
