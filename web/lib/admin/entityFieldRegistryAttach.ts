@@ -19,7 +19,11 @@ type AdminClient = ReturnType<typeof createAdminClient>;
 export type FieldRegistryAttachMeta = {
     field_registry_process_cache_hit?: boolean;
     field_registry_unstable_attempted?: boolean;
+    field_registry_next_cache_hit?: boolean;
+    /** True when defs were served without hitting Postgres (process LRU or Next unstable_cache snapshot). */
     field_registry_combined_cache_hit?: boolean;
+    /** Wall time of `fetchFieldDefinitionsAndSectionsFromDb` when the uncached fetcher ran; omitted on full cache hits. */
+    field_registry_uncached_ms?: number;
 };
 
 const FIELD_REGISTRY_PROCESS_CACHE = new Map<
@@ -128,6 +132,8 @@ async function resolveFieldDefinitionsAndSectionsForDrawer(
                 meta: {
                     field_registry_process_cache_hit: true,
                     field_registry_unstable_attempted: false,
+                    field_registry_next_cache_hit: false,
+                    /** No Postgres defs query this request — process LRU only (Next data cache untouched). */
                     field_registry_combined_cache_hit: true,
                 },
             };
@@ -135,6 +141,7 @@ async function resolveFieldDefinitionsAndSectionsForDrawer(
     }
 
     let fetcherRan = false;
+    let fieldRegistryUncachedMs = 0;
     let bundle: {
         fieldDefs: {
             id: string;
@@ -151,7 +158,10 @@ async function resolveFieldDefinitionsAndSectionsForDrawer(
     let unstableAttempted = false;
     const runUncached = async () => {
         fetcherRan = true;
-        return fetchFieldDefinitionsAndSectionsFromDb(orgId, entityType);
+        const uc0 = Date.now();
+        const b = await fetchFieldDefinitionsAndSectionsFromDb(orgId, entityType);
+        fieldRegistryUncachedMs = Date.now() - uc0;
+        return b;
     };
 
     if (typeof unstable_cache === "function" && process.env.NODE_ENV !== "test") {
@@ -165,6 +175,7 @@ async function resolveFieldDefinitionsAndSectionsForDrawer(
     }
 
     const unstableHit = unstableAttempted && !fetcherRan;
+    /** True when defs+sections snapshot came without a Postgres defs query (`unstable_cache` hit). */
     const combinedCacheHit = unstableHit;
 
     if (FIELD_REGISTRY_PROCESS_CACHE_ENABLED) {
@@ -181,7 +192,11 @@ async function resolveFieldDefinitionsAndSectionsForDrawer(
         meta: {
             field_registry_process_cache_hit: false,
             field_registry_unstable_attempted: unstableAttempted,
+            field_registry_next_cache_hit: unstableHit,
             field_registry_combined_cache_hit: combinedCacheHit,
+            ...(fetcherRan && fieldRegistryUncachedMs >= 0
+                ? { field_registry_uncached_ms: fieldRegistryUncachedMs }
+                : {}),
         },
     };
 }

@@ -282,6 +282,11 @@ export type QueueVm = {
    * Work-unit lane: while true, suppress empty-state copy ("No records") — rows are still loading or tab switched.
    */
   rowsLoading?: boolean;
+  /**
+   * Work-unit lane: prior rows visible while newer rows load — dimmed / non-interactive, not emptied.
+   * (Separate from rowsLoading skeleton when there was no prior list.)
+   */
+  rowsRefreshing?: boolean;
 };
 
 export type WorkStepVm = {

@@ -7,10 +7,15 @@ type ThreadsResult = { threads: unknown[]; error: string | null };
 type BindingsResult = { channels: string[]; error: string | null };
 type RecipientsResult = { recipients: unknown[]; error: string | null };
 
+type PrefetchConsumeRole = "threads" | "bindings" | "recipients";
+
 export type CommunicationsDrawerPrefetchSlot = {
     threads: Promise<ThreadsResult>;
     bindings: Promise<BindingsResult>;
     recipients: Promise<RecipientsResult>;
+    /** True when `arm` found an existing slot (no duplicate network fan-out). */
+    prefetch_arm_cache_hit?: boolean;
+    consumed: Partial<Record<PrefetchConsumeRole, boolean>>;
 };
 
 const slots = new Map<string, CommunicationsDrawerPrefetchSlot>();
@@ -30,7 +35,17 @@ async function readJsonSafely(res: Response): Promise<unknown> {
 
 export function armCommunicationsDrawerPrefetch(apiEntityType: string, entityId: string): void {
     const key = prefetchKey(apiEntityType, entityId);
-    if (slots.has(key)) return;
+    if (slots.has(key)) {
+        if (shouldLogPrefetch()) {
+            console.warn("[perf.drawer.comms_prefetch]", {
+                entity_type: apiEntityType,
+                entity_id: entityId,
+                event: "arm_skip",
+                prefetch_arm_cache_hit: true,
+            });
+        }
+        return;
+    }
 
     const ac = new AbortController();
     controllers.set(key, ac);
@@ -142,10 +157,18 @@ export function armCommunicationsDrawerPrefetch(apiEntityType: string, entityId:
         }
     });
 
-    slots.set(key, { threads, bindings, recipients });
+    const slot: CommunicationsDrawerPrefetchSlot = {
+        threads,
+        bindings,
+        recipients,
+        prefetch_arm_cache_hit: false,
+        consumed: {},
+    };
+    slots.set(key, slot);
 
     if (logPerf) {
         void Promise.allSettled([threads, bindings, recipients]).then(() => {
+            const s = slots.get(key);
             const t1 =
                 typeof performance !== "undefined" && typeof performance.now === "function"
                     ? performance.now()
@@ -154,10 +177,15 @@ export function armCommunicationsDrawerPrefetch(apiEntityType: string, entityId:
             console.warn("[perf.drawer.comms_prefetch]", {
                 entity_type: apiEntityType,
                 entity_id: entityId,
+                event: "prefetch_settled",
                 total_ms,
                 threads_ms: tThreadsEnd ? Math.round((tThreadsEnd - perfT0) * 10) / 10 : undefined,
                 bindings_ms: tBindingsEnd ? Math.round((tBindingsEnd - perfT0) * 10) / 10 : undefined,
                 recipients_ms: tRecipientsEnd ? Math.round((tRecipientsEnd - perfT0) * 10) / 10 : undefined,
+                prefetch_arm_cache_hit: Boolean(s?.prefetch_arm_cache_hit),
+                threads_taken_by_tab: Boolean(s?.consumed.threads),
+                bindings_taken_by_tab: Boolean(s?.consumed.bindings),
+                recipients_taken_by_tab: Boolean(s?.consumed.recipients),
             });
         });
     }
@@ -170,9 +198,14 @@ function shouldLogPrefetch(): boolean {
 
 export function takeCommunicationsDrawerPrefetch(
     apiEntityType: string,
-    entityId: string
+    entityId: string,
+    consume?: PrefetchConsumeRole
 ): CommunicationsDrawerPrefetchSlot | undefined {
-    return slots.get(prefetchKey(apiEntityType, entityId));
+    const slot = slots.get(prefetchKey(apiEntityType, entityId));
+    if (slot && consume) {
+        slot.consumed[consume] = true;
+    }
+    return slot;
 }
 
 export function invalidateCommunicationsDrawerPrefetch(apiEntityType: string, entityId: string): void {

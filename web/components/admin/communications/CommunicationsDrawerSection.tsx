@@ -161,7 +161,7 @@ export default function CommunicationsDrawerSection({
         setLoadingThreads(true);
         setThrErr(null);
         try {
-            const prefetch = takeCommunicationsDrawerPrefetch(apiEntityType, entityId);
+            const prefetch = takeCommunicationsDrawerPrefetch(apiEntityType, entityId, "threads");
             if (prefetch?.threads) {
                 try {
                     const pr = await prefetch.threads;
@@ -219,7 +219,7 @@ export default function CommunicationsDrawerSection({
             setLoadingBindings(true);
             setBindingsErr(null);
             try {
-                const prefetch = takeCommunicationsDrawerPrefetch(apiEntityType, entityId);
+                const prefetch = takeCommunicationsDrawerPrefetch(apiEntityType, entityId, "bindings");
                 if (prefetch?.bindings) {
                     try {
                         const pb = await prefetch.bindings;
@@ -266,7 +266,7 @@ export default function CommunicationsDrawerSection({
             setLoadingRecipients(true);
             setRecipientsErr(null);
             try {
-                const prefetch = takeCommunicationsDrawerPrefetch(apiEntityType, entityId);
+                const prefetch = takeCommunicationsDrawerPrefetch(apiEntityType, entityId, "recipients");
                 if (prefetch?.recipients) {
                     try {
                         const pr = await prefetch.recipients;

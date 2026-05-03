@@ -17,6 +17,7 @@ import { executeOpportunityRecordAction } from "@/lib/recordChrome/executeOpport
 import type { WorkspaceAction } from "@/lib/ui-v2/workspace-actions";
 import type {
     QueueItemQuickActionVm,
+    QueuePreviewItemVm,
     WorkUnitWorkspaceModel,
 } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
@@ -58,6 +59,15 @@ import {
     shouldSuppressWorkUnitKpiStrip,
     statusKeysCoveredByThroughputQueues,
 } from "@/lib/workspace/workUnitQueueDerived";
+import {
+    deleteQueueRowCacheKeysForPrefix,
+    logQueueRowClientCache,
+    peekFreshQueueRowCache,
+    putQueueRowCache,
+    queueRowLogicalCacheKey,
+    shouldStaleBackgroundRefresh,
+    type QueueRowClientCacheBucket,
+} from "@/lib/workspace/queueRowClientCache";
 
 const WORKSPACE_BASE = "/adminV2/workspace";
 
@@ -323,6 +333,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const [wuLaneSearchRev, setWuLaneSearchRev] = useState(0);
     /** Queue-tab interaction: emit `queue_tab_rows_ready` once when row fetch finishes. */
     const pendingQueueTabPerfRef = useRef(false);
+    /** Last settled preview rows — keeps list visible while `queueItems` is briefly null during lane changes. */
+    const queueRowsBufferRef = useRef<QueuePreviewItemVm[]>([]);
+    const queueRowClientCacheRef = useRef(new Map<string, QueueRowClientCacheBucket<QueueItemsResult>>());
+    const selectedQueueKeyRef = useRef<string | null>(null);
+    const unmappedOnlyRef = useRef(false);
+    /** Cancel token for idle prefetch of neighboring queue lanes. */
+    const queueAdjacentPrefetchTokenRef = useRef(0);
 
     const [workflowKpis, setWorkflowKpis] = useState<WorkflowKpis>(DEFAULT_WF_KPIS);
     const [workflowKpisLoading, setWorkflowKpisLoading] = useState(true);
@@ -463,6 +480,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
         return sp.get("unmapped")?.trim() === "1";
     }, [wuLaneSearchRev, searchParams, departmentId, workUnitId]);
 
+    selectedQueueKeyRef.current = selectedQueueKey;
+    unmappedOnlyRef.current = unmappedOnly;
+
     const commitLaneQueryUrl = useCallback((opts: { queueKey: string; unmappedActive: boolean }) => {
         if (typeof window === "undefined") return;
         const sp = readWorkUnitUrlSearchSnapshot();
@@ -503,7 +523,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
             !loading &&
             queueItemsLoading &&
             queueItems === null &&
-            !queueItemsError;
+            !queueItemsError &&
+            queueRowsBufferRef.current.length === 0;
         if (!gated) {
             setWuPrimaryLaneTimedOut(false);
             return;
@@ -511,6 +532,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
         const t = window.setTimeout(() => setWuPrimaryLaneTimedOut(true), 12_000);
         return () => clearTimeout(t);
     }, [workUnitId, selectedQueueKey, workUnit, loading, queueItemsLoading, queueItems, queueItemsError]);
+
+    useEffect(() => {
+        queueRowsBufferRef.current = [];
+        queueRowClientCacheRef.current.clear();
+    }, [departmentId, workUnitId]);
 
     /** Browser back/forward: sync selected queue + `unmapped` from the real location (shallow tabs do not update Next `searchParams`). */
     useEffect(() => {
@@ -684,30 +710,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
             workUnitId: string,
             queueKey: string,
             _summaries: QueueSummary[] | null,
-            options?: { force?: boolean }
+            options?: {
+                force?: boolean;
+                prefetchOnly?: boolean;
+                quietStaleRefresh?: boolean;
+                /** Prefetched rows use canonical `all` cache bucket even when Current tab shows `unmapped` filter UI. */
+                logicalUnmapped?: boolean;
+            }
         ) => {
             void _summaries;
-            /** Tab totals come from summaries; list fetch always omits row-route total work — avoids refetch when summaries land. */
             const fetchSig = `${workUnitId}|${queueKey}|omit`;
-            const lease = queueRowLeaseSigsRef.current;
-            if (options?.force) {
-                lease.delete(fetchSig);
-            } else if (lease.has(fetchSig)) {
-                return;
-            } else {
-                lease.add(fetchSig);
-            }
-            if (!options?.force && fetchSig === queueItemsLastFetchSigRef.current) {
-                lease.delete(fetchSig);
-                if (pendingQueueTabPerfRef.current && typeof window !== "undefined" && typeof performance !== "undefined") {
-                    pendingQueueTabPerfRef.current = false;
-                    alloyPerfSet("queue_tab_rows_ready", performance.now());
-                }
-                return;
-            }
-            queueItemsLastFetchSigRef.current = fetchSig;
-
-            const seq = ++queueItemsRequestSeq.current;
+            const logicalUm = options?.logicalUnmapped ?? unmappedOnly;
+            const logicalKey = queueRowLogicalCacheKey(workUnitId, queueKey, logicalUm);
             const qs = new URLSearchParams({
                 limit: "20",
                 offset: "0",
@@ -715,30 +729,69 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 omit_total_count: "true",
             });
             const route = `/api/admin/queues/${encodeURIComponent(workUnitId)}/${encodeURIComponent(queueKey)}?${qs.toString()}`;
-            setQueueItemsLoading(true);
-            setQueueItemsError(null);
-            setQueueItemsRoute(route);
-            setQueueItems((prev) => {
-                const pk =
-                    prev?.queue && typeof (prev.queue as { key?: string }).key === "string"
-                        ? (prev.queue as { key: string }).key
-                        : null;
-                if (pk != null && pk !== queueKey) return null;
-                return prev;
-            });
-            try {
+            const cache = queueRowClientCacheRef.current;
+
+            if (options?.force) {
+                cache.delete(queueRowLogicalCacheKey(workUnitId, queueKey, false));
+                cache.delete(queueRowLogicalCacheKey(workUnitId, queueKey, true));
+            }
+
+            if (!options?.force && !options?.prefetchOnly && !options?.quietStaleRefresh) {
+                const ent = peekFreshQueueRowCache(cache, logicalKey);
+                if (ent) {
+                    queueItemsLastFetchSigRef.current = fetchSig;
+                    setQueueItemsError(null);
+                    setQueueItemsRoute(route);
+                    setQueueItems(ent.payload);
+                    setQueueItemsLoading(false);
+                    logQueueRowClientCache({
+                        event: "hit",
+                        work_unit_id: workUnitId,
+                        queue_key: queueKey,
+                        age_ms: Date.now() - ent.fetchedAt,
+                    });
+                    if (pendingQueueTabPerfRef.current && typeof window !== "undefined" && typeof performance !== "undefined") {
+                        pendingQueueTabPerfRef.current = false;
+                        alloyPerfSet("queue_tab_rows_ready", performance.now());
+                    }
+                    markFirstUsefulPaintOnce();
+                    if (shouldStaleBackgroundRefresh(ent.fetchedAt)) {
+                        logQueueRowClientCache({
+                            event: "stale_refresh",
+                            work_unit_id: workUnitId,
+                            queue_key: queueKey,
+                            age_ms: Date.now() - ent.fetchedAt,
+                        });
+                        void fetchQueueItems(workUnitId, queueKey, null, {
+                            quietStaleRefresh: true,
+                            logicalUnmapped: logicalUm,
+                        });
+                    }
+                    return;
+                }
+                logQueueRowClientCache({
+                    event: "miss",
+                    work_unit_id: workUnitId,
+                    queue_key: queueKey,
+                    age_ms: null,
+                });
+            }
+
+            const lease = queueRowLeaseSigsRef.current;
+
+            const runNetwork = async (seq: number, touchUiPerf: boolean) => {
                 const init = workspaceDataFetchInit();
-                if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                if (touchUiPerf && typeof window !== "undefined" && typeof performance !== "undefined") {
                     alloyPerfSet("queue_rows_request_start", performance.now());
                     alloyPerfSet("rows_req", performance.now());
                 }
                 const res = await fetch(route, init);
-                if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                if (touchUiPerf && typeof window !== "undefined" && typeof performance !== "undefined") {
                     alloyPerfSet("queue_rows_response_headers", performance.now());
                     alloyPerfSet("rows_resp", performance.now());
                 }
                 const json = (await res.json().catch(() => ({}))) as { error?: string };
-                if (typeof window !== "undefined" && typeof performance !== "undefined") {
+                if (touchUiPerf && typeof window !== "undefined" && typeof performance !== "undefined") {
                     alloyPerfSet("queue_rows_json_parse_done", performance.now());
                 }
                 if (!res.ok) {
@@ -746,7 +799,21 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     throw new Error(json.error ?? "Failed to load queue items");
                 }
                 const payload = json as unknown as QueueItemsResult;
+                const stillSelected =
+                    selectedQueueKeyRef.current === queueKey && unmappedOnlyRef.current === logicalUm;
+                if (options?.prefetchOnly) {
+                    putQueueRowCache(cache, workUnitId, queueKey, payload);
+                    return;
+                }
+                if (options?.quietStaleRefresh) {
+                    if (seq === queueItemsRequestSeq.current && stillSelected) {
+                        putQueueRowCache(cache, workUnitId, queueKey, payload);
+                        setQueueItems(payload);
+                    }
+                    return;
+                }
                 if (seq === queueItemsRequestSeq.current) {
+                    putQueueRowCache(cache, workUnitId, queueKey, payload);
                     setQueueItems(payload);
                     if (pendingQueueTabPerfRef.current && typeof window !== "undefined" && typeof performance !== "undefined") {
                         pendingQueueTabPerfRef.current = false;
@@ -773,6 +840,74 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     }
                     markFirstUsefulPaintOnce();
                 }
+            };
+
+            if (options?.prefetchOnly) {
+                if (peekFreshQueueRowCache(cache, logicalKey)) return;
+                if (lease.has(fetchSig)) return;
+                lease.add(fetchSig);
+                const seq = ++queueItemsRequestSeq.current;
+                logQueueRowClientCache({
+                    event: "prefetch",
+                    work_unit_id: workUnitId,
+                    queue_key: queueKey,
+                    age_ms: null,
+                });
+                try {
+                    await runNetwork(seq, false);
+                } catch {
+                    /* best-effort */
+                } finally {
+                    lease.delete(fetchSig);
+                }
+                return;
+            }
+
+            if (options?.quietStaleRefresh) {
+                if (lease.has(fetchSig)) return;
+                lease.add(fetchSig);
+                const seq = ++queueItemsRequestSeq.current;
+                try {
+                    await runNetwork(seq, false);
+                } catch {
+                    /* stale refresh silent */
+                } finally {
+                    lease.delete(fetchSig);
+                }
+                return;
+            }
+
+            if (options?.force) {
+                lease.delete(fetchSig);
+            } else if (lease.has(fetchSig)) {
+                return;
+            } else {
+                lease.add(fetchSig);
+            }
+            if (!options?.force && fetchSig === queueItemsLastFetchSigRef.current) {
+                lease.delete(fetchSig);
+                if (pendingQueueTabPerfRef.current && typeof window !== "undefined" && typeof performance !== "undefined") {
+                    pendingQueueTabPerfRef.current = false;
+                    alloyPerfSet("queue_tab_rows_ready", performance.now());
+                }
+                return;
+            }
+            queueItemsLastFetchSigRef.current = fetchSig;
+
+            const seq = ++queueItemsRequestSeq.current;
+            setQueueItemsLoading(true);
+            setQueueItemsError(null);
+            setQueueItemsRoute(route);
+            setQueueItems((prev) => {
+                const pk =
+                    prev?.queue && typeof (prev.queue as { key?: string }).key === "string"
+                        ? (prev.queue as { key: string }).key
+                        : null;
+                if (pk != null && pk !== queueKey) return prev;
+                return prev;
+            });
+            try {
+                await runNetwork(seq, true);
             } catch (e) {
                 if (seq === queueItemsRequestSeq.current) {
                     pendingQueueTabPerfRef.current = false;
@@ -787,7 +922,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 }
             }
         },
-        [requestWorkUnitDeferredSupplement, markFirstUsefulPaintOnce]
+        [requestWorkUnitDeferredSupplement, markFirstUsefulPaintOnce, unmappedOnly]
     );
 
     const fetchQueueSummaries = useCallback(async (wuId: string, focusQueueKey: string | null) => {
@@ -872,6 +1007,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             setError("Missing department or work unit in the URL.");
             queueItemsLastFetchSigRef.current = null;
             queueRowLeaseSigsRef.current.clear();
+            queueRowClientCacheRef.current.clear();
             workUnitDeferredScheduledRef.current = false;
             workUnitDetailReadyRef.current = false;
             pendingDeferredAfterWudRef.current = false;
@@ -920,6 +1056,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     setEnrollmentRightRailResolved(null);
                     queueItemsLastFetchSigRef.current = null;
                     queueRowLeaseSigsRef.current.clear();
+                    queueRowClientCacheRef.current.clear();
                     setWuPlacementRows(undefined);
                     setWuScopeHasPlacements(false);
                     if (qFromUrlEffective) setSelectedQueueKey(qFromUrlEffective);
@@ -1198,6 +1335,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         (opts?: { entity_type?: string; entity_id?: string; action_key?: string }) => {
             void opts;
             if (!workUnitId || !selectedQueueKey) return;
+            deleteQueueRowCacheKeysForPrefix(queueRowClientCacheRef.current, workUnitId);
             void Promise.all([
                 fetchQueueItems(workUnitId, selectedQueueKey, queueSummaries, { force: true }),
                 fetchQueueSummaries(workUnitId, selectedQueueKey),
@@ -1213,6 +1351,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         if (!workUnitId || !selectedQueueKey) return;
         const onUpdated = (_ev: Event) => {
             const summaries = queueSummariesRef.current;
+            deleteQueueRowCacheKeysForPrefix(queueRowClientCacheRef.current, workUnitId);
             void Promise.all([
                 fetchQueueItems(workUnitId, selectedQueueKey, summaries, { force: true }),
                 fetchQueueSummaries(workUnitId, selectedQueueKey),
@@ -1226,7 +1365,56 @@ export default function AdminV2OpportunityWorkUnitPage() {
     useEffect(() => {
         if (!workUnitId || !selectedQueueKey || loading || !workUnit) return;
         void fetchQueueItems(workUnitId, selectedQueueKey, null);
-    }, [fetchQueueItems, selectedQueueKey, workUnitId, workUnit, loading]);
+    }, [fetchQueueItems, selectedQueueKey, workUnitId, workUnit, loading, unmappedOnly]);
+
+    useEffect(() => {
+        if (typeof window === "undefined") return;
+        if (!workUnitId || !queueSummaries?.length || !selectedQueueKey || loading || !workUnit) return;
+        if (queueItemsLoading || !queueItems || queueItemsError) return;
+        const token = ++queueAdjacentPrefetchTokenRef.current;
+        const run = () => {
+            if (queueAdjacentPrefetchTokenRef.current !== token) return;
+            const keys = queueSummaries.map((q) => q.key);
+            const ix = keys.indexOf(selectedQueueKey);
+            const want = new Set<string>();
+            if (ix >= 0) {
+                if (ix > 0) want.add(keys[ix - 1]!);
+                if (ix + 1 < keys.length) want.add(keys[ix + 1]!);
+            }
+            for (const hk of ["new_inquiry", "contact_attempted", "tour_scheduled"]) {
+                if (keys.includes(hk) && hk !== selectedQueueKey) want.add(hk);
+            }
+            let n = 0;
+            for (const k of want) {
+                if (n >= 2) break;
+                void fetchQueueItems(workUnitId, k, null, { prefetchOnly: true, logicalUnmapped: false });
+                n++;
+            }
+        };
+        const ric = typeof requestIdleCallback !== "undefined";
+        if (ric) {
+            const id = requestIdleCallback(run, { timeout: 2800 });
+            return () => {
+                cancelIdleCallback(id);
+                queueAdjacentPrefetchTokenRef.current++;
+            };
+        }
+        const tid = window.setTimeout(run, 400);
+        return () => {
+            clearTimeout(tid);
+            queueAdjacentPrefetchTokenRef.current++;
+        };
+    }, [
+        workUnitId,
+        selectedQueueKey,
+        queueSummaries,
+        queueItems,
+        queueItemsLoading,
+        queueItemsError,
+        loading,
+        workUnit,
+        fetchQueueItems,
+    ]);
 
     const queuePicker = useMemo(() => {
         if (!workUnitId) return null;
@@ -1567,6 +1755,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
         const activeQueue = selectedQueueKey
             ? queueSummaries.find((q) => q.key === selectedQueueKey) ?? queueSummaries[0]
             : queueSummaries[0];
+        const activeQueueKey = String(activeQueue?.key ?? "");
+        const queueItemsKey =
+            queueItems != null && typeof queueItems.queue === "object" && queueItems.queue != null
+                ? String((queueItems.queue as { key?: string }).key ?? "")
+                : "";
 
         const entity = queueItems?.queue.entity_type ?? activeQueue?.entity_type ?? "job";
         const rawList = (queueItems?.items ?? []) as unknown[];
@@ -1591,7 +1784,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             ? [...previewCfg.actions]
             : ["open"];
 
-        const vmItems = (
+        const liveVmItems = (
             sourceRows as Array<Record<string, unknown> & { id?: string }>
         ).map((r) => {
                 const rid = r.id as string;
@@ -1759,6 +1952,32 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 };
             });
 
+        if (
+            !queueItemsError &&
+            !queueItemsLoading &&
+            queueItems &&
+            selectedQueueKey &&
+            String(queueItems.queue.key ?? "") === String(selectedQueueKey)
+        ) {
+            queueRowsBufferRef.current = liveVmItems.slice();
+        }
+
+        const hasBufferedRows = queueRowsBufferRef.current.length > 0;
+        const tabSwitchInFlight =
+            Boolean(
+                queueItemsLoading &&
+                    !loading &&
+                    workUnit &&
+                    selectedQueueKey &&
+                    !queueItemsError &&
+                    hasBufferedRows &&
+                    (queueItems === null ||
+                        (queueItemsKey !== "" && activeQueueKey !== "" && queueItemsKey !== activeQueueKey))
+            );
+        /** During lane transitions, always show buffered rows so we never flash another lane's hydrated list. */
+        const rowsRefreshing = tabSwitchInFlight;
+        const displayItems = rowsRefreshing ? queueRowsBufferRef.current : liveVmItems;
+
         const laneTitle = workUnit.name ?? "Queue";
         const errorLine = queueItemsError
             ? `${queueItemsError}${queueItemsRoute ? ` · Route: ${queueItemsRoute}` : ""}`
@@ -1772,7 +1991,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             !queueItemsLoading &&
             queueItems.queue.key === activeQueue?.key &&
             (queueItems.offset ?? 0) === 0 &&
-            vmItems.length === 0 &&
+            liveVmItems.length === 0 &&
             queueItems.total_omitted === true &&
             typeof tabCount === "number" &&
             tabCount > 0;
@@ -1791,24 +2010,17 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 : tabCount;
         const rowTotalDisplay = effectiveRowTotal == null ? "—" : String(effectiveRowTotal);
 
-        const activeQueueKey = String(activeQueue?.key ?? "");
-        const queueItemsKey =
-            queueItems != null && typeof queueItems.queue === "object" && queueItems.queue != null
-                ? String((queueItems.queue as { key?: string }).key ?? "")
-                : "";
         const awaitingFirstRows =
             !queueItemsError &&
             Boolean(selectedQueueKey) &&
             Boolean(workUnit) &&
             !loading &&
-            queueItems === null;
-        /** Empty list + in-flight fetch, tab mismatch, or waiting for first row batch — in-lane loading (no “No records”). */
-        const rowsLoading =
-            awaitingFirstRows ||
-            (Boolean(queueItemsLoading) &&
-                (queueItems === null ||
-                    vmItems.length === 0 ||
-                    (activeQueueKey !== "" && queueItemsKey !== "" && queueItemsKey !== activeQueueKey)));
+            queueItems === null &&
+            queueRowsBufferRef.current.length === 0;
+        const showEmptyPrimaryRowSlot =
+            !queueItemsError && queueItemsLoading && displayItems.length === 0;
+        /** Skeleton / defer “No records” only when nothing is shown yet — buffered preview stays mounted. */
+        const rowsLoading = awaitingFirstRows || showEmptyPrimaryRowSlot;
 
         return {
             workspaceLevel: "work_unit",
@@ -1838,7 +2050,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 title: "",
                 laneQueueLabel: activeQueue?.label?.trim() || activeQueue?.key || undefined,
                 countBadge: effectiveRowTotal,
-                items: vmItems,
+                items: displayItems,
                 sortCaption: errorLine
                     ? errorLine
                     : unmappedListView
@@ -1846,6 +2058,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                       : undefined,
                 rollupSummary: undefined,
                 rowsLoading,
+                rowsRefreshing,
             },
             workSummary: null,
             actionsRail: enrollmentActionsRail(),

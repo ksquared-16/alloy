@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { neutral, derived, brand } from "@/styles/tokens/colors";
 import type {
   CrmCompactRowSemanticSlots,
@@ -659,6 +659,20 @@ function CrmCompactQueuePreview({
 }
 
 function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: WorkspaceActionHandler }) {
+  const listShellRef = useRef<HTMLDivElement>(null);
+  const [refreshMinHeightPx, setRefreshMinHeightPx] = useState<number>();
+
+  useLayoutEffect(() => {
+    if (!queue.rowsRefreshing) {
+      const id = requestAnimationFrame(() => setRefreshMinHeightPx(undefined));
+      return () => cancelAnimationFrame(id);
+    }
+    const el = listShellRef.current;
+    if (!el) return;
+    const h = Math.ceil(el.getBoundingClientRect().height);
+    setRefreshMinHeightPx((mh) => (mh != null && mh > 0 ? Math.max(mh, h) : h));
+  }, [queue.rowsRefreshing, queue.items.length]);
+
   const groupCounts = useMemo(() => {
     const m = new Map<string, number>();
     for (const item of queue.items) {
@@ -696,7 +710,26 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
           {queue.sortCaption}
         </p>
       ) : null}
-      <ul className="adminv2-ws-queue-list adminv2-ws-wu-queue-list" role="list">
+      <div
+        ref={listShellRef}
+        className="relative min-h-0 min-w-0"
+        style={refreshMinHeightPx ? { minHeight: refreshMinHeightPx } : undefined}
+      >
+        {queue.rowsRefreshing ? (
+          <div
+            className="pointer-events-none absolute left-3 right-3 top-[6px] z-[2] h-2 overflow-hidden rounded-full opacity-90 adminv2-ws-wu-queue-rows-shimmer-mask"
+            aria-hidden
+          >
+            <div className="absolute inset-y-0 w-2/5 -translate-x-full rounded-full bg-gradient-to-r from-transparent via-white/70 to-transparent adminv2-ws-wu-queue-rows-shimmer-bar" />
+          </div>
+        ) : null}
+        <ul
+          className={`adminv2-ws-queue-list adminv2-ws-wu-queue-list relative z-0 transition-opacity duration-[180ms] ease-out ${
+            queue.rowsRefreshing ? "opacity-[0.76] pointer-events-none" : "opacity-100"
+          }`}
+          aria-busy={Boolean(queue.rowsRefreshing)}
+          role="list"
+        >
         {queue.rowsLoading && queue.items.length === 0 ? (
           <li className="adminv2-ws-wu-queue-empty-wrap" role="status" aria-busy="true" aria-label="Loading queue rows">
             <div className="adminv2-ws-wu-queue-empty-panel">
@@ -933,7 +966,8 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
             </li>
           );
         })}
-      </ul>
+        </ul>
+      </div>
     </section>
   );
 }

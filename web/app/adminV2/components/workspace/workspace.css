@@ -5917,6 +5917,32 @@
   padding-right: 2px;
 }
 
+@keyframes adminv2-wu-queue-refresh-shimmer-slide {
+  0% {
+    transform: translateX(-15%);
+    opacity: 0.25;
+  }
+  35% {
+    opacity: 0.95;
+  }
+  100% {
+    transform: translateX(340%);
+    opacity: 0.25;
+  }
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-rows-shimmer-bar {
+  animation: adminv2-wu-queue-refresh-shimmer-slide 1.25s ease-in-out infinite;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-rows-shimmer-mask {
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--d-brand, #2667ff) 10%, transparent) 0%,
+    transparent 100%
+  );
+}
+
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card-compact-text {
   flex: 1;
   min-width: 0;

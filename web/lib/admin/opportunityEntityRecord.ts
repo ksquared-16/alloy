@@ -18,6 +18,17 @@ import { logDbTiming, withDbTiming } from "@/lib/admin/dbQueryTiming";
 
 type AdminSupabase = ReturnType<typeof createAdminClient>;
 
+/** Person row shape shared by primary shell fetch and member→person hydrate (DOB for inquiry_children). */
+type WarmPersonRow = {
+  id: string;
+  first_name?: string | null;
+  last_name?: string | null;
+  full_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  date_of_birth?: string | null;
+};
+
 function trimOrNull(v: unknown): string | null {
   if (v == null) return null;
   const s = String(v).trim();
@@ -149,23 +160,22 @@ export async function respondOpportunityEntityGet(
         [p.first_name, p.last_name].filter(Boolean).join(" ").trim() ||
         null
       : null;
-  const primaryPersonContactP = (async (): Promise<Record<string, unknown>> => {
+  const primaryPersonContactP = (async (): Promise<{
+    patch: Record<string, unknown>;
+    /** Person rows loaded for drawer shell IDs — reused later to trim member→person lookups on full hydrate. */
+    warmPersonRows: WarmPersonRow[];
+  }> => {
     const patch: Record<string, unknown> = {};
+    const warmPersonRows: WarmPersonRow[] = [];
     if (opp.primary_person_id) {
       const { data: person } = await supabase
         .from("persons")
-        .select("id, first_name, last_name, full_name, email, phone")
+        .select("id, first_name, last_name, full_name, email, phone, date_of_birth")
         .eq("id", opp.primary_person_id)
         .eq("org_id", orgId)
         .maybeSingle();
-      const p = person as {
-        id: string;
-        first_name?: string | null;
-        last_name?: string | null;
-        full_name?: string | null;
-        email?: string | null;
-        phone?: string | null;
-      } | null;
+      const p = person as WarmPersonRow | null;
+      if (p?.id) warmPersonRows.push(p);
       patch._primary_person_id = p?.id ?? null;
       patch._primary_person_name = personDisplayName(p);
       patch._primary_person_email = trimOrNull(p?.email);
@@ -195,18 +205,12 @@ export async function respondOpportunityEntityGet(
       if (c && (c as { person_id?: string | null }).person_id) {
         const { data: person } = await supabase
           .from("persons")
-          .select("id, first_name, last_name, full_name, email, phone")
+          .select("id, first_name, last_name, full_name, email, phone, date_of_birth")
           .eq("id", (c as { person_id: string }).person_id)
           .eq("org_id", orgId)
           .maybeSingle();
-        const p = person as {
-          id: string;
-          first_name?: string | null;
-          last_name?: string | null;
-          full_name?: string | null;
-          email?: string | null;
-          phone?: string | null;
-        } | null;
+        const p = person as WarmPersonRow | null;
+        if (p?.id) warmPersonRows.push(p);
         patch._primary_person_id = p?.id ?? null;
         patch._primary_person_name = personDisplayName(p);
         if (!patch._primary_contact_email && p?.email)
@@ -223,7 +227,7 @@ export async function respondOpportunityEntityGet(
       patch._primary_person_id = null;
       patch._primary_person_name = null;
     }
-    return patch;
+    return { patch, warmPersonRows };
   })();
 
   if (surfaceParamEarly === "drawer_visible") {
@@ -237,7 +241,7 @@ export async function respondOpportunityEntityGet(
       wuDeptRowV,
       customerRowV,
       stRowV,
-      primaryPatchV,
+      primaryHydrV,
       opportunityDefsVisible,
     ] = await Promise.all([
       wuidForDept
@@ -305,7 +309,7 @@ export async function respondOpportunityEntityGet(
       vis._location_name = null;
       vis._location_label = null;
     }
-    Object.assign(vis, primaryPatchV);
+    Object.assign(vis, primaryHydrV.patch);
     markVisiblePhase("visible_after_primary_person_contact");
     const oppLegacyStatusV = (opp as { status?: string | null }).status;
     const oppSkRawV =
@@ -437,7 +441,7 @@ export async function respondOpportunityEntityGet(
     dprRow,
     vertRow,
     locRow,
-    primaryPatch,
+    primaryHydrBundle,
     opportunityTaggedPack,
   ] = await Promise.all([
     wuidForDept
@@ -547,7 +551,7 @@ export async function respondOpportunityEntityGet(
     out._location_label = null;
     out._location_id = null;
   }
-  Object.assign(out, primaryPatch);
+  Object.assign(out, primaryHydrBundle.patch);
   markPhase("after_primary_person_contact");
   const oppOrgId = oppOrgIdForDefs;
   const oppStatusLabelByKey = displayLabelsFromDefinitions(opportunityDefs);
@@ -692,7 +696,12 @@ export async function respondOpportunityEntityGet(
     });
   }
 
-  await attachDirectFkRelationshipDisplays(supabase, orgId, "opportunities", out);
+  const relationshipDisplaysMode = await attachDirectFkRelationshipDisplays(
+    supabase,
+    orgId,
+    "opportunities",
+    out,
+  );
   markPhase("after_relationship_displays");
   lapSegment("relationship_displays_attach");
 
@@ -918,25 +927,24 @@ export async function respondOpportunityEntityGet(
   const personIds = [
     ...new Set(memList.map((m) => trimOrNull(m.person_id)).filter(Boolean)),
   ] as string[];
+  const pmap = new Map<string, WarmPersonRow>();
+  for (const w of primaryHydrBundle.warmPersonRows) {
+    if (w.id) pmap.set(w.id, w);
+  }
+  const personIdsNeedingFetch = personIds.filter((pid) => !pmap.has(pid));
+  const person_lookup_reused_count = personIds.length - personIdsNeedingFetch.length;
   const { data: personRows } =
-    personIds.length > 0
+    personIdsNeedingFetch.length > 0
       ? await supabase
           .from("persons")
           .select("id, first_name, last_name, full_name, date_of_birth")
           .eq("org_id", orgId)
-          .in("id", personIds)
+          .in("id", personIdsNeedingFetch)
       : { data: [] as { id: string }[] };
-  const pmap = new Map(
-    (
-      (personRows ?? []) as {
-        id: string;
-        first_name?: string | null;
-        last_name?: string | null;
-        full_name?: string | null;
-        date_of_birth?: string | null;
-      }[]
-    ).map((p) => [p.id, p]),
-  );
+  for (const pr of (personRows ?? []) as WarmPersonRow[]) {
+    if (pr.id) pmap.set(pr.id, pr);
+  }
+  const person_lookup_missing_count = personIdsNeedingFetch.length;
   lapSegment("customer_member_linked_person_lookup");
 
   const oppPersonsRowsP = supabase
@@ -1303,6 +1311,10 @@ export async function respondOpportunityEntityGet(
         telemetry: ocmStatusTelemetry,
       },
       field_registry: fieldRegistryMetaFull,
+      relationship_displays_mode: relationshipDisplaysMode,
+      person_lookup_reused_count,
+      person_lookup_missing_count,
+      ocm_defs_cache_hit: ocmOppStatusDefsCacheHit,
       serialization_ms,
       payload_kb: Math.round(payload_kb * 10) / 10,
     });
