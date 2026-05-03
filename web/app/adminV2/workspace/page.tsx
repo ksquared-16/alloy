@@ -216,7 +216,13 @@ export default function AdminV2WorkspaceIndexPage() {
         setWorkspaceRollupRefined(hit.rollupRefined);
         setLoading(false);
         setError(null);
-        perfWorkspaceLoad({ phase: "shell_seed", ms: 0, source: "cache" });
+        perfWorkspaceLoad({
+            phase: "shell_seed",
+            ms: 0,
+            source: "cache",
+            org_id: orgId,
+            client_cache_hit: true,
+        });
     }, [orgId]);
 
     useEffect(() => {
@@ -265,6 +271,7 @@ export default function AdminV2WorkspaceIndexPage() {
                         phase: "critical_deps",
                         ms: Math.round(performance.now() - tCritical0),
                         source: "network",
+                        org_id: orgId,
                     });
                 }
 
@@ -336,7 +343,8 @@ export default function AdminV2WorkspaceIndexPage() {
                                 perfWorkspaceLoad({
                                     phase: "rollup_refined",
                                     ms: Math.round(performance.now() - tCritical0),
-                                    source: "network",
+                                    source: "background",
+                                    org_id: orgId,
                                 });
                             }
                             void (async () => {
@@ -380,7 +388,8 @@ export default function AdminV2WorkspaceIndexPage() {
                                             perfWorkspaceLoad({
                                                 phase: "kpi_placements_ready",
                                                 ms: Math.round(performance.now() - tCritical0),
-                                                source: "network",
+                                                source: "background",
+                                                org_id: orgId,
                                             });
                                         }
                                     }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getWorkUnitQueueItems, QueueServiceError } from "@/lib/queues/QueueService";
+import { perfQueueRowsServer } from "@/lib/perf/adminV2PerfLog";
 
 function parseLimitOffset(searchParams: URLSearchParams): { limit?: number; offset?: number } {
     const limitRaw = (searchParams.get("limit") ?? "").trim();
@@ -92,7 +93,10 @@ export async function GET(
 
         const { enrichment_subtimings_ms: enrichment_subtimings, ...rowsPerfForLog } = rowsPerf;
 
-        console.warn("[perf.queue.rows]", {
+        perfQueueRowsServer({
+            org_id: ctx.orgId,
+            work_unit_id: workUnitId,
+            queue_key: queueKey,
             total_ms,
             auth_ms,
             ...rowsPerfForLog,
@@ -100,7 +104,6 @@ export async function GET(
             serialize_ms,
             row_count: Array.isArray(result.items) ? result.items.length : 0,
             payload_kb: Math.round(payload_kb * 10) / 10,
-            queue_key: queueKey,
             count_mode: queueRowsCountModeLabel(omitTotalCount, countAccuracy),
             omit_total_count: omitTotalCount,
         });

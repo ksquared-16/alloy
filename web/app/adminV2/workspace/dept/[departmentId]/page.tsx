@@ -145,7 +145,14 @@ export default function AdminV2WorkspaceDepartmentPage() {
         setDeptQueueSummariesLoading(hit.summariesComplete ? false : true);
         setDeptQueueSummariesError(null);
         setDeptLoading(false);
-        perfDeptLoad({ phase: "shell_seed", ms: 0, source: "cache" });
+        perfDeptLoad({
+            phase: "shell_seed",
+            ms: 0,
+            source: "cache",
+            org_id: orgId,
+            department_id: departmentId,
+            client_cache_hit: true,
+        });
     }, [departmentId, orgId]);
 
     /** Workflow KPIs deferred until department shell geometry has committed — off the navigation critical path. */
@@ -307,6 +314,8 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     phase: "summaries_ready",
                     ms: Math.round((typeof performance !== "undefined" ? performance.now() : 0) - tAnchor),
                     source: "network",
+                    org_id: orgId,
+                    department_id: departmentId,
                 });
 
                 if (orgId && deptCommit) {
@@ -401,6 +410,8 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         phase: "shell_ready",
                         ms: Math.round((typeof performance !== "undefined" ? performance.now() : 0) - tAnchor),
                         source: "network",
+                        org_id: orgId,
+                        department_id: departmentId,
                     });
                 }
 
@@ -450,7 +461,9 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 perfDeptLoad({
                     phase: "kpis_ready",
                     ms: Math.round(performance.now() - t0),
-                    source: "network",
+                    source: "background",
+                    org_id: orgId,
+                    department_id: departmentId,
                 });
             };
 
@@ -483,7 +496,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
         return () => {
             cancelled = true;
         };
-    }, [departmentId]);
+    }, [departmentId, orgId]);
 
     const departmentPageBlockingLoad = useMemo(() => {
         if (!departmentId) return false;
@@ -532,6 +545,8 @@ export default function AdminV2WorkspaceDepartmentPage() {
             phase: "actions_ready",
             ms: 0,
             source: "network",
+            org_id: orgId,
+            department_id: departmentId,
         });
     }, [deptKey, departmentId, enrollmentDeptRightRail]);
 

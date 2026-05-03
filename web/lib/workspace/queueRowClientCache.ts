@@ -1,3 +1,5 @@
+import { perfQueueRowsClientSide } from "@/lib/perf/adminV2PerfLog";
+
 /**
  * Client-side cache for GET /api/admin/queues/:workUnitId/:queueKey row payloads on the work-unit page.
  * Does not replace server correctness; TTL + explicit invalidation only.
@@ -84,5 +86,12 @@ export function logQueueRowClientCache(
     > & { age_ms?: number | null }
 ): void {
     if (typeof window === "undefined") return;
-    console.warn("[perf.queue.client_cache]", ev);
+    const client_hit = ev.event === "hit" || ev.event === "prefetch";
+    perfQueueRowsClientSide({
+        event: ev.event,
+        work_unit_id: ev.work_unit_id,
+        queue_key: ev.queue_key,
+        age_ms: ev.age_ms ?? null,
+        client_cache_hit: client_hit,
+    });
 }

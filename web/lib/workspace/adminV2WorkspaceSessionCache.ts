@@ -117,12 +117,4 @@ export function invalidateAdminV2DepartmentSessionCache(orgId: string | null, de
     }
 }
 
-export function perfWorkspaceLoad(entry: { phase: string; ms: number; source: "cache" | "network" }): void {
-    if (typeof window === "undefined") return;
-    console.info("[perf.workspace.load]", entry);
-}
-
-export function perfDeptLoad(entry: { phase: string; ms: number; source: "cache" | "network" }): void {
-    if (typeof window === "undefined") return;
-    console.info("[perf.dept.load]", entry);
-}
+export { perfDeptLoad, perfWorkspaceLoad } from "@/lib/perf/adminV2PerfLog";

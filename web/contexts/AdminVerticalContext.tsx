@@ -1,6 +1,8 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from "react";
+import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
+import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
 const STORAGE_KEY = "admin_selected_vertical_id";
 
@@ -31,7 +33,8 @@ export function AdminVerticalProvider({ children }: { children: ReactNode }) {
     const [selectedVerticalId, setSelectedVerticalIdState] = useState<string | null>(null);
 
     useEffect(() => {
-        fetch("/api/admin/verticals")
+        const init = workspaceDataFetchInit() ?? {};
+        void dedupeAdminFetchWithTtl("/api/admin/verticals", init, 8000)
             .then((res) => (res.ok ? res.json() : []))
             .then((data: Vertical[]) => setVerticals(Array.isArray(data) ? data : []))
             .catch(() => setVerticals([]))

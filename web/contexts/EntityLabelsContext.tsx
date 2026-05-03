@@ -1,6 +1,8 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
+import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 
 const CACHE_KEY = "entity_labels_cache";
 const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
@@ -110,7 +112,8 @@ export function EntityLabelsProvider({
 
     const refreshEntityLabels = useCallback(async () => {
         try {
-            const res = await fetch("/api/admin/entity-labels");
+            const fetchInit = workspaceDataFetchInit() ?? {};
+            const res = await dedupeAdminFetchWithTtl("/api/admin/entity-labels", fetchInit, 4500);
             const json = await res.json().catch(() => ({}));
             if (!res.ok) return;
             const effective = (json as { effective?: { entity_type: string; singular: string | null; plural: string | null }[] }).effective ?? [];

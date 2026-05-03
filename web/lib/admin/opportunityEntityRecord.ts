@@ -15,6 +15,7 @@ import type { FieldRegistryAttachMeta } from "@/lib/admin/entityFieldRegistryAtt
 import { isUuidLike } from "@/lib/admin/overviewRelationshipLabels";
 import { batchOptionItemLabelsForOrg, optionLabelFromBatchMap } from "@/lib/admin/optionItemLabelForOrg";
 import { logDbTiming, withDbTiming } from "@/lib/admin/dbQueryTiming";
+import { perfDrawerFullHydrate, timingOpportunityApiVisible } from "@/lib/perf/adminV2PerfLog";
 
 type AdminSupabase = ReturnType<typeof createAdminClient>;
 
@@ -848,13 +849,17 @@ export async function respondOpportunityEntityGet(
         : JSON.stringify({ total_ms: enrichTotalMsV, phases_ms: {} });
     const serverRouteMsV = Date.now() - opportunityRouteStartedAt;
     const visibleLogMs = enrichTotalMsV;
+    const visibleDeptId = trimOrNull(vis._work_unit_department_id as string | null);
     if (process.env.NODE_ENV !== "production" || visibleLogMs > 200) {
-      console.warn("[timing][opportunity-api-visible]", {
+      timingOpportunityApiVisible({
         opportunity_id: id,
-        enrich_ms: enrichTotalMsV,
+        org_id: orgId,
+        work_unit_id: wuidForDept ?? null,
+        department_id: visibleDeptId,
+        total_ms: visibleLogMs,
         enrich_phases_ms: enrichPhaseMs,
         server_route_ms: serverRouteMsV,
-        surface: "drawer_visible",
+        source: "network",
       });
     }
     return NextResponse.json(vis, {
@@ -1683,10 +1688,12 @@ export async function respondOpportunityEntityGet(
   const payload_kb = Buffer.byteLength(bodyJson, "utf8") / 1024;
 
   if (process.env.NODE_ENV !== "production" || enrichTotalMs > 250) {
-    console.warn("[perf.drawer.full_hydrate]", {
+    perfDrawerFullHydrate({
+      entity_id: id,
       opportunity_id: id,
       org_id: orgId,
-      total_route_ms: serverRouteMs,
+      work_unit_id: trimOrNull((opp as { work_unit_id?: string | null }).work_unit_id),
+      total_ms: serverRouteMs,
       enrichment_total_ms: enrichTotalMs,
       segments_ms,
       hydrate_graph_timings_ms: hydrateGraphTimings,
@@ -1705,10 +1712,8 @@ export async function respondOpportunityEntityGet(
       field_registry_stable_cache_key: fieldRegistryMetaFull.field_registry_stable_cache_key ?? null,
       field_registry_next_cache_hit: fieldRegistryMetaFull.field_registry_next_cache_hit ?? null,
       field_registry_process_cache_hit: fieldRegistryMetaFull.field_registry_process_cache_hit ?? null,
-      field_registry_defs_resolve_wall_ms:
-        fieldRegistryMetaFull.field_registry_defs_resolve_wall_ms ?? null,
-      field_registry_field_values_wall_ms:
-        fieldRegistryMetaFull.field_registry_field_values_wall_ms ?? null,
+      field_registry_defs_resolve_wall_ms: fieldRegistryMetaFull.field_registry_defs_resolve_wall_ms ?? null,
+      field_registry_field_values_wall_ms: fieldRegistryMetaFull.field_registry_field_values_wall_ms ?? null,
       field_registry_uncached_ms: fieldRegistryMetaFull.field_registry_uncached_ms ?? null,
       relationship_displays_mode: relationshipDisplaysMode,
       primary_person_row_warm_prefilled,
