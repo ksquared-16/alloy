@@ -8,6 +8,7 @@ import {
     fetchEffectiveStatusDefinitionsTagged,
     displayLabelsFromDefinitions,
     type StatusDefinitionRow,
+    type StatusDefsResolveTelemetry,
 } from "@/lib/admin/statusDefinitionsResolve";
 import { logDbTiming, withDbTiming } from "@/lib/admin/dbQueryTiming";
 import { formatTourDateTime } from "@/lib/enrollment/formatTourDateTime";
@@ -1169,8 +1170,13 @@ export type QueueRowsPerfBreakdown = {
     status_defs_ms: number;
     enrichment_ms: number;
     service_total_ms: number;
-    /** Memory-cache hit only; see {@link fetchEffectiveStatusDefinitionsTagged}. Null for job entity rows route. */
+    /**
+     * True when status definitions were satisfied without running the uncached merge on this request
+     * (process map or Next `unstable_cache`). Null for job entity rows route.
+     */
     status_defs_cache_hit: boolean | null;
+    /** Resolver sub-timings and cache flags for opportunity queues; null for jobs. */
+    status_defs_resolve: StatusDefsResolveTelemetry | null;
     queue_def_cache_hit: boolean | null;
     operational_day_cache_hit: boolean | null;
     enrichment_subtimings_ms: QueueListEnrichmentSubtimingsMs | null;
@@ -1863,6 +1869,7 @@ export async function getWorkUnitQueueItems(params: {
                     status_defs_ms: 0,
                     enrichment_ms: 0,
                     status_defs_cache_hit: null,
+                    status_defs_resolve: null,
                     queue_def_cache_hit: queueDefCacheHit,
                     operational_day_cache_hit: operationalDayCacheHit,
                     enrichment_subtimings_ms: null,
@@ -1914,6 +1921,7 @@ export async function getWorkUnitQueueItems(params: {
                 status_defs_ms: 0,
                 enrichment_ms: 0,
                 status_defs_cache_hit: null,
+                status_defs_resolve: null,
                 queue_def_cache_hit: queueDefCacheHit,
                 operational_day_cache_hit: operationalDayCacheHit,
                 enrichment_subtimings_ms: null,
@@ -1921,8 +1929,8 @@ export async function getWorkUnitQueueItems(params: {
         );
     }
 
-    /** Opportunity statuses: start only after we know entity type (avoid wasted round-trip on job queues). */
-    const oppStatusDefsPromise = fetchEffectiveStatusDefinitionsTagged(supabase as any, params.orgId, "opportunities", {
+    /** Opportunity statuses: parallel with queries; keyed by canonical entity type via resolver normalization. */
+    const oppStatusDefsPromise = fetchEffectiveStatusDefinitionsTagged(supabase as never, params.orgId, def.entity_type, {
         activeOnly: true,
     });
 
@@ -1943,7 +1951,7 @@ export async function getWorkUnitQueueItems(params: {
             timedBranch(oppStatusDefsPromise),
         ]);
         const effectiveStatusDefs = statusPack.rows;
-        const statusDefsCacheHit = statusPack.processCacheHit;
+        const statusDefsCacheHit = statusPack.combinedCacheHit;
         const slice = matched.slice(effectiveOffset, effectiveOffset + effectiveLimit);
         const tEn0 = Date.now();
         const { rows: enrichedRows, queueListSubtimings } = await enrichOpportunityRows({
@@ -1978,6 +1986,7 @@ export async function getWorkUnitQueueItems(params: {
                 status_defs_ms: statusDefsMs,
                 enrichment_ms,
                 status_defs_cache_hit: statusDefsCacheHit,
+                status_defs_resolve: statusPack.telemetry,
                 queue_def_cache_hit: queueDefCacheHit,
                 operational_day_cache_hit: operationalDayCacheHit,
                 enrichment_subtimings_ms: queueListSubtimings ?? null,
@@ -2000,7 +2009,7 @@ export async function getWorkUnitQueueItems(params: {
             timedBranch(oppStatusDefsPromise),
         ]);
         const effectiveStatusDefs = statusPack.rows;
-        const statusDefsCacheHit = statusPack.processCacheHit;
+        const statusDefsCacheHit = statusPack.combinedCacheHit;
         const { data: raw, error } = itemsRes;
         if (error) {
             throw new QueueServiceError(error.message, 400, "DB_ERROR");
@@ -2041,6 +2050,7 @@ export async function getWorkUnitQueueItems(params: {
                 status_defs_ms: statusDefsMs,
                 enrichment_ms,
                 status_defs_cache_hit: statusDefsCacheHit,
+                status_defs_resolve: statusPack.telemetry,
                 queue_def_cache_hit: queueDefCacheHit,
                 operational_day_cache_hit: operationalDayCacheHit,
                 enrichment_subtimings_ms: queueListSubtimings ?? null,
@@ -2070,7 +2080,7 @@ export async function getWorkUnitQueueItems(params: {
         throw new QueueServiceError(error.message, 400, "DB_ERROR");
     }
     const effectiveStatusDefs = statusPack.rows;
-    const statusDefsCacheHit = statusPack.processCacheHit;
+    const statusDefsCacheHit = statusPack.combinedCacheHit;
     const itemRows = (raw ?? []) as OpportunityRowPreview[];
     const tEn0 = Date.now();
     const { rows: enrichedRows, queueListSubtimings } = await enrichOpportunityRows({
@@ -2107,6 +2117,7 @@ export async function getWorkUnitQueueItems(params: {
             status_defs_ms: statusDefsMs,
             enrichment_ms,
             status_defs_cache_hit: statusDefsCacheHit,
+            status_defs_resolve: statusPack.telemetry,
             queue_def_cache_hit: queueDefCacheHit,
             operational_day_cache_hit: operationalDayCacheHit,
             enrichment_subtimings_ms: queueListSubtimings ?? null,

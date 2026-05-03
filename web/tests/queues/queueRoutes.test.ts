@@ -72,6 +72,7 @@ describe("Queue API routes (thin wrappers)", () => {
                 enrichment_ms: 0,
                 service_total_ms: 0,
                 status_defs_cache_hit: null,
+                status_defs_resolve: null,
                 queue_def_cache_hit: false,
                 operational_day_cache_hit: false,
                 enrichment_subtimings_ms: null,
