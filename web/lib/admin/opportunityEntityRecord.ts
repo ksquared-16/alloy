@@ -420,6 +420,8 @@ export async function respondOpportunityEntityGet(
   const enrichPhaseMs: Record<string, number> = {};
   /** Delta timings (full hydrate); cumulative phases remain in enrichPhaseMs for response header. */
   const segments_ms: Record<string, number> = {};
+  /** Fine-grained identity / inquiry graph timings (see `[perf.drawer.full_hydrate]`). */
+  const hydrateGraphTimings: Record<string, number> = {};
   let segmentLapAt = Date.now();
   const lapSegment = (name: string) => {
     const now = Date.now();
@@ -755,6 +757,7 @@ export async function respondOpportunityEntityGet(
     "opportunity_customer_members",
     {
       activeOnly: true,
+      processLruTtlMs: 600_000,
     },
   );
 
@@ -766,6 +769,13 @@ export async function respondOpportunityEntityGet(
     .eq("org_id", orgId)
     .eq("opportunity_id", id)
     .order("created_at", { ascending: true });
+
+  const ocmJoinTimedP = (async () => {
+    const t0 = Date.now();
+    const r = await ocmJoinP;
+    hydrateGraphTimings.ocm_join_ms = Date.now() - t0;
+    return r;
+  })();
 
   const primaryPersonRoleP =
     householdId &&
@@ -810,28 +820,41 @@ export async function respondOpportunityEntityGet(
     return { contactRoleKey: rr.role_key, contactRoleLabel: rr.role_label };
   })();
 
-  const customerMembersP = householdId
-    ? supabase
-        .from("customer_members")
-        .select("id, display_name, relationship, dob")
-        .eq("org_id", orgId)
-        .eq("customer_id", householdId)
-        .eq("is_active", true)
-        .limit(25)
+  type CmBootstrapRow = {
+    id: string;
+    display_name: string;
+    relationship?: string | null;
+    dob?: string | null;
+    person_id?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+    metadata?: Record<string, unknown> | null;
+  };
+
+  const customerMembersTimedP = householdId
+    ? (async () => {
+        const t0 = Date.now();
+        const r = await supabase
+          .from("customer_members")
+          .select(
+            "id, display_name, relationship, dob, person_id, first_name, last_name, metadata",
+          )
+          .eq("org_id", orgId)
+          .eq("customer_id", householdId)
+          .eq("is_active", true)
+          .limit(25);
+        hydrateGraphTimings.customer_members_bootstrap_ms = Date.now() - t0;
+        return r;
+      })()
     : Promise.resolve({
-        data: [] as {
-          id: string;
-          display_name: string;
-          relationship?: string | null;
-          dob?: string | null;
-        }[],
+        data: [] as CmBootstrapRow[],
       });
 
   const [personRR, contactRR, cmsRes, joinRes] = await Promise.all([
     primaryPersonRoleP,
     contactRoleP,
-    customerMembersP,
-    ocmJoinP,
+    customerMembersTimedP,
+    ocmJoinTimedP,
   ]);
 
   const personRoleKey = personRR.role_key;
@@ -847,12 +870,7 @@ export async function respondOpportunityEntityGet(
     dob?: string | null;
   } | null = null;
   if (householdId && cmsRes.data) {
-    const rows = (cmsRes.data ?? []) as {
-      id: string;
-      display_name: string;
-      relationship?: string | null;
-      dob?: string | null;
-    }[];
+    const rows = (cmsRes.data ?? []) as CmBootstrapRow[];
     const pick =
       rows.find((r) =>
         ["child", "dependent", "student"].includes(
@@ -903,26 +921,36 @@ export async function respondOpportunityEntityGet(
   const memberIds = [
     ...new Set(jrows.map((r) => r.customer_member_id).filter(Boolean)),
   ] as string[];
-  const { data: memberRows } =
-    memberIds.length > 0
-      ? await supabase
-          .from("customer_members")
-          .select(
-            "id, display_name, relationship, dob, person_id, first_name, last_name, metadata",
-          )
-          .eq("org_id", orgId)
-          .in("id", memberIds)
-      : { data: [] as { id: string }[] };
-  const memList = (memberRows ?? []) as {
-    id: string;
-    display_name: string;
-    relationship?: string | null;
-    dob?: string | null;
-    person_id?: string | null;
-    first_name?: string | null;
-    last_name?: string | null;
-    metadata?: Record<string, unknown> | null;
-  }[];
+  const bootstrapList = ((cmsRes.data ?? []) ?? []) as CmBootstrapRow[];
+  const bootstrapById = new Map(bootstrapList.map((r) => [r.id, r]));
+  const needingMemberForOcm = memberIds.filter((mid) => !bootstrapById.has(mid));
+  if (needingMemberForOcm.length > 0) {
+    const tGap = Date.now();
+    const { data: supplemental } = await supabase
+      .from("customer_members")
+      .select(
+        "id, display_name, relationship, dob, person_id, first_name, last_name, metadata",
+      )
+      .eq("org_id", orgId)
+      .in("id", needingMemberForOcm);
+    hydrateGraphTimings.customer_members_ocm_gap_fetch_ms = Date.now() - tGap;
+    for (const row of supplemental ?? []) {
+      const m = row as CmBootstrapRow;
+      bootstrapById.set(m.id, m);
+    }
+  }
+
+  const memList: CmBootstrapRow[] = [];
+  let unresolvedMemberJointCount = 0;
+  for (const mid of memberIds) {
+    const hit = bootstrapById.get(mid);
+    if (hit) memList.push(hit);
+    else unresolvedMemberJointCount += 1;
+  }
+  if (unresolvedMemberJointCount > 0) {
+    hydrateGraphTimings.customer_member_ocm_resolve_incomplete_count = unresolvedMemberJointCount;
+  }
+
   const memberMap = new Map(memList.map((m) => [m.id, m]));
   const personIds = [
     ...new Set(memList.map((m) => trimOrNull(m.person_id)).filter(Boolean)),
@@ -931,23 +959,34 @@ export async function respondOpportunityEntityGet(
   for (const w of primaryHydrBundle.warmPersonRows) {
     if (w.id) pmap.set(w.id, w);
   }
+  const primaryPidForWarm = trimOrNull(opp.primary_person_id);
+  const primary_person_row_warm_prefilled = !!(
+    primaryPidForWarm &&
+    primaryHydrBundle.warmPersonRows.some((w) => String(w.id) === primaryPidForWarm)
+  );
+  const primary_person_reused = !!(primaryPidForWarm && pmap.has(primaryPidForWarm));
   const personIdsNeedingFetch = personIds.filter((pid) => !pmap.has(pid));
   const person_lookup_reused_count = personIds.length - personIdsNeedingFetch.length;
-  const { data: personRows } =
-    personIdsNeedingFetch.length > 0
-      ? await supabase
-          .from("persons")
-          .select("id, first_name, last_name, full_name, date_of_birth")
-          .eq("org_id", orgId)
-          .in("id", personIdsNeedingFetch)
-      : { data: [] as { id: string }[] };
-  for (const pr of (personRows ?? []) as WarmPersonRow[]) {
-    if (pr.id) pmap.set(pr.id, pr);
+  const linked_persons_missing_count = personIdsNeedingFetch.length;
+
+  hydrateGraphTimings.customer_member_person_lookup_ms = 0;
+  if (personIdsNeedingFetch.length > 0) {
+    const tPl = Date.now();
+    const { data: personRows } = await supabase
+      .from("persons")
+      .select("id, first_name, last_name, full_name, date_of_birth")
+      .eq("org_id", orgId)
+      .in("id", personIdsNeedingFetch);
+    hydrateGraphTimings.customer_member_person_lookup_ms = Date.now() - tPl;
+    for (const pr of (personRows ?? []) as WarmPersonRow[]) {
+      if (pr.id) pmap.set(pr.id, pr);
+    }
   }
   const person_lookup_missing_count = personIdsNeedingFetch.length;
+
   lapSegment("customer_member_linked_person_lookup");
 
-  const oppPersonsRowsP = supabase
+  const oppPersonsRowsAwaitable = supabase
     .from("opportunity_persons")
     .select("id, person_id, role_type, created_at")
     .eq("org_id", orgId)
@@ -975,7 +1014,12 @@ export async function respondOpportunityEntityGet(
   const [ocmMemberDefsTaggedPack, optionLabelMap, oppPersonsListRes] = await Promise.all([
     ocmMemberDefsTaggedPackP,
     batchOptionItemLabelsForOrg(supabase, orgId, optionPairs),
-    oppPersonsRowsP,
+    (async () => {
+      const t0 = Date.now();
+      const r = await oppPersonsRowsAwaitable;
+      hydrateGraphTimings.opportunity_persons_rows_ms = Date.now() - t0;
+      return r;
+    })(),
   ]);
   const inquiryBatchMs = Date.now() - tInquiry0;
   lapSegment("inquiry_ocm_defs_options_opportunity_persons_rows");
@@ -1171,12 +1215,15 @@ export async function respondOpportunityEntityGet(
       ),
     ] as string[];
     const missingOppPersonIds = personIdsForOpp.filter((pid) => !pmap.has(pid));
+    hydrateGraphTimings.opportunity_persons_missing_persons_ms = 0;
     if (missingOppPersonIds.length > 0) {
+      const tMiss = Date.now();
       const { data: extraPeople } = await supabase
         .from("persons")
         .select("id, first_name, last_name, full_name, date_of_birth, email, phone")
         .eq("org_id", orgId)
         .in("id", missingOppPersonIds);
+      hydrateGraphTimings.opportunity_persons_missing_persons_ms = Date.now() - tMiss;
       for (const row of (extraPeople ?? []) as PersonRowAgg[]) {
         pmap.set(row.id, row);
       }
@@ -1301,6 +1348,7 @@ export async function respondOpportunityEntityGet(
       total_route_ms: serverRouteMs,
       enrichment_total_ms: enrichTotalMs,
       segments_ms,
+      hydrate_graph_timings_ms: hydrateGraphTimings,
       inquiry_option_batch_wall_ms: inquiryBatchMs,
       opportunity_status_defs: {
         combined_cache_hit: oppStatusDefsCacheHitFull,
@@ -1311,9 +1359,19 @@ export async function respondOpportunityEntityGet(
         telemetry: ocmStatusTelemetry,
       },
       field_registry: fieldRegistryMetaFull,
+      field_registry_defs_warm: fieldRegistryMetaFull.field_registry_defs_warm ?? null,
+      field_registry_combined_cache_hit: fieldRegistryMetaFull.field_registry_combined_cache_hit ?? null,
+      field_registry_defs_resolve_wall_ms:
+        fieldRegistryMetaFull.field_registry_defs_resolve_wall_ms ?? null,
+      field_registry_field_values_wall_ms:
+        fieldRegistryMetaFull.field_registry_field_values_wall_ms ?? null,
+      field_registry_uncached_ms: fieldRegistryMetaFull.field_registry_uncached_ms ?? null,
       relationship_displays_mode: relationshipDisplaysMode,
+      primary_person_row_warm_prefilled,
+      primary_person_reused,
       person_lookup_reused_count,
       person_lookup_missing_count,
+      linked_persons_missing_count,
       ocm_defs_cache_hit: ocmOppStatusDefsCacheHit,
       serialization_ms,
       payload_kb: Math.round(payload_kb * 10) / 10,

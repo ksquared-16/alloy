@@ -3,7 +3,7 @@ import { unstable_cache } from "next/cache";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { logDbTiming } from "@/lib/admin/dbQueryTiming";
 
-const STATUS_EFFECTIVE_CACHE = new Map<string, { at: number; rows: StatusDefinitionRow[] }>();
+const STATUS_EFFECTIVE_CACHE = new Map<string, { at: number; rows: StatusDefinitionRow[]; ttlMs: number }>();
 /** Process + upstream data cache TTL; overlaps with Next `unstable_cache` revalidate below. */
 const STATUS_EFFECTIVE_TTL_MS = 90_000;
 const STATUS_EFFECTIVE_CACHE_ENABLED = process.env.NODE_ENV !== "test";
@@ -312,19 +312,30 @@ function emptyStatusDefsTelemetry(normalized: string, processHit: boolean): Stat
  * Layers: short-TTL **process** map then Next **Data Cache** via `unstable_cache` (90s), then Postgres merge.
  * Cache keys use {@link normalizeEffectiveStatusEntityType} so `opportunity` / `opportunities` share one entry.
  */
+export type FetchEffectiveStatusDefinitionsTaggedOpts = {
+    activeOnly?: boolean;
+    /**
+     * In-process LRU TTL (ms). Larger values help warm staging/prod bursts where unrelated traffic
+     * evicts Lambda less often — effective defs still refresh via Postgres on expiry.
+     * Default {@link STATUS_EFFECTIVE_TTL_MS}.
+     */
+    processLruTtlMs?: number;
+};
+
 export async function fetchEffectiveStatusDefinitionsTagged(
     _supabase: SupabaseClient,
     orgId: string,
     entityType: string,
-    opts?: { activeOnly?: boolean }
+    opts?: FetchEffectiveStatusDefinitionsTaggedOpts
 ): Promise<EffectiveStatusDefinitionsPack> {
     const normalized = normalizeEffectiveStatusEntityType(entityType);
     const activeOnly = opts?.activeOnly !== false;
+    const processTtlMs = typeof opts?.processLruTtlMs === "number" && opts.processLruTtlMs >= 5000 ? opts.processLruTtlMs : STATUS_EFFECTIVE_TTL_MS;
     if (STATUS_EFFECTIVE_CACHE_ENABLED) {
         const ck = statusEffectiveCacheKey(orgId, normalized, activeOnly);
         const ent = STATUS_EFFECTIVE_CACHE.get(ck);
         const now = Date.now();
-        if (ent && now - ent.at < STATUS_EFFECTIVE_TTL_MS) {
+        if (ent && now - ent.at < ent.ttlMs) {
             return {
                 rows: ent.rows,
                 processCacheHit: true,
@@ -345,6 +356,7 @@ export async function fetchEffectiveStatusDefinitionsTagged(
         STATUS_EFFECTIVE_CACHE.set(statusEffectiveCacheKey(orgId, normalized, activeOnly), {
             at: Date.now(),
             rows,
+            ttlMs: processTtlMs,
         });
     }
     const uncachedMs = typeof phases.uncached_ms === "number" ? phases.uncached_ms : 0;
@@ -373,7 +385,7 @@ export async function fetchEffectiveStatusDefinitions(
     supabase: SupabaseClient,
     orgId: string,
     entityType: string,
-    opts?: { activeOnly?: boolean }
+    opts?: FetchEffectiveStatusDefinitionsTaggedOpts
 ): Promise<StatusDefinitionRow[]> {
     const pack = await fetchEffectiveStatusDefinitionsTagged(supabase, orgId, entityType, opts);
     return pack.rows;

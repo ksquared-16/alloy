@@ -340,6 +340,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const unmappedOnlyRef = useRef(false);
     /** Cancel token for idle prefetch of neighboring queue lanes. */
     const queueAdjacentPrefetchTokenRef = useRef(0);
+    /** True after first foreground (non-prefetch) rows attempt settles for selection — gates idle prefetch. */
+    const primaryLaneRowsSettledOnceRef = useRef(false);
 
     const [workflowKpis, setWorkflowKpis] = useState<WorkflowKpis>(DEFAULT_WF_KPIS);
     const [workflowKpisLoading, setWorkflowKpisLoading] = useState(true);
@@ -536,6 +538,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     useEffect(() => {
         queueRowsBufferRef.current = [];
         queueRowClientCacheRef.current.clear();
+        primaryLaneRowsSettledOnceRef.current = false;
     }, [departmentId, workUnitId]);
 
     /** Browser back/forward: sync selected queue + `unmapped` from the real location (shallow tabs do not update Next `searchParams`). */
@@ -755,6 +758,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         alloyPerfSet("queue_tab_rows_ready", performance.now());
                     }
                     markFirstUsefulPaintOnce();
+                    primaryLaneRowsSettledOnceRef.current = true;
                     if (shouldStaleBackgroundRefresh(ent.fetchedAt)) {
                         logQueueRowClientCache({
                             event: "stale_refresh",
@@ -908,6 +912,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             });
             try {
                 await runNetwork(seq, true);
+                primaryLaneRowsSettledOnceRef.current = true;
             } catch (e) {
                 if (seq === queueItemsRequestSeq.current) {
                     pendingQueueTabPerfRef.current = false;
@@ -1370,6 +1375,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     useEffect(() => {
         if (typeof window === "undefined") return;
         if (!workUnitId || !queueSummaries?.length || !selectedQueueKey || loading || !workUnit) return;
+        if (!primaryLaneRowsSettledOnceRef.current) return;
         if (queueItemsLoading || !queueItems || queueItemsError) return;
         const token = ++queueAdjacentPrefetchTokenRef.current;
         const run = () => {

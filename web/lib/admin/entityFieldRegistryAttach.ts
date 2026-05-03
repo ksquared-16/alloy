@@ -20,10 +20,16 @@ export type FieldRegistryAttachMeta = {
     field_registry_process_cache_hit?: boolean;
     field_registry_unstable_attempted?: boolean;
     field_registry_next_cache_hit?: boolean;
-    /** True when defs were served without hitting Postgres (process LRU or Next unstable_cache snapshot). */
+    /** Postgres defs snapshot skipped via process LRU or Next unstable_cache snapshot. */
+    field_registry_defs_warm?: boolean;
+    /** True when Next `unstable_cache` invocation did not execute the defs fetcher (exclusive with cold Postgres defs). */
     field_registry_combined_cache_hit?: boolean;
-    /** Wall time of `fetchFieldDefinitionsAndSectionsFromDb` when the uncached fetcher ran; omitted on full cache hits. */
+    /** Wall time of uncached defs+sections DB fetch inside `resolveFieldDefinitionsAndSectionsForDrawer` inner fetcher only. */
     field_registry_uncached_ms?: number;
+    /** Outer wall time resolving defs + sections (includes cache bookkeeping). */
+    field_registry_defs_resolve_wall_ms?: number;
+    /** Wall time loading + merging entity `field_values` rows after defs attach. */
+    field_registry_field_values_wall_ms?: number;
 };
 
 const FIELD_REGISTRY_PROCESS_CACHE = new Map<
@@ -44,14 +50,44 @@ const FIELD_REGISTRY_PROCESS_CACHE = new Map<
     }
 >();
 
-const FIELD_REGISTRY_PROCESS_TTL_MS = 90_000;
+const FIELD_REGISTRY_PROCESS_TTL_MS = 300_000;
 /** Match status_definitions_resolve: isolate-scoped warmup; disabled in test. */
 const FIELD_REGISTRY_PROCESS_CACHE_ENABLED = process.env.NODE_ENV !== "test";
 
 const FIELD_REGISTRY_UNSTABLE_TAGS = ["field-definitions-drawer-registry"];
 
+function normalizeFieldRegistryDbEntityType(entityType: string): string {
+    const t = entityType.trim().toLowerCase();
+    switch (t) {
+        case "opportunity":
+        case "opportunities":
+            return "opportunity";
+        case "customer":
+        case "customers":
+            return "customer";
+        case "job":
+        case "jobs":
+            return "job";
+        case "schedule":
+        case "schedules":
+            return "schedule";
+        case "vendor":
+        case "vendors":
+            return "vendor";
+        case "person":
+        case "persons":
+            return "person";
+        case "location":
+        case "locations":
+            return "location";
+        default:
+            return entityType.trim();
+    }
+}
+
 function fieldRegistryStableKey(orgId: string, entityType: string): string[] {
-    return ["field-registry-drawer-v1", orgId, entityType];
+    const canonDb = normalizeFieldRegistryDbEntityType(entityType);
+    return ["field-registry-drawer-v2", orgId, canonDb];
 }
 
 async function fetchFieldDefinitionsAndSectionsFromDb(
@@ -121,7 +157,8 @@ async function resolveFieldDefinitionsAndSectionsForDrawer(
     orgId: string,
     entityType: string
 ): Promise<{ fieldDefs: Awaited<ReturnType<typeof fetchFieldDefinitionsAndSectionsFromDb>>["fieldDefs"]; fieldSections: { section_key: string; label: string; sort_order: number }[]; meta: FieldRegistryAttachMeta }> {
-    const procKey = `${orgId}\u0001${entityType}`;
+    const entityCanon = normalizeFieldRegistryDbEntityType(entityType);
+    const procKey = `${orgId}\u0001${entityCanon}`;
     if (FIELD_REGISTRY_PROCESS_CACHE_ENABLED) {
         const warm = FIELD_REGISTRY_PROCESS_CACHE.get(procKey);
         const now = Date.now();
@@ -133,6 +170,7 @@ async function resolveFieldDefinitionsAndSectionsForDrawer(
                     field_registry_process_cache_hit: true,
                     field_registry_unstable_attempted: false,
                     field_registry_next_cache_hit: false,
+                    field_registry_defs_warm: true,
                     /** No Postgres defs query this request — process LRU only (Next data cache untouched). */
                     field_registry_combined_cache_hit: true,
                 },
@@ -159,7 +197,7 @@ async function resolveFieldDefinitionsAndSectionsForDrawer(
     const runUncached = async () => {
         fetcherRan = true;
         const uc0 = Date.now();
-        const b = await fetchFieldDefinitionsAndSectionsFromDb(orgId, entityType);
+        const b = await fetchFieldDefinitionsAndSectionsFromDb(orgId, entityCanon);
         fieldRegistryUncachedMs = Date.now() - uc0;
         return b;
     };
@@ -167,7 +205,7 @@ async function resolveFieldDefinitionsAndSectionsForDrawer(
     if (typeof unstable_cache === "function" && process.env.NODE_ENV !== "test") {
         unstableAttempted = true;
         bundle = await unstable_cache(runUncached, fieldRegistryStableKey(orgId, entityType), {
-            revalidate: 90,
+            revalidate: 300,
             tags: [...FIELD_REGISTRY_UNSTABLE_TAGS, `field-registry-org:${orgId}`],
         })();
     } else {
@@ -193,6 +231,7 @@ async function resolveFieldDefinitionsAndSectionsForDrawer(
             field_registry_process_cache_hit: false,
             field_registry_unstable_attempted: unstableAttempted,
             field_registry_next_cache_hit: unstableHit,
+            field_registry_defs_warm: unstableHit,
             field_registry_combined_cache_hit: combinedCacheHit,
             ...(fetcherRan && fieldRegistryUncachedMs >= 0
                 ? { field_registry_uncached_ms: fieldRegistryUncachedMs }
@@ -233,24 +272,39 @@ export async function attachFieldDefinitionsAndValues(
     }
     if (!orgId) return emptyMeta;
 
-    const { fieldDefs, fieldSections, meta } = await resolveFieldDefinitionsAndSectionsForDrawer(orgId, entityType);
+    const dbEntityType = normalizeFieldRegistryDbEntityType(entityType);
+
+    const tDefsWall0 = Date.now();
+    const { fieldDefs, fieldSections, meta: defsMeta } = await resolveFieldDefinitionsAndSectionsForDrawer(orgId, entityType);
+    const defsResolveWallMs = Date.now() - tDefsWall0;
+
+    const mergedDefsMeta: FieldRegistryAttachMeta = {
+        ...defsMeta,
+        field_registry_defs_resolve_wall_ms: defsResolveWallMs,
+        field_registry_defs_warm:
+            defsMeta.field_registry_defs_warm === true ||
+            !!defsMeta.field_registry_process_cache_hit ||
+            !!defsMeta.field_registry_next_cache_hit,
+    };
+
     out._field_definitions = fieldDefs;
     out._field_sections = fieldSections;
 
-    if (fieldDefs.length === 0) return meta;
+    if (fieldDefs.length === 0) return mergedDefsMeta;
 
     const customDefs = fieldDefs.filter((d) => !d.is_system);
     const customDefIds = customDefs.map((d) => d.id);
-    if (customDefIds.length === 0 || !mergeValues) return meta;
+    if (customDefIds.length === 0 || !mergeValues) return mergedDefsMeta;
 
+    const tFvWall0 = Date.now();
     const fvRows = await withDbTiming(
         "field_values.by_entity",
-        { orgId, entityType, entityId, def_count: customDefIds.length },
+        { orgId, entityType: dbEntityType, entityId, def_count: customDefIds.length },
         async () => {
             const { data } = await supabase
                 .from("field_values")
                 .select("field_definition_id, value_text, value_number, value_boolean, value_date, value_json")
-                .eq("entity_type", entityType)
+                .eq("entity_type", dbEntityType)
                 .eq("entity_id", entityId)
                 .in("field_definition_id", customDefIds);
             return data;
@@ -282,5 +336,8 @@ export async function attachFieldDefinitionsAndValues(
             (out as Record<string, unknown>)[d.field_key] = "";
         }
     }
-    return meta;
+    return {
+        ...mergedDefsMeta,
+        field_registry_field_values_wall_ms: Date.now() - tFvWall0,
+    };
 }
