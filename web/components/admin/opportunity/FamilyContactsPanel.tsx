@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useEffect, useMemo } from "react";
 import OpportunityRecordSectionRegistryActions from "@/components/admin/opportunity/OpportunityRecordSectionRegistryActions";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
@@ -7,6 +8,16 @@ import type { AdminDrawerEntityType } from "@/contexts/AdminDrawerContext";
 import { formatPhoneUS } from "@/lib/adminFormatters";
 import { normalizePhone } from "@/lib/contactNormalize";
 import { DrawerRelationshipPanelSkeleton } from "@/components/admin/workspace/DrawerRelationshipPanelSkeleton";
+import {
+    oppDrawerRolePillComfortable,
+    oppInqContactChannelLink,
+    oppInqContactRow,
+    oppInqContactSep,
+    oppInqEyebrow,
+    oppInqMutedEmpty,
+    oppInqNameLink,
+    oppInqRolePill,
+} from "@/components/admin/drawer/opportunityInquiryDrawerTypography";
 
 export type OpportunityPersonRow = {
     id: string;
@@ -30,6 +41,64 @@ function formatRoleTypeLabel(key: string): string {
     const words = s.split(/[_.-]+/).filter(Boolean);
     if (words.length === 0) return s;
     return words.map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+}
+
+/** Matches primary person card footprint in summary (loaded state). */
+function SummaryPrimaryPersonCardSkeleton({ cardPad }: { cardPad: string }) {
+    return (
+        <div
+            className={`mt-1 rounded-lg border border-alloy-stone/20 bg-white shadow-sm ring-1 ring-alloy-stone/[0.06] ${cardPad}`}
+            aria-busy="true"
+            aria-label="Loading primary contact"
+        >
+            <div className="skeleton-pulse h-[13px] w-[min(55%,12rem)] rounded bg-alloy-stone/14" aria-hidden />
+            <div className="mt-2 skeleton-pulse h-[12px] w-[min(88%,16rem)] rounded bg-alloy-stone/11" aria-hidden />
+        </div>
+    );
+}
+
+/** One-line placeholder matching “No additional people linked yet.” height (no oversized cards). */
+function SummaryAdditionalPeopleLineSkeleton() {
+    return (
+        <div className="mt-1.5 flex min-h-[1.125rem] items-center" aria-busy="true" aria-label="Loading people">
+            <div className="skeleton-pulse h-3 w-[min(78%,13rem)] rounded bg-alloy-stone/11" aria-hidden />
+        </div>
+    );
+}
+
+export function OppInquiryContactChannelsRow(props: {
+    phone: string | null | undefined;
+    email: string | null | undefined;
+    phoneHref?: (raw: string) => string | null;
+}): ReactNode {
+    const { phone, email, phoneHref } = props;
+    const p = phone != null ? String(phone).trim() : "";
+    const e = email != null ? String(email).trim() : "";
+    if (!p && !e) {
+        return <div className={oppInqMutedEmpty}>No contact details yet.</div>;
+    }
+    const tel = p ? (phoneHref ? phoneHref(p) : p.replace(/\s/g, "")) : "";
+    const showPhone = Boolean(p && tel);
+    const showEmail = Boolean(e);
+    return (
+        <div className={oppInqContactRow}>
+            {showPhone ? (
+                <span className="tabular-nums">
+                    <a className={oppInqContactChannelLink} href={`tel:${tel}`}>
+                        {formatPhoneUS(p)}
+                    </a>
+                </span>
+            ) : null}
+            {showPhone && showEmail ? <span className={oppInqContactSep}>·</span> : null}
+            {showEmail ? (
+                <span className="min-w-0 truncate">
+                    <a className={oppInqContactChannelLink} href={`mailto:${e}`}>
+                        {e}
+                    </a>
+                </span>
+            ) : null}
+        </div>
+    );
 }
 
 export function FamilyContactsPanel(props: {
@@ -139,74 +208,41 @@ export function FamilyContactsPanel(props: {
         });
     }, [rows, primaryPersonId]);
 
-    const tinyLabel =
-        variant === "summary"
-            ? "mb-0.5 text-[8px] font-semibold tracking-[0.12em] text-alloy-midnight/45"
-            : "text-[11px] font-semibold tracking-wide text-alloy-forge/55";
+    const eyebrow = oppInqEyebrow;
     const cardPad = variant === "summary" ? "px-2 py-1.5" : "px-3 py-2.5";
-    const nameLink =
-        variant === "summary"
-            ? "text-left text-[12px] font-semibold text-alloy-blue hover:underline"
-            : "text-left text-[15px] font-semibold leading-snug text-alloy-blue hover:underline";
-    const contactRow =
-        variant === "summary"
-            ? "mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-alloy-midnight/70"
-            : "mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px] text-alloy-midnight/80";
-    const contactMuted = variant === "summary" ? "text-alloy-midnight/45" : "text-alloy-midnight/50";
-    const contactLink =
-        variant === "summary"
-            ? "font-semibold text-alloy-blue hover:underline underline-offset-2"
-            : "font-semibold text-alloy-blue hover:underline underline-offset-2";
-    const roleBadge =
-        variant === "summary"
-            ? "inline-flex max-w-[9.5rem] items-center rounded-full border border-alloy-stone/20 bg-alloy-stone/10 px-2 py-0.5 text-[9px] font-semibold tracking-wide text-alloy-midnight/70"
-            : "inline-flex max-w-[11rem] items-center rounded-full border border-alloy-blue/20 bg-alloy-blue/[0.07] px-2.5 py-0.5 text-[11px] font-semibold text-alloy-midnight/85";
+
+    const nameLink = oppInqNameLink;
+
+    const roleBadge = variant === "summary" ? oppInqRolePill : oppDrawerRolePillComfortable;
+
+    const registryDensity = variant === "summary" ? "summary" : "default";
 
     return (
-        <div className={variant === "summary" ? "space-y-2" : "space-y-3"} data-family-contacts-panel={sectionKey}>
-            <div>
-                {variant === "default" ? <div className={tinyLabel}>Primary person</div> : null}
+        <div className={variant === "summary" ? "min-w-0 flex flex-1 flex-col space-y-2" : "space-y-3"} data-family-contacts-panel={sectionKey}>
+            <div className="min-w-0">
+                {variant === "default" ? <div className={eyebrow}>Primary person</div> : null}
                 {primaryPersonId ? (
                     <div className={`mt-1 rounded-lg border border-alloy-stone/20 bg-white shadow-sm ring-1 ring-alloy-stone/[0.06] ${cardPad}`}>
                         <button type="button" onClick={() => openDrawer({ type: "persons", id: primaryPersonId })} className={nameLink}>
                             {primaryName && primaryName !== "—" ? primaryName : "View person"}
                         </button>
-                        <div className={contactRow}>
-                            {primaryPhone ? (
-                                <span className="tabular-nums">
-                                    <span className={contactMuted}>Phone </span>
-                                    <a className={contactLink} href={`tel:${primaryPhone}`}>
-                                        {formatPhoneUS(primaryPhone)}
-                                    </a>
-                                </span>
-                            ) : (
-                                <span className={contactMuted}>Phone —</span>
-                            )}
-                            {primaryEmail ? (
-                                <span className="min-w-0 truncate">
-                                    <span className={contactMuted}>Email </span>
-                                    <a className={contactLink} href={`mailto:${primaryEmail}`}>
-                                        {primaryEmail}
-                                    </a>
-                                </span>
-                            ) : (
-                                <span className={contactMuted}>Email —</span>
-                            )}
-                        </div>
+                        <OppInquiryContactChannelsRow phone={primaryPhone} email={primaryEmail} />
                     </div>
                 ) : primaryContactAwaitingFullHydrate ? (
-                    <DrawerRelationshipPanelSkeleton density="compact" rows={1} label="Primary contact loading" />
+                    variant === "summary" ? (
+                        <SummaryPrimaryPersonCardSkeleton cardPad={cardPad} />
+                    ) : (
+                        <DrawerRelationshipPanelSkeleton density="compact" rows={1} label="Primary contact loading" />
+                    )
                 ) : (
-                    <p className={`mt-1 ${variant === "summary" ? "text-[12px] text-alloy-midnight/55" : "text-sm text-alloy-forge/60"}`}>
-                        No primary person on this opportunity.
-                    </p>
+                    <p className={`mt-1 ${oppInqMutedEmpty}`}>No primary person on this opportunity.</p>
                 )}
             </div>
 
             {variant === "default" ? (
                 <div>
-                    <div className={tinyLabel}>Opportunity people</div>
-                    <p className="mt-0.5 text-xs text-alloy-forge/60">Linked on this inquiry only (opportunity_persons).</p>
+                    <div className={eyebrow}>Opportunity people</div>
+                    <p className="mt-0.5 text-xs text-alloy-midnight/55">Linked on this inquiry only (opportunity_persons).</p>
                 </div>
             ) : null}
 
@@ -221,75 +257,62 @@ export function FamilyContactsPanel(props: {
                 openDrawer={openDrawer}
                 openForm={openForm}
                 onApplied={onRegistryApplied}
+                layoutDensity={registryDensity}
             />
 
-            {sorted.length === 0 ? (
-                opportunityFullHydrateFailed ? (
-                    <div
-                        className={
-                            variant === "summary"
-                                ? "rounded-md border border-amber-200/80 bg-amber-50/60 px-2 py-1.5 text-[11px] text-amber-950"
-                                : "rounded-lg border border-amber-200/80 bg-amber-50/60 px-3 py-2 text-sm text-amber-950"
-                        }
-                    >
-                        Full record did not load. Relationships may be incomplete — try refreshing the drawer or reopening the
-                        opportunity.
-                    </div>
-                ) : relationshipRowsAwaitingFullHydrate ? (
-                    <DrawerRelationshipPanelSkeleton density={variant === "summary" ? "compact" : "comfortable"} rows={2} />
-                ) : (
-                    <div className={variant === "summary" ? "text-[12px] text-alloy-midnight/55" : "text-sm text-alloy-forge/60"}>
-                        No additional people linked yet.
-                    </div>
-                )
-            ) : (
-                <ul className={`${variant === "summary" ? "space-y-1.5" : "space-y-2.5"} list-none`}>
-                    {sorted.map((r) => (
-                        <li
-                            key={r.id}
-                            className={`rounded-lg border border-alloy-stone/20 bg-white shadow-sm ring-1 ring-alloy-stone/[0.06] ${cardPad}`}
+            <div className="min-w-0 flex-1">
+                {sorted.length === 0 ? (
+                    opportunityFullHydrateFailed ? (
+                        <div
+                            className={
+                                variant === "summary"
+                                    ? "rounded-md border border-amber-200/80 bg-amber-50/60 px-2 py-1.5 text-[11px] text-amber-950"
+                                    : "rounded-lg border border-amber-200/80 bg-amber-50/60 px-3 py-2 text-sm text-amber-950"
+                            }
                         >
-                            <div className="flex flex-wrap items-start justify-between gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => openDrawer({ type: "persons", id: r.person_id })}
-                                    className={`min-w-0 flex-1 truncate ${nameLink}`}
-                                >
-                                    {r.name && r.name.trim() ? r.name : "View person"}
-                                </button>
-                                <span className={roleBadge} title={r.role_type}>
-                                    {formatRoleTypeLabel(r.role_type)}
-                                </span>
-                            </div>
-                            <div className={contactRow}>
-                                {r.phone ? (
-                                    <span className="tabular-nums">
-                                        <span className={contactMuted}>Phone </span>
-                                        <a
-                                            className={contactLink}
-                                            href={`tel:${normalizePhone(r.phone) ?? r.phone.replace(/\D/g, "")}`}
-                                        >
-                                            {formatPhoneUS(r.phone)}
-                                        </a>
+                            Full record did not load. Relationships may be incomplete — try refreshing the drawer or reopening the
+                            opportunity.
+                        </div>
+                    ) : relationshipRowsAwaitingFullHydrate ? (
+                        variant === "summary" ? (
+                            <SummaryAdditionalPeopleLineSkeleton />
+                        ) : (
+                            <DrawerRelationshipPanelSkeleton density="comfortable" rows={1} />
+                        )
+                    ) : (
+                        <div className={`${variant === "summary" ? "mt-1.5 min-h-[1.125rem]" : ""} ${oppInqMutedEmpty}`}>
+                            No additional people linked yet.
+                        </div>
+                    )
+                ) : (
+                    <ul className={`${variant === "summary" ? "space-y-1.5" : "space-y-2.5"} mt-1.5 list-none`}>
+                        {sorted.map((r) => (
+                            <li
+                                key={r.id}
+                                className={`rounded-lg border border-alloy-stone/20 bg-white shadow-sm ring-1 ring-alloy-stone/[0.06] ${cardPad}`}
+                            >
+                                <div className="flex flex-wrap items-start justify-between gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => openDrawer({ type: "persons", id: r.person_id })}
+                                        className={`min-w-0 flex-1 truncate ${nameLink}`}
+                                    >
+                                        {r.name && r.name.trim() ? r.name : "View person"}
+                                    </button>
+                                    <span className={roleBadge} title={r.role_type}>
+                                        {formatRoleTypeLabel(r.role_type)}
                                     </span>
-                                ) : (
-                                    <span className={contactMuted}>Phone —</span>
-                                )}
-                                {r.email ? (
-                                    <span className="min-w-0 truncate">
-                                        <span className={contactMuted}>Email </span>
-                                        <a className={contactLink} href={`mailto:${r.email}`}>
-                                            {r.email}
-                                        </a>
-                                    </span>
-                                ) : (
-                                    <span className={contactMuted}>Email —</span>
-                                )}
-                            </div>
-                        </li>
-                    ))}
-                </ul>
-            )}
+                                </div>
+                                <OppInquiryContactChannelsRow
+                                    phone={r.phone}
+                                    email={r.email}
+                                    phoneHref={(raw) => normalizePhone(raw) ?? raw.replace(/\D/g, "")}
+                                />
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </div>
         </div>
     );
 }

@@ -29,6 +29,8 @@ type Props = {
     onApplied?: () => void;
     /** Success path only — e.g. workflow_run_id for start_workflow. */
     onExecutionResult?: (executionResult: Record<string, unknown> | undefined) => void;
+    /** Summary column uses a shorter action skeleton aligned with inquiry header panels. */
+    layoutDensity?: "default" | "summary";
 };
 
 function filterSlot(
@@ -56,6 +58,7 @@ export default function OpportunityRecordSectionRegistryActions({
     openForm,
     onApplied,
     onExecutionResult,
+    layoutDensity = "default",
 }: Props) {
     const mountRef = useRef<HTMLDivElement | null>(null);
     const [shouldLoad, setShouldLoad] = useState(false);
@@ -185,22 +188,33 @@ export default function OpportunityRecordSectionRegistryActions({
     );
 
     const n = primary.length + secondary.length + overflow.length;
+    const compactActions = layoutDensity === "summary";
     const primaryCls =
         "px-3 py-1.5 text-sm font-semibold rounded-md bg-alloy-blue text-white hover:opacity-90 disabled:opacity-50";
     const secondaryCls =
         "px-3 py-1.5 text-sm font-semibold rounded-md border border-alloy-stone/60 text-alloy-midnight/90 hover:bg-alloy-stone/15 disabled:opacity-50";
 
     return (
-        <div ref={mountRef} className="mt-2 min-h-[2px]" data-opportunity-record-section-actions-root={sectionKey}>
+        <div
+            ref={mountRef}
+            className={`mt-2 ${compactActions ? "min-h-0" : "min-h-[2px]"}`}
+            data-opportunity-record-section-actions-root={sectionKey}
+        >
             {!shouldLoad ? null : loading ? (
                 <div
-                    className="flex flex-wrap gap-2"
+                    className={`flex flex-wrap gap-2 ${compactActions ? "min-h-[2rem] items-center" : ""}`}
                     aria-busy="true"
                     aria-label="Loading section actions"
                     data-opportunity-record-section-actions-skeleton={sectionKey}
                 >
-                    <div className="h-8 w-[7.5rem] animate-pulse rounded-md bg-alloy-stone/15" />
-                    <div className="h-8 w-[6.5rem] animate-pulse rounded-md bg-alloy-stone/12" />
+                    {compactActions ? (
+                        <div className="skeleton-pulse h-8 w-[6.75rem] rounded-md bg-alloy-stone/13" aria-hidden />
+                    ) : (
+                        <>
+                            <div className="h-8 w-[7.5rem] animate-pulse rounded-md bg-alloy-stone/15" />
+                            <div className="h-8 w-[6.5rem] animate-pulse rounded-md bg-alloy-stone/12" />
+                        </>
+                    )}
                 </div>
             ) : n === 0 ? null : (
                 <div className="flex flex-wrap gap-2" data-opportunity-record-section-actions={sectionKey}>

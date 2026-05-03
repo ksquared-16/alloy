@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { WorkspaceRootShell, type WorkspaceRootMetrics } from "@/components/admin/workspace/WorkspaceRootShell";
 import {
@@ -19,6 +19,12 @@ import {
 } from "@/lib/workspace/viewModels/workspaceRootRollup";
 import { resolveKpisForWorkspace } from "@/lib/kpi/resolver";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
+import { dedupeAdminFetch, dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
+import {
+    perfWorkspaceLoad,
+    readWorkspaceRootCache,
+    writeWorkspaceRootCache,
+} from "@/lib/workspace/adminV2WorkspaceSessionCache";
 import { AdminV2RouteLoadingState } from "@/components/admin/workspace/AdminV2RouteLoadingState";
 import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 
@@ -180,7 +186,8 @@ async function loadWorkspaceRollup(
  * Departments load from GET /api/admin/departments (real org rows; no redirect).
  */
 export default function AdminV2WorkspaceIndexPage() {
-    const { orgName: orgNameFromContext } = useWorkspaceOrg();
+    const { orgName: orgNameFromContext, orgId } = useWorkspaceOrg();
+    const hydratedCacheRef = useRef(false);
     const [departments, setDepartments] = useState<WorkspaceRootDepartmentRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -194,20 +201,38 @@ export default function AdminV2WorkspaceIndexPage() {
     /** After per-dept rollup finishes — soft opacity lift on department cards (quick → refined stats). */
     const [workspaceRollupRefined, setWorkspaceRollupRefined] = useState(false);
 
-    useEffect(() => {
-        /** Synchronous: avoids a Strict Mode window where `loading` is still default `true` but the async body has not run yet (same class of bug as deferred `setLoading(true)`). */
-        setLoading(true);
+    /** Session cache hydrate before paint — avoids revisit blank shell when SSR showed the route loader momentarily. */
+    useLayoutEffect(() => {
+        hydratedCacheRef.current = false;
+        const hit = readWorkspaceRootCache(orgId);
+        if (!hit?.departments?.length) return;
+        hydratedCacheRef.current = true;
+        setDepartments(hit.departments);
+        setDeptTileStats(hit.deptTileStats);
+        setMetrics(hit.metrics);
+        setOrgOpportunityKpis(hit.orgOpportunityKpis ?? null);
+        setWorkspaceKpiStrip(hit.workspaceKpiStrip);
+        setWorkspaceKpiPlacementPending(hit.kpiPlacementPending);
+        setWorkspaceRollupRefined(hit.rollupRefined);
+        setLoading(false);
         setError(null);
-        setWorkspaceRollupRefined(false);
+        perfWorkspaceLoad({ phase: "shell_seed", ms: 0, source: "cache" });
+    }, [orgId]);
 
-        const ac = new AbortController();
-        /** Hard cap so a hung `/api/admin/departments` cannot block the UI forever when `AbortSignal.timeout` is unavailable. */
-        const hardStopMs = 50_000;
-        const hardStop = setTimeout(() => ac.abort(), hardStopMs);
+    useEffect(() => {
+        /** Network revalidation always runs — only show full skeleton when nothing was seeded from cache. */
+        const cachedShellPrimed = hydratedCacheRef.current;
+        if (!cachedShellPrimed) {
+            setLoading(true);
+            setWorkspaceRollupRefined(false);
+        }
+        setError(null);
+
         let applyResults = true;
-
         void (async () => {
             const routeStart = typeof performance !== "undefined" ? performance.now() : 0;
+            const tCritical0 =
+                typeof performance !== "undefined" && typeof window !== "undefined" ? performance.now() : 0;
             if (typeof performance !== "undefined" && typeof window !== "undefined") {
                 alloyPerfSet("workspace_start", routeStart);
             }
@@ -217,10 +242,10 @@ export default function AdminV2WorkspaceIndexPage() {
                     (window as unknown as { __WS_PERF_DEBUG__?: boolean }).__WS_PERF_DEBUG__ === true;
                 const t0 = perfDebug ? performance.now() : 0;
 
-                const fetchInit = workspaceDataFetchInit();
+                const fetchInit = workspaceDataFetchInit() ?? {};
                 const [res, wuRes] = await Promise.all([
-                    fetch("/api/admin/departments", { signal: ac.signal }),
-                    fetch("/api/admin/work-units", { ...(fetchInit ?? {}), signal: ac.signal }).catch(() => null as Response | null),
+                    dedupeAdminFetch("/api/admin/departments", fetchInit),
+                    dedupeAdminFetch("/api/admin/work-units", fetchInit).catch(() => null as Response | null),
                 ]);
                 const json = (await res.json().catch(() => ({}))) as {
                     items?: WorkspaceRootDepartmentRow[];
@@ -233,24 +258,60 @@ export default function AdminV2WorkspaceIndexPage() {
                 if (!res.ok) throw new Error(json.error ?? "Failed to load departments");
                 const items = json.items ?? [];
                 const active = items.filter((d) => d.is_active !== false);
-                if (applyResults) {
-                    setDepartments(active);
+                if (!applyResults) return;
+
+                if (typeof performance !== "undefined" && typeof window !== "undefined") {
+                    perfWorkspaceLoad({
+                        phase: "critical_deps",
+                        ms: Math.round(performance.now() - tCritical0),
+                        source: "network",
+                    });
                 }
 
+                setDepartments(active);
+
                 /** First paint after departments + work units only; growth slice KPIs load in background. */
-                if (applyResults && active.length) {
+                if (active.length) {
                     const quick = buildWorkspaceQuickRollup(active, wuRes, wuJson);
+                    const seedsFromSession = cachedShellPrimed;
                     setMetrics(quick.metrics);
                     setDeptTileStats(quick.deptTileStats);
-                    setOrgOpportunityKpis(null);
-                    setWorkspaceKpiStrip(undefined);
-                    setWorkspaceKpiPlacementPending(true);
-                    setWorkspaceRollupRefined(false);
+                    if (!seedsFromSession) {
+                        setOrgOpportunityKpis(null);
+                        setWorkspaceKpiStrip(undefined);
+                        setWorkspaceKpiPlacementPending(true);
+                        setWorkspaceRollupRefined(false);
+                        writeWorkspaceRootCache(orgId, {
+                            departments: active,
+                            deptTileStats: quick.deptTileStats,
+                            metrics: quick.metrics,
+                            orgOpportunityKpis: null,
+                            workspaceKpiStrip: undefined,
+                            kpiPlacementPending: true,
+                            rollupRefined: false,
+                        });
+                    } else {
+                        /** Silent revalidate — keep KPI cells stable until refined rollup + placements finish. */
+                        const preserved = readWorkspaceRootCache(orgId);
+                        writeWorkspaceRootCache(orgId, {
+                            departments: active,
+                            deptTileStats: quick.deptTileStats,
+                            metrics: quick.metrics,
+                            orgOpportunityKpis: preserved?.orgOpportunityKpis ?? null,
+                            workspaceKpiStrip: preserved?.workspaceKpiStrip,
+                            kpiPlacementPending: preserved?.kpiPlacementPending ?? false,
+                            rollupRefined: preserved?.rollupRefined ?? true,
+                        });
+                    }
                     void (async () => {
                         try {
                             const rollupResult = await loadWorkspaceRollup(active, wuRes, wuJson);
-                            const { metrics: m, deptTileStats: stats, orgOpportunityKpis: roll, growthSnapshots } =
-                                rollupResult;
+                            const {
+                                metrics: m,
+                                deptTileStats: stats,
+                                orgOpportunityKpis: roll,
+                                growthSnapshots,
+                            } = rollupResult;
                             if (!applyResults) return;
                             setMetrics(m);
                             setDeptTileStats(stats);
@@ -262,6 +323,22 @@ export default function AdminV2WorkspaceIndexPage() {
                                 ...m,
                                 departments: active.length,
                             };
+                            writeWorkspaceRootCache(orgId, {
+                                departments: active,
+                                deptTileStats: stats,
+                                metrics: m,
+                                orgOpportunityKpis: roll.length ? roll : null,
+                                workspaceKpiStrip: undefined,
+                                kpiPlacementPending: true,
+                                rollupRefined: true,
+                            });
+                            if (typeof performance !== "undefined" && typeof window !== "undefined") {
+                                perfWorkspaceLoad({
+                                    phase: "rollup_refined",
+                                    ms: Math.round(performance.now() - tCritical0),
+                                    source: "network",
+                                });
+                            }
                             void (async () => {
                                 type PlacementBody = {
                                     items?: WorkspaceKpiPlacementRow[];
@@ -269,10 +346,12 @@ export default function AdminV2WorkspaceIndexPage() {
                                 };
                                 let placementStrip: KPIVm[] | undefined = undefined;
                                 try {
-                                    const placementRes = await fetch("/api/admin/workspace-kpi-placements?surface=workspace", {
-                                        ...(workspaceDataFetchInit() ?? {}),
-                                        cache: "no-store",
-                                    }).catch(() => null as Response | null);
+                                    const placementUrl = "/api/admin/workspace-kpi-placements?surface=workspace";
+                                    const placementRes = await dedupeAdminFetchWithTtl(
+                                        placementUrl,
+                                        { ...(workspaceDataFetchInit() ?? {}), cache: "no-store" },
+                                        8000
+                                    ).catch(() => null as Response | null);
                                     if (placementRes?.ok) {
                                         const body = (await placementRes.json().catch(() => ({}))) as PlacementBody;
                                         placementStrip = resolveKpisForWorkspace({
@@ -288,6 +367,22 @@ export default function AdminV2WorkspaceIndexPage() {
                                     if (applyResults) {
                                         setWorkspaceKpiStrip(placementStrip);
                                         setWorkspaceKpiPlacementPending(false);
+                                        writeWorkspaceRootCache(orgId, {
+                                            departments: active,
+                                            deptTileStats: stats,
+                                            metrics: metricsForPlacement,
+                                            orgOpportunityKpis: roll.length ? roll : null,
+                                            workspaceKpiStrip: placementStrip,
+                                            kpiPlacementPending: false,
+                                            rollupRefined: true,
+                                        });
+                                        if (typeof performance !== "undefined" && typeof window !== "undefined") {
+                                            perfWorkspaceLoad({
+                                                phase: "kpi_placements_ready",
+                                                ms: Math.round(performance.now() - tCritical0),
+                                                source: "network",
+                                            });
+                                        }
                                     }
                                 }
                             })();
@@ -299,7 +394,7 @@ export default function AdminV2WorkspaceIndexPage() {
                             setWorkspaceRollupRefined(true);
                         }
                     })();
-                } else if (applyResults) {
+                } else {
                     setMetrics(null);
                     setDeptTileStats({});
                     setOrgOpportunityKpis(null);
@@ -319,30 +414,18 @@ export default function AdminV2WorkspaceIndexPage() {
                     });
                 }
             } catch (e) {
-                const aborted =
-                    (e instanceof DOMException && e.name === "AbortError") ||
-                    (e instanceof Error && e.name === "AbortError");
-                if (aborted) {
-                    if (applyResults) {
-                        setError(
-                            "Loading departments timed out or was interrupted. Check your connection and try again."
-                        );
-                    }
-                } else if (applyResults) {
+                if (applyResults) {
                     setError((e as Error).message);
                 }
             } finally {
-                clearTimeout(hardStop);
                 if (applyResults) setLoading(false);
             }
         })();
 
         return () => {
             applyResults = false;
-            clearTimeout(hardStop);
-            ac.abort();
         };
-    }, []);
+    }, [orgId]);
 
     const metricsResolved = useMemo(() => {
         if (!metrics) return null;

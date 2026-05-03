@@ -19,6 +19,8 @@ interface AdminV2WorkspaceClientProvidersProps {
   initialEntityLabels?: EntityLabelsBootstrapMap;
   /** Display name from `orgs.name` (server-loaded). */
   orgName?: string | null;
+  /** Server-resolved organization id for admin session cache scope. */
+  orgId?: string | null;
   /** Server-resolved user → org → UTC display timezone. */
   initialViewerTimezone?: AdminViewerTimezoneValue;
   /** Org operational IANA for schedule defaults. */
@@ -31,6 +33,7 @@ export default function AdminV2WorkspaceClientProviders({
   role,
   initialEntityLabels,
   orgName = null,
+  orgId = null,
   initialViewerTimezone,
   initialOperationalTimezoneIana,
 }: AdminV2WorkspaceClientProvidersProps) {
@@ -60,7 +63,7 @@ export default function AdminV2WorkspaceClientProviders({
         <EntityLabelsProvider initialLabels={labels}>
           <AdminOrgOperationalTimezoneProvider iana={operationalTz}>
             <AdminViewerTimezoneProvider value={tzValue}>
-              <WorkspaceOrgProvider orgName={orgName}>
+              <WorkspaceOrgProvider orgName={orgName} orgId={orgId}>
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                   <AdminDrawerProvider>
                     <div

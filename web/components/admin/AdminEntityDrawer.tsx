@@ -59,7 +59,7 @@ import {
 import EntityDrawerOverview from "@/components/admin/entity/EntityDrawerOverview";
 import OpportunityRecordSectionRegistryActions from "@/components/admin/opportunity/OpportunityRecordSectionRegistryActions";
 import { OpportunityHouseholdPeoplePanel } from "@/components/admin/opportunity/OpportunityHouseholdPeoplePanel";
-import { FamilyContactsPanel } from "@/components/admin/opportunity/FamilyContactsPanel";
+import { FamilyContactsPanel, OppInquiryContactChannelsRow } from "@/components/admin/opportunity/FamilyContactsPanel";
 import EntityDrawerSection from "@/components/admin/entity/EntityDrawerSection";
 import JobPricingBreakdown from "@/components/admin/JobPricingBreakdown";
 import JobRrsOverviewTab from "@/components/admin/JobRrsOverviewTab";
@@ -113,6 +113,16 @@ import {
     type RecordLayoutConfigJson,
 } from "@/lib/recordChrome/types";
 import { executeOpportunityRecordAction } from "@/lib/recordChrome/executeOpportunityRecordAction";
+import {
+    oppInqDisplayName,
+    oppInqEyebrow,
+    oppInqFieldInput,
+    oppInqInnerCard,
+    oppInqMutedEmpty,
+    oppInqNameLink,
+    oppInqReadonlyField,
+    oppInqTabBtn,
+} from "@/components/admin/drawer/opportunityInquiryDrawerTypography";
 import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { formatActivityRelativeShort, type ActivitySignalResult } from "@/lib/admin/activitySignals";
 import { formatOpportunityActivityTimelineEvent } from "@/lib/admin/opportunityActivityTimelineFormat";
@@ -10049,9 +10059,8 @@ export default function AdminEntityDrawer() {
                                                     ];
                                                 }
 
-                                                const tinyLabel = "mb-0.5 text-[8px] font-semibold tracking-[0.12em] text-alloy-midnight/45";
-                                                const strong = "text-[13px] font-semibold leading-snug text-alloy-midnight/90";
-                                                const monoLink = "text-[12px] font-semibold text-alloy-blue hover:underline underline-offset-2";
+                                                const tinyLabel = oppInqEyebrow;
+                                                const strong = oppInqDisplayName;
                                                 const openPrimaryContactRecord = () => {
                                                     const pid = String(d.primary_person_id ?? "").trim();
                                                     if (pid) openDrawer({ type: "persons", id: pid });
@@ -10065,10 +10074,6 @@ export default function AdminEntityDrawer() {
                                                     const followNotesValue = String(formData.follow_up_notes ?? d.follow_up_notes ?? "");
                                                     const householdId =
                                                         ident?.household?.id ?? (String(d.customer_id ?? "").trim() || null);
-                                                    const fieldInput =
-                                                        "w-full min-w-0 rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 text-[13px] font-medium text-alloy-midnight/90 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60";
-                                                    const innerCard =
-                                                        "min-w-0 rounded-lg border border-alloy-stone/[0.1] bg-white/[0.97] px-2.5 py-2.5 shadow-sm ring-1 ring-alloy-stone/[0.06]";
                                                     const familyContactsInSummary =
                                                         !!drawer.id &&
                                                         drawer.id !== "new" &&
@@ -10090,11 +10095,11 @@ export default function AdminEntityDrawer() {
                                                                     </span>
                                                                 ) : null}
                                                             </div>
-                                                            <div className="mt-2 grid grid-cols-1 gap-2 lg:grid-cols-2 lg:items-start lg:gap-3">
-                                                                <div className={innerCard}>
+                                                            <div className="mt-2 grid grid-cols-1 gap-2 lg:grid-cols-2 lg:items-stretch lg:gap-3">
+                                                                <div className={`${oppInqInnerCard} min-h-0`}>
                                                                     <div className={tinyLabel}>Family & contacts</div>
                                                                     {familyContactsInSummary ? (
-                                                                        <div className="mt-1">
+                                                                        <div className="mt-1 flex min-h-0 flex-1 flex-col">
                                                                             <FamilyContactsPanel
                                                                                 variant="summary"
                                                                                 opportunityId={drawer.id}
@@ -10134,15 +10139,15 @@ export default function AdminEntityDrawer() {
                                                                                     <button
                                                                                         type="button"
                                                                                         onClick={() => openDrawer({ type: "customers", id: householdId })}
-                                                                                        className="mt-1 block w-full truncate text-left text-[13px] font-semibold text-alloy-blue hover:underline"
+                                                                                        className={`mt-1 block w-full truncate text-left ${oppInqNameLink}`}
                                                                                     >
                                                                                         {household}
                                                                                     </button>
                                                                                 ) : (
-                                                                                    <div className="mt-1 text-[13px] font-semibold text-alloy-midnight/85">{household}</div>
+                                                                                    <div className={`mt-1 ${oppInqDisplayName}`}>{household}</div>
                                                                                 )
                                                                             ) : opportunityFullHydrateFailed ? (
-                                                                                <div className="mt-1 text-[12px] text-alloy-midnight/55">
+                                                                                <div className={`mt-1 ${oppInqMutedEmpty}`}>
                                                                                     Household could not be confirmed — try refreshing the drawer.
                                                                                 </div>
                                                                             ) : opportunityFullHydratePending ? (
@@ -10151,13 +10156,13 @@ export default function AdminEntityDrawer() {
                                                                                     aria-hidden
                                                                                 />
                                                                             ) : (
-                                                                                <div className="mt-1 text-[12px] text-alloy-midnight/45">No household on file.</div>
+                                                                                <div className={`mt-1 ${oppInqMutedEmpty}`}>No household on file.</div>
                                                                             )}
                                                                             <div className={`${tinyLabel} mt-2.5`}>
                                                                                 {commRoleLabel ? `Primary contact (${commRoleLabel})` : "Primary contact"}
                                                                             </div>
                                                                             {opportunityFullHydrateFailed && !primaryContactLabelLine ? (
-                                                                                <div className="mt-0.5 text-[12px] text-alloy-midnight/55">
+                                                                                <div className={`mt-0.5 ${oppInqMutedEmpty}`}>
                                                                                     Primary contact could not be loaded — try refreshing the drawer.
                                                                                 </div>
                                                                             ) : primaryContactNamePending ? (
@@ -10170,37 +10175,20 @@ export default function AdminEntityDrawer() {
                                                                                     <button
                                                                                         type="button"
                                                                                         onClick={openPrimaryContactRecord}
-                                                                                        className="mt-0.5 block w-full truncate text-left text-[13px] font-semibold text-alloy-blue hover:underline"
+                                                                                        className={`mt-0.5 block w-full truncate text-left ${oppInqNameLink}`}
                                                                                     >
                                                                                         {primaryContactLabelLine || "—"}
                                                                                     </button>
                                                                                     {primaryContactChannelsPending ? (
                                                                                         <div
-                                                                                            className="mt-1 h-7 w-full max-w-[18rem] skeleton-pulse rounded-md bg-alloy-stone/12"
+                                                                                            className="mt-1 flex min-h-[1.875rem] items-center"
                                                                                             aria-hidden
-                                                                                        />
+                                                                                        >
+                                                                                            <div className="h-3 w-full max-w-[18rem] skeleton-pulse rounded bg-alloy-stone/11" />
+                                                                                        </div>
                                                                                     ) : (
-                                                                                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-alloy-midnight/70">
-                                                                                            {commPhone ? (
-                                                                                                <span className="tabular-nums">
-                                                                                                    <span className="text-alloy-midnight/45">Phone </span>
-                                                                                                    <a className={monoLink} href={`tel:${commPhone}`}>
-                                                                                                        {formatPhoneUS(commPhone)}
-                                                                                                    </a>
-                                                                                                </span>
-                                                                                            ) : (
-                                                                                                <span className="text-alloy-midnight/45">Phone —</span>
-                                                                                            )}
-                                                                                            {commEmail ? (
-                                                                                                <span className="min-w-0 truncate">
-                                                                                                    <span className="text-alloy-midnight/45">Email </span>
-                                                                                                    <a className={monoLink} href={`mailto:${commEmail}`}>
-                                                                                                        {commEmail}
-                                                                                                    </a>
-                                                                                                </span>
-                                                                                            ) : (
-                                                                                                <span className="text-alloy-midnight/45">Email —</span>
-                                                                                            )}
+                                                                                        <div className="mt-1 min-h-[1.875rem]">
+                                                                                            <OppInquiryContactChannelsRow phone={commPhone} email={commEmail} />
                                                                                         </div>
                                                                                     )}
                                                                                 </>
@@ -10208,9 +10196,9 @@ export default function AdminEntityDrawer() {
                                                                         </>
                                                                     )}
                                                                 </div>
-                                                                <div className={innerCard}>
+                                                                <div className={`${oppInqInnerCard} min-h-[11.5rem] min-w-0`}>
                                                                     <div className={tinyLabel}>What matters now</div>
-                                                                    <div className="mt-1.5 space-y-2">
+                                                                    <div className="mt-1.5 flex min-h-0 flex-1 flex-col space-y-2">
                                                                         <div>
                                                                             <div className={tinyLabel}>Desired start</div>
                                                                             <input
@@ -10226,15 +10214,12 @@ export default function AdminEntityDrawer() {
                                                                                     if (nonJobFormDirty) saveEdit();
                                                                                 }}
                                                                                 disabled={!canMutate}
-                                                                                className={fieldInput}
+                                                                                className={oppInqFieldInput}
                                                                             />
                                                                         </div>
                                                                         <div>
                                                                             <div className={tinyLabel}>Tour date</div>
-                                                                            <div
-                                                                                className="mt-0.5 rounded-lg border border-alloy-stone/15 bg-white px-2 py-1.5 text-[13px] font-medium text-alloy-midnight/75 shadow-sm"
-                                                                                aria-label="Tour date (managed by actions)"
-                                                                            >
+                                                                            <div className={`${oppInqReadonlyField}`} aria-label="Tour date (managed by actions)">
                                                                                 {(() => {
                                                                                     const md = (d.metadata ?? null) as Record<string, unknown> | null;
                                                                                     const fmt = formatTourDateTime(md?.tour_date, md?.tour_time);
@@ -10255,19 +10240,13 @@ export default function AdminEntityDrawer() {
                                                                             : raw === "communication"
                                                                               ? "communication"
                                                                               : null;
-                                                                    const tabBtn = (active: boolean) =>
-                                                                        `rounded-md border px-2.5 py-1 text-[11px] font-semibold ${
-                                                                            active
-                                                                                ? "border-alloy-midnight/25 bg-alloy-midnight text-white"
-                                                                                : "border-alloy-stone/25 bg-white text-alloy-midnight/75 hover:border-alloy-blue/35 hover:text-alloy-blue"
-                                                                        }`;
                                                                     return (
                                                                         <div className="space-y-2">
                                                                             <div className="flex items-center justify-between gap-2">
                                                                                 <div className="flex items-center gap-1.5">
                                                                                     <button
                                                                                         type="button"
-                                                                                        className={tabBtn(panel === "communication")}
+                                                                                        className={oppInqTabBtn(panel === "communication")}
                                                                                         onClick={() =>
                                                                                             setFormData((p) => ({ ...p, _enrollment_panel: "communication" }))
                                                                                         }
@@ -10276,7 +10255,7 @@ export default function AdminEntityDrawer() {
                                                                                     </button>
                                                                                     <button
                                                                                         type="button"
-                                                                                        className={tabBtn(panel === "notes")}
+                                                                                        className={oppInqTabBtn(panel === "notes")}
                                                                                         onClick={() => setFormData((p) => ({ ...p, _enrollment_panel: "notes" }))}
                                                                                     >
                                                                                         Notes
@@ -10352,9 +10331,8 @@ export default function AdminEntityDrawer() {
                                                                                     })()}
                                                                                 </div>
                                                                             ) : panel === "communication" && drawer.id && drawer.id !== "new" ? (
-                                                                                <div className={innerCard}>
+                                                                                <div className={`${oppInqInnerCard} min-h-[7.75rem]`}>
                                                                                     <CommunicationsDrawerSection
-                                                                                        key={drawer.id}
                                                                                         embedded
                                                                                         apiEntityType="opportunities"
                                                                                         entityId={drawer.id}
@@ -10362,7 +10340,7 @@ export default function AdminEntityDrawer() {
                                                                                     />
                                                                                 </div>
                                                                             ) : (
-                                                                                <p className="px-0.5 py-2 text-[11px] leading-snug text-alloy-midnight/55">
+                                                                                <p className={`px-0.5 py-2 ${oppInqMutedEmpty}`}>
                                                                                     Choose Communication or Notes.
                                                                                 </p>
                                                                             )}
@@ -10450,22 +10428,17 @@ export default function AdminEntityDrawer() {
                                                                             !!(commName || primaryContact || primaryPerson || household).trim() &&
                                                                             (!commPhone || !commEmail) ? (
                                                                                 <div
-                                                                                    className="mt-1 h-6 w-full max-w-[16rem] skeleton-pulse rounded-md bg-alloy-stone/12"
+                                                                                    className="mt-1 flex min-h-[1.875rem] items-center"
                                                                                     aria-hidden
-                                                                                />
+                                                                                >
+                                                                                    <div className="h-3 w-full max-w-[18rem] skeleton-pulse rounded bg-alloy-stone/11" />
+                                                                                </div>
                                                                             ) : (
-                                                                                <div className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[12px] font-medium text-alloy-midnight/65">
-                                                                                    {commPhone ? (
-                                                                                        <a className={monoLink} href={`tel:${commPhone}`}>
-                                                                                            {commPhone}
-                                                                                        </a>
-                                                                                    ) : null}
-                                                                                    {commEmail ? (
-                                                                                        <a className={monoLink} href={`mailto:${commEmail}`}>
-                                                                                            {commEmail}
-                                                                                        </a>
-                                                                                    ) : null}
-                                                                                    {!commPhone && !commEmail ? <span>—</span> : null}
+                                                                                <div className="mt-0.5 min-h-[1.875rem]">
+                                                                                    <OppInquiryContactChannelsRow
+                                                                                        phone={commPhone || null}
+                                                                                        email={commEmail || null}
+                                                                                    />
                                                                                 </div>
                                                                             )}
                                                                         </>

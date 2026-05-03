@@ -58,6 +58,7 @@ export default async function AdminV2WorkspaceLayout({
       userEmail={typeof auth.user.email === "string" && auth.user.email ? auth.user.email : "Unknown"}
       role={auth.role}
       orgName={orgName}
+      orgId={orgId}
       initialViewerTimezone={viewerTimezone}
       initialOperationalTimezoneIana={operationalTimezoneIana}
     >
