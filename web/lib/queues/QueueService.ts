@@ -2,16 +2,17 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { validateQueueDefinition, type QueueConfig, type QueueDefinitionV1, type QueueFilter } from "@/lib/config/queueDefinitionSchema";
 import type { QueueItemsResult, QueueOperationalCalendarMeta, QueueSummary } from "@/lib/queues/types";
 import { workUnitScopeTotalFromSummaries, findAllRecordsQueueKey } from "@/lib/workspace/workUnitQueueDerived";
-import { getQueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
+import { getQueueUiConfig, type QueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
 import {
     fetchEffectiveStatusDefinitions,
+    fetchEffectiveStatusDefinitionsTagged,
     displayLabelsFromDefinitions,
     type StatusDefinitionRow,
 } from "@/lib/admin/statusDefinitionsResolve";
 import { logDbTiming, withDbTiming } from "@/lib/admin/dbQueryTiming";
 import { formatTourDateTime } from "@/lib/enrollment/formatTourDateTime";
 import { getOrgLocalTodayUtcBounds, type OrgLocalDayUtcBounds } from "@/lib/admin/orgLocalDayBounds";
-import { fetchOperationalTimezoneForOrg, UTC_FALLBACK_IANA } from "@/lib/admin/timezoneContract";
+import { fetchOperationalTimezoneForOrgWithCache, UTC_FALLBACK_IANA } from "@/lib/admin/timezoneContract";
 
 type JobRowPreview = {
     id: string;
@@ -35,6 +36,18 @@ type OpportunityRowPreview = {
     created_at: string;
     updated_at: string;
     metadata?: Record<string, unknown> | null;
+};
+
+/** Parallel phase wall + per-branch elapsed (branches overlap; sums may exceed `enrichment_ms`). */
+export type QueueListEnrichmentSubtimingsMs = {
+    parallel_wall_ms: number;
+    persons_ms: number;
+    contacts_ms: number;
+    customers_ms: number;
+    customer_members_ms: number;
+    defs_resolve_ms: number;
+    child_persons_ms: number;
+    map_ms: number;
 };
 
 export class QueueServiceError extends Error {
@@ -111,23 +124,53 @@ function planContextOrUtcFallback(ctx: OperationalDayPlanContext | undefined, re
     return ctx ?? utcFallbackOperationalDayContext(refUtc);
 }
 
+function queueListRelationFetchPlan(ui: QueueUiConfig): {
+    persons: boolean;
+    contacts: boolean;
+    customers: boolean;
+    customerMembers: boolean;
+} {
+    const fields = ui.row_preview.fields;
+    const isCrm = ui.row_preview.variant === "crm_compact";
+    const wants = (k: (typeof fields)[number]) => fields.includes(k);
+    const wantsContact = wants("primary_contact") || wants("phone") || wants("email");
+    const wantsHousehold = wants("child_name") || wants("program");
+    return {
+        persons: isCrm || wantsContact,
+        contacts: isCrm || wantsContact,
+        customers: isCrm || wantsContact || wantsHousehold,
+        customerMembers: isCrm && wantsHousehold,
+    };
+}
+
+async function resolveOperationalDayPlanContextWithTelemetry(
+    supabase: ReturnType<typeof createAdminClient>,
+    orgId: string,
+    refUtc: Date
+): Promise<{ ctx: OperationalDayPlanContext; cacheHit: boolean }> {
+    const tz = await fetchOperationalTimezoneForOrgWithCache(supabase as never, orgId);
+    const dayBounds = getOrgLocalTodayUtcBounds(tz.iana, refUtc);
+    return {
+        ctx: {
+            dayBounds,
+            calendar_meta: {
+                calendar_type: "operational_day",
+                timezone_effective: tz.iana,
+                timezone_source: tz.source,
+                day_start_utc: dayBounds.dayStartUtc.toISOString(),
+                day_end_exclusive_utc: dayBounds.dayEndExclusiveUtc.toISOString(),
+            },
+        },
+        cacheHit: tz.cacheHit,
+    };
+}
+
 async function resolveOperationalDayPlanContext(
     supabase: ReturnType<typeof createAdminClient>,
     orgId: string,
     refUtc: Date
 ): Promise<OperationalDayPlanContext> {
-    const { iana, source } = await fetchOperationalTimezoneForOrg(supabase as any, orgId);
-    const dayBounds = getOrgLocalTodayUtcBounds(iana, refUtc);
-    return {
-        dayBounds,
-        calendar_meta: {
-            calendar_type: "operational_day",
-            timezone_effective: iana,
-            timezone_source: source,
-            day_start_utc: dayBounds.dayStartUtc.toISOString(),
-            day_end_exclusive_utc: dayBounds.dayEndExclusiveUtc.toISOString(),
-        },
-    };
+    return (await resolveOperationalDayPlanContextWithTelemetry(supabase, orgId, refUtc)).ctx;
 }
 
 function queueUsesOperationalCalendarDateFilter(queue: QueueConfig): boolean {
@@ -501,10 +544,29 @@ async function enrichOpportunityRows(params: {
      * via `opportunities.customer_id`. `enrichment` still controls other payload shaping / perf logging.
      */
     enrichment?: "full" | "queue_preview" | "queue_list";
-}): Promise<Array<Record<string, unknown>>> {
-    const { supabase, orgId, rows, effectiveStatusDefs: preloadedDefs, enrichment = "full" } = params;
+    /**
+     * When `queue_list`, narrows relational batch queries from work-unit CRM row preview config (`ui.row_preview`)
+     * so basic lanes skip heavy joins. Omit for previews / drawer paths (full hydrate).
+     */
+    relationFetchPlan?: {
+        persons: boolean;
+        contacts: boolean;
+        customers: boolean;
+        customerMembers: boolean;
+    };
+}): Promise<{ rows: Array<Record<string, unknown>>; queueListSubtimings?: QueueListEnrichmentSubtimingsMs }> {
+    const { supabase, orgId, rows, effectiveStatusDefs: preloadedDefs, enrichment = "full", relationFetchPlan } = params;
     const previewLite = enrichment === "queue_preview" || enrichment === "queue_list";
-    if (!rows.length) return [];
+    if (!rows.length) {
+        return { rows: [] };
+    }
+
+    const plan = relationFetchPlan ?? {
+        persons: true,
+        contacts: true,
+        customers: true,
+        customerMembers: true,
+    };
 
     const tEnrich0 = Date.now();
     const nowForAttention = new Date();
@@ -533,42 +595,54 @@ async function enrichOpportunityRows(params: {
         ),
     ];
 
-    const defsPromise =
-        preloadedDefs != null
-            ? Promise.resolve(preloadedDefs)
-            : fetchEffectiveStatusDefinitions(supabase as any, orgId, "opportunities", { activeOnly: true });
+    const emptyRel = Promise.resolve({ data: [] as any[], error: null as any });
 
     const tParallel0 = Date.now();
-    const [personsRes, contactsRes, customersRes, customerMembersRes, defs] = await Promise.all([
-        personIds.length
-            ? supabase
-                .from("persons")
-                .select("id, first_name, last_name, email, phone, date_of_birth")
-                .eq("org_id", orgId)
-                .in("id", personIds as any)
-            : Promise.resolve({ data: [] as any[], error: null as any }),
-        contactIds.length
-            ? supabase
-                .from("contacts")
-                .select("id, first_name, last_name, email, phone, customer_id")
-                .eq("org_id", orgId)
-                .in("id", contactIds as any)
-            : Promise.resolve({ data: [] as any[], error: null as any }),
-        customerIds.length
-            ? supabase.from("customers").select("id, name").eq("org_id", orgId).in("id", customerIds as any)
-            : Promise.resolve({ data: [] as any[], error: null as any }),
-        customerIds.length
-            ? supabase
-                .from("customer_members")
-                .select("customer_id, display_name, first_name, last_name, dob, person_id, relationship, is_active")
-                .eq("org_id", orgId)
-                .eq("relationship", "child")
-                .eq("is_active", true)
-                .in("customer_id", customerIds as any)
-            : Promise.resolve({ data: [] as any[], error: null as any }),
-        defsPromise,
+    const [personsTimed, contactsTimed, customersTimed, membersTimed, defsTimed] = await Promise.all([
+        plan.persons && personIds.length
+            ? timedAwait(
+                  supabase
+                      .from("persons")
+                      .select("id, first_name, last_name, email, phone, date_of_birth")
+                      .eq("org_id", orgId)
+                      .in("id", personIds as any)
+              )
+            : timedAwait(emptyRel),
+        plan.contacts && contactIds.length
+            ? timedAwait(
+                  supabase
+                      .from("contacts")
+                      .select("id, first_name, last_name, email, phone, customer_id")
+                      .eq("org_id", orgId)
+                      .in("id", contactIds as any)
+              )
+            : timedAwait(emptyRel),
+        plan.customers && customerIds.length
+            ? timedAwait(supabase.from("customers").select("id, name").eq("org_id", orgId).in("id", customerIds as any))
+            : timedAwait(emptyRel),
+        plan.customerMembers && customerIds.length
+            ? timedAwait(
+                  supabase
+                      .from("customer_members")
+                      .select("customer_id, display_name, first_name, last_name, dob, person_id, relationship, is_active")
+                      .eq("org_id", orgId)
+                      .eq("relationship", "child")
+                      .eq("is_active", true)
+                      .in("customer_id", customerIds as any)
+              )
+            : timedAwait(emptyRel),
+        preloadedDefs != null
+            ? timedAwait(Promise.resolve(preloadedDefs))
+            : timedAwait(fetchEffectiveStatusDefinitions(supabase as any, orgId, "opportunities", { activeOnly: true })),
     ]);
     const parallelMainMs = Date.now() - tParallel0;
+
+    const personsRes = personsTimed.v;
+    const contactsRes = contactsTimed.v;
+    const customersRes = customersTimed.v;
+    const customerMembersRes = membersTimed.v;
+    const defs = defsTimed.v;
+
     logDbTiming("enrichOpportunityRows.parallel_main", parallelMainMs, {
         orgId,
         row_count: rows.length,
@@ -613,7 +687,10 @@ async function enrichOpportunityRows(params: {
         }
     }
     const primaryPersonIdSet = new Set(personIds);
-    const childPersonIdsToFetch = [...new Set(childPersonIds)].filter((id) => !primaryPersonIdSet.has(id));
+    const childPersonIdsToFetch =
+        plan.customerMembers && activeChildrenByCustomerId.size > 0
+            ? [...new Set(childPersonIds)].filter((id) => !primaryPersonIdSet.has(id))
+            : [];
     const childPersons =
         childPersonIdsToFetch.length > 0
             ? await withDbTiming(
@@ -761,6 +838,19 @@ async function enrichOpportunityRows(params: {
     });
     const mapMs = Date.now() - tMap0;
     const enrichMs = Date.now() - tEnrich0;
+    const queueListSubtimings: QueueListEnrichmentSubtimingsMs | undefined =
+        enrichment === "queue_list"
+            ? {
+                  parallel_wall_ms: parallelMainMs,
+                  persons_ms: personsTimed.ms,
+                  contacts_ms: contactsTimed.ms,
+                  customers_ms: customersTimed.ms,
+                  customer_members_ms: membersTimed.ms,
+                  defs_resolve_ms: defsTimed.ms,
+                  child_persons_ms: childResolutionMs,
+                  map_ms: mapMs,
+              }
+            : undefined;
     if (enrichMs > 200) {
         console.warn("[queue-perf] enrichOpportunityRows", {
             org_id: orgId,
@@ -771,9 +861,10 @@ async function enrichOpportunityRows(params: {
             child_resolution_ms: childResolutionMs,
             map_ms: mapMs,
             total_ms: enrichMs,
+            queue_list_subtimings_ms: queueListSubtimings,
         });
     }
-    return mapped;
+    return { rows: mapped, queueListSubtimings };
 }
 
 function buildOpportunityNeedsAttentionOrExpr(now: Date): string {
@@ -984,17 +1075,20 @@ function applySortToJobQuery(
     return out;
 }
 
-const WU_QUEUE_DEF_CACHE = new Map<string, { at: number; def: QueueDefinitionV1 }>();
-const WU_QUEUE_DEF_TTL_MS = 12_000;
+const WU_QUEUE_DEF_CACHE = new Map<string, { at: number; def: QueueDefinitionV1; revision: string | null }>();
+const WU_QUEUE_DEF_TTL_MS = 90_000;
 const WU_QUEUE_DEF_CACHE_ENABLED = process.env.NODE_ENV !== "test";
 
-async function loadWorkUnitQueueDefinition(params: { orgId: string; workUnitId: string }): Promise<QueueDefinitionV1> {
+async function loadWorkUnitQueueDefinitionWithMeta(params: { orgId: string; workUnitId: string }): Promise<{
+    def: QueueDefinitionV1;
+    cacheHit: boolean;
+}> {
     const cacheKey = `${params.orgId}:${params.workUnitId}`;
     const now = Date.now();
     if (WU_QUEUE_DEF_CACHE_ENABLED) {
         const hit = WU_QUEUE_DEF_CACHE.get(cacheKey);
         if (hit && now - hit.at < WU_QUEUE_DEF_TTL_MS) {
-            return hit.def;
+            return { def: hit.def, cacheHit: true };
         }
     }
     const supabase = createAdminClient();
@@ -1004,7 +1098,7 @@ async function loadWorkUnitQueueDefinition(params: { orgId: string; workUnitId: 
         async () =>
             supabase
                 .from("work_units")
-                .select("id, org_id, queue_definition")
+                .select("id, org_id, queue_definition, updated_at")
                 .eq("id", params.workUnitId)
                 .eq("org_id", params.orgId)
                 .maybeSingle()
@@ -1018,6 +1112,10 @@ async function loadWorkUnitQueueDefinition(params: { orgId: string; workUnitId: 
     }
 
     const raw = (data as { queue_definition?: unknown }).queue_definition;
+    const revision =
+        typeof (data as { updated_at?: unknown }).updated_at === "string"
+            ? String((data as { updated_at: string }).updated_at)
+            : null;
     const storedVersion = getStoredQueueDefinitionVersion(raw);
     if (raw == null || (isPlainObject(raw) && Object.keys(raw).length === 0)) {
         throw new QueueServiceError("Work unit has no queue_definition configured", 400, "MISSING_QUEUE_DEFINITION");
@@ -1027,9 +1125,13 @@ async function loadWorkUnitQueueDefinition(params: { orgId: string; workUnitId: 
     }
     const def = loadQueueDefinitionOrThrow(raw);
     if (WU_QUEUE_DEF_CACHE_ENABLED) {
-        WU_QUEUE_DEF_CACHE.set(cacheKey, { at: now, def });
+        WU_QUEUE_DEF_CACHE.set(cacheKey, { at: now, def, revision });
     }
-    return def;
+    return { def, cacheHit: false };
+}
+
+async function loadWorkUnitQueueDefinition(params: { orgId: string; workUnitId: string }): Promise<QueueDefinitionV1> {
+    return (await loadWorkUnitQueueDefinitionWithMeta(params)).def;
 }
 
 function clampLimit(n: number, min: number, max: number): number {
@@ -1044,6 +1146,12 @@ async function timedBranch<T>(p: Promise<T>): Promise<{ value: T; ms: number }> 
     const t0 = Date.now();
     const value = await p;
     return { value, ms: Date.now() - t0 };
+}
+
+async function timedAwait<T>(p: PromiseLike<T>): Promise<{ ms: number; v: T }> {
+    const t0 = Date.now();
+    const v = await p;
+    return { ms: Date.now() - t0, v };
 }
 
 type PgList = { data: unknown; error: { message: string } | null };
@@ -1061,6 +1169,11 @@ export type QueueRowsPerfBreakdown = {
     status_defs_ms: number;
     enrichment_ms: number;
     service_total_ms: number;
+    /** Memory-cache hit only; see {@link fetchEffectiveStatusDefinitionsTagged}. Null for job entity rows route. */
+    status_defs_cache_hit: boolean | null;
+    queue_def_cache_hit: boolean | null;
+    operational_day_cache_hit: boolean | null;
+    enrichment_subtimings_ms: QueueListEnrichmentSubtimingsMs | null;
 };
 
 export type WorkUnitQueueItemsWithPerf = {
@@ -1397,7 +1510,7 @@ export async function getWorkUnitQueueSummaries(params: {
             const previewRows = matched.slice(0, previewLimit);
             rowsEnriched = previewRows.length;
             const tE0 = Date.now();
-            const preview = await enrichOpportunityRows({
+            const { rows: preview } = await enrichOpportunityRows({
                 supabase,
                 orgId: params.orgId,
                 rows: previewRows,
@@ -1478,7 +1591,7 @@ export async function getWorkUnitQueueSummaries(params: {
         const previewRows = (previewRaw ?? []) as OpportunityRowPreview[];
         rowsEnriched = previewRows.length;
         const tE0 = Date.now();
-        const preview = await enrichOpportunityRows({
+        const { rows: preview } = await enrichOpportunityRows({
             supabase,
             orgId: params.orgId,
             rows: previewRows,
@@ -1676,16 +1789,20 @@ export async function getWorkUnitQueueItems(params: {
     const refUtc = new Date();
 
     const [defTimed, opsTimed] = await Promise.all([
-        timedBranch(loadWorkUnitQueueDefinition({ orgId: params.orgId, workUnitId: params.workUnitId })),
-        timedBranch(resolveOperationalDayPlanContext(supabase, params.orgId, refUtc)),
+        timedBranch(loadWorkUnitQueueDefinitionWithMeta({ orgId: params.orgId, workUnitId: params.workUnitId })),
+        timedBranch(resolveOperationalDayPlanContextWithTelemetry(supabase, params.orgId, refUtc)),
     ]);
-    const def = defTimed.value;
-    const operationalDay = opsTimed.value;
+    const queueDefCacheHit = defTimed.value.cacheHit;
+    const def = defTimed.value.def;
+    const operationalDay = opsTimed.value.ctx;
+    const operationalDayCacheHit = opsTimed.value.cacheHit;
     const load_def_ms = defTimed.ms;
     const operational_day_ms = opsTimed.ms;
 
     assertSupportedEntityType(def);
     const q = findQueueByKey(def, params.queueKey);
+    const rowListUi = getQueueUiConfig(def);
+    const queueListRelationPlan = queueListRelationFetchPlan(rowListUi);
 
     const finalize = (
         queueItems: QueueItemsResult,
@@ -1745,6 +1862,10 @@ export async function getWorkUnitQueueItems(params: {
                     count_ms: 0,
                     status_defs_ms: 0,
                     enrichment_ms: 0,
+                    status_defs_cache_hit: null,
+                    queue_def_cache_hit: queueDefCacheHit,
+                    operational_day_cache_hit: operationalDayCacheHit,
+                    enrichment_subtimings_ms: null,
                 }
             );
         }
@@ -1792,12 +1913,16 @@ export async function getWorkUnitQueueItems(params: {
                 count_ms: countMs,
                 status_defs_ms: 0,
                 enrichment_ms: 0,
+                status_defs_cache_hit: null,
+                queue_def_cache_hit: queueDefCacheHit,
+                operational_day_cache_hit: operationalDayCacheHit,
+                enrichment_subtimings_ms: null,
             }
         );
     }
 
     /** Opportunity statuses: start only after we know entity type (avoid wasted round-trip on job queues). */
-    const oppStatusDefsPromise = fetchEffectiveStatusDefinitions(supabase as any, params.orgId, "opportunities", {
+    const oppStatusDefsPromise = fetchEffectiveStatusDefinitionsTagged(supabase as any, params.orgId, "opportunities", {
         activeOnly: true,
     });
 
@@ -1805,7 +1930,7 @@ export async function getWorkUnitQueueItems(params: {
     const { ops, sort, calendar_meta } = buildOpportunityPlan(q, refUtc, operationalDay);
 
     if (params.queueKey === "needs_attention") {
-        const [{ value: matched, ms: naLoadMs }, { value: effectiveStatusDefs, ms: statusDefsMs }] = await Promise.all([
+        const [{ value: matched, ms: naLoadMs }, { value: statusPack, ms: statusDefsMs }] = await Promise.all([
             timedBranch(
                 loadOpportunityNeedsAttentionRows({
                     supabase,
@@ -1817,14 +1942,17 @@ export async function getWorkUnitQueueItems(params: {
             ),
             timedBranch(oppStatusDefsPromise),
         ]);
+        const effectiveStatusDefs = statusPack.rows;
+        const statusDefsCacheHit = statusPack.processCacheHit;
         const slice = matched.slice(effectiveOffset, effectiveOffset + effectiveLimit);
         const tEn0 = Date.now();
-        const items = await enrichOpportunityRows({
+        const { rows: enrichedRows, queueListSubtimings } = await enrichOpportunityRows({
             supabase,
             orgId: params.orgId,
             rows: slice,
             effectiveStatusDefs,
             enrichment: "queue_list",
+            relationFetchPlan: queueListRelationPlan,
         });
         const enrichment_ms = Date.now() - tEn0;
         return finalize(
@@ -1837,7 +1965,7 @@ export async function getWorkUnitQueueItems(params: {
                     priority: q.priority ?? "standard",
                     display: q.display ?? "list",
                 },
-                items: items as unknown[],
+                items: enrichedRows as unknown[],
                 total: matched.length,
                 limit: effectiveLimit,
                 offset: effectiveOffset,
@@ -1849,6 +1977,10 @@ export async function getWorkUnitQueueItems(params: {
                 count_ms: 0,
                 status_defs_ms: statusDefsMs,
                 enrichment_ms,
+                status_defs_cache_hit: statusDefsCacheHit,
+                queue_def_cache_hit: queueDefCacheHit,
+                operational_day_cache_hit: operationalDayCacheHit,
+                enrichment_subtimings_ms: queueListSubtimings ?? null,
             }
         );
     }
@@ -1863,22 +1995,25 @@ export async function getWorkUnitQueueItems(params: {
     const itemsPromise = itemsQ0.range(effectiveOffset, effectiveOffset + effectiveLimit - 1);
 
     if (omitTotal) {
-        const [{ value: itemsRes, ms: baseQueryMs }, { value: effectiveStatusDefs, ms: statusDefsMs }] = await Promise.all([
+        const [{ value: itemsRes, ms: baseQueryMs }, { value: statusPack, ms: statusDefsMs }] = await Promise.all([
             timedBranch(itemsPromise as Promise<PgList>),
             timedBranch(oppStatusDefsPromise),
         ]);
+        const effectiveStatusDefs = statusPack.rows;
+        const statusDefsCacheHit = statusPack.processCacheHit;
         const { data: raw, error } = itemsRes;
         if (error) {
             throw new QueueServiceError(error.message, 400, "DB_ERROR");
         }
         const itemRows = (raw ?? []) as OpportunityRowPreview[];
         const tEn0 = Date.now();
-        const items = await enrichOpportunityRows({
+        const { rows: enrichedRows, queueListSubtimings } = await enrichOpportunityRows({
             supabase,
             orgId: params.orgId,
             rows: itemRows,
             effectiveStatusDefs,
             enrichment: "queue_list",
+            relationFetchPlan: queueListRelationPlan,
         });
         const enrichment_ms = Date.now() - tEn0;
         return finalize(
@@ -1891,7 +2026,7 @@ export async function getWorkUnitQueueItems(params: {
                     priority: q.priority ?? "standard",
                     display: q.display ?? "list",
                 },
-                items: items as unknown[],
+                items: enrichedRows as unknown[],
                 total: 0,
                 limit: effectiveLimit,
                 offset: effectiveOffset,
@@ -1905,6 +2040,10 @@ export async function getWorkUnitQueueItems(params: {
                 count_ms: 0,
                 status_defs_ms: statusDefsMs,
                 enrichment_ms,
+                status_defs_cache_hit: statusDefsCacheHit,
+                queue_def_cache_hit: queueDefCacheHit,
+                operational_day_cache_hit: operationalDayCacheHit,
+                enrichment_subtimings_ms: queueListSubtimings ?? null,
             }
         );
     }
@@ -1916,7 +2055,7 @@ export async function getWorkUnitQueueItems(params: {
         .eq("work_unit_id", params.workUnitId);
     const countQ = applyOpsToJobQuery(countBase as never, ops);
 
-    const [{ value: countRes, ms: countMs }, { value: itemsRes, ms: baseQueryMs }, { value: effectiveStatusDefs, ms: statusDefsMs }] =
+    const [{ value: countRes, ms: countMs }, { value: itemsRes, ms: baseQueryMs }, { value: statusPack, ms: statusDefsMs }] =
         await Promise.all([
             timedBranch(countQ as Promise<PgCount>),
             timedBranch(itemsPromise as Promise<PgList>),
@@ -1930,14 +2069,17 @@ export async function getWorkUnitQueueItems(params: {
     if (error) {
         throw new QueueServiceError(error.message, 400, "DB_ERROR");
     }
+    const effectiveStatusDefs = statusPack.rows;
+    const statusDefsCacheHit = statusPack.processCacheHit;
     const itemRows = (raw ?? []) as OpportunityRowPreview[];
     const tEn0 = Date.now();
-    const items = await enrichOpportunityRows({
+    const { rows: enrichedRows, queueListSubtimings } = await enrichOpportunityRows({
         supabase,
         orgId: params.orgId,
         rows: itemRows,
         effectiveStatusDefs,
         enrichment: "queue_list",
+        relationFetchPlan: queueListRelationPlan,
     });
     const enrichment_ms = Date.now() - tEn0;
 
@@ -1951,7 +2093,7 @@ export async function getWorkUnitQueueItems(params: {
                 priority: q.priority ?? "standard",
                 display: q.display ?? "list",
             },
-            items: items as unknown[],
+            items: enrichedRows as unknown[],
             total: count ?? 0,
             limit: effectiveLimit,
             offset: effectiveOffset,
@@ -1964,6 +2106,10 @@ export async function getWorkUnitQueueItems(params: {
             count_ms: countMs,
             status_defs_ms: statusDefsMs,
             enrichment_ms,
+            status_defs_cache_hit: statusDefsCacheHit,
+            queue_def_cache_hit: queueDefCacheHit,
+            operational_day_cache_hit: operationalDayCacheHit,
+            enrichment_subtimings_ms: queueListSubtimings ?? null,
         }
     );
 }

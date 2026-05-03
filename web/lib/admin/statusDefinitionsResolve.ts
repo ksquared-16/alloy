@@ -1,9 +1,38 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { unstable_cache } from "next/cache";
+import { createAdminClient } from "@/lib/supabaseAdmin";
 import { logDbTiming } from "@/lib/admin/dbQueryTiming";
 
 const STATUS_EFFECTIVE_CACHE = new Map<string, { at: number; rows: StatusDefinitionRow[] }>();
-const STATUS_EFFECTIVE_TTL_MS = 12_000;
+/** Process + upstream data cache TTL; overlaps with Next `unstable_cache` revalidate below. */
+const STATUS_EFFECTIVE_TTL_MS = 90_000;
 const STATUS_EFFECTIVE_CACHE_ENABLED = process.env.NODE_ENV !== "test";
+
+const STATUS_EFFECTIVE_UNSTABLE_TAGS = ["status-definitions-effective"];
+
+function effectiveStatusDefsUnstableKeyParts(orgId: string, entityType: string, activeOnly: boolean): string[] {
+    return ["admin-status-def-effective-v1", orgId, entityType, activeOnly ? "1" : "0"];
+}
+
+async function loadEffectiveStatusDefinitionsThroughNextCache(
+    orgId: string,
+    entityType: string,
+    opts?: { activeOnly?: boolean }
+): Promise<StatusDefinitionRow[]> {
+    const activeOnly = opts?.activeOnly !== false;
+    const key = effectiveStatusDefsUnstableKeyParts(orgId, entityType, activeOnly);
+    const fetcher = async () => {
+        const client = createAdminClient();
+        return fetchEffectiveStatusDefinitionsUncached(client, orgId, entityType, opts);
+    };
+    if (typeof unstable_cache === "function" && process.env.NODE_ENV !== "test") {
+        return unstable_cache(fetcher, key, {
+            revalidate: 90,
+            tags: [...STATUS_EFFECTIVE_UNSTABLE_TAGS, `status-def-org:${orgId}`],
+        })();
+    }
+    return fetcher();
+}
 
 function statusEffectiveCacheKey(orgId: string, entityType: string, activeOnly: boolean): string {
     return `${orgId}\u0001${entityType}\u0001${activeOnly ? "1" : "0"}`;
@@ -169,6 +198,45 @@ async function fetchEffectiveStatusDefinitionsUncached(
     return fetchIndustryDefaultStatusDefinitions(supabase, entityType, industryKey, opts);
 }
 
+export type EffectiveStatusDefinitionsPack = {
+    rows: StatusDefinitionRow[];
+    /**
+     * True when served from this Node process in-memory cache (sub-ms). `false` includes cold path,
+     * test mode, Next `unstable_cache` hits, or first population after TTL — use `status_defs_ms` to see cost.
+     */
+    processCacheHit: boolean;
+};
+
+/**
+ * Effective merged definitions — same semantics as {@link fetchEffectiveStatusDefinitions}.
+ * Layers: short-TTL **process LRU** (`processCacheHit`) then Next **Data Cache** (cross-request warm on serverless)
+ * via `unstable_cache` (not separately observable here); then Postgres merge.
+ */
+export async function fetchEffectiveStatusDefinitionsTagged(
+    _supabase: SupabaseClient,
+    orgId: string,
+    entityType: string,
+    opts?: { activeOnly?: boolean }
+): Promise<EffectiveStatusDefinitionsPack> {
+    const activeOnly = opts?.activeOnly !== false;
+    if (STATUS_EFFECTIVE_CACHE_ENABLED) {
+        const ck = statusEffectiveCacheKey(orgId, entityType, activeOnly);
+        const ent = STATUS_EFFECTIVE_CACHE.get(ck);
+        const now = Date.now();
+        if (ent && now - ent.at < STATUS_EFFECTIVE_TTL_MS) {
+            return { rows: ent.rows, processCacheHit: true };
+        }
+    }
+    const rows = await loadEffectiveStatusDefinitionsThroughNextCache(orgId, entityType, opts);
+    if (STATUS_EFFECTIVE_CACHE_ENABLED) {
+        STATUS_EFFECTIVE_CACHE.set(statusEffectiveCacheKey(orgId, entityType, activeOnly), {
+            at: Date.now(),
+            rows,
+        });
+    }
+    return { rows, processCacheHit: false };
+}
+
 /**
  * Effective definitions for admin UI: org overrides first; if none, industry defaults (merged for schedules/opportunities).
  * Short TTL in-process cache (org + entity + activeOnly); disabled in test to avoid cross-example staleness.
@@ -179,23 +247,8 @@ export async function fetchEffectiveStatusDefinitions(
     entityType: string,
     opts?: { activeOnly?: boolean }
 ): Promise<StatusDefinitionRow[]> {
-    const activeOnly = opts?.activeOnly !== false;
-    if (STATUS_EFFECTIVE_CACHE_ENABLED) {
-        const ck = statusEffectiveCacheKey(orgId, entityType, activeOnly);
-        const ent = STATUS_EFFECTIVE_CACHE.get(ck);
-        const now = Date.now();
-        if (ent && now - ent.at < STATUS_EFFECTIVE_TTL_MS) {
-            return ent.rows;
-        }
-    }
-    const rows = await fetchEffectiveStatusDefinitionsUncached(supabase, orgId, entityType, opts);
-    if (STATUS_EFFECTIVE_CACHE_ENABLED) {
-        STATUS_EFFECTIVE_CACHE.set(statusEffectiveCacheKey(orgId, entityType, activeOnly), {
-            at: Date.now(),
-            rows,
-        });
-    }
-    return rows;
+    const pack = await fetchEffectiveStatusDefinitionsTagged(supabase, orgId, entityType, opts);
+    return pack.rows;
 }
 
 /** Build a map from pre-fetched effective definitions (batch list enrichment). */

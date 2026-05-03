@@ -51,17 +51,47 @@ export function resolveOrgTimezoneFromMetadata(metadata: unknown): {
     return { iana: tzRaw, source };
 }
 
+const ORG_OP_TZ_PROCESS_CACHE = new Map<string, { at: number; iana: string; source: OperationalTimezoneSource }>();
+const ORG_OP_TZ_TTL_MS = 90_000;
+const ORG_OP_TZ_CACHE_ENABLED = process.env.NODE_ENV !== "test";
+
+export type OperationalTimezoneResolved = {
+    iana: string;
+    source: OperationalTimezoneSource;
+    /** Short-TTL hit on this Node process (`false` means we called `org_settings`). */
+    cacheHit: boolean;
+};
+
 export async function fetchOperationalTimezoneForOrg(
     supabase: SupabaseClient,
     orgId: string
 ): Promise<{ iana: string; source: OperationalTimezoneSource }> {
-    return withDbTiming("org_settings.metadata_for_timezone", { orgId }, async () => {
+    const r = await fetchOperationalTimezoneForOrgWithCache(supabase, orgId);
+    return { iana: r.iana, source: r.source };
+}
+
+export async function fetchOperationalTimezoneForOrgWithCache(
+    supabase: SupabaseClient,
+    orgId: string
+): Promise<OperationalTimezoneResolved> {
+    const now = Date.now();
+    if (ORG_OP_TZ_CACHE_ENABLED) {
+        const ent = ORG_OP_TZ_PROCESS_CACHE.get(orgId);
+        if (ent && now - ent.at < ORG_OP_TZ_TTL_MS) {
+            return { iana: ent.iana, source: ent.source, cacheHit: true };
+        }
+    }
+    const resolved = await withDbTiming("org_settings.metadata_for_timezone", { orgId }, async () => {
         const { data, error } = await supabase.from("org_settings").select("metadata").eq("org_id", orgId).maybeSingle();
         if (error || !data) {
-            return { iana: UTC_FALLBACK_IANA, source: "utc_fallback" };
+            return { iana: UTC_FALLBACK_IANA, source: "utc_fallback" as OperationalTimezoneSource };
         }
         return resolveOrgTimezoneFromMetadata((data as { metadata?: unknown }).metadata);
     });
+    if (ORG_OP_TZ_CACHE_ENABLED) {
+        ORG_OP_TZ_PROCESS_CACHE.set(orgId, { at: Date.now(), iana: resolved.iana, source: resolved.source });
+    }
+    return { ...resolved, cacheHit: false };
 }
 
 /**

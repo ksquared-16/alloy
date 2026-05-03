@@ -90,10 +90,13 @@ export async function GET(
         const payload_kb = Buffer.byteLength(bodyJson, "utf8") / 1024;
         const total_ms = Date.now() - handlerT0;
 
+        const { enrichment_subtimings_ms: enrichment_subtimings, ...rowsPerfForLog } = rowsPerf;
+
         console.warn("[perf.queue.rows]", {
             total_ms,
             auth_ms,
-            ...rowsPerf,
+            ...rowsPerfForLog,
+            enrichment_subtimings,
             serialize_ms,
             row_count: Array.isArray(result.items) ? result.items.length : 0,
             payload_kb: Math.round(payload_kb * 10) / 10,
