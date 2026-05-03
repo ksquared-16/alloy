@@ -838,9 +838,8 @@ function JobDrawerRelationshipsSection(props: {
     );
 }
 
-/** Opportunities always load `surface=full` (single coherent bundle — Phase 4). */
-/** `drawer_visible` = fast shell; client hydrates `full` in background. `full` = single bundle (refetch, mutations). */
-type OpportunityEntitySurface = "full" | "drawer_visible";
+/** Opportunities: `drawer_visible` shell → `full` hydrate; deferred member-linked person rows → `relationship_member_persons` overlay (Pass 6). */
+type OpportunityEntitySurface = "full" | "drawer_visible" | "relationship_member_persons";
 
 /** Merge full opportunity hydrate without clobbering visible fields with null/empty from partial responses. */
 function mergeOpportunityFullHydrate(prev: Record<string, unknown>, full: Record<string, unknown>): Record<string, unknown> {
@@ -925,6 +924,12 @@ function captureDrawerEntityResponsePerf(res: Response): void {
     } else if (surface === "full" || surface === "drawer_initial") {
         applySrvEnr("drawer_opportunity_full_x_alloy_server_duration_ms", "drawer_opportunity_full_x_alloy_opp_enrich_ms");
         alloyPerfSet("drawer_opportunity_full_resp", now);
+    } else if (surface === "relationship_member_persons") {
+        applySrvEnr(
+            "drawer_opportunity_member_graph_overlay_x_alloy_server_duration_ms",
+            "drawer_opportunity_member_graph_overlay_x_alloy_opp_enrich_ms",
+        );
+        alloyPerfSet("drawer_opportunity_member_graph_overlay_resp", now);
     }
 }
 
@@ -1072,6 +1077,9 @@ export default function AdminEntityDrawer() {
     /** Background `surface=full` after `drawer_visible` — avoids second loading shell; cleared on new entity fetch / drawer close. */
     const opportunityFullHydrateInFlightRef = useRef<string | null>(null);
     const opportunityFullHydrateDoneRef = useRef<string | null>(null);
+    /** Lazy `surface=relationship_member_persons` after `full` when `_member_person_graph_pending`; no loader. */
+    const memberPersonGraphOverlayInFlightRef = useRef<string | null>(null);
+    const memberPersonGraphOverlayDoneRef = useRef<string | null>(null);
 
     /** Coherent shell: entity row loaded (header actions may still resolve in parallel). */
     const drawerReady = useMemo(() => {
@@ -1105,6 +1113,8 @@ export default function AdminEntityDrawer() {
         setPostDrawerVisibleKey(null);
         opportunityFullHydrateInFlightRef.current = null;
         opportunityFullHydrateDoneRef.current = null;
+        memberPersonGraphOverlayInFlightRef.current = null;
+        memberPersonGraphOverlayDoneRef.current = null;
     }, [drawer.type, drawer.id]);
 
     useLayoutEffect(() => {
@@ -1687,6 +1697,8 @@ export default function AdminEntityDrawer() {
             entityDrawerTabInitKeyRef.current = "";
             opportunityFullHydrateInFlightRef.current = null;
             opportunityFullHydrateDoneRef.current = null;
+            memberPersonGraphOverlayInFlightRef.current = null;
+            memberPersonGraphOverlayDoneRef.current = null;
             setData(null);
             setError(null);
             setIsEditing(false);
@@ -1746,6 +1758,8 @@ export default function AdminEntityDrawer() {
         if (drawer.type === "opportunities" && drawer.id !== "new") {
             opportunityFullHydrateInFlightRef.current = null;
             opportunityFullHydrateDoneRef.current = null;
+            memberPersonGraphOverlayInFlightRef.current = null;
+            memberPersonGraphOverlayDoneRef.current = null;
             setOpportunityFullHydrateFailed(false);
         }
         if ((drawer.type === "locations" || drawer.type === "customers" || drawer.type === "opportunities" || drawer.type === "vendors" || drawer.type === "jobs" || drawer.type === "persons") && drawer.id === "new") {
@@ -1849,6 +1863,57 @@ export default function AdminEntityDrawer() {
             }
         };
     }, [drawer.type, drawer.id, drawer.jobRecordSurface, opportunityRecordHydrationPending]);
+
+    useEffect(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+        if (!data || typeof data !== "object") return;
+        if (String((data as { id?: unknown }).id ?? "") !== String(drawer.id)) return;
+        const s = String((data as { _record_surface?: string })._record_surface ?? "").trim();
+        if (!(s === "full" || s === "drawer_initial")) return;
+        if ((data as { _member_person_graph_pending?: unknown })._member_person_graph_pending !== true) return;
+        if (memberPersonGraphOverlayDoneRef.current === drawer.id) return;
+        if (memberPersonGraphOverlayInFlightRef.current === drawer.id) return;
+        const url = buildAdminEntityFetchUrl(drawer.type, drawer.id, drawer.jobRecordSurface, "relationship_member_persons");
+        if (!url) return;
+        memberPersonGraphOverlayInFlightRef.current = drawer.id;
+        const ac = new AbortController();
+        fetch(url, { signal: ac.signal })
+            .then((res) => {
+                captureDrawerEntityResponsePerf(res);
+                if (!res.ok) throw new Error(String(res.status));
+                logOpportunityEnrichHeaderFromResponse(res);
+                return res.json();
+            })
+            .then((json) => {
+                if (String((json as { id?: unknown }).id ?? "") !== String(drawer.id)) {
+                    memberPersonGraphOverlayInFlightRef.current = null;
+                    return;
+                }
+                memberPersonGraphOverlayInFlightRef.current = null;
+                memberPersonGraphOverlayDoneRef.current = drawer.id;
+                setData((prev) => {
+                    if (!prev || String((prev as { id?: unknown }).id ?? "") !== String(drawer.id)) {
+                        return prev;
+                    }
+                    const merged = mergeOpportunityFullHydrate(prev as Record<string, unknown>, json as Record<string, unknown>);
+                    const prevSurf = String((prev as { _record_surface?: string })._record_surface ?? "full").trim();
+                    merged._record_surface = prevSurf || "full";
+                    return merged;
+                });
+            })
+            .catch((e) => {
+                memberPersonGraphOverlayInFlightRef.current = null;
+                if (e instanceof Error && e.name === "AbortError") return;
+            });
+        return () => {
+            ac.abort();
+            if (memberPersonGraphOverlayInFlightRef.current === drawer.id) {
+                memberPersonGraphOverlayInFlightRef.current = null;
+            }
+        };
+        // Depends on merged opportunity record (full + pending gate); refs prevent duplicate overlays.
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- gate on hydrated record blob, not unrelated drawer state.
+    }, [drawer.type, drawer.id, drawer.jobRecordSurface, data]);
 
     useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
@@ -6340,7 +6405,7 @@ export default function AdminEntityDrawer() {
                           };
                       })
                     : [];
-                const detailPending = false;
+                const detailPending = d._member_person_graph_pending === true;
                 out.inquiry_children = (
                     <OpportunityInquiryChildrenSection
                         rows={rows.filter((r) => r.id && (r.customer_member_id || r.display_name))}

@@ -61,6 +61,96 @@ function ageFromDobIso(
   return { years, months, label };
 }
 
+function warmPersonDisplayName(
+  p: {
+    full_name?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+  } | null,
+): string | null {
+  return p
+    ? (p.full_name && p.full_name.trim()) ||
+        [p.first_name, p.last_name].filter(Boolean).join(" ").trim() ||
+        null
+    : null;
+}
+
+/** Primary/contact shell labels + warm person rows for reuse on member graph overlay. */
+async function fetchPrimaryPersonContactHydrate(
+  supabase: AdminSupabase,
+  orgId: string,
+  opp: Record<string, unknown> & {
+    primary_contact_id?: string | null;
+    primary_person_id?: string | null;
+  },
+): Promise<{
+  patch: Record<string, unknown>;
+  warmPersonRows: WarmPersonRow[];
+}> {
+  const patch: Record<string, unknown> = {};
+  const warmPersonRows: WarmPersonRow[] = [];
+  if (opp.primary_person_id) {
+    const { data: person } = await supabase
+      .from("persons")
+      .select("id, first_name, last_name, full_name, email, phone, date_of_birth")
+      .eq("id", opp.primary_person_id)
+      .eq("org_id", orgId)
+      .maybeSingle();
+    const p = person as WarmPersonRow | null;
+    if (p?.id) warmPersonRows.push(p);
+    patch._primary_person_id = p?.id ?? null;
+    patch._primary_person_name = warmPersonDisplayName(p);
+    patch._primary_person_email = trimOrNull(p?.email);
+    patch._primary_person_phone = trimOrNull(p?.phone);
+    patch._contact_name = patch._primary_person_name;
+    patch._primary_contact_name = patch._primary_person_name;
+  } else if (opp.primary_contact_id) {
+    const contact = await supabase
+      .from("contacts")
+      .select("first_name, last_name, person_id, email, phone")
+      .eq("id", opp.primary_contact_id)
+      .eq("org_id", orgId)
+      .single();
+    const c = contact.data;
+    const name = c
+      ? [c.first_name, c.last_name].filter(Boolean).join(" ") || null
+      : null;
+    patch._contact_name = name;
+    patch._primary_contact_name = name;
+    patch._primary_contact_email = trimOrNull(
+      (c as { email?: string | null } | null)?.email,
+    );
+    patch._primary_contact_phone = trimOrNull(
+      (c as { phone?: string | null } | null)?.phone,
+    );
+    if (c && (c as { person_id?: string | null }).person_id) {
+      const { data: person } = await supabase
+        .from("persons")
+        .select("id, first_name, last_name, full_name, email, phone, date_of_birth")
+        .eq("id", (c as { person_id: string }).person_id)
+        .eq("org_id", orgId)
+        .maybeSingle();
+      const p = person as WarmPersonRow | null;
+      if (p?.id) warmPersonRows.push(p);
+      patch._primary_person_id = p?.id ?? null;
+      patch._primary_person_name = warmPersonDisplayName(p);
+      if (!patch._primary_contact_email && p?.email)
+        patch._primary_contact_email = trimOrNull(p.email);
+      if (!patch._primary_contact_phone && p?.phone)
+        patch._primary_contact_phone = trimOrNull(p.phone);
+    } else {
+      patch._primary_person_id = null;
+      patch._primary_person_name = null;
+    }
+  } else {
+    patch._contact_name = null;
+    patch._primary_contact_name = null;
+    patch._primary_person_id = null;
+    patch._primary_person_name = null;
+  }
+  return { patch, warmPersonRows };
+}
+
 async function resolveCustomerPersonRole(
   supabase: AdminSupabase,
   params: { orgId: string; customerId: string; personId: string },
@@ -84,6 +174,434 @@ async function resolveCustomerPersonRole(
     .maybeSingle();
   const roleLabel = trimOrNull((rt as { label?: string | null } | null)?.label);
   return { role_key: roleType, role_label: roleLabel };
+}
+
+type CmBootstrapRow = {
+  id: string;
+  display_name: string;
+  relationship?: string | null;
+  dob?: string | null;
+  person_id?: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  metadata?: Record<string, unknown> | null;
+};
+
+type OcmJoinRow = {
+  id: string;
+  customer_member_id: string;
+  desired_program_type?: string | null;
+  desired_schedule_type?: string | null;
+  outcome_status_key?: string | null;
+  fit_status?: string | null;
+  notes?: string | null;
+  metadata?: Record<string, unknown> | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+type InquiryHydrateChild = {
+  id: string;
+  customer_member_id: string;
+  person_id: string | null;
+  display_name: string | null;
+  dob: string | null;
+  age: string | null;
+  desired_program_type: string | null;
+  desired_program_label: string | null;
+  desired_schedule_type: string | null;
+  desired_schedule_label: string | null;
+  outcome_status_key: string | null;
+  outcome_status_label: string | null;
+  fit_status: string | null;
+  notes: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
+function mapOcmJoinRowsToInquiryChildrenBlock(
+  jrowsIn: OcmJoinRow[],
+  memberMap: Map<string, CmBootstrapRow>,
+  pmap: Map<string, WarmPersonRow>,
+  oppDefaultProgramType: string | null,
+  oppDefaultScheduleType: string | null,
+  optionLabelMap: Awaited<ReturnType<typeof batchOptionItemLabelsForOrg>>,
+  ocmStatusLabelByKey: Map<string, string>,
+): InquiryHydrateChild[] {
+  return jrowsIn.map((r) => {
+    const m = memberMap.get(r.customer_member_id) ?? null;
+    const pid = trimOrNull(m?.person_id);
+    const p = pid ? (pmap.get(pid) ?? null) : null;
+    const dob = p?.date_of_birth
+      ? String(p.date_of_birth)
+      : m?.dob
+        ? String(m.dob)
+        : null;
+    const age = ageFromDobIso(dob);
+    const desiredProgramType =
+      trimOrNull(r.desired_program_type) ?? oppDefaultProgramType;
+    const desiredScheduleType =
+      trimOrNull(r.desired_schedule_type) ?? oppDefaultScheduleType;
+    const memMeta = (m?.metadata ?? null) as Record<string, unknown> | null;
+    const demoProgramLabel =
+      memMeta && typeof memMeta.demo_program_label === "string"
+        ? trimOrNull(memMeta.demo_program_label)
+        : null;
+    const outcomeStatusKey = trimOrNull(r.outcome_status_key);
+    const rawProgLabel = optionLabelFromBatchMap(
+      optionLabelMap,
+      "childcare_program_type",
+      desiredProgramType,
+    );
+    const desiredProgramLabel = rawProgLabel ?? demoProgramLabel;
+    const desiredScheduleLabel = optionLabelFromBatchMap(
+      optionLabelMap,
+      "childcare_schedule_type",
+      desiredScheduleType,
+    );
+    const outcomeStatusLabel = outcomeStatusKey
+      ? resolveDisplayFromLabelMap(ocmStatusLabelByKey, outcomeStatusKey, null)
+      : null;
+    return {
+      id: r.id,
+      customer_member_id: r.customer_member_id,
+      person_id: pid,
+      display_name:
+        m?.display_name ??
+        (pid ? warmPersonDisplayName(p) : null) ??
+        r.customer_member_id.slice(0, 8) + "…",
+      dob,
+      age: age ? age.label : null,
+      desired_program_type: desiredProgramType,
+      desired_program_label: desiredProgramLabel,
+      desired_schedule_type: desiredScheduleType,
+      desired_schedule_label: desiredScheduleLabel,
+      outcome_status_key: outcomeStatusKey,
+      outcome_status_label: outcomeStatusLabel,
+      fit_status: trimOrNull(r.fit_status),
+      notes: trimOrNull(r.notes),
+      metadata: (r.metadata as Record<string, unknown>) ?? null,
+      created_at: r.created_at ?? null,
+      updated_at: r.updated_at ?? null,
+    };
+  });
+}
+
+function applyInquiryChildrenMetadataFallbacks(
+  inquiryChildren: InquiryHydrateChild[],
+  oppMeta: Record<string, unknown> | null,
+  opportunityId: string,
+): InquiryHydrateChild[] {
+  let inquiryChildrenOut = [...inquiryChildren];
+  if (!inquiryChildrenOut.length && oppMeta && Array.isArray(oppMeta.inquiry_children)) {
+    const mdKids = oppMeta.inquiry_children as unknown[];
+    inquiryChildrenOut = mdKids
+      .map((raw, i) => {
+        if (!raw || typeof raw !== "object") return null;
+        const row = raw as Record<string, unknown>;
+        const displayName =
+          typeof row.display_name === "string" && row.display_name.trim()
+            ? row.display_name.trim()
+            : typeof row.child_name === "string" && row.child_name.trim()
+              ? row.child_name.trim()
+              : null;
+        if (!displayName) return null;
+        const sid = `metadata_child:${opportunityId}:${i}`;
+        return {
+          id: sid,
+          customer_member_id: sid,
+          person_id: null,
+          display_name: displayName,
+          dob: typeof row.dob === "string" ? row.dob : null,
+          age: typeof row.age === "string" ? row.age : null,
+          desired_program_type:
+            typeof row.program_type_key === "string"
+              ? trimOrNull(row.program_type_key)
+              : null,
+          desired_program_label:
+            typeof row.program_label === "string"
+              ? trimOrNull(row.program_label)
+              : typeof row.program_short === "string"
+                ? trimOrNull(row.program_short)
+                : null,
+          desired_schedule_type: null,
+          desired_schedule_label: null,
+          outcome_status_key: null,
+          outcome_status_label: null,
+          fit_status: null,
+          notes: typeof row.notes === "string" ? trimOrNull(row.notes) : null,
+          metadata: (row.metadata as Record<string, unknown>) ?? {
+            source: "opportunity_metadata",
+          },
+          created_at: null,
+          updated_at: null,
+        };
+      })
+      .filter(Boolean) as InquiryHydrateChild[];
+  }
+  if (!inquiryChildrenOut.length && oppMeta && typeof oppMeta === "object") {
+    const md = oppMeta as Record<string, unknown>;
+    const demoChild = (
+      typeof md.demo_child_name === "string" && md.demo_child_name.trim()
+        ? md.demo_child_name.trim()
+        : typeof md.child_name === "string" && md.child_name.trim()
+          ? md.child_name.trim()
+          : null
+    ) as string | null;
+    if (demoChild) {
+      const sid = `metadata_child:${opportunityId}:demo`;
+      inquiryChildrenOut = [
+        {
+          id: sid,
+          customer_member_id: sid,
+          person_id: null,
+          display_name: demoChild,
+          dob: typeof md.child_dob === "string" ? md.child_dob : null,
+          age: typeof md.child_age === "string" ? md.child_age : null,
+          desired_program_type:
+            typeof md.program_type_key === "string"
+              ? trimOrNull(md.program_type_key)
+              : null,
+          desired_program_label:
+            typeof md.program_label === "string"
+              ? trimOrNull(md.program_label)
+              : typeof md.demo_requested_program === "string"
+                ? trimOrNull(md.demo_requested_program)
+                : null,
+          desired_schedule_type:
+            typeof md.schedule_type_key === "string"
+              ? trimOrNull(md.schedule_type_key)
+              : null,
+          desired_schedule_label:
+            typeof md.schedule_label === "string"
+              ? trimOrNull(md.schedule_label)
+              : null,
+          outcome_status_key: null,
+          outcome_status_label: null,
+          fit_status: null,
+          notes: typeof md.notes === "string" ? trimOrNull(md.notes) : null,
+          metadata: { source: "opportunity_metadata_demo_child_name" },
+          created_at: null,
+          updated_at: null,
+        },
+      ];
+    }
+  }
+  return inquiryChildrenOut;
+}
+
+/** Lazy member→person hydrate for `_inquiry_children` enrichment (skipped on main full hydrate Pass 6). */
+async function respondOpportunityRelationshipMemberOverlay(
+  supabase: AdminSupabase,
+  orgId: string,
+  opportunityId: string,
+  opp: Record<string, unknown> & {
+    customer_id?: string | null;
+    program_type?: string | null;
+    schedule_type?: string | null;
+    metadata?: Record<string, unknown> | null;
+  },
+  opportunityRouteStartedAt: number,
+): Promise<NextResponse> {
+  const hydrateGraphTimings: Record<string, number> = {};
+  const oppMeta =
+    opp.metadata === null || typeof opp.metadata !== "object" ? null : (opp.metadata as Record<string, unknown>);
+  const primaryBundle = await fetchPrimaryPersonContactHydrate(supabase, orgId, opp);
+  const householdId =
+    typeof opp.customer_id === "string" && opp.customer_id.trim()
+      ? opp.customer_id.trim()
+      : null;
+  const oppDefaultProgramType = trimOrNull(opp.program_type);
+  const oppDefaultScheduleType = trimOrNull(opp.schedule_type);
+
+  const ocmMemberDefsTaggedPackP = fetchEffectiveStatusDefinitionsTagged(
+    supabase,
+    orgId,
+    "opportunity_customer_members",
+    {
+      activeOnly: true,
+      processLruTtlMs: 600_000,
+      nextRevalidateSeconds: 900,
+    },
+  );
+
+  const ocmJoinTimedP = (async () => {
+    const t0 = Date.now();
+    const r = await supabase
+      .from("opportunity_customer_members")
+      .select(
+        "id, customer_member_id, desired_program_type, desired_schedule_type, outcome_status_key, fit_status, notes, metadata, created_at, updated_at",
+      )
+      .eq("org_id", orgId)
+      .eq("opportunity_id", opportunityId)
+      .order("created_at", { ascending: true });
+    hydrateGraphTimings.ocm_join_ms = Date.now() - t0;
+    return r;
+  })();
+
+  const oppPersonsRowsTimedP = (async () => {
+    const t0 = Date.now();
+    const r = await supabase
+      .from("opportunity_persons")
+      .select("id, person_id, role_type, created_at")
+      .eq("org_id", orgId)
+      .eq("opportunity_id", opportunityId)
+      .order("created_at", { ascending: true });
+    hydrateGraphTimings.opportunity_persons_rows_ms = Date.now() - t0;
+    return r;
+  })();
+
+  const customerMembersTimedP = householdId
+    ? (async () => {
+        const t0 = Date.now();
+        const r = await supabase
+          .from("customer_members")
+          .select(
+            "id, display_name, relationship, dob, person_id, first_name, last_name, metadata",
+          )
+          .eq("org_id", orgId)
+          .eq("customer_id", householdId)
+          .eq("is_active", true)
+          .limit(25);
+        hydrateGraphTimings.customer_members_bootstrap_ms = Date.now() - t0;
+        return r;
+      })()
+    : Promise.resolve({
+        data: [] as CmBootstrapRow[],
+      });
+
+  const [cmsRes, joinRes, oppPersonRowsRes] = await Promise.all([
+    customerMembersTimedP,
+    ocmJoinTimedP,
+    oppPersonsRowsTimedP,
+  ]);
+
+  const jrows = (joinRes.data ?? []) as OcmJoinRow[];
+  const memberIds = [
+    ...new Set(jrows.map((r) => r.customer_member_id).filter(Boolean)),
+  ] as string[];
+  const bootstrapList = ((cmsRes.data ?? []) ?? []) as CmBootstrapRow[];
+  const bootstrapById = new Map(bootstrapList.map((r) => [r.id, r]));
+  const needingMemberForOcm = memberIds.filter((mid) => !bootstrapById.has(mid));
+  if (needingMemberForOcm.length > 0) {
+    const tGap = Date.now();
+    const { data: supplemental } = await supabase
+      .from("customer_members")
+      .select(
+        "id, display_name, relationship, dob, person_id, first_name, last_name, metadata",
+      )
+      .eq("org_id", orgId)
+      .in("id", needingMemberForOcm);
+    hydrateGraphTimings.customer_members_ocm_gap_fetch_ms = Date.now() - tGap;
+    for (const row of supplemental ?? []) {
+      const m = row as CmBootstrapRow;
+      bootstrapById.set(m.id, m);
+    }
+  }
+
+  const memList: CmBootstrapRow[] = [];
+  for (const mid of memberIds) {
+    const hit = bootstrapById.get(mid);
+    if (hit) memList.push(hit);
+  }
+  const memberMap = new Map(memList.map((m) => [m.id, m]));
+
+  const personIdsFromMembers = [
+    ...new Set(memList.map((m) => trimOrNull(m.person_id)).filter(Boolean)),
+  ] as string[];
+  const oppRowsWarmIds = (((oppPersonRowsRes.data ?? []) ?? []) as { person_id?: string | null }[]).map((z) =>
+    trimOrNull(z.person_id),
+  );
+  const personIdsFromOppRows = [...new Set(oppRowsWarmIds.filter(Boolean))] as string[];
+
+  const pmap = new Map<string, WarmPersonRow>();
+  for (const w of primaryBundle.warmPersonRows) {
+    if (w.id) pmap.set(w.id, w);
+  }
+
+  const memberPersonIdsNeeded = personIdsFromMembers.filter((pid) => !pmap.has(pid));
+  const oppPersonIdsNeeded = personIdsFromOppRows.filter((pid) => !pmap.has(pid));
+  const allNeeded = [...new Set([...memberPersonIdsNeeded, ...oppPersonIdsNeeded])];
+  hydrateGraphTimings.relationship_overlay_member_linked_person_fetch_ms = 0;
+  if (allNeeded.length > 0) {
+    const tPl = Date.now();
+    const { data: personRows } = await supabase
+      .from("persons")
+      .select("id, first_name, last_name, full_name, date_of_birth, email, phone")
+      .eq("org_id", orgId)
+      .in("id", allNeeded);
+    hydrateGraphTimings.relationship_overlay_member_linked_person_fetch_ms = Date.now() - tPl;
+    for (const pr of (personRows ?? []) as WarmPersonRow[]) {
+      if (pr.id) pmap.set(pr.id, pr);
+    }
+  }
+
+  const optionPairs: { setKey: string; itemKey: string }[] = [];
+  for (const r of jrows) {
+    const desiredProgramType =
+      trimOrNull(r.desired_program_type) ?? oppDefaultProgramType;
+    const desiredScheduleType =
+      trimOrNull(r.desired_schedule_type) ?? oppDefaultScheduleType;
+    if (desiredProgramType)
+      optionPairs.push({
+        setKey: "childcare_program_type",
+        itemKey: desiredProgramType,
+      });
+    if (desiredScheduleType)
+      optionPairs.push({
+        setKey: "childcare_schedule_type",
+        itemKey: desiredScheduleType,
+      });
+  }
+
+  const [ocmMemberDefsTaggedPack, optionLabelMap] = await Promise.all([
+    ocmMemberDefsTaggedPackP,
+    batchOptionItemLabelsForOrg(supabase, orgId, optionPairs),
+  ]);
+
+  const ocmMemberStatusDefs = ocmMemberDefsTaggedPack.rows;
+  const ocmStatusTelemetry = ocmMemberDefsTaggedPack.telemetry;
+  const ocmOppStatusDefsCacheHit = ocmMemberDefsTaggedPack.combinedCacheHit;
+  const ocmStatusLabelByKey = displayLabelsFromDefinitions(ocmMemberStatusDefs);
+
+  let inquiryBlocks = mapOcmJoinRowsToInquiryChildrenBlock(
+    jrows,
+    memberMap,
+    pmap,
+    oppDefaultProgramType,
+    oppDefaultScheduleType,
+    optionLabelMap,
+    ocmStatusLabelByKey,
+  );
+  inquiryBlocks = applyInquiryChildrenMetadataFallbacks(inquiryBlocks, oppMeta, opportunityId);
+
+  const payload = {
+    id: opportunityId,
+    org_id: orgId,
+    _inquiry_children: inquiryBlocks,
+    _member_person_graph_pending: false,
+    hydrate_graph_timings_ms_overlay: hydrateGraphTimings,
+    ocm_status_defs_overlay: {
+      combined_cache_hit: ocmOppStatusDefsCacheHit,
+      telemetry: ocmStatusTelemetry,
+    },
+  };
+
+  if (process.env.NODE_ENV !== "production") {
+    console.warn("[perf.drawer.member_person_graph_overlay]", payload);
+  }
+
+  const serverRouteMs = Date.now() - opportunityRouteStartedAt;
+
+  return NextResponse.json(payload, {
+    status: 200,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "X-Alloy-Entity-Surface": "relationship_member_persons",
+      "X-Alloy-Server-Duration": String(serverRouteMs),
+    },
+  });
 }
 
 /**
@@ -137,6 +655,17 @@ export async function respondOpportunityEntityGet(
   const surfaceParamEarly = (request.nextUrl.searchParams.get("surface") ?? "")
     .trim()
     .toLowerCase();
+
+  if (surfaceParamEarly === "relationship_member_persons") {
+    return respondOpportunityRelationshipMemberOverlay(
+      supabase,
+      orgId,
+      id,
+      opp,
+      opportunityRouteStartedAt,
+    );
+  }
+
   const wuidForDept = trimOrNull(
     (opp as { work_unit_id?: string | null }).work_unit_id,
   );
@@ -148,87 +677,8 @@ export async function respondOpportunityEntityGet(
     (opp as { discount_program_id?: string | null }).discount_program_id ??
     null;
   const oppOrgIdForDefs = (opp as { org_id?: string }).org_id;
-  const personDisplayName = (
-    p: {
-      full_name?: string | null;
-      first_name?: string | null;
-      last_name?: string | null;
-    } | null,
-  ) =>
-    p
-      ? (p.full_name && p.full_name.trim()) ||
-        [p.first_name, p.last_name].filter(Boolean).join(" ").trim() ||
-        null
-      : null;
-  const primaryPersonContactP = (async (): Promise<{
-    patch: Record<string, unknown>;
-    /** Person rows loaded for drawer shell IDs — reused later to trim member→person lookups on full hydrate. */
-    warmPersonRows: WarmPersonRow[];
-  }> => {
-    const patch: Record<string, unknown> = {};
-    const warmPersonRows: WarmPersonRow[] = [];
-    if (opp.primary_person_id) {
-      const { data: person } = await supabase
-        .from("persons")
-        .select("id, first_name, last_name, full_name, email, phone, date_of_birth")
-        .eq("id", opp.primary_person_id)
-        .eq("org_id", orgId)
-        .maybeSingle();
-      const p = person as WarmPersonRow | null;
-      if (p?.id) warmPersonRows.push(p);
-      patch._primary_person_id = p?.id ?? null;
-      patch._primary_person_name = personDisplayName(p);
-      patch._primary_person_email = trimOrNull(p?.email);
-      patch._primary_person_phone = trimOrNull(p?.phone);
-      patch._contact_name = patch._primary_person_name;
-      patch._primary_contact_name = patch._primary_person_name;
-    } else if (opp.primary_contact_id) {
-      // LEGACY_COMPAT: fallback display/load via compatibility contact when primary_person_id is unset.
-      const contact = await supabase
-        .from("contacts")
-        .select("first_name, last_name, person_id, email, phone")
-        .eq("id", opp.primary_contact_id)
-        .eq("org_id", orgId)
-        .single();
-      const c = contact.data;
-      const name = c
-        ? [c.first_name, c.last_name].filter(Boolean).join(" ") || null
-        : null;
-      patch._contact_name = name;
-      patch._primary_contact_name = name;
-      patch._primary_contact_email = trimOrNull(
-        (c as { email?: string | null } | null)?.email,
-      );
-      patch._primary_contact_phone = trimOrNull(
-        (c as { phone?: string | null } | null)?.phone,
-      );
-      if (c && (c as { person_id?: string | null }).person_id) {
-        const { data: person } = await supabase
-          .from("persons")
-          .select("id, first_name, last_name, full_name, email, phone, date_of_birth")
-          .eq("id", (c as { person_id: string }).person_id)
-          .eq("org_id", orgId)
-          .maybeSingle();
-        const p = person as WarmPersonRow | null;
-        if (p?.id) warmPersonRows.push(p);
-        patch._primary_person_id = p?.id ?? null;
-        patch._primary_person_name = personDisplayName(p);
-        if (!patch._primary_contact_email && p?.email)
-          patch._primary_contact_email = trimOrNull(p.email);
-        if (!patch._primary_contact_phone && p?.phone)
-          patch._primary_contact_phone = trimOrNull(p.phone);
-      } else {
-        patch._primary_person_id = null;
-        patch._primary_person_name = null;
-      }
-    } else {
-      patch._contact_name = null;
-      patch._primary_contact_name = null;
-      patch._primary_person_id = null;
-      patch._primary_person_name = null;
-    }
-    return { patch, warmPersonRows };
-  })();
+  const personDisplayName = warmPersonDisplayName;
+  const primaryPersonContactP = fetchPrimaryPersonContactHydrate(supabase, orgId, opp);
 
   if (surfaceParamEarly === "drawer_visible") {
     const enrichStartedAt = Date.now();
@@ -555,6 +1005,7 @@ export async function respondOpportunityEntityGet(
   }
   Object.assign(out, primaryHydrBundle.patch);
   markPhase("after_primary_person_contact");
+  const tFinShell = Date.now();
   const oppOrgId = oppOrgIdForDefs;
   const oppStatusLabelByKey = displayLabelsFromDefinitions(opportunityDefs);
   const oppLegacyStatus = (opp as { status?: string | null }).status;
@@ -624,6 +1075,7 @@ export async function respondOpportunityEntityGet(
       defs: opportunityDefs,
     }),
   );
+  hydrateGraphTimings.opportunity_financial_status_shell_ms = Date.now() - tFinShell;
   markPhase("after_status_defs_and_financial");
   lapSegment("status_resolve_and_lifecycle_shell");
   const drawerInitial = surfaceParamEarly === "drawer_initial";
@@ -852,17 +1304,6 @@ export async function respondOpportunityEntityGet(
     }
   })();
 
-  type CmBootstrapRow = {
-    id: string;
-    display_name: string;
-    relationship?: string | null;
-    dob?: string | null;
-    person_id?: string | null;
-    first_name?: string | null;
-    last_name?: string | null;
-    metadata?: Record<string, unknown> | null;
-  };
-
   const customerMembersTimedP = householdId
     ? (async () => {
         const t0 = Date.now();
@@ -894,6 +1335,8 @@ export async function respondOpportunityEntityGet(
   const personRoleLabel = personRR.role_label;
   const contactRoleKey = contactRR.contactRoleKey;
   const contactRoleLabel = contactRR.contactRoleLabel;
+
+  const tIdentityChildSerial0 = Date.now();
 
   let child: {
     id: string;
@@ -937,6 +1380,8 @@ export async function respondOpportunityEntityGet(
       };
     }
   }
+
+  hydrateGraphTimings.identity_child_pick_serial_after_parallel_ms = Date.now() - tIdentityChildSerial0;
 
   const joinRows = joinRes.data;
   markPhase("after_identity_parallel_fetch");
@@ -995,7 +1440,7 @@ export async function respondOpportunityEntityGet(
   );
   const personIdsFromOppRows = [...new Set(oppRowsWarmIds.filter(Boolean))] as string[];
 
-  const graphPersonPidUnion = [...new Set([...personIdsFromMembers, ...personIdsFromOppRows])];
+  const unionGraphPersonIds = [...new Set([...personIdsFromMembers, ...personIdsFromOppRows])];
   const pmap = new Map<string, WarmPersonRow>();
   for (const w of primaryHydrBundle.warmPersonRows) {
     if (w.id) pmap.set(w.id, w);
@@ -1006,24 +1451,39 @@ export async function respondOpportunityEntityGet(
     primaryHydrBundle.warmPersonRows.some((w) => String(w.id) === primaryPidForWarm)
   );
   const primary_person_reused = !!(primaryPidForWarm && pmap.has(primaryPidForWarm));
-  const personIdsNeedingFetch = graphPersonPidUnion.filter((pid) => !pmap.has(pid));
-  const person_lookup_reused_count = graphPersonPidUnion.length - personIdsNeedingFetch.length;
-  const linked_persons_missing_count = personIdsNeedingFetch.length;
+
+  /** Member-linked `persons` rows are deferred to `surface=relationship_member_persons` (Pass 6). */
+  const memberLinkedPersonIdsDeferred = personIdsFromMembers.filter((pid) => !pmap.has(pid));
+  const oppRolesPersonPrefetchIds = personIdsFromOppRows.filter((pid) => !pmap.has(pid));
+  out._member_person_graph_pending = memberLinkedPersonIdsDeferred.length > 0;
+  hydrateGraphTimings.relationship_member_person_ids_deferred_count =
+    memberLinkedPersonIdsDeferred.length;
+  hydrateGraphTimings.customer_member_linked_person_bulk_skipped_ms = memberLinkedPersonIdsDeferred.length ? 1 : 0;
+
+  const person_lookup_reused_count = unionGraphPersonIds.filter((pid) => pmap.has(pid)).length;
+  const linked_persons_missing_count =
+    memberLinkedPersonIdsDeferred.length + oppRolesPersonPrefetchIds.length;
 
   hydrateGraphTimings.customer_member_person_lookup_ms = 0;
-  if (personIdsNeedingFetch.length > 0) {
+  hydrateGraphTimings.opportunity_roles_person_prefetch_ms = 0;
+  if (oppRolesPersonPrefetchIds.length > 0) {
     const tPl = Date.now();
     const { data: personRows } = await supabase
       .from("persons")
       .select("id, first_name, last_name, full_name, date_of_birth, email, phone")
       .eq("org_id", orgId)
-      .in("id", personIdsNeedingFetch);
-    hydrateGraphTimings.customer_member_person_lookup_ms = Date.now() - tPl;
+      .in("id", oppRolesPersonPrefetchIds);
+    const wall = Date.now() - tPl;
+    hydrateGraphTimings.customer_member_person_lookup_ms = wall;
+    hydrateGraphTimings.opportunity_roles_person_prefetch_ms = wall;
     for (const pr of (personRows ?? []) as WarmPersonRow[]) {
       if (pr.id) pmap.set(pr.id, pr);
     }
   }
-  const person_lookup_missing_count = personIdsNeedingFetch.length;
+
+  let person_lookup_missing_count =
+    memberLinkedPersonIdsDeferred.length +
+    oppRolesPersonPrefetchIds.filter((pid) => !pmap.has(pid)).length;
 
   lapSegment("customer_member_linked_person_lookup");
 
@@ -1050,6 +1510,7 @@ export async function respondOpportunityEntityGet(
     batchOptionItemLabelsForOrg(supabase, orgId, optionPairs),
   ]);
   const inquiryBatchMs = Date.now() - tInquiry0;
+  enrichPhaseMs.inquiry_children_batch_ms = inquiryBatchMs;
   lapSegment("inquiry_ocm_defs_options_opportunity_persons_rows");
 
   const ocmMemberStatusDefs = ocmMemberDefsTaggedPack.rows;
@@ -1057,164 +1518,16 @@ export async function respondOpportunityEntityGet(
   const ocmStatusTelemetry = ocmMemberDefsTaggedPack.telemetry;
   const ocmStatusLabelByKey = displayLabelsFromDefinitions(ocmMemberStatusDefs);
 
-  const inquiryChildren = jrows.map((r) => {
-    const m = memberMap.get(r.customer_member_id) ?? null;
-    const pid = trimOrNull(m?.person_id);
-    const p = pid ? (pmap.get(pid) ?? null) : null;
-    const dob = p?.date_of_birth
-      ? String(p.date_of_birth)
-      : m?.dob
-        ? String(m.dob)
-        : null;
-    const age = ageFromDobIso(dob);
-    const desiredProgramType =
-      trimOrNull(r.desired_program_type) ?? oppDefaultProgramType;
-    const desiredScheduleType =
-      trimOrNull(r.desired_schedule_type) ?? oppDefaultScheduleType;
-    const memMeta = (m?.metadata ?? null) as Record<string, unknown> | null;
-    const demoProgramLabel =
-      memMeta && typeof memMeta.demo_program_label === "string"
-        ? trimOrNull(memMeta.demo_program_label)
-        : null;
-    const outcomeStatusKey = trimOrNull(r.outcome_status_key);
-    const rawProgLabel = optionLabelFromBatchMap(
-      optionLabelMap,
-      "childcare_program_type",
-      desiredProgramType,
-    );
-    const desiredProgramLabel = rawProgLabel ?? demoProgramLabel;
-    const desiredScheduleLabel = optionLabelFromBatchMap(
-      optionLabelMap,
-      "childcare_schedule_type",
-      desiredScheduleType,
-    );
-    const outcomeStatusLabel = outcomeStatusKey
-      ? resolveDisplayFromLabelMap(ocmStatusLabelByKey, outcomeStatusKey, null)
-      : null;
-    return {
-      id: r.id,
-      customer_member_id: r.customer_member_id,
-      person_id: pid,
-      display_name:
-        m?.display_name ??
-        (pid ? personDisplayName(p) : null) ??
-        r.customer_member_id.slice(0, 8) + "…",
-      dob,
-      age: age ? age.label : null,
-      desired_program_type: desiredProgramType,
-      desired_program_label: desiredProgramLabel,
-      desired_schedule_type: desiredScheduleType,
-      desired_schedule_label: desiredScheduleLabel,
-      outcome_status_key: outcomeStatusKey,
-      outcome_status_label: outcomeStatusLabel,
-      fit_status: trimOrNull(r.fit_status),
-      notes: trimOrNull(r.notes),
-      metadata: (r.metadata as Record<string, unknown>) ?? null,
-      created_at: r.created_at ?? null,
-      updated_at: r.updated_at ?? null,
-    };
-  });
-  enrichPhaseMs.inquiry_children_batch_ms = inquiryBatchMs;
-  let inquiryChildrenOut = inquiryChildren;
-  if (
-    !inquiryChildrenOut.length &&
-    oppMeta &&
-    Array.isArray(oppMeta.inquiry_children)
-  ) {
-    const mdKids = oppMeta.inquiry_children as unknown[];
-    inquiryChildrenOut = mdKids
-      .map((raw, i) => {
-        if (!raw || typeof raw !== "object") return null;
-        const row = raw as Record<string, unknown>;
-        const displayName =
-          typeof row.display_name === "string" && row.display_name.trim()
-            ? row.display_name.trim()
-            : typeof row.child_name === "string" && row.child_name.trim()
-              ? row.child_name.trim()
-              : null;
-        if (!displayName) return null;
-        const sid = `metadata_child:${id}:${i}`;
-        return {
-          id: sid,
-          customer_member_id: sid,
-          person_id: null,
-          display_name: displayName,
-          dob: typeof row.dob === "string" ? row.dob : null,
-          age: typeof row.age === "string" ? row.age : null,
-          desired_program_type:
-            typeof row.program_type_key === "string"
-              ? trimOrNull(row.program_type_key)
-              : null,
-          desired_program_label:
-            typeof row.program_label === "string"
-              ? trimOrNull(row.program_label)
-              : typeof row.program_short === "string"
-                ? trimOrNull(row.program_short)
-                : null,
-          desired_schedule_type: null,
-          desired_schedule_label: null,
-          outcome_status_key: null,
-          outcome_status_label: null,
-          fit_status: null,
-          notes: typeof row.notes === "string" ? trimOrNull(row.notes) : null,
-          metadata: (row.metadata as Record<string, unknown>) ?? {
-            source: "opportunity_metadata",
-          },
-          created_at: null,
-          updated_at: null,
-        };
-      })
-      .filter(Boolean) as typeof inquiryChildren;
-  }
-  // Final fallback: demo/seed metadata uses simple child_name fields (queue shows these).
-  if (!inquiryChildrenOut.length && oppMeta && typeof oppMeta === "object") {
-    const md = oppMeta as Record<string, unknown>;
-    const demoChild = (
-      typeof md.demo_child_name === "string" && md.demo_child_name.trim()
-        ? md.demo_child_name.trim()
-        : typeof md.child_name === "string" && md.child_name.trim()
-          ? md.child_name.trim()
-          : null
-    ) as string | null;
-    if (demoChild) {
-      const sid = `metadata_child:${id}:demo`;
-      inquiryChildrenOut = [
-        {
-          id: sid,
-          customer_member_id: sid,
-          person_id: null,
-          display_name: demoChild,
-          dob: typeof md.child_dob === "string" ? md.child_dob : null,
-          age: typeof md.child_age === "string" ? md.child_age : null,
-          desired_program_type:
-            typeof md.program_type_key === "string"
-              ? trimOrNull(md.program_type_key)
-              : null,
-          desired_program_label:
-            typeof md.program_label === "string"
-              ? trimOrNull(md.program_label)
-              : typeof md.demo_requested_program === "string"
-                ? trimOrNull(md.demo_requested_program)
-                : null,
-          desired_schedule_type:
-            typeof md.schedule_type_key === "string"
-              ? trimOrNull(md.schedule_type_key)
-              : null,
-          desired_schedule_label:
-            typeof md.schedule_label === "string"
-              ? trimOrNull(md.schedule_label)
-              : null,
-          outcome_status_key: null,
-          outcome_status_label: null,
-          fit_status: null,
-          notes: typeof md.notes === "string" ? trimOrNull(md.notes) : null,
-          metadata: { source: "opportunity_metadata_demo_child_name" },
-          created_at: null,
-          updated_at: null,
-        } as (typeof inquiryChildren)[number],
-      ];
-    }
-  }
+  let inquiryBlocks = mapOcmJoinRowsToInquiryChildrenBlock(
+    jrows as OcmJoinRow[],
+    memberMap,
+    pmap,
+    oppDefaultProgramType,
+    oppDefaultScheduleType,
+    optionLabelMap,
+    ocmStatusLabelByKey,
+  );
+  const inquiryChildrenOut = applyInquiryChildrenMetadataFallbacks(inquiryBlocks, oppMeta, id);
   out._inquiry_children = inquiryChildrenOut;
   markPhase("after_inquiry_children_resolved");
   lapSegment("inquiry_children_metadata_fallbacks");
