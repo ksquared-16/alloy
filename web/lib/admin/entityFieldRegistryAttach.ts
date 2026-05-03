@@ -22,6 +22,8 @@ export type FieldRegistryAttachMeta = {
     field_registry_next_cache_hit?: boolean;
     /** Postgres defs snapshot skipped via process LRU or Next unstable_cache snapshot. */
     field_registry_defs_warm?: boolean;
+    /** Canonical key string for staged proof / collision checks ({@link fieldRegistryDrawerStableKeyString}). */
+    field_registry_stable_cache_key?: string | null;
     /** True when Next `unstable_cache` invocation did not execute the defs fetcher (exclusive with cold Postgres defs). */
     field_registry_combined_cache_hit?: boolean;
     /** Wall time of uncached defs+sections DB fetch inside `resolveFieldDefinitionsAndSectionsForDrawer` inner fetcher only. */
@@ -88,6 +90,15 @@ function normalizeFieldRegistryDbEntityType(entityType: string): string {
 function fieldRegistryStableKey(orgId: string, entityType: string): string[] {
     const canonDb = normalizeFieldRegistryDbEntityType(entityType);
     return ["field-registry-drawer-v2", orgId, canonDb];
+}
+
+/** Debug identity for drawer field_definitions cache (`field-registry-drawer-v2` + org + canonical DB entity_type). */
+export function fieldRegistryDrawerStableKeyString(orgId: string, drawerSurfaceType: string): string | null {
+    const et = DRAWER_TYPE_TO_FIELD_ENTITY_TYPE[drawerSurfaceType];
+    const trimmedOrg = String(orgId ?? "").trim();
+    if (!et || !trimmedOrg) return null;
+    const canon = normalizeFieldRegistryDbEntityType(et);
+    return fieldRegistryStableKey(trimmedOrg, et).join(":");
 }
 
 async function fetchFieldDefinitionsAndSectionsFromDb(
@@ -278,8 +289,13 @@ export async function attachFieldDefinitionsAndValues(
     const { fieldDefs, fieldSections, meta: defsMeta } = await resolveFieldDefinitionsAndSectionsForDrawer(orgId, entityType);
     const defsResolveWallMs = Date.now() - tDefsWall0;
 
+    const stableKey = fieldRegistryDrawerStableKeyString(orgId, drawerType);
     const mergedDefsMeta: FieldRegistryAttachMeta = {
         ...defsMeta,
+        field_registry_stable_cache_key: stableKey,
+        /** Cold Postgres defs avoided (process LRU or Next snapshot) — aligns staging “warm” dashboards. */
+        field_registry_combined_cache_hit:
+            !!defsMeta.field_registry_process_cache_hit || !!defsMeta.field_registry_next_cache_hit,
         field_registry_defs_resolve_wall_ms: defsResolveWallMs,
         field_registry_defs_warm:
             defsMeta.field_registry_defs_warm === true ||

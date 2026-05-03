@@ -50,10 +50,14 @@ type EffectiveStatusDefsPhaseTimings = {
 async function loadEffectiveStatusDefinitionsThroughNextCache(
     orgId: string,
     normalizedEntityType: string,
-    opts?: { activeOnly?: boolean },
+    opts?: { activeOnly?: boolean; nextRevalidateSeconds?: number },
     phasesOut?: EffectiveStatusDefsPhaseTimings | null
 ): Promise<{ rows: StatusDefinitionRow[]; fetcherRan: boolean; nextCacheAttempted: boolean }> {
     const activeOnly = opts?.activeOnly !== false;
+    const nextRev =
+        typeof opts?.nextRevalidateSeconds === "number" && opts.nextRevalidateSeconds >= 60
+            ? Math.floor(opts.nextRevalidateSeconds)
+            : 90;
     const key = effectiveStatusDefsUnstableKeyParts(orgId, normalizedEntityType, activeOnly);
     let fetcherRan = false;
     const fetcher = async () => {
@@ -63,7 +67,7 @@ async function loadEffectiveStatusDefinitionsThroughNextCache(
     };
     if (typeof unstable_cache === "function" && process.env.NODE_ENV !== "test") {
         const rows = await unstable_cache(fetcher, key, {
-            revalidate: 90,
+            revalidate: nextRev,
             tags: [...STATUS_EFFECTIVE_UNSTABLE_TAGS, `status-def-org:${orgId}`],
         })();
         return { rows, fetcherRan, nextCacheAttempted: true };
@@ -320,6 +324,8 @@ export type FetchEffectiveStatusDefinitionsTaggedOpts = {
      * Default {@link STATUS_EFFECTIVE_TTL_MS}.
      */
     processLruTtlMs?: number;
+    /** Next.js `unstable_cache` `revalidate` seconds for this entity (min 60). Default 90. */
+    nextRevalidateSeconds?: number;
 };
 
 export async function fetchEffectiveStatusDefinitionsTagged(
@@ -348,7 +354,7 @@ export async function fetchEffectiveStatusDefinitionsTagged(
     const { rows, fetcherRan, nextCacheAttempted } = await loadEffectiveStatusDefinitionsThroughNextCache(
         orgId,
         normalized,
-        opts,
+        { activeOnly, nextRevalidateSeconds: opts?.nextRevalidateSeconds },
         phases
     );
     const nextCacheHit = nextCacheAttempted && !fetcherRan;

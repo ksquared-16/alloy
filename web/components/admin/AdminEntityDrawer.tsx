@@ -106,6 +106,7 @@ import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedu
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { prefetchWorkspaceChildcareInquiryOptionSets } from "@/lib/workspace/workspaceChildcareInquiryOptionSets";
 import { adminEntityRefetchShouldBlockDrawerShell } from "@/lib/ui-v2/adminV2EntityDrawerLoading";
+import { fetchAdminWorkUnitDrawerJson } from "@/lib/admin/adminWorkUnitDrawerFetch";
 import { getSectionOrderFromScheduleLayoutBlocks } from "@/lib/recordChrome/scheduleLayoutConfig";
 import {
     applyOverviewSectionOrder,
@@ -2888,12 +2889,21 @@ export default function AdminEntityDrawer() {
             }
             return;
         }
+        const stampedDeptRaw =
+            data && typeof data === "object"
+                ? String((data as { _work_unit_department_id?: unknown })._work_unit_department_id ?? "").trim()
+                : "";
+        const entityWuMatchesStamp =
+            wuidFromData.length > 0 && stampedDeptRaw.length > 0 && wuidFromData === wuid;
+        if (entityWuMatchesStamp) {
+            setOpportunityWorkUnitDepartmentId(stampedDeptRaw);
+        }
+
         let cancelled = false;
         const run = async () => {
             try {
                 const t0 = timingEnabled ? performance.now() : 0;
-                const res = await fetch(`/api/admin/work-units/${encodeURIComponent(wuid)}`, { credentials: "include" });
-                const json = (await res.json().catch(() => ({}))) as { queue_definition?: unknown; department_id?: string | null };
+                const json = await fetchAdminWorkUnitDrawerJson(wuid);
                 if (cancelled) return;
                 if (timingEnabled) {
                     console.info("[timing][drawer]", {
@@ -2903,10 +2913,12 @@ export default function AdminEntityDrawer() {
                         ms: Math.round((performance.now() - t0) * 10) / 10,
                     });
                 }
-                setOpportunityWorkUnitDepartmentId(
-                    typeof json.department_id === "string" && json.department_id.trim() ? json.department_id.trim() : null
-                );
-                const qd = (json as { queue_definition?: unknown }).queue_definition;
+                const deptJson =
+                    typeof json.department_id === "string" && json.department_id.trim()
+                        ? json.department_id.trim()
+                        : null;
+                setOpportunityWorkUnitDepartmentId(deptJson ?? (entityWuMatchesStamp ? stampedDeptRaw : null));
+                const qd = json.queue_definition;
                 if (!qd || typeof qd !== "object") {
                     setOpportunityQueueDefinition(null);
                     return;
@@ -2916,7 +2928,7 @@ export default function AdminEntityDrawer() {
             } catch {
                 if (!cancelled) {
                     setOpportunityQueueDefinition(null);
-                    setOpportunityWorkUnitDepartmentId(null);
+                    setOpportunityWorkUnitDepartmentId(entityWuMatchesStamp ? stampedDeptRaw : null);
                 }
             }
         };

@@ -13,6 +13,9 @@ export type CommunicationsDrawerPrefetchSlot = {
     threads: Promise<ThreadsResult>;
     bindings: Promise<BindingsResult>;
     recipients: Promise<RecipientsResult>;
+    threads_snapshot?: ThreadsResult | null;
+    bindings_snapshot?: BindingsResult | null;
+    recipients_snapshot?: RecipientsResult | null;
     /** True when `arm` found an existing slot (no duplicate network fan-out). */
     prefetch_arm_cache_hit?: boolean;
     consumed: Partial<Record<PrefetchConsumeRole, boolean>>;
@@ -166,6 +169,16 @@ export function armCommunicationsDrawerPrefetch(apiEntityType: string, entityId:
     };
     slots.set(key, slot);
 
+    void threads.then((r) => {
+        slot.threads_snapshot = r;
+    });
+    void bindings.then((r) => {
+        slot.bindings_snapshot = r;
+    });
+    void recipients.then((r) => {
+        slot.recipients_snapshot = r;
+    });
+
     if (logPerf) {
         void Promise.allSettled([threads, bindings, recipients]).then(() => {
             const s = slots.get(key);
@@ -206,6 +219,17 @@ export function takeCommunicationsDrawerPrefetch(
         slot.consumed[consume] = true;
     }
     return slot;
+}
+
+/** Consume flag only (snapshot path applies data without awaiting the prefetch promise). */
+export function markCommunicationsDrawerPrefetchConsumed(
+    apiEntityType: string,
+    entityId: string,
+    role: PrefetchConsumeRole,
+): void {
+    const slot = slots.get(prefetchKey(apiEntityType, entityId));
+    if (!slot) return;
+    slot.consumed[role] = true;
 }
 
 export function invalidateCommunicationsDrawerPrefetch(apiEntityType: string, entityId: string): void {

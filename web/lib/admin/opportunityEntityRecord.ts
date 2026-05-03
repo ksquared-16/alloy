@@ -758,6 +758,7 @@ export async function respondOpportunityEntityGet(
     {
       activeOnly: true,
       processLruTtlMs: 600_000,
+      nextRevalidateSeconds: 900,
     },
   );
 
@@ -777,47 +778,78 @@ export async function respondOpportunityEntityGet(
     return r;
   })();
 
-  const primaryPersonRoleP =
-    householdId &&
-    typeof opp.primary_person_id === "string" &&
-    opp.primary_person_id.trim()
-      ? resolveCustomerPersonRole(supabase, {
-          orgId,
-          customerId: householdId,
-          personId: opp.primary_person_id.trim(),
-        })
-      : Promise.resolve({
+  const oppPersonsRowsQuery = supabase
+    .from("opportunity_persons")
+    .select("id, person_id, role_type, created_at")
+    .eq("org_id", orgId)
+    .eq("opportunity_id", id)
+    .order("created_at", { ascending: true });
+
+  const oppPersonsRowsTimedP = (async () => {
+    const t0 = Date.now();
+    const r = await oppPersonsRowsQuery;
+    hydrateGraphTimings.opportunity_persons_rows_ms = Date.now() - t0;
+    return r;
+  })();
+
+  const primaryPersonRoleP = (async () => {
+    const t0 = Date.now();
+    try {
+      if (
+        !(
+          householdId &&
+          typeof opp.primary_person_id === "string" &&
+          opp.primary_person_id.trim()
+        )
+      ) {
+        return {
           role_key: null as string | null,
           role_label: null as string | null,
-        });
+        };
+      }
+      const rr = await resolveCustomerPersonRole(supabase, {
+        orgId,
+        customerId: householdId,
+        personId: opp.primary_person_id.trim(),
+      });
+      return rr;
+    } finally {
+      hydrateGraphTimings.primary_role_ms = Date.now() - t0;
+    }
+  })();
 
   const contactRoleP = (async (): Promise<{
     contactRoleKey: string | null;
     contactRoleLabel: string | null;
   }> => {
-    if (
-      !householdId ||
-      typeof opp.primary_contact_id !== "string" ||
-      !opp.primary_contact_id.trim()
-    ) {
-      return { contactRoleKey: null, contactRoleLabel: null };
+    const t0 = Date.now();
+    try {
+      if (
+        !householdId ||
+        typeof opp.primary_contact_id !== "string" ||
+        !opp.primary_contact_id.trim()
+      ) {
+        return { contactRoleKey: null, contactRoleLabel: null };
+      }
+      const { data: cRow } = await supabase
+        .from("contacts")
+        .select("person_id")
+        .eq("id", opp.primary_contact_id.trim())
+        .eq("org_id", orgId)
+        .maybeSingle();
+      const pid = trimOrNull(
+        (cRow as { person_id?: string | null } | null)?.person_id,
+      );
+      if (!pid) return { contactRoleKey: null, contactRoleLabel: null };
+      const rr = await resolveCustomerPersonRole(supabase, {
+        orgId,
+        customerId: householdId,
+        personId: pid,
+      });
+      return { contactRoleKey: rr.role_key, contactRoleLabel: rr.role_label };
+    } finally {
+      hydrateGraphTimings.contact_role_chain_ms = Date.now() - t0;
     }
-    const { data: cRow } = await supabase
-      .from("contacts")
-      .select("person_id")
-      .eq("id", opp.primary_contact_id.trim())
-      .eq("org_id", orgId)
-      .maybeSingle();
-    const pid = trimOrNull(
-      (cRow as { person_id?: string | null } | null)?.person_id,
-    );
-    if (!pid) return { contactRoleKey: null, contactRoleLabel: null };
-    const rr = await resolveCustomerPersonRole(supabase, {
-      orgId,
-      customerId: householdId,
-      personId: pid,
-    });
-    return { contactRoleKey: rr.role_key, contactRoleLabel: rr.role_label };
   })();
 
   type CmBootstrapRow = {
@@ -850,11 +882,12 @@ export async function respondOpportunityEntityGet(
         data: [] as CmBootstrapRow[],
       });
 
-  const [personRR, contactRR, cmsRes, joinRes] = await Promise.all([
+  const [personRR, contactRR, cmsRes, joinRes, oppPersonsListResEarly] = await Promise.all([
     primaryPersonRoleP,
     contactRoleP,
     customerMembersTimedP,
     ocmJoinTimedP,
+    oppPersonsRowsTimedP,
   ]);
 
   const personRoleKey = personRR.role_key;
@@ -885,12 +918,14 @@ export async function respondOpportunityEntityGet(
       const relKey = trimOrNull(pick.relationship);
       let relLabel: string | null = null;
       if (relKey) {
+        const tRelLookup = Date.now();
         const { data: rt } = await supabase
           .from("customer_member_relationship_types")
           .select("label")
           .eq("org_id", orgId)
           .eq("key", relKey)
           .maybeSingle();
+        hydrateGraphTimings.customer_member_child_relationship_type_lookup_ms = Date.now() - tRelLookup;
         relLabel = trimOrNull((rt as { label?: string | null } | null)?.label);
       }
       child = {
@@ -952,9 +987,15 @@ export async function respondOpportunityEntityGet(
   }
 
   const memberMap = new Map(memList.map((m) => [m.id, m]));
-  const personIds = [
+  const personIdsFromMembers = [
     ...new Set(memList.map((m) => trimOrNull(m.person_id)).filter(Boolean)),
   ] as string[];
+  const oppRowsWarmIds = (((oppPersonsListResEarly.data ?? []) ?? []) as { person_id?: string | null }[]).map((z) =>
+    trimOrNull(z.person_id),
+  );
+  const personIdsFromOppRows = [...new Set(oppRowsWarmIds.filter(Boolean))] as string[];
+
+  const graphPersonPidUnion = [...new Set([...personIdsFromMembers, ...personIdsFromOppRows])];
   const pmap = new Map<string, WarmPersonRow>();
   for (const w of primaryHydrBundle.warmPersonRows) {
     if (w.id) pmap.set(w.id, w);
@@ -965,8 +1006,8 @@ export async function respondOpportunityEntityGet(
     primaryHydrBundle.warmPersonRows.some((w) => String(w.id) === primaryPidForWarm)
   );
   const primary_person_reused = !!(primaryPidForWarm && pmap.has(primaryPidForWarm));
-  const personIdsNeedingFetch = personIds.filter((pid) => !pmap.has(pid));
-  const person_lookup_reused_count = personIds.length - personIdsNeedingFetch.length;
+  const personIdsNeedingFetch = graphPersonPidUnion.filter((pid) => !pmap.has(pid));
+  const person_lookup_reused_count = graphPersonPidUnion.length - personIdsNeedingFetch.length;
   const linked_persons_missing_count = personIdsNeedingFetch.length;
 
   hydrateGraphTimings.customer_member_person_lookup_ms = 0;
@@ -974,7 +1015,7 @@ export async function respondOpportunityEntityGet(
     const tPl = Date.now();
     const { data: personRows } = await supabase
       .from("persons")
-      .select("id, first_name, last_name, full_name, date_of_birth")
+      .select("id, first_name, last_name, full_name, date_of_birth, email, phone")
       .eq("org_id", orgId)
       .in("id", personIdsNeedingFetch);
     hydrateGraphTimings.customer_member_person_lookup_ms = Date.now() - tPl;
@@ -985,13 +1026,6 @@ export async function respondOpportunityEntityGet(
   const person_lookup_missing_count = personIdsNeedingFetch.length;
 
   lapSegment("customer_member_linked_person_lookup");
-
-  const oppPersonsRowsAwaitable = supabase
-    .from("opportunity_persons")
-    .select("id, person_id, role_type, created_at")
-    .eq("org_id", orgId)
-    .eq("opportunity_id", id)
-    .order("created_at", { ascending: true });
 
   const tInquiry0 = Date.now();
   const optionPairs: { setKey: string; itemKey: string }[] = [];
@@ -1011,15 +1045,9 @@ export async function respondOpportunityEntityGet(
         itemKey: desiredScheduleType,
       });
   }
-  const [ocmMemberDefsTaggedPack, optionLabelMap, oppPersonsListRes] = await Promise.all([
+  const [ocmMemberDefsTaggedPack, optionLabelMap] = await Promise.all([
     ocmMemberDefsTaggedPackP,
     batchOptionItemLabelsForOrg(supabase, orgId, optionPairs),
-    (async () => {
-      const t0 = Date.now();
-      const r = await oppPersonsRowsAwaitable;
-      hydrateGraphTimings.opportunity_persons_rows_ms = Date.now() - t0;
-      return r;
-    })(),
   ]);
   const inquiryBatchMs = Date.now() - tInquiry0;
   lapSegment("inquiry_ocm_defs_options_opportunity_persons_rows");
@@ -1192,7 +1220,7 @@ export async function respondOpportunityEntityGet(
   lapSegment("inquiry_children_metadata_fallbacks");
 
   {
-    const opRows = oppPersonsListRes.data;
+    const opRows = oppPersonsListResEarly.data;
     type OppPersonLite = {
       id: string;
       person_id: string;
@@ -1361,6 +1389,9 @@ export async function respondOpportunityEntityGet(
       field_registry: fieldRegistryMetaFull,
       field_registry_defs_warm: fieldRegistryMetaFull.field_registry_defs_warm ?? null,
       field_registry_combined_cache_hit: fieldRegistryMetaFull.field_registry_combined_cache_hit ?? null,
+      field_registry_stable_cache_key: fieldRegistryMetaFull.field_registry_stable_cache_key ?? null,
+      field_registry_next_cache_hit: fieldRegistryMetaFull.field_registry_next_cache_hit ?? null,
+      field_registry_process_cache_hit: fieldRegistryMetaFull.field_registry_process_cache_hit ?? null,
       field_registry_defs_resolve_wall_ms:
         fieldRegistryMetaFull.field_registry_defs_resolve_wall_ms ?? null,
       field_registry_field_values_wall_ms:
