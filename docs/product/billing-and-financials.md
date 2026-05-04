@@ -2,20 +2,21 @@
 
 ## Purpose
 
-Capture **payments**, **Stripe** linkage, and job pricing surfaces as they exist in code today.
+Capture **payments**, **Stripe** linkage, and job pricing surfaces **as wired in `web/` today** — without claiming webhook or refund flows that are not verified in this app.
 
 ## Current state
 
 - **`payments`** rows and admin presentation rollups (e.g. `getPaymentAllocationRollup` in entity route imports).
-- **Stripe:** archived implementation notes under `docs/archive/2026-05-02-docs-reset/implementation/STRIPE_SUPABASE_LINKING.md`; live behavior in `web/` (grep `stripe`, `payment_collect`, `customer_payment_methods` in schema).
+- **Stripe:** archived notes under `docs/archive/2026-05-02-docs-reset/implementation/STRIPE_SUPABASE_LINKING.md`; live code paths include **`payment-collect-context`**, **`customer_payment_methods`** in schema, and Stripe usage in job/admin flows (grep `stripe` under `web/`).
 - **Pricing:** `web/lib/pricing/` (`initializeJobPricing`, `overrideJobPricing`) integrates with workflow and admin flows.
-- **Discounts:** admin job PATCH mentions discount code selection tokens; deals with discount tables per schema.
+- **Discounts:** Admin job PATCH supports discount selection tokens per schema/routes.
+- **Ledger / financials APIs:** e.g. **`web/app/api/admin/financials/ledger/route.ts`**, **`web/app/api/admin/financials/snapshot/route.ts`** — org-scoped reads for privileged roles.
 
 ## How it works
 
 - Job drawer shows computed totals via helpers (`computeJobDisplayTotalCents` etc. in admin entity route).
-- Payment capture routes (e.g. payment-collect-context) assemble Stripe context for UI.
-- **Not fully verified:** Per financial mutation route, whether events are emitted or workflows run where the product expects that pattern.
+- Payment capture routes (e.g. **`payment-collect-context`**) assemble Stripe context for UI.
+- **Not fully verified:** Per financial mutation route, whether **`emitEvent`** / workflows always run where product intent expects — see **`docs/audits/event-integrity-audit.md`**.
 
 ## Source of truth / key files
 
@@ -24,6 +25,7 @@ Capture **payments**, **Stripe** linkage, and job pricing surfaces as they exist
 | Job display totals | `web/lib/admin/jobDisplayPrice.ts`, `web/app/api/admin/entity/[type]/[id]/route.ts` |
 | Pricing init/override | `web/lib/pricing/initializeJobPricing.ts`, `web/lib/pricing/overrideJobPricing.ts` |
 | Payment context | `web/app/api/admin/jobs/[id]/payment-collect-context/route.ts` |
+| Financials read APIs | `web/app/api/admin/financials/**` |
 | Schema | `customer_payment_methods`, `payments` in `supabase/migrations` / baseline SQL |
 
 ## Guardrails
@@ -34,8 +36,8 @@ Capture **payments**, **Stripe** linkage, and job pricing surfaces as they exist
 
 ## Known gaps / risks
 
-- **Needs verification:** End-to-end mapping of Stripe webhooks to local payment states (if any) in `web/app/api/**`.
-- **Needs verification:** Refund/credit note model coverage.
+- **Needs verification:** Stripe **webhook** handler location — smoke helpers reference **`${backendBase}/stripe/webhook`** (`web/tests/payments/paymentsTask2.smoke.helpers.ts`), which may be a **separate service** rather than `web/app/api/**`; confirm per deployment before documenting as Next route.
+- **Needs verification:** Refund/credit note model coverage and UI completeness.
 
 ## When this doc must be updated
 

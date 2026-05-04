@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Normative rules for **documentation**, **GPT/Cursor source-pack usage**, **deployment/tenancy**, and **operational performance** so `docs/` and runtime context stay aligned with code.
+Normative rules for **documentation**, **GPT/Cursor source-pack usage**, **deployment/tenancy**, and **operational performance** so `docs/` and runtime context stay aligned with code. **This file is the documentation doctrine** (the former standalone `documentation-doctrine.md` was consolidated here).
 
 ## Current state — documentation and source pack
 
@@ -55,7 +55,7 @@ If implementation must change doctrine, **update docs with the code** and record
 
 ### Current state
 
-- **Tenancy:** Production data is segregated by **`org_id`**; admin flows call `getAdminContextCached` to establish org + user roles.
+- **Tenancy:** Production data is segregated by **`org_id`**; admin flows call **`getAdminContextCached`** for org + portal eligibility. **CRM data visibility** (department + site) resolves via **`getAdminAccessContextCached`** and **`web/lib/admin/accessScope.ts`** on scoped routes — same request bundle under the hood (`loadAdminAccessBundleCached`).
 - **Supabase:** Server uses service role clients only on the server (`createAdminClient`, `serverServiceClient` patterns); browser uses anon/authenticated clients where applicable.
 - **Envs:** Booking/public flows may use `ALLOY_PUBLIC_ORG_ID` in action-link consume paths when org id missing — understand before changing.
 - Archived **`implementation/DEPLOYMENT.md`** and **`OPERATIONS.md`** were moved to `docs/archive/2026-05-02-docs-reset/` — treat as historical unless refreshed.
@@ -73,6 +73,7 @@ If implementation must change doctrine, **update docs with the code** and record
 | Admin client | `web/lib/supabaseAdmin.ts` |
 | Server service client | `web/lib/supabase/serverServiceClient.ts` |
 | Admin context | `web/lib/admin/getAdminContext.ts` |
+| CRM access scope | `web/lib/admin/getAdminAccessContext.ts`, `web/lib/admin/resolveAdminAccessCore.ts`, `web/lib/admin/accessScope.ts` |
 | Perf overlay | `web/components/admin/AdminV2PerfOverlay.tsx`, `web/lib/perf/alloyPerfGlobal.ts` |
 | Queue hot path | `web/lib/queues/QueueService.ts` |
 
@@ -93,7 +94,7 @@ If implementation must change doctrine, **update docs with the code** and record
 
 - **Needs verification:** Current hosting topology (Vercel vs other), CDN, and edge configuration.
 - **Needs verification:** Server APM / log aggregation stack.
-- Verification debt inventory: `execution/roadmap-and-gaps.md`.
+- Verification debt inventory: **`execution/roadmap-and-gaps.md`**; deep-dive route/event lists may also live under **`docs/audits/`**.
 
 ## When this doc must be updated
 

@@ -18,7 +18,8 @@ High-level map of **server boundaries** for admin, public booking, and action li
 | Admin actions | `POST` paths delegated to `executeAdminAction` | Check router module for exact URLs |
 | Workflows | `web/app/api/admin/workflows/[id]/run/route.ts` | Executes/runs workflows (admin) |
 | Action links | `web/app/api/action/[token]/consume/route.ts`, `action-links/*` | Emit events → workflows |
-| Communications | `web/app/api/admin/communications/*` | Threads, send, etc. |
+| Communications | `web/app/api/admin/communications/*` | Threads, send, unread, etc. |
+| Admin agent (AI) | `web/app/api/admin/agent/**` | Versioned agent routes; env-gated (e.g. `AGENT_V2_FIELD_VISIBILITY_ENABLED`) |
 | Booking v2 | `web/app/api/book-v2/*` | Quote, confirm, specialty flows |
 | Jobs patch | `web/app/api/admin/jobs/[id]/route.ts` | Includes workflow triggers for actions |
 | User access scope | `GET`/`PATCH /api/admin/users/[userId]/access-scope` | Admin-only; replaces profile + allow lists; validates site `location_type` server-side; **`PATCH`** rejects restricted scopes with empty allow lists |

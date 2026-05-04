@@ -32,6 +32,9 @@ Use these meanings in code review and prompts.
 | **Access profile (CRM)** | Row in **`user_access_profiles`**: per `(user_id, org_id)`, declares **`department_scope`** and **`site_scope`** (`all` or `restricted`). Separate from role capabilities. |
 | **Department scope** | **`all`** = every department in the org; **`restricted`** + **`user_department_access`** = explicit department allow list. Unknown / unlinked department on a scoped record ⇒ **deny** for restricted users (enforced on CRM admin reads/mutations that carry `work_unit_id` / department resolution). |
 | **Site scope** | **`all`** = every site in the org; **`restricted`** + **`user_site_access`** = explicit allow list of **`locations`** where **`location_type = 'site'`**. Unknown or non-site location on a scoped record ⇒ **deny** for restricted users (enforced on CRM admin routes using location linkage). |
+| **Communication thread (canonical)** | Row in **`communication_threads`**: org + primary entity + channel + `recipient_key` (see `canonicalOutboundEnqueue.ts`). |
+| **Communication message (canonical)** | Row in **`communication_messages`**: inbound/outbound message in a thread; outbound enqueue sets `status: queued` and may emit **`message_queued`**. |
+| **Legacy message / outbox** | **`public.messages`**, **`messages_outbox`** — still produced by workflow **`send_message`** paths; distinguish from canonical **`communication_*`** tables. |
 | **Config** | Org or global settings that steer labels, statuses, layouts, and queue shape — within platform validation. |
 
 ## Source of truth / key files

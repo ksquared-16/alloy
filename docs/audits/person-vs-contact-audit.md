@@ -10,7 +10,7 @@
 - **`contacts`** (and FKs like `primary_contact_id`, `messages_outbox.to_contact_id`) remain **legacy / compatibility** for messaging, documents, workflows, vendor linkage, and historical rows.
 - In new application code, when both exist on a row, prefer **`primary_person_id`** over **`primary_contact_id`** for CRM semantics — **without** guessing DB-wide authority for aged rows outside code paths documented here.
 
-Related docs: `docs/system/entity-model.md`, `docs/product/crm-system.md`, `docs/core/glossary.md`, `docs/execution/known-gaps.md`.
+Related docs: `docs/system/entity-model.md`, `docs/product/crm-system.md`, `docs/core/glossary.md`, `docs/execution/roadmap-and-gaps.md`.
 
 ---
 

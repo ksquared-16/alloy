@@ -9,6 +9,7 @@ Explain how **business facts** become **`workflow_events`**, trigger **workflows
 ## Current state
 
 - **`emitEvent`** (`web/lib/emitEvent.ts`) inserts into **`workflow_events`** (server-only, canonical layer).
+- **Status transitions:** Many entity PATCH routes and admin actions call **`emitStatusChangedEvent`** (`web/lib/admin/emitStatusChangedEvent.ts`): emits **`opportunity_status_changed`** for entity type `opportunities`, otherwise **`entity_status_changed`**, then fan-out **`executeWorkflowRun`** with `event_id` (grep for call sites).
 - **`executeWorkflowRun`** (`web/lib/workflowRun.ts`) loads workflow rows, enriches payload with related entities, evaluates conditions, and runs workflow actions (large implementation).
 - **`executeAdminAction`** (`web/lib/admin/actions/executeAdminAction.ts`) routes declarative admin operations; for workflow starts it emits an event and invokes `executeWorkflowRun` with `event_id` for event-driven validation paths.
 - **Action links:** Consumption routes (e.g. `web/app/api/action/[token]/consume/route.ts`) mark links consumed, emit events, and fan out to enabled workflows.
@@ -27,6 +28,7 @@ Explain how **business facts** become **`workflow_events`**, trigger **workflows
 | Concern | Location |
 |---------|-----------|
 | Event insert | `web/lib/emitEvent.ts` |
+| Status-driven workflow fan-out | `web/lib/admin/emitStatusChangedEvent.ts` |
 | Workflow runner | `web/lib/workflowRun.ts` |
 | Admin action execution | `web/lib/admin/actions/executeAdminAction.ts` |
 | Action link consume | `web/app/api/action/[token]/consume/route.ts` |

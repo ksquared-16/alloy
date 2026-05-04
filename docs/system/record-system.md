@@ -71,8 +71,9 @@ Workspace navigation context for queues: **`docs/system/workspace-system.md`**.
 
 ## Known gaps / risks
 
-- **Needs verification:** Which entity types beyond jobs have full RRS coverage vs flat Supabase selects.
-- **Needs verification:** Long-term consolidation path for “flat” entity branches to resolver pattern.
+- **Implemented today:** Jobs use **RRS**; opportunities use **`respondOpportunityEntityGet`** (`web/lib/admin/opportunityEntityRecord.ts`) — a **dedicated** record responder, not the job RRS module.
+- **Needs verification:** Which other entity types will move to RRS vs stay on entity-route hydration.
+- **Needs verification:** Long-term consolidation of opportunity responder with job RRS patterns (roadmap, not behavioral bug).
 
 ## When this doc must be updated
 

@@ -11,6 +11,7 @@ Cover **opportunities**, pipeline status, CRM-adjacent admin behavior, **communi
 - **Queues:** `QueueService` supports opportunity preview lists with field/sort allowlists and work-unit scoping tests (`web/tests/queues/QueueServiceOpportunityScoping.test.ts`).
 - **Opportunity identity (writes):** All server paths that `insert` / `update` `opportunities` must run **`normalizeOpportunityWritePayload`** (`web/lib/opportunityIdentity.ts`) on the payload when identity keys may appear; metadata-only patches no-op. **`primary_person_id`** is canonical when present; **`primary_contact_id`** is legacy fallback only — resolution fills `primary_person_id` from `contacts.person_id` when possible. Python/sync use **`enrich_opportunity_payload_person_first`** before PostgREST writes.
 - **Child facts vs metadata:** Enrollment opportunities do **not** rely on **`metadata`** for child names or DOB. **Household children** live in **`customer_members`** (`relationship = 'child'`, `is_active = true`), joined **`opportunities.customer_id` → `customer_members.customer_id`**. Queue **CRM compact** lanes use **`QueueService`** to emit **`_crm_compact_children`** and **`metadata.program_label`** for the Program column per child. See **`docs/system/workspace-system.md`** (CRM compact doctrine) and **`docs/system/entity-model.md`**.
+
 ## How it works
 
 - Operators work opportunities inside **workspace queues** and open **AdminEntityDrawer** for full detail (entity GET with optional `surface`).
@@ -35,8 +36,7 @@ Cover **opportunities**, pipeline status, CRM-adjacent admin behavior, **communi
 
 ## Known gaps / risks
 
-- **Needs verification:** Opportunity **`surface`** behavior parity with jobs RRS.
-- **Needs verification:** KPI definitions vs what operators see in lanes.
+- **Needs verification:** KPI definitions vs what operators see in lanes (queue summaries vs department KPI routes).
 
 ---
 
@@ -46,18 +46,21 @@ Cover **opportunities**, pipeline status, CRM-adjacent admin behavior, **communi
 
 Outbound/inbound messaging threads tied to **entities** and **workflows** — without duplicating send logic in UI.
 
-### Current state
+### Current state (Communications V1 — as implemented in `web/`)
 
-- Admin APIs under **`web/app/api/admin/communications/`** (threads, send, related helpers).
-- Entity type normalization maps short names to tables (e.g. opportunity → `opportunities`, schedule → `schedules`) in thread routes.
-- **Canonical outbound path:** `web/lib/communications/canonicalOutboundEnqueue.ts` (used to centralize enqueue behavior — verify call graph when changing send pipeline).
-- Provider binding, RLS, and runbooks lived in archived docs; current code is source of truth.
+- **Canonical store:** **`communication_threads`** (per org + primary entity + channel + `recipient_key`) and **`communication_messages`** (outbound rows with `status`, `workflow_run_id`, optional **`communication_provider_binding_id`**, body/subject, `metadata`).
+- **Canonical enqueue:** **`enqueueCanonicalOutboundMessage`** (`web/lib/communications/canonicalOutboundEnqueue.ts`) upserts the thread, inserts **`communication_messages`** with `status: queued`, then **`emitEvent`** with **`event_type: message_queued`** and fans out to enabled workflows on that event (same file).
+- **Admin composer:** **`POST /api/admin/communications/send`** documents a guarded path through canonical enqueue + `message_queued` (see route header).
+- **Threads / reads:** APIs under **`web/app/api/admin/communications/`** (threads, thread messages, unread counts on **`communication_messages`**, etc.).
+- **Legacy parallel:** Workflow **`send_message`** / **`create_message`** paths may still write **`public.messages`** and **`messages_outbox`** (`web/lib/workflowRun.ts`, admin **`/admin/messaging`**, **`/admin/messages-outbox`**). Delivery often expects **`INTERNAL_MESSAGES_PROCESS_URL`** / cron — **no `web/app/api/internal/**` route** found in this repo; treat worker deployment as **Needs verification** per environment.
+- **Opt-in dual-write mirror:** **`COMMUNICATION_DUAL_WRITE`** env + **`isCommunicationCanonicalDualWriteEnabled()`** (`web/lib/communications/communicationsEnabled.ts`) — **Partially implemented** (off unless env enables).
+- **Inbound:** **`communication_messages`** with inbound direction / read tracking (e.g. unread route) — **Partially implemented**; full provider inbound matrix **Needs verification** per org.
 
 ### How it works
 
-1. UI loads threads for an entity via admin API with org context.
+1. UI loads threads for an entity via admin API with org context (and **CRM scope** dimensions where the route applies **`getAdminAccessContextCached`**).
 2. Send requests reference entity type/id; server validates membership and org.
-3. Complex lifecycle sends should originate from **workflows** or shared server helpers so templates stay consistent.
+3. Workflow and drawer sends should converge on **canonical enqueue** where wired; legacy SMS/email rows may still bypass until all workflows migrate.
 
 ### Source of truth / key files
 
@@ -65,7 +68,9 @@ Outbound/inbound messaging threads tied to **entities** and **workflows** — wi
 |---------|-----------|
 | Thread listing | `web/app/api/admin/communications/threads/route.ts` |
 | Send | `web/app/api/admin/communications/send/route.ts` |
-| Canonical enqueue | `web/lib/communications/canonicalOutboundEnqueue.ts` |
+| Canonical enqueue + `message_queued` | `web/lib/communications/canonicalOutboundEnqueue.ts` |
+| Dual-write flag | `web/lib/communications/communicationsEnabled.ts`, `web/lib/communications/mirrorQueuedMessage.ts` |
+| Workflow send / legacy queue | `web/lib/workflowRun.ts` (search `send_message`, `messages_outbox`) |
 | Drawer integration | `web/components/admin/AdminEntityDrawer.tsx` (communications UI sections) |
 
 ### Guardrails
@@ -77,7 +82,8 @@ Outbound/inbound messaging threads tied to **entities** and **workflows** — wi
 
 ### Known gaps / risks
 
-- **Needs verification:** Full provider matrix (email/SMS/push) and which are production-enabled per org.
+- **Needs verification:** Production provider bindings matrix and which channels are enabled per org.
+- **Needs verification:** Where **`INTERNAL_MESSAGES_PROCESS_URL`** is hosted for a given deployment (may be outside this Next app).
 
 ---
 
@@ -93,7 +99,7 @@ Outbound/inbound messaging threads tied to **entities** and **workflows** — wi
 - Admin routes include **`web/app/api/admin/schedules/[id]/assign/route.ts`**, **`cancel/route.ts`**, **`reschedule/route.ts`** — typically check allowed status keys via **`assertAllowedStatusKey`** patterns.
 - **Action links:** `consume-reschedule` and related routes update schedule rows consistent with workflow expectations (see comments in `web/app/api/action-links/consume-reschedule/route.ts`).
 - **Workspace:** Department hooks fetch “today” schedules via **`/api/admin/schedules`** (`useDepartmentQueueData.ts`).
-- **Needs verification:** Dedicated attendance, punch clock, or staffing models beyond schedule rows — grep showed thin coverage; may be vertical-specific or not yet implemented.
+- **Not implemented (beyond `schedules` + booking/admin flows):** Dedicated attendance, punch clock, or multi-team **staff scheduling platform** — **Needs verification** for vertical-specific extensions.
 
 ### How it works
 

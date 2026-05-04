@@ -10,9 +10,9 @@ Short, bucketed roadmap derived from current product areas — not a commitment 
 
 ### CRM go-live
 
-- Complete person-first data path on opportunities and inbound leads (reduce contact-only reliance where still live).
+- **Person-first writes:** Implemented server-side via **`normalizeOpportunityWritePayload`** / related helpers; remaining work is **inbound parity** (every lead capture path), **legacy row backfill**, and retiring contact-only assumptions in narrow integrations — not “greenfield” modeling.
 - Queue/workspace parity: confirm KPI definitions match operator queues (`QueueService` vs KPI routes).
-- Drawer parity: opportunity `surface` behavior documented and tested like jobs RRS.
+- Drawer parity: opportunities use **`respondOpportunityEntityGet`** surfaces (not RRS); long-term unification with jobs-style RRS is **roadmap**, not current behavior.
 
 ### Configuration / settings
 
@@ -52,14 +52,27 @@ This roadmap **does not** override principles in `core/system-overview.md`. If r
 
 ---
 
+## Working notes (person vs contact)
+
+**Policy (as enforced in code):** `persons` are canonical; `customer_persons` is the canonical customer↔person relationship; `contacts` and related FKs (`primary_contact_id`, `to_contact_id`, `owner_contact_id`, etc.) are **legacy/compatibility**. New application logic should prefer **`primary_person_id`** when populated; contact-based messaging/document/vendor integrations remain **explicit exceptions**.
+
+**Inventory + follow-ups:** `docs/audits/person-vs-contact-audit.md`.
+
+**Opportunities: legacy rows:** Some `opportunities` rows may still have **`primary_contact_id`** set without **`primary_person_id`** (historical ingest, GHL sync, or pre-migration data). **Reads** must tolerate this; **writes** normalize toward **`primary_person_id`** where resolvable (`web/lib/opportunityIdentity.ts`). A full backfill/migration of legacy rows is a follow-up project — not blocked on day-to-day operations.
+
+When verified in code or DB, fold conclusions into **`docs/system/entity-model.md`**, **`docs/product/crm-system.md`**, or **`docs/core/glossary.md`** and shorten the matching bullet here.
+
+---
+
 ## Confirmed gaps
 
 - **Opportunity vs contact vs person:** Full inventory and sprint notes live in **`docs/audits/person-vs-contact-audit.md`**; remaining work is tightening inbound parity and messaging/document exceptions — not deleting compatibility tables.
-- **Event coverage:** Not every admin mutator has been audited for `emitEvent` parity; risk of pockets mutating without canonical events.
-- **CRM scoped access (remaining coverage):** Department/site enforcement for lists, drawers, actions, and many **direct mutators** is in place without a generic RBAC engine; **not every** admin read route may be scoped yet — grep **`getAdminAccessContextCached`** / **`assert*AccessScope`** when adding surfaces.
-- **Documents/forms:** No single “forms engine” location confirmed; storage/compliance pipeline **Needs verification**.
-- **AI production surface:** Exact routes/flags for agent behaviors not cataloged in this pass (**Needs verification**).
-- **Stripe webhooks:** End-to-end mapping from webhook handlers to `payments` state not verified here.
+- **Event coverage:** Route/mutation inventory and high-risk gaps are tracked in **`docs/audits/event-integrity-audit.md`**; treat that audit as the working list — not “all routes verified clean” until explicitly closed.
+- **CRM scoped access (remaining coverage):** Department/site enforcement for lists, drawers, actions, and many **direct mutators** is in place (`getAdminAccessContextCached`, `web/lib/admin/accessScope.ts`); **not every** legacy admin read may be scoped — grep **`getAdminAccessContextCached`** / **`assert*AccessScope`** when adding surfaces.
+- **Communications dequeue:** Canonical **enqueue** + **`message_queued`** + thread/message rows are in **`web/`**; **delivery** may still depend on **`INTERNAL_MESSAGES_PROCESS_URL`** / worker not defined under `web/app/api/internal/**` — treat as **Needs verification** per environment.
+- **Documents/forms:** Upload + storage path is implemented (see `product/documents-and-forms.md`); **dedicated forms product / AI parsing** — **Not implemented** (or only vertical-specific) in repo scan.
+- **AI production surface:** Agent HTTP routes exist under **`web/app/api/admin/agent/**`** with env gates — see `product/ai-system.md`.
+- **Stripe webhooks:** End-to-end mapping from webhook handlers to `payments` state **Needs verification** (smoke tests reference a `stripe/webhook` backend URL — may not be this Next app).
 
 ## Needs verification (from doc pass)
 
