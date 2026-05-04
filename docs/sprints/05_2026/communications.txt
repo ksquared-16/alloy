@@ -1835,3 +1835,208 @@ End design batch — Cards 22, 23, 25A.
 - `docs/sprints/05_2026/communications.txt` (this section)
 
 **Suggested commit message:** `feat(communications): delivery webhooks, read receipts, drawer split, setup copy`
+
+⸻
+
+### Communications V1 — **stabilization QA card** (scripted runbook)
+
+**Purpose:** Repeatable pre-demo / pre-pilot verification. **No product code changes** — ops + QA + SQL only.  
+**Scope:** Outbound email/SMS, inbound SMS, dispatcher dequeue, `provider_message_id`, delivery webhooks, read/unread, drawer, quick message modal, settings page.
+
+---
+
+#### 1. Required env checklist
+
+**Vercel (Next.js — admin UI + webhooks on same deployment unless split)**
+
+| Variable | Required for | Notes |
+|----------|----------------|-------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Admin app | Standard Alloy web. |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Admin app | Standard. |
+| `SUPABASE_SERVICE_ROLE_KEY` (or project-specific server secret name) | Server routes (`createAdminClient`) | Never expose to browser. |
+| `RESEND_WEBHOOK_SECRET` | **`POST /api/webhooks/resend`** | Svix signing secret from Resend dashboard; without it route returns **503**. |
+| `TWILIO_AUTH_TOKEN` | **`POST /api/webhooks/twilio/sms-status`** signature | Must match Twilio account; without it route returns **503**. |
+| `PUBLIC_TWILIO_WEBHOOK_BASE_URL` **or** `NEXT_PUBLIC_APP_URL` | Twilio status callback **signature URL** | Set if Twilio POSTs to a URL whose origin differs from `request.nextUrl.origin` (proxy / custom domain). Must be **no trailing slash**; path must resolve to `…/api/webhooks/twilio/sms-status`. |
+| `INTERNAL_MESSAGES_PROCESS_URL` | Wake backend message processor after send | Optional; if unset, send still enqueues but note in UI about cron. |
+| `INTERNAL_CRON_TOKEN` | Auth header `x-cron-token` for internal process POST | Must pair with `INTERNAL_MESSAGES_PROCESS_URL`. |
+
+**Render (or other Python host — dispatcher + inbound SMS)**
+
+| Variable | Required for | Notes |
+|----------|----------------|-------|
+| Supabase URL + **service** key (env names per `supabase_client` / deploy) | `process_communication_messages`, inbound persistence | Same DB as web. |
+| `RESEND_API_KEY` (or binding `secret_ref` resolving to a key) | Outbound Resend | Used by `send_resend_email`. |
+| `RESEND_FROM_EMAIL` | Default From if binding omits | Optional if binding `config.from_email` set. |
+| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_MESSAGING_SERVICE_SID` | Legacy global SMS send | When binding uses legacy global Twilio path. |
+| Binding `secret_ref` → env for tenant Twilio | Per-org SMS with credentials | `twilio_account_sid`, `messaging_service_sid` in binding `config` + token `secret_ref`. |
+| `COMMUNICATIONS_SMS_INBOUND_ENABLED` | Inbound SMS acceptance | If false/disabled, inbound may be rejected per route logic. |
+| `COMMUNICATIONS_TWILIO_INBOUND_VALIDATION_BASE_URL` | **Inbound** Twilio signature URL | Public URL Twilio used to POST (if not same as request URL). |
+
+---
+
+#### 2. Required Supabase binding rows (`communication_provider_bindings`)
+
+For **each org under test**:
+
+| Channel | Check | Purpose |
+|---------|--------|---------|
+| **email** | `provider` = `resend`, `status` = `active`, `secret_ref` ≠ `unconfigured` (e.g. `env:RESEND_API_KEY` or org-specific ref) | Outbound email + composer readiness. |
+| **sms** | `status` = `active`, `secret_ref` resolved, `config` includes `twilio_account_sid` + `messaging_service_sid` **or** use legacy global Twilio env + binding pattern documented in runbooks | Outbound SMS. |
+| **sms** | Optional `inbound_to_e164` matching Twilio **To** number | Deterministic org routing for inbound SMS when using legacy `/sms/inbound` path. |
+
+Unique index: `(org_id, inbound_to_e164)` where `inbound_to_e164` is set — avoid duplicate inbound numbers per org.
+
+---
+
+#### 3. Required Twilio / Resend webhook URLs (replace `ORIGIN` with production admin origin, e.g. `https://app.example.com`)
+
+| Provider | Configure where | URL |
+|----------|-------------------|-----|
+| **Resend** | Resend dashboard → Webhooks | `{ORIGIN}/api/webhooks/resend` |
+| **Twilio — SMS status** | Twilio Console → Messaging Service (or phone) → Status callback | `{ORIGIN}/api/webhooks/twilio/sms-status` |
+| **Twilio — inbound SMS** | Messaging webhook (existing Alloy backend) | Backend route per deploy: `/sms/inbound` or `/sms/inbound/{binding_id}` — **not** the Next route; keep separate from status callback URL. |
+
+**After saving Twilio status URL:** Trigger a test outbound SMS and confirm Twilio’s request URL matches the string used for signing (see `PUBLIC_TWILIO_WEBHOOK_BASE_URL`).
+
+---
+
+#### 4. Exact SQL validation queries (Supabase SQL editor or `psql`)
+
+Replace `'YOUR_ORG_UUID'` (and optionally thread/message ids) with real UUIDs from the test org.
+
+**4.1 — Recent outbound rows (queue → send → provider id)**
+
+```sql
+SELECT id, channel, direction, status, provider, provider_message_id,
+       sent_at, delivered_at, error, created_at
+FROM public.communication_messages
+WHERE org_id = 'YOUR_ORG_UUID'
+  AND direction = 'outbound'
+ORDER BY created_at DESC
+LIMIT 25;
+```
+
+**Pass hint:** After dispatcher runs, `status` should be `sent` (or `failed` with `error`), and **`provider_message_id` non-null** for successful Resend/Twilio sends.
+
+**4.2 — Stuck queued outbound (dispatcher not running or send failure)**
+
+```sql
+SELECT id, channel, status, created_at, error
+FROM public.communication_messages
+WHERE org_id = 'YOUR_ORG_UUID'
+  AND direction = 'outbound'
+  AND status = 'queued'
+ORDER BY created_at ASC
+LIMIT 50;
+```
+
+**Pass hint:** Empty or only very fresh rows; persistent rows indicate dequeue/cron issue.
+
+**4.3 — Webhook evidence (metadata append)**
+
+```sql
+SELECT id, channel, status, provider_message_id, delivered_at,
+       metadata->'provider_webhook_events' AS webhook_events
+FROM public.communication_messages
+WHERE org_id = 'YOUR_ORG_UUID'
+  AND provider_message_id IS NOT NULL
+ORDER BY created_at DESC
+LIMIT 10;
+```
+
+**Pass hint:** After Resend `email.delivered` or Twilio `delivered`, `delivered_at` set and/or `provider_webhook_events` JSON array present (capped in app).
+
+**4.4 — Inbound canonical rows**
+
+```sql
+SELECT id, channel, direction, status, from_address, to_address,
+       provider_message_id, created_at, metadata
+FROM public.communication_messages
+WHERE org_id = 'YOUR_ORG_UUID'
+  AND direction = 'inbound'
+ORDER BY created_at DESC
+LIMIT 15;
+```
+
+**4.5 — Read receipts (per-user)**
+
+```sql
+SELECT r.message_id, r.user_id, r.read_at
+FROM public.communication_message_reads r
+JOIN public.communication_messages m ON m.id = r.message_id
+WHERE m.org_id = 'YOUR_ORG_UUID'
+ORDER BY r.read_at DESC
+LIMIT 30;
+```
+
+**4.6 — Active bindings snapshot**
+
+```sql
+SELECT id, channel, provider, status, is_primary,
+       secret_ref,
+       (secret_ref IS NOT NULL AND secret_ref <> '' AND secret_ref <> 'unconfigured') AS secret_ref_configured,
+       inbound_to_e164
+FROM public.communication_provider_bindings
+WHERE org_id = 'YOUR_ORG_UUID'
+ORDER BY channel, is_primary DESC, updated_at DESC;
+```
+
+---
+
+#### 5. Manual UI test checklist (execute in order; record time + user)
+
+| # | Step | Expected |
+|---|------|----------|
+| A1 | Log in as admin/ops with comms send permission | Admin V2 loads. |
+| A2 | **Settings → Communications** | Readiness shows email/SMS; binding cards show credential **configured/missing**; no raw secrets. Banner explains admin-managed credentials. |
+| A3 | Edit binding **display label** + **status** + **primary** → Save | PATCH succeeds; reload reflects changes. |
+| A4 | Open opportunity/job with linked people → **Communication** drawer | Threads load; filters **All / Email / SMS** work. |
+| A5 | **Drawer** — send **email** to eligible recipient | Toast/queued copy; optimistic row if response includes ids; SQL shows `queued` then `sent` + Resend id after dequeue. |
+| A6 | **Drawer** — send **SMS** similarly | Same; SQL shows Twilio SID after dequeue. |
+| A7 | **Header → Messages** → Quick modal | Bindings load; search person; send email/SMS (single + optional multi-recipient); summary for partial failures if tested. |
+| A8 | **Inbound SMS** (from real handset to Twilio inbound number) | Legacy + canonical behavior per org; thread appears in relevant drawer/person context when routing matches. |
+| A9 | **Read/unread** — ensure at least one inbound exists | Blue dots on filter tabs / bubble; after **~1s** viewing drawer conversation, dots clear; optional: header Messages dot clears on event or ≤2 min poll. |
+| A10 | **Delivery webhook** — Resend: trigger `email.delivered` for a known `provider_message_id` | SQL: `delivered_at` populated; UI **Delivered** when drawer shows that message. |
+| A11 | **Delivery webhook** — Twilio: drive status `delivered` for outbound SID | Same for SMS row with matching `provider_message_id`. |
+| A12 | Narrow viewport | Drawer stacks; composer still reachable. |
+
+---
+
+#### 6. Known expected limitations (do **not** file as regressions without product change)
+
+- **`provider_message_id`** is set **after** successful provider send in **`communication_message_sender`** — rows stay `queued` with null id until dequeue completes.  
+- Webhooks **no-op** (`ignored`) if no row matches `provider_message_id`.  
+- **Unread count** API scans only the **300** newest inbound messages — undercount possible.  
+- Drawer merges at most **10** threads × **36** messages/thread (merged cap **200**) — very chatty records may omit older threads from merged view.  
+- **Inbound SMS** to a number matching **multiple** orgs or ambiguous person resolution uses **surrogate** anchors — operator may need SQL to interpret.  
+- **Quick message** thread preview uses **first** selected recipient when multiple chips selected.
+
+---
+
+#### 7. Pass / fail table — **demo readiness**
+
+| # | Area | Pass criteria | Fail if |
+|---|------|---------------|---------|
+| P1 | Outbound email | SQL shows `sent` + non-null `provider_message_id` (Resend id) within reasonable time after enqueue | Stays `queued` indefinitely; or `failed` with unclear `error` |
+| P2 | Outbound SMS | Same with Twilio SID | Same |
+| P3 | Dispatcher | `INTERNAL_MESSAGES_PROCESS_URL` + `INTERNAL_CRON_TOKEN` wake fired, or cron eventually clears queue | Queue grows; no `sent` |
+| P4 | Inbound SMS | Inbound row appears in `communication_messages` with expected `from`/`to` | 4xx/5xx on webhook; or no canonical row when enabled |
+| P5 | Resend webhook | Signature required; `delivered_at` updates for matching id | 503 missing secret; or always `ignored` |
+| P6 | Twilio status webhook | Valid signature; delivered updates row | 403 signature; URL mismatch |
+| P7 | Read/unread | Reads rows inserted; UI dots clear on view | mark-read 403/500; dots never clear |
+| P8 | Drawer | Loads threads + messages; send + filters work | Blank errors; send 403/422 unexplained |
+| P9 | Quick modal | Search + send path works for person not on opp/job | 500 on person-search or send |
+| P10 | Settings | Page loads; safe edits save | 500 bindings; secrets in network tab (should never happen) |
+
+**Demo go / no-go:** **Pass** if P1–P4 and P8–P10 green for one staging org; **P5–P7** green if demo script includes webhooks + inbound read UX. **Conditional go** if webhooks untested but P1–P4 solid (call out “delivery state live only after webhook drill”).
+
+---
+
+#### 8. Gaps noted while writing this card (documentation / ops, not code)
+
+- **Exact** inbound webhook base URL for Render must match the Twilio console value (`COMMUNICATIONS_TWILIO_INBOUND_VALIDATION_BASE_URL` vs actual public host).  
+- **Per-environment** `ORIGIN` list (staging vs prod) should be pinned in deploy docs to avoid Resend/Twilio pointing at wrong host.  
+- **Service role** key rotation requires simultaneous Vercel + Render update.  
+- No single **automated** assertion in CI for Twilio/Resend callbacks — manual or scripted HTTP replay still required.
+
+**Suggested commit message:** `docs(communications): V1 stabilization QA runbook`
