@@ -63,7 +63,8 @@ async function resolveContextLocationId(
 
 /**
  * POST /api/admin/communications/send — guarded composer enqueue (canonical path + message_queued).
- * Admin/ops + communications.send stub; future org matrix may tighten.
+ * requireAdminOrOps + {@link COMMUNICATIONS_SEND_PERMISSION_KEY} via role_permission_grants (admin/ops bypass;
+ * legacy alias ops.messaging.write). Denied requests return 403 before enqueue.
  */
 export async function POST(request: NextRequest) {
     const forbidden = await requireAdminOrOps();
@@ -72,11 +73,16 @@ export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
-    const finer = await assertCommunicationsSendAllowed({
+    const sendAuth = await assertCommunicationsSendAllowed({
         orgId: ctx.orgId,
         actor: ctx.userId ? { userId: ctx.userId } : null,
     });
-    if (!finer.ok) return NextResponse.json({ error: finer.message }, { status: 403 });
+    if (!sendAuth.ok) {
+        return NextResponse.json(
+            { error: sendAuth.message, code: "communications_send_forbidden" },
+            { status: 403 }
+        );
+    }
 
     let body: Record<string, unknown>;
     try {
@@ -222,7 +228,7 @@ export async function POST(request: NextRequest) {
         communication_message_id: res.communicationMessageId,
         thread_id: res.threadId,
         channel,
-        permission_note: finer.ok ? COMMUNICATIONS_SEND_PERMISSION_KEY : undefined,
+        permission_note: sendAuth.ok ? COMMUNICATIONS_SEND_PERMISSION_KEY : undefined,
         process_trigger_attempted_note: envUnset
             ? "INTERNAL_MESSAGES_PROCESS_URL/INTERNAL_CRON_TOKEN unset — row stays queued until cron runs."
             : "Backend process trigger dispatched (best-effort).",
