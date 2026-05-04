@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import { createClient } from "@/lib/supabaseClient";
 import { palette, neutral, derived } from "@/styles/tokens/colors";
 import { markWorkUnitNavigationStart } from "@/lib/perf/markWorkUnitNavigationStart";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
+import QuickMessageModal from "@/app/adminV2/components/QuickMessageModal";
 
 function normalizeAdminPath(pathname: string): string {
   if (pathname === "/admin/v2" || pathname.startsWith("/admin/v2/")) {
@@ -75,6 +76,7 @@ export default function TopNavBar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const router = useRouter();
+  const [quickMessageOpen, setQuickMessageOpen] = useState(false);
 
   const normalizedPath = useMemo(() => normalizeAdminPath(pathname), [pathname]);
 
@@ -160,15 +162,15 @@ export default function TopNavBar() {
         >
           Queue
         </AdminV2NavLink>
-        <AdminV2NavLink
-          href="/adminV2/messages"
-          active={isMessaging}
+        <button
+          type="button"
+          onClick={() => setQuickMessageOpen(true)}
           className="px-2 py-1 rounded text-[11px] font-normal"
-          style={secondaryTabStyle(isMessaging)}
-          title="Messaging (V1 scaffold — global inbox deferred)"
+          style={secondaryTabStyle(isMessaging || quickMessageOpen)}
+          title="Send a quick email or SMS (opens modal). Messaging overview: /adminV2/messages"
         >
           Messages
-        </AdminV2NavLink>
+        </button>
         <AdminV2NavLink
           href="/adminV2/ai-activity"
           active={isAiActivity}
@@ -187,6 +189,7 @@ export default function TopNavBar() {
       >
         Sign out
       </button>
+      <QuickMessageModal open={quickMessageOpen} onClose={() => setQuickMessageOpen(false)} />
     </header>
   );
 }

@@ -93,8 +93,9 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
     }
 
-    const entityType = normalizeEntityTypeParam(String(body.entity_type ?? ""));
-    const entityId = String(body.entity_id ?? "").trim();
+    const quickMessage = body.quick_message === true;
+    let entityType = normalizeEntityTypeParam(String(body.entity_type ?? ""));
+    let entityId = String(body.entity_id ?? "").trim();
     const channel = normalizeChannel(String(body.channel ?? ""));
     const toRawInput = String(body.to ?? body.to_address ?? "").trim();
     let toRaw = toRawInput;
@@ -104,59 +105,102 @@ export async function POST(request: NextRequest) {
     const bindingIdOpt = typeof body.binding_id === "string" ? body.binding_id.trim() : "";
     const recipientPersonIdRaw = typeof body.recipient_person_id === "string" ? body.recipient_person_id.trim() : "";
 
-    if (!entityType || (entityType !== "opportunities" && entityType !== "jobs")) {
-        return NextResponse.json({ error: "entity_type must be opportunities or jobs" }, { status: 400 });
-    }
-    if (!entityId || !UUID_RE.test(entityId)) return NextResponse.json({ error: "Valid entity_id required" }, { status: 400 });
     if (!channel) return NextResponse.json({ error: "channel must be sms, email, or in_app" }, { status: 400 });
     if (!textRaw) return NextResponse.json({ error: "body is required" }, { status: 400 });
-
-    const supabase = createAdminClient();
-    const table = entityType === "jobs" ? "jobs" : "opportunities";
-    if (!(await assertRowOrg(supabase, table, entityId, ctx.orgId)).ok) {
-        return NextResponse.json({ error: "Entity not found" }, { status: 404 });
+    if (channel === "in_app" && quickMessage) {
+        return NextResponse.json({ error: "quick_message supports email and sms only" }, { status: 400 });
     }
 
+    const supabase = createAdminClient();
+
+    if (quickMessage) {
+        if (!recipientPersonIdRaw || !UUID_RE.test(recipientPersonIdRaw)) {
+            return NextResponse.json({ error: "quick_message requires recipient_person_id (UUID)" }, { status: 400 });
+        }
+        if (channel !== "email" && channel !== "sms") {
+            return NextResponse.json({ error: "quick_message channel must be email or sms" }, { status: 400 });
+        }
+        /** Person-anchored threads; client entity_type/entity_id are ignored for quick send. */
+        entityType = "persons";
+        entityId = recipientPersonIdRaw;
+    } else {
+        if (!entityType || (entityType !== "opportunities" && entityType !== "jobs")) {
+            return NextResponse.json({ error: "entity_type must be opportunities or jobs" }, { status: 400 });
+        }
+        if (!entityId || !UUID_RE.test(entityId)) return NextResponse.json({ error: "Valid entity_id required" }, { status: 400 });
+    }
+
+    if (entityType === "persons") {
+        if (!(await assertRowOrg(supabase, "persons", entityId, ctx.orgId)).ok) {
+            return NextResponse.json({ error: "Person not found" }, { status: 404 });
+        }
+    } else if (entityType === "opportunities" || entityType === "jobs") {
+        const table = entityType === "jobs" ? "jobs" : "opportunities";
+        if (!(await assertRowOrg(supabase, table, entityId, ctx.orgId)).ok) {
+            return NextResponse.json({ error: "Entity not found" }, { status: 404 });
+        }
+    } else {
+        return NextResponse.json({ error: "Invalid entity_type" }, { status: 500 });
+    }
+
+    const primaryEntityType = entityType;
+
     if (channel === "email" && recipientPersonIdRaw && UUID_RE.test(recipientPersonIdRaw)) {
-        const elig = await assertRecipientPersonEligibleForDrawerEmail(
-            supabase,
-            ctx.orgId,
-            entityType,
-            entityId,
-            recipientPersonIdRaw
-        );
-        if (!elig) {
-            return NextResponse.json(
-                { error: "recipient_person_id is not an eligible person-with-email for this record" },
-                { status: 400 }
+        if (quickMessage) {
+            const em = await getPersonEmailOrNull(supabase, ctx.orgId, recipientPersonIdRaw);
+            if (!em) {
+                return NextResponse.json({ error: "Recipient person has no usable email" }, { status: 400 });
+            }
+            toRaw = em;
+        } else {
+            const elig = await assertRecipientPersonEligibleForDrawerEmail(
+                supabase,
+                ctx.orgId,
+                primaryEntityType as "opportunities" | "jobs",
+                entityId,
+                recipientPersonIdRaw
             );
+            if (!elig) {
+                return NextResponse.json(
+                    { error: "recipient_person_id is not an eligible person-with-email for this record" },
+                    { status: 400 }
+                );
+            }
+            const em = await getPersonEmailOrNull(supabase, ctx.orgId, recipientPersonIdRaw);
+            if (!em) {
+                return NextResponse.json({ error: "Recipient person has no usable email" }, { status: 400 });
+            }
+            toRaw = em;
         }
-        const em = await getPersonEmailOrNull(supabase, ctx.orgId, recipientPersonIdRaw);
-        if (!em) {
-            return NextResponse.json({ error: "Recipient person has no usable email" }, { status: 400 });
-        }
-        toRaw = em;
     }
 
     if (channel === "sms" && recipientPersonIdRaw && UUID_RE.test(recipientPersonIdRaw)) {
-        const elig = await assertRecipientPersonEligibleForDrawerSms(
-            supabase,
-            ctx.orgId,
-            entityType,
-            entityId,
-            recipientPersonIdRaw
-        );
-        if (!elig) {
-            return NextResponse.json(
-                { error: "recipient_person_id is not an eligible person-with-phone for this record" },
-                { status: 400 }
+        if (quickMessage) {
+            const sms = await getPersonSmsToOrNull(supabase, ctx.orgId, recipientPersonIdRaw);
+            if (!sms) {
+                return NextResponse.json({ error: "Recipient person has no usable SMS number" }, { status: 400 });
+            }
+            toRaw = sms;
+        } else {
+            const elig = await assertRecipientPersonEligibleForDrawerSms(
+                supabase,
+                ctx.orgId,
+                primaryEntityType as "opportunities" | "jobs",
+                entityId,
+                recipientPersonIdRaw
             );
+            if (!elig) {
+                return NextResponse.json(
+                    { error: "recipient_person_id is not an eligible person-with-phone for this record" },
+                    { status: 400 }
+                );
+            }
+            const sms = await getPersonSmsToOrNull(supabase, ctx.orgId, recipientPersonIdRaw);
+            if (!sms) {
+                return NextResponse.json({ error: "Recipient person has no usable SMS number" }, { status: 400 });
+            }
+            toRaw = sms;
         }
-        const sms = await getPersonSmsToOrNull(supabase, ctx.orgId, recipientPersonIdRaw);
-        if (!sms) {
-            return NextResponse.json({ error: "Recipient person has no usable SMS number" }, { status: 400 });
-        }
-        toRaw = sms;
     }
 
     const { data: rows, error: bindErr } = await supabase
@@ -176,7 +220,7 @@ export async function POST(request: NextRequest) {
         );
     }
 
-    const locId = await resolveContextLocationId(supabase, ctx.orgId, entityType, entityId);
+    const locId = await resolveContextLocationId(supabase, ctx.orgId, primaryEntityType, entityId);
 
     let resolvedBindingId: string | null = null;
     if (channel !== "in_app") {
@@ -210,7 +254,8 @@ export async function POST(request: NextRequest) {
     }
 
     const meta: Record<string, unknown> = {
-        source: "drawer_composer",
+        source: quickMessage ? "header_quick_message" : "drawer_composer",
+        ...(quickMessage ? { quick_message: true } : {}),
         ...(bindingIdOpt && UUID_RE.test(bindingIdOpt) ? { requested_binding_id: bindingIdOpt } : {}),
         ...(recipientPersonIdRaw && UUID_RE.test(recipientPersonIdRaw) ? { recipient_person_id: recipientPersonIdRaw } : {}),
     };
@@ -218,7 +263,7 @@ export async function POST(request: NextRequest) {
     const res = await enqueueCanonicalOutboundMessage({
         supabase,
         orgId: ctx.orgId,
-        primaryEntityType: entityType,
+        primaryEntityType,
         primaryEntityId: entityId,
         channelRaw: channel,
         toRaw,

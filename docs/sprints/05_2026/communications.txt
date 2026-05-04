@@ -1699,3 +1699,48 @@ End design batch — Cards 22, 23, 25A.
 5. SMS pills and SMS bubbles: phone shows **`(XXX) XXX-XXXX`** when 10/11-digit US.
 
 **Suggested commit message:** `fix(communications): drawer messaging fit, truncate, optimistic append, phone display`
+
+⸻
+
+### Global quick message — **header modal V1** (person search + send)
+
+**Scope:** Admin V2 header **Messages** opens a **modal** (not a full-page nav). Drawer messaging unchanged. No templates, bulk, attachments, or inbox.
+
+**UI**
+
+- **`TopNavBar`:** **Messages** is a **button** that opens **`QuickMessageModal`**; tab highlight when modal open or when path is **`/adminV2/messages`**.
+- **Modal:** Debounced **person search**, pick recipient, **Email / SMS** (SMS disabled when bindings say unavailable), optional **email subject**, **body**, **Send** — styling aligned with drawer composer labels/inputs. Blockers: **missing email/phone** for the chosen channel, or **missing provider binding** — not “must be on an opportunity/job”.
+- **`/adminV2/messages`:** Scaffold kept; copy points at header quick message and documents APIs.
+
+**API**
+
+- **`GET /api/admin/communications/person-search?q=`** — **`requireAdminOrOps`**, org from **`getAdminContextCached`**; searches **`persons`** (name / email / phone **`ilike`**, merged dedupe, max **20**). UUID **`q`** returns that person if in org. Sanitized token (no LIKE wildcards / commas). **Person-first; no contacts.**
+- **`POST /api/admin/communications/send`** — when **`quick_message: true`**: **`recipient_person_id`** (required), **`channel`** (**email** | **sms**), **`body`**, optional **`subject`** (email). Server sets canonical anchor **`primary_entity_type = "persons"`**, **`primary_entity_id = recipient_person_id`** (org-scoped **`assertRowOrg(persons, …)`**). **`to`** is resolved from the person row (**`getPersonEmailOrNull` / `getPersonSmsToOrNull`**); no opportunity/job link required. Client **`entity_type` / `entity_id`** are **ignored** for quick send. Metadata **`source: "header_quick_message"`**, **`quick_message: true`** in metadata. Drawer sends (**`quick_message` false**) unchanged: **opportunities/jobs** + drawer recipient eligibility.
+
+**Threads**
+
+- Outbound quick messages use **person-anchored** **`communication_threads`** (same union path as **`GET /api/admin/communications/threads`** for related persons on opportunity/job/customer).
+
+**Limitations**
+
+- Search is **substring** on separate columns (not full-text ranked).
+- **`resolveQuickMessageAnchor`** (opp/job-only anchor) was **removed** after this correction; do not reintroduce it for global quick send.
+
+**Manual smoke**
+
+1. Header **Messages** → modal; send to a person **with** email/SMS who is **not** on any opportunity/job → **succeeds** (person thread).  
+2. Person **without** email (email channel) → **400** clear copy; same for SMS without phone.  
+3. No org binding for channel → **422** channel/binding errors unchanged.  
+4. Drawer compose on opportunity/job still works.  
+5. **`/adminV2/messages`** scaffold loads.
+
+**Files touched (cumulative for quick message slice)**
+
+- `web/app/adminV2/components/TopNavBar.tsx`
+- `web/app/adminV2/components/QuickMessageModal.tsx`
+- `web/app/adminV2/messages/page.tsx`
+- `web/app/api/admin/communications/send/route.ts`
+- `web/app/api/admin/communications/person-search/route.ts`
+- `docs/sprints/05_2026/communications.txt` (this section)
+
+**Suggested commit message:** `feat(communications): header quick message modal and person-search API`
