@@ -37,6 +37,11 @@
  *
  * Run from `web/`:
  *   npx tsx --tsconfig tsconfig.json scripts/seedAccessValidationDemo.ts
+ *
+ * Manual verification (after composite PK on user_roles):
+ * - Set ACCESS_VALIDATION_APPLY_USER_SCOPES=true and CORPORATE / REGIONAL / DIRECTOR auth user UUIDs.
+ * - Run script; then confirm `user_roles` has multi-role rows (regional: ops + regional_lead; director: ops + school_director).
+ * - Portal login: corporate admin; regional + director users must retain `ops` (or `admin`) for admin shell eligibility.
  */
 
 import { config as loadEnv } from "dotenv";

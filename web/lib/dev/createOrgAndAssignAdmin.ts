@@ -1,6 +1,6 @@
 /**
  * Internal dev helpers — create org + assign admin in user_roles.
- * user_roles PK is user_id: one row per user; upsert replaces org for that admin (dev expectation).
+ * Membership identity is (user_id, org_id, role); upsert touches only the admin row for this org.
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -73,7 +73,7 @@ export async function createOrgAndAssignAdmin(supabase: SupabaseClient, params: 
             org_id,
             role: "admin",
         },
-        { onConflict: "user_id" }
+        { onConflict: "user_id,org_id,role" }
     );
 
     if (roleErr) {

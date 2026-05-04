@@ -7,7 +7,7 @@ Repeatable flow (no UI) for validating tenant creation, **generated** tenant con
 - `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (service role; server-side only).
 - `industries` row with `key = childcare` (and active).
 - `verticals` row with `slug = childcare` (and active) — required for demo seed.
-- A real **`auth.users.id`** UUID to attach as org admin (`user_roles`; one row per user in this schema).
+- A real **`auth.users.id`** UUID to attach as org admin (`user_roles`; membership rows are keyed by `(user_id, org_id, role)` — spin-up assigns one `admin` row).
 
 ## One-command spin-up
 
@@ -41,7 +41,7 @@ Skipped automatically if `TENANT_E2E_ENABLED` is not `true` or env is incomplete
 
 ## Limitations
 
-- **`user_roles`** is upserted by `user_id`; the admin user’s org is **replaced** for that user — intended for dev accounts only.
+- **`user_roles`** upserts the **`admin`** row for `(admin_user_id, new_org_id, 'admin')` — dev-only; does not remove other org memberships or roles for that user.
 - Creates a **new org** each script/test run (unique name) to avoid collisions.
 - Demo seed is idempotent per `metadata.seed_key`; a **new org** avoids re-seed skips.
 

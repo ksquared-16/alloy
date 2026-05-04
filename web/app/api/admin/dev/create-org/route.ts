@@ -15,7 +15,7 @@ function spinupEnabled(): boolean {
 
 /**
  * POST /api/admin/dev/create-org
- * Dev-only: creates org, sets industry, assigns admin in user_roles (upsert by user_id).
+ * Dev-only: creates org, sets industry, assigns admin in user_roles (upsert on user_id + org_id + role).
  * Requires DEV_TENANT_SPINUP_ENABLED=true and admin session.
  */
 export async function POST(request: NextRequest) {

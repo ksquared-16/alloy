@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-type OrgMember = { user_id: string; email: string | null; role: string };
+type OrgMember = { user_id: string; email: string | null; role: string; role_keys?: string[] };
 type RoleDef = { role_key: string; role_label: string; is_active: boolean };
 type Dept = { id: string; name: string | null };
 type Loc = { id: string; label: string | null; location_type: string | null };
@@ -179,7 +179,8 @@ export default function UserAccessClient() {
                     <option value="">Select…</option>
                     {users.map((u) => (
                         <option key={u.user_id} value={u.user_id}>
-                            {(u.email ?? u.user_id).slice(0, 64)} ({u.role})
+                            {(u.email ?? u.user_id).slice(0, 64)}
+                            {u.role_keys?.length ? ` (${u.role_keys.join(", ")})` : u.role ? ` (${u.role})` : ""}
                         </option>
                     ))}
                 </select>
@@ -189,6 +190,9 @@ export default function UserAccessClient() {
                 <>
                     <div className="space-y-2 border-t border-alloy-forge/10 pt-4">
                         <h2 className="text-sm font-semibold">Role key (user_roles)</h2>
+                        <p className="text-xs text-alloy-midnight/55">
+                            Saving replaces all roles for this user in this org with the selected role_key. Multi-role setups use seeds or tooling outside this form.
+                        </p>
                         <select className="w-full rounded border border-alloy-forge/15 bg-white px-2 py-1.5" value={role} onChange={(e) => setRole(e.target.value)}>
                             {roleDefs.map((r) => (
                                 <option key={r.role_key} value={r.role_key}>

@@ -9,6 +9,7 @@ type UserRow = {
   user_id: string;
   email: string | null;
   role: string;
+  role_keys?: string[];
   created_at: string;
 };
 
@@ -91,7 +92,7 @@ export default function UsersClient() {
     <>
       <AdminPageHeader
         title="Users"
-        subtitle="Org members. Only admins can change roles or remove users. Role changes and password reset emails take effect immediately."
+        subtitle="Org members. Only admins can change roles or remove users. Changing role replaces all role_keys for that member with the selected admin/ops key (see Access Control for full RBAC roles)."
       />
       <SectionCard title="Members">
         {error && (
@@ -124,15 +125,20 @@ export default function UsersClient() {
                     <tr key={u.user_id} className="border-b border-alloy-stone/20 hover:bg-alloy-stone/10">
                       <td className="py-2 pr-4">{u.email ?? "—"}</td>
                       <td className="py-2 pr-4">
-                        <select
-                          value={u.role}
-                          onChange={(e) => handleRoleChange(u.user_id, e.target.value)}
-                          disabled={roleLoadingId === u.user_id}
-                          className="px-2 py-1 border border-alloy-stone/40 rounded text-sm disabled:opacity-50"
-                        >
-                          <option value="admin">admin</option>
-                          <option value="ops">ops</option>
-                        </select>
+                        <div className="space-y-1">
+                          {(u.role_keys?.length ?? 0) > 1 ? (
+                            <p className="text-xs text-alloy-midnight/60">Roles: {(u.role_keys ?? []).join(" · ")}</p>
+                          ) : null}
+                          <select
+                            value={u.role}
+                            onChange={(e) => handleRoleChange(u.user_id, e.target.value)}
+                            disabled={roleLoadingId === u.user_id}
+                            className="px-2 py-1 border border-alloy-stone/40 rounded text-sm disabled:opacity-50"
+                          >
+                            <option value="admin">admin</option>
+                            <option value="ops">ops</option>
+                          </select>
+                        </div>
                       </td>
                       <td className="py-2 pr-4">{u.created_at ? formatDateTime(u.created_at) : "—"}</td>
                       <td className="py-2 pr-4">
