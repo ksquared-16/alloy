@@ -14,6 +14,8 @@ import {
     type OpportunityPricingExistingRow,
 } from "@/lib/admin/opportunityQuotePatch";
 import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertExistingOpportunityMutableInAdminScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 
 /**
  * PATCH allowlist intentionally excludes identity FKs (`primary_contact_id`, `primary_person_id`).
@@ -73,7 +75,7 @@ export async function PATCH(
         const { data: existing } = await supabase
             .from("opportunities")
             .select(
-                "org_id, status_key, customer_id, primary_contact_id, primary_person_id, vertical_id, metadata, work_unit_id, quote_subtotal, quote_total, price_breakdown, discount_amount, discount_code, discount_code_id, discount_program_id, discount_validated_at, quote_is_overridden, quote_override_total, quote_override_reason, estimated_price_cents, monetary_value_cents"
+                "org_id, status_key, customer_id, primary_contact_id, primary_person_id, vertical_id, metadata, work_unit_id, location_id, quote_subtotal, quote_total, price_breakdown, discount_amount, discount_code, discount_code_id, discount_program_id, discount_validated_at, quote_is_overridden, quote_override_total, quote_override_reason, estimated_price_cents, monetary_value_cents"
             )
             .eq("id", id)
             .eq("org_id", ctx.orgId)
@@ -104,6 +106,14 @@ export async function PATCH(
         if (!existingRow?.org_id) {
             return NextResponse.json({ error: "Not found" }, { status: 404 });
         }
+
+        const access = await getAdminAccessContextCached();
+        if (!access.ok) return adminContextFailureResponse(access);
+        const scopeDim = scopeDimensionsFromAccess(access);
+        if (!(await assertExistingOpportunityMutableInAdminScope(supabase, ctx.orgId, scopeDim, id))) {
+            return NextResponse.json({ error: "Not found" }, { status: 404 });
+        }
+
         const orgId = existingRow.org_id;
         const oldStatusKey = existingRow.status_key ?? null;
 

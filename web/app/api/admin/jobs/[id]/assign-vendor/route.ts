@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertExistingJobMutableInAdminScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import type { OrgSettingsRow } from "@/lib/admin/vendorPayoutPolicy";
 import { vendorIsEligibleForAssignment } from "@/lib/admin/vendorAssignmentPolicy";
 import { emitEvent } from "@/lib/emitEvent";
@@ -53,6 +55,15 @@ export async function POST(
 
     if (jobErr) return NextResponse.json({ error: jobErr.message }, { status: 500 });
     if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
+
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) {
+        return NextResponse.json({ error: access.status === 401 ? "Unauthorized" : "Forbidden" }, { status: access.status });
+    }
+    const dim = scopeDimensionsFromAccess(access);
+    if (!(await assertExistingJobMutableInAdminScope(supabase, ctx.orgId, dim, jobId))) {
+        return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    }
 
     if (vendorId) {
         const { data: vendor, error: vErr } = await supabase

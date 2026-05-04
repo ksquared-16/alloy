@@ -5,6 +5,8 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { getAdminAuthCached, requireAdminOrOps } from "@/lib/adminAuth";
 import { emitEvent } from "@/lib/emitEvent";
 import { executeWorkflowRun } from "@/lib/workflowRun";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertExistingScheduleMutableInAdminScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 
 /** POST: assign a vendor to this schedule. Body: { vendor_id }. Workflow(s) with event_type "schedule_vendor_assigned" create/update assignment with status "offered". */
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -24,11 +26,19 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const supabase = createAdminClient();
     const { data: schedule, error: sErr } = await supabase
         .from("schedules")
-        .select("id, job_id, org_id")
+        .select("id, job_id, org_id, location_id")
         .eq("id", scheduleId)
         .eq("org_id", ctx.orgId)
         .single();
     if (sErr || !schedule) return NextResponse.json({ error: "Schedule not found" }, { status: 404 });
+
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const dim = scopeDimensionsFromAccess(access);
+    if (!(await assertExistingScheduleMutableInAdminScope(supabase, ctx.orgId, dim, scheduleId))) {
+        return NextResponse.json({ error: "Schedule not found" }, { status: 404 });
+    }
+
     const jobId = (schedule as { job_id?: string }).job_id;
     if (!jobId) return NextResponse.json({ error: "Schedule has no job_id" }, { status: 400 });
 

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { emitEvent } from "@/lib/emitEvent";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertExistingJobMutableInAdminScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 
 const ALLOWED_TYPES = new Set(["adjustment", "fee"]);
 
@@ -63,8 +65,21 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const dueDate = normalizeDateOnly(body.due_date) ?? serviceDate;
 
     const supabase = createAdminClient();
-    const { data: job, error: jobErr } = await supabase.from("jobs").select("id, org_id").eq("id", jobId).maybeSingle();
+    const { data: job, error: jobErr } = await supabase
+        .from("jobs")
+        .select("id, org_id, work_unit_id, location_id")
+        .eq("id", jobId)
+        .maybeSingle();
     if (jobErr || !job || (job as { org_id: string }).org_id !== ctx.orgId) {
+        return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    }
+
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) {
+        return NextResponse.json({ error: access.status === 401 ? "Unauthorized" : "Forbidden" }, { status: access.status });
+    }
+    const dim = scopeDimensionsFromAccess(access);
+    if (!(await assertExistingJobMutableInAdminScope(supabase, ctx.orgId, dim, jobId))) {
         return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
 

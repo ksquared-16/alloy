@@ -7,6 +7,8 @@ import {
     getActivitySignalForEntity,
     resolveActivitySignalRules,
 } from "@/lib/admin/activitySignals";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertExistingOpportunityMutableInAdminScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 
 function trimOrEmpty(v: unknown): string {
     return v != null && String(v).trim() !== "" ? String(v).trim() : "";
@@ -30,9 +32,16 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const accessDim = scopeDimensionsFromAccess(access);
+    if (!(await assertExistingOpportunityMutableInAdminScope(supabase, ctx.orgId, accessDim, opportunityId))) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
     const { data: opp, error: oppErr } = await supabase
         .from("opportunities")
-        .select("id, status_key, status, work_unit_id")
+        .select("id, status_key, status, work_unit_id, location_id")
         .eq("id", opportunityId)
         .eq("org_id", ctx.orgId)
         .maybeSingle();

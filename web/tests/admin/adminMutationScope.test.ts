@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
+    assertExistingOpportunityMutableInAdminScope,
     assertJobInAccessScope,
     assertScheduleInAccessScope,
     departmentIdAllowed,
@@ -66,5 +67,32 @@ describe("Card 6B mutation gates — helper behavior", () => {
             location_id: "loc-1",
         });
         expect(from).not.toHaveBeenCalled();
+    });
+
+    it("Card 6C: assertExistingOpportunityMutableInAdminScope loads opportunity row then short-circuits for corporate scope", async () => {
+        const maybeSingle = vi.fn().mockResolvedValue({
+            data: { work_unit_id: "wu-1", location_id: "loc-1" },
+            error: null,
+        });
+        const eqOrg = vi.fn().mockReturnValue({ maybeSingle });
+        const eqId = vi.fn().mockReturnValue({ eq: eqOrg });
+        const select = vi.fn().mockReturnValue({ eq: eqId });
+        const from = vi.fn().mockReturnValue({ select });
+        const supabase = { from } as unknown as SupabaseClient;
+        const dim = scopeDimensionsFromAccess(corporate());
+        await expect(assertExistingOpportunityMutableInAdminScope(supabase, "org-a", dim, "opp-1")).resolves.toBe(true);
+        expect(from).toHaveBeenCalledWith("opportunities");
+        expect(maybeSingle).toHaveBeenCalled();
+    });
+
+    it("Card 6C: assertExistingOpportunityMutableInAdminScope returns false when opportunity row is missing", async () => {
+        const maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+        const eqOrg = vi.fn().mockReturnValue({ maybeSingle });
+        const eqId = vi.fn().mockReturnValue({ eq: eqOrg });
+        const select = vi.fn().mockReturnValue({ eq: eqId });
+        const from = vi.fn().mockReturnValue({ select });
+        const supabase = { from } as unknown as SupabaseClient;
+        const dim = scopeDimensionsFromAccess(corporate());
+        await expect(assertExistingOpportunityMutableInAdminScope(supabase, "org-a", dim, "missing")).resolves.toBe(false);
     });
 });

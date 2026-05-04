@@ -4,6 +4,8 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { getAdminAuthCached, requireAdminOrOps } from "@/lib/adminAuth";
 import { emitEvent } from "@/lib/emitEvent";
 import { executeWorkflowRun } from "@/lib/workflowRun";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertExistingJobMutableInAdminScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 
 /**
  * POST: trigger workflow(s) to apply job.assigned_vendor_id to all upcoming schedules.
@@ -23,11 +25,18 @@ export async function POST(_request: Request, context: { params: Promise<{ id: s
     const supabase = createAdminClient();
     const { data: job, error: jobErr } = await supabase
         .from("jobs")
-        .select("id, assigned_vendor_id, org_id")
+        .select("id, assigned_vendor_id, org_id, work_unit_id, location_id")
         .eq("id", jobId)
         .eq("org_id", ctx.orgId)
         .single();
     if (jobErr || !job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
+
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const dim = scopeDimensionsFromAccess(access);
+    if (!(await assertExistingJobMutableInAdminScope(supabase, ctx.orgId, dim, jobId))) {
+        return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    }
 
     const vendorId = (job as { assigned_vendor_id?: string | null }).assigned_vendor_id;
     if (!vendorId) return NextResponse.json({ error: "Job has no assigned_vendor_id; set it first" }, { status: 400 });

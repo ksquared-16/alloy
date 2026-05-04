@@ -12,7 +12,7 @@ import { fetchOperationalTimezoneForOrg, type OperationalTimezoneSource } from "
 import { emitEvent } from "@/lib/emitEvent";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
-import { narrowJobIdsForScheduleList, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { assertJobInAccessScope, narrowJobIdsForScheduleList, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 
 /** GET: list schedules for current org. Admin/ops. Exclude canceled by default. */
 export async function GET(request: NextRequest) {
@@ -262,7 +262,7 @@ export async function POST(request: NextRequest) {
   const supabase = createAdminClient();
   const { data: job } = await supabase
     .from("jobs")
-    .select("id, org_id, location_id")
+    .select("id, org_id, location_id, work_unit_id")
     .eq("id", job_id)
     .maybeSingle();
   if (!job || (job as { org_id?: string }).org_id !== ctx.orgId) {
@@ -278,6 +278,19 @@ export async function POST(request: NextRequest) {
     if (!loc || (loc as { org_id?: string }).org_id !== ctx.orgId) {
       return NextResponse.json({ error: "Location not found or does not belong to your org" }, { status: 400 });
     }
+  }
+
+  const accessCtx = await getAdminAccessContextCached();
+  if (!accessCtx.ok) {
+    return NextResponse.json({ error: accessCtx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: accessCtx.status });
+  }
+  const postDim = scopeDimensionsFromAccess(accessCtx);
+  const effectiveLoc = location_id ?? (job as { location_id?: string | null }).location_id ?? null;
+  if (!(await assertJobInAccessScope(supabase, ctx.orgId, postDim, {
+    work_unit_id: (job as { work_unit_id?: string | null }).work_unit_id ?? null,
+    location_id: effectiveLoc,
+  }))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
   const start_at = typeof body.start_at === "string" ? body.start_at : null;

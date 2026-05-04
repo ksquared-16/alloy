@@ -528,3 +528,52 @@ export async function narrowJobIdsForScheduleList(
     }
     return ids.length ? ids : "none";
 }
+
+/** Mutation routes: fetch job scope columns then apply same checks as reads (404 at caller). */
+export async function assertExistingJobMutableInAdminScope(
+    supabase: SupabaseClient,
+    orgId: string,
+    dim: AdminAccessScopeDimensions,
+    jobId: string
+): Promise<boolean> {
+    const { data, error } = await supabase
+        .from("jobs")
+        .select("work_unit_id, location_id")
+        .eq("id", jobId)
+        .eq("org_id", orgId)
+        .maybeSingle();
+    if (error || !data) return false;
+    return assertJobInAccessScope(supabase, orgId, dim, data as { work_unit_id?: string | null; location_id?: string | null });
+}
+
+export async function assertExistingScheduleMutableInAdminScope(
+    supabase: SupabaseClient,
+    orgId: string,
+    dim: AdminAccessScopeDimensions,
+    scheduleId: string
+): Promise<boolean> {
+    const { data, error } = await supabase
+        .from("schedules")
+        .select("job_id, location_id")
+        .eq("id", scheduleId)
+        .eq("org_id", orgId)
+        .maybeSingle();
+    if (error || !data) return false;
+    return assertScheduleInAccessScope(supabase, orgId, dim, data as { job_id?: string | null; location_id?: string | null });
+}
+
+export async function assertExistingOpportunityMutableInAdminScope(
+    supabase: SupabaseClient,
+    orgId: string,
+    dim: AdminAccessScopeDimensions,
+    opportunityId: string
+): Promise<boolean> {
+    const { data, error } = await supabase
+        .from("opportunities")
+        .select("work_unit_id, location_id")
+        .eq("id", opportunityId)
+        .eq("org_id", orgId)
+        .maybeSingle();
+    if (error || !data) return false;
+    return assertOpportunityInAccessScope(supabase, orgId, dim, data as { work_unit_id?: string | null; location_id?: string | null });
+}

@@ -3,6 +3,8 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { emitEvent } from "@/lib/emitEvent";
 import { postVendorPayoutCashForSchedule, type PostCashEventError } from "@/lib/admin/postCashEvent";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertExistingScheduleMutableInAdminScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 
 function isPostError(result: { entry_id?: string; code?: string }): result is PostCashEventError {
     return !("entry_id" in result && result.entry_id);
@@ -31,6 +33,19 @@ export async function POST(
     if (!scheduleId) return NextResponse.json({ error: "Missing schedule id" }, { status: 400 });
 
     const supabase = createAdminClient();
+
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) {
+        return NextResponse.json(
+            { error: access.status === 401 ? "Unauthorized" : "Forbidden" },
+            { status: access.status }
+        );
+    }
+    const dim = scopeDimensionsFromAccess(access);
+    if (!(await assertExistingScheduleMutableInAdminScope(supabase, ctx.orgId, dim, scheduleId))) {
+        return NextResponse.json({ error: "Schedule not found" }, { status: 404 });
+    }
+
     const result = await postVendorPayoutCashForSchedule({
         supabase,
         orgId: ctx.orgId,

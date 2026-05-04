@@ -5,6 +5,8 @@ import { emitEvent } from "@/lib/emitEvent";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { resolveScheduleStatusRowByKey } from "@/lib/admin/scheduleEffectiveStatusKey";
 import { executeWorkflowRun } from "@/lib/workflowRun";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertExistingScheduleMutableInAdminScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 
 /** POST: create a new schedule (reschedule). Body: { start_at, end_at, timezone?, copy_assignment?: boolean }. When copy_assignment is false, workflow(s) with event_type "schedule_created" may create assignment from job default. */
 export async function POST(request: NextRequest, context: { params: Promise<{ id: string }> }) {
@@ -24,11 +26,18 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     const supabase = createAdminClient();
     const { data: oldSchedule, error: fetchErr } = await supabase
         .from("schedules")
-        .select("id, job_id, timezone, duration_minutes, org_id")
+        .select("id, job_id, timezone, duration_minutes, org_id, location_id")
         .eq("id", oldScheduleId)
         .eq("org_id", ctx.orgId)
         .single();
     if (fetchErr || !oldSchedule) return NextResponse.json({ error: "Schedule not found" }, { status: 404 });
+
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const dim = scopeDimensionsFromAccess(access);
+    if (!(await assertExistingScheduleMutableInAdminScope(supabase, ctx.orgId, dim, oldScheduleId))) {
+        return NextResponse.json({ error: "Schedule not found" }, { status: 404 });
+    }
 
     const orgId = (oldSchedule as { org_id: string }).org_id;
     const jobId = (oldSchedule as { job_id?: string }).job_id;

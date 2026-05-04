@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertExistingJobMutableInAdminScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { emitEvent } from "@/lib/emitEvent";
 
 /** POST: set archived_at = null. Admin only. Scoped by org_id. */
@@ -18,6 +20,13 @@ export async function POST(
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
   const supabase = createAdminClient();
+  const access = await getAdminAccessContextCached();
+  if (!access.ok) return NextResponse.json({ error: access.status === 401 ? "Unauthorized" : "Forbidden" }, { status: access.status });
+  const dim = scopeDimensionsFromAccess(access);
+  if (!(await assertExistingJobMutableInAdminScope(supabase, ctx.orgId, dim, id))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
   const { data, error } = await supabase
     .from("jobs")
     .update({ archived_at: null })

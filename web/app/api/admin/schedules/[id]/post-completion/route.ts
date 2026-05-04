@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { emitEvent } from "@/lib/emitEvent";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertExistingScheduleMutableInAdminScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import {
     postScheduleCompletion,
     isPostScheduleCompletionError,
@@ -32,6 +34,19 @@ export async function POST(
     if (!scheduleId) return NextResponse.json({ error: "Missing schedule id" }, { status: 400 });
 
     const supabase = createAdminClient();
+
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) {
+        return NextResponse.json(
+            { error: access.status === 401 ? "Unauthorized" : "Forbidden" },
+            { status: access.status }
+        );
+    }
+    const dim = scopeDimensionsFromAccess(access);
+    if (!(await assertExistingScheduleMutableInAdminScope(supabase, ctx.orgId, dim, scheduleId))) {
+        return NextResponse.json({ error: "Schedule not found" }, { status: 404 });
+    }
+
     const result = await postScheduleCompletion({
         supabase,
         orgId: ctx.orgId,

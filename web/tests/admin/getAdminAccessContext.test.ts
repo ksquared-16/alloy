@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
     chooseOrgAndRoleKeysFromMembershipRows,
     resolveAdminAccessCore,
+    resolveAdminAccessDimensionsForOrgMember,
 } from "@/lib/admin/resolveAdminAccessCore";
 import * as supabaseAdmin from "@/lib/supabaseAdmin";
 
@@ -98,6 +99,87 @@ function createAccessMockSupabase(config: {
                             return Promise.resolve({ data: { org_id: row.org_id }, error: null });
                         },
                     }),
+                }),
+            };
+        }
+        if (table === "role_permission_grants") {
+            return {
+                select: () => ({
+                    eq: () => ({
+                        in: () => ({
+                            eq: () => Promise.resolve({ data: grantsDefault, error: null }),
+                        }),
+                    }),
+                }),
+            };
+        }
+        if (table === "user_access_profiles") {
+            return {
+                select: () => ({
+                    eq: () => ({
+                        eq: () => ({
+                            maybeSingle: () =>
+                                Promise.resolve({
+                                    data: config.profile ?? null,
+                                    error: null,
+                                }),
+                        }),
+                    }),
+                }),
+            };
+        }
+        if (table === "user_department_access") {
+            return {
+                select: () => ({
+                    eq: () => ({
+                        eq: () =>
+                            Promise.resolve({
+                                data: config.dept_access ?? [],
+                                error: null,
+                            }),
+                    }),
+                }),
+            };
+        }
+        if (table === "user_site_access") {
+            return {
+                select: () => ({
+                    eq: () => ({
+                        eq: () =>
+                            Promise.resolve({
+                                data: config.site_access ?? [],
+                                error: null,
+                            }),
+                    }),
+                }),
+            };
+        }
+        throw new Error(`unexpected table ${table}`);
+    });
+
+    return { from } as unknown as SupabaseClient;
+}
+
+function createOrgMemberMockSupabase(config: {
+    roles: string[];
+    grants?: { permission_key: string }[];
+    profile?: { department_scope: string; site_scope: string } | null;
+    dept_access?: { department_id: string }[];
+    site_access?: { location_id: string }[];
+}): SupabaseClient {
+    const grantsDefault = config.grants ?? [];
+    const from = vi.fn((table: string) => {
+        if (table === "user_roles") {
+            return {
+                select: () => ({
+                    eq: vi.fn(() => ({
+                        eq: vi.fn(() =>
+                            Promise.resolve({
+                                data: config.roles.map((role) => ({ role })),
+                                error: null,
+                            })
+                        ),
+                    })),
                 }),
             };
         }
@@ -266,5 +348,40 @@ describe("layout vs API org alignment (same resolver)", () => {
         expect(core?.orgId).toBe(orgId);
 
         vi.spyOn(supabaseAdmin, "createAdminClient").mockRestore();
+    });
+});
+
+describe("resolveAdminAccessDimensionsForOrgMember (admin settings preview)", () => {
+    it("resolves scope for membership in the requested org only", async () => {
+        const sb = createOrgMemberMockSupabase({
+            roles: ["regional_lead"],
+            grants: [],
+            profile: { department_scope: "all", site_scope: "restricted" },
+            site_access: [{ location_id: "loc-a" }],
+        });
+        const dim = await resolveAdminAccessDimensionsForOrgMember(sb, "user-1", "org-x");
+        expect(dim?.roleKeys).toEqual(["regional_lead"]);
+        expect(dim?.departmentScope).toBe("all");
+        expect(dim?.siteScope).toBe("restricted");
+        expect(dim?.allowedSiteLocationIds).toEqual(["loc-a"]);
+        expect(dim?.allowedDepartmentIds).toBeNull();
+        expect(dim?.portalEligible).toBe(false);
+    });
+
+    it("returns null when there is no user_roles row for that org", async () => {
+        const from = vi.fn((table: string) => {
+            if (table === "user_roles") {
+                return {
+                    select: () => ({
+                        eq: vi.fn(() => ({
+                            eq: vi.fn(() => Promise.resolve({ data: [], error: null })),
+                        })),
+                    }),
+                };
+            }
+            throw new Error(`unexpected table ${table}`);
+        });
+        const sb = { from } as unknown as SupabaseClient;
+        expect(await resolveAdminAccessDimensionsForOrgMember(sb, "user-1", "org-x")).toBeNull();
     });
 });
