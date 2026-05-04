@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
-import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { departmentIdAllowed, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { normalizeQueueDefinitionForCreate } from "@/lib/rrs/queue/queueDefinitionV1";
 
 const KEY_REGEX = /^[a-z0-9_]{2,64}$/;
@@ -125,6 +125,13 @@ export async function POST(request: NextRequest) {
         .maybeSingle();
 
     if (deptErr || !dept) {
+        return NextResponse.json({ error: "Department not found" }, { status: 404 });
+    }
+
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const postDim = scopeDimensionsFromAccess(access);
+    if (!departmentIdAllowed(postDim, department_id)) {
         return NextResponse.json({ error: "Department not found" }, { status: 404 });
     }
 

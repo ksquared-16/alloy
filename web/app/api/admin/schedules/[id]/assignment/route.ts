@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAuthCached, requireAdminOrOps } from "@/lib/adminAuth";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertScheduleInAccessScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { emitEvent } from "@/lib/emitEvent";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 
@@ -21,8 +23,21 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     if (!statusKey) return NextResponse.json({ error: "Missing status_key" }, { status: 400 });
 
     const supabase = createAdminClient();
-    const { data: schedRow } = await supabase.from("schedules").select("id").eq("id", scheduleId).eq("org_id", ctx.orgId).maybeSingle();
+    const { data: schedRow } = await supabase
+        .from("schedules")
+        .select("id, job_id, location_id")
+        .eq("id", scheduleId)
+        .eq("org_id", ctx.orgId)
+        .maybeSingle();
     if (!schedRow) return NextResponse.json({ error: "Schedule not found" }, { status: 404 });
+
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const dim = scopeDimensionsFromAccess(access);
+    const sr = schedRow as { job_id?: string | null; location_id?: string | null };
+    if (!(await assertScheduleInAccessScope(supabase, ctx.orgId, dim, { job_id: sr.job_id ?? null, location_id: sr.location_id ?? null }))) {
+        return NextResponse.json({ error: "Schedule not found" }, { status: 404 });
+    }
 
     const { data: assignment, error: aErr } = await supabase
         .from("assignments")

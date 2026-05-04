@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
-import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { departmentIdAllowed, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { validateQueueDefinition } from "@/lib/config/queueDefinitionSchema";
 
 const KEY_REGEX = /^[a-z0-9_]{2,64}$/;
@@ -63,6 +63,10 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const patchDim = scopeDimensionsFromAccess(access);
+
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
@@ -113,12 +117,19 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         queue_definition?: unknown;
     };
 
+    if (!departmentIdAllowed(patchDim, existingRow.department_id)) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
 
     if (body.department_id !== undefined) {
         const newDeptId = typeof body.department_id === "string" ? body.department_id.trim() : "";
         if (!newDeptId) {
             return NextResponse.json({ error: "department_id cannot be empty" }, { status: 400 });
+        }
+        if (!departmentIdAllowed(patchDim, newDeptId)) {
+            return NextResponse.json({ error: "Department not found" }, { status: 404 });
         }
         const ok = await assertRowOrg(supabase, "departments", newDeptId, ctx.orgId);
         if (!ok.ok) {
@@ -234,10 +245,30 @@ export async function DELETE(_request: NextRequest, context: { params: Promise<{
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const dim = scopeDimensionsFromAccess(access);
+
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
     const supabase = createAdminClient();
+    const { data: row, error: fetchErr } = await supabase
+        .from("work_units")
+        .select("id, department_id")
+        .eq("id", id)
+        .eq("org_id", ctx.orgId)
+        .maybeSingle();
+
+    if (fetchErr || !row) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    const deptId = (row as { department_id?: string }).department_id;
+    if (!departmentIdAllowed(dim, deptId)) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
     const { error } = await supabase.from("work_units").delete().eq("id", id).eq("org_id", ctx.orgId);
 
     if (error) {

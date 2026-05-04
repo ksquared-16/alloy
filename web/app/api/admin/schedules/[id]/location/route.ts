@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertScheduleInAccessScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { logAdminAudit } from "@/lib/adminAuth";
 import { emitEvent } from "@/lib/emitEvent";
 
@@ -42,12 +44,30 @@ export async function PATCH(
 
     const { data: schedule, error: schedErr } = await supabase
         .from("schedules")
-        .select("id, org_id")
+        .select("id, org_id, job_id, location_id")
         .eq("id", id)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
 
     if (schedErr || !schedule) {
+        return NextResponse.json({ error: "Schedule not found" }, { status: 404 });
+    }
+
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) {
+        return NextResponse.json(
+            { error: access.status === 401 ? "Unauthorized" : "Forbidden" },
+            { status: access.status }
+        );
+    }
+    const dim = scopeDimensionsFromAccess(access);
+    const sch = schedule as { job_id?: string | null; location_id?: string | null };
+    if (!(await assertScheduleInAccessScope(supabase, ctx.orgId, dim, { job_id: sch.job_id ?? null, location_id: sch.location_id ?? null }))) {
+        return NextResponse.json({ error: "Schedule not found" }, { status: 404 });
+    }
+
+    const proposedLoc = location_id ?? sch.location_id ?? null;
+    if (!(await assertScheduleInAccessScope(supabase, ctx.orgId, dim, { job_id: sch.job_id ?? null, location_id: proposedLoc }))) {
         return NextResponse.json({ error: "Schedule not found" }, { status: 404 });
     }
 

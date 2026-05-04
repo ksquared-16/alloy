@@ -197,13 +197,22 @@ export async function PATCH(
 
         const { data: existingJob, error: existingErr } = await supabase
             .from("jobs")
-            .select("status_key, customer_id, assigned_vendor_id")
+            .select("status_key, customer_id, assigned_vendor_id, work_unit_id, location_id")
             .eq("id", id)
             .eq("org_id", ctx.orgId)
             .maybeSingle();
         if (existingErr || !existingJob) {
             return NextResponse.json({ error: "Not found" }, { status: 404 });
         }
+
+        const access = await getAdminAccessContextCached();
+        if (!access.ok) return NextResponse.json({ error: access.status === 401 ? "Unauthorized" : "Forbidden" }, { status: access.status });
+        const scopeDim = scopeDimensionsFromAccess(access);
+        const ej = existingJob as { work_unit_id?: string | null; location_id?: string | null };
+        if (!(await assertJobInAccessScope(supabase, ctx.orgId, scopeDim, { work_unit_id: ej.work_unit_id ?? null, location_id: ej.location_id ?? null }))) {
+            return NextResponse.json({ error: "Not found" }, { status: 404 });
+        }
+
         const oldStatusKey = (existingJob as { status_key?: string | null }).status_key ?? null;
 
         const updates: Record<string, unknown> = {};

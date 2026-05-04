@@ -30,6 +30,11 @@ Card 5 — Record fetch enforcement [DONE]
 Card 6 — Action enforcement [DONE]
   - `executeAdminAction` + POST `/api/admin/actions/execute` pass `scopeDimensionsFromAccess` when restricted
 
+Card 6B — Mutation scope enforcement [DONE]
+  - PATCH jobs, job location, schedules, schedule location, schedule assignment, work-units (incl. POST create + DELETE), departments PATCH/DELETE
+  - Restricted callers get **404** for out-of-scope targets (same as read routes); org/admin role checks unchanged
+  - Tests: `web/tests/admin/adminMutationScope.test.ts`
+
 Card 7 — Settings UI (minimal)
   - Assign roles (user_roles), department scope, site scope
 
