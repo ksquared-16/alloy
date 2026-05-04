@@ -6,6 +6,8 @@ Configure in Twilio Messaging Service.
 Binding route (CARD 6): POST /sms/inbound/{binding_id}
   deterministic org routing + communication_* dual-write — legacy insert always preserved.
 Legacy: POST /sms/inbound
+
+Card 24: X-Twilio-Signature validation + inbound kill switch (COMMUNICATIONS_SMS_INBOUND_ENABLED).
 """
 import logging
 from typing import Any, Dict, Optional, Tuple
@@ -16,6 +18,15 @@ from fastapi import APIRouter, Request, Response
 from ..services.activity_workflow_events import emit_message_lifecycle_event
 from ..services.communication_inbound import persist_inbound_communication_sms
 from ..services.communications.binding_resolver import find_binding_by_id
+from ..services.twilio_inbound_signature import (
+    form_to_signature_params,
+    resolve_inbound_twilio_auth_token,
+    validate_twilio_inbound_signature,
+)
+from ..settings import (
+    COMMUNICATIONS_SMS_INBOUND_ENABLED,
+    COMMUNICATIONS_TWILIO_INBOUND_VALIDATION_BASE_URL,
+)
 from ..supabase_client import _get_base_url, _get_headers
 
 logger = logging.getLogger("alloy-dispatcher")
@@ -23,18 +34,34 @@ logger = logging.getLogger("alloy-dispatcher")
 router = APIRouter()
 
 
-async def _parse_twilio_form(request: Request) -> Tuple[str, str, str, str]:
-    """Returns from_num, to_num, body, message_sid."""
-    try:
-        form = await request.form()
-        from_num = (form.get("From") or "").strip()
-        to_num = (form.get("To") or "").strip()
-        body = (form.get("Body") or "").strip()
-        message_sid = (form.get("MessageSid") or "").strip()
-        return from_num, to_num, body, message_sid
-    except Exception as e:
-        logger.warning("sms_inbound: form parse failed %s", e)
-        return "", "", "", ""
+def _empty_twiml() -> Response:
+    return Response(content="<Response></Response>", media_type="application/xml")
+
+
+def _mask_binding_id(binding_id: Optional[str]) -> str:
+    b = (binding_id or "").strip()
+    if not b:
+        return "—"
+    if len(b) <= 8:
+        return f"{b[:2]}…"
+    return f"{b[:4]}…{b[-4:]}"
+
+
+def _signature_validation_url(request: Request) -> str:
+    base = COMMUNICATIONS_TWILIO_INBOUND_VALIDATION_BASE_URL.strip().rstrip("/")
+    if base:
+        path = request.url.path or ""
+        q = request.url.query
+        return f"{base}{path}" + (f"?{q}" if q else "")
+    return str(request.url)
+
+
+def _fields_from_form(form: Any) -> Tuple[str, str, str, str]:
+    from_num = (form.get("From") or "").strip()
+    to_num = (form.get("To") or "").strip()
+    body = (form.get("Body") or "").strip()
+    message_sid = (form.get("MessageSid") or "").strip()
+    return from_num, to_num, body, message_sid
 
 
 def _insert_legacy_messages(
@@ -89,13 +116,17 @@ def _insert_legacy_messages(
     return inserted
 
 
-async def _handle_inbound_with_optional_binding(request: Request, binding_id: Optional[str]) -> Response:
-    from_num, to_num, body, message_sid = await _parse_twilio_form(request)
-
+def _handle_inbound_with_optional_binding(
+    *,
+    binding_id: Optional[str],
+    binding_row: Optional[Dict[str, Any]],
+    from_num: str,
+    to_num: str,
+    body: str,
+    message_sid: str,
+) -> Response:
     if binding_id:
-        headers = _get_headers()
-        base_url = _get_base_url()
-        bd = find_binding_by_id(base_url, headers, binding_id.strip())
+        bd = binding_row
         if bd:
             try:
                 org_id_raw = bd.get("org_id")
@@ -112,7 +143,7 @@ async def _handle_inbound_with_optional_binding(request: Request, binding_id: Op
             except Exception as e:
                 logger.warning("sms_inbound: communication inbound persist skipped %s", e)
         else:
-            logger.warning("sms_inbound: unknown binding_id=%s (legacy only)", binding_id[:8])
+            logger.warning("sms_inbound: unknown binding_id=%s (legacy only)", _mask_binding_id(binding_id))
 
     try:
         _insert_legacy_messages(
@@ -124,19 +155,74 @@ async def _handle_inbound_with_optional_binding(request: Request, binding_id: Op
     except Exception as e:
         logger.exception("sms_inbound: Supabase legacy insert failed %s", e)
 
-    return Response(
-        content="<Response></Response>",
-        media_type="application/xml",
+    return _empty_twiml()
+
+
+async def _inbound_guarded(request: Request, binding_id: Optional[str]) -> Response:
+    route = "bound" if binding_id else "legacy"
+    if not COMMUNICATIONS_SMS_INBOUND_ENABLED:
+        logger.info("sms_inbound_guard event=inbound_disabled route=%s binding=%s", route, _mask_binding_id(binding_id))
+        return _empty_twiml()
+
+    form = await request.form()
+    post_params = form_to_signature_params(form)
+
+    headers = _get_headers()
+    base_url = _get_base_url()
+    binding_row: Optional[Dict[str, Any]] = None
+    if binding_id:
+        binding_row = find_binding_by_id(base_url, headers, binding_id.strip())
+
+    auth_token = resolve_inbound_twilio_auth_token(binding_row if binding_id else None)
+
+    sig = (request.headers.get("X-Twilio-Signature") or request.headers.get("x-twilio-signature") or "").strip()
+    validation_url = _signature_validation_url(request)
+
+    if not auth_token:
+        logger.warning(
+            "sms_inbound_guard event=signature_invalid reason=no_auth_token route=%s binding=%s",
+            route,
+            _mask_binding_id(binding_id),
+        )
+        return Response(status_code=403)
+
+    if not validate_twilio_inbound_signature(
+        auth_token=auth_token,
+        full_url=validation_url,
+        post_params=post_params,
+        signature_header=sig or None,
+    ):
+        logger.warning(
+            "sms_inbound_guard event=signature_invalid reason=bad_or_missing_signature route=%s binding=%s",
+            route,
+            _mask_binding_id(binding_id),
+        )
+        return Response(status_code=403)
+
+    logger.info(
+        "sms_inbound_guard event=validation_ok route=%s binding=%s",
+        route,
+        _mask_binding_id(binding_id),
+    )
+
+    from_num, to_num, body, message_sid = _fields_from_form(form)
+    return _handle_inbound_with_optional_binding(
+        binding_id=binding_id,
+        binding_row=binding_row,
+        from_num=from_num,
+        to_num=to_num,
+        body=body,
+        message_sid=message_sid,
     )
 
 
 @router.post("/inbound/{binding_id}")
 async def post_sms_inbound_bound(binding_id: str, request: Request) -> Response:
     """Inbound with deterministic binding (org/thread routing for communication_*)."""
-    return await _handle_inbound_with_optional_binding(request, binding_id)
+    return await _inbound_guarded(request, binding_id)
 
 
 @router.post("/inbound")
 async def post_sms_inbound(request: Request) -> Response:
     """Legacy webhook URL — inserts public.messages only (no binding_id route)."""
-    return await _handle_inbound_with_optional_binding(request, None)
+    return await _inbound_guarded(request, None)

@@ -1087,3 +1087,299 @@ REQUIRED OUTPUT:
 
 ⸻
 End roadmap Cards 16–20 — execute only when each card is explicitly approved and tasked.
+
+⸻
+
+Card 21 — Communications Performance Fix (Drawer + Prefetch)
+
+Goal:
+Eliminate unnecessary communications-related network and rendering work so drawer performance returns to pre-communications baseline.
+
+Context:
+Cursor audit identified that `armCommunicationsDrawerPrefetch` is triggered on `_record_surface === "drawer_visible"`, causing:
+- threads fetch
+- bindings fetch
+- recipients fetch
+
+This occurs even when the user never opens the Communication panel.
+
+This is the primary suspected cause of performance regression.
+
+Scope:
+- Remove or gate `armCommunicationsDrawerPrefetch` so it does NOT fire on `drawer_visible`.
+- Only fetch communications data when:
+  - Communication tab/panel is explicitly active
+  OR
+  - CommunicationsDrawerSection is mounted with `active === true`
+- Ensure no duplicate fetches occur between:
+  - prefetch
+  - CommunicationsDrawerSection
+- Preserve existing API contracts.
+- Do NOT modify KPI behavior or other workspace fetch logic.
+- Add lightweight console timing logs if helpful.
+
+Acceptance Criteria:
+- No communications fetch occurs unless Communication panel is opened.
+- Drawer initial load time improves measurably.
+- Communication tab still loads correctly when opened.
+- No regression in message sending or thread display.
+
+⸻
+
+Card 22 — Delivery Truth Model
+
+Goal:
+Define and standardize communication delivery states across email and SMS.
+
+Scope:
+- Define canonical states:
+  - queued
+  - sent_to_provider
+  - provider_accepted
+  - delivered
+  - failed
+  - bounced
+  - inbound_received
+- Clarify:
+  - Resend "sent" = provider accepted (NOT delivered)
+  - SMS current "delivered" is optimistic
+- Map:
+  provider responses → canonical states
+- Identify schema gaps (do NOT implement yet)
+
+Acceptance:
+- Clear delivery state contract documented
+- No behavior changes yet
+
+⸻
+
+Card 23 — Operator Truth UX
+
+Goal:
+Ensure operators are not misled by delivery state.
+
+Scope:
+- Update UI semantics (plan only):
+  - “Sent to provider”
+  - “Delivery not confirmed”
+- Define display rules for drawer
+- No implementation yet unless trivial
+
+⸻
+
+Card 24 — Twilio Inbound Hardening
+
+Goal:
+Secure inbound SMS handling before production use.
+
+Scope:
+- Implement Twilio signature validation
+- Add kill switch for inbound endpoint
+- Preserve legacy compatibility
+- Do NOT change outbound SMS
+
+IMPLEMENTATION (2026-05 sprint — shipped)
+
+- **Routes:** `POST /sms/inbound` and `POST /sms/inbound/{binding_id}` (`backend/app/routes/sms_inbound.py`).
+- **Signature:** `X-Twilio-Signature` validated with `twilio.request_validator.RequestValidator` (`backend/app/services/twilio_inbound_signature.py`). **Auth token resolution:** for the binding route, load `communication_provider_bindings` by `binding_id`; if `secret_ref` is `env:VAR`, use that env value; if `legacy_global_twilio` or `unconfigured`/missing resolved secret, fall back to process **`TWILIO_AUTH_TOKEN`** (same as legacy global Twilio). For the legacy route (no binding), use **`TWILIO_AUTH_TOKEN`** only. If no auth token is available, inbound returns **403** (no legacy insert, no canonical communication rows, no success-path workflow events).
+- **Validation URL:** Twilio signs the full webhook URL. By default the app uses `str(request.url)` (scheme + host + path + query). If the API sits behind a proxy and the public URL differs, set **`COMMUNICATIONS_TWILIO_INBOUND_VALIDATION_BASE_URL`** to the public origin only (e.g. `https://api.yourdomain.com`); validation then uses that base + request path + query. Must match the URL configured in Twilio Console for the webhook.
+- **Kill switch:** **`COMMUNICATIONS_SMS_INBOUND_ENABLED`** — when set to `false`, `0`, `no`, or `off` (case-insensitive), inbound returns **200** with empty TwiML `<Response></Response>` and performs **no** database writes and **no** workflow event emission. When unset or any other value, inbound is **enabled** (backward compatible with deployments that did not set the flag).
+- **Invalid signature / missing token:** **403**; no `public.messages` insert, no `communication_*` persistence, no `message_received` (or other) success events from this path.
+- **Logging:** Structured lines with prefix `sms_inbound_guard` and events `inbound_disabled`, `signature_invalid` (reasons `no_auth_token`, `bad_or_missing_signature`), `validation_ok`. No full bodies; binding ids **masked**; no secrets.
+- **Tests:** `backend/tests/test_twilio_inbound_signature.py` (unittest). Run from `backend/`: `python -m unittest discover -s tests -p 'test_*.py'` (requires `STRIPE_SECRET_KEY` and `STRIPE_WEBHOOK_SECRET` in env for `settings` import, or use the project `.env`).
+- **Explicitly unchanged:** Outbound SMS, Resend/email, KPI code paths, `COMMUNICATIONS_DUAL_WRITE`, canonical threading semantics beyond validation order-of-operations; person-first inbound resolution and surrogate behavior remain in `communication_inbound.py` unchanged.
+
+⸻
+
+Card 25 — Communications Authorization (RBAC)
+
+Goal:
+Replace stubbed send permissions with real authorization.
+
+Scope:
+- Implement `communications.send` permission
+- Integrate with org/user role model
+- Ensure audit compatibility with workflow_events
+
+IMPLEMENTATION (2026-05 sprint — shipped)
+
+- **Route:** `POST /api/admin/communications/send` enforces **`assertCommunicationsSendAllowed`** before any enqueue (`communication_messages` insert, provider, workflow events on success path).
+- **Source of truth:** Same bundle as CRM admin: `loadAdminAccessBundleCached` → `roleKeys` + `permissionKeys` from `user_roles` + `role_permission_grants` (`resolveAdminAccessCore`).
+- **Rules:** (1) If `roleKeys` includes **`admin`** or **`ops`** for the active org → **allow** (portal parity / existing behavior). (2) Else require **`communications.send`** in `permissionKeys`, **or** legacy catalog alias **`ops.messaging.write`** (already in `permission_keys` / seeded grants) so custom roles can send without a new DB row for the new key until orgs seed **`communications.send`** explicitly.
+- **403:** JSON `{ error, code: "communications_send_forbidden" }` — no enqueue, no provider, no success-path events.
+- **Constants:** `COMMUNICATIONS_SEND_PERMISSION_KEY`, `LEGACY_MESSAGING_SEND_PERMISSION_ALIAS` in `web/lib/communications/communicationPermissions.ts`; pure helper **`hasCommunicationsSendPermission`** for tests.
+- **Tests:** `web/tests/communications/communicationPermissions.test.ts` (Vitest).
+- **UI:** No composer-level permission fetch; **`canMutate`** in `AdminAuthContext` is admin-only and would wrongly block **ops** — server remains source of truth; failed send shows existing POST error state.
+- **Future (configurable RBAC):** Add **`communications.send`** to `permission_keys` + org `role_permission_grants` via admin UI/seed (optional); consider removing **`ops.messaging.write`** alias once all orgs grant **`communications.send`** explicitly where needed.
+
+⸻
+⸻
+⸻
+
+DESIGN BATCH — Cards 22, 23, 25A (documentation only; no runtime changes in this batch)
+
+Status: **Complete** (design notes below). Implementation deferred.
+
+Code / doc evidence reviewed for this batch (non-exhaustive):
+- `web/lib/communications/communicationPermissions.ts` — `communications.send` stub; `assertCommunicationsSendAllowed` always `{ ok: true }`.
+- `web/app/api/admin/communications/send/route.ts` — `requireAdminOrOps` + `assertCommunicationsSendAllowed`.
+- `backend/app/services/communication_message_sender.py` — outbound worker: rows `status=queued` → patch `sent` / `failed`; SMS emits `message_sent` then **`message_delivered` with `extra.note: optimistic-after-send`**; email emits `message_sent` only (Resend returns id).
+- `backend/app/integrations/resend_client.py` — Resend REST returns JSON `id` on success.
+- `backend/app/integrations/twilio_client.py` — Twilio `messages.create` returns `sid` and Twilio **`status`** (often `queued` / `sent` — carrier delivery is asynchronous).
+- `backend/app/services/communication_inbound.py` / `communication_workflow_events.py` — inbound persistence + `workflow_events` inserts for communication lifecycle.
+- `docs/system/actions-and-workflows.md` — workflow_events guardrails; communications align with existing emit patterns.
+
+⸻
+
+CARD 22 — Delivery Truth Model — DESIGN DELIVERABLES
+
+Purpose:
+One canonical vocabulary for “where is this message in its delivery lifecycle?” across **email (Resend)**, **SMS (Twilio)**, and **in-app**, without pretending provider-specific tokens mean more than they do.
+
+1. Canonical states (operator-facing vocabulary; internal storage may alias)
+
+| Canonical state | Meaning |
+|-----------------|--------|
+| **queued** | Alloy has accepted the outbound intent; message not yet handed to provider (or still in local/worker queue). Maps to today’s `communication_messages.status = queued` while worker pending. |
+| **sent_to_provider** | Alloy’s worker is dispatching or has invoked the provider client; provider may still be accepting. Use when Twilio API returns a Message **SID** but Twilio **message.status** is still `queued` / `accepted` / similar — i.e. **handoff to carrier not finished from Alloy’s perspective**. (Optional subdistinction: may stay internal; not required in UI if noisy.) |
+| **provider_accepted** | Provider **accepted the request** and gave a durable id (Resend `id`, Twilio `sid`). **Does not** mean the recipient’s mailbox or handset received the content. |
+| **delivered** | **Confirmed** end-to-end delivery to recipient **per provider-trusted signal** (email: delivery webhook or equivalent; SMS: Twilio **delivered** status or delivery receipt webhook). **Not** the same as “API call succeeded.” |
+| **failed** | Terminal failure before or during provider send (HTTP error, validation, missing binding, Twilio error). Maps to today’s `communication_messages.status = failed` + `error`. |
+| **bounced** | Provider accepted send path but later reports **non-delivery to recipient** (email bounce). Distinct from **failed** (which is typically synchronous send-time). May require provider webhook + stored bounce detail. |
+| **inbound_received** | Inbound message persisted (SMS or future inbound email). Not an outbound state; used for thread rows that are **inbound** direction. Aligns with inbound persistence + `message_received` style events. |
+
+2. Semantics (non-negotiable clarifications)
+
+- **Resend:** A successful `POST /emails` returns an **`id`**. That id means **provider_accepted** in the canonical model — **not** **delivered**. True delivery requires Resend **webhooks** (delivered, bounced, etc.) or equivalent; until then, UI should allow **“delivery not confirmed.”**
+- **Twilio outbound:** A successful REST `messages.create` yields a **SID** and often an initial **`status`** of `queued` (or similar). That is **not** handset delivery. **`delivered`** in the canonical model must only be set when **`status`** (or webhook) indicates **delivered** (or documented equivalent). **Do not** label Alloy message rows **delivered** based solely on send API success.
+- **Current implementation gap (SMS):** `communication_message_sender` patches outbound SMS to `status: "sent"` and emits **`workflow_events` `message_delivered` with `extra.note: optimistic-after-send`**. That workflow event name is **misleading** relative to canonical **delivered**. Operators must be told this is **not** confirmed delivery until Twilio callbacks/webhooks back it (see Card 23). Persistence does not currently store a separate “optimistic delivery” vs “confirmed delivery” flag on `communication_messages` — **schema / event naming gap**.
+
+3. Mapping: provider signals → canonical (implementation reference for a future card)
+
+- **Resend:** HTTP 200 + body `id` → **provider_accepted** (and enqueue webhook subscription for delivered/bounced later). HTTP non-2xx / exception before id → **failed**.
+- **Twilio REST create:** return `sid` + Twilio `status`:
+  - `queued`, `accepted`, `sending`, … → **sent_to_provider** or **provider_accepted** (product choice: prefer **provider_accepted** once `sid` exists; use **sent_to_provider** only if we need finer distinction before sid).
+  - `delivered` (when Twilio reports it on the resource or via webhook) → **delivered**.
+  - `failed`, `undelivered` → **failed** (or terminal non-delivery; align with SMS error taxonomy).
+- **In-app:** internal **queued** until written → **delivered** when persisted to thread (no third-party); or treat as **provider_accepted** instantaneously if we consider Alloy the provider — product call: prefer **delivered** for in-app once stored, since there is no external mailbox.
+
+4. Schema / storage gaps (proposals only — no migrations in this batch)
+
+- **`communication_messages.status`** today behaves like a coarse enum (**queued** / **sent** / **failed**). It does **not** distinguish **provider_accepted** vs **delivered** vs **bounced**. **Proposal:** either (a) extend allowed values + migration, or (b) add **`delivery_substate`** or **`canonical_delivery_state`** JSON/column, plus **`provider_last_event_at`**.
+- **Provider id:** `provider_message_id` already stores Resend id / Twilio sid — good anchor for webhook correlation.
+- **Metadata:** Store Resend/Twilio **raw last status** (or webhook payload tail) in **`metadata`** for debugging — **proposal** only.
+- **Workflow events:** Consider renaming or adding event types so **`message_delivered`** is only emitted when canonical **delivered** is true; keep **optimistic** SMS under **`message_sent`** + explicit **`delivery_unconfirmed`** or metadata on payload **until webhooks exist** — **proposal** only; must preserve audit trail when changing names (append-only / new types).
+
+⸻
+
+CARD 23 — Operator Truth UX — DESIGN DELIVERABLES
+
+Goal:
+Operators never infer “they got it” from **provider id** or **“sent”** alone.
+
+1. Truth tiers (for copy and badge styling)
+
+| Tier | Meaning for operators |
+|------|------------------------|
+| **Confirmed (safe to assert receipt path)** | Only **delivered** (canonical) backed by provider-trusted signal. Rare for email without webhooks. |
+| **Accepted by provider (not receipt)** | Resend id / Twilio sid obtained — **“Sent to provider”** — **delivery not confirmed**. |
+| **In flight (Alloy)** | **queued** / worker pending — **“Sending…”** or **“Queued”**. |
+| **Not OK** | **failed**, **bounced** — show reason when `error` / bounce detail exists. |
+
+2. Per canonical state — drawer display (concise copy; final strings TBD in UX pass)
+
+| Canonical state | Primary label (suggestion) | Secondary / tooltip |
+|-----------------|----------------------------|----------------------|
+| **queued** | **Queued** | “Waiting to send.” |
+| **sent_to_provider** | **Sending…** or **Handed to carrier** | “Provider is processing.” |
+| **provider_accepted** | **Sent to provider** | **“Delivery not confirmed.”** Do **not** use “Delivered.” |
+| **delivered** | **Delivered** | Optional timestamp; only if webhook/status proves delivery. |
+| **failed** | **Failed** | Show **`error`** snippet when present; link to retry policy (future). |
+| **bounced** | **Bounced** | “Provider could not deliver (e.g. invalid address).” |
+| **inbound_received** | **Received** | Inbound row; separate from outbound pipeline. |
+
+3. Email (Resend) — operator messaging
+
+- After successful enqueue/API id: show **“Sent to provider”** + **“Delivery not confirmed”** (subtitle or muted line).
+- Never equate Resend **id** with inbox delivery.
+
+4. SMS (Twilio) — operator messaging
+
+- After Twilio SID: **“Sent to provider”** + **“Delivery not confirmed”** until Twilio **delivered** (or equivalent).
+- **Explicitly call out today’s gap:** the system may emit **`message_delivered`** workflow events **optimistically** for SMS (`optimistic-after-send` in backend) — **drawer must not show plain “Delivered”** for that path until persistence reflects canonical **delivered** or copy overrides to honest wording.
+
+5. Failed / bounced
+
+- **failed:** Red or warning accent; show truncated **`error`** from row; avoid blame-specific language in default copy.
+- **bounced:** Distinct from **failed** (post-acceptance); use for email bounces when webhook exists.
+
+6. Safe vs “not confirmed” summary
+
+- **Safe to treat as confirmed delivery:** canonical **delivered** only (with provider evidence).
+- **Must show “delivery not confirmed”:** **provider_accepted**, **sent_to_provider**, and any **optimistic** delivery signal (current SMS workflow event **until** reconciled).
+- **Inbound** rows: **Received** — separate pipeline; do not mix with outbound delivery truth.
+
+⸻
+
+CARD 25A — Communications Authorization (RBAC) — DESIGN ONLY
+
+(Card 25 remains the **implementation** card; **25A** = authorization **design** for a later sprint / PR.)
+
+1. Permission key
+
+- **Stable key:** **`communications.send`**
+- Already referenced in code as **`COMMUNICATIONS_SEND_PERMISSION_KEY`** (`web/lib/communications/communicationPermissions.ts`).
+
+2. Initial assignees (recommendation — adjust per org policy)
+
+- **Org roles that can compose and send record-attached email/SMS from admin** (same surface as today’s drawer composer):
+  - **Include:** org admin / operations manager equivalents (names depend on existing role matrix).
+  - **Exclude by default:** read-only viewers, billing-only, or strictly scheduling-only roles **unless** product explicitly extends.
+- **Super-admin / platform:** follow existing **`requireAdminOrOps`** semantics; **do not** bypass org-scoped permission checks when acting on tenant data (align with how other sensitive admin routes combine global + org checks).
+
+3. Integration with org / user role model (design)
+
+- **Store:** org-scoped role or capability row (exact table TBD by existing admin roles implementation — do **not** invent schema in app code in this batch).
+- **Resolve at request time:** `(org_id, user_id) → set of permission keys` including **`communications.send`**.
+- **Composition:** **`requireAdminOrOps`** AND **`assertCommunicationsSendAllowed`** (once real) both succeed for POST **send**.
+
+4. Routes / surfaces that must enforce **`communications.send`** (when implemented)
+
+- **Primary:** `POST /api/admin/communications/send` (Next route — already calls **`assertCommunicationsSendAllowed`** stub).
+- **Future parity:** any new mutation that enqueues outbound **canonical** comms without going through this route (e.g. server actions, bulk send APIs) must call the same assertion helper or shared guard.
+- **Read paths** (threads, messages, bindings, drawer-recipients): typically **read** role that can open the drawer; **not** gated by **`communications.send`** unless product demands “hide composer only” (design choice: prefer **hide/disable composer** vs hiding thread — default recommendation: **allow read**, **gate send**).
+
+5. Audit / workflow_events (must remain intact)
+
+- **Do not** remove **`emit_for_communication_message`** / **`workflow_events`** insert paths when adding RBAC.
+- **Authorization failure** should **not** enqueue `communication_messages` or emit **message_sent**; return **403** with stable JSON error.
+- **Success path** unchanged: canonical enqueue → worker → same events as today.
+- **Optional future event (design):** `communication_send_denied` on denied attempt — **out of scope** for minimal RBAC; log + HTTP 403 may suffice initially.
+
+6. Implementation explicitly out of scope for 25A
+
+- No DB migration, no role matrix edits, no middleware changes — **design and sprint alignment only**.
+
+⸻
+
+MISMATCHES / BLOCKERS (from this review)
+
+1. **Workflow event name vs truth:** **`message_delivered`** emitted for SMS with **`optimistic-after-send`** — naming implies delivery; conflicts with Card 22/23 until renamed or gated.
+2. **DB `status`:** **`sent`** conflates provider acceptance and (incorrectly, for SMS) perceived “sent to user.” Need mapping layer or schema evolution before UI can be fully honest without copy hacks.
+3. **Resend / Twilio webhooks:** Full **delivered** / **bounced** canonical states require **inbound webhooks** and persistence — **Card 24** (inbound SMS hardening) adjacent; email webhooks are a **separate implementation track**.
+4. **RBAC:** **`assertCommunicationsSendAllowed`** is implemented (Card 25) — wired to **`role_permission_grants`** with admin/ops bypass and **`ops.messaging.write`** alias until **`communications.send`** is seeded per org.
+
+⸻
+
+RECOMMENDED NEXT IMPLEMENTATION SEQUENCE (after this design batch)
+
+1. **First (highest leverage, unblocks honest UX):** **Delivery truth in persistence + events** — subset of Card 22: map **`sent`** → **`provider_accepted`** in API responses / UI mapping **without** breaking existing enum (adapter layer), and **stop labelling SMS as delivered** in operator UI until confirmed (Card 23 copy + conditional rendering). **Gate:** requires product sign-off on renaming **`message_delivered`** optimistic emissions (or new event type).
+2. **Batch next:** **Drawer UX (Card 23)** copy/components + **Resend/Twilio webhook ingestion** (new card or split 22) — can ship UI strings ahead of webhooks if **“delivery not confirmed”** is default for email/SMS.
+3. **Batch next:** **Card 25 RBAC** — implement **`communications.send`** resolution + enforce on **`send` route**; keep **`requireAdminOrOps`**; add tests. **Depends:** org permission source of truth.
+4. **Stay gated until security/infrastructure ready:** **Card 24** Twilio inbound hardening (signature + kill switch) — do not enable production inbound without it; **COMMUNICATION_DUAL_WRITE** remains **off** per program policy unless explicitly approved elsewhere.
+
+Suggested **immediate implementation order:** **Card 23 (copy + mapping layer + optimistic SMS wording)** → **Card 22 storage/event refinement** → **Card 25** → **Card 24** (parallel if team split; inbound not required for outbound truth UX).
+
+---
+
+End design batch — Cards 22, 23, 25A.
