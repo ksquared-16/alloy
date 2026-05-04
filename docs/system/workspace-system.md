@@ -53,7 +53,7 @@ Work-unit **CRM compact** queue rows show **Child** and **Program** columns usin
 ## Current state
 
 - Routes under **`web/app/adminV2/`** compose the shell (`AdminV2Shell.tsx`) with workspace navigation and embedded perf overlay.
-- **Departments** and **work units** model organizational scope; work units may carry **`queue_definition`** (validated v1 JSON) driving lane behavior. Per-user **department/site visibility** for CRM will follow **`user_access_profiles`** (see **`docs/system/configuration-system.md`** — enforced in API routes in later cards).
+- **Departments** and **work units** model organizational scope; work units may carry **`queue_definition`** (validated v1 JSON) driving lane behavior. Per-user **department/site visibility** is enforced on workspace lists, queues/KPIs, entity drawers, and scoped mutators via **`user_access_profiles`** (see **`docs/system/configuration-system.md`**).
 - **`QueueService`** (`web/lib/queues/QueueService.ts`) interprets queue definitions, applies org timezone bounds, status definitions, filters/sorts allowlists, and returns summaries + item lists for opportunities/jobs/etc.
 - **`AdminV2PerfOverlay`** (`web/components/admin/AdminV2PerfOverlay.tsx`) exposes client perf markers (`window.__alloyPerf` per `web/lib/perf/alloyPerfGlobal.ts`).
 - Hooks such as **`useDepartmentQueueData`** fetch schedules and related lists for department views.

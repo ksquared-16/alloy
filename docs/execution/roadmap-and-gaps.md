@@ -56,6 +56,7 @@ This roadmap **does not** override principles in `core/system-overview.md`. If r
 
 - **Opportunity vs contact vs person:** Full inventory and sprint notes live in **`docs/audits/person-vs-contact-audit.md`**; remaining work is tightening inbound parity and messaging/document exceptions — not deleting compatibility tables.
 - **Event coverage:** Not every admin mutator has been audited for `emitEvent` parity; risk of pockets mutating without canonical events.
+- **CRM scoped access (remaining coverage):** Department/site enforcement for lists, drawers, actions, and many **direct mutators** is in place without a generic RBAC engine; **not every** admin read route may be scoped yet — grep **`getAdminAccessContextCached`** / **`assert*AccessScope`** when adding surfaces.
 - **Documents/forms:** No single “forms engine” location confirmed; storage/compliance pipeline **Needs verification**.
 - **AI production surface:** Exact routes/flags for agent behaviors not cataloged in this pass (**Needs verification**).
 - **Stripe webhooks:** End-to-end mapping from webhook handlers to `payments` state not verified here.

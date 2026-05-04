@@ -8,7 +8,7 @@ Define what **configuration** is allowed to control vs what must remain **platfo
 
 Config surfaces include (non-exhaustive):
 
-- **User access scope (CRM)** — Tables **`user_access_profiles`**, **`user_department_access`**, **`user_site_access`** hold **data visibility** per `(user_id, org_id)` (`department_scope` / `site_scope` plus optional allow lists). Capabilities remain on **`user_roles`** and **`role_definitions`** / **`role_permission_grants`**. Canonical sites are **`locations`** rows with **`location_type = 'site'`**. Route handlers will resolve scope via **`getAdminAccessContext`** in later sprint cards; **Card 1** is schema + backfill only (`supabase/migrations/20260504103000_user_access_scope_tables_v1.sql`).
+- **User access scope (CRM)** — Tables **`user_access_profiles`**, **`user_department_access`**, **`user_site_access`** hold **data visibility** per `(user_id, org_id)` (`department_scope` / `site_scope` plus optional allow lists). Capabilities remain on **`user_roles`** and **`role_definitions`** / **`role_permission_grants`**. Canonical sites are **`locations`** rows with **`location_type = 'site'`**. Runtime enforcement resolves scope via **`getAdminAccessContextCached`** + helpers in **`web/lib/admin/accessScope.ts`** on entity reads, queue builders, actions, and **direct admin mutators** touching jobs, schedules, opportunities, work units, etc. (out-of-scope targets → **404**). **Admin settings:** **`GET` / `PATCH /api/admin/users/[userId]/access-scope`** (admin only); UI: **`/adminV2/settings/user-access`**. **`resolveAdminAccessDimensionsForOrgMember`** (`web/lib/admin/resolveAdminAccessCore.ts`) previews scope for a **specific org** (multi-org safe). Migration: **`supabase/migrations/20260504103000_user_access_scope_tables_v1.sql`** (triggers enforce site rows and department org match).
 - **Status definitions** — per-entity allowed keys and display labels (`fetchEffectiveStatusDefinitions`, `web/lib/admin/statusDefinitionsResolve.ts`, admin APIs).
 - **Queue definitions** — `work_units.queue_definition` validated as v1 (`web/lib/config/queueDefinitionSchema.ts`).
 - **Record / drawer layouts** — org overrides in **`record_drawer_layouts`**, templates in **`record_layouts`** (`web/app/api/admin/record-layouts/route.ts`).
@@ -28,6 +28,7 @@ Config surfaces include (non-exhaustive):
 | Queue schema | `web/lib/config/queueDefinitionSchema.ts` |
 | Record layouts API | `web/app/api/admin/record-layouts/route.ts` |
 | Status resolve | `web/lib/admin/statusDefinitionsResolve.ts` |
+| Access scope (CRM) | `web/lib/admin/accessScope.ts`, `web/lib/admin/getAdminAccessContext.ts`, `web/app/api/admin/users/[userId]/access-scope/route.ts` |
 | Admin entity types for statuses | `web/lib/admin/statusDefinitionsAdminEntityTypes.ts` |
 
 ## Guardrails
