@@ -8,6 +8,8 @@ import {
 } from "@/lib/workspace/opportunityAttentionRules";
 import { buildOpportunityAttentionQueueItems } from "@/lib/workspace/buildOpportunityAttentionQueueItems";
 import { enrichOpportunityQueueRowsWithActivitySignals } from "@/lib/admin/activitySignals";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 
 /**
  * GET — Needs Attention queue for opportunity work units.
@@ -16,6 +18,10 @@ import { enrichOpportunityQueueRowsWithActivitySignals } from "@/lib/admin/activ
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const dim = scopeDimensionsFromAccess(access);
 
     const { id: workUnitId } = await context.params;
     if (!workUnitId) return NextResponse.json({ error: "Missing work unit id" }, { status: 400 });
@@ -44,6 +50,14 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         );
     }
 
+    const deptId = (wu as { department_id?: string | null }).department_id;
+    if (dim.departmentScope === "restricted") {
+        const allowed = dim.allowedDepartmentIds ?? [];
+        if (!deptId || !allowed.includes(deptId)) {
+            return NextResponse.json({ error: "Not found" }, { status: 404 });
+        }
+    }
+
     const rules =
         parseOpportunityAttentionRuleConfigV1FromMetadata((wu as { metadata?: unknown }).metadata) ??
         DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1;
@@ -53,9 +67,9 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
             supabase,
             orgId: ctx.orgId,
             rules,
+            accessDim: dim,
         });
 
-        const deptId = (wu as { department_id?: string | null }).department_id;
         let departmentMetadata: unknown | null = null;
         if (deptId) {
             const { data: deptRow } = await supabase

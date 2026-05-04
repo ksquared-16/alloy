@@ -11,11 +11,17 @@ import { resolveScheduledOnBounds } from "@/lib/admin/orgLocalDayBounds";
 import { fetchOperationalTimezoneForOrg, type OperationalTimezoneSource } from "@/lib/admin/timezoneContract";
 import { emitEvent } from "@/lib/emitEvent";
 import { executeWorkflowRun } from "@/lib/workflowRun";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { narrowJobIdsForScheduleList, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 
 /** GET: list schedules for current org. Admin/ops. Exclude canceled by default. */
 export async function GET(request: NextRequest) {
   const ctx = await getAdminContextCached();
   if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
+
+  const access = await getAdminAccessContextCached();
+  if (!access.ok) return NextResponse.json({ error: access.status === 401 ? "Unauthorized" : "Forbidden" }, { status: access.status });
+  const scopeDim = scopeDimensionsFromAccess(access);
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
   if (supabaseUrl) console.log("SUPABASE_URL_HOST", new URL(supabaseUrl).host);
@@ -31,6 +37,16 @@ export async function GET(request: NextRequest) {
   const limit = Math.min(Number(searchParams.get("limit")) || 200, 200);
 
   const supabase = createAdminClient();
+
+  const jobScope = await narrowJobIdsForScheduleList(supabase, ctx.orgId, scopeDim, jobId || null);
+  if (jobScope === "none") {
+    return NextResponse.json({ schedules: [], total: 0 });
+  }
+
+  const applyJobScopeFilter = <T extends { in: (col: string, vals: string[]) => T }>(query: T): T => {
+    if (jobScope === "all") return query;
+    return query.in("job_id", jobScope);
+  };
 
   if (scheduledOnRaw && (from || to)) {
     return NextResponse.json(
@@ -81,43 +97,45 @@ export async function GET(request: NextRequest) {
       calendar_type: "operational_day",
     };
     /** Inner join non-archived jobs so totals and rows match the former jobs-based “today” lane. */
-    let dayQ = supabase
-      .from("schedules")
-      .select(
-        `id, job_id, org_id, location_id, schedule_number, start_at, end_at, timezone, status_key, schedule_status_id, assigned_vendor_id, created_at, canceled_at, canceled_by, cancel_reason, duration_minutes,
+    let dayQ = applyJobScopeFilter(
+      supabase
+        .from("schedules")
+        .select(
+          `id, job_id, org_id, location_id, schedule_number, start_at, end_at, timezone, status_key, schedule_status_id, assigned_vendor_id, created_at, canceled_at, canceled_by, cancel_reason, duration_minutes,
         jobs!inner(archived_at)`,
-        { count: "exact" }
-      )
-      .eq("org_id", ctx.orgId)
-      .gte("start_at", bounds.dayStartUtc.toISOString())
-      .lt("start_at", bounds.dayEndExclusiveUtc.toISOString())
-      .is("jobs.archived_at", null)
-      .order("start_at", { ascending: true })
-      .limit(limit);
+          { count: "exact" }
+        )
+        .eq("org_id", ctx.orgId)
+        .gte("start_at", bounds.dayStartUtc.toISOString())
+        .lt("start_at", bounds.dayEndExclusiveUtc.toISOString())
+        .is("jobs.archived_at", null)
+        .order("start_at", { ascending: true })
+        .limit(limit)
+    );
     if (!includeCanceled) {
       dayQ = dayQ.is("canceled_at", null);
     }
-    if (jobId) dayQ = dayQ.eq("job_id", jobId);
     if (statusKey) dayQ = dayQ.eq("status_key", statusKey);
     const res = await dayQ;
     rows = res.data as unknown[] | null;
     queryError = res.error;
     count = res.count ?? null;
   } else {
-    let q = supabase
-      .from("schedules")
-      .select(
-        "id, job_id, org_id, location_id, schedule_number, start_at, end_at, timezone, status_key, schedule_status_id, assigned_vendor_id, created_at, canceled_at, canceled_by, cancel_reason, duration_minutes",
-        { count: "exact" }
-      )
-      .eq("org_id", ctx.orgId)
-      .order("start_at", { ascending: false })
-      .limit(limit);
+    let q = applyJobScopeFilter(
+      supabase
+        .from("schedules")
+        .select(
+          "id, job_id, org_id, location_id, schedule_number, start_at, end_at, timezone, status_key, schedule_status_id, assigned_vendor_id, created_at, canceled_at, canceled_by, cancel_reason, duration_minutes",
+          { count: "exact" }
+        )
+        .eq("org_id", ctx.orgId)
+        .order("start_at", { ascending: false })
+        .limit(limit)
+    );
 
     if (!includeCanceled) {
       q = q.is("canceled_at", null);
     }
-    if (jobId) q = q.eq("job_id", jobId);
     if (statusKey) q = q.eq("status_key", statusKey);
     if (from) q = q.gte("start_at", from);
     if (to) q = q.lte("start_at", to);

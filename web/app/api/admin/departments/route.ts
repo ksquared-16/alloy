@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 
 export const dynamic = "force-dynamic";
 
@@ -22,14 +24,28 @@ export async function GET() {
     const ctxMs = Date.now() - t0;
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const dim = scopeDimensionsFromAccess(access);
+
     const t1 = Date.now();
     const supabase = createAdminClient();
-    const { data: rows, error } = await supabase
+    let deptQuery = supabase
         .from("departments")
         .select("id, org_id, key, name, description, sort_order, is_active, metadata, created_at, updated_at")
         .eq("org_id", ctx.orgId)
         .order("sort_order", { ascending: true })
         .order("name", { ascending: true });
+
+    if (dim.departmentScope === "restricted") {
+        const allowed = dim.allowedDepartmentIds ?? [];
+        if (!allowed.length) {
+            return NextResponse.json({ items: [] });
+        }
+        deptQuery = deptQuery.in("id", allowed);
+    }
+
+    const { data: rows, error } = await deptQuery;
 
     if (error) {
         return NextResponse.json({ error: error.message }, { status: 500 });

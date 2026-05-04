@@ -21,6 +21,8 @@ import { fetchActiveJobLineItemsForAdmin } from "@/lib/admin/fetchActiveJobLineI
 import { buildOverrideLinesFromAdminJobRow, overrideJobPricing } from "@/lib/pricing/overrideJobPricing";
 import { attachDirectFkRelationshipDisplays } from "@/lib/admin/relationshipDisplayAttach";
 import { attachFieldDefinitionsAndValues } from "@/lib/admin/entityFieldRegistryAttach";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertJobInAccessScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 
 const ALLOWED_KEYS = [
     "title",
@@ -57,6 +59,10 @@ export async function GET(
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
 
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return NextResponse.json({ error: access.status === 401 ? "Unauthorized" : "Forbidden" }, { status: access.status });
+    const dim = scopeDimensionsFromAccess(access);
+
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
@@ -73,6 +79,14 @@ export async function GET(
     }
 
     const j = job as Record<string, unknown>;
+    if (
+        !(await assertJobInAccessScope(supabase, ctx.orgId, dim, {
+            work_unit_id: j.work_unit_id as string | null | undefined,
+            location_id: j.location_id as string | null | undefined,
+        }))
+    ) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
     const customerId = j.customer_id as string | null | undefined;
     const vendorId = j.assigned_vendor_id as string | null | undefined;
     const primaryPersonId = j.primary_person_id as string | null | undefined;

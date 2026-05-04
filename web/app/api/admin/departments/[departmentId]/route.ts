@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 
 const KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 
@@ -18,6 +20,10 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const dim = scopeDimensionsFromAccess(access);
+
     const { departmentId } = await context.params;
     if (!departmentId) return NextResponse.json({ error: "Missing department id" }, { status: 400 });
 
@@ -34,6 +40,13 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
     }
     if (!row) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    if (dim.departmentScope === "restricted") {
+        const allowed = dim.allowedDepartmentIds ?? [];
+        if (!allowed.includes(departmentId)) {
+            return NextResponse.json({ error: "Not found" }, { status: 404 });
+        }
     }
 
     return NextResponse.json(row);

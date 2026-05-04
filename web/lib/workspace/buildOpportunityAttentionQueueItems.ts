@@ -1,4 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
+import {
+    accessScopeRestrictsData,
+    applyRecordScopeConstraintsToQuery,
+    resolveRecordScopeConstraints,
+} from "@/lib/admin/accessScope";
 import { buildOpportunityLifecycleFields, effectiveOpportunityQuoteDollars } from "@/lib/admin/opportunityLifecyclePresentation";
 import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import {
@@ -41,12 +47,13 @@ export async function buildOpportunityAttentionQueueItems(params: {
     supabase: SupabaseClient;
     orgId: string;
     rules: OpportunityAttentionRuleConfigV1;
+    accessDim?: AdminAccessScopeDimensions | null;
 }): Promise<{
     items: WorkspaceOpportunityQueueRuntime["items"];
     rules: OpportunityAttentionRuleConfigV1;
     attention_reason_counts: AttentionReasonCountSummary[];
 }> {
-    const { supabase, orgId, rules } = params;
+    const { supabase, orgId, rules, accessDim = null } = params;
 
     const oppDefs = await fetchEffectiveStatusDefinitions(supabase, orgId, "opportunities", { activeOnly: true });
     const terminalStatusKeys = terminalOpportunityStatusKeysFromDefs(oppDefs);
@@ -58,14 +65,24 @@ export async function buildOpportunityAttentionQueueItems(params: {
         statusLabelByKey.set(k, label || k);
     }
 
-    const { data: rows, error: oppErr } = await supabase
+    let oppQ = supabase
         .from("opportunities")
         .select(
-            "id, name, status_key, quote_total, customer_id, primary_person_id, location_id, job_date, job_time_window, customer_notes, metadata, created_at, updated_at"
+            "id, name, status_key, quote_total, customer_id, primary_person_id, location_id, work_unit_id, job_date, job_time_window, customer_notes, metadata, created_at, updated_at"
         )
         .eq("org_id", orgId)
         .order("updated_at", { ascending: true, nullsFirst: false })
         .limit(MAX_ROWS);
+
+    if (accessDim && accessScopeRestrictsData(accessDim)) {
+        const c = await resolveRecordScopeConstraints(supabase, orgId, accessDim);
+        if (c.impossible) {
+            return { items: [], rules, attention_reason_counts: summarizeAttentionReasonCounts([]) };
+        }
+        oppQ = applyRecordScopeConstraintsToQuery(oppQ, c);
+    }
+
+    const { data: rows, error: oppErr } = await oppQ;
 
     if (oppErr) {
         throw new Error(oppErr.message);

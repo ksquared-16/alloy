@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { normalizeQueueDefinitionForCreate } from "@/lib/rrs/queue/queueDefinitionV1";
 
 const KEY_REGEX = /^[a-z0-9_]{2,64}$/;
@@ -22,10 +24,25 @@ export async function GET(request: NextRequest) {
     const ctxMs = Date.now() - t0;
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const dim = scopeDimensionsFromAccess(access);
+
     const departmentId = new URL(request.url).searchParams.get("department_id")?.trim() || null;
 
     const t1 = Date.now();
     const supabase = createAdminClient();
+
+    if (dim.departmentScope === "restricted") {
+        const allowed = dim.allowedDepartmentIds ?? [];
+        if (!allowed.length) {
+            return NextResponse.json({ items: [] });
+        }
+        if (departmentId && !allowed.includes(departmentId)) {
+            return NextResponse.json({ error: "Department not found" }, { status: 404 });
+        }
+    }
+
     let q = supabase
         .from("work_units")
         .select("id, org_id, department_id, key, name, description, sort_order, is_active, queue_definition, metadata, created_at, updated_at")
@@ -39,6 +56,9 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: "Department not found" }, { status: 404 });
         }
         q = q.eq("department_id", departmentId);
+    } else if (dim.departmentScope === "restricted") {
+        const allowed = dim.allowedDepartmentIds ?? [];
+        q = q.in("department_id", allowed);
     }
 
     const { data: rows, error } = await q;

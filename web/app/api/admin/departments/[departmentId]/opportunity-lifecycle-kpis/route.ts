@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import {
+    applyRecordScopeConstraintsToQuery,
+    resolveRecordScopeConstraints,
+    scopeDimensionsFromAccess,
+} from "@/lib/admin/accessScope";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import { computeOpportunityLifecycleKpis } from "@/lib/workspace/computeOpportunityLifecycleKpis";
@@ -14,8 +20,19 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const dim = scopeDimensionsFromAccess(access);
+    if (dim.departmentScope === "restricted") {
+        const allowed = dim.allowedDepartmentIds ?? [];
+        if (!allowed.includes(departmentId)) {
+            return NextResponse.json({ error: "Not found" }, { status: 404 });
+        }
+    }
+
     try {
         const supabase = createAdminClient();
+        const scopeCons = await resolveRecordScopeConstraints(supabase, ctx.orgId, dim);
 
         // Department scoping for opportunities is defined by the configured work units, not a fixed column.
         // Use the department's `pipeline_overview` queue as the canonical scope when present.
@@ -43,7 +60,8 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
             const resolved = await resolveOpportunityQueueFromDefinition(
                 supabase,
                 ctx.orgId,
-                (scopeWu as { queue_definition?: unknown }).queue_definition
+                (scopeWu as { queue_definition?: unknown }).queue_definition,
+                dim
             );
             if (!resolved.ok) {
                 const status = resolved.code === "INVALID_DEFINITION" ? 400 : 500;
@@ -79,18 +97,37 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
                 }
             }
 
-            const { data: allRows, error: allErr } = await q.limit(5000);
+            if (!scopeCons.impossible) {
+                q = applyRecordScopeConstraintsToQuery(q, scopeCons);
+            }
+
+            let allRows: KpiOppRow[] | null = null;
+            let allErr: { message: string } | null = null;
+            if (!scopeCons.impossible) {
+                const res = await q.limit(5000);
+                allRows = res.data as KpiOppRow[] | null;
+                allErr = res.error;
+            }
             if (allErr) {
                 return NextResponse.json({ error: allErr.message || "Failed to load KPI scoped opportunities" }, { status: 500 });
             }
             rows = (allRows ?? []) as KpiOppRow[];
         } else {
             // Fallback: org-wide opportunities (still useful as a visibility layer).
-            const { data, error } = await supabase
+            let q = supabase
                 .from("opportunities")
                 .select("status_key, quote_total, estimated_price_cents, monetary_value_cents")
-                .eq("org_id", ctx.orgId)
-                .limit(5000);
+                .eq("org_id", ctx.orgId);
+            if (!scopeCons.impossible) {
+                q = applyRecordScopeConstraintsToQuery(q, scopeCons);
+            }
+            let data: KpiOppRow[] | null = null;
+            let error: { message: string } | null = null;
+            if (!scopeCons.impossible) {
+                const res = await q.limit(5000);
+                data = res.data as KpiOppRow[] | null;
+                error = res.error;
+            }
             if (error) {
                 return NextResponse.json({ error: error.message || "Failed to load opportunities" }, { status: 500 });
             }

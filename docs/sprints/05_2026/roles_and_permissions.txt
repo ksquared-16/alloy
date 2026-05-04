@@ -15,17 +15,20 @@ Card 2 — Access context helper [DONE]
   - Legacy admin/ops + missing profile → all/all default
   - Tests; no route filtering / queues / actions yet
 
-Card 3 — Query scope utilities [NEXT]
-  - Reusable dept/site predicates for SQL
+Card 3 — Query scope utilities [DONE]
+  - Reusable dept/site predicates for SQL (`web/lib/admin/accessScope.ts`)
+  - Tests: `web/tests/admin/adminAccessScope.test.ts`
 
-Card 4 — Workspace & queues
-  - Departments/work_units + opportunity queues scoped
+Card 4 — Workspace & queues [DONE]
+  - Departments/work_units lists + single-row reads filtered by dept scope
+  - Opportunity queues / KPI / attention builders intersect org ∩ dept ∩ site via scope helpers
 
-Card 5 — Record fetch enforcement
-  - Entity drawer / opportunities / jobs / schedules / customers / documents / payments where resolvable
+Card 5 — Record fetch enforcement [DONE]
+  - Entity drawer route + dedicated jobs/schedules GET enforce scope (404 when out of scope)
+  - Opportunities drawer uses `assertOpportunityInAccessScope` inside `respondOpportunityEntityGet`
 
-Card 6 — Action enforcement
-  - executeAdminAction + admin actions
+Card 6 — Action enforcement [DONE]
+  - `executeAdminAction` + POST `/api/admin/actions/execute` pass `scopeDimensionsFromAccess` when restricted
 
 Card 7 — Settings UI (minimal)
   - Assign roles (user_roles), department scope, site scope

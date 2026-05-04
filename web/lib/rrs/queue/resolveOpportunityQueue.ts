@@ -4,6 +4,11 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
+import {
+    resolveRecordScopeConstraints,
+    applyRecordScopeConstraintsToQuery,
+} from "@/lib/admin/accessScope";
 import {
     isQueueDefinitionV1Opportunity,
     parseQueueDefinitionV1Strict,
@@ -57,7 +62,8 @@ async function fetchBookedPipelineStageIds(supabase: SupabaseClient, orgId: stri
 export async function resolveOpportunityQueueFromDefinition(
     supabase: SupabaseClient,
     orgId: string,
-    queueDefinitionRaw: unknown
+    queueDefinitionRaw: unknown,
+    accessDim?: AdminAccessScopeDimensions | null
 ): Promise<ResolveOpportunityQueueResult> {
     const parsed = parseQueueDefinitionV1Strict(queueDefinitionRaw);
     if (!parsed.ok) {
@@ -74,6 +80,19 @@ export async function resolveOpportunityQueueFromDefinition(
     const filters = def.filters ?? {};
 
     let q = supabase.from("opportunities").select(SELECT_COLS, { count: "exact" }).eq("org_id", orgId);
+
+    if (accessDim) {
+        const c = await resolveRecordScopeConstraints(supabase, orgId, accessDim);
+        if (c.impossible) {
+            return {
+                ok: true,
+                definition: def,
+                total: 0,
+                items: [],
+            };
+        }
+        q = applyRecordScopeConstraintsToQuery(q, c);
+    }
 
     if (filters.status_keys?.length) {
         q = q.in("status_key", filters.status_keys);

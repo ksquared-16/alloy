@@ -20,6 +20,8 @@ import { hydrateVendorDisplayStub } from "@/lib/admin/hydrateVendorDisplayStub";
 import { resolveJobRecord } from "@/lib/rrs/entities/job";
 import { resolveRecordSurfaceParam } from "@/lib/rrs/surfaces";
 import { respondOpportunityEntityGet } from "@/lib/admin/opportunityEntityRecord";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertEntityDrawerRecordReadable, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 
 /**
  * Drawer entity org model:
@@ -75,7 +77,18 @@ export async function GET(
         if (!ctx.ok) return adminContextFailureResponse(ctx);
         const orgId = ctx.orgId;
 
+        const access = await getAdminAccessContextCached();
+        if (!access.ok) return adminContextFailureResponse(access);
+        const scopeDim = scopeDimensionsFromAccess(access);
+
         const supabase = createAdminClient();
+
+        const skipDrawerScopeGate = id === "new" || type === "opportunities" || type === "addons";
+        if (!skipDrawerScopeGate) {
+            if (!(await assertEntityDrawerRecordReadable(supabase, orgId, scopeDim, type, id))) {
+                return NextResponse.json("Not found", { status: 404 });
+            }
+        }
 
         if (type === "jobs") {
             if (id === "new") {
@@ -90,7 +103,7 @@ export async function GET(
             return NextResponse.json({ ...resolved.flat, _rrs: resolved.rrs });
         }
         if (type === "opportunities") {
-            return respondOpportunityEntityGet(supabase, orgId, id, request);
+            return respondOpportunityEntityGet(supabase, orgId, id, request, scopeDim);
         }
         if (type === "contacts") {
             if (id === "new") {

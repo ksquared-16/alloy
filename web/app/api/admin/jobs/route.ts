@@ -9,10 +9,21 @@ import { assertAllowedStatusKey, fetchEffectiveStatusDefinitions } from "@/lib/a
 import { fetchJobStatusKeyByFk, effectiveJobStatusKey, resolveJobStatusRowByOrgAndKey } from "@/lib/admin/jobEffectiveStatusKey";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { computeJobBalanceSnapshot } from "@/lib/admin/jobPaymentBalances";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import {
+    accessScopeRestrictsData,
+    applyRecordScopeConstraintsToQuery,
+    resolveRecordScopeConstraints,
+    scopeDimensionsFromAccess,
+} from "@/lib/admin/accessScope";
 /** GET: list jobs for current org. Admin/ops. Exclude archived by default. */
 export async function GET(request: NextRequest) {
   const ctx = await getAdminContextCached();
   if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
+
+  const access = await getAdminAccessContextCached();
+  if (!access.ok) return NextResponse.json({ error: access.status === 401 ? "Unauthorized" : "Forbidden" }, { status: access.status });
+  const scopeDim = scopeDimensionsFromAccess(access);
 
   const { searchParams } = new URL(request.url);
   const search = (searchParams.get("search") ?? "").trim();
@@ -54,10 +65,29 @@ export async function GET(request: NextRequest) {
     if (!wuOk.ok) {
       return NextResponse.json({ error: "Work unit not found" }, { status: 404 });
     }
+    if (scopeDim.departmentScope === "restricted") {
+      const allowedDept = scopeDim.allowedDepartmentIds ?? [];
+      const { data: wuRow } = await supabase
+        .from("work_units")
+        .select("department_id")
+        .eq("id", workUnitIdParam)
+        .eq("org_id", ctx.orgId)
+        .maybeSingle();
+      const du = (wuRow as { department_id?: string } | null)?.department_id;
+      if (!du || !allowedDept.includes(du)) {
+        return NextResponse.json({ error: "Work unit not found" }, { status: 404 });
+      }
+    }
   } else if (departmentIdParam) {
     const depOk = await assertRowOrg(supabase, "departments", departmentIdParam, ctx.orgId);
     if (!depOk.ok) {
       return NextResponse.json({ error: "Department not found" }, { status: 404 });
+    }
+    if (scopeDim.departmentScope === "restricted") {
+      const allowedDept = scopeDim.allowedDepartmentIds ?? [];
+      if (!allowedDept.includes(departmentIdParam)) {
+        return NextResponse.json({ error: "Department not found" }, { status: 404 });
+      }
     }
     const { data: wuInDept, error: wuInDeptErr } = await supabase
       .from("work_units")
@@ -99,6 +129,34 @@ export async function GET(request: NextRequest) {
   if (assignedVendorId) {
     q = q.eq("assigned_vendor_id", assignedVendorId);
   }
+
+  let scopeConstraints: Awaited<ReturnType<typeof resolveRecordScopeConstraints>> | null = null;
+  let scopeWorkUnitInFilter: string[] | null = null;
+  if (accessScopeRestrictsData(scopeDim)) {
+    const c = await resolveRecordScopeConstraints(supabase, ctx.orgId, scopeDim);
+    if (c.impossible) {
+      return NextResponse.json({ jobs: [], total: 0 });
+    }
+    scopeConstraints = c;
+    if (c.workUnitIds?.length) {
+      const allowedWu = new Set(c.workUnitIds);
+      if (workUnitIdParam) {
+        if (!allowedWu.has(workUnitIdParam)) {
+          return NextResponse.json({ jobs: [], total: 0 });
+        }
+      } else if (departmentWorkUnitIds) {
+        departmentWorkUnitIds = departmentWorkUnitIds.filter((wid) => allowedWu.has(wid));
+        if (!departmentWorkUnitIds.length) {
+          return NextResponse.json({ jobs: [], total: 0 });
+        }
+      } else if (assignedVendorUnassigned || unassignedWorkUnit) {
+        return NextResponse.json({ jobs: [], total: 0 });
+      } else {
+        scopeWorkUnitInFilter = c.workUnitIds;
+      }
+    }
+  }
+
   if (assignedVendorUnassigned) {
     q = q.is("assigned_vendor_id", null);
   } else if (unassignedWorkUnit) {
@@ -107,6 +165,17 @@ export async function GET(request: NextRequest) {
     q = q.eq("work_unit_id", workUnitIdParam);
   } else if (departmentWorkUnitIds) {
     q = q.in("work_unit_id", departmentWorkUnitIds);
+  } else if (scopeWorkUnitInFilter?.length) {
+    q = q.in("work_unit_id", scopeWorkUnitInFilter);
+  }
+
+  if (scopeConstraints) {
+    const locOnly = {
+      impossible: false as const,
+      workUnitIds: null as string[] | null,
+      locationIds: scopeConstraints.locationIds,
+    };
+    q = applyRecordScopeConstraintsToQuery(q, locOnly);
   }
 
   if (search) {

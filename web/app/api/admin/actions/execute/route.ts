@@ -5,6 +5,8 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { adminActionsOrgTag } from "@/lib/admin/actions/cacheTags";
 import { executeAdminAction } from "@/lib/admin/actions/executeAdminAction";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 
 type ExecuteBody = {
     action_key?: string;
@@ -20,6 +22,9 @@ export async function POST(request: NextRequest) {
     if (forbidden) return forbidden;
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
 
     let body: ExecuteBody;
     try {
@@ -37,7 +42,7 @@ export async function POST(request: NextRequest) {
 
     const t0 = Date.now();
     const supabase = createAdminClient();
-    const result = await executeAdminAction(supabase, { orgId: ctx.orgId, userId: ctx.userId }, {
+    const result = await executeAdminAction(supabase, { orgId: ctx.orgId, userId: ctx.userId, accessScope: scopeDimensionsFromAccess(access) }, {
         actionKey,
         entityType,
         entityId,

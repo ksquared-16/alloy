@@ -5,6 +5,8 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1 } from "@/lib/workspace/opportunityAttentionRules";
 import { buildOpportunityAttentionQueueItems } from "@/lib/workspace/buildOpportunityAttentionQueueItems";
 import { enrichOpportunityQueueRowsWithActivitySignals } from "@/lib/admin/activitySignals";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 
 /**
  * GET — Org-wide opportunity attention preview for a department when the `needs_attention` work unit
@@ -15,6 +17,10 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const dim = scopeDimensionsFromAccess(access);
+
     const { departmentId } = await context.params;
     if (!departmentId) return NextResponse.json({ error: "Missing department id" }, { status: 400 });
 
@@ -23,11 +29,19 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
+    if (dim.departmentScope === "restricted") {
+        const allowed = dim.allowedDepartmentIds ?? [];
+        if (!allowed.includes(departmentId)) {
+            return NextResponse.json({ error: "Not found" }, { status: 404 });
+        }
+    }
+
     try {
         const { items, rules, attention_reason_counts } = await buildOpportunityAttentionQueueItems({
             supabase,
             orgId: ctx.orgId,
             rules: DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1,
+            accessDim: dim,
         });
 
         const { data: deptRow } = await supabase

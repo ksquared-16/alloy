@@ -9,6 +9,8 @@ import { resolveOpportunityQueueFromDefinition } from "@/lib/rrs/queue/resolveOp
 import { isOpportunityActiveForExecution, terminalOpportunityStatusKeysFromDefs } from "@/lib/workspace/opportunityExecutionEligibility";
 import { enrichOpportunityRowsWithCrmProjection } from "@/lib/workspace/enrichOpportunityQueueProjection";
 import { enrichOpportunityQueueRowsWithActivitySignals } from "@/lib/admin/activitySignals";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 
 /**
  * GET — Execute `work_units.queue_definition` for opportunity queues (Growth).
@@ -17,6 +19,10 @@ import { enrichOpportunityQueueRowsWithActivitySignals } from "@/lib/admin/activ
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const dim = scopeDimensionsFromAccess(access);
 
     const { id: workUnitId } = await context.params;
     if (!workUnitId) return NextResponse.json({ error: "Missing work unit id" }, { status: 400 });
@@ -38,6 +44,12 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     }
 
     const deptId = (wu as { department_id?: string | null }).department_id;
+    if (dim.departmentScope === "restricted") {
+        const allowed = dim.allowedDepartmentIds ?? [];
+        if (!deptId || !allowed.includes(deptId)) {
+            return NextResponse.json({ error: "Not found" }, { status: 404 });
+        }
+    }
     let departmentMetadata: unknown | null = null;
     if (deptId) {
         const { data: deptRow } = await supabase
@@ -50,7 +62,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     }
 
     const qd = (wu as { queue_definition?: unknown }).queue_definition;
-    const resolved = await resolveOpportunityQueueFromDefinition(supabase, ctx.orgId, qd);
+    const resolved = await resolveOpportunityQueueFromDefinition(supabase, ctx.orgId, qd, dim);
     if (!resolved.ok) {
         const status = resolved.code === "INVALID_DEFINITION" ? 400 : 500;
         return NextResponse.json({ error: resolved.error, code: resolved.code }, { status });

@@ -16,6 +16,8 @@ import { isUuidLike } from "@/lib/admin/overviewRelationshipLabels";
 import { batchOptionItemLabelsForOrg, optionLabelFromBatchMap } from "@/lib/admin/optionItemLabelForOrg";
 import { logDbTiming, withDbTiming } from "@/lib/admin/dbQueryTiming";
 import { perfDrawerFullHydrate, timingOpportunityApiVisible } from "@/lib/perf/adminV2PerfLog";
+import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
+import { assertOpportunityInAccessScope } from "@/lib/admin/accessScope";
 
 type AdminSupabase = ReturnType<typeof createAdminClient>;
 
@@ -624,6 +626,7 @@ export async function respondOpportunityEntityGet(
   orgId: string,
   id: string,
   request: NextRequest,
+  accessDim?: AdminAccessScopeDimensions | null,
 ): Promise<NextResponse> {
   const opportunityRouteStartedAt = Date.now();
   const { data, error } = await withDbTiming(
@@ -652,6 +655,15 @@ export async function respondOpportunityEntityGet(
     estimated_price_cents?: number | null;
     monetary_value_cents?: number | null;
   };
+  if (
+    accessDim &&
+    !(await assertOpportunityInAccessScope(supabase, orgId, accessDim, {
+      work_unit_id: (opp as { work_unit_id?: string | null }).work_unit_id,
+      location_id: opp.location_id ?? null,
+    }))
+  ) {
+    return NextResponse.json("Not found", { status: 404 });
+  }
   const out: Record<string, unknown> = { ...data };
   const surfaceParamEarly = (request.nextUrl.searchParams.get("surface") ?? "")
     .trim()

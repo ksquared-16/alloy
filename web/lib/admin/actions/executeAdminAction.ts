@@ -8,6 +8,15 @@ import { emitEvent } from "@/lib/emitEvent";
 import { findOrCreatePersonInOrgWithMeta } from "@/lib/persons/findOrCreatePersonInOrg";
 import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
 import { executeWorkflowRun } from "@/lib/workflowRun";
+import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
+import { accessScopeRestrictsData, assertEntityDrawerRecordReadable } from "@/lib/admin/accessScope";
+
+export type ExecuteAdminActionCtx = {
+    orgId: string;
+    userId?: string;
+    /** When set with restricted dept/site dimensions, entity targets must pass drawer-style scope gates. */
+    accessScope?: AdminAccessScopeDimensions | null;
+};
 
 export type ExecuteAdminActionInput = {
     actionKey: string;
@@ -94,7 +103,7 @@ function mapEntityTypeForActivityEvent(raw: string): string | null {
 
 async function withActionExecutedEmit(
     _supabase: SupabaseClient,
-    ctx: { orgId: string; userId?: string },
+    ctx: ExecuteAdminActionCtx,
     correlationId: string,
     actionKey: string,
     entityTypeRaw: string,
@@ -126,7 +135,7 @@ async function withActionExecutedEmit(
  */
 export async function executeAdminAction(
     supabase: SupabaseClient,
-    ctx: { orgId: string; userId?: string },
+    ctx: ExecuteAdminActionCtx,
     input: ExecuteAdminActionInput
 ): Promise<ExecuteAdminActionResult> {
     const correlationId = randomUUID();
@@ -157,6 +166,14 @@ export async function executeAdminAction(
         const got = norm(entityTypeRaw);
         if (want !== got) {
             return { ok: false, correlation_id: correlationId, error: "Action does not apply to this entity type", status: 400 };
+        }
+    }
+
+    const scopeDim = ctx.accessScope ?? null;
+    if (scopeDim && accessScopeRestrictsData(scopeDim)) {
+        const okTarget = await assertEntityDrawerRecordReadable(supabase, ctx.orgId, scopeDim, table, entityId);
+        if (!okTarget) {
+            return { ok: false, correlation_id: correlationId, error: "Not found", status: 404 };
         }
     }
 
