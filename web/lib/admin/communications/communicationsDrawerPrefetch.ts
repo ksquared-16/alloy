@@ -75,7 +75,7 @@ export function scheduleDeferredCommunicationsDrawerPrefetch(apiEntityType: stri
     const bindingsDeferred = createPromiseWithResolvers<BindingsResult>();
 
     const recipients: Promise<RecipientsResult> = bindingsDeferred.promise.then(async (b): Promise<RecipientsResult> => {
-        if (b.error || !b.channels.includes("email")) {
+        if (b.error || (!b.channels.includes("email") && !b.channels.includes("sms"))) {
             return { recipients: [], error: null };
         }
         try {

@@ -11,9 +11,8 @@ import {
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 
 /**
- * GET /api/admin/communications/drawer-recipients — person-first email checklist for drawer composer.
- * Opportunities: opportunity_persons + primary_person_id (persons rows with email).
- * Jobs: customer_persons + optional opportunity_persons + primary_person_id.
+ * GET /api/admin/communications/drawer-recipients — person-first recipient rows for drawer composer (email + mobile).
+ * Opportunities: opportunity_persons + primary_person_id. Jobs: customer_persons + opportunity_persons + primary_person_id.
  */
 export async function GET(request: NextRequest) {
     const forbidden = await requireAdminOrOps();
