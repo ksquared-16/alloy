@@ -19,6 +19,10 @@ Users with **multiple allowed site locations** (`locations.location_type = site`
 
 Selection is **client state only** until downstream routes read it.
 
+## Follow-up: layered location UX (not started)
+
+Product direction after the first-pass site filter is fully wired: **site first**, then optional **room / age grouping** where the org configures it. The current header dropdown is intentionally minimal; do not build the second layer until site-scoped list/workspace fetches are complete.
+
 ## Remaining wiring (next PR)
 
 1. **Pass `selectedSiteId` into data fetches** — department queue summaries, work-unit queues, KPI resolvers — either:

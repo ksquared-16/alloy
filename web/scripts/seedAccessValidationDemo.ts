@@ -4,7 +4,10 @@
  * **Maintenance:** Prefer the planned realistic staging reseed (`docs/sprints/05_2026/staging_demo_reseed_sprint.md`) over extending this demo package for new product validation.
  *
  * Alloy model this seed demonstrates (no schema changes here):
- * - **Departments / work units** = functional areas — Enrollment; Billing / Operations.
+ * - **Departments / work units** — reuses real org rows when present (`enrollment`; billing pillar resolves
+ *   `billing_operations` → `billing` → `operations`). Creates normal-named pillars only if missing, then tags
+ *   **seed-created** rows with `demo_seed_package` for cleanup. Demo opportunities attach to those depts’
+ *   existing opportunity work units when possible, else a normal **Inquiries** work unit.
  * - **Sites** (`locations` with `location_type = site`) = physical campuses — North Campus; South Campus.
  *
  * Primary lanes: Enrollment workspace records tied to North Campus vs South Campus (same department, different sites).
@@ -16,7 +19,8 @@
  * - Director — **`ops` + `school_director`**; Enrollment dept + North Campus only.
  *
  * Optional cleanup (same org):
- * - Set ACCESS_VALIDATION_CLEAN_DEMO=true — deletes **v1 + v2** demo rows and **exits** (run again without the flag to re-seed).
+ * - Set ACCESS_VALIDATION_CLEAN_DEMO=true — deletes **v1 + v2** demo rows, drops legacy `access_val_dept_*`
+ *   department trees, and **exits** (run again without the flag to re-seed).
  * - ACCESS_VALIDATION_CLEAN_OLD_DEMO=true — legacy alias; deletes **v1 only** (same as before).
  *
  * Inserts only when markers are absent per keyed entity (v2 package).
@@ -71,7 +75,7 @@ const ACCESS_VALIDATION_OPPORTUNITY_QUEUE_DEF = JSON.parse(
                 {
                     key: "all",
                     label: "All opportunities",
-                    description: "Access validation seed — opportunities in this work unit.",
+                    description: "Demo opportunities in this work unit.",
                     filters: [],
                     sort: [{ field: "updated_at", direction: "desc" }],
                     limit: 120,
@@ -83,17 +87,20 @@ const ACCESS_VALIDATION_OPPORTUNITY_QUEUE_DEF = JSON.parse(
     )
 ) as Record<string, unknown>;
 
-/** Functional departments (workspace pillars). */
-const SEED_KEY_DEPT_ENROLLMENT = "access_val_dept_enrollment";
-const SEED_KEY_DEPT_BILLING_OPS = "access_val_dept_billing_operations";
+/** Canonical department keys — reuse existing org configuration (see `resolveOrCreateDepartmentForSeed`). */
+const DEPT_KEY_ENROLLMENT = "enrollment";
+const DEPT_KEYS_BILLING_PILLAR = ["billing_operations", "billing", "operations"] as const;
 
 /** Physical campuses (`locations.location_type = site`). */
 const SEED_KEY_SITE_NORTH_CAMPUS = "access_val_site_north_campus";
 const SEED_KEY_SITE_SOUTH_CAMPUS = "access_val_site_south_campus";
 
-/** Work units — one per functional department (not per campus). */
+/** Seed-only work units (created only when no suitable opportunity work unit exists in the department). */
 const SEED_KEY_WU_ENROLLMENT = "access_val_wu_enrollment";
 const SEED_KEY_WU_BILLING_OPS = "access_val_wu_billing_operations";
+
+/** Legacy fake department keys — removed during CLEAN_DEMO after package deletes. */
+const LEGACY_DEPT_KEYS = ["access_val_dept_enrollment", "access_val_dept_billing_operations"] as const;
 
 /** Validation lanes (seed marker keys — encode dept flavor + campus). */
 const SEED_LANE_ENROLLMENT_NORTH = "access_val_lane_enrollment_north_campus";
@@ -157,27 +164,141 @@ async function deleteAllAccessValidationDemoPackages(supabase: ReturnType<typeof
     console.log("\n=== ACCESS_VALIDATION_CLEAN_DEMO: removing v1 + v2 demo packages ===");
     await deleteRowsForAccessValidationDemoPackage(supabase, orgId, LEGACY_DEMO_PKG);
     await deleteRowsForAccessValidationDemoPackage(supabase, orgId, PKG);
+    await deleteLegacyAccessValidationDepartmentTrees(supabase, orgId);
     console.log("=== Access-validation demo cleanup complete ===\n");
 }
 
-async function ensureDepartment(supabase: ReturnType<typeof createAdminClient>, orgId: string, key: string, name: string): Promise<string> {
-    const { data: existing } = await supabase.from("departments").select("id").eq("org_id", orgId).eq("key", key).maybeSingle();
-    if (existing?.id) return existing.id as string;
+/**
+ * Old seeds used dedicated department keys `access_val_dept_*`. Remove any remaining tree so /workspace
+ * never keeps fake “Access Validation — …” pillars after cleanup.
+ */
+async function deleteLegacyAccessValidationDepartmentTrees(
+    supabase: ReturnType<typeof createAdminClient>,
+    orgId: string
+): Promise<void> {
+    const { data: depts, error } = await supabase
+        .from("departments")
+        .select("id, key")
+        .eq("org_id", orgId)
+        .in("key", [...LEGACY_DEPT_KEYS]);
+    if (error) throw new Error(`[legacy access-val dept lookup] ${error.message}`);
+    const ids = (depts ?? []).map((d) => (d as { id: string }).id).filter(Boolean);
+    if (!ids.length) return;
+    console.log("--- Removing legacy access-validation department keys:", LEGACY_DEPT_KEYS.join(", "), `(${ids.length} dept(s)) ---`);
+    const { error: wuErr } = await supabase.from("work_units").delete().eq("org_id", orgId).in("department_id", ids);
+    if (wuErr) throw new Error(`[legacy access-val work_units] ${wuErr.message}`);
+    const { error: dErr } = await supabase.from("departments").delete().eq("org_id", orgId).in("id", ids);
+    if (dErr) throw new Error(`[legacy access-val departments] ${dErr.message}`);
+}
 
+function queueDefEntityType(queueDefinition: unknown): string | null {
+    if (!queueDefinition || typeof queueDefinition !== "object") return null;
+    const et = (queueDefinition as { entity_type?: unknown }).entity_type;
+    return typeof et === "string" ? et.trim().toLowerCase() : null;
+}
+
+async function resolveOrCreateDepartmentForSeed(
+    supabase: ReturnType<typeof createAdminClient>,
+    orgId: string,
+    resolveKeys: string[],
+    create: { key: string; name: string; description: string | null }
+): Promise<{ id: string; key: string; reused: boolean }> {
+    for (const raw of resolveKeys) {
+        const k = raw.trim().toLowerCase();
+        if (!k) continue;
+        const { data: row } = await supabase.from("departments").select("id, key").eq("org_id", orgId).eq("key", k).maybeSingle();
+        if (row?.id) {
+            return { id: row.id as string, key: (row as { key: string }).key, reused: true };
+        }
+    }
+    const ck = create.key.trim().toLowerCase();
     const { data: created, error } = await supabase
         .from("departments")
         .insert({
             org_id: orgId,
-            key,
-            name,
-            description: `Access validation seed (${PKG})`,
-            sort_order: 0,
+            key: ck,
+            name: create.name,
+            description: create.description,
+            sort_order: 99,
             is_active: true,
-            metadata: { access_validation_seed_key: key, demo_seed_package: PKG },
+            metadata: { access_validation_seed_key: ck, demo_seed_package: PKG },
+        })
+        .select("id, key")
+        .single();
+    if (error) throw new Error(`departments insert (seed create) ${ck}: ${error.message}`);
+    return { id: (created as { id: string }).id, key: (created as { key: string }).key, reused: false };
+}
+
+/**
+ * Prefer an existing opportunity-configured work unit in the department; otherwise insert a normal-looking
+ * “Inquiries” lane tagged for demo cleanup.
+ */
+async function ensureOpportunityWorkUnitInDepartment(
+    supabase: ReturnType<typeof createAdminClient>,
+    orgId: string,
+    departmentId: string,
+    opts: {
+        preferWorkUnitKeys: string[];
+        createKey: string;
+        createName: string;
+        accessValidationSeedKeyForCreate: string;
+    }
+): Promise<string> {
+    const { data: rows, error } = await supabase
+        .from("work_units")
+        .select("id, key, queue_definition, metadata")
+        .eq("org_id", orgId)
+        .eq("department_id", departmentId)
+        .order("sort_order", { ascending: true });
+    if (error) throw new Error(`work_units list: ${error.message}`);
+    const list = (rows ?? []) as Array<{
+        id: string;
+        key?: string | null;
+        queue_definition: unknown;
+        metadata?: Record<string, unknown> | null;
+    }>;
+
+    for (const r of list) {
+        if (queueDefEntityType(r.queue_definition) === "opportunity") return r.id;
+    }
+    for (const pk of opts.preferWorkUnitKeys) {
+        const want = pk.trim().toLowerCase();
+        const hit = list.find((r) => (r.key ?? "").trim().toLowerCase() === want);
+        if (hit && queueDefEntityType(hit.queue_definition) === "opportunity") return hit.id;
+    }
+
+    const ck = opts.createKey.trim().toLowerCase();
+    const existingCreateKey = list.find((r) => (r.key ?? "").trim().toLowerCase() === ck);
+    if (existingCreateKey?.id) {
+        if (queueDefEntityType(existingCreateKey.queue_definition) === "opportunity") return existingCreateKey.id;
+        const rowMeta = existingCreateKey.metadata as { demo_seed_package?: string } | undefined;
+        if (rowMeta?.demo_seed_package === PKG) {
+            const { error: fixErr } = await supabase
+                .from("work_units")
+                .update({
+                    queue_definition: ACCESS_VALIDATION_OPPORTUNITY_QUEUE_DEF,
+                    updated_at: new Date().toISOString(),
+                })
+                .eq("id", existingCreateKey.id)
+                .eq("org_id", orgId);
+            if (fixErr) throw new Error(`work_units patch queue_definition ${ck}: ${fixErr.message}`);
+            return existingCreateKey.id;
+        }
+    }
+
+    const { data: created, error: insErr } = await supabase
+        .from("work_units")
+        .insert({
+            org_id: orgId,
+            department_id: departmentId,
+            key: ck,
+            name: opts.createName,
+            queue_definition: ACCESS_VALIDATION_OPPORTUNITY_QUEUE_DEF,
+            metadata: { access_validation_seed_key: opts.accessValidationSeedKeyForCreate, demo_seed_package: PKG },
         })
         .select("id")
         .single();
-    if (error) throw new Error(`departments insert ${key}: ${error.message}`);
+    if (insErr) throw new Error(`work_units insert ${ck}: ${insErr.message}`);
     return (created as { id: string }).id;
 }
 
@@ -207,38 +328,6 @@ async function ensureSiteLocation(
         .select("id")
         .single();
     if (error) throw new Error(`locations insert ${seedKey}: ${error.message}`);
-    return (created as { id: string }).id;
-}
-
-async function ensureWorkUnit(
-    supabase: ReturnType<typeof createAdminClient>,
-    orgId: string,
-    departmentId: string,
-    key: string,
-    name: string
-): Promise<string> {
-    const { data: existing } = await supabase
-        .from("work_units")
-        .select("id")
-        .eq("org_id", orgId)
-        .eq("department_id", departmentId)
-        .eq("key", key)
-        .maybeSingle();
-    if (existing?.id) return existing.id as string;
-
-    const { data: created, error } = await supabase
-        .from("work_units")
-        .insert({
-            org_id: orgId,
-            department_id: departmentId,
-            key,
-            name,
-            queue_definition: ACCESS_VALIDATION_OPPORTUNITY_QUEUE_DEF,
-            metadata: { access_validation_seed_key: key, demo_seed_package: PKG },
-        })
-        .select("id")
-        .single();
-    if (error) throw new Error(`work_units insert ${key}: ${error.message}`);
     return (created as { id: string }).id;
 }
 
@@ -500,16 +589,37 @@ async function main() {
     }
     if (cleanOldOnly) {
         await deleteRowsForAccessValidationDemoPackage(supabase, orgId, LEGACY_DEMO_PKG);
+        await deleteLegacyAccessValidationDepartmentTrees(supabase, orgId);
     }
 
-    const deptEnrollmentId = await ensureDepartment(supabase, orgId, SEED_KEY_DEPT_ENROLLMENT, "Access Validation — Enrollment");
-    const deptBillingOpsId = await ensureDepartment(supabase, orgId, SEED_KEY_DEPT_BILLING_OPS, "Access Validation — Billing / Operations");
+    const deptEnrollment = await resolveOrCreateDepartmentForSeed(supabase, orgId, [DEPT_KEY_ENROLLMENT], {
+        key: DEPT_KEY_ENROLLMENT,
+        name: "Enrollment",
+        description: null,
+    });
+    const deptBilling = await resolveOrCreateDepartmentForSeed(supabase, orgId, [...DEPT_KEYS_BILLING_PILLAR], {
+        key: "billing_operations",
+        name: "Billing / Operations",
+        description: null,
+    });
+    const deptEnrollmentId = deptEnrollment.id;
+    const deptBillingOpsId = deptBilling.id;
 
-    const siteNorthCampusId = await ensureSiteLocation(supabase, orgId, SEED_KEY_SITE_NORTH_CAMPUS, "Access Validation — North Campus");
-    const siteSouthCampusId = await ensureSiteLocation(supabase, orgId, SEED_KEY_SITE_SOUTH_CAMPUS, "Access Validation — South Campus");
+    const siteNorthCampusId = await ensureSiteLocation(supabase, orgId, SEED_KEY_SITE_NORTH_CAMPUS, "North Campus");
+    const siteSouthCampusId = await ensureSiteLocation(supabase, orgId, SEED_KEY_SITE_SOUTH_CAMPUS, "South Campus");
 
-    const wuEnrollmentId = await ensureWorkUnit(supabase, orgId, deptEnrollmentId, SEED_KEY_WU_ENROLLMENT, "Access Validation — Enrollment workspace");
-    const wuBillingOpsId = await ensureWorkUnit(supabase, orgId, deptBillingOpsId, SEED_KEY_WU_BILLING_OPS, "Access Validation — Billing / Operations workspace");
+    const wuEnrollmentId = await ensureOpportunityWorkUnitInDepartment(supabase, orgId, deptEnrollmentId, {
+        preferWorkUnitKeys: ["enrollment_pipeline", "pipeline_overview", "crm_pipeline", "all"],
+        createKey: "inquiries",
+        createName: "Inquiries",
+        accessValidationSeedKeyForCreate: SEED_KEY_WU_ENROLLMENT,
+    });
+    const wuBillingOpsId = await ensureOpportunityWorkUnitInDepartment(supabase, orgId, deptBillingOpsId, {
+        preferWorkUnitKeys: ["enrollment_pipeline", "new_leads", "pipeline_overview", "crm_pipeline"],
+        createKey: "inquiries",
+        createName: "Inquiries",
+        accessValidationSeedKeyForCreate: SEED_KEY_WU_BILLING_OPS,
+    });
 
     await syncAccessValidationWorkUnitQueueDefinitions(supabase, orgId, [wuEnrollmentId, wuBillingOpsId]);
 
@@ -524,7 +634,7 @@ async function main() {
         supabase,
         orgId,
         SEED_LANE_ENROLLMENT_NORTH,
-        "Access validation — Enrollment · North Campus",
+        "Enrollment · North Campus",
         custEnrN,
         personEnrN,
         wuEnrollmentId,
@@ -534,7 +644,7 @@ async function main() {
         supabase,
         orgId,
         SEED_LANE_ENROLLMENT_SOUTH,
-        "Access validation — Enrollment · South Campus",
+        "Enrollment · South Campus",
         custEnrS,
         personEnrS,
         wuEnrollmentId,
@@ -545,7 +655,7 @@ async function main() {
         supabase,
         orgId,
         SEED_LANE_ENROLLMENT_NORTH,
-        "Access validation job — Enrollment · North Campus",
+        "Enrollment follow-up — North Campus",
         custEnrN,
         personEnrN,
         oppEnrN,
@@ -556,7 +666,7 @@ async function main() {
         supabase,
         orgId,
         SEED_LANE_ENROLLMENT_SOUTH,
-        "Access validation job — Enrollment · South Campus",
+        "Enrollment follow-up — South Campus",
         custEnrS,
         personEnrS,
         oppEnrS,
@@ -578,7 +688,7 @@ async function main() {
         supabase,
         orgId,
         SEED_LANE_BILLING_OPS_NORTH,
-        "Access validation — Billing / Operations · North Campus",
+        "Billing / Operations · North Campus",
         custBoN,
         personBoN,
         wuBillingOpsId,
@@ -588,7 +698,7 @@ async function main() {
         supabase,
         orgId,
         SEED_LANE_BILLING_OPS_SOUTH,
-        "Access validation — Billing / Operations · South Campus",
+        "Billing / Operations · South Campus",
         custBoS,
         personBoS,
         wuBillingOpsId,
@@ -599,7 +709,7 @@ async function main() {
         supabase,
         orgId,
         SEED_LANE_BILLING_OPS_NORTH,
-        "Access validation job — Billing / Ops · North Campus",
+        "Billing / Operations follow-up — North Campus",
         custBoN,
         personBoN,
         oppBoN,
@@ -610,7 +720,7 @@ async function main() {
         supabase,
         orgId,
         SEED_LANE_BILLING_OPS_SOUTH,
-        "Access validation job — Billing / Ops · South Campus",
+        "Billing / Operations follow-up — South Campus",
         custBoS,
         personBoS,
         oppBoS,
@@ -622,9 +732,12 @@ async function main() {
     const schedBoS = await ensureSchedule(supabase, orgId, `${SEED_LANE_BILLING_OPS_SOUTH}:visit`, jobBoS, siteSouthCampusId);
 
     console.log("\n--- Access validation seed (data) — demo package:", PKG, "---");
-    console.log("Semantics: departments/work units = functional; sites = physical campuses.");
+    console.log("Semantics: reuse real department keys (enrollment; billing/operations pillar); sites = physical campuses.");
     console.log("org_id:", orgId);
-    console.log("departments (functional):", { enrollment: deptEnrollmentId, billing_operations: deptBillingOpsId });
+    console.log("departments:", {
+        enrollment: { id: deptEnrollmentId, key: deptEnrollment.key, reused: deptEnrollment.reused },
+        billing_pillar: { id: deptBillingOpsId, key: deptBilling.key, reused: deptBilling.reused },
+    });
     console.log("sites / campuses (physical):", { north_campus: siteNorthCampusId, south_campus: siteSouthCampusId });
     console.log("work_units:", { enrollment: wuEnrollmentId, billing_operations: wuBillingOpsId });
     console.log("lanes — Enrollment:", {

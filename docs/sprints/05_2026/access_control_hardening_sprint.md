@@ -71,7 +71,7 @@ Tests: `web/tests/admin/adminFinancialScope.test.ts` (helper-level).
 - **npm script:** `npm run dev:seed:access-validation`
 - **Package marker:** `demo_seed_package = access_validation_demo_v2` on inserted rows (alongside `access_validation_seed_key`). Inserts only when that entity’s seed key is not already present; **does not** truncate org data.
 - **Admin shell compatibility:** Corporate test user gets **`admin`**. Regional and director test users get **`ops`** plus their persona role (**`regional_lead`** / **`school_director`**) so `portalEligible` passes while scope presets stay the same (`user_access_profiles` + department/site access tables unchanged).
-- **Full demo wipe:** Optional env `ACCESS_VALIDATION_CLEAN_DEMO=true` deletes **all** rows tagged `metadata.demo_seed_package = access_validation_demo_v1` **or** `access_validation_demo_v2`, then **exits** (re-run without the flag to seed).
+- **Full demo wipe:** Optional env `ACCESS_VALIDATION_CLEAN_DEMO=true` deletes **all** rows tagged `metadata.demo_seed_package = access_validation_demo_v1` **or** `access_validation_demo_v2`, removes any leftover **`access_val_dept_*`** department trees from older seeds, then **exits** (re-run without the flag to seed).
 - **Legacy cleanup:** Optional env `ACCESS_VALIDATION_CLEAN_OLD_DEMO=true` deletes **only** rows with `metadata.demo_seed_package = access_validation_demo_v1` (old misleading labels). Never deletes v2 rows or data without that marker.
 
 Orgs that ran v1 before cleanup may still show stale rows until cleanup is run once.
