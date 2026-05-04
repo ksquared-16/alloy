@@ -20,7 +20,10 @@
     "dev:seed:ensure-enrollment-pipeline": "tsx --tsconfig tsconfig.json scripts/ensureEnrollmentPipelineWorkUnitV1.ts",
     "dev:seed:enrollment-demo-data": "tsx --tsconfig tsconfig.json scripts/seedEnrollmentPipelineDemoData.ts",
     "dev:seed:access-validation": "tsx --tsconfig tsconfig.json scripts/seedAccessValidationDemo.ts",
-    "test:tenant:e2e": "vitest run tests/admin/tenantEndToEnd.test.ts"
+    "test:tenant:e2e": "vitest run tests/admin/tenantEndToEnd.test.ts",
+    "demo:reset:dry": "tsx scripts/resetStagingDemoData.ts --dry-run",
+    "demo:reset": "tsx scripts/resetStagingDemoData.ts",
+    "demo:seed": "tsx scripts/seedRealisticChildcareDemoData.ts"
   },
   "dependencies": {
     "@radix-ui/react-dropdown-menu": "^2.1.16",

@@ -26,6 +26,17 @@ type ThreadPreviewRow = {
     } | null;
 };
 
+/** Last N messages in first thread (existing GET messages API; chronological for display). */
+const THREAD_MESSAGE_PREVIEW_LIMIT = 5;
+
+type ThreadMessagePreviewRow = {
+    id: string;
+    direction: string;
+    channel: string;
+    body: string | null;
+    created_at: string | null;
+};
+
 function formatDisplayPhoneUs(raw: string | null | undefined): string {
     const digits = String(raw ?? "").replace(/\D/g, "");
     if (digits.length === 11 && digits.startsWith("1")) {
@@ -86,6 +97,10 @@ export default function QuickMessageModal({ open, onClose }: QuickMessageModalPr
     const [threadsLoading, setThreadsLoading] = useState(false);
     const [threadsErr, setThreadsErr] = useState<string | null>(null);
 
+    const [threadMsgsPreview, setThreadMsgsPreview] = useState<ThreadMessagePreviewRow[]>([]);
+    const [threadMsgsLoading, setThreadMsgsLoading] = useState(false);
+    const [threadMsgsErr, setThreadMsgsErr] = useState<string | null>(null);
+
     const searchSeq = useRef(0);
 
     const emailReady = channelsAvailable.includes("email") && !bindingsErr && !loadingBindings;
@@ -132,6 +147,8 @@ export default function QuickMessageModal({ open, onClose }: QuickMessageModalPr
             setSendOk(null);
             setThreadsPreview([]);
             setThreadsErr(null);
+            setThreadMsgsPreview([]);
+            setThreadMsgsErr(null);
         }
     }, [open]);
 
@@ -170,6 +187,55 @@ export default function QuickMessageModal({ open, onClose }: QuickMessageModalPr
             cancelled = true;
         };
     }, [open, previewPersonId]);
+
+    const firstPreviewThreadId = threadsPreview[0]?.id ?? null;
+
+    useEffect(() => {
+        if (!open || !firstPreviewThreadId) {
+            setThreadMsgsPreview([]);
+            setThreadMsgsErr(null);
+            return;
+        }
+        let cancelled = false;
+        setThreadMsgsPreview([]);
+        setThreadMsgsLoading(true);
+        setThreadMsgsErr(null);
+        void (async () => {
+            try {
+                const r = await fetch(
+                    `/api/admin/communications/threads/${encodeURIComponent(firstPreviewThreadId)}/messages?limit=${THREAD_MESSAGE_PREVIEW_LIMIT}`,
+                    { credentials: "include" },
+                );
+                const j = await r.json().catch(() => ({}));
+                if (cancelled) return;
+                if (!r.ok) throw new Error((j as { error?: string }).error ?? `HTTP ${r.status}`);
+                const raw = (j as { messages?: Record<string, unknown>[] }).messages;
+                const list = Array.isArray(raw) ? raw : [];
+                const rows: ThreadMessagePreviewRow[] = list.map((m) => ({
+                    id: String(m.id ?? ""),
+                    direction: String(m.direction ?? ""),
+                    channel: String(m.channel ?? ""),
+                    body: m.body != null ? String(m.body) : null,
+                    created_at: m.created_at != null ? String(m.created_at) : null,
+                }));
+                const newestFirst = [...rows].sort(
+                    (a, b) => Date.parse(String(b.created_at ?? 0)) - Date.parse(String(a.created_at ?? 0)),
+                );
+                const lastN = newestFirst.slice(0, THREAD_MESSAGE_PREVIEW_LIMIT).reverse();
+                setThreadMsgsPreview(lastN);
+            } catch (e) {
+                if (!cancelled) {
+                    setThreadMsgsErr(e instanceof Error ? e.message : "Failed to load messages");
+                    setThreadMsgsPreview([]);
+                }
+            } finally {
+                if (!cancelled) setThreadMsgsLoading(false);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [open, firstPreviewThreadId]);
 
     useEffect(() => {
         if (!open) return;
@@ -317,23 +383,25 @@ export default function QuickMessageModal({ open, onClose }: QuickMessageModalPr
                 : "Send SMS"
             : `Send to ${selectedRecipients.length} people`;
 
+    const threadStripFallback = threadsPreview.slice(0, 5);
+
     return (
-        <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-alloy-midnight/45 px-3 py-10 backdrop-blur-[2px]">
+        <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-alloy-midnight/45 px-2 py-6 backdrop-blur-[2px] sm:px-4 sm:py-10">
             <button type="button" className="absolute inset-0 cursor-default" aria-label="Close modal" onClick={onClose} />
             <div
                 role="dialog"
                 aria-modal="true"
                 aria-labelledby="quick-message-title"
-                className="relative z-[101] w-full max-w-lg rounded-2xl border border-alloy-stone/18 bg-white p-4 shadow-xl"
+                className="relative z-[101] mx-auto flex w-full max-w-5xl max-h-[min(92vh,56rem)] flex-col overflow-hidden rounded-2xl border border-alloy-stone/18 bg-white shadow-xl"
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="flex items-start justify-between gap-2 border-b border-alloy-stone/12 pb-3">
-                    <div>
+                <div className="flex shrink-0 items-start justify-between gap-2 border-b border-alloy-stone/12 px-4 py-3 sm:px-5">
+                    <div className="min-w-0">
                         <p id="quick-message-title" className="text-sm font-semibold text-alloy-midnight">
                             Quick message
                         </p>
                         <p className="mt-0.5 text-[11px] leading-snug text-alloy-midnight/55">
-                            Person-first · org-scoped · person-anchored threads. Click a search result to add or remove recipients.
+                            Person-first · org-scoped · person-anchored threads. Search to add or remove recipients.
                         </p>
                     </div>
                     <button
@@ -345,111 +413,188 @@ export default function QuickMessageModal({ open, onClose }: QuickMessageModalPr
                     </button>
                 </div>
 
-                <div className="mt-3 space-y-3">
-                    <div>
-                        <div className={COMPOSER_LABEL}>Recipients</div>
-                        <input
-                            type="search"
-                            value={searchQ}
-                            onChange={(e) => setSearchQ(e.target.value)}
-                            placeholder="Search name, email, or phone…"
-                            className="w-full rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 text-[12px] text-alloy-midnight/85 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20"
-                            autoComplete="off"
-                            aria-label="Search people"
-                        />
-                        {searchBusy ? (
-                            <p className="mt-1 text-[11px] text-alloy-midnight/45" aria-live="polite">
-                                Searching…
-                            </p>
-                        ) : null}
-                        {searchErr ? <p className="mt-1 text-[11px] text-alloy-ember">{searchErr}</p> : null}
-                        {searchQ.trim().length >= 2 && !searchBusy && searchHits.length === 0 && !searchErr ? (
-                            <p className="mt-1 text-[11px] text-alloy-midnight/50">No matches.</p>
-                        ) : null}
-                        {searchHits.length > 0 ? (
-                            <ul
-                                className="mt-1.5 max-h-36 overflow-y-auto rounded-lg border border-alloy-stone/14 bg-alloy-stone/[0.03]"
-                                role="listbox"
-                                aria-label="Search results — click to add or remove"
-                            >
-                                {searchHits.map((p) => {
-                                    const selected = selectedRecipients.some((r) => r.person_id === p.person_id);
-                                    return (
-                                        <li key={p.person_id}>
+                <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4 sm:px-5 sm:py-5 lg:flex-row lg:items-stretch lg:gap-0 lg:overflow-hidden lg:py-0">
+                    {/* Left ~30% — search + chips */}
+                    <aside className="flex w-full shrink-0 flex-col gap-3 lg:w-[30%] lg:min-w-0 lg:max-w-[22rem] lg:border-r lg:border-alloy-stone/12 lg:px-5 lg:py-5">
+                        <div>
+                            <div className={COMPOSER_LABEL}>Search</div>
+                            <input
+                                type="search"
+                                value={searchQ}
+                                onChange={(e) => setSearchQ(e.target.value)}
+                                placeholder="Name, email, or phone…"
+                                className="w-full rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 text-[12px] text-alloy-midnight/85 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20"
+                                autoComplete="off"
+                                aria-label="Search people"
+                            />
+                            {searchBusy ? (
+                                <p className="mt-1 text-[11px] text-alloy-midnight/45" aria-live="polite">
+                                    Searching…
+                                </p>
+                            ) : null}
+                            {searchErr ? <p className="mt-1 text-[11px] text-alloy-ember">{searchErr}</p> : null}
+                            {searchQ.trim().length >= 2 && !searchBusy && searchHits.length === 0 && !searchErr ? (
+                                <p className="mt-1 text-[11px] text-alloy-midnight/50">No matches.</p>
+                            ) : null}
+                            {searchHits.length > 0 ? (
+                                <ul
+                                    className="mt-1.5 max-h-[min(40vh,14rem)] overflow-y-auto rounded-lg border border-alloy-stone/14 bg-alloy-stone/[0.03] lg:max-h-[min(52vh,22rem)]"
+                                    role="listbox"
+                                    aria-label="Search results — click to add or remove"
+                                >
+                                    {searchHits.map((p) => {
+                                        const selected = selectedRecipients.some((r) => r.person_id === p.person_id);
+                                        return (
+                                            <li key={p.person_id}>
+                                                <button
+                                                    type="button"
+                                                    role="option"
+                                                    aria-selected={selected}
+                                                    onClick={() => toggleRecipient(p)}
+                                                    className={`flex w-full flex-col gap-0.5 px-2 py-1.5 text-left text-[12px] transition ${
+                                                        selected ? "bg-alloy-midnight/[0.1]" : "hover:bg-white/80"
+                                                    }`}
+                                                >
+                                                    <span className="font-semibold text-alloy-forge">{p.display_name}</span>
+                                                    <span className="text-[10px] text-alloy-midnight/55">
+                                                        {p.has_email ? p.email : "No email"}
+                                                        {p.has_email && p.has_phone ? " · " : null}
+                                                        {p.has_phone ? formatDisplayPhoneUs(p.phone) : p.has_email ? "" : " · No phone"}
+                                                        <span className="ml-1 text-alloy-blue">{selected ? "· Remove" : "· Add"}</span>
+                                                    </span>
+                                                </button>
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
+                            ) : null}
+                        </div>
+
+                        <div>
+                            <div className={COMPOSER_LABEL}>Selected</div>
+                            {selectedRecipients.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                    {selectedRecipients.map((p) => (
+                                        <span
+                                            key={p.person_id}
+                                            className="inline-flex max-w-full items-center gap-1 rounded-full border border-alloy-midnight/15 bg-alloy-midnight/[0.05] py-0.5 pl-2 pr-1 text-[10px] font-medium text-alloy-forge"
+                                        >
+                                            <span className="truncate">{p.display_name}</span>
                                             <button
                                                 type="button"
-                                                role="option"
-                                                aria-selected={selected}
+                                                aria-label={`Remove ${p.display_name}`}
+                                                className="shrink-0 rounded-full px-1 text-alloy-midnight/55 hover:bg-alloy-stone/15 hover:text-alloy-ember"
                                                 onClick={() => toggleRecipient(p)}
-                                                className={`flex w-full flex-col gap-0.5 px-2 py-1.5 text-left text-[12px] transition ${
-                                                    selected ? "bg-alloy-midnight/[0.1]" : "hover:bg-white/80"
-                                                }`}
                                             >
-                                                <span className="font-semibold text-alloy-forge">{p.display_name}</span>
-                                                <span className="text-[10px] text-alloy-midnight/55">
-                                                    {p.has_email ? p.email : "No email"}
-                                                    {p.has_email && p.has_phone ? " · " : null}
-                                                    {p.has_phone ? formatDisplayPhoneUs(p.phone) : p.has_email ? "" : " · No phone"}
-                                                    <span className="ml-1 text-alloy-blue">{selected ? "· Remove" : "· Add"}</span>
-                                                </span>
+                                                ×
                                             </button>
-                                        </li>
-                                    );
-                                })}
-                            </ul>
-                        ) : null}
-                    </div>
-
-                    {selectedRecipients.length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                            {selectedRecipients.map((p) => (
-                                <span
-                                    key={p.person_id}
-                                    className="inline-flex max-w-full items-center gap-1 rounded-full border border-alloy-midnight/15 bg-alloy-midnight/[0.05] pl-2 pr-1 py-0.5 text-[10px] font-medium text-alloy-forge"
-                                >
-                                    <span className="truncate">{p.display_name}</span>
+                                        </span>
+                                    ))}
                                     <button
                                         type="button"
-                                        aria-label={`Remove ${p.display_name}`}
-                                        className="shrink-0 rounded-full px-1 text-alloy-midnight/55 hover:bg-alloy-stone/15 hover:text-alloy-ember"
-                                        onClick={() => toggleRecipient(p)}
+                                        className="text-[10px] font-semibold text-alloy-blue hover:underline"
+                                        onClick={() => {
+                                            setSelectedRecipients([]);
+                                            setSendErr(null);
+                                            setSendOk(null);
+                                        }}
                                     >
-                                        ×
+                                        Clear all
                                     </button>
-                                </span>
-                            ))}
-                            <button
-                                type="button"
-                                className="text-[10px] font-semibold text-alloy-blue hover:underline"
-                                onClick={() => {
-                                    setSelectedRecipients([]);
-                                    setSendErr(null);
-                                    setSendOk(null);
-                                }}
-                            >
-                                Clear all
-                            </button>
+                                </div>
+                            ) : (
+                                <p className="text-[11px] text-alloy-midnight/50">Add people from search.</p>
+                            )}
                         </div>
-                    ) : null}
+                    </aside>
 
-                    {previewPersonId ? (
-                        <div className="rounded-lg border border-alloy-stone/14 bg-alloy-stone/[0.04] px-2 py-1.5">
-                            <div className={COMPOSER_LABEL}>Recent threads</div>
-                            {selectedRecipients.length > 1 ? (
+                    {/* Right ~70% — thread preview + composer */}
+                    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 border-t border-alloy-stone/12 pt-4 lg:w-[70%] lg:border-t-0 lg:border-l lg:border-alloy-stone/12 lg:px-5 lg:py-5 lg:pt-5">
+                        <div className="flex min-h-0 flex-1 flex-col rounded-xl border border-alloy-stone/14 bg-alloy-stone/[0.04] p-3 lg:min-h-[11rem]">
+                            <div className={COMPOSER_LABEL}>Thread preview</div>
+                            {!previewPersonId ? (
+                                <p className="mt-1 text-[11px] text-alloy-midnight/50">Select a recipient to load context.</p>
+                            ) : selectedRecipients.length > 1 ? (
                                 <p className="text-[10px] text-alloy-midnight/50">
-                                    Preview for <span className="font-medium text-alloy-forge">{selectedRecipients[0]?.display_name}</span>{" "}
-                                    (first selected).
+                                    Context for{" "}
+                                    <span className="font-medium text-alloy-forge">{selectedRecipients[0]?.display_name}</span> (first
+                                    selected).
                                 </p>
                             ) : null}
                             {threadsLoading ? (
-                                <p className="text-[11px] text-alloy-midnight/45">Loading…</p>
+                                <p className="mt-2 text-[11px] text-alloy-midnight/45">Loading threads…</p>
                             ) : threadsErr ? (
-                                <p className="text-[11px] text-alloy-ember">{threadsErr}</p>
-                            ) : threadsPreview.length === 0 ? (
-                                <p className="text-[11px] text-alloy-midnight/52">No threads yet for this person.</p>
+                                <p className="mt-2 text-[11px] text-alloy-ember">{threadsErr}</p>
+                            ) : !previewPersonId ? null : threadsPreview.length === 0 ? (
+                                <p className="mt-2 text-[11px] text-alloy-midnight/52">No threads yet for this person.</p>
+                            ) : threadMsgsLoading && threadMsgsPreview.length === 0 ? (
+                                <p className="mt-2 text-[11px] text-alloy-midnight/45">Loading recent messages…</p>
+                            ) : threadMsgsPreview.length > 0 ? (
+                                <div
+                                    className="mt-2 flex max-h-[min(36vh,16rem)] flex-col gap-1.5 overflow-y-auto lg:max-h-[min(40vh,20rem)]"
+                                    aria-label={`Last ${THREAD_MESSAGE_PREVIEW_LIMIT} messages in first thread`}
+                                >
+                                    {threadMsgsPreview.map((m) => {
+                                        const inbound = (m.direction ?? "").toLowerCase() === "inbound";
+                                        const when = m.created_at ? new Date(m.created_at).toLocaleString() : "";
+                                        const ch = (m.channel ?? "").toUpperCase();
+                                        return (
+                                            <div
+                                                key={m.id}
+                                                className={`flex w-full ${inbound ? "justify-start" : "justify-end"}`}
+                                            >
+                                                <div
+                                                    className={`max-w-[min(100%,28rem)] rounded-xl px-2 py-1.5 text-[11px] leading-snug shadow-sm ${
+                                                        inbound
+                                                            ? "border border-alloy-stone/14 bg-white text-alloy-forge"
+                                                            : "bg-alloy-midnight/[0.9] text-white"
+                                                    }`}
+                                                >
+                                                    <div
+                                                        className={`mb-0.5 flex flex-wrap items-center gap-x-1 text-[9px] font-semibold uppercase tracking-wide ${
+                                                            inbound ? "text-alloy-midnight/40" : "text-white/55"
+                                                        }`}
+                                                    >
+                                                        <span>{ch}</span>
+                                                        <span className="opacity-50">·</span>
+                                                        <span className="font-normal normal-case">{when}</span>
+                                                    </div>
+                                                    <p
+                                                        className={`line-clamp-6 whitespace-pre-wrap break-words ${
+                                                            inbound ? "text-alloy-forge" : "text-white/95"
+                                                        }`}
+                                                    >
+                                                        {m.body?.trim() ? m.body : "—"}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            ) : threadMsgsErr ? (
+                                <div className="mt-2 space-y-1">
+                                    <p className="text-[11px] text-alloy-ember">{threadMsgsErr}</p>
+                                    <p className="text-[10px] text-alloy-midnight/50">Recent threads (fallback):</p>
+                                    <ul className="max-h-28 space-y-1 overflow-y-auto text-[10px]">
+                                        {threadStripFallback.map((t) => {
+                                            const pv = t.last_message_preview;
+                                            const ch = (t.channel ?? "").toUpperCase();
+                                            const when = pv?.created_at ? new Date(pv.created_at).toLocaleString() : "";
+                                            return (
+                                                <li key={t.id} className="rounded border border-alloy-stone/10 bg-white/80 px-1.5 py-1">
+                                                    <div className="flex items-center justify-between gap-1">
+                                                        <span className="font-semibold text-alloy-midnight/70">{ch}</span>
+                                                        <span className="shrink-0 text-alloy-midnight/40">{when}</span>
+                                                    </div>
+                                                    <p className="mt-0.5 line-clamp-2 text-alloy-forge/88">{previewSnippet(pv?.body)}</p>
+                                                </li>
+                                            );
+                                        })}
+                                    </ul>
+                                </div>
                             ) : (
-                                <ul className="mt-1 max-h-28 space-y-1 overflow-y-auto text-[10px]">
-                                    {threadsPreview.map((t) => {
+                                <ul className="mt-2 max-h-[min(32vh,14rem)] space-y-1 overflow-y-auto text-[10px]">
+                                    {threadStripFallback.map((t) => {
                                         const pv = t.last_message_preview;
                                         const ch = (t.channel ?? "").toUpperCase();
                                         const when = pv?.created_at ? new Date(pv.created_at).toLocaleString() : "";
@@ -466,102 +611,104 @@ export default function QuickMessageModal({ open, onClose }: QuickMessageModalPr
                                 </ul>
                             )}
                         </div>
-                    ) : null}
 
-                    <div>
-                        <div className={COMPOSER_LABEL}>Channel</div>
-                        {blockedForChannel.length > 0 ? (
-                            <p className="mb-1 text-[11px] text-alloy-ember">
-                                {channel === "email"
-                                    ? `Remove or fix recipients without email: ${blockedForChannel.map((p) => p.display_name).join(", ")}`
-                                    : `Remove or fix recipients without mobile: ${blockedForChannel.map((p) => p.display_name).join(", ")}`}
-                            </p>
-                        ) : null}
-                        <div className="flex flex-wrap gap-1">
-                            <button
-                                type="button"
-                                disabled={!emailReady}
-                                onClick={() => setChannel("email")}
-                                className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${
-                                    channel === "email"
-                                        ? "bg-alloy-midnight text-white"
-                                        : "border border-alloy-stone/22 bg-white text-alloy-forge disabled:cursor-not-allowed disabled:opacity-45"
-                                }`}
-                            >
-                                Email
-                            </button>
-                            <button
-                                type="button"
-                                disabled={!smsReady}
-                                onClick={() => setChannel("sms")}
-                                className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${
-                                    channel === "sms"
-                                        ? "bg-alloy-midnight text-white"
-                                        : "border border-alloy-stone/22 bg-white text-alloy-forge disabled:cursor-not-allowed disabled:opacity-45"
-                                }`}
-                            >
-                                SMS
-                            </button>
+                        <div className="shrink-0 space-y-3 border-t border-alloy-stone/12 pt-3 lg:border-t-0 lg:pt-0">
+                            <div>
+                                <div className={COMPOSER_LABEL}>Channel</div>
+                                {blockedForChannel.length > 0 ? (
+                                    <p className="mb-1 text-[11px] text-alloy-ember">
+                                        {channel === "email"
+                                            ? `Remove or fix recipients without email: ${blockedForChannel.map((p) => p.display_name).join(", ")}`
+                                            : `Remove or fix recipients without mobile: ${blockedForChannel.map((p) => p.display_name).join(", ")}`}
+                                    </p>
+                                ) : null}
+                                <div className="flex flex-wrap gap-1">
+                                    <button
+                                        type="button"
+                                        disabled={!emailReady}
+                                        onClick={() => setChannel("email")}
+                                        className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${
+                                            channel === "email"
+                                                ? "bg-alloy-midnight text-white"
+                                                : "border border-alloy-stone/22 bg-white text-alloy-forge disabled:cursor-not-allowed disabled:opacity-45"
+                                        }`}
+                                    >
+                                        Email
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={!smsReady}
+                                        onClick={() => setChannel("sms")}
+                                        className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${
+                                            channel === "sms"
+                                                ? "bg-alloy-midnight text-white"
+                                                : "border border-alloy-stone/22 bg-white text-alloy-forge disabled:cursor-not-allowed disabled:opacity-45"
+                                        }`}
+                                    >
+                                        SMS
+                                    </button>
+                                </div>
+                                {loadingBindings ? (
+                                    <p className="mt-1 text-[10px] text-alloy-midnight/48">Loading outbound configuration…</p>
+                                ) : bindingsErr ? (
+                                    <p className="mt-1 text-[10px] text-alloy-ember">{bindingsErr}</p>
+                                ) : !emailReady && !smsReady ? (
+                                    <p className="mt-1 text-[10px] text-alloy-midnight/55">
+                                        No outbound email or SMS bindings are active for this org.
+                                    </p>
+                                ) : null}
+                            </div>
+
+                            {channel === "email" ? (
+                                <label className="block space-y-0.5">
+                                    <span className="text-[11px] font-medium text-alloy-midnight/75">Subject</span>
+                                    <input
+                                        type="text"
+                                        value={subject}
+                                        onChange={(e) => setSubject(e.target.value)}
+                                        disabled={sendBusy}
+                                        placeholder="Optional"
+                                        className="w-full rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 text-[12px] text-alloy-midnight/85 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
+                                        autoComplete="off"
+                                    />
+                                </label>
+                            ) : null}
+
+                            <label className="block space-y-0.5">
+                                <span className="text-[11px] font-medium text-alloy-midnight/75">
+                                    {channel === "email" ? "Email body" : "Message"}
+                                </span>
+                                <textarea
+                                    value={body}
+                                    onChange={(e) => setBody(e.target.value)}
+                                    disabled={sendBusy}
+                                    rows={4}
+                                    placeholder={channel === "sms" ? "SMS…" : "Email…"}
+                                    className="w-full resize-none rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 text-[12px] leading-snug text-alloy-midnight/85 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
+                                    aria-label={channel === "email" ? "Email body" : "SMS message"}
+                                />
+                            </label>
+
+                            <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => void send()}
+                                    disabled={sendBusy || !canSend}
+                                    className="rounded-lg border border-alloy-midnight/20 bg-alloy-midnight px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-alloy-midnight/90 disabled:cursor-not-allowed disabled:opacity-45"
+                                >
+                                    {sendBusy ? "Sending…" : sendLabel}
+                                </button>
+                            </div>
+                            {sendErr ? <p className="text-[11px] text-alloy-ember">{sendErr}</p> : null}
+                            {sendOk ? (
+                                <p
+                                    className={`text-[11px] ${sendOk.startsWith("Partial:") ? "text-amber-900/90" : "text-green-800/85"}`}
+                                >
+                                    {sendOk}
+                                </p>
+                            ) : null}
                         </div>
-                        {loadingBindings ? (
-                            <p className="mt-1 text-[10px] text-alloy-midnight/48">Loading outbound configuration…</p>
-                        ) : bindingsErr ? (
-                            <p className="mt-1 text-[10px] text-alloy-ember">{bindingsErr}</p>
-                        ) : !emailReady && !smsReady ? (
-                            <p className="mt-1 text-[10px] text-alloy-midnight/55">
-                                No outbound email or SMS bindings are active for this org.
-                            </p>
-                        ) : null}
                     </div>
-
-                    {channel === "email" ? (
-                        <label className="block space-y-0.5">
-                            <span className="text-[11px] font-medium text-alloy-midnight/75">Subject</span>
-                            <input
-                                type="text"
-                                value={subject}
-                                onChange={(e) => setSubject(e.target.value)}
-                                disabled={sendBusy}
-                                placeholder="Optional"
-                                className="w-full rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 text-[12px] text-alloy-midnight/85 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
-                                autoComplete="off"
-                            />
-                        </label>
-                    ) : null}
-
-                    <label className="block space-y-0.5">
-                        <span className="text-[11px] font-medium text-alloy-midnight/75">
-                            {channel === "email" ? "Email body" : "Message"}
-                        </span>
-                        <textarea
-                            value={body}
-                            onChange={(e) => setBody(e.target.value)}
-                            disabled={sendBusy}
-                            rows={3}
-                            placeholder={channel === "sms" ? "SMS…" : "Email…"}
-                            className="w-full resize-none rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 text-[12px] leading-snug text-alloy-midnight/85 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
-                            aria-label={channel === "email" ? "Email body" : "SMS message"}
-                        />
-                    </label>
-
-                    <div className="flex flex-wrap items-center gap-2">
-                        <button
-                            type="button"
-                            onClick={() => void send()}
-                            disabled={sendBusy || !canSend}
-                            className="rounded-lg border border-alloy-midnight/20 bg-alloy-midnight px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-alloy-midnight/90 disabled:cursor-not-allowed disabled:opacity-45"
-                        >
-                            {sendBusy ? "Sending…" : sendLabel}
-                        </button>
-                    </div>
-                    {sendErr ? <p className="text-[11px] text-alloy-ember">{sendErr}</p> : null}
-                    {sendOk ? (
-                        <p
-                            className={`text-[11px] ${sendOk.startsWith("Partial:") ? "text-amber-900/90" : "text-green-800/85"}`}
-                        >
-                            {sendOk}
-                        </p>
-                    ) : null}
                 </div>
             </div>
         </div>
