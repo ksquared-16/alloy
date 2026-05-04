@@ -8,6 +8,8 @@ import {
     markCommunicationsDrawerPrefetchConsumed,
     invalidateCommunicationsDrawerPrefetch,
 } from "@/lib/admin/communications/communicationsDrawerPrefetch";
+import type { CommunicationMessage } from "@/lib/communications/deliveryStateAdapter";
+import { deliveryStatePresentation, mapToDeliveryState } from "@/lib/communications/deliveryStateAdapter";
 
 type ThreadRow = {
     id: string;
@@ -16,11 +18,8 @@ type ThreadRow = {
     updated_at?: string | null;
 };
 
-type MsgRow = {
+type MsgRow = CommunicationMessage & {
     id: string;
-    direction: string;
-    channel?: string | null;
-    status?: string | null;
     body?: string | null;
     created_at?: string | null;
     sent_at?: string | null;
@@ -643,16 +642,25 @@ export default function CommunicationsDrawerSection({
                 <ul className="space-y-2">
                     {msgs.map((m) => {
                         const msgWhen = communicationMessageInstant(m);
+                        const pres = deliveryStatePresentation(mapToDeliveryState(m));
+                        const rowLabelClass = pres.highlightFailure
+                            ? "text-alloy-ember"
+                            : "text-alloy-forge";
                         return (
                             <li key={m.id} className="rounded-md border border-alloy-stone/10 bg-alloy-stone/5 px-2.5 py-2 text-sm">
                             <div className="flex flex-wrap items-baseline justify-between gap-2 text-[12px] text-alloy-forge/70">
-                                <span className="font-semibold capitalize text-alloy-forge">
-                                    {m.direction} · {m.channel ?? "—"} · {m.status ?? "—"}
+                                <span className={`font-semibold capitalize ${rowLabelClass}`}>
+                                    {m.direction} · {m.channel ?? "—"} · {pres.label}
                                 </span>
                                 <span className="tabular-nums text-[11px]">
                                     {msgWhen ? formatDateTimeForUserDisplay(msgWhen, viewerTz) : ""}
                                 </span>
                             </div>
+                            {pres.subtext ? (
+                                <div className="mt-0.5 text-[10px] leading-snug text-alloy-midnight/50">
+                                    {pres.subtext}
+                                </div>
+                            ) : null}
                             {(m.from_address || m.to_address) && (
                                 <div className="mt-1 text-[12px] text-alloy-forge/65">
                                     {m.from_address ? <span>from {m.from_address}</span> : null}
