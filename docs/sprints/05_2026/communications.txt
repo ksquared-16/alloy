@@ -1213,6 +1213,149 @@ IMPLEMENTATION (2026-05 sprint — shipped)
 - **Future (configurable RBAC):** Add **`communications.send`** to `permission_keys` + org `role_permission_grants` via admin UI/seed (optional); consider removing **`ops.messaging.write`** alias once all orgs grant **`communications.send`** explicitly where needed.
 
 ⸻
+
+End-to-End Communications Setup Checklist
+
+Purpose: prepare **staging** for end-to-end **inbound + outbound** communications verification (canonical `communication_*` + legacy `messages` where applicable). This is an operational runbook; it does not change product scope.
+
+Shared prerequisites (all paths):
+- **Dispatcher API** reachable from the internet at a stable **HTTPS** base URL (Twilio inbound webhooks require public URL + valid TLS).
+- **Supabase:** `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` on the backend (required for PostgREST writes reads used by worker paths).
+- **Stripe (backend boot):** `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET` are **required at Python import time** in `backend/app/settings.py` — staging must set them (test keys are fine) or the API process will not start.
+- **Org + bindings:** outbound email/SMS require at least one **`communication_provider_bindings`** row per org/channel ( **`status=active`** ) with correct `provider`, `secret_ref`, and `config`. There is **no provider setup UI** yet — rows are created via SQL, seed, or PostgREST admin.
+
+⸻
+
+1. Required staging env vars — Resend (outbound email)
+
+Backend worker (`communication_message_sender` → `resend_client.send_resend_email`):
+- **`RESEND_API_KEY`** — default API key when binding `secret_ref` resolves via `env:RESEND_API_KEY` or fallback in code.
+- **`RESEND_FROM_EMAIL`** — used when binding `config.from_email` is empty (`default_from_email()` in `resend_client.py`).
+
+Binding-oriented (recommended for multi-tenant clarity):
+- Store per-org key in an env var (e.g. `RESEND_API_KEY_ACME`) and set binding **`secret_ref`** to `env:RESEND_API_KEY_ACME`.
+- Binding must have **`provider` = `resend`**, `config` with at least **`from_email`** (verified sender/domain in Resend), and optionally **`subject`** / **`html`**.
+
+⸻
+
+2. Required staging env vars — Twilio (outbound SMS)
+
+Global / legacy path (`twilio_client.send_sms` — **`legacy_global_twilio`** binding or implicit global):
+- **`TWILIO_ACCOUNT_SID`**
+- **`TWILIO_AUTH_TOKEN`**
+- **`TWILIO_MESSAGING_SERVICE_SID`**
+
+Tenant binding path (`send_sms_with_credentials`):
+- Binding `config`: **`twilio_account_sid`**, **`messaging_service_sid`**
+- Binding **`secret_ref`**: **`env:VAR`** where `VAR` holds that subaccount’s **Auth Token** (not only the global trio above).
+
+⸻
+
+3. Required staging env vars — Twilio (inbound SMS, Card 24)
+
+- **`TWILIO_AUTH_TOKEN`** — required for **`X-Twilio-Signature`** validation on legacy `POST /sms/inbound` and as fallback for bindings using `legacy_global_twilio` / unconfigured `secret_ref`.
+- **`COMMUNICATIONS_SMS_INBOUND_ENABLED`** — set to `true` or leave **unset** for inbound processing; use `false` / `0` / `no` / `off` only to kill-switch inbound without changing code.
+- **`COMMUNICATIONS_TWILIO_INBOUND_VALIDATION_BASE_URL`** (optional) — public origin only, e.g. `https://dispatcher.staging.example.com`, **no path**. Set when the URL Twilio signs differs from what the app sees (reverse proxy / Host mismatch). Validation URL = this base + **path** + query (`sms_inbound.py`).
+- Per-binding **`secret_ref`** `env:...` if the inbound auth token for that binding is **not** the same as global **`TWILIO_AUTH_TOKEN`**.
+
+⸻
+
+4. Exact Twilio Console webhook URL format
+
+Mount in `backend/app/server.py`: router prefix **`/sms`**, routes **`/inbound`** and **`/inbound/{binding_id}`**.
+
+Base: **`https://<DISPATCHER_PUBLIC_HOST>`**
+
+- Legacy webhook (still inserts **`public.messages`**; canonical org resolved via **`inbound_to_e164`** on **exactly one active** SMS binding matching Twilio **`To`**):  
+  **`POST https://<DISPATCHER_PUBLIC_HOST>/sms/inbound`**
+- Binding-ID route (explicit **`communication_provider_bindings.id`** in path; same persistence when binding row loads):  
+  **`POST https://<DISPATCHER_PUBLIC_HOST>/sms/inbound/<communication_provider_bindings.id>`**  
+  (use the **UUID** of the row.)
+
+Configure the URL in Twilio **Phone Number** or **Messaging Service** inbound webhook settings so it matches **exactly** what signature validation expects (including **`COMMUNICATIONS_TWILIO_INBOUND_VALIDATION_BASE_URL`** if used).
+
+⸻
+
+5. How to test inbound SMS
+
+1. Binding row must exist with **`channel=sms`**, **`status=active`**, **`inbound_to_e164`** equal (after E.164 normalization) to Twilio **`To`**. Rows in **`pending_verification`** do **not** match — canonical persistence is skipped despite legacy **`messages`** insert.
+2. Ensure **`COMMUNICATIONS_SMS_INBOUND_ENABLED`** is not disabled; backend has **`TWILIO_AUTH_TOKEN`** (and binding token if applicable).
+3. In Twilio, point inbound SMS to one of the URLs in §4.
+4. Send an SMS to the Twilio number.
+5. Expect **HTTP 200** with empty TwiML `<Response></Response>` from the dispatcher.
+6. Verify **dispatcher logs** for **`sms_inbound_guard event=validation_ok`** (and not `signature_invalid` / `inbound_disabled`). If multiple active bindings share the same **`inbound_to_e164`** across orgs, expect **`canonical_skip ambiguous_destination_binding`** — fix data or use **`/sms/inbound/{binding_id}`**.
+7. In Supabase: **`public.messages`** inbound row; **`communication_messages`** + **`communication_threads`** when org binding resolved (see thread/message **`metadata.inbound_resolution`**: `single_person_match`, `unknown_sender`, or `ambiguous_sender` with **`candidate_person_ids`**).
+
+⸻
+
+6. How to test outbound email
+
+1. Ensure **active** `communication_provider_bindings` row for **`email`** + Resend (`provider`, `secret_ref`, `config.from_email`).
+2. **`RESEND_API_KEY`** (or env var referenced by binding) and **`RESEND_FROM_EMAIL`** fallback as needed.
+3. As an **admin/ops** user (or role with **`communications.send`** / **`ops.messaging.write`**), **`POST /api/admin/communications/send`** with **`channel: "email"`**, valid **`opportunities` or `jobs`** `entity_type` / `entity_id`, **`body`**, and recipient (`to` or eligible **`recipient_person_id`** per route rules).
+4. Confirm **`communication_messages`** row **`status=queued`** then trigger processing (§7).
+5. After processing, row should move to **`sent`**, Resend returns an **`id`**; check **`workflow_events`** for communication lifecycle events.
+
+⸻
+
+7. How to test outbound SMS (supported today)
+
+1. **Binding:** Active SMS binding with **`legacy_global_twilio`** (uses `TWILIO_*` env) **or** full `config` + **`env:`** auth token (see §2).
+2. **`POST /api/admin/communications/send`** with **`channel: "sms"`**, same entity constraints, valid E.164 **`to`**.
+3. Enqueue writes **`communication_messages`** with **`status=queued`**.
+4. **Drain the queue:** either set **`INTERNAL_MESSAGES_PROCESS_URL`** + **`INTERNAL_CRON_TOKEN`** on the **web** app (see `web/lib/communications/triggerBackendMessagesQueue.ts`) so send triggers **`POST`** to the dispatcher, **or** manually call:
+   - **`POST https://<DISPATCHER_HOST>/internal/messages/process`**
+   - Header **`x-cron-token`:** **`INTERNAL_CRON_TOKEN`** (must match backend env)
+   - Body optional: `{ "limit": 25 }`
+5. Backend runs **`process_communication_messages`** (`communication_message_sender.py`) and patches rows to **`sent`** on Twilio success; logs **`Twilio send_sms`** / **`Twilio send_sms_with_credentials`** with masked SID.
+
+If **`INTERNAL_CRON_TOKEN`** is missing on the backend, the process endpoint returns **501**; rows remain **queued**.
+
+⸻
+
+8. Expected DB tables / rows to inspect
+
+| Area | Tables |
+|------|--------|
+| Legacy SMS store | **`public.messages`** (inbound/outbound, `channel=sms`) |
+| Canonical threads | **`communication_threads`** |
+| Canonical messages | **`communication_messages`** (`direction`, `status`, `provider`, `provider_message_id`, `communication_provider_binding_id`) |
+| Provider config | **`communication_provider_bindings`** |
+| Communication-scoped events | **`workflow_events`** (inserts from `communication_workflow_events.emit_for_communication_message` / related) |
+| Person anchor | **`persons`** (inbound person-first resolution vs surrogate — see `communication_inbound.py`) |
+
+⸻
+
+9. Expected logs / events
+
+- **Inbound:** `sms_inbound_guard` (`validation_ok`, or `inbound_disabled` / `signature_invalid`).
+- **Outbound SMS:** `Twilio send_sms` / `Twilio send_sms_with_credentials` (masked SID); **`COMM_MSG_***`** / patch failures on errors.
+- **Outbound email:** `Resend send ok id_tail=...`
+- **Workflow:** `communication_event` (failures logged); **`message_sent`**, optimistic **`message_delivered`** (SMS) with `extra.note` as in ship notes; **`message_received`** on inbound canonical path.
+
+⸻
+
+10. Known limitations (current program state)
+
+- **No delivery webhooks** from Resend/Twilio into Alloy yet — no automatic **`delivered`/`bounced`** canonical state from provider callbacks.
+- **Provider accepted ≠ delivered:** Twilio **`message.status`** after API create is often **`queued`/`sent`**; email Resend **`id`** means Resend accepted the send, not inbox delivery. **`message_delivered`** after SMS send is **optimistic** (documented in sprint / `communication_message_sender` behavior).
+- **Templates / bulk messaging** not implemented.
+- **Provider setup UI** not built — bindings and secrets are operational/DB-managed.
+- **`COMMUNICATIONS_DUAL_WRITE`** remains **off** unless explicitly approved elsewhere — do not enable for staging tests unless policy allows.
+
+⸻
+
+Code-level blockers to “true” end-to-end (staging checklist honesty)
+
+| Blocker | Detail |
+|---------|--------|
+| Backend import requires Stripe env | Without **`STRIPE_SECRET_KEY`** + **`STRIPE_WEBHOOK_SECRET`**, Python cannot import `settings` — dispatcher won’t boot. |
+| Bindings must exist | Composer returns **422** if no actionable binding (`send/route.ts`); no UI to create bindings. |
+| Queue drain | **`communication_messages`** stays **`queued`** until **`POST /internal/messages/process`** succeeds; web auto-trigger needs **`INTERNAL_MESSAGES_PROCESS_URL`** (full URL to that path) + **`INTERNAL_CRON_TOKEN`** aligned with backend. |
+| Composer entity scope | Send API only **`opportunities`** / **`jobs`** (`entity_type`) — other entities return 400. |
+| RBAC | Non-admin/ops users need **`communications.send`** or **`ops.messaging.write`** grant or send returns **403**. |
+| Inbound without Supabase | If Supabase env missing, inbound legacy/PostgREST paths may no-op or fail writes (`supabase_client` degradation). |
+
 ⸻
 ⸻
 
