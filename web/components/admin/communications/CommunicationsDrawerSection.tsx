@@ -8,8 +8,9 @@ import {
     markCommunicationsDrawerPrefetchConsumed,
     invalidateCommunicationsDrawerPrefetch,
 } from "@/lib/admin/communications/communicationsDrawerPrefetch";
-import type { CommunicationMessage } from "@/lib/communications/deliveryStateAdapter";
+import type { CommunicationMessage, DeliveryState } from "@/lib/communications/deliveryStateAdapter";
 import { deliveryStatePresentation, mapToDeliveryState } from "@/lib/communications/deliveryStateAdapter";
+import { normalizeRecipientKeyEmail, normalizeRecipientKeySms } from "@/lib/communications/recipientKey";
 
 type ThreadRow = {
     id: string;
@@ -132,6 +133,52 @@ function communicationMessageInstant(m: MsgRow): string | null | undefined {
     return s && String(s).trim() ? s : null;
 }
 
+/** Compact bubble headline; keep delivery truth in a muted subline where needed. */
+function bubbleStatusLine(m: MsgRow): { headline: string; sub?: string } {
+    const state = mapToDeliveryState(m);
+    const pres = deliveryStatePresentation(state);
+    switch (state as DeliveryState) {
+        case "inbound_received":
+            return { headline: "Received" };
+        case "failed":
+        case "bounced":
+            return { headline: "Failed", sub: pres.subtext };
+        case "queued":
+            return { headline: "Queued", sub: pres.subtext };
+        case "delivered":
+            return { headline: "Delivered" };
+        case "provider_accepted":
+            return { headline: "Sent", sub: "Provider accepted · delivery not confirmed" };
+        case "sent_to_provider":
+            return { headline: "Sent", sub: pres.subtext };
+        default:
+            return { headline: pres.label, sub: pres.subtext };
+    }
+}
+
+function counterpartyLabel(
+    m: MsgRow,
+    inbound: boolean,
+    lookup: { phoneToName: Map<string, string>; emailToName: Map<string, string> },
+): { title: string; subtitle?: string } {
+    const ch = (m.channel ?? "").trim().toLowerCase();
+    const raw = String((inbound ? m.from_address : m.to_address) ?? "").trim();
+    if (!raw) return { title: inbound ? "Sender" : "Recipient" };
+    if (ch === "sms") {
+        const k = normalizeRecipientKeySms(raw);
+        const name = k ? lookup.phoneToName.get(k) : undefined;
+        if (name) return { title: inbound ? `From ${name}` : `To ${name}`, subtitle: raw };
+        return { title: inbound ? `From ${raw}` : `To ${raw}` };
+    }
+    if (ch === "email") {
+        const ek = normalizeRecipientKeyEmail(raw);
+        const name = lookup.emailToName.get(ek);
+        if (name) return { title: inbound ? `From ${name}` : `To ${name}`, subtitle: raw };
+        return { title: inbound ? `From ${raw}` : `To ${raw}` };
+    }
+    return { title: inbound ? `From ${raw}` : `To ${raw}` };
+}
+
 /** Canonical threads + messages + drawer composer (Cards 16–17, 26–29). */
 export default function CommunicationsDrawerSection({
     apiEntityType,
@@ -153,8 +200,6 @@ export default function CommunicationsDrawerSection({
     const [viewFilter, setViewFilter] = useState<ViewFilter>("all");
     /** When view is "all", which channel to use for send UI. */
     const [allComposerMode, setAllComposerMode] = useState<"email" | "sms">("email");
-    /** When multiple threads: merged (default) or isolate one thread's messages. */
-    const [threadScope, setThreadScope] = useState<"merged" | string>("merged");
 
     const conversationScrollRef = useRef<HTMLDivElement>(null);
 
@@ -187,6 +232,22 @@ export default function CommunicationsDrawerSection({
         return viewFilter === "email" ? "email" : "sms";
     }, [viewFilter, allComposerMode]);
 
+    /** Match message from/to addresses to drawer person rows (person-first; no contacts). */
+    const addressDisplayNameLookup = useMemo(() => {
+        const phoneToName = new Map<string, string>();
+        const emailToName = new Map<string, string>();
+        for (const r of recipients) {
+            if (r.phone) {
+                const k = normalizeRecipientKeySms(r.phone);
+                if (k) phoneToName.set(k, r.display_name);
+            }
+            if (r.email) {
+                emailToName.set(normalizeRecipientKeyEmail(r.email), r.display_name);
+            }
+        }
+        return { phoneToName, emailToName };
+    }, [recipients]);
+
     useEffect(() => {
         setThreads([]);
         setThrErr(null);
@@ -196,7 +257,6 @@ export default function CommunicationsDrawerSection({
         setLoadingMsgs(false);
         setViewFilter("all");
         setAllComposerMode("email");
-        setThreadScope("merged");
         setChannelsAvailable([]);
         setBindingsErr(null);
         setRecipients([]);
@@ -253,19 +313,6 @@ export default function CommunicationsDrawerSection({
             return ch === viewFilter;
         });
     }, [threads, viewFilter]);
-
-    /** Switching channel view resets scope so we never point at a hidden thread. */
-    useEffect(() => {
-        setThreadScope("merged");
-    }, [viewFilter]);
-
-    /** If a scoped thread id vanished (filter/refresh), fall back to merged. */
-    useEffect(() => {
-        if (threadScope === "merged") return;
-        if (!filteredThreadsByView.some((t) => t.id === threadScope)) {
-            setThreadScope("merged");
-        }
-    }, [filteredThreadsByView, threadScope]);
 
     const loadThreads = useCallback(async () => {
         setThrErr(null);
@@ -356,10 +403,7 @@ export default function CommunicationsDrawerSection({
 
     const loadConversationMessages = useCallback(async () => {
         if (!dataLayerActive) return;
-        const scopeList =
-            threadScope === "merged"
-                ? filteredThreadsByView.slice(0, MAX_MERGE_THREADS)
-                : filteredThreadsByView.filter((t) => t.id === threadScope);
+        const scopeList = filteredThreadsByView.slice(0, MAX_MERGE_THREADS);
         if (scopeList.length === 0) {
             setMsgs([]);
             setMsgErr(null);
@@ -397,7 +441,7 @@ export default function CommunicationsDrawerSection({
         } finally {
             setLoadingMsgs(false);
         }
-    }, [dataLayerActive, filteredThreadsByView, threadScope]);
+    }, [dataLayerActive, filteredThreadsByView]);
 
     useEffect(() => {
         if (!dataLayerActive) return;
@@ -707,19 +751,19 @@ export default function CommunicationsDrawerSection({
 
     const composerBlockInner =
         showDrawerComposerChrome && composerEntity ? (
-            <div className="rounded-xl border border-alloy-stone/15 bg-white/[0.97] px-2.5 py-2.5 shadow-sm">
+            <div className="w-full min-w-0">
                 <div className={COMPOSER_LABEL}>Compose</div>
                 {loadingBindings ? (
-                    <div className="space-y-1.5 py-1" aria-busy="true">
+                    <div className="space-y-1 py-1" aria-busy="true">
                         <div className="skeleton-pulse h-3 w-[min(92%,240px)] rounded bg-alloy-stone/14" aria-hidden />
-                        <div className="skeleton-pulse h-9 w-full rounded-md bg-alloy-stone/12" aria-hidden />
+                        <div className="skeleton-pulse h-8 w-full rounded-md bg-alloy-stone/12" aria-hidden />
                     </div>
                 ) : bindingsErr ? (
                     <p className="text-[11px] text-alloy-ember">{bindingsErr}</p>
                 ) : (
-                    <div className="mt-2 space-y-2.5">
+                    <div className="mt-1.5 space-y-2">
                         {viewFilter === "all" ? (
-                            <div className="flex flex-wrap items-center gap-1.5">
+                            <div className="flex flex-wrap items-center gap-1">
                                 <span className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
                                     Send as
                                 </span>
@@ -749,39 +793,42 @@ export default function CommunicationsDrawerSection({
                         ) : null}
 
                         {effectiveComposer === "email" && !emailOutboundReady ? (
-                            <p className="text-[11px] leading-snug text-alloy-midnight/65">
-                                Email outbound is not configured — add an active Resend binding.
+                            <p className="text-[10px] leading-snug text-alloy-midnight/60">
+                                Add an active Resend email binding for this org.
                             </p>
                         ) : null}
 
                         {effectiveComposer === "sms" && !smsOutboundReady ? (
-                            <p className="text-[11px] leading-snug text-alloy-midnight/65">
-                                SMS outbound is not available — add an active SMS binding with secret_ref (Twilio credentials).
+                            <p className="text-[10px] leading-snug text-alloy-midnight/60" title="SMS outbound requires a binding row with Twilio credentials">
+                                SMS unavailable: set{" "}
+                                <code className="rounded bg-alloy-stone/10 px-0.5 text-[9px]">communication_provider_bindings</code>{" "}
+                                <code className="rounded bg-alloy-stone/10 px-0.5 text-[9px]">secret_ref</code> (not empty / not{" "}
+                                <code className="rounded bg-alloy-stone/10 px-0.5 text-[9px]">unconfigured</code>) on an active{" "}
+                                <code className="rounded bg-alloy-stone/10 px-0.5 text-[9px]">channel=sms</code> row for this org. Global Twilio
+                                env alone does not enable the composer — the send route uses binding rows only.
                             </p>
                         ) : null}
 
                         {composerReady ? (
                             loadingRecipients ? (
-                                <div className="space-y-1.5 py-1" aria-busy="true">
-                                    <div className="skeleton-pulse h-3 w-[min(88%,220px)] rounded bg-alloy-stone/14" aria-hidden />
-                                    <div className="skeleton-pulse h-16 w-full rounded-md bg-alloy-stone/12" aria-hidden />
+                                <div className="flex flex-wrap gap-1 py-0.5" aria-busy="true">
+                                    <div className="skeleton-pulse h-7 w-24 rounded-full bg-alloy-stone/12" aria-hidden />
+                                    <div className="skeleton-pulse h-7 w-28 rounded-full bg-alloy-stone/11" aria-hidden />
                                 </div>
                             ) : recipientsErr ? (
                                 <p className="text-[11px] text-alloy-ember">{recipientsErr}</p>
                             ) : recipientsForComposer.length === 0 ? (
-                                <p className="text-[11px] text-alloy-midnight/65">
+                                <p className="text-[10px] text-alloy-midnight/58">
                                     {effectiveComposer === "email"
-                                        ? "No people with email on this record."
-                                        : "No people with a mobile number on this record."}
+                                        ? "No linked people with email."
+                                        : "No linked people with a mobile number for SMS."}
                                 </p>
                             ) : (
-                                <div className="space-y-2">
-                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
-                                        Recipients
-                                    </p>
-                                    <div className="grid max-h-[9.5rem] gap-1.5 overflow-y-auto pr-0.5">
+                                <div className="space-y-1.5">
+                                    <div className="flex max-h-[5.5rem] flex-wrap gap-1 overflow-y-auto pr-0.5">
                                         {recipientsForComposer.map((r) => {
                                             const on = selectedRecipientIds.has(r.person_id);
+                                            const addr = effectiveComposer === "email" ? r.email ?? "" : r.phone ?? "";
                                             return (
                                                 <button
                                                     key={r.person_id}
@@ -789,30 +836,17 @@ export default function CommunicationsDrawerSection({
                                                     aria-pressed={on}
                                                     disabled={sendBusy}
                                                     onClick={() => toggleRecipient(r.person_id)}
-                                                    className={`w-full rounded-lg border px-2.5 py-2 text-left transition ${
+                                                    title={r.relationship_hint ?? undefined}
+                                                    className={`max-w-full rounded-full border px-2 py-1 text-left text-[11px] leading-tight transition ${
                                                         on
-                                                            ? "border-alloy-midnight bg-alloy-midnight/[0.07] ring-1 ring-alloy-midnight/20"
-                                                            : "border-alloy-stone/18 bg-white hover:border-alloy-stone/30"
+                                                            ? "border-alloy-midnight bg-alloy-midnight/[0.08] font-semibold text-alloy-midnight ring-1 ring-alloy-midnight/18"
+                                                            : "border-alloy-stone/20 bg-white font-medium text-alloy-forge hover:border-alloy-stone/35"
                                                     }`}
                                                 >
-                                                    <div className="flex items-start justify-between gap-2">
-                                                        <span className="text-[12px] font-semibold text-alloy-midnight">
-                                                            {r.display_name}
-                                                        </span>
-                                                        {on ? (
-                                                            <span className="shrink-0 text-[10px] font-medium text-alloy-forge/75">
-                                                                On
-                                                            </span>
-                                                        ) : null}
-                                                    </div>
-                                                    <div className="mt-0.5 break-all text-[11px] text-alloy-midnight/65">
-                                                        {effectiveComposer === "email" ? r.email ?? "—" : r.phone ?? "—"}
-                                                    </div>
-                                                    {r.relationship_hint ? (
-                                                        <div className="mt-0.5 text-[10px] text-alloy-midnight/45">
-                                                            {r.relationship_hint}
-                                                        </div>
-                                                    ) : null}
+                                                    <span className="block truncate">{r.display_name}</span>
+                                                    <span className="block truncate text-[10px] font-normal text-alloy-midnight/55">
+                                                        {addr}
+                                                    </span>
                                                 </button>
                                             );
                                         })}
@@ -839,10 +873,8 @@ export default function CommunicationsDrawerSection({
                                             value={composerBody}
                                             onChange={(e) => setComposerBody(e.target.value)}
                                             disabled={sendBusy}
-                                            rows={3}
-                                            placeholder={
-                                                effectiveComposer === "sms" ? "Write SMS…" : "Write email…"
-                                            }
+                                            rows={embedded ? 2 : 3}
+                                            placeholder={effectiveComposer === "sms" ? "SMS…" : "Email…"}
                                             className="w-full resize-none rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 text-[12px] leading-snug text-alloy-midnight/85 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
                                             aria-label={effectiveComposer === "email" ? "Email body" : "SMS message"}
                                         />
@@ -888,8 +920,8 @@ export default function CommunicationsDrawerSection({
     ) : null;
 
     return (
-        <div className={`flex min-h-0 min-w-0 flex-col ${className}`}>
-            <section className="flex min-h-0 flex-col gap-2">
+        <div className={`flex min-h-0 min-w-0 flex-1 flex-col ${className}`}>
+            <section className="flex min-h-0 flex-1 flex-col gap-1.5">
                 {headerTitle}
                 {description}
 
@@ -900,8 +932,8 @@ export default function CommunicationsDrawerSection({
                 ) : threads.length === 0 ? (
                     emptyThreadsBody
                 ) : (
-                    <>
-                        <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Message channels">
+                    <div className="flex min-h-0 flex-1 flex-col gap-1.5">
+                        <div className="flex shrink-0 flex-wrap items-center gap-1" role="tablist" aria-label="Message channels">
                             <button
                                 type="button"
                                 role="tab"
@@ -931,30 +963,11 @@ export default function CommunicationsDrawerSection({
                             </button>
                         </div>
 
-                        {filteredThreadsByView.length > 1 ? (
-                            <label className="flex flex-wrap items-center gap-2 text-[11px] text-alloy-midnight/70">
-                                <span className="shrink-0 font-medium text-alloy-midnight/55">Conversation</span>
-                                <select
-                                    value={threadScope}
-                                    onChange={(e) =>
-                                        setThreadScope(e.target.value === "merged" ? "merged" : e.target.value)
-                                    }
-                                    className="min-w-0 max-w-full flex-1 rounded-lg border border-alloy-stone/20 bg-white px-2 py-1 text-[11px] text-alloy-forge shadow-sm"
-                                >
-                                    <option value="merged">All (merged timeline)</option>
-                                    {filteredThreadsByView.map((t) => (
-                                        <option key={t.id} value={t.id}>
-                                            {channelFacetLabel(t.channel)} — {t.recipient_key || t.id.slice(0, 8)}
-                                        </option>
-                                    ))}
-                                </select>
-                            </label>
-                        ) : null}
-
-                        <div
-                            ref={conversationScrollRef}
-                            className="comms-drawer-conversation flex max-h-[min(300px,42vh)] min-h-[132px] flex-col overflow-y-auto rounded-xl border border-alloy-stone/15 bg-[linear-gradient(180deg,rgba(246,247,249,0.9)_0%,#ffffff_100%)] px-2 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]"
-                        >
+                        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-alloy-stone/15 bg-[linear-gradient(180deg,rgba(246,247,249,0.88)_0%,#ffffff_100%)] shadow-sm">
+                            <div
+                                ref={conversationScrollRef}
+                                className="comms-drawer-conversation min-h-0 flex-1 overflow-y-auto px-2 py-1.5"
+                            >
                             {loadingMsgs ? (
                                 <div className="flex flex-1 flex-col justify-center gap-2 py-4" aria-busy="true">
                                     <div className="skeleton-pulse h-12 w-[88%] rounded-2xl bg-alloy-stone/12" />
@@ -968,19 +981,22 @@ export default function CommunicationsDrawerSection({
                                     No messages in this view yet.
                                 </p>
                             ) : (
-                                <ul className="flex flex-col gap-0.5">
+                                <ul className="flex flex-col gap-1.5 pb-1">
                                     {msgs.map((m) => {
                                         const inbound = (m.direction ?? "").toLowerCase() === "inbound";
-                                        const pres = deliveryStatePresentation(mapToDeliveryState(m));
+                                        const state = mapToDeliveryState(m);
+                                        const pres = deliveryStatePresentation(state);
                                         const fail = pres.highlightFailure;
                                         const msgWhen = communicationMessageInstant(m);
+                                        const { headline, sub } = bubbleStatusLine(m);
+                                        const cp = counterpartyLabel(m, inbound, addressDisplayNameLookup);
                                         return (
                                             <li
                                                 key={`${m.id}-${m._thread_id ?? ""}`}
                                                 className={`flex w-full ${inbound ? "justify-start" : "justify-end"}`}
                                             >
                                                 <div
-                                                    className={`max-w-[min(100%,19.5rem)] rounded-2xl px-3 py-2 text-[13px] leading-snug shadow-sm ${
+                                                    className={`max-w-[min(100%,19.5rem)] rounded-2xl px-2.5 py-1.5 text-[13px] leading-snug shadow-sm ${
                                                         inbound
                                                             ? "rounded-tl-sm border border-alloy-stone/16 bg-white text-alloy-forge"
                                                             : `rounded-tr-sm text-white ${
@@ -991,53 +1007,58 @@ export default function CommunicationsDrawerSection({
                                                     }`}
                                                 >
                                                     <div
-                                                        className={`mb-1 flex flex-wrap items-baseline gap-x-1.5 text-[10px] font-medium uppercase tracking-wide ${
-                                                            inbound ? "text-alloy-midnight/42" : "text-white/58"
+                                                        className={`mb-0.5 flex flex-wrap items-baseline gap-x-1 text-[10px] font-semibold uppercase tracking-wide ${
+                                                            inbound ? "text-alloy-midnight/38" : "text-white/55"
                                                         }`}
                                                     >
-                                                        <span>{channelFacetLabel(m.channel)}</span>
-                                                        <span className="opacity-50">·</span>
+                                                        <span className="opacity-90">{channelFacetLabel(m.channel)}</span>
+                                                        <span className="opacity-40">·</span>
                                                         <span
                                                             className={
                                                                 inbound
                                                                     ? fail
                                                                         ? "text-alloy-ember"
-                                                                        : "text-alloy-forge/90"
-                                                                    : ""
+                                                                        : "normal-case text-alloy-forge/88"
+                                                                    : "normal-case"
                                                             }
                                                         >
-                                                            {pres.label}
+                                                            {headline}
                                                         </span>
                                                         {msgWhen ? (
                                                             <span
-                                                                className={`ml-auto tabular-nums normal-case font-normal opacity-80 ${
-                                                                    inbound ? "" : "text-white/70"
+                                                                className={`ml-auto tabular-nums normal-case font-normal opacity-75 ${
+                                                                    inbound ? "text-alloy-midnight/45" : "text-white/65"
                                                                 }`}
                                                             >
                                                                 {formatDateTimeForUserDisplay(msgWhen, viewerTz)}
                                                             </span>
                                                         ) : null}
                                                     </div>
-                                                    {pres.subtext ? (
+                                                    {sub ? (
                                                         <p
-                                                            className={`mb-1 text-[10px] leading-snug ${
-                                                                inbound ? "text-alloy-midnight/48" : "text-white/55"
+                                                            className={`mb-0.5 text-[9px] font-normal normal-case leading-snug ${
+                                                                inbound ? "text-alloy-midnight/42" : "text-white/48"
                                                             }`}
                                                         >
-                                                            {pres.subtext}
+                                                            {sub}
                                                         </p>
                                                     ) : null}
-                                                    {(m.from_address || m.to_address) && (
-                                                        <p
-                                                            className={`mb-1.5 text-[11px] ${
-                                                                inbound ? "text-alloy-forge/65" : "text-white/70"
-                                                            }`}
-                                                        >
-                                                            {m.from_address ? <span>From {m.from_address}</span> : null}
-                                                            {m.from_address && m.to_address ? " · " : null}
-                                                            {m.to_address ? <span>To {m.to_address}</span> : null}
-                                                        </p>
-                                                    )}
+                                                    <p
+                                                        className={`mb-1 text-[10px] font-medium leading-snug ${
+                                                            inbound ? "text-alloy-forge/72" : "text-white/72"
+                                                        }`}
+                                                    >
+                                                        {cp.title}
+                                                        {cp.subtitle ? (
+                                                            <span
+                                                                className={`mt-0.5 block font-normal ${
+                                                                    inbound ? "text-alloy-midnight/45" : "text-white/50"
+                                                                }`}
+                                                            >
+                                                                {cp.subtitle}
+                                                            </span>
+                                                        ) : null}
+                                                    </p>
                                                     {m.body ? (
                                                         <div
                                                             className={`whitespace-pre-wrap ${
@@ -1053,10 +1074,15 @@ export default function CommunicationsDrawerSection({
                                     })}
                                 </ul>
                             )}
-                        </div>
+                            </div>
 
-                        {composerBlockInner}
-                    </>
+                            {composerBlockInner ? (
+                                <div className="shrink-0 border-t border-alloy-stone/12 bg-white/[0.97] px-2 py-1.5">
+                                    {composerBlockInner}
+                                </div>
+                            ) : null}
+                        </div>
+                    </div>
                 )}
             </section>
         </div>

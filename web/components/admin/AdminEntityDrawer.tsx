@@ -10246,27 +10246,24 @@ export default function AdminEntityDrawer() {
                                                                               ? "communication"
                                                                               : null;
                                                                     return (
-                                                                        <div className="space-y-2">
-                                                                            <div className="flex items-center justify-between gap-2">
-                                                                                <div className="flex items-center gap-1.5">
-                                                                                    <button
-                                                                                        type="button"
-                                                                                        className={oppInqTabBtn(panel === "communication")}
-                                                                                        onClick={() =>
-                                                                                            setFormData((p) => ({ ...p, _enrollment_panel: "communication" }))
-                                                                                        }
-                                                                                    >
-                                                                                        Communication
-                                                                                    </button>
-                                                                                    <button
-                                                                                        type="button"
-                                                                                        className={oppInqTabBtn(panel === "notes")}
-                                                                                        onClick={() => setFormData((p) => ({ ...p, _enrollment_panel: "notes" }))}
-                                                                                    >
-                                                                                        Notes
-                                                                                    </button>
-                                                                                </div>
-                                                                                <div className={tinyLabel}>Notes / communication</div>
+                                                                        <div className="space-y-1.5">
+                                                                            <div className="inline-flex rounded-lg border border-alloy-stone/15 bg-alloy-stone/[0.04] p-0.5">
+                                                                                <button
+                                                                                    type="button"
+                                                                                    className={oppInqTabBtn(panel === "communication")}
+                                                                                    onClick={() =>
+                                                                                        setFormData((p) => ({ ...p, _enrollment_panel: "communication" }))
+                                                                                    }
+                                                                                >
+                                                                                    Communication
+                                                                                </button>
+                                                                                <button
+                                                                                    type="button"
+                                                                                    className={oppInqTabBtn(panel === "notes")}
+                                                                                    onClick={() => setFormData((p) => ({ ...p, _enrollment_panel: "notes" }))}
+                                                                                >
+                                                                                    Notes
+                                                                                </button>
                                                                             </div>
 
                                                                             {panel === "notes" ? (
@@ -10336,7 +10333,9 @@ export default function AdminEntityDrawer() {
                                                                                     })()}
                                                                                 </div>
                                                                             ) : panel === "communication" && drawer.id && drawer.id !== "new" ? (
-                                                                                <div className={`${oppInqInnerCard} min-h-[7.75rem]`}>
+                                                                                <div
+                                                                                    className={`${oppInqInnerCard} flex min-h-[min(18rem,52vh)] min-w-0 flex-1 flex-col`}
+                                                                                >
                                                                                     <CommunicationsDrawerSection
                                                                                         embedded
                                                                                         apiEntityType="opportunities"
@@ -10344,11 +10343,7 @@ export default function AdminEntityDrawer() {
                                                                                         active
                                                                                     />
                                                                                 </div>
-                                                                            ) : (
-                                                                                <p className={`px-0.5 py-2 ${oppInqMutedEmpty}`}>
-                                                                                    Choose Communication or Notes.
-                                                                                </p>
-                                                                            )}
+                                                                            ) : null}
                                                                         </div>
                                                                     );
                                                                 })()}

@@ -1610,8 +1610,8 @@ End design batch — Cards 22, 23, 25A.
 **Implemented (no API/provider/KPI/workflow changes):**
 
 - **Layout:** **All | Email | SMS** tabs filter which threads contribute to the timeline and drive the composer (`All` uses **Send as** Email/SMS; **In-app** control removed from UI). Conversation **scroll** (`max-h` ~42vh / 300px) with **composer below**. **Removed** “expand / collapse thread space” and the side thread list with “related person / this record” copy.
-- **Merged feed:** Loads **up to 10** threads (after filter) × **36** messages each, merges chronologically, **caps at 200** messages, **scrolls to bottom** on load. Optional **Conversation** dropdown when **2+** threads: **merged timeline** vs **one thread** only.
-- **Bubbles:** **Inbound** = left, **outbound/system outbound** = right; subtle **Email / SMS / In-app** channel line + **`deliveryStatePresentation` + `mapToDeliveryState`** (Received, Sent to provider, Delivery not confirmed, Failed, etc.).
+- **Merged feed:** Loads **up to 10** threads (after filter) × **36** messages each, merges chronologically, **caps at 200** messages, **scrolls to bottom** on load. **No per-thread dropdown** — tabs alone drive the visible slice; always merged for the active filter.
+- **Bubbles:** **Inbound** = left, **outbound/system outbound** = right; subtle **Email / SMS / In-app** channel line + delivery mapping (see tightening pass below for simplified headlines).
 - **Composer:** **Send email** / **Send SMS** (no recipient count in label); **Subject** optional + **Email body** label; SMS **body only**; inline disabled copy when binding/channel not available.
 - **Recipients:** **Selectable rows** (button + `aria-pressed`), not default checkboxes.
 - **Notifications:** **Success** copy below the button **auto-clears after ~4.5s**; **errors** stay until the next send attempt or change.
@@ -1634,3 +1634,37 @@ End design batch — Cards 22, 23, 25A.
 5. Regression: send email still succeeds with existing behavior.
 
 **Suggested commit message:** `feat(communications): unified conversation-first drawer communication UX`
+
+⸻
+
+### Drawer Communication — **UX tightening pass** (inquiry tabs + conversation polish)
+
+**Scope:** Front-end only; **`composerChannels.ts` / send route unchanged** for SMS eligibility (binding `secret_ref` still required).
+
+**1. Inquiry summary — Communication / Notes**
+
+- **Removed** the empty-state line **“Choose Communication or Notes.”** (no placeholder when neither sub-panel is selected).
+- **Tightened** the tab row: **segmented control** (`inline-flex` + light border) instead of a wide header with a redundant right label.
+- **Opportunity comms embed:** wrapper now **`flex min-h-[min(18rem,52vh)]`** so the conversation stack can grow and keep **composer visible** above the fold more often (`AdminEntityDrawer.tsx`).
+
+**2. Conversation panel (`CommunicationsDrawerSection.tsx`)**
+
+- **Removed** the **Conversation** `<select>`; **All / Email / SMS** tabs are the only history filter; timeline stays **merged** for that filter.
+- **Delivery UI:** primary line shows **Received / Sent / Failed / Delivered / Queued** as appropriate; **“Provider accepted · delivery not confirmed”** (and similar) moved to a **smaller muted subline** under the headline (still honest; not raw DB enums).
+- **Counterparty names:** **From / To** lines prefer **person display names** when `from_address` / `to_address` matches a **drawer recipient** phone/email (`normalizeRecipientKeySms` / `normalizeRecipientKeyEmail`); raw address shown as a **subtitle** when a name matched. Person-first only (same recipient list as composer); **no contacts** as primary identity.
+- **Layout:** conversation + composer live in one **flex column** with **`flex-1` scroll** for history and **`shrink-0` + `border-t`** composer strip at the bottom of the card.
+- **Recipients:** **Compact pill/chip** toggles (truncate, `aria-pressed`) replacing large full-width cards; shorter SMS placeholder rows when embedded.
+
+**3. SMS eligibility (finding)**
+
+- **`availableComposerChannels`** / **`activeOutboundBindings`** (`web/lib/communications/composerChannels.ts`) treat SMS as available only when **`status === 'active'`**, **`channel === 'sms'`**, and **`secret_ref`** is set and **not** empty / **`unconfigured`**.
+- **`POST /api/admin/communications/send`** uses **`activeOutboundBindings`** — **no global Twilio env fallback** in this path. UI **cannot** safely show SMS as “ready” without a proper **`secret_ref`** on an active binding row.
+- **Exact unblock (SQL intent):** for the org’s row in **`communication_provider_bindings`**, set **`channel`** to SMS, **`status`** to **`active`**, and **`secret_ref`** to the vault/secret reference your worker uses to load Twilio credentials (must not be null or the literal **`unconfigured`**). Align with how **`INTERNAL_*`** / worker reads credentials in your deployment.
+
+**Files touched this pass**
+
+- `web/components/admin/communications/CommunicationsDrawerSection.tsx`
+- `web/components/admin/AdminEntityDrawer.tsx` (opportunity inquiry Communication/Notes strip + comms container height)
+- `docs/Sprints/05_2026/Communications.txt` (this section)
+
+**Suggested commit message:** `fix(communications): tighten drawer comms UX, names in bubbles, SMS binding copy`
