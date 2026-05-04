@@ -64,14 +64,14 @@
   --ws-dept-operational-row-min-height: 0;
   /*
    * Cross-surface typography roles — record cards, queue rows, department tiles (see doctrine).
-   * Values preserve current work-unit CRM scale; other surfaces reference the same tokens where applicable.
+   * Fact values stay **regular (400)** for CRM compact scan; labels/titles stay heavier via sibling tokens.
    */
   --ws-type-crm-record-title-size: 11px;
   --ws-type-crm-record-title-weight: 800;
   --ws-type-fact-group-label-size: 11px;
   --ws-type-fact-group-label-weight: 600;
   --ws-type-fact-value-size: 13px;
-  --ws-type-fact-value-weight: 650;
+  --ws-type-fact-value-weight: 400;
   --ws-type-dept-tile-name-size: 14.5px;
   --ws-type-dept-tile-desc-size: 11.5px;
 }
@@ -6163,7 +6163,7 @@
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview .adminv2-ws-queue-fact-value,
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview .adminv2-ws-queue-fact-line {
   font-size: var(--ws-type-fact-value-size, 13px);
-  font-weight: var(--ws-type-fact-value-weight, 650);
+  font-weight: var(--ws-type-fact-value-weight, 400);
   line-height: 1.34;
   letter-spacing: -0.006em;
   color: color-mix(in srgb, var(--d-muted) 18%, var(--d-text-primary, #273f52));
@@ -6238,7 +6238,7 @@
   align-items: center;
   padding: 0 14px;
   font-size: 14px;
-  font-weight: 550;
+  font-weight: 400;
   line-height: 1;
   color: rgba(55, 65, 81, 0.55);
   user-select: none;
@@ -6288,14 +6288,14 @@
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview .adminv2-ws-queue-fact-timing-k,
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview .adminv2-ws-queue-fact-timing-k {
   font-size: inherit;
-  font-weight: 750;
+  font-weight: 450;
   color: color-mix(in srgb, var(--d-muted) 22%, var(--d-text-primary, #273f52));
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview .adminv2-ws-queue-fact-timing-v,
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview .adminv2-ws-queue-fact-timing-v {
   font-size: inherit;
-  font-weight: 650;
+  font-weight: 400;
   color: color-mix(in srgb, var(--d-muted) 18%, var(--d-text-primary, #273f52));
 }
 

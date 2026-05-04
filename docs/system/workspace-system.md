@@ -48,6 +48,8 @@ Work-unit **CRM compact** queue rows show **Child** and **Program** columns usin
 
 **UI path:** Work-unit pages consume **`_crm_compact_children`** via **`buildWorkUnitQueueCrmCompactRowSlice`** (`web/lib/ui-v2/crmQueueRowPreviewPresentation.ts`) and `QueueBlock` fact columns.
 
+**Typography (platform expectation):** CRM compact **fact values** (contact name, phone, email, child/program/timing cells) use shared workspace token **`--ws-type-fact-value-weight: 400`** (regular) on v2 surfaces so dense queue rows stay scannable; column heads and group labels stay heavier via **`--ws-type-fact-group-label-weight`**. Implementation: `web/app/adminV2/components/workspace/workspace.css` (`.adminv2-ws-queue-fact-value` / `.adminv2-ws-queue-fact-line` under `.adminv2-ws-crm-queue-preview`).
+
 ## Current state
 
 - Routes under **`web/app/adminV2/`** compose the shell (`AdminV2Shell.tsx`) with workspace navigation and embedded perf overlay.
