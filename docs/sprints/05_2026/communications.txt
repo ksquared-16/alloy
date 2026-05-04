@@ -1600,3 +1600,37 @@ End design batch — Cards 22, 23, 25A.
 **Suggested commit message:** `feat(communications): related-person drawer threads, SMS/email composer, messaging scaffold`
 
 (Separate KPI / **`COMMUNICATION_DUAL_WRITE`** / **`workflowRun.ts`** untouched in this batch per program rules.)
+
+⸻
+
+### Drawer Communication — **unified messaging UX refinement** (front-end only)
+
+**Goal:** Single conversation-first surface in the entity drawer: merged history (newest at bottom), channel filter tabs, polished composer and recipients, delivery adapter copy only (no raw DB status).
+
+**Implemented (no API/provider/KPI/workflow changes):**
+
+- **Layout:** **All | Email | SMS** tabs filter which threads contribute to the timeline and drive the composer (`All` uses **Send as** Email/SMS; **In-app** control removed from UI). Conversation **scroll** (`max-h` ~42vh / 300px) with **composer below**. **Removed** “expand / collapse thread space” and the side thread list with “related person / this record” copy.
+- **Merged feed:** Loads **up to 10** threads (after filter) × **36** messages each, merges chronologically, **caps at 200** messages, **scrolls to bottom** on load. Optional **Conversation** dropdown when **2+** threads: **merged timeline** vs **one thread** only.
+- **Bubbles:** **Inbound** = left, **outbound/system outbound** = right; subtle **Email / SMS / In-app** channel line + **`deliveryStatePresentation` + `mapToDeliveryState`** (Received, Sent to provider, Delivery not confirmed, Failed, etc.).
+- **Composer:** **Send email** / **Send SMS** (no recipient count in label); **Subject** optional + **Email body** label; SMS **body only**; inline disabled copy when binding/channel not available.
+- **Recipients:** **Selectable rows** (button + `aria-pressed`), not default checkboxes.
+- **Notifications:** **Success** copy below the button **auto-clears after ~4.5s**; **errors** stay until the next send attempt or change.
+- **Person-first + related threads unchanged** at API level; same **`POST /api/admin/communications/send`** payload as before.
+
+**Files touched:** `web/components/admin/communications/CommunicationsDrawerSection.tsx` only (this pass).
+
+**Limitations**
+
+- **Merge cost** is bounded but still **parallel fetches per thread** (max 10); very large thread counts may feel heavier than a single-thread read.
+- **Cross-thread narrative** is chronological; a single logical “conversation” may still split across threads in the DB.
+- **Customer** (and other) drawers: **read** merged history still works; **composer** remains only for **`opportunities` / `jobs`** (unchanged product rule).
+
+**Manual smoke**
+
+1. Open Communication on a job/opportunity with mixed SMS/email: **All** shows both; scroll bottom aligned; inbound left / outbound right.  
+2. **Email** tab: only email messages; **Send email** + subject optional.  
+3. **SMS** tab: only SMS; **Send SMS** or disabled reason.  
+4. Success line **fades** after a few seconds; force an error → line **persists** until next send.  
+5. Regression: send email still succeeds with existing behavior.
+
+**Suggested commit message:** `feat(communications): unified conversation-first drawer communication UX`

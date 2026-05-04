@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
 import {
@@ -49,7 +49,14 @@ type DrawerRecipient = {
     is_suggested_default: boolean;
 };
 
-type ComposerChannel = "email" | "sms" | "in_app";
+/** Unified history filter + composer mode (in-app hidden). */
+type ViewFilter = "all" | "email" | "sms";
+
+type MsgRowWithThread = MsgRow & { _thread_id?: string };
+
+const MESSAGES_PER_THREAD_LIMIT = 36;
+const MAX_MERGE_THREADS = 10;
+const SUCCESS_TOAST_MS = 4500;
 
 function shouldLogCommsLoad(): boolean {
     if (typeof window === "undefined") return process.env.NODE_ENV !== "production";
@@ -112,12 +119,6 @@ function userFriendlySendNote(processNote: string, channel?: string): string {
     return `${noun} queued for delivery.`;
 }
 
-function snippetPreview(raw: string | null | undefined, maxLen = 80): string {
-    const t = String(raw ?? "").trim().replace(/\s+/g, " ");
-    if (!t) return "No preview yet";
-    return t.length <= maxLen ? t : `${t.slice(0, maxLen - 1)}…`;
-}
-
 function channelFacetLabel(channel: string | undefined | null): string {
     const c = (channel ?? "").trim().toLowerCase();
     if (c === "email") return "Email";
@@ -144,12 +145,18 @@ export default function CommunicationsDrawerSection({
     const [thrErr, setThrErr] = useState<string | null>(null);
     const [loadingThreads, setLoadingThreads] = useState(false);
 
-    const [selectedId, setSelectedId] = useState<string | null>(null);
-    const [msgs, setMsgs] = useState<MsgRow[]>([]);
+    const [msgs, setMsgs] = useState<MsgRowWithThread[]>([]);
     const [msgErr, setMsgErr] = useState<string | null>(null);
     const [loadingMsgs, setLoadingMsgs] = useState(false);
 
-    const [threadSpaceExpanded, setThreadSpaceExpanded] = useState(false);
+    /** All | Email | SMS — filters merged feed + composer. */
+    const [viewFilter, setViewFilter] = useState<ViewFilter>("all");
+    /** When view is "all", which channel to use for send UI. */
+    const [allComposerMode, setAllComposerMode] = useState<"email" | "sms">("email");
+    /** When multiple threads: merged (default) or isolate one thread's messages. */
+    const [threadScope, setThreadScope] = useState<"merged" | string>("merged");
+
+    const conversationScrollRef = useRef<HTMLDivElement>(null);
 
     const composerEntity =
         apiEntityType === "opportunities" || apiEntityType === "jobs" ? apiEntityType : null;
@@ -163,7 +170,6 @@ export default function CommunicationsDrawerSection({
     const [recipientsErr, setRecipientsErr] = useState<string | null>(null);
     const [loadingRecipients, setLoadingRecipients] = useState(false);
     const [selectedRecipientIds, setSelectedRecipientIds] = useState<Set<string>>(() => new Set());
-    const [composerChannel, setComposerChannel] = useState<ComposerChannel>("email");
 
     const [composerSubject, setComposerSubject] = useState("");
     const [composerBody, setComposerBody] = useState("");
@@ -176,15 +182,21 @@ export default function CommunicationsDrawerSection({
     const smsOutboundReady =
         channelsAvailable.includes("sms") && !bindingsErr && !loadingBindings;
 
+    const effectiveComposer = useMemo((): "email" | "sms" => {
+        if (viewFilter === "all") return allComposerMode;
+        return viewFilter === "email" ? "email" : "sms";
+    }, [viewFilter, allComposerMode]);
+
     useEffect(() => {
         setThreads([]);
         setThrErr(null);
         setLoadingThreads(false);
-        setSelectedId(null);
         setMsgs([]);
         setMsgErr(null);
         setLoadingMsgs(false);
-        setThreadSpaceExpanded(false);
+        setViewFilter("all");
+        setAllComposerMode("email");
+        setThreadScope("merged");
         setChannelsAvailable([]);
         setBindingsErr(null);
         setRecipients([]);
@@ -194,14 +206,11 @@ export default function CommunicationsDrawerSection({
         setComposerBody("");
         setSendErr(null);
         setSendOkNote(null);
-        setComposerChannel("email");
     }, [entityId, apiEntityType]);
 
     /** When parent hides Communication (`active` false), drop thread detail state (no polling; next open is clean). */
     useEffect(() => {
         if (active) return;
-        setThreadSpaceExpanded(false);
-        setSelectedId(null);
         setMsgs([]);
         setMsgErr(null);
     }, [active]);
@@ -209,18 +218,14 @@ export default function CommunicationsDrawerSection({
     /** Fetches run only while `active`. */
     const dataLayerActive = active;
 
-    /** When recipients or composer channel changes — eligible selection only (person-first per channel). */
+    /** When recipients or effective composer changes — eligible selection only (person-first per channel). */
     useEffect(() => {
         if (!recipients.length) {
             setSelectedRecipientIds(new Set());
             return;
         }
-        if (composerChannel === "in_app") {
-            setSelectedRecipientIds(new Set());
-            return;
-        }
         const eligible =
-            composerChannel === "email"
+            effectiveComposer === "email"
                 ? recipients.filter((r) => !!r.email)
                 : recipients.filter((r) => !!r.phone);
         if (!eligible.length) {
@@ -239,7 +244,28 @@ export default function CommunicationsDrawerSection({
                       : [];
             return new Set(pick);
         });
-    }, [recipients, composerChannel]);
+    }, [recipients, effectiveComposer]);
+
+    const filteredThreadsByView = useMemo(() => {
+        return threads.filter((t) => {
+            const ch = (t.channel ?? "").trim().toLowerCase();
+            if (viewFilter === "all") return true;
+            return ch === viewFilter;
+        });
+    }, [threads, viewFilter]);
+
+    /** Switching channel view resets scope so we never point at a hidden thread. */
+    useEffect(() => {
+        setThreadScope("merged");
+    }, [viewFilter]);
+
+    /** If a scoped thread id vanished (filter/refresh), fall back to merged. */
+    useEffect(() => {
+        if (threadScope === "merged") return;
+        if (!filteredThreadsByView.some((t) => t.id === threadScope)) {
+            setThreadScope("merged");
+        }
+    }, [filteredThreadsByView, threadScope]);
 
     const loadThreads = useCallback(async () => {
         setThrErr(null);
@@ -256,14 +282,6 @@ export default function CommunicationsDrawerSection({
             const tList = Array.isArray(tRaw) ? (tRaw as ThreadRow[]) : [];
             setThreads(tList);
             markCommunicationsDrawerPrefetchConsumed(apiEntityType, entityId, "threads");
-            setSelectedId((prev) => {
-                if (embedded) {
-                    if (prev && tList.some((x) => x.id === prev)) return prev;
-                    return null;
-                }
-                if (prev && tList.some((x) => x.id === prev)) return prev;
-                return tList[0]?.id ?? null;
-            });
             setLoadingThreads(false);
         };
 
@@ -272,7 +290,6 @@ export default function CommunicationsDrawerSection({
             if (tsnap.error) {
                 setThrErr(tsnap.error);
                 setThreads([]);
-                setSelectedId(null);
                 markCommunicationsDrawerPrefetchConsumed(apiEntityType, entityId, "threads");
                 setLoadingThreads(false);
                 return;
@@ -310,7 +327,6 @@ export default function CommunicationsDrawerSection({
             if (lateSnap?.error) {
                 setThrErr(lateSnap.error);
                 setThreads([]);
-                setSelectedId(null);
                 markCommunicationsDrawerPrefetchConsumed(apiEntityType, entityId, "threads");
                 setLoadingThreads(false);
                 return;
@@ -330,22 +346,75 @@ export default function CommunicationsDrawerSection({
                 ? (j as { threads: ThreadRow[] }).threads
                 : [];
             setThreads(t);
-            setSelectedId((prev) => {
-                if (embedded) {
-                    if (prev && t.some((x) => x.id === prev)) return prev;
-                    return null;
-                }
-                if (prev && t.some((x) => x.id === prev)) return prev;
-                return t[0]?.id ?? null;
-            });
         } catch (e) {
             setThrErr(e instanceof Error ? e.message : "Failed to load threads");
             setThreads([]);
-            setSelectedId(null);
         } finally {
             setLoadingThreads(false);
         }
-    }, [apiEntityType, entityId, embedded]);
+    }, [apiEntityType, entityId]);
+
+    const loadConversationMessages = useCallback(async () => {
+        if (!dataLayerActive) return;
+        const scopeList =
+            threadScope === "merged"
+                ? filteredThreadsByView.slice(0, MAX_MERGE_THREADS)
+                : filteredThreadsByView.filter((t) => t.id === threadScope);
+        if (scopeList.length === 0) {
+            setMsgs([]);
+            setMsgErr(null);
+            return;
+        }
+        setLoadingMsgs(true);
+        setMsgErr(null);
+        try {
+            const batches = await Promise.all(
+                scopeList.map(async (th) => {
+                    const r = await fetch(
+                        `/api/admin/communications/threads/${encodeURIComponent(th.id)}/messages?limit=${MESSAGES_PER_THREAD_LIMIT}`,
+                        { credentials: "include" },
+                    );
+                    const j = await r.json().catch(() => ({}));
+                    if (!r.ok) throw new Error((j as { error?: string }).error ?? `HTTP ${r.status}`);
+                    const raw = Array.isArray((j as { messages?: MsgRow[] }).messages)
+                        ? (j as { messages: MsgRow[] }).messages
+                        : [];
+                    return raw.map((m) => ({ ...m, _thread_id: th.id }) as MsgRowWithThread);
+                }),
+            );
+            let merged = batches.flat();
+            merged.sort((a, b) => {
+                const ta = Date.parse(String(a.created_at ?? a.sent_at ?? 0));
+                const tb = Date.parse(String(b.created_at ?? b.sent_at ?? 0));
+                return (Number.isFinite(ta) ? ta : 0) - (Number.isFinite(tb) ? tb : 0);
+            });
+            const cap = 200;
+            if (merged.length > cap) merged = merged.slice(-cap);
+            setMsgs(merged);
+        } catch (e) {
+            setMsgErr(e instanceof Error ? e.message : "Failed to load messages");
+            setMsgs([]);
+        } finally {
+            setLoadingMsgs(false);
+        }
+    }, [dataLayerActive, filteredThreadsByView, threadScope]);
+
+    useEffect(() => {
+        if (!dataLayerActive) return;
+        void loadConversationMessages();
+    }, [dataLayerActive, loadConversationMessages]);
+
+    useLayoutEffect(() => {
+        const el = conversationScrollRef.current;
+        if (!el || loadingMsgs) return;
+        el.scrollTop = el.scrollHeight;
+    }, [msgs, loadingMsgs]);
+
+    useEffect(() => {
+        if (!sendOkNote) return;
+        const id = window.setTimeout(() => setSendOkNote(null), SUCCESS_TOAST_MS);
+        return () => window.clearTimeout(id);
+    }, [sendOkNote]);
 
     useEffect(() => {
         if (!dataLayerActive) return;
@@ -546,36 +615,6 @@ export default function CommunicationsDrawerSection({
         loadingBindings,
     ]);
 
-    const loadMsgs = useCallback(async (tid: string) => {
-        setLoadingMsgs(true);
-        setMsgErr(null);
-        try {
-            const r = await fetch(`/api/admin/communications/threads/${encodeURIComponent(tid)}/messages?limit=80`, {
-                credentials: "include",
-            });
-            const j = await r.json().catch(() => ({}));
-            if (!r.ok) throw new Error((j as { error?: string }).error ?? `HTTP ${r.status}`);
-            setMsgs(Array.isArray((j as { messages?: MsgRow[] }).messages) ? j.messages.reverse() : []);
-        } catch (e) {
-            setMsgErr(e instanceof Error ? e.message : "Failed to load messages");
-            setMsgs([]);
-        } finally {
-            setLoadingMsgs(false);
-        }
-    }, []);
-
-    const fetchMessages = embedded ? threadSpaceExpanded : true;
-
-    useEffect(() => {
-        if (!dataLayerActive) return;
-        if (!fetchMessages || !selectedId) {
-            setMsgs([]);
-            setMsgErr(null);
-            return;
-        }
-        void loadMsgs(selectedId);
-    }, [dataLayerActive, fetchMessages, selectedId, loadMsgs]);
-
     const toggleRecipient = (personId: string) => {
         setSelectedRecipientIds((prev) => {
             const n = new Set(prev);
@@ -587,11 +626,10 @@ export default function CommunicationsDrawerSection({
 
     const sendFromComposer = async () => {
         if (!composerEntity || selectedRecipientIds.size === 0 || !composerBody.trim()) return;
-        if (composerChannel === "in_app") return;
-        if (composerChannel === "email" && !emailOutboundReady) return;
-        if (composerChannel === "sms" && !smsOutboundReady) return;
+        if (effectiveComposer === "email" && !emailOutboundReady) return;
+        if (effectiveComposer === "sms" && !smsOutboundReady) return;
 
-        const channelSent = composerChannel === "sms" ? "sms" : "email";
+        const channelSent = effectiveComposer === "sms" ? "sms" : "email";
         setSendBusy(true);
         setSendErr(null);
         setSendOkNote(null);
@@ -605,7 +643,7 @@ export default function CommunicationsDrawerSection({
                     body: composerBody.trim(),
                     recipient_person_id: personId,
                 };
-                if (composerChannel === "email") {
+                if (effectiveComposer === "email") {
                     payload.subject = composerSubject.trim();
                 }
                 const res = await fetch("/api/admin/communications/send", {
@@ -628,8 +666,7 @@ export default function CommunicationsDrawerSection({
             setComposerBody("");
             invalidateCommunicationsDrawerPrefetch(apiEntityType, entityId);
             await loadThreads();
-            const refetchMsgs = (!embedded || threadSpaceExpanded) && selectedId;
-            if (refetchMsgs && selectedId) void loadMsgs(selectedId);
+            await loadConversationMessages();
         } catch (e) {
             setSendErr(e instanceof Error ? e.message : "Send failed");
         } finally {
@@ -639,198 +676,38 @@ export default function CommunicationsDrawerSection({
 
     if (!active) return null;
 
-    const headerTitle = !embedded ? (
-        <h3 className={DRAWER_SECTION_HEADER_CLASS}>Communications</h3>
-    ) : null;
-
-    const description = !embedded ? (
-        <p className="text-sm text-alloy-midnight/65 -mt-2 mb-3">
-            SMS, email, and in-app threads for this record — select a thread below for history; compose from this panel when
-            outbound is configured.
-        </p>
-    ) : null;
-
     const recipientsForComposer =
-        composerChannel === "email"
+        effectiveComposer === "email"
             ? recipients.filter((r) => !!r.email)
-            : composerChannel === "sms"
-              ? recipients.filter((r) => !!r.phone)
-              : [];
+            : recipients.filter((r) => !!r.phone);
 
-    const threadAnchorHint = (t: ThreadRow) => {
-        if (t.anchor_kind === "related_person") return "Via related person";
-        return "This record";
+    const onViewFilter = (v: ViewFilter) => {
+        setViewFilter(v);
+        if (v === "email") setAllComposerMode("email");
+        if (v === "sms") setAllComposerMode("sms");
     };
 
-    const threadList = (variant: "compact" | "full") => (
-        <div className={variant === "compact" ? "space-y-1.5" : "sm:min-w-[11rem] sm:max-w-[14rem] sm:shrink-0 space-y-1"}>
-            {threads.map((t) => {
-                const pv = t.last_message_preview;
-                let previewStateLabel = "";
-                if (pv) {
-                    previewStateLabel = deliveryStatePresentation(
-                        mapToDeliveryState({
-                            direction: pv.direction,
-                            channel: pv.channel,
-                            status: pv.status,
-                        }),
-                    ).label;
-                }
-                const isSel = selectedId === t.id;
-                return variant === "compact" ? (
-                    <div
-                        key={t.id}
-                        className="flex min-w-0 flex-col gap-0.5 rounded-md border border-alloy-stone/15 bg-white/[0.97] px-2 py-1.5 text-[12px]"
-                    >
-                        <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
-                            <span className="font-semibold text-alloy-midnight/85">
-                                {channelFacetLabel(t.channel)}
-                                <span className="ml-1 text-[10px] font-normal uppercase tracking-wide text-alloy-midnight/40">
-                                    {threadAnchorHint(t)}
-                                </span>
-                            </span>
-                            {t.updated_at ? (
-                                <span className="tabular-nums text-[11px] text-alloy-midnight/45">
-                                    {formatDateTimeForUserDisplay(t.updated_at, viewerTz)}
-                                </span>
-                            ) : null}
-                        </div>
-                        <div className="min-w-0 truncate text-[11px] text-alloy-midnight/58">
-                            {pv ? (
-                                <>
-                                    <span className="font-medium text-alloy-midnight/70">{previewStateLabel}</span>
-                                    <span className="mx-1 text-alloy-midnight/35">·</span>
-                                    <span>{snippetPreview(pv.body)}</span>
-                                </>
-                            ) : (
-                                <span>{t.recipient_key ? t.recipient_key : "Conversation"}</span>
-                            )}
-                        </div>
-                    </div>
-                ) : (
-                    <button
-                        key={t.id}
-                        type="button"
-                        onClick={() => setSelectedId(t.id)}
-                        className={`w-full rounded-md border px-2 py-1.5 text-left text-xs font-medium transition-colors ${
-                            isSel
-                                ? "border-alloy-midnight bg-alloy-midnight text-white"
-                                : "border-alloy-stone/30 bg-white text-alloy-forge hover:bg-alloy-stone/10"
-                        }`}
-                    >
-                        <div className="flex items-start justify-between gap-1">
-                            <span>{channelFacetLabel(t.channel)}</span>
-                            <span
-                                className={`shrink-0 text-[9px] font-normal uppercase tracking-wide ${
-                                    isSel ? "text-white/65" : "text-alloy-midnight/40"
-                                }`}
-                            >
-                                {t.anchor_kind === "related_person" ? "person" : "record"}
-                            </span>
-                        </div>
-                        {t.recipient_key ? (
-                            <div
-                                className={`mt-0.5 truncate font-normal text-[11px] ${
-                                    isSel ? "opacity-85" : "opacity-75"
-                                }`}
-                            >
-                                {t.recipient_key}
-                            </div>
-                        ) : null}
-                        {pv ? (
-                            <div
-                                className={`mt-1 border-t pt-1 text-[10px] leading-snug ${
-                                    isSel ? "border-white/20" : "border-alloy-stone/15"
-                                }`}
-                            >
-                                <span className="font-semibold">{previewStateLabel}</span>
-                                <span className={isSel ? "text-white/80" : "text-alloy-midnight/60"}>
-                                    {" "}
-                                    — {snippetPreview(pv.body)}
-                                </span>
-                            </div>
-                        ) : null}
-                    </button>
-                );
-            })}
-        </div>
-    );
-
-    const messagesPanel = (
-        <div className="min-h-[120px] flex-1 rounded-lg border border-alloy-stone/15 bg-white p-3">
-            {selectedId == null ? (
-                <p className="text-sm text-alloy-midnight/60">Select a thread.</p>
-            ) : loadingMsgs ? (
-                <div className="flex min-h-[140px] flex-col gap-2 pt-1" aria-busy="true">
-                    <div className="skeleton-pulse h-14 w-full rounded-md bg-alloy-stone/12" aria-hidden />
-                    <div className="skeleton-pulse h-14 w-[min(100%,90%)] rounded-md bg-alloy-stone/10" aria-hidden />
-                </div>
-            ) : msgErr ? (
-                <p className="text-sm text-alloy-ember">{msgErr}</p>
-            ) : msgs.length === 0 ? (
-                <p className="text-sm text-alloy-midnight/60">No messages in this thread.</p>
-            ) : (
-                <ul className="space-y-2">
-                    {msgs.map((m) => {
-                        const msgWhen = communicationMessageInstant(m);
-                        const pres = deliveryStatePresentation(mapToDeliveryState(m));
-                        const rowLabelClass = pres.highlightFailure
-                            ? "text-alloy-ember"
-                            : "text-alloy-forge";
-                        return (
-                            <li key={m.id} className="rounded-md border border-alloy-stone/10 bg-alloy-stone/5 px-2.5 py-2 text-sm">
-                                <div className="flex flex-wrap items-baseline justify-between gap-2 text-[12px] text-alloy-forge/70">
-                                <span className={`font-semibold capitalize ${rowLabelClass}`}>
-                                    {m.direction} · {channelFacetLabel(m.channel)} · {pres.label}
-                                </span>
-                                <span className="tabular-nums text-[11px]">
-                                    {msgWhen ? formatDateTimeForUserDisplay(msgWhen, viewerTz) : ""}
-                                </span>
-                            </div>
-                            {pres.subtext ? (
-                                <div className="mt-0.5 text-[10px] leading-snug text-alloy-midnight/50">
-                                    {pres.subtext}
-                                </div>
-                            ) : null}
-                            {(m.from_address || m.to_address) && (
-                                <div className="mt-1 text-[12px] text-alloy-forge/65">
-                                    {m.from_address ? <span>from {m.from_address}</span> : null}
-                                    {m.from_address && m.to_address ? " · " : null}
-                                    {m.to_address ? <span>to {m.to_address}</span> : null}
-                                </div>
-                            )}
-                            {m.body ? (
-                                <div className="mt-1.5 whitespace-pre-wrap text-[13px] text-alloy-forge/90">{m.body}</div>
-                            ) : null}
-                        </li>
-                        );
-                    })}
-                </ul>
-            )}
-        </div>
-    );
+    const filterTabCls = (v: ViewFilter) =>
+        `rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition ${
+            viewFilter === v
+                ? "bg-alloy-midnight text-white shadow-sm"
+                : "border border-alloy-stone/22 bg-white text-alloy-forge hover:bg-alloy-stone/[0.06]"
+        }`;
 
     const emptyThreadsClass = embedded ? "text-[12px] text-alloy-midnight/60" : "text-sm text-alloy-midnight/60";
     const emptyThreadsBody = (
         <div className={emptyThreadsClass}>
             <p className="font-medium text-alloy-midnight/75">No communications yet</p>
-            <p className="mt-1 leading-relaxed">Send an email or SMS from the composer above to start a conversation.</p>
+            <p className="mt-1 leading-relaxed">Send an email or SMS below once outbound is configured.</p>
         </div>
     );
 
-    const expandCollapseBtnClass =
-        "text-left text-[12px] font-semibold underline-offset-2 bg-transparent border-0 p-0 cursor-pointer";
+    const composerReady =
+        (effectiveComposer === "email" && emailOutboundReady) || (effectiveComposer === "sms" && smsOutboundReady);
 
-    const composerChannelTabCls = (ch: ComposerChannel) =>
-        `rounded-md px-2 py-1 text-[11px] font-semibold border transition-colors ${
-            composerChannel === ch
-                ? "border-alloy-midnight bg-alloy-midnight text-white"
-                : "border-alloy-stone/25 bg-white text-alloy-forge hover:bg-alloy-stone/8"
-        }`;
-
-    const composerBlock =
+    const composerBlockInner =
         showDrawerComposerChrome && composerEntity ? (
-            <div className="mb-3 rounded-md border border-alloy-stone/15 bg-white/[0.98] px-2.5 py-2">
+            <div className="rounded-xl border border-alloy-stone/15 bg-white/[0.97] px-2.5 py-2.5 shadow-sm">
                 <div className={COMPOSER_LABEL}>Compose</div>
                 {loadingBindings ? (
                     <div className="space-y-1.5 py-1" aria-busy="true">
@@ -840,50 +717,50 @@ export default function CommunicationsDrawerSection({
                 ) : bindingsErr ? (
                     <p className="text-[11px] text-alloy-ember">{bindingsErr}</p>
                 ) : (
-                    <div className="mt-1.5 space-y-2">
-                        <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Message channel">
-                            <button
-                                type="button"
-                                role="tab"
-                                aria-selected={composerChannel === "email"}
-                                className={composerChannelTabCls("email")}
-                                onClick={() => setComposerChannel("email")}
-                            >
-                                Email
-                            </button>
-                            <button
-                                type="button"
-                                role="tab"
-                                aria-selected={composerChannel === "sms"}
-                                className={composerChannelTabCls("sms")}
-                                onClick={() => setComposerChannel("sms")}
-                            >
-                                SMS
-                            </button>
-                            <button
-                                type="button"
-                                disabled
-                                className="cursor-not-allowed rounded-md border border-dashed border-alloy-stone/30 px-2 py-1 text-[11px] font-medium text-alloy-midnight/40"
-                                title="In-app messaging from the drawer is planned."
-                            >
-                                In-app · soon
-                            </button>
-                        </div>
+                    <div className="mt-2 space-y-2.5">
+                        {viewFilter === "all" ? (
+                            <div className="flex flex-wrap items-center gap-1.5">
+                                <span className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
+                                    Send as
+                                </span>
+                                <button
+                                    type="button"
+                                    onClick={() => setAllComposerMode("email")}
+                                    className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${
+                                        allComposerMode === "email"
+                                            ? "bg-alloy-midnight text-white"
+                                            : "border border-alloy-stone/22 bg-white text-alloy-forge"
+                                    }`}
+                                >
+                                    Email
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setAllComposerMode("sms")}
+                                    className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${
+                                        allComposerMode === "sms"
+                                            ? "bg-alloy-midnight text-white"
+                                            : "border border-alloy-stone/22 bg-white text-alloy-forge"
+                                    }`}
+                                >
+                                    SMS
+                                </button>
+                            </div>
+                        ) : null}
 
-                        {composerChannel === "email" && !emailOutboundReady ? (
-                            <p className="text-[11px] text-alloy-midnight/65">
-                                Email outbound is not configured — add an active Resend binding for this organization.
+                        {effectiveComposer === "email" && !emailOutboundReady ? (
+                            <p className="text-[11px] leading-snug text-alloy-midnight/65">
+                                Email outbound is not configured — add an active Resend binding.
                             </p>
                         ) : null}
 
-                        {composerChannel === "sms" && !smsOutboundReady ? (
-                            <p className="text-[11px] text-alloy-midnight/65">
-                                SMS outbound is not configured — add an active SMS binding with a configured secret_ref
-                                (Twilio credentials).
+                        {effectiveComposer === "sms" && !smsOutboundReady ? (
+                            <p className="text-[11px] leading-snug text-alloy-midnight/65">
+                                SMS outbound is not available — add an active SMS binding with secret_ref (Twilio credentials).
                             </p>
                         ) : null}
 
-                        {(composerChannel === "email" && emailOutboundReady) || (composerChannel === "sms" && smsOutboundReady) ? (
+                        {composerReady ? (
                             loadingRecipients ? (
                                 <div className="space-y-1.5 py-1" aria-busy="true">
                                     <div className="skeleton-pulse h-3 w-[min(88%,220px)] rounded bg-alloy-stone/14" aria-hidden />
@@ -893,68 +770,83 @@ export default function CommunicationsDrawerSection({
                                 <p className="text-[11px] text-alloy-ember">{recipientsErr}</p>
                             ) : recipientsForComposer.length === 0 ? (
                                 <p className="text-[11px] text-alloy-midnight/65">
-                                    {composerChannel === "email"
-                                        ? "No linked people with an email address on this record."
-                                        : "No linked people with a usable mobile phone on this record."}
+                                    {effectiveComposer === "email"
+                                        ? "No people with email on this record."
+                                        : "No people with a mobile number on this record."}
                                 </p>
                             ) : (
                                 <div className="space-y-2">
-                                    <div className="space-y-1.5">
-                                        {recipientsForComposer.map((r) => (
-                                            <label
-                                                key={r.person_id}
-                                                className="flex cursor-pointer items-start gap-2 text-[11px] text-alloy-midnight/80"
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    checked={selectedRecipientIds.has(r.person_id)}
-                                                    onChange={() => toggleRecipient(r.person_id)}
+                                    <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                        Recipients
+                                    </p>
+                                    <div className="grid max-h-[9.5rem] gap-1.5 overflow-y-auto pr-0.5">
+                                        {recipientsForComposer.map((r) => {
+                                            const on = selectedRecipientIds.has(r.person_id);
+                                            return (
+                                                <button
+                                                    key={r.person_id}
+                                                    type="button"
+                                                    aria-pressed={on}
                                                     disabled={sendBusy}
-                                                    className="mt-0.5 shrink-0"
-                                                />
-                                                <span className="min-w-0 leading-snug">
-                                                    <span className="font-semibold">{r.display_name}</span>
-                                                    <span className="text-alloy-midnight/55">
-                                                        {" · "}
-                                                        {composerChannel === "email" ? r.email ?? "—" : r.phone ?? "—"}
-                                                    </span>
-                                                    {r.relationship_hint ? (
-                                                        <span className="block text-[10px] text-alloy-midnight/45">
-                                                            {r.relationship_hint}
+                                                    onClick={() => toggleRecipient(r.person_id)}
+                                                    className={`w-full rounded-lg border px-2.5 py-2 text-left transition ${
+                                                        on
+                                                            ? "border-alloy-midnight bg-alloy-midnight/[0.07] ring-1 ring-alloy-midnight/20"
+                                                            : "border-alloy-stone/18 bg-white hover:border-alloy-stone/30"
+                                                    }`}
+                                                >
+                                                    <div className="flex items-start justify-between gap-2">
+                                                        <span className="text-[12px] font-semibold text-alloy-midnight">
+                                                            {r.display_name}
                                                         </span>
+                                                        {on ? (
+                                                            <span className="shrink-0 text-[10px] font-medium text-alloy-forge/75">
+                                                                On
+                                                            </span>
+                                                        ) : null}
+                                                    </div>
+                                                    <div className="mt-0.5 break-all text-[11px] text-alloy-midnight/65">
+                                                        {effectiveComposer === "email" ? r.email ?? "—" : r.phone ?? "—"}
+                                                    </div>
+                                                    {r.relationship_hint ? (
+                                                        <div className="mt-0.5 text-[10px] text-alloy-midnight/45">
+                                                            {r.relationship_hint}
+                                                        </div>
                                                     ) : null}
-                                                </span>
-                                            </label>
-                                        ))}
+                                                </button>
+                                            );
+                                        })}
                                     </div>
-                                    {composerChannel === "email" ? (
+                                    {effectiveComposer === "email" ? (
                                         <label className="block space-y-0.5">
-                                            <span className="block text-[11px] font-medium text-alloy-midnight/75">Subject</span>
+                                            <span className="text-[11px] font-medium text-alloy-midnight/75">Subject</span>
                                             <input
                                                 type="text"
                                                 value={composerSubject}
                                                 onChange={(e) => setComposerSubject(e.target.value)}
                                                 disabled={sendBusy}
-                                                placeholder="Optional — sensible default if empty"
-                                                className="w-full rounded-md border border-alloy-stone/20 bg-white px-2 py-1 text-[12px] text-alloy-midnight/85 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
-                                                aria-label="Subject"
+                                                placeholder="Optional"
+                                                className="w-full rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 text-[12px] text-alloy-midnight/85 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
                                                 autoComplete="off"
                                             />
                                         </label>
                                     ) : null}
-                                    <textarea
-                                        value={composerBody}
-                                        onChange={(e) => setComposerBody(e.target.value)}
-                                        disabled={sendBusy}
-                                        rows={3}
-                                        placeholder={
-                                            composerChannel === "sms"
-                                                ? "SMS message (plain text)…"
-                                                : "Email body (plain text)…"
-                                        }
-                                        className="w-full resize-none rounded-md border border-alloy-stone/20 bg-white px-2 py-1.5 text-[12px] leading-snug text-alloy-midnight/85 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
-                                        aria-label="Message body"
-                                    />
+                                    <label className="block space-y-0.5">
+                                        <span className="text-[11px] font-medium text-alloy-midnight/75">
+                                            {effectiveComposer === "email" ? "Email body" : "Message"}
+                                        </span>
+                                        <textarea
+                                            value={composerBody}
+                                            onChange={(e) => setComposerBody(e.target.value)}
+                                            disabled={sendBusy}
+                                            rows={3}
+                                            placeholder={
+                                                effectiveComposer === "sms" ? "Write SMS…" : "Write email…"
+                                            }
+                                            className="w-full resize-none rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 text-[12px] leading-snug text-alloy-midnight/85 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
+                                            aria-label={effectiveComposer === "email" ? "Email body" : "SMS message"}
+                                        />
+                                    </label>
                                     <div className="flex flex-wrap items-center gap-2">
                                         <button
                                             type="button"
@@ -963,14 +855,16 @@ export default function CommunicationsDrawerSection({
                                                 sendBusy ||
                                                 selectedRecipientIds.size === 0 ||
                                                 !composerBody.trim() ||
-                                                (composerChannel === "email" && !emailOutboundReady) ||
-                                                (composerChannel === "sms" && !smsOutboundReady)
+                                                (effectiveComposer === "email" && !emailOutboundReady) ||
+                                                (effectiveComposer === "sms" && !smsOutboundReady)
                                             }
-                                            className="rounded-md border border-alloy-midnight/20 bg-alloy-midnight px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-alloy-midnight/90 disabled:cursor-not-allowed disabled:opacity-45"
+                                            className="rounded-lg border border-alloy-midnight/20 bg-alloy-midnight px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-alloy-midnight/90 disabled:cursor-not-allowed disabled:opacity-45"
                                         >
                                             {sendBusy
                                                 ? "Sending…"
-                                                : `Send (${composerChannel === "email" ? "Email" : "SMS"} · ${selectedRecipientIds.size})`}
+                                                : effectiveComposer === "email"
+                                                  ? "Send email"
+                                                  : "Send SMS"}
                                         </button>
                                     </div>
                                     {sendErr ? <p className="text-[11px] text-alloy-ember">{sendErr}</p> : null}
@@ -983,81 +877,186 @@ export default function CommunicationsDrawerSection({
             </div>
         ) : null;
 
+    const headerTitle = !embedded ? (
+        <h3 className={DRAWER_SECTION_HEADER_CLASS}>Communications</h3>
+    ) : null;
+
+    const description = !embedded ? (
+        <p className="text-sm text-alloy-midnight/65 -mt-2 mb-1.5">
+            Recent messages and outbound compose for this record.
+        </p>
+    ) : null;
+
     return (
-        <div className={`min-w-0 ${className}`}>
-            <section>
+        <div className={`flex min-h-0 min-w-0 flex-col ${className}`}>
+            <section className="flex min-h-0 flex-col gap-2">
                 {headerTitle}
                 {description}
 
-                {composerBlock}
-
-                {embedded ? (
-                    !threadSpaceExpanded ? (
-                        <div className="space-y-2">
-                            {loadingThreads ? (
-                                <CommsQuietSkeletonLines dense />
-                            ) : thrErr ? (
-                                <p className="text-[12px] text-alloy-ember">{thrErr}</p>
-                            ) : threads.length === 0 ? (
-                                emptyThreadsBody
-                            ) : (
-                                threadList("compact")
-                            )}
-                            <button
-                                type="button"
-                                className={`${expandCollapseBtnClass} text-alloy-blue hover:underline`}
-                                onClick={() => setThreadSpaceExpanded(true)}
-                            >
-                                Expand thread space
-                            </button>
-                        </div>
-                    ) : (
-                        <div className="space-y-2">
-                            <div className="flex min-h-[120px] flex-col gap-3 sm:flex-row">
-                                {loadingThreads ? (
-                                    <div className="min-h-[120px] flex-1 rounded-lg border border-alloy-stone/15 bg-white p-3">
-                                        <CommsQuietSkeletonLines />
-                                    </div>
-                                ) : thrErr ? (
-                                    <p className="min-h-[120px] flex-1 rounded-lg border border-alloy-stone/15 bg-white p-3 text-[12px] text-alloy-ember">
-                                        {thrErr}
-                                    </p>
-                                ) : threads.length === 0 ? (
-                                    <div className="flex min-h-[120px] flex-1 rounded-lg border border-alloy-stone/15 bg-white p-3">
-                                        {emptyThreadsBody}
-                                    </div>
-                                ) : (
-                                    <>
-                                        {threadList("full")}
-                                        {messagesPanel}
-                                    </>
-                                )}
-                            </div>
-                            <button
-                                type="button"
-                                className={`${expandCollapseBtnClass} text-alloy-midnight/55 hover:text-alloy-blue hover:underline`}
-                                onClick={() => {
-                                    setThreadSpaceExpanded(false);
-                                    setSelectedId(null);
-                                }}
-                            >
-                                Collapse thread space
-                            </button>
-                        </div>
-                    )
-                ) : loadingThreads ? (
-                    <div className="min-h-[5rem] rounded-lg border border-alloy-stone/12 bg-white/80 px-3 py-2">
-                        <CommsQuietSkeletonLines />
-                    </div>
+                {loadingThreads ? (
+                    <CommsQuietSkeletonLines dense={Boolean(embedded)} />
                 ) : thrErr ? (
                     <p className="text-sm text-alloy-ember">{thrErr}</p>
                 ) : threads.length === 0 ? (
                     emptyThreadsBody
                 ) : (
-                    <div className="flex flex-col gap-3 sm:flex-row">
-                        {threadList("full")}
-                        {messagesPanel}
-                    </div>
+                    <>
+                        <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="Message channels">
+                            <button
+                                type="button"
+                                role="tab"
+                                aria-selected={viewFilter === "all"}
+                                className={filterTabCls("all")}
+                                onClick={() => onViewFilter("all")}
+                            >
+                                All
+                            </button>
+                            <button
+                                type="button"
+                                role="tab"
+                                aria-selected={viewFilter === "email"}
+                                className={filterTabCls("email")}
+                                onClick={() => onViewFilter("email")}
+                            >
+                                Email
+                            </button>
+                            <button
+                                type="button"
+                                role="tab"
+                                aria-selected={viewFilter === "sms"}
+                                className={filterTabCls("sms")}
+                                onClick={() => onViewFilter("sms")}
+                            >
+                                SMS
+                            </button>
+                        </div>
+
+                        {filteredThreadsByView.length > 1 ? (
+                            <label className="flex flex-wrap items-center gap-2 text-[11px] text-alloy-midnight/70">
+                                <span className="shrink-0 font-medium text-alloy-midnight/55">Conversation</span>
+                                <select
+                                    value={threadScope}
+                                    onChange={(e) =>
+                                        setThreadScope(e.target.value === "merged" ? "merged" : e.target.value)
+                                    }
+                                    className="min-w-0 max-w-full flex-1 rounded-lg border border-alloy-stone/20 bg-white px-2 py-1 text-[11px] text-alloy-forge shadow-sm"
+                                >
+                                    <option value="merged">All (merged timeline)</option>
+                                    {filteredThreadsByView.map((t) => (
+                                        <option key={t.id} value={t.id}>
+                                            {channelFacetLabel(t.channel)} — {t.recipient_key || t.id.slice(0, 8)}
+                                        </option>
+                                    ))}
+                                </select>
+                            </label>
+                        ) : null}
+
+                        <div
+                            ref={conversationScrollRef}
+                            className="comms-drawer-conversation flex max-h-[min(300px,42vh)] min-h-[132px] flex-col overflow-y-auto rounded-xl border border-alloy-stone/15 bg-[linear-gradient(180deg,rgba(246,247,249,0.9)_0%,#ffffff_100%)] px-2 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]"
+                        >
+                            {loadingMsgs ? (
+                                <div className="flex flex-1 flex-col justify-center gap-2 py-4" aria-busy="true">
+                                    <div className="skeleton-pulse h-12 w-[88%] rounded-2xl bg-alloy-stone/12" />
+                                    <div className="skeleton-pulse ml-auto h-12 w-[78%] rounded-2xl bg-alloy-stone/10" />
+                                    <div className="skeleton-pulse h-10 w-[70%] rounded-2xl bg-alloy-stone/11" />
+                                </div>
+                            ) : msgErr ? (
+                                <p className="text-sm text-alloy-ember">{msgErr}</p>
+                            ) : msgs.length === 0 ? (
+                                <p className="py-6 text-center text-[13px] text-alloy-midnight/58">
+                                    No messages in this view yet.
+                                </p>
+                            ) : (
+                                <ul className="flex flex-col gap-0.5">
+                                    {msgs.map((m) => {
+                                        const inbound = (m.direction ?? "").toLowerCase() === "inbound";
+                                        const pres = deliveryStatePresentation(mapToDeliveryState(m));
+                                        const fail = pres.highlightFailure;
+                                        const msgWhen = communicationMessageInstant(m);
+                                        return (
+                                            <li
+                                                key={`${m.id}-${m._thread_id ?? ""}`}
+                                                className={`flex w-full ${inbound ? "justify-start" : "justify-end"}`}
+                                            >
+                                                <div
+                                                    className={`max-w-[min(100%,19.5rem)] rounded-2xl px-3 py-2 text-[13px] leading-snug shadow-sm ${
+                                                        inbound
+                                                            ? "rounded-tl-sm border border-alloy-stone/16 bg-white text-alloy-forge"
+                                                            : `rounded-tr-sm text-white ${
+                                                                  fail
+                                                                      ? "border border-alloy-ember/40 bg-alloy-ember/[0.92]"
+                                                                      : "bg-alloy-midnight/[0.92]"
+                                                              }`
+                                                    }`}
+                                                >
+                                                    <div
+                                                        className={`mb-1 flex flex-wrap items-baseline gap-x-1.5 text-[10px] font-medium uppercase tracking-wide ${
+                                                            inbound ? "text-alloy-midnight/42" : "text-white/58"
+                                                        }`}
+                                                    >
+                                                        <span>{channelFacetLabel(m.channel)}</span>
+                                                        <span className="opacity-50">·</span>
+                                                        <span
+                                                            className={
+                                                                inbound
+                                                                    ? fail
+                                                                        ? "text-alloy-ember"
+                                                                        : "text-alloy-forge/90"
+                                                                    : ""
+                                                            }
+                                                        >
+                                                            {pres.label}
+                                                        </span>
+                                                        {msgWhen ? (
+                                                            <span
+                                                                className={`ml-auto tabular-nums normal-case font-normal opacity-80 ${
+                                                                    inbound ? "" : "text-white/70"
+                                                                }`}
+                                                            >
+                                                                {formatDateTimeForUserDisplay(msgWhen, viewerTz)}
+                                                            </span>
+                                                        ) : null}
+                                                    </div>
+                                                    {pres.subtext ? (
+                                                        <p
+                                                            className={`mb-1 text-[10px] leading-snug ${
+                                                                inbound ? "text-alloy-midnight/48" : "text-white/55"
+                                                            }`}
+                                                        >
+                                                            {pres.subtext}
+                                                        </p>
+                                                    ) : null}
+                                                    {(m.from_address || m.to_address) && (
+                                                        <p
+                                                            className={`mb-1.5 text-[11px] ${
+                                                                inbound ? "text-alloy-forge/65" : "text-white/70"
+                                                            }`}
+                                                        >
+                                                            {m.from_address ? <span>From {m.from_address}</span> : null}
+                                                            {m.from_address && m.to_address ? " · " : null}
+                                                            {m.to_address ? <span>To {m.to_address}</span> : null}
+                                                        </p>
+                                                    )}
+                                                    {m.body ? (
+                                                        <div
+                                                            className={`whitespace-pre-wrap ${
+                                                                inbound ? "text-[13px] text-alloy-forge/95" : "text-[13px] text-white/95"
+                                                            }`}
+                                                        >
+                                                            {m.body}
+                                                        </div>
+                                                    ) : null}
+                                                </div>
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
+                            )}
+                        </div>
+
+                        {composerBlockInner}
+                    </>
                 )}
             </section>
         </div>
