@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import "@/app/adminV2/components/workspace/workspace.css";
@@ -1238,14 +1238,19 @@ export default function AdminEntityDrawer() {
         memberPersonGraphOverlayDoneRef.current = null;
     }, [drawer.type, drawer.id]);
 
-    useLayoutEffect(() => {
+    /** Comms prefetch: only while enrollment Communication tab is selected (avoid drawer_visible-triggered fetch fan-out). */
+    const enrollmentCommPanelSelected =
+        String((formData as { _enrollment_panel?: unknown })._enrollment_panel ?? "").trim() === "communication";
+    useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
         if (!data || typeof data !== "object") return;
         if (!entityDataMatchesDrawer(data, drawer.id)) return;
-        const surface = String((data as { _record_surface?: unknown })._record_surface ?? "").trim();
-        if (surface !== "drawer_visible") return;
+        if (!enrollmentCommPanelSelected) {
+            invalidateCommunicationsDrawerPrefetch("opportunities", drawer.id);
+            return;
+        }
         armCommunicationsDrawerPrefetch("opportunities", drawer.id);
-    }, [drawer.type, drawer.id, data]);
+    }, [drawer.type, drawer.id, data, enrollmentCommPanelSelected]);
 
     useEffect(() => {
         const t = drawer.type;

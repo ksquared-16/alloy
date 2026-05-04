@@ -1,6 +1,7 @@
 /**
- * Anticipatory client-side prefetch for Communications drawer payloads.
- * Started when opportunity `drawer_visible` applies; invalidated on record change / drawer teardown.
+ * Optional client-side prefetch for Communications drawer payloads.
+ * Armed when the enrollment Communication tab is active (`_enrollment_panel === "communication"`);
+ * invalidated when that tab is not selected / drawer teardown.
  */
 
 type ThreadsResult = { threads: unknown[]; error: string | null };
@@ -40,7 +41,7 @@ export function armCommunicationsDrawerPrefetch(apiEntityType: string, entityId:
     const key = prefetchKey(apiEntityType, entityId);
     if (slots.has(key)) {
         if (shouldLogPrefetch()) {
-            console.warn("[perf.drawer.comms_prefetch]", {
+            console.warn("[perf.comms.prefetch]", {
                 entity_type: apiEntityType,
                 entity_id: entityId,
                 event: "arm_skip",
@@ -169,6 +170,14 @@ export function armCommunicationsDrawerPrefetch(apiEntityType: string, entityId:
     };
     slots.set(key, slot);
 
+    if (logPerf) {
+        console.warn("[perf.comms.prefetch]", {
+            entity_type: apiEntityType,
+            entity_id: entityId,
+            event: "arm",
+        });
+    }
+
     void threads.then((r) => {
         slot.threads_snapshot = r;
     });
@@ -187,7 +196,7 @@ export function armCommunicationsDrawerPrefetch(apiEntityType: string, entityId:
                     ? performance.now()
                     : Date.now();
             const total_ms = Math.round((t1 - perfT0) * 10) / 10;
-            console.warn("[perf.drawer.comms_prefetch]", {
+            console.warn("[perf.comms.prefetch]", {
                 entity_type: apiEntityType,
                 entity_id: entityId,
                 event: "prefetch_settled",

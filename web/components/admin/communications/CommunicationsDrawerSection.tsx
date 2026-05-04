@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
-import { takeCommunicationsDrawerPrefetch, markCommunicationsDrawerPrefetchConsumed } from "@/lib/admin/communications/communicationsDrawerPrefetch";
+import {
+    takeCommunicationsDrawerPrefetch,
+    markCommunicationsDrawerPrefetchConsumed,
+    invalidateCommunicationsDrawerPrefetch,
+} from "@/lib/admin/communications/communicationsDrawerPrefetch";
 
 type ThreadRow = {
     id: string;
@@ -179,9 +183,10 @@ export default function CommunicationsDrawerSection({
         const applyThreadRowsFromPrefetch = (tRaw: unknown, perfSource: string) => {
             if (typeof console !== "undefined" && typeof console.warn === "function") {
                 const list = Array.isArray(tRaw) ? tRaw : [];
-                console.warn("[perf.drawer.comms_tab]", {
+                console.warn("[perf.comms.load]", {
                     entity_type: apiEntityType,
                     entity_id: entityId,
+                    kind: "threads",
                     source: perfSource,
                     count: list.length,
                 });
@@ -215,6 +220,14 @@ export default function CommunicationsDrawerSection({
         }
 
         setLoadingThreads(true);
+        if (typeof console !== "undefined" && typeof console.warn === "function") {
+            console.warn("[perf.comms.load]", {
+                entity_type: apiEntityType,
+                entity_id: entityId,
+                kind: "threads",
+                source: "network",
+            });
+        }
         try {
             if (peek?.threads) {
                 try {
@@ -269,9 +282,10 @@ export default function CommunicationsDrawerSection({
             ) => {
                 if (!cancelled) {
                     if (typeof console !== "undefined" && typeof console.warn === "function") {
-                        console.warn("[perf.drawer.comms_tab]", {
+                        console.warn("[perf.comms.load]", {
                             entity_type: apiEntityType,
                             entity_id: entityId,
+                            kind: "bindings",
                             source: perfSrc,
                             channel_count: Array.isArray(pb.channels) ? pb.channels.length : 0,
                             error: pb.error ?? null,
@@ -297,6 +311,14 @@ export default function CommunicationsDrawerSection({
 
             setLoadingBindings(true);
             setBindingsErr(null);
+            if (typeof console !== "undefined" && typeof console.warn === "function") {
+                console.warn("[perf.comms.load]", {
+                    entity_type: apiEntityType,
+                    entity_id: entityId,
+                    kind: "bindings",
+                    source: "network",
+                });
+            }
             try {
                 if (peekB?.bindings) {
                     try {
@@ -345,9 +367,10 @@ export default function CommunicationsDrawerSection({
                 if (cancelled) return;
                 if (typeof console !== "undefined" && typeof console.warn === "function") {
                     const list = Array.isArray(pr.recipients) ? pr.recipients : [];
-                    console.warn("[perf.drawer.comms_tab]", {
+                    console.warn("[perf.comms.load]", {
                         entity_type: apiEntityType,
                         entity_id: entityId,
+                        kind: "recipients",
                         source: perfSrc,
                         recipients_count: list.length,
                         error: pr.error ?? null,
@@ -372,6 +395,14 @@ export default function CommunicationsDrawerSection({
 
             setLoadingRecipients(true);
             setRecipientsErr(null);
+            if (typeof console !== "undefined" && typeof console.warn === "function") {
+                console.warn("[perf.comms.load]", {
+                    entity_type: apiEntityType,
+                    entity_id: entityId,
+                    kind: "recipients",
+                    source: "network",
+                });
+            }
             try {
                 if (peekR?.recipients) {
                     try {
@@ -487,6 +518,7 @@ export default function CommunicationsDrawerSection({
             setSendOkNote(userFriendlySendNote(lastNote));
             setComposerSubject("");
             setComposerBody("");
+            invalidateCommunicationsDrawerPrefetch(apiEntityType, entityId);
             await loadThreads();
             const refetchMsgs = (!embedded || threadSpaceExpanded) && selectedId;
             if (refetchMsgs && selectedId) void loadMsgs(selectedId);
