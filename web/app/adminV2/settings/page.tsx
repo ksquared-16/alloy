@@ -102,6 +102,9 @@ export default function AdminV2SettingsIndexPage() {
             <div className="space-y-4">
                 <Group label="Organization" accentClass="border-slate-400/40">
                     <SettingsTileGrid variant="four">
+                        <SettingsCard href="/adminV2/settings/communications" title="Communications setup" accent="organization">
+                            Email/SMS bindings, outbound readiness, and safe label/status edits (no secrets).
+                        </SettingsCard>
                         <SettingsCard href="/adminV2/settings/departments" title="Departments" accent="organization">
                             Departments and workspace hierarchy.
                         </SettingsCard>

@@ -1744,3 +1744,26 @@ End design batch — Cards 22, 23, 25A.
 - `docs/sprints/05_2026/communications.txt` (this section)
 
 **Suggested commit message:** `feat(communications): header quick message modal and person-search API`
+
+⸻
+
+### Productization batch — **Cards A–C** (UX, provider setup scaffold, header)
+
+**Card A — Messaging UX**
+
+- **Quick message modal:** Removed footer scaffold blurb. **Multi-recipient:** search rows **toggle** add/remove; **chip** strip with clear-all; **sequential** `POST …/send` per person with **all ok**, **all failed**, or **partial** summary (amber for partial). **Recent threads:** after selection, **`GET /api/admin/communications/threads?entity_type=persons&entity_id=…`** (preview uses **first** selected when multiple). **`GET …/threads`** extended: **`person`/`persons`** normalization and **`assertRowOrg(persons)`** for direct person thread reads.
+- **Drawer (`CommunicationsDrawerSection`):** Tighter vertical rhythm (section **gap**, filter tab padding, composer **space-y**, shorter conversation **vh** cap, **max-h** on recipient chips, smaller chip/textarea/send button typography). **Delivery copy:** outbound **provider_accepted** shows headline **Sent** + sub **Provider accepted** (no loud “delivery not confirmed”); shared **`deliveryStatePresentation`** label/subtext aligned.
+
+**Card B — Provider setup scaffold**
+
+- **`/adminV2/settings/communications`** + **`CommunicationsSetupClient`:** Readiness strip (email/SMS from **`channels_available`**), per-binding cards with **channel, provider, status, primary, inbound, from hint, scope**, **credentials configured / not** (from **`ready_for_composer`** — no **`secret_ref`** value exposed). **Editable:** `display_label`, `status` (`active` | `disabled` | `pending_verification`), `is_primary` (clearing other rows’ primary on same channel when setting true). **`PATCH /api/admin/communications/bindings/[bindingId]`** — org-scoped, safe fields only, **`updated_at`** bump. Settings index **tile** under Organization.
+
+**Card C — Header**
+
+- **Messages:** **`MessageSquare`** (lucide-react) + label, **rounded-md**, slightly stronger active secondary style; nav **gap** tweak. Modal trigger unchanged.
+
+**Still out of scope (explicit)**
+
+- Delivery **webhooks**; **read/unread**; provider credential **self-service / vault UI**; **templates / bulk / classroom** messaging; **attachments**; **placeholder shortcuts / emojis** in composer.
+
+**Suggested commit message:** `feat(communications): quick modal threads+multi-send, setup page, drawer polish`

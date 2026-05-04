@@ -61,7 +61,7 @@ const SUCCESS_TOAST_MS = 4500;
 /** Default visible rows in the conversation strip (rest behind “View older messages”). */
 const DEFAULT_VISIBLE_MESSAGE_COUNT = 3;
 /** Fixed scroll area height so composer stays in view without growing the drawer. */
-const CONVERSATION_SCROLL_HEIGHT_CLASS = "h-[min(15rem,38vh)] max-h-[min(22rem,48vh)] shrink-0";
+const CONVERSATION_SCROLL_HEIGHT_CLASS = "h-[min(13rem,34vh)] max-h-[min(20rem,44vh)] shrink-0";
 
 function shouldLogCommsLoad(): boolean {
     if (typeof window === "undefined") return process.env.NODE_ENV !== "production";
@@ -152,7 +152,7 @@ function bubbleStatusLine(m: MsgRow): { headline: string; sub?: string } {
         case "delivered":
             return { headline: "Delivered" };
         case "provider_accepted":
-            return { headline: "Sent", sub: "Provider accepted · delivery not confirmed" };
+            return { headline: "Sent", sub: "Provider accepted" };
         case "sent_to_provider":
             return { headline: "Sent", sub: pres.subtext };
         default:
@@ -876,7 +876,7 @@ export default function CommunicationsDrawerSection({
     };
 
     const filterTabCls = (v: ViewFilter) =>
-        `rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition ${
+        `rounded-lg px-2 py-1 text-[11px] font-semibold transition ${
             viewFilter === v
                 ? "bg-alloy-midnight text-white shadow-sm"
                 : "border border-alloy-stone/22 bg-white text-alloy-forge hover:bg-alloy-stone/[0.06]"
@@ -905,7 +905,7 @@ export default function CommunicationsDrawerSection({
                 ) : bindingsErr ? (
                     <p className="text-[11px] text-alloy-ember">{bindingsErr}</p>
                 ) : (
-                    <div className="mt-1.5 space-y-2">
+                    <div className="mt-1 space-y-1.5">
                         {viewFilter === "all" ? (
                             <div className="flex flex-wrap items-center gap-1">
                                 <span className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
@@ -968,8 +968,8 @@ export default function CommunicationsDrawerSection({
                                         : "No linked people with a mobile number for SMS."}
                                 </p>
                             ) : (
-                                <div className="space-y-1.5">
-                                    <div className="flex max-h-[5.5rem] flex-wrap gap-1 overflow-y-auto pr-0.5">
+                                <div className="space-y-1">
+                                    <div className="flex max-h-[3.75rem] flex-wrap gap-0.5 overflow-y-auto pr-0.5">
                                         {recipientsForComposer.map((r) => {
                                             const on = selectedRecipientIds.has(r.person_id);
                                             const addr =
@@ -984,14 +984,14 @@ export default function CommunicationsDrawerSection({
                                                     disabled={sendBusy}
                                                     onClick={() => toggleRecipient(r.person_id)}
                                                     title={r.relationship_hint ?? undefined}
-                                                    className={`max-w-full rounded-full border px-2 py-0.5 text-left text-[11px] leading-tight transition ${
+                                                    className={`max-w-full rounded-full border px-1.5 py-0.5 text-left text-[10px] leading-tight transition ${
                                                         on
                                                             ? "border-alloy-midnight bg-alloy-midnight/[0.08] font-semibold text-alloy-midnight ring-1 ring-alloy-midnight/18"
                                                             : "border-alloy-stone/20 bg-white font-medium text-alloy-forge hover:border-alloy-stone/35"
                                                     }`}
                                                 >
                                                     <span className="block truncate">{r.display_name}</span>
-                                                    <span className="block truncate text-[10px] font-normal text-alloy-midnight/55">
+                                                    <span className="block truncate text-[9px] font-normal text-alloy-midnight/55">
                                                         {addr}
                                                     </span>
                                                 </button>
@@ -1000,29 +1000,29 @@ export default function CommunicationsDrawerSection({
                                     </div>
                                     {effectiveComposer === "email" ? (
                                         <label className="block space-y-0.5">
-                                            <span className="text-[11px] font-medium text-alloy-midnight/75">Subject</span>
+                                            <span className="text-[10px] font-medium text-alloy-midnight/75">Subject</span>
                                             <input
                                                 type="text"
                                                 value={composerSubject}
                                                 onChange={(e) => setComposerSubject(e.target.value)}
                                                 disabled={sendBusy}
                                                 placeholder="Optional"
-                                                className="w-full rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 text-[12px] text-alloy-midnight/85 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
+                                                className="w-full rounded-md border border-alloy-stone/20 bg-white px-2 py-1 text-[11px] text-alloy-midnight/85 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
                                                 autoComplete="off"
                                             />
                                         </label>
                                     ) : null}
                                     <label className="block space-y-0.5">
-                                        <span className="text-[11px] font-medium text-alloy-midnight/75">
+                                        <span className="text-[10px] font-medium text-alloy-midnight/75">
                                             {effectiveComposer === "email" ? "Email body" : "Message"}
                                         </span>
                                         <textarea
                                             value={composerBody}
                                             onChange={(e) => setComposerBody(e.target.value)}
                                             disabled={sendBusy}
-                                            rows={embedded ? 2 : 3}
+                                            rows={embedded ? 2 : 2}
                                             placeholder={effectiveComposer === "sms" ? "SMS…" : "Email…"}
-                                            className="w-full resize-none rounded-lg border border-alloy-stone/20 bg-white px-2 py-1.5 text-[12px] leading-snug text-alloy-midnight/85 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
+                                            className="w-full resize-none rounded-md border border-alloy-stone/20 bg-white px-2 py-1 text-[11px] leading-snug text-alloy-midnight/85 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
                                             aria-label={effectiveComposer === "email" ? "Email body" : "SMS message"}
                                         />
                                     </label>
@@ -1037,7 +1037,7 @@ export default function CommunicationsDrawerSection({
                                                 (effectiveComposer === "email" && !emailOutboundReady) ||
                                                 (effectiveComposer === "sms" && !smsOutboundReady)
                                             }
-                                            className="rounded-lg border border-alloy-midnight/20 bg-alloy-midnight px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-alloy-midnight/90 disabled:cursor-not-allowed disabled:opacity-45"
+                                            className="rounded-md border border-alloy-midnight/20 bg-alloy-midnight px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-alloy-midnight/90 disabled:cursor-not-allowed disabled:opacity-45"
                                         >
                                             {sendBusy
                                                 ? "Sending…"
@@ -1068,7 +1068,7 @@ export default function CommunicationsDrawerSection({
 
     return (
         <div className={`flex min-h-0 min-w-0 flex-1 flex-col ${className}`}>
-            <section className="flex min-h-0 flex-1 flex-col gap-1.5">
+            <section className="flex min-h-0 flex-1 flex-col gap-1">
                 {headerTitle}
                 {description}
 

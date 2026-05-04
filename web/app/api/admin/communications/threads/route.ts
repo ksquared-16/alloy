@@ -14,6 +14,7 @@ function normalizeEntityTypeParam(raw: string): string | null {
     if (s === "job") return "jobs";
     if (s === "schedule") return "schedules";
     if (s === "contact") return "contacts";
+    if (s === "person") return "persons";
     return s;
 }
 
@@ -112,7 +113,15 @@ export async function GET(request: NextRequest) {
     const orgId = ctx.orgId;
 
     const tableForAssert =
-        entityType === "opportunities" ? "opportunities" : entityType === "jobs" ? "jobs" : entityType === "customers" ? "customers" : null;
+        entityType === "opportunities"
+            ? "opportunities"
+            : entityType === "jobs"
+              ? "jobs"
+              : entityType === "customers"
+                ? "customers"
+                : entityType === "persons"
+                  ? "persons"
+                  : null;
 
     if (tableForAssert) {
         const okOrg = await assertRowOrg(supabase, tableForAssert, entityId, orgId);

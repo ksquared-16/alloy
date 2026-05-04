@@ -110,7 +110,7 @@ export function deliveryStatePresentation(state: DeliveryState): DeliveryStatePr
         case "sent_to_provider":
             return { label: "Sending…", subtext: "Handoff in progress" };
         case "provider_accepted":
-            return { label: "Sent to provider", subtext: "Delivery not confirmed" };
+            return { label: "Sent", subtext: "Provider accepted" };
         case "delivered":
             return { label: "Delivered" };
         case "failed":

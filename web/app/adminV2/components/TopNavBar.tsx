@@ -8,6 +8,7 @@ import { palette, neutral, derived } from "@/styles/tokens/colors";
 import { markWorkUnitNavigationStart } from "@/lib/perf/markWorkUnitNavigationStart";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import QuickMessageModal from "@/app/adminV2/components/QuickMessageModal";
+import { MessageSquare } from "lucide-react";
 
 function normalizeAdminPath(pathname: string): string {
   if (pathname === "/admin/v2" || pathname.startsWith("/admin/v2/")) {
@@ -103,8 +104,8 @@ export default function TopNavBar() {
 
   const secondaryTabStyle = (active: boolean) =>
     active
-      ? { backgroundColor: "rgba(255,255,255,0.14)", color: neutral.surface, opacity: 1 }
-      : { opacity: 0.55, color: neutral.surface };
+      ? { backgroundColor: "rgba(255,255,255,0.16)", color: neutral.surface, opacity: 1 }
+      : { opacity: 0.62, color: neutral.surface };
 
   const onSignOut = async () => {
     const supabase = createClient();
@@ -115,7 +116,7 @@ export default function TopNavBar() {
 
   return (
     <header
-      className="flex items-center h-12 flex-shrink-0 px-4 gap-4 border-b"
+      className="flex items-center h-12 flex-shrink-0 px-4 gap-3 border-b"
       style={{
         backgroundColor: palette.midnightForge,
         borderColor: derived.topBarDivider,
@@ -141,7 +142,7 @@ export default function TopNavBar() {
       >
         <span style={{ opacity: 0.92 }}>Search</span>
       </div>
-      <nav className="flex items-center gap-1 shrink-0" aria-label="Perspective tabs">
+      <nav className="flex items-center gap-1.5 shrink-0 pl-1" aria-label="Perspective tabs">
         <AdminV2NavLink
           href="/adminV2/workspace"
           active={isWorkspaceOverview}
@@ -165,16 +166,17 @@ export default function TopNavBar() {
         <button
           type="button"
           onClick={() => setQuickMessageOpen(true)}
-          className="px-2 py-1 rounded text-[11px] font-normal"
+          className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium leading-none"
           style={secondaryTabStyle(isMessaging || quickMessageOpen)}
-          title="Send a quick email or SMS (opens modal). Messaging overview: /adminV2/messages"
+          title="Send a quick email or SMS (opens modal)"
         >
+          <MessageSquare className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden strokeWidth={2} />
           Messages
         </button>
         <AdminV2NavLink
           href="/adminV2/ai-activity"
           active={isAiActivity}
-          className="px-2 py-1 rounded text-[11px] font-normal"
+          className="px-2.5 py-1 rounded-md text-[11px] font-medium"
           style={secondaryTabStyle(isAiActivity)}
           title="Full AI apply history (recent actions also appear above the command bar)"
         >
