@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertJobInAccessScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { effectiveScheduleStatusKey, fetchScheduleStatusKeyByFk } from "@/lib/admin/scheduleEffectiveStatusKey";
 
 export const dynamic = "force-dynamic";
@@ -26,13 +28,23 @@ export async function GET(
     const { data: job, error: jobErr } = await supabase
         .from("jobs")
         .select(
-            "id, customer_id, assigned_vendor_id, gross_price_cents, estimated_total_cents, recurring_total_cents, discounted, discount_code, discount_amount, is_recurring, service_frequency_key"
+            "id, customer_id, assigned_vendor_id, gross_price_cents, estimated_total_cents, recurring_total_cents, discounted, discount_code, discount_amount, is_recurring, service_frequency_key, work_unit_id, location_id"
         )
         .eq("id", jobId)
         .eq("org_id", orgId)
         .maybeSingle();
 
     if (jobErr || !job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
+
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) {
+        return NextResponse.json({ error: access.status === 401 ? "Unauthorized" : "Forbidden" }, { status: access.status });
+    }
+    const scopeDim = scopeDimensionsFromAccess(access);
+    const jRow = job as { work_unit_id?: string | null; location_id?: string | null };
+    if (!(await assertJobInAccessScope(supabase, orgId, scopeDim, { work_unit_id: jRow.work_unit_id ?? null, location_id: jRow.location_id ?? null }))) {
+        return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    }
 
     const { data: scheduleRows } = await supabase
         .from("schedules")

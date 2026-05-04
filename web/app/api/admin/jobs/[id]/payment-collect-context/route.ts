@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertJobInAccessScope, assertScheduleInAccessScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { computeJobBalanceSnapshot, getJobPricingTotalCents } from "@/lib/admin/jobPaymentBalances";
 
 function formatCardBrand(brand: string | null | undefined): string {
@@ -38,13 +40,28 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const { data: job, error: jobErr } = await supabase
         .from("jobs")
         .select(
-            "id, customer_id, org_id, gross_price_cents, estimated_total_cents, discount_amount, discounted, recurring_total_cents"
+            "id, customer_id, org_id, gross_price_cents, estimated_total_cents, discount_amount, discounted, recurring_total_cents, work_unit_id, location_id"
         )
         .eq("id", jobId)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
 
     if (jobErr || !job) {
+        return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    }
+
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) {
+        return NextResponse.json({ error: access.status === 401 ? "Unauthorized" : "Forbidden" }, { status: access.status });
+    }
+    const scopeDim = scopeDimensionsFromAccess(access);
+    const jobCore = job as { work_unit_id?: string | null; location_id?: string | null };
+    if (
+        !(await assertJobInAccessScope(supabase, ctx.orgId, scopeDim, {
+            work_unit_id: jobCore.work_unit_id ?? null,
+            location_id: jobCore.location_id ?? null,
+        }))
+    ) {
         return NextResponse.json({ error: "Job not found" }, { status: 404 });
     }
 
@@ -71,13 +88,21 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     if (scheduleId) {
         const { data: sched } = await supabase
             .from("schedules")
-            .select("id, job_id, price_cents, start_at")
+            .select("id, job_id, location_id, price_cents, start_at")
             .eq("id", scheduleId)
             .eq("org_id", ctx.orgId)
             .maybeSingle();
-        const s = sched as { job_id?: string; price_cents?: number | null; start_at?: string | null } | null;
+        const s = sched as { job_id?: string; location_id?: string | null; price_cents?: number | null; start_at?: string | null } | null;
         if (!s || s.job_id !== jobId) {
             return NextResponse.json({ error: "Schedule not found for this job" }, { status: 400 });
+        }
+        if (
+            !(await assertScheduleInAccessScope(supabase, ctx.orgId, scopeDim, {
+                job_id: jobId,
+                location_id: s.location_id ?? null,
+            }))
+        ) {
+            return NextResponse.json({ error: "Schedule not found for this job" }, { status: 404 });
         }
         let listPrice: number | null = null;
         if (s.price_cents != null && Number.isFinite(Number(s.price_cents)) && Number(s.price_cents) > 0) {

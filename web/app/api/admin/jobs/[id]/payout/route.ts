@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertJobInAccessScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import {
     resolveVendorPayoutPolicy,
     computePayoutPercent,
@@ -43,13 +45,23 @@ export async function GET(
 
     const { data: job, error: jobErr } = await supabase
         .from("jobs")
-        .select("id, org_id, assigned_vendor_id, gross_price_cents, discount_amount")
+        .select("id, org_id, assigned_vendor_id, gross_price_cents, discount_amount, work_unit_id, location_id")
         .eq("id", jobId)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
 
     if (jobErr) return NextResponse.json({ error: jobErr.message }, { status: 500 });
     if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
+
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) {
+        return NextResponse.json({ error: access.status === 401 ? "Unauthorized" : "Forbidden" }, { status: access.status });
+    }
+    const dim = scopeDimensionsFromAccess(access);
+    const jb = job as { work_unit_id?: string | null; location_id?: string | null };
+    if (!(await assertJobInAccessScope(supabase, ctx.orgId, dim, { work_unit_id: jb.work_unit_id ?? null, location_id: jb.location_id ?? null }))) {
+        return NextResponse.json({ error: "Job not found" }, { status: 404 });
+    }
 
     const jobAssignedVendorId = (job as { assigned_vendor_id?: string | null }).assigned_vendor_id ?? null;
 

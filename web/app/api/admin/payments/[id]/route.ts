@@ -8,6 +8,8 @@ import {
     paymentRowFieldsForStatusKeyChange,
     resolvePaymentStatusIdByKey,
 } from "@/lib/admin/paymentStatusSync";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertPaymentDrawerReadable, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 
 /** PATCH: update status_key, paid_at, notes. Editable fields only. */
 export async function PATCH(
@@ -49,6 +51,14 @@ export async function PATCH(
     if (prevErr || !prevRow) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
+
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const dim = scopeDimensionsFromAccess(access);
+    if (!(await assertPaymentDrawerReadable(supabase, ctx.orgId, dim, id))) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
     const oldStatusKey = (prevRow as { status_key?: string | null }).status_key ?? null;
 
     if (updates.status_key !== undefined) {

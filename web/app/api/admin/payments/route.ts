@@ -3,6 +3,8 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { assertJobInAccessScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import {
     batchPaymentAllocationRollups,
@@ -68,6 +70,22 @@ export async function GET(request: NextRequest) {
     if (jobId) {
         const jobOk = await assertRowOrg(supabase, "jobs", jobId, ctx.orgId);
         if (!jobOk.ok) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+        const { data: jobScopeRow } = await supabase
+            .from("jobs")
+            .select("work_unit_id, location_id")
+            .eq("id", jobId)
+            .eq("org_id", ctx.orgId)
+            .maybeSingle();
+        if (!jobScopeRow) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+        const access = await getAdminAccessContextCached();
+        if (!access.ok) return adminContextFailureResponse(access);
+        const dim = scopeDimensionsFromAccess(access);
+        const jr = jobScopeRow as { work_unit_id?: string | null; location_id?: string | null };
+        if (!(await assertJobInAccessScope(supabase, ctx.orgId, dim, { work_unit_id: jr.work_unit_id ?? null, location_id: jr.location_id ?? null }))) {
+            return NextResponse.json({ error: "Not found" }, { status: 404 });
+        }
     }
 
     let paymentIdFilter: string[] | null = null;
