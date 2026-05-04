@@ -6,7 +6,8 @@ import { logDbTiming } from "@/lib/admin/dbQueryTiming";
 /**
  * Request-scoped memoization (React `cache`) so routes that call both
  * `requireAdminOrOps` → `getCachedAuthUser` and `getAdminContext` → `getCachedAuthUserId`
- * share at most one `auth.getUser()` when JWT claims are absent.
+ * share at most one `auth.getUser()` when JWT claims are absent. Bundle resolution
+ * (`loadAdminAccessBundleCached`) uses the same user id for org and scope alignment.
  */
 export const getCachedAuthUserId = cache(async (): Promise<string | null> => {
     const t0 = Date.now();

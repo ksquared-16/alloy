@@ -1,16 +1,12 @@
 /**
- * Resolve admin org context from public.user_roles (membership scoping).
- * Use in admin API routes that need org_id and role.
- *
- * Request-scoped memoization: `getAdminContext` and `getAdminContextCached` are the same
- * function — React `cache()` dedupes work within a single request (no cross-request leakage).
+ * Admin API org gate: resolves org_id + compatibility `role` for routes that historically required admin/ops.
+ * Builds on `loadAdminAccessBundleCached` so layout/auth/org resolution stay aligned with `getAdminAccessContext`.
  */
 
 import { cache } from "react";
 import { NextResponse } from "next/server";
-import { createAdminClient } from "@/lib/supabaseAdmin";
-import { fetchPrimaryAdminOpsMembershipForUser } from "@/lib/admin/primaryAdminOpsOrg";
-import { getCachedAuthUserId } from "@/lib/admin/cachedAuthSession";
+import { loadAdminAccessBundleCached } from "@/lib/admin/getAdminAccessContext";
+import { compatibilityPortalRole } from "@/lib/admin/adminPortalRolePick";
 
 export type AdminContextSuccess = {
     ok: true;
@@ -29,40 +25,31 @@ export type AdminContextResult = AdminContextSuccess | AdminContextFailure;
 async function loadAdminContext(): Promise<AdminContextResult> {
     try {
         const t0 = Date.now();
-        const userId = await getCachedAuthUserId();
+        const bundle = await loadAdminAccessBundleCached();
         const authMs = Date.now() - t0;
-        if (!userId) {
-            return { ok: false, status: 401 };
+        if (!bundle.ok) {
+            if (bundle.status === 401 && authMs > 400) {
+                console.warn("[admin-context-perf] getAdminContext (unauthenticated)", { auth_ms: authMs });
+            }
+            return bundle;
         }
 
-        const t1 = Date.now();
-        const admin = createAdminClient();
-        const membership = await fetchPrimaryAdminOpsMembershipForUser(admin, userId);
-        const membershipMs = Date.now() - t1;
-        if (!membership) {
-            if (authMs + membershipMs > 400) {
-                console.warn("[admin-context-perf] getAdminContext (no membership)", {
-                    auth_claims_or_user_ms: authMs,
-                    membership_ms: membershipMs,
-                });
-            }
+        if (!bundle.portalEligible) {
             return { ok: false, status: 403 };
         }
 
         const totalMs = Date.now() - t0;
         if (totalMs > 400) {
             console.warn("[admin-context-perf] getAdminContext", {
-                auth_claims_or_user_ms: authMs,
-                user_roles_membership_ms: membershipMs,
                 total_ms: totalMs,
             });
         }
 
         return {
             ok: true,
-            orgId: membership.orgId,
-            role: membership.role,
-            userId,
+            orgId: bundle.orgId,
+            role: compatibilityPortalRole(bundle.roleKeys),
+            userId: bundle.userId,
         };
     } catch (e) {
         console.error("[getAdminContext] unexpected:", e);

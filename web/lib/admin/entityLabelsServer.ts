@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { resolveAdminAccessCore } from "@/lib/admin/resolveAdminAccessCore";
 import { resolveEntityLabelsForOrg } from "@/lib/admin/entityLabelsResolve";
-import { fetchPrimaryAdminOpsMembershipForUser } from "@/lib/admin/primaryAdminOpsOrg";
 
 /** Same shape as EntityLabelsContext labels map (kept here so server code never imports the client context file). */
 export type EntityLabelsBootstrapMap = Record<string, { singular: string | null; plural: string | null }>;
@@ -17,19 +17,11 @@ export function entityLabelsMapFromEffective(
 
 export async function getAdminOrgIdForUser(userId: string): Promise<string | null> {
     const supabase = createAdminClient();
-    const membership = await fetchPrimaryAdminOpsMembershipForUser(supabase, userId);
-    if (membership) return membership.orgId;
-
-    const { data: au } = await supabase.from("app_users").select("org_id").eq("id", userId).maybeSingle();
-    const fromAppUser = (au as { org_id?: string | null } | null)?.org_id ?? null;
-    if (fromAppUser) return fromAppUser;
-
-    const { data: auAuth } = await supabase
-        .from("app_users")
-        .select("org_id")
-        .eq("auth_user_id", userId)
-        .maybeSingle();
-    return (auAuth as { org_id?: string | null } | null)?.org_id ?? null;
+    const core = await resolveAdminAccessCore(supabase, userId);
+    if (!core?.portalEligible) {
+        return null;
+    }
+    return core.orgId;
 }
 
 /** Server-only: hydrated label map for admin shell (no raw entity_type flash on first paint). */

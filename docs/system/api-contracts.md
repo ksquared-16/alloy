@@ -7,7 +7,7 @@ High-level map of **server boundaries** for admin, public booking, and action li
 ## Current state
 
 - **Next.js route handlers** under `web/app/api/**` implement REST-ish JSON endpoints.
-- **Admin** routes generally require auth + org context via **`getAdminContextCached`** / `createAdminClient`.
+- **Admin** routes generally require auth + org context via **`getAdminContextCached`** / **`loadAdminAccessBundleCached`** / `createAdminClient`. Full scope dimensions (departments/sites, permission union) resolve through **`getAdminAccessContextCached`** (`web/lib/admin/getAdminAccessContext.ts`); individual routes apply filters in later sprint cards.
 - **Public/booking** routes use their own validation (e.g. book-v2 flow) and may reference `ALLOY_PUBLIC_ORG_ID` where applicable.
 
 ## How it works (representative)
