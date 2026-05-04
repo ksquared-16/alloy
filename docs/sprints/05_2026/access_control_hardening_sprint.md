@@ -113,7 +113,7 @@ Prerequisites: seed run (optional user scopes); three browser sessions or profil
 
 ---
 
-## Card F — Next UX (planned): AdminV2 header site filter
+## Card F — AdminV2 header site filter (partial)
 
 **Goal:** Users with **multiple allowed sites** need a fast way to narrow what they see without opening another settings page.
 
