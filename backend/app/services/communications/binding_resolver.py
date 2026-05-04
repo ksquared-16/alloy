@@ -11,6 +11,8 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
+from ...supabase_client import normalize_phone
+
 logger = logging.getLogger("alloy-dispatcher")
 
 
@@ -122,31 +124,52 @@ def find_binding_by_id(
     return None
 
 
-def find_binding_by_inbound_to(
+def find_sms_bindings_by_inbound_to(
     base_url: str,
     headers: Dict[str, str],
     *,
     to_e164: str,
-) -> Optional[Dict[str, Any]]:
-    to_norm = (to_e164 or "").strip()
+    limit: int = 50,
+) -> List[Dict[str, Any]]:
+    """Active SMS bindings matching Twilio ``To`` (E.164 via normalize_phone). Multiple rows = same number across orgs or data issue — caller disambiguates."""
+    to_norm = normalize_phone(to_e164) or (to_e164 or "").strip()
     if not to_norm:
-        return None
+        return []
+    lim = max(1, min(int(limit), 100))
     url = f"{base_url}/communication_provider_bindings"
     params = {
         "inbound_to_e164": f"eq.{to_norm}",
         "status": "eq.active",
         "channel": "eq.sms",
         "select": "*",
-        "limit": "10",
+        "order": "updated_at.asc",
+        "limit": str(lim),
     }
     try:
         resp = requests.get(url, headers=headers, params=params, timeout=15)
         if not resp.ok:
-            return None
+            logger.warning(
+                "find_sms_bindings_by_inbound_to GET fail status=%s",
+                resp.status_code,
+            )
+            return []
         rows = resp.json()
-        if isinstance(rows, list) and rows:
-            # If multiple orgs share same number (misconfig), take first — ops must fix.
-            return rows[0]
-    except Exception:
-        return None
-    return None
+        return rows if isinstance(rows, list) else []
+    except Exception as e:
+        logger.exception("find_sms_bindings_by_inbound_to exception %s", e)
+        return []
+
+
+def find_binding_by_inbound_to(
+    base_url: str,
+    headers: Dict[str, str],
+    *,
+    to_e164: str,
+) -> Optional[Dict[str, Any]]:
+    rows = find_sms_bindings_by_inbound_to(base_url, headers, to_e164=to_e164)
+    if len(rows) > 1:
+        logger.warning(
+            "find_binding_by_inbound_to: multiple bindings for destination count=%s",
+            len(rows),
+        )
+    return rows[0] if rows else None

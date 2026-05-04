@@ -15,10 +15,18 @@ from .communication_workflow_events import emit_for_communication_message
 logger = logging.getLogger("alloy-dispatcher")
 
 INBOUND_SURROGATE_NS = uuid.UUID("a3f7c89e-b1aa-52d0-9e61-000000010001")
+INBOUND_AMBIGUOUS_NS = uuid.UUID("b2d6c1d2-4e3f-5a6b-9c0d-1e2f3a4b5c6d")
+
+_MAX_PERSON_LOOKUP = 22
 
 
 def surrogate_inbound_entity_id(org_id: str, phone_norm: str) -> str:
     return str(uuid.uuid5(INBOUND_SURROGATE_NS, f"{org_id}|{phone_norm}"))
+
+
+def surrogate_ambiguous_persons(org_id: str, phone_norm: str, person_ids: List[str]) -> str:
+    tail = ",".join(sorted(str(x) for x in person_ids if x))
+    return str(uuid.uuid5(INBOUND_AMBIGUOUS_NS, f"{org_id}|{phone_norm}|{tail}"))
 
 
 _UUID_RE = re.compile(
@@ -40,7 +48,12 @@ def _persons_by_phone_org(
     if not phone_normalized:
         return []
     url = f"{base_url}/persons"
-    params = {"org_id": f"eq.{org_id}", "phone": f"eq.{phone_normalized}", "select": "id", "limit": "5"}
+    params = {
+        "org_id": f"eq.{org_id}",
+        "phone": f"eq.{phone_normalized}",
+        "select": "id",
+        "limit": str(_MAX_PERSON_LOOKUP),
+    }
     try:
         r = requests.get(url, headers=headers, params=params, timeout=15)
         if not r.ok:
@@ -54,18 +67,56 @@ def _persons_by_phone_org(
 def resolve_primary_entity_for_inbound_sms(
     base_url: str, headers: Dict[str, str], org_id: str, from_phone: str
 ) -> Tuple[str, str]:
+    """Backward-compat: entity type + id only (no metadata). Prefer resolve_inbound_sms_anchor_with_metadata internally."""
+    et, eid, _, _ = resolve_inbound_sms_anchor_with_metadata(base_url, headers, org_id, from_phone)
+    return et, eid
+
+
+def resolve_inbound_sms_anchor_with_metadata(
+    base_url: str, headers: Dict[str, str], org_id: str, from_phone: str
+) -> Tuple[str, str, Dict[str, Any], Dict[str, Any]]:
     """
-    CARD 15 — threading anchor: persons.id when phone matches in org (no contacts table).
-    Otherwise deterministic surrogate UUID (external SMS identity → communications_unknown).
+    Person-first inbound anchor for SMS threading (no contacts).
+
+    Returns (primary_entity_type, primary_entity_id, thread_metadata, message_resolution_metadata).
+
+    - Exactly one matching person in org → persons + person id.
+    - Zero persons → communications_unknown surrogate (unknown_sender).
+    - Multiple persons → communications_unknown deterministic surrogate + candidate_person_ids (no guessing).
     """
     norm = recipient_key_normalize_sms(from_phone)
     persons = _persons_by_phone_org(base_url, headers, org_id, norm)
-    if persons:
+    count = len(persons)
+
+    if count == 0:
+        if not norm:
+            eid = surrogate_inbound_entity_id(org_id, "__missing_phone__")
+        else:
+            eid = surrogate_inbound_entity_id(org_id, norm)
+        tm = {"inbound_resolution": "unknown_sender", "anchor": "surrogate_phone"}
+        mm = dict(tm)
+        return "communications_unknown", eid, tm, mm
+
+    if count == 1:
         pid = str(persons[0].get("id"))
-        return "persons", pid
-    if not norm:
-        return "communications_unknown", surrogate_inbound_entity_id(org_id, "__missing_phone__")
-    return "communications_unknown", surrogate_inbound_entity_id(org_id, norm)
+        tm = {"inbound_resolution": "single_person_match", "person_id": pid}
+        mm = dict(tm)
+        return "persons", pid, tm, mm
+
+    ids_sorted = sorted(
+        str(p.get("id")) for p in persons if p.get("id") is not None
+    )
+    eid = surrogate_ambiguous_persons(org_id, norm or "", ids_sorted)
+    tm: Dict[str, Any] = {
+        "inbound_resolution": "ambiguous_sender",
+        "candidate_person_ids": ids_sorted[:20],
+        "anchor": "surrogate_ambiguous_persons",
+    }
+    if count >= _MAX_PERSON_LOOKUP:
+        tm["resolution_truncated"] = True
+        tm["resolution_note"] = f"cap_{_MAX_PERSON_LOOKUP}_person_query"
+    mm = dict(tm)
+    return "communications_unknown", eid, tm, mm
 
 
 def _row_exists_or_create_thread(
@@ -77,6 +128,7 @@ def _row_exists_or_create_thread(
     entity_id: str,
     channel: str,
     recipient_key: str,
+    metadata: Optional[Dict[str, Any]] = None,
 ) -> Optional[str]:
     url = f"{base_url}/communication_threads"
     h = dict(headers)
@@ -105,7 +157,7 @@ def _row_exists_or_create_thread(
         "primary_entity_id": entity_id,
         "channel": channel,
         "recipient_key": recipient_key,
-        "metadata": {},
+        "metadata": dict(metadata) if metadata else {},
     }
     try:
         r = requests.post(url, headers=h, json=body, timeout=15)
@@ -147,9 +199,16 @@ def persist_inbound_communication_sms(
         entity_type = str(et_raw).strip()
         entity_id = str(eid_raw).strip()
         if not entity_type or not _UUID_RE.match(entity_id):
-            entity_type, entity_id = resolve_primary_entity_for_inbound_sms(base_url, headers, org_id, from_num)
+            entity_type, entity_id, thread_meta, msg_meta = resolve_inbound_sms_anchor_with_metadata(
+                base_url, headers, org_id, from_num
+            )
+        else:
+            thread_meta = {"inbound_resolution": "primary_entity_hint"}
+            msg_meta = dict(thread_meta)
     else:
-        entity_type, entity_id = resolve_primary_entity_for_inbound_sms(base_url, headers, org_id, from_num)
+        entity_type, entity_id, thread_meta, msg_meta = resolve_inbound_sms_anchor_with_metadata(
+            base_url, headers, org_id, from_num
+        )
 
     rkey = recipient_key_normalize_sms(from_num)
     thread_id = _row_exists_or_create_thread(
@@ -160,6 +219,7 @@ def persist_inbound_communication_sms(
         entity_id=entity_id,
         channel="sms",
         recipient_key=rkey,
+        metadata=thread_meta,
     )
     if not thread_id:
         return None
@@ -176,8 +236,10 @@ def persist_inbound_communication_sms(
         "to_address": to_num or None,
         "provider": "twilio",
         "provider_message_id": external_sid or None,
-        "metadata": {},
+        "metadata": dict(msg_meta),
     }
+    if bid:
+        payload_msg["communication_provider_binding_id"] = bid
     if bid:
         payload_msg["communication_provider_binding_id"] = bid
 
@@ -206,6 +268,7 @@ def persist_inbound_communication_sms(
                 extra={
                     "external_id": external_sid or None,
                     "communication_provider_binding_id": bid,
+                    "inbound_resolution": msg_meta.get("inbound_resolution"),
                 },
             )
             return row if isinstance(row, dict) else None

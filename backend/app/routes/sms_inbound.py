@@ -5,7 +5,7 @@ Configure in Twilio Messaging Service.
 
 Binding route (CARD 6): POST /sms/inbound/{binding_id}
   deterministic org routing + communication_* dual-write — legacy insert always preserved.
-Legacy: POST /sms/inbound
+Legacy: POST /sms/inbound — still inserts legacy messages; canonical persistence resolves org via active SMS binding matching Twilio ``To`` (`inbound_to_e164`), when unambiguous.
 
 Card 24: X-Twilio-Signature validation + inbound kill switch (COMMUNICATIONS_SMS_INBOUND_ENABLED).
 """
@@ -17,7 +17,10 @@ from fastapi import APIRouter, Request, Response
 
 from ..services.activity_workflow_events import emit_message_lifecycle_event
 from ..services.communication_inbound import persist_inbound_communication_sms
-from ..services.communications.binding_resolver import find_binding_by_id
+from ..services.communications.binding_resolver import (
+    find_binding_by_id,
+    find_sms_bindings_by_inbound_to,
+)
 from ..services.twilio_inbound_signature import (
     form_to_signature_params,
     resolve_inbound_twilio_auth_token,
@@ -125,26 +128,44 @@ def _handle_inbound_with_optional_binding(
     body: str,
     message_sid: str,
 ) -> Response:
-    if binding_id:
-        bd = binding_row
-        if bd:
-            try:
-                org_id_raw = bd.get("org_id")
-                if org_id_raw:
-                    persist_inbound_communication_sms(
-                        org_id=str(org_id_raw),
-                        binding_id=str(bd.get("id")) if bd.get("id") else binding_id.strip(),
-                        from_num=from_num,
-                        to_num=to_num,
-                        body=body,
-                        external_sid=message_sid,
-                        primary_entity_hint=None,
-                    )
-            except Exception as e:
-                logger.warning("sms_inbound: communication inbound persist skipped %s", e)
-        else:
-            logger.warning("sms_inbound: unknown binding_id=%s (legacy only)", _mask_binding_id(binding_id))
+    base_url = _get_base_url()
+    headers = _get_headers()
 
+    eff_row = binding_row
+    eff_uuid: Optional[str] = binding_id.strip() if binding_id and binding_id.strip() else None
+
+    if eff_uuid:
+        if not eff_row:
+            logger.warning("sms_inbound: unknown binding_id=%s (legacy only)", _mask_binding_id(binding_id))
+    else:
+        matches = find_sms_bindings_by_inbound_to(base_url, headers, to_e164=to_num)
+        if len(matches) > 1:
+            distinct_orgs = len({str(m.get("org_id")) for m in matches})
+            logger.warning(
+                "sms_inbound: canonical_skip ambiguous_destination_binding bindings=%s distinct_orgs=%s",
+                len(matches),
+                distinct_orgs,
+            )
+        elif len(matches) == 1:
+            eff_row = matches[0]
+            rid = eff_row.get("id")
+            eff_uuid = str(rid) if rid else None
+
+    if eff_row:
+        try:
+            org_id_raw = eff_row.get("org_id")
+            if org_id_raw:
+                persist_inbound_communication_sms(
+                    org_id=str(org_id_raw),
+                    binding_id=eff_uuid,
+                    from_num=from_num,
+                    to_num=to_num,
+                    body=body,
+                    external_sid=message_sid,
+                    primary_entity_hint=None,
+                )
+        except Exception as e:
+            logger.warning("sms_inbound: communication inbound persist skipped %s", e)
     try:
         _insert_legacy_messages(
             from_num=from_num,
