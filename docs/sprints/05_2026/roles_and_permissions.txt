@@ -3,7 +3,7 @@ Alloy sprint — Roles / permissions / department & site access (CRM)
 
 Phase 3 — Kanban cards (ordered)
 
-Card 1 — Schema migration [APPROVED pending verification]
+Card 1 — Schema migration [DONE]
   - user_access_profiles, user_department_access, user_site_access
   - Triggers, indexes, backfill user_access_profiles from distinct user_roles (user_id, org_id) → all/all
   - Migration: supabase/migrations/20260504103000_user_access_scope_tables_v1.sql
@@ -39,3 +39,16 @@ Locks (Phase 2)
   - Restricted users: unknown dept/site → deny; unresolved docs/payments → deny unless all/all scope
   - Out-of-scope entity routes → 404
   - Deploy safety: backfill all/all; runtime default missing profile to all/all for legacy transition
+
+Supabase CLI — migration 20260504103000 (user_access_scope_tables_v1)
+---------------------------------------------------------------------
+- `supabase migration list` (linked remote): all historical Local/Remote pairs align through
+  20260502143000; **20260504103000 is listed locally only** until the next `supabase db push`
+  (or equivalent) applies it to the linked project. **Do not** assume staging/prod DB has the
+  tables until that migration row appears on the Remote column.
+- Ordering: timestamp **20260504103000** is chronologically **after** **20260502143000** and is the
+  intended next migration on the branch.
+- Local Docker-only drift: if `supabase migration up --local` errors about inserting migrations
+  before the latest applied version, local `schema_migrations` / Docker history may be out of sync
+  with the migration folder; fix with `supabase migration repair`, `db reset`, or by applying SQL
+  manually only when you accept bookkeeping drift. Remote deployment should use normal CLI push.
