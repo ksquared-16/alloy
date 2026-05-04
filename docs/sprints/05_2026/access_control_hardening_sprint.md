@@ -66,6 +66,7 @@ Tests: `web/tests/admin/adminFinancialScope.test.ts` (helper-level).
 
 ## Card C — Seed script
 
+- **Follow-on (product data):** After the communications sprint, staging should move to a **realistic reseed** — see **`docs/sprints/05_2026/staging_demo_reseed_sprint.md`**. Do not keep growing `access_validation_demo_*` for new CRM features.
 - **File:** `web/scripts/seedAccessValidationDemo.ts`
 - **npm script:** `npm run dev:seed:access-validation`
 - **Package marker:** `demo_seed_package = access_validation_demo_v2` on inserted rows (alongside `access_validation_seed_key`). Inserts only when that entity’s seed key is not already present; **does not** truncate org data.

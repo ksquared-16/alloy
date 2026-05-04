@@ -14,6 +14,8 @@ import type { CSSProperties, ReactNode } from "react";
 interface AdminV2WorkspaceClientProvidersProps {
   children: ReactNode;
   userEmail: string;
+  /** Supabase auth user id — scopes workspace sessionStorage cache per principal. */
+  principalUserId: string;
   role: string;
   /** Same server bootstrap as `/admin` — shape matches `EntityLabelsMap`. */
   initialEntityLabels?: EntityLabelsBootstrapMap;
@@ -30,6 +32,7 @@ interface AdminV2WorkspaceClientProvidersProps {
 export default function AdminV2WorkspaceClientProviders({
   children,
   userEmail,
+  principalUserId,
   role,
   initialEntityLabels,
   orgName = null,
@@ -63,7 +66,7 @@ export default function AdminV2WorkspaceClientProviders({
         <EntityLabelsProvider initialLabels={labels}>
           <AdminOrgOperationalTimezoneProvider iana={operationalTz}>
             <AdminViewerTimezoneProvider value={tzValue}>
-              <WorkspaceOrgProvider orgName={orgName} orgId={orgId}>
+              <WorkspaceOrgProvider orgName={orgName} orgId={orgId} principalUserId={principalUserId}>
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                   <AdminDrawerProvider>
                     <div

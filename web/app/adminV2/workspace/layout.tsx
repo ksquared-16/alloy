@@ -56,6 +56,7 @@ export default async function AdminV2WorkspaceLayout({
   return (
     <AdminV2WorkspaceClientProviders
       userEmail={typeof auth.user.email === "string" && auth.user.email ? auth.user.email : "Unknown"}
+      principalUserId={auth.user.id}
       role={auth.role}
       orgName={orgName}
       orgId={orgId}

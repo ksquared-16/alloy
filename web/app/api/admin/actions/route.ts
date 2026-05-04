@@ -81,6 +81,7 @@ export async function GET(request: NextRequest) {
             [
                 "admin-actions-resolve",
                 ctx.orgId,
+                ctx.userId,
                 surface,
                 entityType ?? "-",
                 entityId ?? "-",

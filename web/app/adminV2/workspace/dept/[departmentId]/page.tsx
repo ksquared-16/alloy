@@ -21,13 +21,13 @@ import ActionsBlock from "@/app/adminV2/components/workspace/blocks/ActionsBlock
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import type { WorkspaceAction } from "@/lib/ui-v2/workspace-actions";
 import type { KPIVm } from "@/lib/ui-v2/workspace-types";
-import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
+import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
 import {
     REGISTRY_RIGHT_RAIL_ACTION_ID_PREFIX,
     mergeEnrollmentRightRailActions,
 } from "@/lib/workspace/viewModels/enrollmentRightRailMerge";
-import { rightRailResolvedFromActionsPayload } from "@/lib/workspace/rightRailResolvedFromActionsPayload";
+import { fetchWorkspaceRightRailResolvedActions } from "@/lib/workspace/fetchWorkspaceRightRailResolvedActions";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { dedupeAdminFetch, dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import {
@@ -90,7 +90,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
     const params = useParams();
     const router = useRouter();
     const { openDrawer } = useAdminDrawer();
-    const { orgId } = useWorkspaceOrg();
+    const { orgId, principalUserId } = useWorkspaceOrg();
     const departmentId = workspaceRouteParam(params.departmentId);
 
     /** True when layout applied readDepartmentPageCache for this dept (mirrors workspace root seeded shell). */
@@ -137,7 +137,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
         deptActionsPerfKeyRef.current = null;
         deptKpisPerfKeyRef.current = null;
         if (!departmentId || !orgId) return;
-        const hit = readDepartmentPageCache(orgId, departmentId);
+        const hit = readDepartmentPageCache(orgId, departmentId, principalUserId);
         if (!hit || hit.dept.id !== departmentId) return;
         seededDeptShellRef.current = true;
         setDept(hit.dept);
@@ -154,7 +154,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
             department_id: departmentId,
             client_cache_hit: true,
         });
-    }, [departmentId, orgId]);
+    }, [departmentId, orgId, principalUserId]);
 
     /** Workflow KPIs deferred until department shell geometry has committed — off the navigation critical path. */
     useEffect(() => {
@@ -227,7 +227,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
         deptKpisPerfKeyRef.current = null;
         const tAnchor =
             typeof performance !== "undefined" && typeof window !== "undefined" ? performance.now() : 0;
-        const seedSnap = seededDeptShellRef.current ? readDepartmentPageCache(orgId, departmentId) : null;
+        const seedSnap = seededDeptShellRef.current ? readDepartmentPageCache(orgId, departmentId, principalUserId) : null;
 
         if (!seededDeptShellRef.current) {
             setDeptLoading(true);
@@ -320,7 +320,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 });
 
                 if (orgId && deptCommit) {
-                    writeDepartmentPageCache(orgId, {
+                    writeDepartmentPageCache(orgId, principalUserId, {
                         dept: deptCommit,
                         workUnits: wuCommit,
                         workUnitSummaries: nextSummaries,
@@ -391,9 +391,11 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     setDeptWorkUnitsError(null);
                 }
 
-                const cachedMidFetch = seededDeptShellRef.current ? readDepartmentPageCache(orgId, departmentId) : null;
+                const cachedMidFetch = seededDeptShellRef.current
+                    ? readDepartmentPageCache(orgId, departmentId, principalUserId)
+                    : null;
                 if (orgId && deptCommit) {
-                    writeDepartmentPageCache(orgId, {
+                    writeDepartmentPageCache(orgId, principalUserId, {
                         dept: deptCommit,
                         workUnits: wuCommit,
                         workUnitSummaries:
@@ -442,7 +444,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
         return () => {
             cancelled = true;
         };
-    }, [departmentId, orgId]);
+    }, [departmentId, orgId, principalUserId]);
 
     useEffect(() => {
         if (!departmentId) return;
@@ -497,7 +499,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
         return () => {
             cancelled = true;
         };
-    }, [departmentId, orgId]);
+    }, [departmentId, orgId, principalUserId]);
 
     const departmentPageBlockingLoad = useMemo(() => {
         if (!departmentId) return false;
@@ -510,24 +512,15 @@ export default function AdminV2WorkspaceDepartmentPage() {
             return;
         }
         let cancelled = false;
-        const route =
-            `/api/admin/actions?` +
-            new URLSearchParams({
-                surface: "right_rail",
-                entity_type: "opportunity",
-                department_id: departmentId,
-                work_unit_id: primaryWorkUnit.id,
-            }).toString();
         (async () => {
             try {
                 const init = workspaceDataFetchInit();
-                const res = await dedupeAdminFetchWithTtl(route, init, 1500);
-                const j = (await res.json().catch(() => ({}))) as { actions?: ResolvedActionsBySlot; error?: string };
-                if (!cancelled && res.ok) {
-                    setEnrollmentDeptRightRail(rightRailResolvedFromActionsPayload(j.actions));
-                } else if (!cancelled) {
-                    setEnrollmentDeptRightRail([]);
-                }
+                const list = await fetchWorkspaceRightRailResolvedActions({
+                    departmentId,
+                    workUnitId: primaryWorkUnit.id,
+                    fetchInit: init,
+                });
+                if (!cancelled) setEnrollmentDeptRightRail(list);
             } catch {
                 if (!cancelled) setEnrollmentDeptRightRail([]);
             }

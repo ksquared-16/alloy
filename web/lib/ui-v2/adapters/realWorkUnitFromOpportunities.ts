@@ -7,6 +7,7 @@ import {
 } from "@/lib/workspace/viewModels/enrollmentWorkUnitViewModel";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import { mergeEnrollmentRightRailActions } from "@/lib/workspace/viewModels/enrollmentRightRailMerge";
+import { isEnrollmentLikeDepartmentKey } from "@/lib/workspace/enrollmentDepartmentKey";
 
 function parseIsoMs(ts: string | null | undefined): number | null {
     if (!ts) return null;
@@ -130,7 +131,7 @@ export function buildRealOpportunityWorkUnitWorkspaceModel(input: {
 }): WorkUnitWorkspaceModel {
     const workUnitKeyLower = input.workUnitKey.trim().toLowerCase();
     const isAllInquiries = workUnitKeyLower === "pipeline_overview";
-    const isEnrollmentDept = (input.departmentKey ?? "").trim().toLowerCase() === "enrollment";
+    const isEnrollmentDept = isEnrollmentLikeDepartmentKey(input.departmentKey);
 
     const rawItems: QueueItemVm[] = input.oq.items.map((row) => {
         const base = isEnrollmentDept

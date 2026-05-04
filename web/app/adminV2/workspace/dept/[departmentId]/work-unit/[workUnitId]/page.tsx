@@ -25,7 +25,7 @@ import { parseAttentionReasonCountsPayload } from "@/lib/workspace/attentionReas
 import { buildRealOpportunityWorkUnitWorkspaceModel } from "@/lib/ui-v2/adapters/realWorkUnitFromOpportunities";
 import { buildWorkUnitQueueCrmCompactRowSlice } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
 import { mergeEnrollmentRightRailActions } from "@/lib/workspace/viewModels/enrollmentRightRailMerge";
-import { rightRailResolvedFromActionsPayload } from "@/lib/workspace/rightRailResolvedFromActionsPayload";
+import { fetchWorkspaceRightRailResolvedActions } from "@/lib/workspace/fetchWorkspaceRightRailResolvedActions";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { resolveKpisForWorkUnit } from "@/lib/kpi/resolver";
 import { buildDefaultWorkUnitKpis } from "@/lib/kpi/baseline";
@@ -568,18 +568,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 work_unit_id: workUnitId,
                 department_id: departmentId,
             }).toString();
-        const rightRailActionsRoute =
-            `/api/admin/actions?` +
-            new URLSearchParams({
-                surface: "right_rail",
-                entity_type: "opportunity",
-                work_unit_id: workUnitId,
-                department_id: departmentId,
-            }).toString();
-
         const [actionsSettled, rightRailSettled] = await Promise.allSettled([
             dedupeAdminFetchWithTtl(actionsListRoute, init, 1500),
-            dedupeAdminFetchWithTtl(rightRailActionsRoute, init, 1500),
+            fetchWorkspaceRightRailResolvedActions({
+                departmentId,
+                workUnitId,
+                fetchInit: init,
+            }),
         ]);
 
         if (actionsSettled.status === "fulfilled") {
@@ -598,16 +593,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
             }
         }
 
-        if (rightRailSettled.status === "fulfilled") {
-            try {
-                const ar = rightRailSettled.value;
-                const aj = (await ar.json().catch(() => ({}))) as { actions?: ResolvedActionsBySlot; error?: string };
-                if (ar.ok) {
-                    parsedRightRail = rightRailResolvedFromActionsPayload(aj.actions);
-                }
-            } catch {
-                /* non-fatal */
-            }
+        if (rightRailSettled.status === "fulfilled" && Array.isArray(rightRailSettled.value)) {
+            parsedRightRail = rightRailSettled.value;
         }
 
         setOpportunityQueueRowActions(parsedQueueRowQuick);

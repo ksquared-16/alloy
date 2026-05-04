@@ -1,6 +1,7 @@
 #!/usr/bin/env npx tsx
 /**
  * Idempotent CRM access-validation seed (local/staging).
+ * **Maintenance:** Prefer the planned realistic staging reseed (`docs/sprints/05_2026/staging_demo_reseed_sprint.md`) over extending this demo package for new product validation.
  *
  * Alloy model this seed demonstrates (no schema changes here):
  * - **Departments / work units** = functional areas — Enrollment; Billing / Operations.
