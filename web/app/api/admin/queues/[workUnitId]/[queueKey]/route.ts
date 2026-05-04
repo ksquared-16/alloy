@@ -1,5 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import {
+    accessScopeRestrictsData,
+    departmentIdAllowed,
+    fetchWorkUnitDepartmentId,
+    resolveRecordScopeConstraints,
+    scopeDimensionsFromAccess,
+    type RecordScopeConstraints,
+} from "@/lib/admin/accessScope";
 import { getWorkUnitQueueItems, QueueServiceError } from "@/lib/queues/QueueService";
 import { perfQueueRowsServer } from "@/lib/perf/adminV2PerfLog";
 
@@ -68,9 +78,34 @@ export async function GET(
     const auth_ms = Date.now() - tAuth0;
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const dim = scopeDimensionsFromAccess(access);
+
     const { workUnitId, queueKey } = await context.params;
     if (!workUnitId) return NextResponse.json({ error: "Missing workUnitId" }, { status: 400 });
     if (!queueKey) return NextResponse.json({ error: "Missing queueKey" }, { status: 400 });
+
+    const supabase = createAdminClient();
+    const { data: wuExists } = await supabase.from("work_units").select("id").eq("id", workUnitId).eq("org_id", ctx.orgId).maybeSingle();
+    if (!wuExists) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    if (accessScopeRestrictsData(dim) && dim.departmentScope === "restricted") {
+        const deptId = await fetchWorkUnitDepartmentId(supabase, ctx.orgId, workUnitId);
+        if (!departmentIdAllowed(dim, deptId)) {
+            return NextResponse.json({ error: "Not found" }, { status: 404 });
+        }
+    }
+
+    let recordScopeImpossible = false;
+    let recordScopeConstraints: RecordScopeConstraints | null = null;
+    if (accessScopeRestrictsData(dim)) {
+        const c = await resolveRecordScopeConstraints(supabase, ctx.orgId, dim);
+        if (c.impossible) recordScopeImpossible = true;
+        else recordScopeConstraints = c;
+    }
 
     try {
         const { limit, offset } = parseLimitOffset(request.nextUrl.searchParams);
@@ -83,6 +118,8 @@ export async function GET(
             offset,
             countAccuracy,
             omitTotalCount,
+            recordScopeImpossible,
+            recordScopeConstraints,
         });
 
         const tSer0 = Date.now();

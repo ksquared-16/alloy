@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { resolveDiscountRedemptionFkPoolsForRestrictedAdmin } from "@/lib/admin/discountRedemptionListScope";
 
 export type DiscountRedemptionListItem = {
     id: string;
@@ -45,17 +48,32 @@ export async function GET(request: NextRequest) {
     const offset = Number(searchParams.get("offset")) || 0;
 
     const supabase = createAdminClient();
-    const [custRes, jobRes, oppRes, contactRes] = await Promise.all([
-        supabase.from("customers").select("id").eq("org_id", ctx.orgId),
-        supabase.from("jobs").select("id").eq("org_id", ctx.orgId),
-        supabase.from("opportunities").select("id").eq("org_id", ctx.orgId),
-        supabase.from("contacts").select("id").eq("org_id", ctx.orgId),
-    ]);
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const dim = scopeDimensionsFromAccess(access);
 
-    const customerIds = ((custRes.data ?? []) as { id: string }[]).map((r) => r.id);
-    const jobIds = ((jobRes.data ?? []) as { id: string }[]).map((r) => r.id);
-    const opportunityIds = ((oppRes.data ?? []) as { id: string }[]).map((r) => r.id);
-    const contactIds = ((contactRes.data ?? []) as { id: string }[]).map((r) => r.id);
+    const scopedPools = await resolveDiscountRedemptionFkPoolsForRestrictedAdmin(supabase, ctx.orgId, dim);
+
+    let customerIds: string[];
+    let jobIds: string[];
+    let opportunityIds: string[];
+    let contactIds: string[];
+
+    if (!scopedPools) {
+        const [custRes, jobRes, oppRes, contactRes] = await Promise.all([
+            supabase.from("customers").select("id").eq("org_id", ctx.orgId),
+            supabase.from("jobs").select("id").eq("org_id", ctx.orgId),
+            supabase.from("opportunities").select("id").eq("org_id", ctx.orgId),
+            supabase.from("contacts").select("id").eq("org_id", ctx.orgId),
+        ]);
+
+        customerIds = ((custRes.data ?? []) as { id: string }[]).map((r) => r.id);
+        jobIds = ((jobRes.data ?? []) as { id: string }[]).map((r) => r.id);
+        opportunityIds = ((oppRes.data ?? []) as { id: string }[]).map((r) => r.id);
+        contactIds = ((contactRes.data ?? []) as { id: string }[]).map((r) => r.id);
+    } else {
+        ({ customerIds, jobIds, opportunityIds, contactIds } = scopedPools);
+    }
 
     const orFilter = orgScopeOrFilter({
         customers: customerIds,

@@ -14,6 +14,8 @@ import { logDbTiming, withDbTiming } from "@/lib/admin/dbQueryTiming";
 import { formatTourDateTime } from "@/lib/enrollment/formatTourDateTime";
 import { getOrgLocalTodayUtcBounds, type OrgLocalDayUtcBounds } from "@/lib/admin/orgLocalDayBounds";
 import { fetchOperationalTimezoneForOrgWithCache, UTC_FALLBACK_IANA } from "@/lib/admin/timezoneContract";
+import type { RecordScopeConstraints } from "@/lib/admin/accessScope";
+import { applyRecordScopeConstraintsToQuery } from "@/lib/admin/accessScope";
 
 type JobRowPreview = {
     id: string;
@@ -930,6 +932,7 @@ async function loadOpportunityNeedsAttentionRows(params: {
     now: Date;
     /** Default full cap; use {@link NEEDS_ATTENTION_COUNT_ONLY_FETCH_CAP} for count-only summaries. */
     fetchCap?: number;
+    recordScopeConstraints?: RecordScopeConstraints | null;
 }): Promise<OpportunityRowPreview[]> {
     const cap = params.fetchCap ?? NEEDS_ATTENTION_OPPORTUNITY_FETCH_CAP;
     const candidateOr = buildOpportunityNeedsAttentionCandidateOrExpr(params.now);
@@ -939,6 +942,9 @@ async function loadOpportunityNeedsAttentionRows(params: {
         .eq("org_id", params.orgId)
         .eq("work_unit_id", params.workUnitId)
         .or(candidateOr) as any;
+    if (params.recordScopeConstraints) {
+        q = applyRecordScopeConstraintsToQuery(q, params.recordScopeConstraints);
+    }
     const plans = params.sort.length ? params.sort : [{ column: "updated_at", ascending: true }];
     for (const p of plans) {
         q = q.order(p.column, { ascending: p.ascending });
@@ -1789,6 +1795,10 @@ export async function getWorkUnitQueueItems(params: {
     countAccuracy?: QueueCountAccuracy;
     /** Skip COUNT query; list still returns `limit` rows. UI should fall back to tab/summary totals. */
     omitTotalCount?: boolean;
+    /** Scope layer could not resolve any jobs/opps (restricted user). */
+    recordScopeImpossible?: boolean;
+    /** Site/department filters for job & opportunity queue rows. */
+    recordScopeConstraints?: RecordScopeConstraints | null;
 }): Promise<WorkUnitQueueItemsWithPerf> {
     const tSvc0 = Date.now();
     const supabase = createAdminClient();
@@ -1810,6 +1820,8 @@ export async function getWorkUnitQueueItems(params: {
     const rowListUi = getQueueUiConfig(def);
     const queueListRelationPlan = queueListRelationFetchPlan(rowListUi);
 
+    const scopeFilter = params.recordScopeConstraints ?? null;
+
     const finalize = (
         queueItems: QueueItemsResult,
         timings: Omit<QueueRowsPerfBreakdown, "service_total_ms">
@@ -1821,6 +1833,42 @@ export async function getWorkUnitQueueItems(params: {
         },
     });
 
+    if (params.recordScopeImpossible === true) {
+        const effectiveLimit0 = clampLimit(params.limit ?? q.limit ?? 50, 1, 200);
+        const effectiveOffset0 = clampLimit(params.offset ?? 0, 0, 1000000);
+        const omitTotal0 = params.omitTotalCount === true;
+        return finalize(
+            {
+                queue: {
+                    key: q.key,
+                    label: q.label,
+                    description: q.description,
+                    entity_type: def.entity_type,
+                    priority: q.priority ?? "standard",
+                    display: q.display ?? "list",
+                },
+                items: [],
+                total: 0,
+                limit: effectiveLimit0,
+                offset: effectiveOffset0,
+                ...(omitTotal0 ? { total_omitted: true } : {}),
+            },
+            {
+                load_def_ms,
+                operational_day_ms,
+                base_query_ms: 0,
+                count_ms: 0,
+                status_defs_ms: 0,
+                enrichment_ms: 0,
+                status_defs_cache_hit: null,
+                status_defs_resolve: null,
+                queue_def_cache_hit: queueDefCacheHit,
+                operational_day_cache_hit: operationalDayCacheHit,
+                enrichment_subtimings_ms: null,
+            }
+        );
+    }
+
     const effectiveLimit = clampLimit(params.limit ?? q.limit ?? 50, 1, 200);
     const effectiveOffset = clampLimit(params.offset ?? 0, 0, 1000000);
     const omitTotal = params.omitTotalCount === true;
@@ -1829,11 +1877,12 @@ export async function getWorkUnitQueueItems(params: {
     if (def.entity_type === "job") {
         const { ops, sort, calendar_meta } = buildJobPlan(q, operationalDay);
 
-        const itemsBase = supabase
+        let itemsBase = supabase
             .from("jobs")
             .select("id, title, status_key, work_unit_id, assigned_vendor_id, created_at, updated_at")
             .eq("org_id", params.orgId)
             .eq("work_unit_id", params.workUnitId);
+        if (scopeFilter) itemsBase = applyRecordScopeConstraintsToQuery(itemsBase, scopeFilter);
 
         const itemsQ0 = applySortToJobQuery(applyOpsToJobQuery(itemsBase as never, ops) as never, sort);
         const itemsPromise = itemsQ0.range(effectiveOffset, effectiveOffset + effectiveLimit - 1);
@@ -1877,11 +1926,12 @@ export async function getWorkUnitQueueItems(params: {
             );
         }
 
-        const countBase = supabase
+        let countBase = supabase
             .from("jobs")
             .select("id", { count: countSel!, head: true })
             .eq("org_id", params.orgId)
             .eq("work_unit_id", params.workUnitId);
+        if (scopeFilter) countBase = applyRecordScopeConstraintsToQuery(countBase, scopeFilter);
         const countQ = applyOpsToJobQuery(countBase as never, ops);
 
         const [{ value: countRes, ms: countMs }, { value: itemsRes, ms: baseQueryMs }] = await Promise.all([
@@ -1946,6 +1996,7 @@ export async function getWorkUnitQueueItems(params: {
                     workUnitId: params.workUnitId,
                     sort,
                     now: refUtc,
+                    recordScopeConstraints: scopeFilter,
                 })
             ),
             timedBranch(oppStatusDefsPromise),
@@ -1994,11 +2045,13 @@ export async function getWorkUnitQueueItems(params: {
         );
     }
 
-    const itemsBase = supabase
+    const itemsBaseRaw = supabase
         .from("opportunities")
         .select("id, name, status_key, customer_id, primary_person_id, primary_contact_id, metadata, created_at, updated_at")
         .eq("org_id", params.orgId)
         .eq("work_unit_id", params.workUnitId);
+
+    const itemsBase = scopeFilter ? applyRecordScopeConstraintsToQuery(itemsBaseRaw, scopeFilter) : itemsBaseRaw;
 
     const itemsQ0 = applySortToJobQuery(applyOpsToJobQuery(itemsBase as never, ops) as never, sort);
     const itemsPromise = itemsQ0.range(effectiveOffset, effectiveOffset + effectiveLimit - 1);
@@ -2058,11 +2111,12 @@ export async function getWorkUnitQueueItems(params: {
         );
     }
 
-    const countBase = supabase
+    const countBaseRaw = supabase
         .from("opportunities")
         .select("id", { count: countSel!, head: true })
         .eq("org_id", params.orgId)
         .eq("work_unit_id", params.workUnitId);
+    const countBase = scopeFilter ? applyRecordScopeConstraintsToQuery(countBaseRaw, scopeFilter) : countBaseRaw;
     const countQ = applyOpsToJobQuery(countBase as never, ops);
 
     const [{ value: countRes, ms: countMs }, { value: itemsRes, ms: baseQueryMs }, { value: statusPack, ms: statusDefsMs }] =

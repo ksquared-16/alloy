@@ -119,11 +119,39 @@ Prerequisites: seed run (optional user scopes); three browser sessions or profil
 
 ---
 
+## Route Family Hardening (May 2026)
+
+Incremental patches aligned with **Card A** route-family priorities — **no access-model redesign**.
+
+### Patched routes
+
+| Route | Change |
+|-------|--------|
+| `GET /api/admin/payments` | Without `job_id`, dept/site-restricted callers list payments only when `job_id` is in scoped jobs **or** `id` appears in active allocations tied to scoped jobs (direct job targets + charge-linked allocations). Impossible scope → empty list. |
+| `GET /api/admin/financials/journal-entries/[id]` | Restricted users get **404** unless header (`schedule_completed` / `customer_payment` / `vendor_payout` + `source_id` schedule) **and/or** lines resolve via `job_id` / `schedule_id` under scope; lines with only `customer_id` / `vendor_id` (no job/schedule) are denied when restricted. |
+| `GET /api/admin/discount-redemptions` | Restricted callers build FK `.or()` pools from **scoped** jobs, opportunities (record constraints), derived customers/contacts — not full-org id scans. |
+| `GET /api/admin/queues/[workUnitId]/[queueKey]` | Validates work unit exists; **department-restricted** users receive **404** for other departments’ work units; passes `resolveRecordScopeConstraints` into queue queries so job/opportunity rows respect site **location_id** expansion where applicable; impossible scope → empty items. |
+| `GET /api/admin/customers` | Restricted lists constrained to customers referenced from scoped jobs/opportunities. |
+| `GET /api/admin/persons` | Restricted lists constrained to persons tied to scoped customers (memberships) or scoped opportunities (`primary_person_id` / `primary_contact_id` → `person_id`). |
+| `GET /api/admin/documents` | Restricted lists filter rows through `assertDocumentDrawerReadable` (entity drawer parity). |
+
+### Tests
+
+- `web/tests/admin/routeFamilyHardening.test.ts` — helper-level coverage for journal visibility, redemption pool resolver (unrestricted), payment allocation collector edge, scoped customer/person list helpers (unrestricted).
+- `web/tests/queues/queueRoutes.test.ts` — queue drill-in handler mocks extended for `getAdminAccessContextCached`, Supabase work-unit probe, and `getWorkUnitQueueItems` scope arguments.
+
+### Verification commands
+
+From `web/`: `npm test`, `npx tsc --noEmit`.
+
+---
+
 ## Remaining known gaps
 
-- **`GET /api/admin/payments`** without `job_id` — still returns **org-wide** payment rows for any ops/admin caller; scoped filtering would require per-payment job resolution and batch filtering (non-trivial).
-- **`discount-redemptions`** — FK pool built from **all** org customers/jobs/opportunities/contacts; restricted users could theoretically see redemption rows anchored only to entities they should not enumerate.
-- **`financials/journal-entries/[id]`** — GL lines may reference jobs/schedules outside scope.
-- **`queues/[workUnitId]/[queueKey]`** — must align with department/work-unit visibility rules.
-- **Persons/customers/documents/subscriptions/workflow-events** — many routes still **org-only**.
+- **`GET /api/admin/payments`** without `job_id` — pagination totals remain consistent with PostgREST `.or(job_id ∪ allocation-payment ids)`; extremely large scoped job sets may approach URL/filter limits (same class as other `.in`-heavy admin lists).
+- **`GET /api/admin/financials/journal-entries`** (list) — still org-wide for restricted callers; individual `[id]` reads are hardened only.
+- **`GET /api/admin/customers` / `persons`** — narrowing uses scoped job/opportunity linkages; orphan households without those ties remain hidden for restricted roles (by design).
+- **`payments/run`** and other payment **mutations** — not part of this route-family pass.
+- **Subscriptions/workflow-events/related records** — still largely org-scoped at the handler layer.
+- **Communications** — intentionally untouched (separate sprint).
 - **Playwright** — no automated multi-role CRM smoke yet.

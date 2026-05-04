@@ -1,8 +1,10 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { NextRequest } from "next/server";
 
-const { mockGetAdminContext } = vi.hoisted(() => ({
+const { mockGetAdminContext, mockGetAdminAccessContext, mockCreateAdminClient } = vi.hoisted(() => ({
     mockGetAdminContext: vi.fn(),
+    mockGetAdminAccessContext: vi.fn(),
+    mockCreateAdminClient: vi.fn(),
 }));
 
 vi.mock("@/lib/admin/getAdminContext", async () => {
@@ -16,6 +18,14 @@ vi.mock("@/lib/admin/getAdminContext", async () => {
     };
 });
 
+vi.mock("@/lib/admin/getAdminAccessContext", () => ({
+    getAdminAccessContextCached: mockGetAdminAccessContext,
+}));
+
+vi.mock("@/lib/supabaseAdmin", () => ({
+    createAdminClient: mockCreateAdminClient,
+}));
+
 describe("Queue API routes (thin wrappers)", () => {
     beforeEach(() => {
         mockGetAdminContext.mockResolvedValue({
@@ -24,6 +34,28 @@ describe("Queue API routes (thin wrappers)", () => {
             userId: "u1",
             role: "admin",
         } as any);
+        mockGetAdminAccessContext.mockResolvedValue({
+            ok: true,
+            userId: "u1",
+            orgId: "org1",
+            roleKeys: ["admin"],
+            permissionKeys: [],
+            departmentScope: "all",
+            allowedDepartmentIds: null,
+            siteScope: "all",
+            allowedSiteLocationIds: null,
+        });
+        mockCreateAdminClient.mockReturnValue({
+            from: vi.fn(() => ({
+                select: vi.fn(() => ({
+                    eq: vi.fn(() => ({
+                        eq: vi.fn(() => ({
+                            maybeSingle: vi.fn().mockResolvedValue({ data: { id: "wu1" }, error: null }),
+                        })),
+                    })),
+                })),
+            })),
+        });
     });
 
     afterEach(() => {
@@ -96,7 +128,14 @@ describe("Queue API routes (thin wrappers)", () => {
         const res = await GET(req, { params: Promise.resolve({ workUnitId: "wu1", queueKey: "all" }) });
         expect(res.status).toBe(200);
         expect(getItems).toHaveBeenCalledWith(
-            expect.objectContaining({ limit: 100, offset: 0, workUnitId: "wu1", queueKey: "all" })
+            expect.objectContaining({
+                limit: 100,
+                offset: 0,
+                workUnitId: "wu1",
+                queueKey: "all",
+                recordScopeImpossible: false,
+                recordScopeConstraints: null,
+            })
         );
     });
 });

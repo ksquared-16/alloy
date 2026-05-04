@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { accessScopeRestrictsData, assertDocumentDrawerReadable, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { normalizeDocumentRow } from "@/lib/admin/normalizeDocumentRow";
 import { isV1DocumentEntityType } from "@/lib/admin/v1DocumentEntities";
 import {
@@ -135,6 +137,10 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
     }
 
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const dim = scopeDimensionsFromAccess(access);
+
     const { searchParams } = new URL(request.url);
     const entityTypeFilter = searchParams.get("entity_type")?.trim() || null;
     if (entityTypeFilter && !isV1DocumentEntityType(entityTypeFilter)) {
@@ -164,10 +170,23 @@ export async function GET(request: NextRequest) {
     }
 
     const rows = (rawRows ?? []) as DocRow[];
-    const labelMap = await attachRelatedLabels(supabase, ctx.orgId, rows);
+
+    let scopedRows = rows;
+    if (accessScopeRestrictsData(dim)) {
+        scopedRows = [];
+        for (const row of rows) {
+            const ok = await assertDocumentDrawerReadable(supabase, ctx.orgId, dim, {
+                entity_type: row.entity_type,
+                entity_id: row.entity_id,
+            });
+            if (ok) scopedRows.push(row);
+        }
+    }
+
+    const labelMap = await attachRelatedLabels(supabase, ctx.orgId, scopedRows);
     const docDefs = await fetchEffectiveStatusDefinitions(supabase, ctx.orgId, "documents", { activeOnly: true });
 
-    const documents = rows.map((src) => {
+    const documents = scopedRows.map((src) => {
         const n = normalizeDocumentRow(src as unknown as Record<string, unknown>);
         const t = src.entity_type?.trim() ?? null;
         const eid = src.entity_id?.trim() ?? null;

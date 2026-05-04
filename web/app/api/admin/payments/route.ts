@@ -4,7 +4,13 @@ import { requireAdminOrOps } from "@/lib/adminAuth";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
-import { assertJobInAccessScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import {
+    accessScopeRestrictsData,
+    assertJobInAccessScope,
+    narrowJobIdsForScheduleList,
+    scopeDimensionsFromAccess,
+} from "@/lib/admin/accessScope";
+import { collectPaymentIdsLinkedViaAllocationsToScopedJobs } from "@/lib/admin/adminPaymentListScope";
 import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import {
     batchPaymentAllocationRollups,
@@ -66,6 +72,9 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(Number(searchParams.get("limit")) || 100, 500);
     const offset = Number(searchParams.get("offset")) || 0;
 
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+
     const supabase = createAdminClient();
     if (jobId) {
         const jobOk = await assertRowOrg(supabase, "jobs", jobId, ctx.orgId);
@@ -79,8 +88,6 @@ export async function GET(request: NextRequest) {
             .maybeSingle();
         if (!jobScopeRow) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-        const access = await getAdminAccessContextCached();
-        if (!access.ok) return adminContextFailureResponse(access);
         const dim = scopeDimensionsFromAccess(access);
         const jr = jobScopeRow as { work_unit_id?: string | null; location_id?: string | null };
         if (!(await assertJobInAccessScope(supabase, ctx.orgId, dim, { work_unit_id: jr.work_unit_id ?? null, location_id: jr.location_id ?? null }))) {
@@ -106,6 +113,23 @@ export async function GET(request: NextRequest) {
         .eq("org_id", ctx.orgId)
         .order("created_at", { ascending: false })
         .range(offset, offset + limit - 1);
+
+    if (!jobId && accessScopeRestrictsData(scopeDimensionsFromAccess(access))) {
+        const dim = scopeDimensionsFromAccess(access);
+        const jobScope = await narrowJobIdsForScheduleList(supabase, ctx.orgId, dim, null);
+        if (jobScope === "none") {
+            return NextResponse.json({ payments: [], total: 0 });
+        }
+        const scopedJobIds = jobScope as string[];
+        const orphanPaymentIds = await collectPaymentIdsLinkedViaAllocationsToScopedJobs(supabase, ctx.orgId, scopedJobIds);
+        const parts: string[] = [];
+        if (scopedJobIds.length) parts.push(`job_id.in.(${scopedJobIds.join(",")})`);
+        if (orphanPaymentIds.length) parts.push(`id.in.(${orphanPaymentIds.join(",")})`);
+        if (!parts.length) {
+            return NextResponse.json({ payments: [], total: 0 });
+        }
+        q = q.or(parts.join(","));
+    }
 
     if (paymentIdFilter) q = q.in("id", paymentIdFilter);
     if (statusKeyParam && /^[a-zA-Z0-9_-]+$/.test(statusKeyParam)) {

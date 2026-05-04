@@ -577,3 +577,165 @@ export async function assertExistingOpportunityMutableInAdminScope(
     if (error || !data) return false;
     return assertOpportunityInAccessScope(supabase, orgId, dim, data as { work_unit_id?: string | null; location_id?: string | null });
 }
+
+const GL_SCHEDULE_BACKED_SOURCE_TYPES = new Set(["schedule_completed", "customer_payment", "vendor_payout"]);
+
+type GlJournalLineScopeSlice = {
+    job_id?: string | null;
+    schedule_id?: string | null;
+    customer_id?: string | null;
+    vendor_id?: string | null;
+};
+
+/**
+ * GET journal-entry drawer: restricted users see entries only when schedule/job linkage resolves under scope.
+ * Unknown headers without job/schedule lines are denied.
+ */
+export async function assertGlJournalEntryReadableInAdminScope(
+    supabase: SupabaseClient,
+    orgId: string,
+    dim: AdminAccessScopeDimensions,
+    entry: { source_type?: string | null; source_id?: string | null },
+    lines: GlJournalLineScopeSlice[]
+): Promise<boolean> {
+    if (!accessScopeRestrictsData(dim)) return true;
+
+    const st = entry.source_type != null ? String(entry.source_type).trim().toLowerCase() : "";
+    const sidRaw = entry.source_id != null ? String(entry.source_id).trim() : "";
+    let resolvedViaHeader = false;
+
+    if (sidRaw && GL_SCHEDULE_BACKED_SOURCE_TYPES.has(st)) {
+        const { data: sch, error: schErr } = await supabase
+            .from("schedules")
+            .select("job_id, location_id")
+            .eq("id", sidRaw)
+            .eq("org_id", orgId)
+            .maybeSingle();
+        if (schErr || !sch) return false;
+        if (!(await assertScheduleInAccessScope(supabase, orgId, dim, sch as { job_id?: string | null; location_id?: string | null }))) {
+            return false;
+        }
+        resolvedViaHeader = true;
+    }
+
+    const lineAnchored = lines.some((l) => {
+        const j = l.job_id != null ? String(l.job_id).trim() : "";
+        const s = l.schedule_id != null ? String(l.schedule_id).trim() : "";
+        return j !== "" || s !== "";
+    });
+
+    if (!resolvedViaHeader && !lineAnchored) return false;
+
+    for (const line of lines) {
+        const jobId = line.job_id != null ? String(line.job_id).trim() : "";
+        if (jobId) {
+            if (!(await assertExistingJobMutableInAdminScope(supabase, orgId, dim, jobId))) return false;
+        }
+        const scheduleId = line.schedule_id != null ? String(line.schedule_id).trim() : "";
+        if (scheduleId) {
+            if (!(await assertExistingScheduleMutableInAdminScope(supabase, orgId, dim, scheduleId))) return false;
+        }
+
+        const hasScopeAnchor = jobId !== "" || scheduleId !== "";
+        const cust = line.customer_id != null ? String(line.customer_id).trim() : "";
+        const vend = line.vendor_id != null ? String(line.vendor_id).trim() : "";
+        const ambiguousOnly = !hasScopeAnchor && (cust !== "" || vend !== "");
+        if (ambiguousOnly) return false;
+    }
+
+    return true;
+}
+
+/**
+ * Customers reachable via scoped jobs / opportunities — list routes only (`null` = unrestricted).
+ */
+export async function fetchScopedCustomerIdsForRestrictedAdmin(
+    supabase: SupabaseClient,
+    orgId: string,
+    dim: AdminAccessScopeDimensions
+): Promise<string[] | null> {
+    if (!accessScopeRestrictsData(dim)) return null;
+
+    const out = new Set<string>();
+    const BATCH = 500;
+
+    const jobIdsResult = await narrowJobIdsForScheduleList(supabase, orgId, dim, null);
+    if (jobIdsResult !== "none" && jobIdsResult !== "all") {
+        for (let i = 0; i < jobIdsResult.length; i += BATCH) {
+            const slice = jobIdsResult.slice(i, i + BATCH);
+            const { data } = await supabase.from("jobs").select("customer_id").eq("org_id", orgId).in("id", slice).not("customer_id", "is", null);
+            for (const r of data ?? []) {
+                const cid = (r as { customer_id?: string | null }).customer_id;
+                if (cid) out.add(cid);
+            }
+        }
+    }
+
+    const c = await resolveRecordScopeConstraints(supabase, orgId, dim);
+    if (!c.impossible) {
+        let oppQ = supabase.from("opportunities").select("customer_id").eq("org_id", orgId).not("customer_id", "is", null);
+        oppQ = applyRecordScopeConstraintsToQuery(oppQ, c);
+        const { data: opps } = await oppQ.limit(10000);
+        for (const r of opps ?? []) {
+            const cid = (r as { customer_id?: string | null }).customer_id;
+            if (cid) out.add(cid);
+        }
+    }
+
+    return [...out];
+}
+
+/**
+ * Persons tied to scoped customers (memberships) or scoped opportunities (`null` = unrestricted).
+ */
+export async function fetchScopedPersonIdsForRestrictedAdmin(
+    supabase: SupabaseClient,
+    orgId: string,
+    dim: AdminAccessScopeDimensions
+): Promise<string[] | null> {
+    if (!accessScopeRestrictsData(dim)) return null;
+
+    const ids = new Set<string>();
+    const BATCH = 500;
+
+    const customerIds = await fetchScopedCustomerIdsForRestrictedAdmin(supabase, orgId, dim);
+    const custArr = customerIds ?? [];
+
+    if (custArr.length) {
+        for (let i = 0; i < custArr.length; i += BATCH) {
+            const slice = custArr.slice(i, i + BATCH);
+            const { data } = await supabase.from("customer_persons").select("person_id").in("customer_id", slice);
+            for (const r of data ?? []) {
+                const pid = (r as { person_id?: string | null }).person_id;
+                if (pid) ids.add(pid);
+            }
+        }
+    }
+
+    const c = await resolveRecordScopeConstraints(supabase, orgId, dim);
+    if (!c.impossible) {
+        let oppQ = supabase.from("opportunities").select("primary_person_id, primary_contact_id").eq("org_id", orgId);
+        oppQ = applyRecordScopeConstraintsToQuery(oppQ, c);
+        const { data: opps } = await oppQ.limit(10000);
+        const primaryContactIds: string[] = [];
+        for (const r of opps ?? []) {
+            const pp = (r as { primary_person_id?: string | null }).primary_person_id;
+            const pc = (r as { primary_contact_id?: string | null }).primary_contact_id;
+            if (pp) ids.add(pp);
+            if (pc) primaryContactIds.push(pc);
+        }
+        if (primaryContactIds.length) {
+            const { data: contacts } = await supabase
+                .from("contacts")
+                .select("person_id")
+                .eq("org_id", orgId)
+                .in("id", [...new Set(primaryContactIds)]);
+            for (const row of contacts ?? []) {
+                const pid = (row as { person_id?: string | null }).person_id;
+                if (pid) ids.add(pid);
+            }
+        }
+    }
+
+    return [...ids];
+}
