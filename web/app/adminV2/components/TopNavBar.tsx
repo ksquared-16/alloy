@@ -6,6 +6,7 @@ import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLi
 import { createClient } from "@/lib/supabaseClient";
 import { palette, neutral, derived } from "@/styles/tokens/colors";
 import { markWorkUnitNavigationStart } from "@/lib/perf/markWorkUnitNavigationStart";
+import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 
 function normalizeAdminPath(pathname: string): string {
   if (pathname === "/admin/v2" || pathname.startsWith("/admin/v2/")) {
@@ -19,6 +20,56 @@ function normalizeAdminPath(pathname: string): string {
 }
 
 const WORK_UNIT_QUEUE_PATH = /^\/adminV2\/workspace\/dept\/[^/]+\/work-unit\/[^/]+\/?$/;
+
+function WorkspaceSiteFilterStrip({ normalizedPath }: { normalizedPath: string }) {
+  const wf = useWorkspaceSiteFilter();
+  if (!normalizedPath.startsWith("/adminV2/workspace")) return null;
+  if (!wf?.bootstrap) return null;
+
+  const { bootstrap, selectedSiteId, setSelectedSiteId } = wf;
+
+  if (bootstrap.show_dropdown && bootstrap.sites.length > 1) {
+    return (
+      <div className="flex shrink-0 items-center gap-1.5 min-w-0 max-w-[min(240px,28vw)]">
+        <label htmlFor="adminv2-workspace-site-filter" className="sr-only">
+          Site filter
+        </label>
+        <select
+          id="adminv2-workspace-site-filter"
+          value={selectedSiteId ?? ""}
+          onChange={(e) => setSelectedSiteId(e.target.value === "" ? null : e.target.value)}
+          className="min-w-0 flex-1 truncate rounded border px-2 py-1 text-[11px] font-medium outline-none focus:ring-1 focus:ring-white/35"
+          style={{
+            backgroundColor: derived.searchBgOnPrimary,
+            borderColor: derived.topBarDivider,
+            color: neutral.surface,
+          }}
+          title="View filter — narrows workspace data to one campus within your allowed sites (queue wiring deferred; see docs/sprints/05_2026/site_filter_workspace_card.md)."
+        >
+          <option value="">All locations</option>
+          {bootstrap.sites.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
+  }
+
+  if (bootstrap.single_site_label) {
+    return (
+      <span
+        className="shrink-0 truncate max-w-[min(200px,26vw)] text-[11px] font-medium opacity-90"
+        title="Your access is scoped to this site."
+      >
+        {bootstrap.single_site_label}
+      </span>
+    );
+  }
+
+  return null;
+}
 
 export default function TopNavBar() {
   const pathname = usePathname();
@@ -78,6 +129,7 @@ export default function TopNavBar() {
           className="h-8 w-8 shrink-0"
         />
       </div>
+      <WorkspaceSiteFilterStrip normalizedPath={normalizedPath} />
       <div
         className="flex-1 max-w-md rounded-md px-3 py-1.5 text-sm"
         style={{

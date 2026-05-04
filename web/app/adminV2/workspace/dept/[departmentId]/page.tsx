@@ -39,6 +39,7 @@ import { AutomationWorkflowsBlock } from "@/app/adminV2/components/workspace/blo
 import { resolveKpisForDepartment } from "@/lib/kpi/resolver";
 import type { WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
 import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
+import { isEnrollmentLikeDepartmentKey } from "@/lib/workspace/enrollmentDepartmentKey";
 
 const WORKSPACE_BASE = "/adminV2/workspace";
 
@@ -504,7 +505,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
     }, [departmentId, deptLoading]);
 
     useEffect(() => {
-        if (deptKey !== "enrollment" || !departmentId || !primaryWorkUnit?.id) {
+        if (!isEnrollmentLikeDepartmentKey(deptKey) || !departmentId || !primaryWorkUnit?.id) {
             setEnrollmentDeptRightRail(null);
             return;
         }
@@ -537,7 +538,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
     }, [deptKey, departmentId, primaryWorkUnit?.id]);
 
     useEffect(() => {
-        if (deptKey !== "enrollment" || !departmentId || enrollmentDeptRightRail === null) return;
+        if (!isEnrollmentLikeDepartmentKey(deptKey) || !departmentId || enrollmentDeptRightRail === null) return;
         const sig = `${departmentId}:rail`;
         if (deptActionsPerfKeyRef.current === sig) return;
         deptActionsPerfKeyRef.current = sig;
@@ -551,7 +552,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
     }, [deptKey, departmentId, enrollmentDeptRightRail]);
 
     const enrollmentDepartmentRailModel = useMemo(() => {
-        if (deptKey !== "enrollment") return null;
+        if (!isEnrollmentLikeDepartmentKey(deptKey)) return null;
         return mergeEnrollmentRightRailActions(enrollmentDeptRightRail ?? [], {
             primaries: [],
             systemActions: [],
@@ -806,7 +807,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         </div>
                     }
                     railSlot={
-                        deptKey === "enrollment" && primaryWorkUnit ? (
+                        isEnrollmentLikeDepartmentKey(deptKey) && primaryWorkUnit ? (
                             (enrollmentDepartmentRailModel?.systemActions?.length ?? 0) > 0 ? (
                                 <div className="adminv2-ws-soft-content-reveal">
                                     <ActionsBlock

@@ -59,6 +59,7 @@ import {
     shouldSuppressWorkUnitKpiStrip,
     statusKeysCoveredByThroughputQueues,
 } from "@/lib/workspace/workUnitQueueDerived";
+import { isEnrollmentLikeDepartmentKey } from "@/lib/workspace/enrollmentDepartmentKey";
 import {
     deleteQueueRowCacheKeysForPrefix,
     logQueueRowClientCache,
@@ -1676,7 +1677,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         if (!workUnit || !dept) return null;
 
         const enrollmentActionsRail = (): WorkUnitWorkspaceModel["actionsRail"] => {
-            const isEnrollmentDept = (dept.key ?? "").trim().toLowerCase() === "enrollment";
+            const isEnrollmentDept = isEnrollmentLikeDepartmentKey(dept.key);
             const emptyBase = {
                 primaries: [],
                 systemActions: [],
@@ -2549,7 +2550,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         onAction={onAction}
                         headerQueuePicker={headerQueuePickerSlot}
                         kpiStripPlaceholder={workUnitKpiStripPlaceholder}
-                        reserveActionsRail={(dept?.key ?? "").trim().toLowerCase() === "enrollment"}
+                        reserveActionsRail={isEnrollmentLikeDepartmentKey(dept?.key)}
                         primaryFooterSlot={
                             <AutomationWorkflowsBlock
                                 title="Automations"

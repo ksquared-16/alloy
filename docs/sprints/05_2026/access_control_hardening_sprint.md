@@ -70,6 +70,7 @@ Tests: `web/tests/admin/adminFinancialScope.test.ts` (helper-level).
 - **npm script:** `npm run dev:seed:access-validation`
 - **Package marker:** `demo_seed_package = access_validation_demo_v2` on inserted rows (alongside `access_validation_seed_key`). Inserts only when that entity’s seed key is not already present; **does not** truncate org data.
 - **Admin shell compatibility:** Corporate test user gets **`admin`**. Regional and director test users get **`ops`** plus their persona role (**`regional_lead`** / **`school_director`**) so `portalEligible` passes while scope presets stay the same (`user_access_profiles` + department/site access tables unchanged).
+- **Full demo wipe:** Optional env `ACCESS_VALIDATION_CLEAN_DEMO=true` deletes **all** rows tagged `metadata.demo_seed_package = access_validation_demo_v1` **or** `access_validation_demo_v2`, then **exits** (re-run without the flag to seed).
 - **Legacy cleanup:** Optional env `ACCESS_VALIDATION_CLEAN_OLD_DEMO=true` deletes **only** rows with `metadata.demo_seed_package = access_validation_demo_v1` (old misleading labels). Never deletes v2 rows or data without that marker.
 
 Orgs that ran v1 before cleanup may still show stale rows until cleanup is run once.
@@ -123,14 +124,24 @@ Prerequisites: seed run (optional user scopes); three browser sessions or profil
 - **Options:** only site `location_type === 'site'` locations the user is already allowed to see (from access scope — not a permission change).
 - **Semantics:** _view filter_ only. Effective rows = **`access_scope ∩ selected_site`**. Changing the control does not elevate or bypass RBAC.
 
-**Scope of work (later card):** wire filter into workspace/queues and list surfaces that already respect server-side scope (client- or query-param–driven narrowing, consistent with existing patterns). **Not implemented in this sprint.**
+**Shipped (May 2026, plumbing):** `GET /api/admin/workspace/site-filter`, `WorkspaceSiteFilterContext`, header strip on workspace routes (`WorkspaceSiteFilterGate`), minimal dropdown / single-site label. **Remaining:** thread `selectedSiteId` into workspace data loads per **`docs/sprints/05_2026/site_filter_workspace_card.md`**.
 
 ---
 
 ## Seed instructions
 
 1. Choose a **non-production** org: `ACCESS_VALIDATION_ORG_ID=<uuid>`.
-2. (Optional, once per org if you still see legacy **“Access Validation — North/South”** departments) remove **only** `access_validation_demo_v1`–tagged rows:
+2. Remove **all** access-validation demo rows (v1 **and** v2) when finished UI validation:
+
+   ```bash
+   ACCESS_VALIDATION_ORG_ID=<org-uuid> \
+   ACCESS_VALIDATION_CLEAN_DEMO=true \
+   npm run dev:seed:access-validation
+   ```
+
+   The script deletes tagged rows and **exits** (does not re-seed). Run again **without** `ACCESS_VALIDATION_CLEAN_DEMO` to recreate demo data.
+
+3. (Optional legacy) Remove **only** `access_validation_demo_v1` rows if old North/South noise remains:
 
    ```bash
    ACCESS_VALIDATION_ORG_ID=<org-uuid> \
@@ -138,7 +149,7 @@ Prerequisites: seed run (optional user scopes); three browser sessions or profil
    npm run dev:seed:access-validation
    ```
 
-3. From `web/` with `.env.local` service role configured (same as other dev scripts), seed v2 demo data:
+4. From `web/` with `.env.local` service role configured (same as other dev scripts), seed v2 demo data:
 
    ```bash
    ACCESS_VALIDATION_ORG_ID=<org-uuid> npm run dev:seed:access-validation
@@ -146,7 +157,7 @@ Prerequisites: seed run (optional user scopes); three browser sessions or profil
 
    Console output maps **functional** departments/work units vs **physical** campuses and lists lane IDs (Enrollment north/south + optional Billing/Ops north/south).
 
-4. Optional — provision **test auth users** in Supabase Auth first, then apply roles + scoped profiles (each `user_roles` **row** is one role; seed adds missing rows only):
+5. Optional — provision **test auth users** in Supabase Auth first, then apply roles + scoped profiles (each `user_roles` **row** is one role; seed adds missing rows only):
 
    ```bash
    ACCESS_VALIDATION_ORG_ID=<org-uuid> \
@@ -161,7 +172,9 @@ Prerequisites: seed run (optional user scopes); three browser sessions or profil
    - **Regional:** `ops` + `regional_lead`; all departments; sites restricted to **North Campus** + **South Campus**.  
    - **Director:** `ops` + `school_director`; **Enrollment** department only + **North Campus** site only.
 
-5. Ensure org has **`new_inquiry`** (or chosen `status_key`) allowed for opportunities if status-definition triggers apply.
+6. Ensure org has **`new_inquiry`** (or chosen `status_key`) allowed for opportunities if status-definition triggers apply.
+
+See also **`docs/sprints/05_2026/site_filter_workspace_card.md`** (header site filter plumbing).
 
 ---
 

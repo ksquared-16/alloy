@@ -14,9 +14,9 @@
  * - Regional — **`ops` + `regional_lead`** (shell needs `ops` or `admin`; scope unchanged: all departments, both seeded campuses).
  * - Director — **`ops` + `school_director`**; Enrollment dept + North Campus only.
  *
- * Optional cleanup (same org): set ACCESS_VALIDATION_CLEAN_OLD_DEMO=true to **delete only** rows whose
- * `metadata.demo_seed_package` is `access_validation_demo_v1` (legacy “North/South department” demo). Does **not**
- * touch v2 rows or unmarked data.
+ * Optional cleanup (same org):
+ * - Set ACCESS_VALIDATION_CLEAN_DEMO=true — deletes **v1 + v2** demo rows and **exits** (run again without the flag to re-seed).
+ * - ACCESS_VALIDATION_CLEAN_OLD_DEMO=true — legacy alias; deletes **v1 only** (same as before).
  *
  * Inserts only when markers are absent per keyed entity (v2 package).
  *
@@ -24,7 +24,8 @@
  *   ACCESS_VALIDATION_ORG_ID=<uuid>
  *
  * Env (optional):
- *   ACCESS_VALIDATION_CLEAN_OLD_DEMO=true   → delete legacy v1 demo rows for this org (see above), then continue
+ *   ACCESS_VALIDATION_CLEAN_DEMO=true      → delete v1 + v2 demo rows (`demo_seed_package`), then **exit** (re-run without flag to seed)
+ *   ACCESS_VALIDATION_CLEAN_OLD_DEMO=true  → delete v1 demo rows only (legacy), then continue
  *
  * Env (optional — user scopes; only when ACCESS_VALIDATION_APPLY_USER_SCOPES=true):
  *   ACCESS_VALIDATION_APPLY_USER_SCOPES=true
@@ -48,6 +49,7 @@ import { config as loadEnv } from "dotenv";
 import { resolve } from "path";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { resolveScheduleStatusRowByKey } from "@/lib/admin/scheduleEffectiveStatusKey";
+import { validateQueueDefinition } from "@/lib/config/queueDefinitionSchema";
 
 loadEnv({ path: resolve(process.cwd(), ".env.local") });
 loadEnv({ path: resolve(process.cwd(), ".env") });
@@ -55,8 +57,30 @@ loadEnv({ path: resolve(process.cwd(), ".env") });
 /** Bump when seed keys/navigation change so metadata distinguishes newer demo rows from legacy runs. */
 const PKG = "access_validation_demo_v2";
 
-/** Legacy package only removed when ACCESS_VALIDATION_CLEAN_OLD_DEMO=true (misleading North/South-as-department demo). */
+/** Legacy package — removed when CLEAN_OLD_DEMO or CLEAN_DEMO runs. */
 const LEGACY_DEMO_PKG = "access_validation_demo_v1";
+
+/** Minimal QueueDefinitionV1 so `/api/admin/work-units/:id/queues` succeeds for seeded opportunity work units. */
+const ACCESS_VALIDATION_OPPORTUNITY_QUEUE_DEF = JSON.parse(
+    JSON.stringify(
+        validateQueueDefinition({
+            version: 1,
+            entity_type: "opportunity",
+            queues: [
+                {
+                    key: "all",
+                    label: "All opportunities",
+                    description: "Access validation seed — opportunities in this work unit.",
+                    filters: [],
+                    sort: [{ field: "updated_at", direction: "desc" }],
+                    limit: 120,
+                    priority: "standard",
+                    display: "list",
+                },
+            ],
+        })
+    )
+) as Record<string, unknown>;
 
 /** Functional departments (workspace pillars). */
 const SEED_KEY_DEPT_ENROLLMENT = "access_val_dept_enrollment";
@@ -86,10 +110,14 @@ function requireEnv(name: string): string {
 }
 
 /**
- * Deletes only rows explicitly tagged with the old demo package (v1). FK-safe order; scoped to org_id.
+ * Deletes rows tagged with a given `metadata.demo_seed_package`. FK-safe order; scoped to org_id.
  */
-async function deleteLegacyAccessValidationDemoV1(supabase: ReturnType<typeof createAdminClient>, orgId: string): Promise<void> {
-    console.log("\n--- ACCESS_VALIDATION_CLEAN_OLD_DEMO: removing rows where metadata.demo_seed_package =", LEGACY_DEMO_PKG, "---");
+async function deleteRowsForAccessValidationDemoPackage(
+    supabase: ReturnType<typeof createAdminClient>,
+    orgId: string,
+    demoPackage: string
+): Promise<void> {
+    console.log("\n--- Removing access-validation demo rows where metadata.demo_seed_package =", demoPackage, "---");
     console.log("org_id:", orgId);
 
     const tablesOrdered = [
@@ -108,7 +136,7 @@ async function deleteLegacyAccessValidationDemoV1(supabase: ReturnType<typeof cr
             .from(table)
             .delete()
             .eq("org_id", orgId)
-            .eq("metadata->>demo_seed_package", LEGACY_DEMO_PKG)
+            .eq("metadata->>demo_seed_package", demoPackage)
             .select("id");
 
         if (error) {
@@ -120,7 +148,15 @@ async function deleteLegacyAccessValidationDemoV1(supabase: ReturnType<typeof cr
         }
     }
 
-    console.log("--- Legacy v1 demo cleanup finished (v2 and unmarked rows untouched) ---\n");
+    console.log("--- Finished package:", demoPackage, "---\n");
+}
+
+/** Removes v1 and v2 access-validation demo markers from the org (preferred teardown after UI validation). */
+async function deleteAllAccessValidationDemoPackages(supabase: ReturnType<typeof createAdminClient>, orgId: string): Promise<void> {
+    console.log("\n=== ACCESS_VALIDATION_CLEAN_DEMO: removing v1 + v2 demo packages ===");
+    await deleteRowsForAccessValidationDemoPackage(supabase, orgId, LEGACY_DEMO_PKG);
+    await deleteRowsForAccessValidationDemoPackage(supabase, orgId, PKG);
+    console.log("=== Access-validation demo cleanup complete ===\n");
 }
 
 async function ensureDepartment(supabase: ReturnType<typeof createAdminClient>, orgId: string, key: string, name: string): Promise<string> {
@@ -196,13 +232,39 @@ async function ensureWorkUnit(
             department_id: departmentId,
             key,
             name,
-            queue_definition: {},
+            queue_definition: ACCESS_VALIDATION_OPPORTUNITY_QUEUE_DEF,
             metadata: { access_validation_seed_key: key, demo_seed_package: PKG },
         })
         .select("id")
         .single();
     if (error) throw new Error(`work_units insert ${key}: ${error.message}`);
     return (created as { id: string }).id;
+}
+
+/** Existing installs may have `{}` queue_definition — upgrade seed-tagged work units in place. */
+async function syncAccessValidationWorkUnitQueueDefinitions(
+    supabase: ReturnType<typeof createAdminClient>,
+    orgId: string,
+    workUnitIds: string[]
+): Promise<void> {
+    for (const id of workUnitIds) {
+        const { data, error } = await supabase.from("work_units").select("metadata").eq("id", id).eq("org_id", orgId).maybeSingle();
+        if (error || !data) continue;
+        const pkg = (data as { metadata?: { demo_seed_package?: string } }).metadata?.demo_seed_package;
+        if (pkg !== PKG) continue;
+
+        const { error: upErr } = await supabase
+            .from("work_units")
+            .update({
+                queue_definition: ACCESS_VALIDATION_OPPORTUNITY_QUEUE_DEF,
+                updated_at: new Date().toISOString(),
+            })
+            .eq("id", id)
+            .eq("org_id", orgId);
+        if (upErr) {
+            console.warn(`[sync queue_definition] work_unit ${id}: ${upErr.message}`);
+        }
+    }
 }
 
 async function ensurePerson(
@@ -427,8 +489,16 @@ async function main() {
     const orgId = requireEnv("ACCESS_VALIDATION_ORG_ID");
     const supabase = createAdminClient();
 
-    if (process.env.ACCESS_VALIDATION_CLEAN_OLD_DEMO?.trim().toLowerCase() === "true") {
-        await deleteLegacyAccessValidationDemoV1(supabase, orgId);
+    const cleanDemo = process.env.ACCESS_VALIDATION_CLEAN_DEMO?.trim().toLowerCase() === "true";
+    const cleanOldOnly = process.env.ACCESS_VALIDATION_CLEAN_OLD_DEMO?.trim().toLowerCase() === "true";
+
+    if (cleanDemo) {
+        await deleteAllAccessValidationDemoPackages(supabase, orgId);
+        console.log("\nACCESS_VALIDATION_CLEAN_DEMO finished. Re-run without this flag to seed again.");
+        return;
+    }
+    if (cleanOldOnly) {
+        await deleteRowsForAccessValidationDemoPackage(supabase, orgId, LEGACY_DEMO_PKG);
     }
 
     const deptEnrollmentId = await ensureDepartment(supabase, orgId, SEED_KEY_DEPT_ENROLLMENT, "Access Validation — Enrollment");
@@ -439,6 +509,8 @@ async function main() {
 
     const wuEnrollmentId = await ensureWorkUnit(supabase, orgId, deptEnrollmentId, SEED_KEY_WU_ENROLLMENT, "Access Validation — Enrollment workspace");
     const wuBillingOpsId = await ensureWorkUnit(supabase, orgId, deptBillingOpsId, SEED_KEY_WU_BILLING_OPS, "Access Validation — Billing / Operations workspace");
+
+    await syncAccessValidationWorkUnitQueueDefinitions(supabase, orgId, [wuEnrollmentId, wuBillingOpsId]);
 
     // Primary lanes: Enrollment functional area × physical campus.
     const personEnrN = await ensurePerson(supabase, orgId, `${SEED_LANE_ENROLLMENT_NORTH}:guardian`, "Enrollment", "North Guardian");
