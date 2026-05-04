@@ -58,6 +58,10 @@ type MsgRowWithThread = MsgRow & { _thread_id?: string };
 const MESSAGES_PER_THREAD_LIMIT = 36;
 const MAX_MERGE_THREADS = 10;
 const SUCCESS_TOAST_MS = 4500;
+/** Default visible rows in the conversation strip (rest behind “View older messages”). */
+const DEFAULT_VISIBLE_MESSAGE_COUNT = 3;
+/** Fixed scroll area height so composer stays in view without growing the drawer. */
+const CONVERSATION_SCROLL_HEIGHT_CLASS = "h-[min(15rem,38vh)] max-h-[min(22rem,48vh)] shrink-0";
 
 function shouldLogCommsLoad(): boolean {
     if (typeof window === "undefined") return process.env.NODE_ENV !== "production";
@@ -156,6 +160,20 @@ function bubbleStatusLine(m: MsgRow): { headline: string; sub?: string } {
     }
 }
 
+/** Display-only US-style phone; does not change stored values. */
+function formatDisplayPhoneUs(raw: string | null | undefined): string {
+    const digits = String(raw ?? "").replace(/\D/g, "");
+    if (digits.length === 11 && digits.startsWith("1")) {
+        const d = digits.slice(1);
+        return `(${d.slice(0, 3)}) ${d.slice(3, 6)}-${d.slice(6)}`;
+    }
+    if (digits.length === 10) {
+        return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+    }
+    const t = String(raw ?? "").trim();
+    return t || "—";
+}
+
 function counterpartyLabel(
     m: MsgRow,
     inbound: boolean,
@@ -167,8 +185,9 @@ function counterpartyLabel(
     if (ch === "sms") {
         const k = normalizeRecipientKeySms(raw);
         const name = k ? lookup.phoneToName.get(k) : undefined;
-        if (name) return { title: inbound ? `From ${name}` : `To ${name}`, subtitle: raw };
-        return { title: inbound ? `From ${raw}` : `To ${raw}` };
+        const disp = formatDisplayPhoneUs(raw);
+        if (name) return { title: inbound ? `From ${name}` : `To ${name}`, subtitle: disp };
+        return { title: inbound ? `From ${disp}` : `To ${disp}` };
     }
     if (ch === "email") {
         const ek = normalizeRecipientKeyEmail(raw);
@@ -177,6 +196,54 @@ function counterpartyLabel(
         return { title: inbound ? `From ${raw}` : `To ${raw}` };
     }
     return { title: inbound ? `From ${raw}` : `To ${raw}` };
+}
+
+function messageBodyNeedsToggle(body: string | null | undefined): boolean {
+    const t = String(body ?? "");
+    if (t.length > 240) return true;
+    return t.split("\n").length > 3;
+}
+
+function TruncatedMessageBody({
+    messageId,
+    body,
+    expanded,
+    onToggle,
+    inbound,
+}: {
+    messageId: string;
+    body: string;
+    expanded: boolean;
+    onToggle: (id: string) => void;
+    inbound: boolean;
+}) {
+    const needsToggle = messageBodyNeedsToggle(body);
+    const textCls = inbound ? "text-[13px] text-alloy-forge/95" : "text-[13px] text-white/95";
+    const btnCls = inbound
+        ? "mt-0.5 text-[11px] font-semibold text-alloy-blue hover:underline"
+        : "mt-0.5 text-[11px] font-semibold text-white/85 hover:underline";
+
+    if (!needsToggle) {
+        return <div className={`whitespace-pre-wrap break-words ${textCls}`}>{body}</div>;
+    }
+    if (expanded) {
+        return (
+            <>
+                <div className={`whitespace-pre-wrap break-words ${textCls}`}>{body}</div>
+                <button type="button" className={btnCls} onClick={() => onToggle(messageId)}>
+                    Show less
+                </button>
+            </>
+        );
+    }
+    return (
+        <>
+            <div className={`line-clamp-3 whitespace-pre-wrap break-words ${textCls}`}>{body}</div>
+            <button type="button" className={btnCls} onClick={() => onToggle(messageId)}>
+                Show more
+            </button>
+        </>
+    );
 }
 
 /** Canonical threads + messages + drawer composer (Cards 16–17, 26–29). */
@@ -222,6 +289,10 @@ export default function CommunicationsDrawerSection({
     const [sendErr, setSendErr] = useState<string | null>(null);
     const [sendOkNote, setSendOkNote] = useState<string | null>(null);
 
+    /** When false, only the last {@link DEFAULT_VISIBLE_MESSAGE_COUNT} messages are listed (rest via “View older”). */
+    const [showOlderMessages, setShowOlderMessages] = useState(false);
+    const [expandedBodies, setExpandedBodies] = useState<Record<string, boolean>>({});
+
     const emailOutboundReady =
         channelsAvailable.includes("email") && !bindingsErr && !loadingBindings;
     const smsOutboundReady =
@@ -266,6 +337,8 @@ export default function CommunicationsDrawerSection({
         setComposerBody("");
         setSendErr(null);
         setSendOkNote(null);
+        setShowOlderMessages(false);
+        setExpandedBodies({});
     }, [entityId, apiEntityType]);
 
     /** When parent hides Communication (`active` false), drop thread detail state (no polling; next open is clean). */
@@ -273,6 +346,8 @@ export default function CommunicationsDrawerSection({
         if (active) return;
         setMsgs([]);
         setMsgErr(null);
+        setShowOlderMessages(false);
+        setExpandedBodies({});
     }, [active]);
 
     /** Fetches run only while `active`. */
@@ -313,6 +388,16 @@ export default function CommunicationsDrawerSection({
             return ch === viewFilter;
         });
     }, [threads, viewFilter]);
+
+    const displayedMsgs = useMemo(() => {
+        if (showOlderMessages || msgs.length <= DEFAULT_VISIBLE_MESSAGE_COUNT) return msgs;
+        return msgs.slice(-DEFAULT_VISIBLE_MESSAGE_COUNT);
+    }, [msgs, showOlderMessages]);
+
+    const hiddenOlderCount =
+        msgs.length > DEFAULT_VISIBLE_MESSAGE_COUNT && !showOlderMessages
+            ? msgs.length - DEFAULT_VISIBLE_MESSAGE_COUNT
+            : 0;
 
     const loadThreads = useCallback(async () => {
         setThrErr(null);
@@ -407,6 +492,8 @@ export default function CommunicationsDrawerSection({
         if (scopeList.length === 0) {
             setMsgs([]);
             setMsgErr(null);
+            setShowOlderMessages(false);
+            setExpandedBodies({});
             return;
         }
         setLoadingMsgs(true);
@@ -435,9 +522,13 @@ export default function CommunicationsDrawerSection({
             const cap = 200;
             if (merged.length > cap) merged = merged.slice(-cap);
             setMsgs(merged);
+            setShowOlderMessages(false);
+            setExpandedBodies({});
         } catch (e) {
             setMsgErr(e instanceof Error ? e.message : "Failed to load messages");
             setMsgs([]);
+            setShowOlderMessages(false);
+            setExpandedBodies({});
         } finally {
             setLoadingMsgs(false);
         }
@@ -452,7 +543,7 @@ export default function CommunicationsDrawerSection({
         const el = conversationScrollRef.current;
         if (!el || loadingMsgs) return;
         el.scrollTop = el.scrollHeight;
-    }, [msgs, loadingMsgs]);
+    }, [displayedMsgs, loadingMsgs, showOlderMessages]);
 
     useEffect(() => {
         if (!sendOkNote) return;
@@ -677,18 +768,22 @@ export default function CommunicationsDrawerSection({
         setSendBusy(true);
         setSendErr(null);
         setSendOkNote(null);
+        const bodyTrim = composerBody.trim();
+        const subjectTrim = composerSubject.trim();
         try {
             let lastNote = "";
+            const optimisticRows: MsgRowWithThread[] = [];
+            const nowIso = new Date().toISOString();
             for (const personId of selectedRecipientIds) {
                 const payload: Record<string, unknown> = {
                     entity_type: composerEntity,
                     entity_id: entityId,
                     channel: channelSent,
-                    body: composerBody.trim(),
+                    body: bodyTrim,
                     recipient_person_id: personId,
                 };
                 if (effectiveComposer === "email") {
-                    payload.subject = composerSubject.trim();
+                    payload.subject = subjectTrim;
                 }
                 const res = await fetch("/api/admin/communications/send", {
                     method: "POST",
@@ -704,13 +799,56 @@ export default function CommunicationsDrawerSection({
                     typeof (j as { process_trigger_attempted_note?: string }).process_trigger_attempted_note === "string"
                         ? String((j as { process_trigger_attempted_note: string }).process_trigger_attempted_note)
                         : "";
+                const msgId = String((j as { communication_message_id?: string }).communication_message_id ?? "").trim();
+                const threadId = String((j as { thread_id?: string }).thread_id ?? "").trim();
+                const rec = recipients.find((r) => r.person_id === personId);
+                const toAddr =
+                    channelSent === "email"
+                        ? (rec?.email ? String(rec.email).trim() : "")
+                        : rec?.phone
+                          ? normalizeRecipientKeySms(rec.phone)
+                          : "";
+                if (msgId && threadId) {
+                    optimisticRows.push({
+                        id: msgId,
+                        _thread_id: threadId,
+                        body: bodyTrim,
+                        channel: channelSent,
+                        direction: "outbound",
+                        status: "queued",
+                        created_at: nowIso,
+                        sent_at: nowIso,
+                        to_address: toAddr || null,
+                        from_address: null,
+                        provider_message_id: null,
+                        metadata: { drawer_optimistic: true },
+                        delivered_at: null,
+                    } as MsgRowWithThread);
+                }
             }
             setSendOkNote(userFriendlySendNote(lastNote, channelSent === "sms" ? "sms" : "email"));
             setComposerSubject("");
             setComposerBody("");
             invalidateCommunicationsDrawerPrefetch(apiEntityType, entityId);
-            await loadThreads();
-            await loadConversationMessages();
+            if (optimisticRows.length > 0) {
+                setMsgs((prev) => {
+                    const byId = new Set(prev.map((x) => x.id));
+                    const merged = [...prev];
+                    for (const row of optimisticRows) {
+                        if (!byId.has(row.id)) {
+                            merged.push(row);
+                            byId.add(row.id);
+                        }
+                    }
+                    merged.sort((a, b) => {
+                        const ta = Date.parse(String(a.created_at ?? a.sent_at ?? 0));
+                        const tb = Date.parse(String(b.created_at ?? b.sent_at ?? 0));
+                        return (Number.isFinite(ta) ? ta : 0) - (Number.isFinite(tb) ? tb : 0);
+                    });
+                    return merged;
+                });
+                setShowOlderMessages(false);
+            }
         } catch (e) {
             setSendErr(e instanceof Error ? e.message : "Send failed");
         } finally {
@@ -729,6 +867,12 @@ export default function CommunicationsDrawerSection({
         setViewFilter(v);
         if (v === "email") setAllComposerMode("email");
         if (v === "sms") setAllComposerMode("sms");
+        setShowOlderMessages(false);
+        setExpandedBodies({});
+    };
+
+    const toggleBodyExpand = (messageId: string) => {
+        setExpandedBodies((prev) => ({ ...prev, [messageId]: !prev[messageId] }));
     };
 
     const filterTabCls = (v: ViewFilter) =>
@@ -828,7 +972,10 @@ export default function CommunicationsDrawerSection({
                                     <div className="flex max-h-[5.5rem] flex-wrap gap-1 overflow-y-auto pr-0.5">
                                         {recipientsForComposer.map((r) => {
                                             const on = selectedRecipientIds.has(r.person_id);
-                                            const addr = effectiveComposer === "email" ? r.email ?? "" : r.phone ?? "";
+                                            const addr =
+                                                effectiveComposer === "email"
+                                                    ? r.email ?? ""
+                                                    : formatDisplayPhoneUs(r.phone ?? "");
                                             return (
                                                 <button
                                                     key={r.person_id}
@@ -837,7 +984,7 @@ export default function CommunicationsDrawerSection({
                                                     disabled={sendBusy}
                                                     onClick={() => toggleRecipient(r.person_id)}
                                                     title={r.relationship_hint ?? undefined}
-                                                    className={`max-w-full rounded-full border px-2 py-1 text-left text-[11px] leading-tight transition ${
+                                                    className={`max-w-full rounded-full border px-2 py-0.5 text-left text-[11px] leading-tight transition ${
                                                         on
                                                             ? "border-alloy-midnight bg-alloy-midnight/[0.08] font-semibold text-alloy-midnight ring-1 ring-alloy-midnight/18"
                                                             : "border-alloy-stone/20 bg-white font-medium text-alloy-forge hover:border-alloy-stone/35"
@@ -963,10 +1110,10 @@ export default function CommunicationsDrawerSection({
                             </button>
                         </div>
 
-                        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-alloy-stone/15 bg-[linear-gradient(180deg,rgba(246,247,249,0.88)_0%,#ffffff_100%)] shadow-sm">
+                        <div className="flex shrink-0 flex-col overflow-hidden rounded-xl border border-alloy-stone/15 bg-[linear-gradient(180deg,rgba(246,247,249,0.88)_0%,#ffffff_100%)] shadow-sm">
                             <div
                                 ref={conversationScrollRef}
-                                className="comms-drawer-conversation min-h-0 flex-1 overflow-y-auto px-2 py-1.5"
+                                className={`comms-drawer-conversation min-h-0 overflow-x-hidden overflow-y-auto px-2 py-1 ${CONVERSATION_SCROLL_HEIGHT_CLASS}`}
                             >
                             {loadingMsgs ? (
                                 <div className="flex flex-1 flex-col justify-center gap-2 py-4" aria-busy="true">
@@ -977,12 +1124,34 @@ export default function CommunicationsDrawerSection({
                             ) : msgErr ? (
                                 <p className="text-sm text-alloy-ember">{msgErr}</p>
                             ) : msgs.length === 0 ? (
-                                <p className="py-6 text-center text-[13px] text-alloy-midnight/58">
+                                <p className="py-4 text-center text-[13px] text-alloy-midnight/58">
                                     No messages in this view yet.
                                 </p>
                             ) : (
-                                <ul className="flex flex-col gap-1.5 pb-1">
-                                    {msgs.map((m) => {
+                                <ul className="flex flex-col gap-1 pb-0.5">
+                                    {hiddenOlderCount > 0 ? (
+                                        <li className="flex w-full justify-center pb-0.5">
+                                            <button
+                                                type="button"
+                                                className="rounded-full border border-alloy-stone/22 bg-white/90 px-2.5 py-0.5 text-[11px] font-semibold text-alloy-midnight/70 shadow-sm hover:border-alloy-stone/40 hover:bg-white"
+                                                onClick={() => setShowOlderMessages(true)}
+                                            >
+                                                View older messages ({hiddenOlderCount})
+                                            </button>
+                                        </li>
+                                    ) : null}
+                                    {showOlderMessages && msgs.length > DEFAULT_VISIBLE_MESSAGE_COUNT ? (
+                                        <li className="flex w-full justify-center pb-0.5">
+                                            <button
+                                                type="button"
+                                                className="text-[11px] font-semibold text-alloy-blue hover:underline"
+                                                onClick={() => setShowOlderMessages(false)}
+                                            >
+                                                Show fewer messages
+                                            </button>
+                                        </li>
+                                    ) : null}
+                                    {displayedMsgs.map((m) => {
                                         const inbound = (m.direction ?? "").toLowerCase() === "inbound";
                                         const state = mapToDeliveryState(m);
                                         const pres = deliveryStatePresentation(state);
@@ -996,7 +1165,7 @@ export default function CommunicationsDrawerSection({
                                                 className={`flex w-full ${inbound ? "justify-start" : "justify-end"}`}
                                             >
                                                 <div
-                                                    className={`max-w-[min(100%,19.5rem)] rounded-2xl px-2.5 py-1.5 text-[13px] leading-snug shadow-sm ${
+                                                    className={`max-w-[min(100%,19.5rem)] rounded-2xl px-2 py-1 text-[13px] leading-snug shadow-sm ${
                                                         inbound
                                                             ? "rounded-tl-sm border border-alloy-stone/16 bg-white text-alloy-forge"
                                                             : `rounded-tr-sm text-white ${
@@ -1060,13 +1229,13 @@ export default function CommunicationsDrawerSection({
                                                         ) : null}
                                                     </p>
                                                     {m.body ? (
-                                                        <div
-                                                            className={`whitespace-pre-wrap ${
-                                                                inbound ? "text-[13px] text-alloy-forge/95" : "text-[13px] text-white/95"
-                                                            }`}
-                                                        >
-                                                            {m.body}
-                                                        </div>
+                                                        <TruncatedMessageBody
+                                                            messageId={m.id}
+                                                            body={m.body}
+                                                            expanded={Boolean(expandedBodies[m.id])}
+                                                            onToggle={toggleBodyExpand}
+                                                            inbound={inbound}
+                                                        />
                                                     ) : null}
                                                 </div>
                                             </li>
@@ -1077,7 +1246,7 @@ export default function CommunicationsDrawerSection({
                             </div>
 
                             {composerBlockInner ? (
-                                <div className="shrink-0 border-t border-alloy-stone/12 bg-white/[0.97] px-2 py-1.5">
+                                <div className="shrink-0 border-t border-alloy-stone/12 bg-white/[0.97] px-2 py-1">
                                     {composerBlockInner}
                                 </div>
                             ) : null}

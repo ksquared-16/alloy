@@ -1668,3 +1668,34 @@ End design batch — Cards 22, 23, 25A.
 - `docs/Sprints/05_2026/Communications.txt` (this section)
 
 **Suggested commit message:** `fix(communications): tighten drawer comms UX, names in bubbles, SMS binding copy`
+
+⸻
+
+### Drawer Communication — **messaging strip UX** (fit-to-screen, truncate, smooth send, phone display)
+
+**Scope:** `CommunicationsDrawerSection.tsx` only; no KPI / provider / `workflowRun` / dual-write changes.
+
+**Behavior**
+
+- **Conversation height:** fixed **`h-[min(15rem,38vh)]`** cap with **internal scroll**; composer stays **below** the scroll region (no need to scroll the whole drawer to reach compose).
+- **Default message window:** only the **last 3** messages; **“View older messages (N)”** expands full list; **“Show fewer messages”** collapses again.
+- **Long bodies:** **`line-clamp-3`** + **`whitespace-pre-wrap` / `break-words`** with **Show more / Show less** when body is long or has **>3** lines (heuristic unchanged: length **>240**).
+- **Send:** on success, **append** rows from **`communication_message_id` / `thread_id`** in the POST JSON; **no** immediate **`loadThreads` + `loadConversationMessages`** refetch (prefetch invalidation only). Composer cleared; scroll-to-bottom on **`displayedMsgs`**.
+- **Phone display:** **`formatDisplayPhoneUs`** on recipient pill second line (SMS) and already on bubble counterparty lines (**stored values unchanged**).
+- **Polish:** slightly tighter bubble padding and composer **border-t** padding.
+
+**Limitations**
+
+- **Optimistic row** only appears when send response includes **`communication_message_id`** and **`thread_id`**; otherwise UI still succeeds but list updates on next natural reload.
+- **Thread list** in sidebar (if any parent) unchanged — formatting applies where this component renders addresses.
+- **`line-clamp`** with **`pre-wrap`** can behave unevenly in some browsers for very long unbroken strings; **`break-words`** mitigates most cases.
+
+**Manual smoke**
+
+1. Open Communication: **composer** visible without scrolling parent; message list scrolls inside capped area.  
+2. Thread with **>3** messages: default **3** newest; **View older** → full thread; **Show fewer** → back.  
+3. Long message / multiline: **Show more** → full text + **Show less**.  
+4. Send email/SMS: message **appears** at bottom **without** full-list flicker; composer empty; toast still clears.  
+5. SMS pills and SMS bubbles: phone shows **`(XXX) XXX-XXXX`** when 10/11-digit US.
+
+**Suggested commit message:** `fix(communications): drawer messaging fit, truncate, optimistic append, phone display`
