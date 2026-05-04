@@ -3,6 +3,10 @@
  * Realistic childcare CRM seed for an existing org (staging / demo).
  * Prerequisite: run `demo:reset:dry` then `demo:reset` execute against the same org when replacing prior demo rows.
  *
+ * Flags:
+ *   --scopes-only   — wire DEMO_* user roles + access only (no family/opportunity loop). Same as `npm run demo:seed:scopes`.
+ *   --patch-metadata — idempotent metadata backfill for already-seeded rows (inquiry_children, tour_time, notes_at). Same as `npm run demo:seed:patch-metadata`.
+ *
  * Env:
  *   DEMO_RESET_ORG_ID (required)
  *   DEMO_CORPORATE_USER_ID, DEMO_REGIONAL_USER_ID, DEMO_DIRECTOR_USER_ID (optional — updates access profiles + roles)
@@ -286,10 +290,15 @@ function nextStepForStatus(statusKey: string): string {
     }
 }
 
-function stableChildDob(seedKey: string, idx: number): string {
-    const base = hash32(`${seedKey}:child:${idx}`);
-    const yearsAgo = 2 + modLength(base, 3);
-    const monthsAgo = modLength(base, 12);
+/**
+ * Deterministic DOB per child member. Sibling index is biased into different enrollment tiers so
+ * multi-child households are not all bucketed as the same program (e.g. Toddler 2–3).
+ */
+function stableChildDob(memberSeedKey: string, idx: number): string {
+    const base = hash32(`${memberSeedKey}:child:${idx}`);
+    const tier = (idx + modLength(base, 3)) % 3;
+    const yearsAgo = tier === 0 ? 0 : tier === 1 ? 3 : 4;
+    const monthsAgo = tier === 0 ? 10 + modLength(base, 6) : tier === 1 ? modLength(base >>> 2, 12) : 6 + modLength(base >>> 2, 8);
     const d = new Date();
     d.setFullYear(d.getFullYear() - yearsAgo);
     d.setMonth(Math.max(0, d.getMonth() - monthsAgo));
@@ -507,6 +516,22 @@ function runSeedPreflight(totalOpps: number, statusPool: string[]): void {
             }
             checkVisible("gp.first", p.grandparent.first);
             checkVisible("gp.last", p.grandparent.last);
+        }
+
+        if (p.childrenCount >= 2) {
+            const progLabels: string[] = [];
+            for (let c = 0; c < p.childrenCount; c++) {
+                const mk = `${p.seedKey}:child:${c}`;
+                const dob = stableChildDob(mk, c);
+                const months = approximateAgeMonthsFromDobIso(dob) ?? 24;
+                progLabels.push(programLabelAndAgeGroupFromAgeMonths(months).program_label);
+            }
+            const uniq = new Set(progLabels);
+            if (uniq.size < p.childrenCount) {
+                errors.push(
+                    `record i=${i} seedKey=${p.seedKey}: expected distinct program tiers per sibling, got [${progLabels.join(", ")}]`
+                );
+            }
         }
 
         const emails = [p.g0Email, p.g1Email, p.grandparent?.email].filter(Boolean) as string[];
@@ -889,14 +914,27 @@ async function ensureOpportunity(
 
     const inquiryList = extras?.inquiry_children ?? [];
     const firstChild = inquiryList[0] as Record<string, unknown> | undefined;
+    const programLabelsFromInquiry = inquiryList
+        .map((ic) => {
+            const pl = (ic as Record<string, unknown>).program_label;
+            return typeof pl === "string" ? pl.trim() : "";
+        })
+        .filter(Boolean);
+    const uniqPrograms = [...new Set(programLabelsFromInquiry)];
     const program_label =
-        typeof firstChild?.program_label === "string" && String(firstChild.program_label).trim()
-            ? String(firstChild.program_label).trim()
-            : pickPoolMod(PROG_LABELS, h, "PROG_LABELS");
+        uniqPrograms.length > 1
+            ? uniqPrograms.join(" · ")
+            : uniqPrograms.length === 1
+              ? uniqPrograms[0]!
+              : typeof firstChild?.program_label === "string" && String(firstChild.program_label).trim()
+                ? String(firstChild.program_label).trim()
+                : pickPoolMod(PROG_LABELS, h, "PROG_LABELS");
     const age_group =
-        typeof firstChild?.age_group === "string" && String(firstChild.age_group).trim()
-            ? String(firstChild.age_group).trim()
-            : ageGroupForProgramLabel(program_label);
+        uniqPrograms.length > 1
+            ? ""
+            : typeof firstChild?.age_group === "string" && String(firstChild.age_group).trim()
+              ? String(firstChild.age_group).trim()
+              : ageGroupForProgramLabel(program_label);
 
     const tuitionCents =
         statusKey === "enrolled" || statusKey === "enrolling" ? 120_000 + modLength(h, 8) * 2_500 : null;
@@ -1379,6 +1417,7 @@ async function printSeedValidationSummary(supabase: SupabaseAdmin, orgId: string
 
     let tourDateMissingTime = 0;
     let notesMissingAt = 0;
+    let multiChildHomogeneousPrograms = 0;
     for (const o of opps) {
         const md = asMetaRecord(o.metadata);
         const td = (mdString(md, "tour_date") ?? "").trim();
@@ -1387,6 +1426,16 @@ async function printSeedValidationSummary(supabase: SupabaseAdmin, orgId: string
         const n = (mdString(md, "notes") ?? mdString(md, "demo_note") ?? "").trim();
         const na = (mdString(md, "notes_at") ?? "").trim();
         if (n && !na) notesMissingAt++;
+        const ic = md?.inquiry_children;
+        if (Array.isArray(ic) && ic.length >= 2) {
+            const labs = ic
+                .map((row) => {
+                    const r = row as Record<string, unknown>;
+                    return typeof r.program_label === "string" ? r.program_label.trim() : "";
+                })
+                .filter(Boolean);
+            if (labs.length >= 2 && new Set(labs).size === 1) multiChildHomogeneousPrograms++;
+        }
     }
 
     const nowQa = new Date();
@@ -1494,6 +1543,9 @@ async function printSeedValidationSummary(supabase: SupabaseAdmin, orgId: string
     console.log(`- child rows where metadata.program_label ≠ DOB-derived tier: ${childProgramMismatches}`);
     console.log(`- opportunities with tour_date but no tour_time: ${tourDateMissingTime}`);
     console.log(`- opportunities with notes/demo_note but no notes_at: ${notesMissingAt}`);
+    console.log(
+        `- opportunities with 2+ inquiry_children sharing one program_label (should be 0 after tiered DOB seed/patch): ${multiChildHomogeneousPrograms}`
+    );
     console.log(`- needs_attention (QueueService rules, now): ${needsAttentionHits} / ${opps.length} (${naPct.toFixed(1)}%)`);
 
     console.log("\nG. Sample opportunities (first 5 by created_at)");
@@ -1542,6 +1594,176 @@ async function wireDemoUserScopes(
     }
 }
 
+const TOUR_METADATA_STATUS_KEYS = new Set(["tour_scheduled", "tour_completed", "enrolling", "waitlisted", "enrolled"]);
+
+function childDisplayFromMemberSeed(m: {
+    display_name?: string | null;
+    first_name?: string | null;
+    last_name?: string | null;
+}): string {
+    const d = String(m.display_name ?? "").trim();
+    if (d) return d;
+    return [String(m.first_name ?? "").trim(), String(m.last_name ?? "").trim()].filter(Boolean).join(" ").trim();
+}
+
+/**
+ * Idempotent backfill for already-seeded orgs: realign `metadata.inquiry_children` and member program metadata
+ * from authoritative DOB, add missing `tour_time` / `notes_at`, and refresh opportunity-level program summary.
+ * Does not delete rows or rerun the 135-family generator.
+ */
+async function runMetadataPatchMain(): Promise<void> {
+    const orgId = requireEnv("DEMO_RESET_ORG_ID");
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()) {
+        console.error("Missing SUPABASE_SERVICE_ROLE_KEY");
+        process.exit(1);
+    }
+    const supabase = createAdminClient();
+    const pkg = STAGING_REALISTIC_CHILDCARE_SEED_PACKAGE;
+    console.log(
+        "\n[seed:patch-metadata] Idempotent CRM metadata backfill (inquiry_children, member program fields, tour_time, notes_at).\n"
+    );
+    const { data: oppsRaw, error } = await supabase
+        .from("opportunities")
+        .select("id,status_key,metadata,created_at")
+        .eq("org_id", orgId)
+        .eq("metadata->>demo_seed_package", pkg);
+    if (error) throw new Error(error.message);
+    const opps = (oppsRaw ?? []) as Array<{
+        id: string;
+        status_key: string | null;
+        metadata: unknown;
+        created_at: string | null;
+    }>;
+    let oppUpdates = 0;
+    let memberTouch = 0;
+    for (const o of opps) {
+        const md = asMetaRecord(o.metadata);
+        if (!md) continue;
+        const { data: ocmRows } = await supabase
+            .from("opportunity_customer_members")
+            .select("customer_member_id")
+            .eq("org_id", orgId)
+            .eq("opportunity_id", o.id);
+        const mids = [
+            ...new Set(
+                (ocmRows ?? [])
+                    .map((r) => String((r as { customer_member_id?: string }).customer_member_id ?? "").trim())
+                    .filter(Boolean)
+            ),
+        ];
+        const inquiry_children: Record<string, unknown>[] = [];
+        if (mids.length) {
+            const { data: mems, error: memErr } = await supabase
+                .from("customer_members")
+                .select("id,display_name,first_name,last_name,dob,person_id,metadata,relationship,is_active")
+                .eq("org_id", orgId)
+                .in("id", mids);
+            if (memErr) throw new Error(memErr.message);
+            const members = (mems ?? []) as Array<{
+                id: string;
+                display_name: string | null;
+                first_name: string | null;
+                last_name: string | null;
+                dob: string | null;
+                person_id: string | null;
+                metadata: unknown;
+                relationship: string | null;
+                is_active: boolean | null;
+            }>;
+            const childRows = members.filter((m) => m.relationship === "child" && m.is_active !== false);
+            const pids = [...new Set(childRows.map((m) => String(m.person_id ?? "").trim()).filter(Boolean))];
+            const dobByPerson = new Map<string, string>();
+            if (pids.length) {
+                const { data: plist, error: pErr } = await supabase
+                    .from("persons")
+                    .select("id,date_of_birth")
+                    .eq("org_id", orgId)
+                    .in("id", pids);
+                if (pErr) throw new Error(pErr.message);
+                for (const pr of plist ?? []) {
+                    const row = pr as { id: string; date_of_birth: string | null };
+                    const d = String(row.date_of_birth ?? "").trim();
+                    if (d) dobByPerson.set(row.id, d);
+                }
+            }
+            const sorted = [...childRows].sort((a, b) =>
+                childDisplayFromMemberSeed(a).toLowerCase().localeCompare(childDisplayFromMemberSeed(b).toLowerCase())
+            );
+            for (const m of sorted) {
+                const canonicalDob = (m.person_id ? dobByPerson.get(m.person_id) : "") || String(m.dob ?? "").trim();
+                const months = approximateAgeMonthsFromDobIso(canonicalDob) ?? 24;
+                const { program_label, age_group } = programLabelAndAgeGroupFromAgeMonths(months);
+                const display_name = childDisplayFromMemberSeed(m);
+                const dobOut =
+                    canonicalDob.length >= 10 ? canonicalDob.slice(0, 10) : canonicalDob ? canonicalDob : "";
+                inquiry_children.push({
+                    display_name,
+                    program_label,
+                    age_group,
+                    ...(dobOut ? { dob: dobOut } : {}),
+                });
+                const prevMeta = asMetaRecord(m.metadata as Record<string, unknown> | null) ?? {};
+                if ((mdString(prevMeta, "program_label") ?? "").trim() !== program_label || (mdString(prevMeta, "age_group") ?? "").trim() !== age_group) {
+                    const nextMemberMeta = { ...prevMeta, program_label, age_group };
+                    const { error: upM } = await supabase
+                        .from("customer_members")
+                        .update({ metadata: nextMemberMeta as never })
+                        .eq("id", m.id)
+                        .eq("org_id", orgId);
+                    if (upM) throw new Error(`customer_members ${m.id}: ${upM.message}`);
+                    memberTouch++;
+                }
+            }
+        }
+
+        const nextMd: Record<string, unknown> = { ...md };
+        if (inquiry_children.length) {
+            nextMd.inquiry_children = inquiry_children;
+            const uniqProg = [...new Set(inquiry_children.map((ic) => String(ic.program_label ?? "").trim()).filter(Boolean))];
+            nextMd.program_label = uniqProg.length > 1 ? uniqProg.join(" · ") : uniqProg[0] ?? md.program_label;
+            nextMd.age_group =
+                uniqProg.length > 1
+                    ? ""
+                    : typeof inquiry_children[0]?.age_group === "string"
+                      ? inquiry_children[0].age_group
+                      : md.age_group;
+        }
+
+        const td = (mdString(nextMd, "tour_date") ?? "").trim();
+        const tt0 = (mdString(nextMd, "tour_time") ?? "").trim();
+        const sk = (o.status_key ?? "").trim();
+        if (td && TOUR_METADATA_STATUS_KEYS.has(sk) && !tt0) {
+            const seedKey = mdString(asMetaRecord(nextMd), "seed_key") ?? o.id;
+            nextMd.tour_time = buildSeedTourTime(hash32(seedKey));
+        }
+
+        const noteText = (mdString(nextMd, "notes") ?? mdString(nextMd, "demo_note") ?? "").trim();
+        const na0 = (mdString(nextMd, "notes_at") ?? "").trim();
+        if (noteText && !na0) {
+            const ca = o.created_at && String(o.created_at).trim() ? String(o.created_at).trim() : null;
+            nextMd.notes_at = ca ?? isoDate(new Date());
+        }
+
+        const changed =
+            JSON.stringify(md.inquiry_children ?? null) !== JSON.stringify(nextMd.inquiry_children ?? null) ||
+            (mdString(md, "program_label") ?? "").trim() !== (mdString(nextMd, "program_label") ?? "").trim() ||
+            (mdString(md, "age_group") ?? "").trim() !== (mdString(nextMd, "age_group") ?? "").trim() ||
+            (mdString(md, "tour_time") ?? "").trim() !== (mdString(nextMd, "tour_time") ?? "").trim() ||
+            (mdString(md, "notes_at") ?? "").trim() !== (mdString(nextMd, "notes_at") ?? "").trim();
+
+        if (changed) {
+            const patch = { metadata: nextMd, updated_at: isoDate(new Date()) };
+            const { error: upO } = await supabase.from("opportunities").update(patch as never).eq("id", o.id).eq("org_id", orgId);
+            if (upO) throw new Error(`opportunities ${o.id}: ${upO.message}`);
+            oppUpdates++;
+        }
+    }
+    console.log(`[seed:patch-metadata] Opportunities updated: ${oppUpdates} / ${opps.length}`);
+    console.log(`[seed:patch-metadata] customer_members metadata program touch count: ${memberTouch}`);
+    await printSeedValidationSummary(supabase, orgId);
+    console.log("[seed:patch-metadata] Done.");
+}
+
 async function runScopesOnlyMain(): Promise<void> {
     const orgId = requireEnv("DEMO_RESET_ORG_ID");
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()) {
@@ -1569,6 +1791,14 @@ async function runScopesOnlyMain(): Promise<void> {
     const enrollmentDeptId = (enrollmentDeptRow as { id: string }).id;
 
     await wireDemoUserScopes(supabase, orgId, northId, southId, enrollmentDeptId);
+    console.log("\n[seed:scopes-only] Validation");
+    console.log("- Mode: user_roles + user_access_profiles + department/site junctions only (no customers/opportunities touched).");
+    console.log(`- DEMO_CORPORATE_USER_ID set: ${Boolean(process.env.DEMO_CORPORATE_USER_ID?.trim())}`);
+    console.log(`- DEMO_REGIONAL_USER_ID set: ${Boolean(process.env.DEMO_REGIONAL_USER_ID?.trim())}`);
+    console.log(`- DEMO_DIRECTOR_USER_ID set: ${Boolean(process.env.DEMO_DIRECTOR_USER_ID?.trim())}`);
+    console.log("- Corporate wiring (when id set): all departments · all sites");
+    console.log("- Regional wiring (when id set): all departments · North + South sites");
+    console.log("- Director wiring (when id set): Enrollment department · North site only");
     console.log("[seed:scopes-only] Complete.");
 }
 
@@ -1841,7 +2071,12 @@ async function main(): Promise<void> {
 }
 
 const argv = new Set(process.argv.slice(2));
-if (argv.has("--scopes-only")) {
+if (argv.has("--patch-metadata")) {
+    runMetadataPatchMain().catch((e) => {
+        console.error(e);
+        process.exit(1);
+    });
+} else if (argv.has("--scopes-only")) {
     runScopesOnlyMain().catch((e) => {
         console.error(e);
         process.exit(1);

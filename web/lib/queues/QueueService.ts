@@ -422,7 +422,7 @@ function programSecondaryForCustomerMemberChild(
  * One `_crm_compact_children` line per active child member; `secondary` is per-child program (member metadata or DOB-derived).
  */
 function baseNameFromCrmChildPrimary(primary: string): string {
-    const s = primary.trim();
+    const s = primary.trim().replace(/\s+/g, " ");
     const idx = s.lastIndexOf(" (");
     return (idx === -1 ? s : s.slice(0, idx)).trim().toLowerCase();
 }
@@ -445,7 +445,8 @@ function mergeInquiryChildrenIntoMemberStructuredLines(
     const byDisplay = new Map<string, string>();
     for (const raw of inquiryChildren) {
         const row = raw as Record<string, unknown>;
-        const disp = typeof row.display_name === "string" ? row.display_name.trim().toLowerCase() : "";
+        const disp =
+            typeof row.display_name === "string" ? row.display_name.trim().replace(/\s+/g, " ").toLowerCase() : "";
         const sec = inquiryProgramSecondaryFromRow(raw);
         if (disp && sec) byDisplay.set(disp, sec);
     }

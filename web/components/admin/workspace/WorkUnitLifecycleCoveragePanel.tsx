@@ -25,7 +25,9 @@ export type WorkUnitLifecycleCoveragePanelProps = {
  * Operator-facing coverage copy + collapsible admin diagnostics for unmapped / "Other" lifecycle buckets.
  * Uses only data already loaded on the work-unit page (no extra API).
  */
-const SHOW_QUEUE_DIAGNOSTICS = process.env.NEXT_PUBLIC_SHOW_ADMIN_QUEUE_DIAGNOSTICS === "1";
+/** Product builds never ship this copy unless explicitly enabled in local dev. */
+const SHOW_QUEUE_DIAGNOSTICS =
+    process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_SHOW_ADMIN_QUEUE_DIAGNOSTICS === "1";
 
 export function WorkUnitLifecycleCoveragePanel({
     hasLifecycleThroughput,

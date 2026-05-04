@@ -4629,6 +4629,9 @@ export default function AdminEntityDrawer() {
                 setData((prev) => (prev ? { ...prev, ...json } : prev));
                 refetch();
                 router.refresh();
+                window.dispatchEvent(
+                    new CustomEvent("adminv2:opportunity-updated", { detail: { id: "", action_key: "customer_member_inline_save" } })
+                );
                 return;
             }
             if (drawer.type === "payments") {
@@ -4877,6 +4880,11 @@ export default function AdminEntityDrawer() {
             setData((prev) => (prev ? { ...prev, ...json } : prev));
             refetch();
             router.refresh();
+            if (drawer.type === "opportunities" && drawer.id && drawer.id !== "new") {
+                window.dispatchEvent(
+                    new CustomEvent("adminv2:opportunity-updated", { detail: { id: drawer.id, action_key: "inline_save" } })
+                );
+            }
             if (drawer.type === "schedules" && drawer.id) {
                 const jid = (json as { job_id?: string | null }).job_id;
                 window.dispatchEvent(
