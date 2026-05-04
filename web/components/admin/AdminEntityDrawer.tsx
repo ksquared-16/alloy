@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import "@/app/adminV2/components/workspace/workspace.css";
@@ -20,7 +20,7 @@ import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
 import EntityDocumentsSection from "@/components/admin/EntityDocumentsSection";
 import CommunicationsDrawerSection from "@/components/admin/communications/CommunicationsDrawerSection";
 import {
-    armCommunicationsDrawerPrefetch,
+    scheduleDeferredCommunicationsDrawerPrefetch,
     invalidateCommunicationsDrawerPrefetch,
 } from "@/lib/admin/communications/communicationsDrawerPrefetch";
 import {
@@ -1238,27 +1238,27 @@ export default function AdminEntityDrawer() {
         memberPersonGraphOverlayDoneRef.current = null;
     }, [drawer.type, drawer.id]);
 
-    /** Comms prefetch: only while enrollment Communication tab is selected (avoid drawer_visible-triggered fetch fan-out). */
-    const enrollmentCommPanelSelected =
-        String((formData as { _enrollment_panel?: unknown })._enrollment_panel ?? "").trim() === "communication";
-    useEffect(() => {
-        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return;
+    /** Deferred comms prefetch: reserve slot in layout phase (before child effects) — rAF+idle starts HTTP. */
+    useLayoutEffect(() => {
+        if (!drawer.id || drawer.id === "new") return;
+        if (!drawerReady) return;
         if (!data || typeof data !== "object") return;
         if (!entityDataMatchesDrawer(data, drawer.id)) return;
-        if (!enrollmentCommPanelSelected) {
-            invalidateCommunicationsDrawerPrefetch("opportunities", drawer.id);
-            return;
+
+        if (drawer.type === "opportunities") {
+            scheduleDeferredCommunicationsDrawerPrefetch("opportunities", drawer.id);
+        } else if (drawer.type === "jobs") {
+            scheduleDeferredCommunicationsDrawerPrefetch("jobs", drawer.id);
         }
-        armCommunicationsDrawerPrefetch("opportunities", drawer.id);
-    }, [drawer.type, drawer.id, data, enrollmentCommPanelSelected]);
+    }, [drawer.type, drawer.id, drawerReady, data]);
 
     useEffect(() => {
         const t = drawer.type;
         const eid = drawer.id;
         return () => {
-            if (t === "opportunities" && eid && eid !== "new") {
-                invalidateCommunicationsDrawerPrefetch("opportunities", eid);
-            }
+            if (!eid || eid === "new") return;
+            if (t === "opportunities") invalidateCommunicationsDrawerPrefetch("opportunities", eid);
+            if (t === "jobs") invalidateCommunicationsDrawerPrefetch("jobs", eid);
         };
     }, [drawer.type, drawer.id]);
 

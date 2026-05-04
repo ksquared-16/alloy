@@ -1,7 +1,8 @@
 /**
- * Optional client-side prefetch for Communications drawer payloads.
- * Armed when the enrollment Communication tab is active (`_enrollment_panel === "communication"`);
- * invalidated when that tab is not selected / drawer teardown.
+ * Deferred client-side prefetch for Communications drawer payloads.
+ * The prefetch slot is registered synchronously so child UI can await the same promises
+ * (parent useLayoutEffect runs before child useEffects — avoids duplicate network).
+ * Actual HTTP work starts after paint (rAF + idle / short timeout) so the drawer does not compete with critical work.
  */
 
 type ThreadsResult = { threads: unknown[]; error: string | null };
@@ -37,7 +38,22 @@ async function readJsonSafely(res: Response): Promise<unknown> {
     }
 }
 
-export function armCommunicationsDrawerPrefetch(apiEntityType: string, entityId: string): void {
+function createPromiseWithResolvers<T>(): {
+    promise: Promise<T>;
+    resolve: (v: T) => void;
+} {
+    let resolve!: (v: T) => void;
+    const promise = new Promise<T>((res) => {
+        resolve = res;
+    });
+    return { promise, resolve };
+}
+
+/**
+ * Reserve slot + defer HTTP to after paint / idle. Supported: opportunities, jobs (record comms embed).
+ * Idempotent while the same slot exists.
+ */
+export function scheduleDeferredCommunicationsDrawerPrefetch(apiEntityType: string, entityId: string): void {
     const key = prefetchKey(apiEntityType, entityId);
     if (slots.has(key)) {
         if (shouldLogPrefetch()) {
@@ -54,7 +70,53 @@ export function armCommunicationsDrawerPrefetch(apiEntityType: string, entityId:
     const ac = new AbortController();
     controllers.set(key, ac);
     const { signal } = ac;
-    const logPerf = shouldLogPrefetch();
+
+    const threadsDeferred = createPromiseWithResolvers<ThreadsResult>();
+    const bindingsDeferred = createPromiseWithResolvers<BindingsResult>();
+
+    const recipients: Promise<RecipientsResult> = bindingsDeferred.promise.then(async (b): Promise<RecipientsResult> => {
+        if (b.error || !b.channels.includes("email")) {
+            return { recipients: [], error: null };
+        }
+        try {
+            const qs = new URLSearchParams({ entity_type: apiEntityType, entity_id: entityId });
+            const r = await fetch(`/api/admin/communications/drawer-recipients?${qs}`, {
+                credentials: "include",
+                signal,
+            });
+            const j = (await readJsonSafely(r)) as { recipients?: unknown[]; error?: string };
+            if (!r.ok) {
+                return { recipients: [], error: j.error ?? `HTTP ${r.status}` };
+            }
+            const list = j.recipients;
+            return { recipients: Array.isArray(list) ? list : [], error: null };
+        } catch (e) {
+            if (signal.aborted) {
+                const err = new Error("Aborted");
+                err.name = "AbortError";
+                throw err;
+            }
+            return { recipients: [], error: e instanceof Error ? e.message : "Failed to load recipients" };
+        }
+    });
+
+    const slot: CommunicationsDrawerPrefetchSlot = {
+        threads: threadsDeferred.promise,
+        bindings: bindingsDeferred.promise,
+        recipients,
+        prefetch_arm_cache_hit: false,
+        consumed: {},
+    };
+    slots.set(key, slot);
+
+    if (shouldLogPrefetch()) {
+        console.warn("[perf.comms.prefetch]", {
+            entity_type: apiEntityType,
+            entity_id: entityId,
+            event: "arm_scheduled",
+            note: "slot_reserved_sync_deferred_fetch",
+        });
+    }
 
     let tThreadsEnd = 0;
     let tBindingsEnd = 0;
@@ -66,151 +128,146 @@ export function armCommunicationsDrawerPrefetch(apiEntityType: string, entityId:
               ? Date.now()
               : 0;
 
-    const threads: Promise<ThreadsResult> = (async (): Promise<ThreadsResult> => {
-        try {
-            const qs = new URLSearchParams({ entity_type: apiEntityType, entity_id: entityId, limit: "40" });
-            const r = await fetch(`/api/admin/communications/threads?${qs.toString()}`, {
-                credentials: "include",
-                signal,
-            });
-            const j = (await readJsonSafely(r)) as { threads?: unknown[]; error?: string };
-            tThreadsEnd =
-                typeof performance !== "undefined" && typeof performance.now === "function"
-                    ? performance.now()
-                    : Date.now();
-            if (!r.ok) {
-                return { threads: [], error: j.error ?? `HTTP ${r.status}` };
-            }
-            return { threads: Array.isArray(j.threads) ? j.threads : [], error: null };
-        } catch (e) {
-            tThreadsEnd =
-                typeof performance !== "undefined" && typeof performance.now === "function"
-                    ? performance.now()
-                    : Date.now();
-            if (signal.aborted) {
-                const err = new Error("Aborted");
-                err.name = "AbortError";
-                throw err;
-            }
-            return { threads: [], error: e instanceof Error ? e.message : "Failed to load threads" };
-        }
-    })();
+    let started = false;
+    const runFetches = () => {
+        if (started) return;
+        if (!slots.has(key)) return;
+        started = true;
 
-    const bindings: Promise<BindingsResult> = (async (): Promise<BindingsResult> => {
-        try {
-            const r = await fetch(`/api/admin/communications/bindings`, { credentials: "include", signal });
-            const j = (await readJsonSafely(r)) as { channels_available?: string[]; error?: string };
-            tBindingsEnd =
-                typeof performance !== "undefined" && typeof performance.now === "function"
-                    ? performance.now()
-                    : Date.now();
-            if (!r.ok) {
-                return { channels: [], error: j.error ?? `HTTP ${r.status}` };
-            }
-            const ch = j.channels_available;
-            return { channels: Array.isArray(ch) ? ch : [], error: null };
-        } catch (e) {
-            tBindingsEnd =
-                typeof performance !== "undefined" && typeof performance.now === "function"
-                    ? performance.now()
-                    : Date.now();
-            if (signal.aborted) {
-                const err = new Error("Aborted");
-                err.name = "AbortError";
-                throw err;
-            }
-            return { channels: [], error: e instanceof Error ? e.message : "Failed to load bindings" };
-        }
-    })();
-
-    const recipients: Promise<RecipientsResult> = bindings.then(async (b): Promise<RecipientsResult> => {
-        if (b.error || !b.channels.includes("email")) {
-            tRecipientsEnd =
-                typeof performance !== "undefined" && typeof performance.now === "function"
-                    ? performance.now()
-                    : Date.now();
-            return { recipients: [], error: null };
-        }
-        try {
-            const qs = new URLSearchParams({ entity_type: apiEntityType, entity_id: entityId });
-            const r = await fetch(`/api/admin/communications/drawer-recipients?${qs}`, {
-                credentials: "include",
-                signal,
-            });
-            const j = (await readJsonSafely(r)) as { recipients?: unknown[]; error?: string };
-            tRecipientsEnd =
-                typeof performance !== "undefined" && typeof performance.now === "function"
-                    ? performance.now()
-                    : Date.now();
-            if (!r.ok) {
-                return { recipients: [], error: j.error ?? `HTTP ${r.status}` };
-            }
-            const list = j.recipients;
-            return { recipients: Array.isArray(list) ? list : [], error: null };
-        } catch (e) {
-            tRecipientsEnd =
-                typeof performance !== "undefined" && typeof performance.now === "function"
-                    ? performance.now()
-                    : Date.now();
-            if (signal.aborted) {
-                const err = new Error("Aborted");
-                err.name = "AbortError";
-                throw err;
-            }
-            return { recipients: [], error: e instanceof Error ? e.message : "Failed to load recipients" };
-        }
-    });
-
-    const slot: CommunicationsDrawerPrefetchSlot = {
-        threads,
-        bindings,
-        recipients,
-        prefetch_arm_cache_hit: false,
-        consumed: {},
-    };
-    slots.set(key, slot);
-
-    if (logPerf) {
-        console.warn("[perf.comms.prefetch]", {
-            entity_type: apiEntityType,
-            entity_id: entityId,
-            event: "arm",
-        });
-    }
-
-    void threads.then((r) => {
-        slot.threads_snapshot = r;
-    });
-    void bindings.then((r) => {
-        slot.bindings_snapshot = r;
-    });
-    void recipients.then((r) => {
-        slot.recipients_snapshot = r;
-    });
-
-    if (logPerf) {
-        void Promise.allSettled([threads, bindings, recipients]).then(() => {
-            const s = slots.get(key);
-            const t1 =
-                typeof performance !== "undefined" && typeof performance.now === "function"
-                    ? performance.now()
-                    : Date.now();
-            const total_ms = Math.round((t1 - perfT0) * 10) / 10;
+        if (shouldLogPrefetch()) {
             console.warn("[perf.comms.prefetch]", {
                 entity_type: apiEntityType,
                 entity_id: entityId,
-                event: "prefetch_settled",
-                total_ms,
-                threads_ms: tThreadsEnd ? Math.round((tThreadsEnd - perfT0) * 10) / 10 : undefined,
-                bindings_ms: tBindingsEnd ? Math.round((tBindingsEnd - perfT0) * 10) / 10 : undefined,
-                recipients_ms: tRecipientsEnd ? Math.round((tRecipientsEnd - perfT0) * 10) / 10 : undefined,
-                prefetch_arm_cache_hit: Boolean(s?.prefetch_arm_cache_hit),
-                threads_taken_by_tab: Boolean(s?.consumed.threads),
-                bindings_taken_by_tab: Boolean(s?.consumed.bindings),
-                recipients_taken_by_tab: Boolean(s?.consumed.recipients),
+                event: "fetch_start",
             });
-        });
+        }
+
+        void (async () => {
+            try {
+                const qs = new URLSearchParams({ entity_type: apiEntityType, entity_id: entityId, limit: "40" });
+                const [threadsRes, bindingsRes] = await Promise.all([
+                    (async (): Promise<ThreadsResult> => {
+                        try {
+                            const r = await fetch(`/api/admin/communications/threads?${qs.toString()}`, {
+                                credentials: "include",
+                                signal,
+                            });
+                            const j = (await readJsonSafely(r)) as { threads?: unknown[]; error?: string };
+                            tThreadsEnd =
+                                typeof performance !== "undefined" && typeof performance.now === "function"
+                                    ? performance.now()
+                                    : Date.now();
+                            if (!r.ok) {
+                                return { threads: [], error: j.error ?? `HTTP ${r.status}` };
+                            }
+                            return { threads: Array.isArray(j.threads) ? j.threads : [], error: null };
+                        } catch (e) {
+                            tThreadsEnd =
+                                typeof performance !== "undefined" && typeof performance.now === "function"
+                                    ? performance.now()
+                                    : Date.now();
+                            if (signal.aborted) {
+                                return { threads: [], error: "Aborted" };
+                            }
+                            return { threads: [], error: e instanceof Error ? e.message : "Failed to load threads" };
+                        }
+                    })(),
+                    (async (): Promise<BindingsResult> => {
+                        try {
+                            const r = await fetch(`/api/admin/communications/bindings`, { credentials: "include", signal });
+                            const j = (await readJsonSafely(r)) as { channels_available?: string[]; error?: string };
+                            tBindingsEnd =
+                                typeof performance !== "undefined" && typeof performance.now === "function"
+                                    ? performance.now()
+                                    : Date.now();
+                            if (!r.ok) {
+                                return { channels: [], error: j.error ?? `HTTP ${r.status}` };
+                            }
+                            const ch = j.channels_available;
+                            return { channels: Array.isArray(ch) ? ch : [], error: null };
+                        } catch (e) {
+                            tBindingsEnd =
+                                typeof performance !== "undefined" && typeof performance.now === "function"
+                                    ? performance.now()
+                                    : Date.now();
+                            if (signal.aborted) {
+                                return { channels: [], error: "Aborted" };
+                            }
+                            return { channels: [], error: e instanceof Error ? e.message : "Failed to load bindings" };
+                        }
+                    })(),
+                ]);
+
+                if (!slots.has(key)) return;
+
+                const s0 = slots.get(key);
+                if (s0) {
+                    s0.threads_snapshot = threadsRes;
+                    s0.bindings_snapshot = bindingsRes;
+                }
+                threadsDeferred.resolve(threadsRes);
+                bindingsDeferred.resolve(bindingsRes);
+
+                void recipients
+                    .then((r) => {
+                        tRecipientsEnd =
+                            typeof performance !== "undefined" && typeof performance.now === "function"
+                                ? performance.now()
+                                : Date.now();
+                        const s1 = slots.get(key);
+                        if (s1) s1.recipients_snapshot = r;
+                    })
+                    .catch(() => {});
+
+                if (shouldLogPrefetch()) {
+                    void Promise.allSettled([threadsDeferred.promise, bindingsDeferred.promise, recipients]).then(() => {
+                        const s2 = slots.get(key);
+                        const t1 =
+                            typeof performance !== "undefined" && typeof performance.now === "function"
+                                ? performance.now()
+                                : Date.now();
+                        const total_ms = Math.round((t1 - perfT0) * 10) / 10;
+                        console.warn("[perf.comms.prefetch]", {
+                            entity_type: apiEntityType,
+                            entity_id: entityId,
+                            event: "prefetch_settled",
+                            total_ms,
+                            threads_ms: tThreadsEnd ? Math.round((tThreadsEnd - perfT0) * 10) / 10 : undefined,
+                            bindings_ms: tBindingsEnd ? Math.round((tBindingsEnd - perfT0) * 10) / 10 : undefined,
+                            recipients_ms: tRecipientsEnd ? Math.round((tRecipientsEnd - perfT0) * 10) / 10 : undefined,
+                            prefetch_arm_cache_hit: Boolean(s2?.prefetch_arm_cache_hit),
+                            threads_taken_by_tab: Boolean(s2?.consumed.threads),
+                            bindings_taken_by_tab: Boolean(s2?.consumed.bindings),
+                            recipients_taken_by_tab: Boolean(s2?.consumed.recipients),
+                        });
+                    });
+                }
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : "prefetch failed";
+                threadsDeferred.resolve({ threads: [], error: msg });
+                bindingsDeferred.resolve({ channels: [], error: msg });
+            }
+        })();
+    };
+
+    const scheduleIdle = (cb: () => void) => {
+        if (typeof window !== "undefined" && typeof window.requestIdleCallback === "function") {
+            window.requestIdleCallback(() => cb(), { timeout: 450 });
+        } else {
+            setTimeout(cb, 48);
+        }
+    };
+
+    if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+        window.requestAnimationFrame(() => scheduleIdle(runFetches));
+    } else {
+        scheduleIdle(runFetches);
     }
+}
+
+/** Alias for scheduleDeferredCommunicationsDrawerPrefetch (same deferred behavior). */
+export function armCommunicationsDrawerPrefetch(apiEntityType: string, entityId: string): void {
+    scheduleDeferredCommunicationsDrawerPrefetch(apiEntityType, entityId);
 }
 
 function shouldLogPrefetch(): boolean {
@@ -221,7 +278,7 @@ function shouldLogPrefetch(): boolean {
 export function takeCommunicationsDrawerPrefetch(
     apiEntityType: string,
     entityId: string,
-    consume?: PrefetchConsumeRole
+    consume?: PrefetchConsumeRole,
 ): CommunicationsDrawerPrefetchSlot | undefined {
     const slot = slots.get(prefetchKey(apiEntityType, entityId));
     if (slot && consume) {

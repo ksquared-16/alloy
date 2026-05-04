@@ -36,6 +36,18 @@ type DrawerRecipient = {
     is_suggested_default: boolean;
 };
 
+function shouldLogCommsLoad(): boolean {
+    if (typeof window === "undefined") return process.env.NODE_ENV !== "production";
+    return process.env.NODE_ENV !== "production" || /staging|localhost|127\.0\.0\.1/i.test(window.location.hostname);
+}
+
+function logCommsLoad(payload: Record<string, unknown>): void {
+    if (!shouldLogCommsLoad()) return;
+    if (typeof console !== "undefined" && typeof console.warn === "function") {
+        console.warn("[perf.comms.load]", payload);
+    }
+}
+
 export interface CommunicationsDrawerSectionProps {
     apiEntityType: string;
     entityId: string;
@@ -180,17 +192,14 @@ export default function CommunicationsDrawerSection({
         setThrErr(null);
         const peek = takeCommunicationsDrawerPrefetch(apiEntityType, entityId);
 
-        const applyThreadRowsFromPrefetch = (tRaw: unknown, perfSource: string) => {
-            if (typeof console !== "undefined" && typeof console.warn === "function") {
-                const list = Array.isArray(tRaw) ? tRaw : [];
-                console.warn("[perf.comms.load]", {
-                    entity_type: apiEntityType,
-                    entity_id: entityId,
-                    kind: "threads",
-                    source: perfSource,
-                    count: list.length,
-                });
-            }
+        const applyThreadRowsFromPrefetch = (tRaw: unknown, loadEvent: Record<string, unknown>) => {
+            logCommsLoad({
+                kind: "threads",
+                entity_type: apiEntityType,
+                entity_id: entityId,
+                count: Array.isArray(tRaw) ? tRaw.length : 0,
+                ...loadEvent,
+            });
             const tList = Array.isArray(tRaw) ? (tRaw as ThreadRow[]) : [];
             setThreads(tList);
             markCommunicationsDrawerPrefetchConsumed(apiEntityType, entityId, "threads");
@@ -215,30 +224,51 @@ export default function CommunicationsDrawerSection({
                 setLoadingThreads(false);
                 return;
             }
-            applyThreadRowsFromPrefetch(tsnap.threads, "prefetch_threads_snapshot");
+            applyThreadRowsFromPrefetch(tsnap.threads, { event: "prefetch_reused", path: "snapshot" });
             return;
         }
 
         setLoadingThreads(true);
-        if (typeof console !== "undefined" && typeof console.warn === "function") {
-            console.warn("[perf.comms.load]", {
-                entity_type: apiEntityType,
-                entity_id: entityId,
-                kind: "threads",
-                source: "network",
-            });
-        }
         try {
             if (peek?.threads) {
                 try {
                     const pr = await peek.threads;
                     if (pr.error) throw new Error(pr.error);
-                    applyThreadRowsFromPrefetch(pr.threads, "prefetch_threads_promise");
+                    applyThreadRowsFromPrefetch(pr.threads, { event: "prefetch_reused", path: "promise" });
                     return;
                 } catch (e) {
-                    if (!(e instanceof Error && e.name === "AbortError")) throw e;
+                    if (e instanceof Error && e.name === "AbortError") {
+                        setLoadingThreads(false);
+                        return;
+                    }
+                    throw e;
                 }
             }
+            const peekLate = takeCommunicationsDrawerPrefetch(apiEntityType, entityId);
+            const lateSnap = peekLate?.threads_snapshot;
+            if (lateSnap && !lateSnap.error) {
+                applyThreadRowsFromPrefetch(lateSnap.threads, {
+                    event: "duplicate_prevented",
+                    detail: "late_snapshot_before_network",
+                    path: "snapshot",
+                });
+                return;
+            }
+            if (lateSnap?.error) {
+                setThrErr(lateSnap.error);
+                setThreads([]);
+                setSelectedId(null);
+                markCommunicationsDrawerPrefetchConsumed(apiEntityType, entityId, "threads");
+                setLoadingThreads(false);
+                return;
+            }
+
+            logCommsLoad({
+                event: "network_fallback",
+                kind: "threads",
+                entity_type: apiEntityType,
+                entity_id: entityId,
+            });
             const qs = new URLSearchParams({ entity_type: apiEntityType, entity_id: entityId, limit: "40" });
             const r = await fetch(`/api/admin/communications/threads?${qs.toString()}`, { credentials: "include" });
             const j = await r.json().catch(() => ({}));
@@ -276,21 +306,16 @@ export default function CommunicationsDrawerSection({
         (async () => {
             const peekB = takeCommunicationsDrawerPrefetch(apiEntityType, entityId);
 
-            const applyBindingsPayload = (
-                pb: { channels: string[]; error: string | null },
-                perfSrc: string,
-            ) => {
+            const applyBindingsPayload = (pb: { channels: string[]; error: string | null }, loadEvent: Record<string, unknown>) => {
                 if (!cancelled) {
-                    if (typeof console !== "undefined" && typeof console.warn === "function") {
-                        console.warn("[perf.comms.load]", {
-                            entity_type: apiEntityType,
-                            entity_id: entityId,
-                            kind: "bindings",
-                            source: perfSrc,
-                            channel_count: Array.isArray(pb.channels) ? pb.channels.length : 0,
-                            error: pb.error ?? null,
-                        });
-                    }
+                    logCommsLoad({
+                        kind: "bindings",
+                        entity_type: apiEntityType,
+                        entity_id: entityId,
+                        channel_count: Array.isArray(pb.channels) ? pb.channels.length : 0,
+                        error: pb.error ?? null,
+                        ...loadEvent,
+                    });
                     markCommunicationsDrawerPrefetchConsumed(apiEntityType, entityId, "bindings");
                     if (pb.error) {
                         setBindingsErr(pb.error);
@@ -305,37 +330,48 @@ export default function CommunicationsDrawerSection({
 
             const bsnap = peekB?.bindings_snapshot;
             if (bsnap) {
-                applyBindingsPayload(bsnap, "prefetch_bindings_snapshot");
+                applyBindingsPayload(bsnap, { event: "prefetch_reused", path: "snapshot" });
                 return;
             }
 
             setLoadingBindings(true);
             setBindingsErr(null);
-            if (typeof console !== "undefined" && typeof console.warn === "function") {
-                console.warn("[perf.comms.load]", {
-                    entity_type: apiEntityType,
-                    entity_id: entityId,
-                    kind: "bindings",
-                    source: "network",
-                });
-            }
             try {
                 if (peekB?.bindings) {
                     try {
                         const pb = await peekB.bindings;
                         if (cancelled) return;
-                        applyBindingsPayload(pb, "prefetch_bindings_promise");
+                        applyBindingsPayload(pb, { event: "prefetch_reused", path: "promise" });
                         return;
                     } catch (e) {
-                        if (!(e instanceof Error && e.name === "AbortError")) throw e;
+                        if (e instanceof Error && e.name === "AbortError") {
+                            if (!cancelled) setLoadingBindings(false);
+                            return;
+                        }
+                        throw e;
                     }
                 }
+                const peekLate = takeCommunicationsDrawerPrefetch(apiEntityType, entityId);
+                const lateSnap = peekLate?.bindings_snapshot;
+                if (lateSnap) {
+                    if (cancelled) return;
+                    applyBindingsPayload(lateSnap, {
+                        event: "duplicate_prevented",
+                        detail: "late_snapshot_before_network",
+                        path: "snapshot",
+                    });
+                    return;
+                }
+
                 const r = await fetch(`/api/admin/communications/bindings`, { credentials: "include" });
                 const j = await r.json().catch(() => ({}));
                 if (!r.ok) throw new Error((j as { error?: string }).error ?? `HTTP ${r.status}`);
                 const ch = (j as { channels_available?: string[] }).channels_available;
-                if (!cancelled) setChannelsAvailable(Array.isArray(ch) ? ch : []);
-                if (!cancelled) setBindingsErr(null);
+                const pb = {
+                    channels: Array.isArray(ch) ? ch : [],
+                    error: null as string | null,
+                };
+                if (!cancelled) applyBindingsPayload(pb, { event: "network_fallback", path: "direct" });
             } catch (e) {
                 if (!cancelled) setBindingsErr(e instanceof Error ? e.message : "Failed to load bindings");
                 if (!cancelled) setChannelsAvailable([]);
@@ -360,22 +396,17 @@ export default function CommunicationsDrawerSection({
         (async () => {
             const peekR = takeCommunicationsDrawerPrefetch(apiEntityType, entityId);
 
-            const applyRecipientsPayload = (
-                pr: { recipients: unknown[]; error: string | null },
-                perfSrc: string,
-            ) => {
+            const applyRecipientsPayload = (pr: { recipients: unknown[]; error: string | null }, loadEvent: Record<string, unknown>) => {
                 if (cancelled) return;
-                if (typeof console !== "undefined" && typeof console.warn === "function") {
-                    const list = Array.isArray(pr.recipients) ? pr.recipients : [];
-                    console.warn("[perf.comms.load]", {
-                        entity_type: apiEntityType,
-                        entity_id: entityId,
-                        kind: "recipients",
-                        source: perfSrc,
-                        recipients_count: list.length,
-                        error: pr.error ?? null,
-                    });
-                }
+                const list = Array.isArray(pr.recipients) ? pr.recipients : [];
+                logCommsLoad({
+                    kind: "recipients",
+                    entity_type: apiEntityType,
+                    entity_id: entityId,
+                    recipients_count: list.length,
+                    error: pr.error ?? null,
+                    ...loadEvent,
+                });
                 markCommunicationsDrawerPrefetchConsumed(apiEntityType, entityId, "recipients");
                 if (pr.error) {
                     setRecipients([]);
@@ -389,31 +420,39 @@ export default function CommunicationsDrawerSection({
 
             const rsnap = peekR?.recipients_snapshot;
             if (rsnap) {
-                applyRecipientsPayload(rsnap, "prefetch_recipients_snapshot");
+                applyRecipientsPayload(rsnap, { event: "prefetch_reused", path: "snapshot" });
                 return;
             }
 
             setLoadingRecipients(true);
             setRecipientsErr(null);
-            if (typeof console !== "undefined" && typeof console.warn === "function") {
-                console.warn("[perf.comms.load]", {
-                    entity_type: apiEntityType,
-                    entity_id: entityId,
-                    kind: "recipients",
-                    source: "network",
-                });
-            }
             try {
                 if (peekR?.recipients) {
                     try {
                         const pr = await peekR.recipients;
                         if (cancelled) return;
-                        applyRecipientsPayload(pr, "prefetch_recipients_promise");
+                        applyRecipientsPayload(pr, { event: "prefetch_reused", path: "promise" });
                         return;
                     } catch (e) {
-                        if (!(e instanceof Error && e.name === "AbortError")) throw e;
+                        if (e instanceof Error && e.name === "AbortError") {
+                            if (!cancelled) setLoadingRecipients(false);
+                            return;
+                        }
+                        throw e;
                     }
                 }
+                const peekLate = takeCommunicationsDrawerPrefetch(apiEntityType, entityId);
+                const lateSnap = peekLate?.recipients_snapshot;
+                if (lateSnap) {
+                    if (cancelled) return;
+                    applyRecipientsPayload(lateSnap, {
+                        event: "duplicate_prevented",
+                        detail: "late_snapshot_before_network",
+                        path: "snapshot",
+                    });
+                    return;
+                }
+
                 const qs = new URLSearchParams({
                     entity_type: composerEntity,
                     entity_id: entityId,
@@ -422,8 +461,15 @@ export default function CommunicationsDrawerSection({
                 const j = await r.json().catch(() => ({}));
                 if (!r.ok) throw new Error((j as { error?: string }).error ?? `HTTP ${r.status}`);
                 const list = (j as { recipients?: DrawerRecipient[] }).recipients;
-                if (!cancelled) setRecipients(Array.isArray(list) ? list : []);
-                if (!cancelled) setRecipientsErr(null);
+                if (!cancelled) {
+                    applyRecipientsPayload(
+                        {
+                            recipients: Array.isArray(list) ? list : [],
+                            error: null,
+                        },
+                        { event: "network_fallback", path: "direct" },
+                    );
+                }
             } catch (e) {
                 if (!cancelled) {
                     setRecipients([]);
