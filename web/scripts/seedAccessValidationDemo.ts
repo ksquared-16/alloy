@@ -2,11 +2,19 @@
 /**
  * Idempotent CRM access-validation seed (local/staging).
  *
- * Creates two departments, two site locations, paired work units, minimal persons/customers,
- * opportunities, jobs, and schedules so restricted site/department users can prove list + 404 behavior.
+ * Alloy model this seed demonstrates (no schema changes here):
+ * - **Departments / work units** = functional areas — Enrollment; Billing / Operations.
+ * - **Sites** (`locations` with `location_type = site`) = physical campuses — North Campus; South Campus.
  *
- * Does not delete or update arbitrary existing rows. Only inserts when seed markers are absent.
- * User role/profile changes are optional and gated (see env below).
+ * Primary lanes: Enrollment workspace records tied to North Campus vs South Campus (same department, different sites).
+ * Optional lanes: Billing / Operations workspace at each campus (proves department ≠ geography).
+ *
+ * Presets when ACCESS_VALIDATION_APPLY_USER_SCOPES=true:
+ * - Corporate — all departments, all sites.
+ * - Regional — all departments; sites restricted to both seeded campuses.
+ * - Director — **Enrollment department only** + **North Campus site only** (Enrollment @ North lane only).
+ *
+ * Does not delete existing rows; inserts only when markers are absent per keyed entity.
  *
  * Env (required):
  *   ACCESS_VALIDATION_ORG_ID=<uuid>
@@ -14,8 +22,8 @@
  * Env (optional — user scopes; only when ACCESS_VALIDATION_APPLY_USER_SCOPES=true):
  *   ACCESS_VALIDATION_APPLY_USER_SCOPES=true
  *   ACCESS_VALIDATION_CORPORATE_USER_ID=<auth uuid>   → all/all profile (upsert)
- *   ACCESS_VALIDATION_REGIONAL_USER_ID=<auth uuid>    → restricted sites = both seeded sites; all departments
- *   ACCESS_VALIDATION_DIRECTOR_USER_ID=<auth uuid>    → restricted 1 site + 1 department (north lane)
+ *   ACCESS_VALIDATION_REGIONAL_USER_ID=<auth uuid>    → both campuses; all departments
+ *   ACCESS_VALIDATION_DIRECTOR_USER_ID=<auth uuid>    → Enrollment dept + North Campus only
  *
  * When applying user scopes, membership rows are inserted only if the user has NO existing user_roles row
  * for the org (role is not overwritten).
@@ -32,15 +40,26 @@ import { resolveScheduleStatusRowByKey } from "@/lib/admin/scheduleEffectiveStat
 loadEnv({ path: resolve(process.cwd(), ".env.local") });
 loadEnv({ path: resolve(process.cwd(), ".env") });
 
-const PKG = "access_validation_demo_v1";
-const SEED_KEY_DEPT_N = "access_val_dept_north";
-const SEED_KEY_DEPT_S = "access_val_dept_south";
-const SEED_KEY_SITE_N = "access_val_site_north";
-const SEED_KEY_SITE_S = "access_val_site_south";
-const SEED_KEY_WU_N = "access_val_wu_north";
-const SEED_KEY_WU_S = "access_val_wu_south";
-const SEED_LANE_A = "access_val_lane_a";
-const SEED_LANE_B = "access_val_lane_b";
+/** Bump when seed keys/navigation change so metadata distinguishes newer demo rows from legacy runs. */
+const PKG = "access_validation_demo_v2";
+
+/** Functional departments (workspace pillars). */
+const SEED_KEY_DEPT_ENROLLMENT = "access_val_dept_enrollment";
+const SEED_KEY_DEPT_BILLING_OPS = "access_val_dept_billing_operations";
+
+/** Physical campuses (`locations.location_type = site`). */
+const SEED_KEY_SITE_NORTH_CAMPUS = "access_val_site_north_campus";
+const SEED_KEY_SITE_SOUTH_CAMPUS = "access_val_site_south_campus";
+
+/** Work units — one per functional department (not per campus). */
+const SEED_KEY_WU_ENROLLMENT = "access_val_wu_enrollment";
+const SEED_KEY_WU_BILLING_OPS = "access_val_wu_billing_operations";
+
+/** Validation lanes (seed marker keys — encode dept flavor + campus). */
+const SEED_LANE_ENROLLMENT_NORTH = "access_val_lane_enrollment_north_campus";
+const SEED_LANE_ENROLLMENT_SOUTH = "access_val_lane_enrollment_south_campus";
+const SEED_LANE_BILLING_OPS_NORTH = "access_val_lane_billing_ops_north_campus";
+const SEED_LANE_BILLING_OPS_SOUTH = "access_val_lane_billing_ops_south_campus";
 
 function requireEnv(name: string): string {
     const v = process.env[name]?.trim();
@@ -188,6 +207,7 @@ async function ensureOpportunity(
     supabase: ReturnType<typeof createAdminClient>,
     orgId: string,
     seedKey: string,
+    opportunityName: string,
     customerId: string,
     personId: string,
     workUnitId: string,
@@ -210,7 +230,7 @@ async function ensureOpportunity(
             primary_contact_id: null,
             work_unit_id: workUnitId,
             location_id: locationId,
-            name: `Access validation — ${seedKey}`,
+            name: opportunityName,
             status_key: "new_inquiry",
             metadata: { access_validation_seed_key: seedKey, demo_seed_package: PKG },
         })
@@ -224,6 +244,7 @@ async function ensureJob(
     supabase: ReturnType<typeof createAdminClient>,
     orgId: string,
     seedKey: string,
+    jobTitle: string,
     customerId: string,
     personId: string,
     opportunityId: string,
@@ -242,7 +263,7 @@ async function ensureJob(
             opportunity_id: opportunityId,
             work_unit_id: workUnitId,
             location_id: locationId,
-            title: `Access validation job — ${seedKey}`,
+            title: jobTitle,
             metadata: { access_validation_seed_key: seedKey, demo_seed_package: PKG },
         })
         .select("id")
@@ -347,38 +368,137 @@ async function main() {
     const orgId = requireEnv("ACCESS_VALIDATION_ORG_ID");
     const supabase = createAdminClient();
 
-    const deptNorthId = await ensureDepartment(supabase, orgId, SEED_KEY_DEPT_N, "Access Validation — North");
-    const deptSouthId = await ensureDepartment(supabase, orgId, SEED_KEY_DEPT_S, "Access Validation — South");
+    const deptEnrollmentId = await ensureDepartment(supabase, orgId, SEED_KEY_DEPT_ENROLLMENT, "Access Validation — Enrollment");
+    const deptBillingOpsId = await ensureDepartment(supabase, orgId, SEED_KEY_DEPT_BILLING_OPS, "Access Validation — Billing / Operations");
 
-    const siteNorthId = await ensureSiteLocation(supabase, orgId, SEED_KEY_SITE_N, "Access Validation Site North");
-    const siteSouthId = await ensureSiteLocation(supabase, orgId, SEED_KEY_SITE_S, "Access Validation Site South");
+    const siteNorthCampusId = await ensureSiteLocation(supabase, orgId, SEED_KEY_SITE_NORTH_CAMPUS, "Access Validation — North Campus");
+    const siteSouthCampusId = await ensureSiteLocation(supabase, orgId, SEED_KEY_SITE_SOUTH_CAMPUS, "Access Validation — South Campus");
 
-    const wuNorthId = await ensureWorkUnit(supabase, orgId, deptNorthId, SEED_KEY_WU_N, "Access Validation WU North");
-    const wuSouthId = await ensureWorkUnit(supabase, orgId, deptSouthId, SEED_KEY_WU_S, "Access Validation WU South");
+    const wuEnrollmentId = await ensureWorkUnit(supabase, orgId, deptEnrollmentId, SEED_KEY_WU_ENROLLMENT, "Access Validation — Enrollment workspace");
+    const wuBillingOpsId = await ensureWorkUnit(supabase, orgId, deptBillingOpsId, SEED_KEY_WU_BILLING_OPS, "Access Validation — Billing / Operations workspace");
 
-    const personA = await ensurePerson(supabase, orgId, `${SEED_LANE_A}:guardian`, "Lane", "AlphaGuardian");
-    const personB = await ensurePerson(supabase, orgId, `${SEED_LANE_B}:guardian`, "Lane", "BetaGuardian");
+    // Primary lanes: Enrollment functional area × physical campus.
+    const personEnrN = await ensurePerson(supabase, orgId, `${SEED_LANE_ENROLLMENT_NORTH}:guardian`, "Enrollment", "North Guardian");
+    const personEnrS = await ensurePerson(supabase, orgId, `${SEED_LANE_ENROLLMENT_SOUTH}:guardian`, "Enrollment", "South Guardian");
 
-    const custA = await ensureCustomer(supabase, orgId, `${SEED_LANE_A}:customer`, "Alpha Household");
-    const custB = await ensureCustomer(supabase, orgId, `${SEED_LANE_B}:customer`, "Beta Household");
+    const custEnrN = await ensureCustomer(supabase, orgId, `${SEED_LANE_ENROLLMENT_NORTH}:customer`, "Enrollment · North Campus Household");
+    const custEnrS = await ensureCustomer(supabase, orgId, `${SEED_LANE_ENROLLMENT_SOUTH}:customer`, "Enrollment · South Campus Household");
 
-    const oppA = await ensureOpportunity(supabase, orgId, SEED_LANE_A, custA, personA, wuNorthId, siteNorthId);
-    const oppB = await ensureOpportunity(supabase, orgId, SEED_LANE_B, custB, personB, wuSouthId, siteSouthId);
+    const oppEnrN = await ensureOpportunity(
+        supabase,
+        orgId,
+        SEED_LANE_ENROLLMENT_NORTH,
+        "Access validation — Enrollment · North Campus",
+        custEnrN,
+        personEnrN,
+        wuEnrollmentId,
+        siteNorthCampusId
+    );
+    const oppEnrS = await ensureOpportunity(
+        supabase,
+        orgId,
+        SEED_LANE_ENROLLMENT_SOUTH,
+        "Access validation — Enrollment · South Campus",
+        custEnrS,
+        personEnrS,
+        wuEnrollmentId,
+        siteSouthCampusId
+    );
 
-    const jobA = await ensureJob(supabase, orgId, SEED_LANE_A, custA, personA, oppA, wuNorthId, siteNorthId);
-    const jobB = await ensureJob(supabase, orgId, SEED_LANE_B, custB, personB, oppB, wuSouthId, siteSouthId);
+    const jobEnrN = await ensureJob(
+        supabase,
+        orgId,
+        SEED_LANE_ENROLLMENT_NORTH,
+        "Access validation job — Enrollment · North Campus",
+        custEnrN,
+        personEnrN,
+        oppEnrN,
+        wuEnrollmentId,
+        siteNorthCampusId
+    );
+    const jobEnrS = await ensureJob(
+        supabase,
+        orgId,
+        SEED_LANE_ENROLLMENT_SOUTH,
+        "Access validation job — Enrollment · South Campus",
+        custEnrS,
+        personEnrS,
+        oppEnrS,
+        wuEnrollmentId,
+        siteSouthCampusId
+    );
 
-    const schedA = await ensureSchedule(supabase, orgId, `${SEED_LANE_A}:visit`, jobA, siteNorthId);
-    const schedB = await ensureSchedule(supabase, orgId, `${SEED_LANE_B}:visit`, jobB, siteSouthId);
+    const schedEnrN = await ensureSchedule(supabase, orgId, `${SEED_LANE_ENROLLMENT_NORTH}:visit`, jobEnrN, siteNorthCampusId);
+    const schedEnrS = await ensureSchedule(supabase, orgId, `${SEED_LANE_ENROLLMENT_SOUTH}:visit`, jobEnrS, siteSouthCampusId);
 
-    console.log("\n--- Access validation seed (data) ---");
+    // Optional lanes: Billing / Operations × each campus (department scope differs from Enrollment-only director).
+    const personBoN = await ensurePerson(supabase, orgId, `${SEED_LANE_BILLING_OPS_NORTH}:guardian`, "Billing Ops", "North Guardian");
+    const personBoS = await ensurePerson(supabase, orgId, `${SEED_LANE_BILLING_OPS_SOUTH}:guardian`, "Billing Ops", "South Guardian");
+
+    const custBoN = await ensureCustomer(supabase, orgId, `${SEED_LANE_BILLING_OPS_NORTH}:customer`, "Billing / Ops · North Campus Household");
+    const custBoS = await ensureCustomer(supabase, orgId, `${SEED_LANE_BILLING_OPS_SOUTH}:customer`, "Billing / Ops · South Campus Household");
+
+    const oppBoN = await ensureOpportunity(
+        supabase,
+        orgId,
+        SEED_LANE_BILLING_OPS_NORTH,
+        "Access validation — Billing / Operations · North Campus",
+        custBoN,
+        personBoN,
+        wuBillingOpsId,
+        siteNorthCampusId
+    );
+    const oppBoS = await ensureOpportunity(
+        supabase,
+        orgId,
+        SEED_LANE_BILLING_OPS_SOUTH,
+        "Access validation — Billing / Operations · South Campus",
+        custBoS,
+        personBoS,
+        wuBillingOpsId,
+        siteSouthCampusId
+    );
+
+    const jobBoN = await ensureJob(
+        supabase,
+        orgId,
+        SEED_LANE_BILLING_OPS_NORTH,
+        "Access validation job — Billing / Ops · North Campus",
+        custBoN,
+        personBoN,
+        oppBoN,
+        wuBillingOpsId,
+        siteNorthCampusId
+    );
+    const jobBoS = await ensureJob(
+        supabase,
+        orgId,
+        SEED_LANE_BILLING_OPS_SOUTH,
+        "Access validation job — Billing / Ops · South Campus",
+        custBoS,
+        personBoS,
+        oppBoS,
+        wuBillingOpsId,
+        siteSouthCampusId
+    );
+
+    const schedBoN = await ensureSchedule(supabase, orgId, `${SEED_LANE_BILLING_OPS_NORTH}:visit`, jobBoN, siteNorthCampusId);
+    const schedBoS = await ensureSchedule(supabase, orgId, `${SEED_LANE_BILLING_OPS_SOUTH}:visit`, jobBoS, siteSouthCampusId);
+
+    console.log("\n--- Access validation seed (data) — demo package:", PKG, "---");
+    console.log("Semantics: departments/work units = functional; sites = physical campuses.");
     console.log("org_id:", orgId);
-    console.log("departments:", { north: deptNorthId, south: deptSouthId });
-    console.log("sites:", { north: siteNorthId, south: siteSouthId });
-    console.log("work_units:", { north: wuNorthId, south: wuSouthId });
-    console.log("opportunities:", { laneA: oppA, laneB: oppB });
-    console.log("jobs:", { laneA: jobA, laneB: jobB });
-    console.log("schedules:", { laneA: schedA, laneB: schedB });
+    console.log("departments (functional):", { enrollment: deptEnrollmentId, billing_operations: deptBillingOpsId });
+    console.log("sites / campuses (physical):", { north_campus: siteNorthCampusId, south_campus: siteSouthCampusId });
+    console.log("work_units:", { enrollment: wuEnrollmentId, billing_operations: wuBillingOpsId });
+    console.log("lanes — Enrollment:", {
+        north_campus: { opportunity_id: oppEnrN, job_id: jobEnrN, schedule_id: schedEnrN },
+        south_campus: { opportunity_id: oppEnrS, job_id: jobEnrS, schedule_id: schedEnrS },
+    });
+    console.log("lanes — Billing / Operations (optional):", {
+        north_campus: { opportunity_id: oppBoN, job_id: jobBoN, schedule_id: schedBoN },
+        south_campus: { opportunity_id: oppBoS, job_id: jobBoS, schedule_id: schedBoS },
+    });
 
     if (process.env.ACCESS_VALIDATION_APPLY_USER_SCOPES === "true") {
         const corporateId = process.env.ACCESS_VALIDATION_CORPORATE_USER_ID?.trim();
@@ -392,13 +512,21 @@ async function main() {
         }
         if (regionalId) {
             const rIns = await ensureUserRoleIfAbsent(supabase, orgId, regionalId, "regional_lead");
-            await applyUserAccessProfile(supabase, orgId, regionalId, "all", "restricted", [], [siteNorthId, siteSouthId]);
-            console.log("Regional user: restricted both seeded sites; all departments. role inserted?", rIns.inserted, regionalId);
+            await applyUserAccessProfile(supabase, orgId, regionalId, "all", "restricted", [], [siteNorthCampusId, siteSouthCampusId]);
+            console.log(
+                "Regional user: both seeded campuses (sites); all functional departments. role inserted?",
+                rIns.inserted,
+                regionalId
+            );
         }
         if (directorId) {
             const dIns = await ensureUserRoleIfAbsent(supabase, orgId, directorId, "school_director");
-            await applyUserAccessProfile(supabase, orgId, directorId, "restricted", "restricted", [deptNorthId], [siteNorthId]);
-            console.log("Director user: north dept + north site only. role inserted?", dIns.inserted, directorId);
+            await applyUserAccessProfile(supabase, orgId, directorId, "restricted", "restricted", [deptEnrollmentId], [siteNorthCampusId]);
+            console.log(
+                "Director user: Enrollment department + North Campus site only (Enrollment · North lane). role inserted?",
+                dIns.inserted,
+                directorId
+            );
         }
     } else {
         console.log("\n(Skipped user_roles / profiles — set ACCESS_VALIDATION_APPLY_USER_SCOPES=true and user id env vars to apply.)");

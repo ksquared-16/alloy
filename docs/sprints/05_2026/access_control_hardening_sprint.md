@@ -68,7 +68,18 @@ Tests: `web/tests/admin/adminFinancialScope.test.ts` (helper-level).
 
 - **File:** `web/scripts/seedAccessValidationDemo.ts`
 - **npm script:** `npm run dev:seed:access-validation`
-- **Idempotency:** Inserts only when `metadata` markers (`access_validation_seed_key`, `demo_seed_package = access_validation_demo_v1`) are absent; **does not** truncate org data.
+- **Package marker:** `demo_seed_package = access_validation_demo_v2` on inserted rows (alongside `access_validation_seed_key`). Inserts only when that entity’s seed key is not already present; **does not** truncate org data. Orgs that ran an older demo (`access_validation_demo_v1`) may retain legacy rows alongside v2-keyed rows — prefer a clean dev org or ignore obsolete rows.
+
+### What the seed creates (terminology)
+
+| Concept | Alloy meaning | Seed labels |
+|--------|----------------|-------------|
+| **Department** | Functional pillar / workspace grouping | **Enrollment**; **Billing / Operations** |
+| **Work unit** | Workspace within a department | One enrollment workspace; one billing/operations workspace |
+| **Site / location** | Physical campus (`location_type = site`) | **North Campus**; **South Campus** |
+| **Lanes** | Demo records tying workspace + campus | **Enrollment · North Campus** and **Enrollment · South Campus** (primary); **Billing / Ops · North/South Campus** (optional extra lanes) |
+
+**Director preset:** restricted to **Enrollment** department **and** **North Campus** only → visible primary lane is Enrollment · North Campus; hidden examples include Enrollment · South Campus, both Billing/Ops lanes, and other campuses outside allow-list.
 
 See **Seed instructions** below.
 
@@ -78,11 +89,11 @@ See **Seed instructions** below.
 
 Prerequisites: seed run (optional user scopes); three browser sessions or profile switches.
 
-1. **Corporate / admin (`department_scope=all`, `site_scope=all`):** Departments list shows all seeded departments; locations/sites lists show both sites; workspace queues for both work units show seeded opportunities.
-2. **Regional (`site_scope=restricted`, two sites):** Sees both seeded **site** locations in allowed list; queues and entity lists exclude data whose `location_id` is outside those sites (spot-check schedules list and job drawer).
-3. **Director (`site_scope=restricted` + one site, `department_scope=restricted` + one dept):** Only **North** lane data visible; **South** lane opportunity/job/schedule IDs do not appear in lists tied to scope.
-4. **Direct URL:** As director, open `GET /api/admin/entity/jobs/{southJobId}` (or drawer URL in UI) — expect **404** (or “Not found” in UI).
-5. **Direct mutation:** As director, `PATCH` south job or `POST` job charge for south job — expect **404**.
+1. **Corporate / admin (`department_scope=all`, `site_scope=all`):** Sees both functional departments (**Enrollment**, **Billing / Operations**); both physical campuses (**North Campus**, **South Campus**); workspace queues for **both** work units; seeded opportunities/jobs across **all** demo lanes (Enrollment north/south + Billing/Ops north/south).
+2. **Regional (`site_scope=restricted`, both campuses):** `site_scope` allow-list includes **North Campus** and **South Campus** only; **all departments** remain visible — so Billing/Ops lanes **do** appear. Lists should exclude entities whose resolved site is outside those campuses (spot-check schedules/jobs).
+3. **Director (`department_scope=restricted` → Enrollment only; `site_scope=restricted` → North Campus only):** Should see **Enrollment · North Campus** lane only (same enrollment work unit as South, different site). Should **not** see Enrollment · South Campus, any Billing/Ops lane, or queues belonging to the Billing/Ops work unit.
+4. **Direct URL:** As director, open an opportunity/job from **Enrollment · South Campus** or **Billing / Ops · …** (IDs from seed stdout) — expect **404** / “Not found”.
+5. **Direct mutation:** As director, `PATCH` or charge-post against an **out-of-scope** seeded job — expect **404**.
 6. **Settings:** `AdminV2 → Settings → User access scope` — change scope and save; reload and confirm effective JSON preview updates.
 7. **Restricted empty allow-list:** `PATCH .../access-scope` with `site_scope=restricted` and `site_location_ids: []` — expect **400** with explicit error (rejected).
 8. **Site-only options:** On user-access page, restricted site checkboxes must only list `location_type === 'site'` locations (non-sites excluded in client filter; API validates on save).
@@ -104,6 +115,8 @@ Prerequisites: seed run (optional user scopes); three browser sessions or profil
    ACCESS_VALIDATION_ORG_ID=<org-uuid> npm run dev:seed:access-validation
    ```
 
+   Console output maps **functional** departments/work units vs **physical** campuses and lists lane IDs (Enrollment north/south + optional Billing/Ops north/south).
+
 3. Optional — provision **test auth users** in Supabase Auth first, then apply scoped profiles (inserts `user_roles` **only if** no row exists for that user+org):
 
    ```bash
@@ -114,6 +127,10 @@ Prerequisites: seed run (optional user scopes); three browser sessions or profil
    ACCESS_VALIDATION_DIRECTOR_USER_ID=<uuid> \
    npm run dev:seed:access-validation
    ```
+
+   - **Corporate:** all departments, all sites.  
+   - **Regional:** all departments; sites restricted to **North Campus** + **South Campus** (both seeded campuses).  
+   - **Director:** **Enrollment** department only + **North Campus** site only.
 
 4. Ensure org has **`new_inquiry`** (or chosen `status_key`) allowed for opportunities if status-definition triggers apply.
 
