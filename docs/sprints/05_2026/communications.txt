@@ -1767,3 +1767,71 @@ End design batch — Cards 22, 23, 25A.
 - Delivery **webhooks**; **read/unread**; provider credential **self-service / vault UI**; **templates / bulk / classroom** messaging; **attachments**; **placeholder shortcuts / emojis** in composer.
 
 **Suggested commit message:** `feat(communications): quick modal threads+multi-send, setup page, drawer polish`
+
+⸻
+
+### Near-completion batch — **Cards D–G** (webhooks, read/unread, drawer layout, setup copy)
+
+**Card D — Delivery webhooks foundation**
+
+- **`POST /api/webhooks/resend`** — Svix verification via **`svix`** / **`RESEND_WEBHOOK_SECRET`**; maps **`email.delivered`** → **`delivered_at`** + **`status: delivered`**, **`email.failed`** → **`failed`**, **`email.bounced` / `email.complained`** → **`bounced`**, **`email.delivery_delayed`** / **`email.sent`** → metadata-only lifecycle events; **`applyOutboundProviderDeliveryPatch`** merges **`metadata.provider_webhook_events`** (cap **30**). Unknown row → **200** `{ ignored: true }` so Resend does not retry-loop.
+- **`POST /api/webhooks/twilio/sms-status`** — **`application/x-www-form-urlencoded`** body, **`X-Twilio-Signature`** via **`TWILIO_AUTH_TOKEN`** and **`verifyTwilioRequestSignature`**. Public URL for signing: **`PUBLIC_TWILIO_WEBHOOK_BASE_URL`** or **`NEXT_PUBLIC_APP_URL`**, else request origin + path. **`delivered`** → **`delivered_at`** + **`status: delivered`**; **`failed` / `undelivered`** → **`status: failed`**; other statuses append webhook metadata only. Same **ignored** behavior when no outbound row matches **`provider_message_id`**.
+- **`web/lib/communications/twilioWebhookSignature.ts`** — Twilio request validation helper.
+- **`web/lib/communications/providerDeliveryPersistence.ts`** — shared outbound patch (unchanged contract from prior work).
+- **`deliveryStateAdapter`** — Doc only: **`metadata.provider_webhook_events`** is audit; **Delivered** still requires **`delivered_at`** (or **`delivery_confirmed`** / in-app rules).
+
+**Important:** Webhooks only match rows where **`communication_messages.provider_message_id`** equals Resend email id / Twilio **`MessageSid`**. If workers never persist that id, callbacks return **ignored** until enqueue/send path sets it.
+
+**Card E — Read / unread V1**
+
+- **Schema:** Uses existing **`communication_message_reads`** (**`PRIMARY KEY (message_id, user_id)`**); no new migration in this batch.
+- **`GET …/threads/[threadId]/messages?include_viewer_read=1`** — Adds **`viewer_has_read`** per message for the current admin user (inbound only meaningful).
+- **`POST /api/admin/communications/messages/mark-read`** — Body **`{ message_ids: string[] }`**; upserts read rows for **inbound** ids in org.
+- **`GET /api/admin/communications/unread-count`** — Bounded (**300** newest inbound) count of messages with no read row for **`ctx.userId`**.
+- **`CommunicationsDrawerSection`:** Fetches with **`include_viewer_read=1`**; after messages load, debounced **mark-read** for inbound unread; **`CustomEvent` `alloy-comms-unread-refresh`**. Subtle **blue dot** on channel tabs (per-filter unread), on inbound bubble headers, and **TopNavBar** **Messages** button (poll **120s** + event refresh).
+
+**Card F — Drawer layout final pass**
+
+- **File-only:** **`CommunicationsDrawerSection.tsx`**. Wide (**`lg:`**): **~1/3** left column = **All / Email / SMS** + **recipients / bindings / send-as**; **~2/3** right = **taller scrollable thread** (**`CONVERSATION_SCROLL_CLASS_SPLIT`**) + **message compose** (subject/body/send) in a bordered block below the thread. Narrow: **stacked** column (**filters → recipients → thread → compose**). Stacked-without-embed-composer layout unchanged (single card + composer under thread). **`messageStream`** extracted to avoid duplicate map logic.
+
+**Card G — Communications setup page polish**
+
+- **`CommunicationsSetupClient`:** Amber **mid-build** banner: admin-managed credentials, future self-service, what is editable (**label / status / primary**) vs outside UI (**`secret_ref`**). Provider bindings blurb clarifies **read-only** vs **dropdown** status.
+
+**Env / webhook URLs (operator runbook)**
+
+| Purpose | URL (replace origin) | Env vars |
+|--------|----------------------|----------|
+| Resend lifecycle | `{ORIGIN}/api/webhooks/resend` | **`RESEND_WEBHOOK_SECRET`** (Svix signing secret from Resend dashboard) |
+| Twilio SMS status | `{ORIGIN}/api/webhooks/twilio/sms-status` | **`TWILIO_AUTH_TOKEN`**; optional **`PUBLIC_TWILIO_WEBHOOK_BASE_URL`** if Twilio hits a different public host than the app’s default origin |
+
+**Still after this batch**
+
+- Persist **`provider_message_id`** reliably on outbound enqueue/send if webhooks are ignored today.
+- Richer read/unread (per-thread badges in global nav, notifications) — intentionally not built.
+- Resend **`email.sent`** → explicit **`provider_accepted`** persistence if product wants DB status to echo provider “accepted” beyond **`sent`**.
+
+**Manual smoke (batch D–G)**
+
+1. **Resend:** Send test email; confirm row has **`provider_message_id`**; fire webhook (or dashboard replay); row gains **`delivered_at`** / **`metadata.provider_webhook_events`**; drawer shows **Delivered** only with **`delivered_at`**.  
+2. **Twilio:** Status callback with valid signature updates matching outbound SMS row.  
+3. **Read/unread:** Inbound message with no read row shows **tab dot** + **bubble dot**; after **~0.5s** on panel, **mark-read** runs and dots clear; header dot clears on refresh/event.  
+4. **Drawer:** At **`lg`**, left column shows filters + recipients; right shows **≥3** recent rows (default window) + compose; shrink viewport → stacked usable.  
+5. **Settings:** Banner and binding copy read clearly; no secret values in UI.
+
+**Files touched (this batch)**
+
+- `web/app/api/webhooks/resend/route.ts`
+- `web/app/api/webhooks/twilio/sms-status/route.ts`
+- `web/lib/communications/twilioWebhookSignature.ts` (if present from prior slice)
+- `web/lib/communications/providerDeliveryPersistence.ts` (prior slice; referenced)
+- `web/app/api/admin/communications/messages/mark-read/route.ts`
+- `web/app/api/admin/communications/unread-count/route.ts`
+- `web/app/api/admin/communications/threads/[threadId]/messages/route.ts`
+- `web/components/admin/communications/CommunicationsDrawerSection.tsx`
+- `web/app/adminV2/components/TopNavBar.tsx`
+- `web/app/adminV2/settings/communications/CommunicationsSetupClient.tsx`
+- `web/lib/communications/deliveryStateAdapter.ts`
+- `docs/sprints/05_2026/communications.txt` (this section)
+
+**Suggested commit message:** `feat(communications): delivery webhooks, read receipts, drawer split, setup copy`

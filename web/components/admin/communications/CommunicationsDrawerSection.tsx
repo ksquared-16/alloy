@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
 import {
@@ -39,6 +39,8 @@ type MsgRow = CommunicationMessage & {
     provider_message_id?: string | null;
     metadata?: Record<string, unknown> | null;
     delivered_at?: string | null;
+    /** When from messages API with `include_viewer_read=1`; inbound false until read. */
+    viewer_has_read?: boolean;
 };
 
 type DrawerRecipient = {
@@ -60,8 +62,12 @@ const MAX_MERGE_THREADS = 10;
 const SUCCESS_TOAST_MS = 4500;
 /** Default visible rows in the conversation strip (rest behind “View older messages”). */
 const DEFAULT_VISIBLE_MESSAGE_COUNT = 3;
-/** Fixed scroll area height so composer stays in view without growing the drawer. */
-const CONVERSATION_SCROLL_HEIGHT_CLASS = "h-[min(13rem,34vh)] max-h-[min(20rem,44vh)] shrink-0";
+/** Fixed scroll area height when composer is stacked under the thread (narrow / non-split). */
+const CONVERSATION_SCROLL_HEIGHT_CLASS_STACKED =
+    "h-[min(13rem,34vh)] max-h-[min(20rem,44vh)] shrink-0 min-h-[10.5rem]";
+/** Taller thread column when composer sits beside recipients (wide). */
+const CONVERSATION_SCROLL_CLASS_SPLIT =
+    "min-h-[11rem] flex-1 max-h-[min(22rem,50vh)] shrink-0 overflow-x-hidden overflow-y-auto px-2 py-1 lg:min-h-[14rem] lg:max-h-[min(28rem,56vh)]";
 
 function shouldLogCommsLoad(): boolean {
     if (typeof window === "undefined") return process.env.NODE_ENV !== "production";
@@ -269,6 +275,7 @@ export default function CommunicationsDrawerSection({
     const [allComposerMode, setAllComposerMode] = useState<"email" | "sms">("email");
 
     const conversationScrollRef = useRef<HTMLDivElement>(null);
+    const markedReadSubmittedRef = useRef<Set<string>>(new Set());
 
     const composerEntity =
         apiEntityType === "opportunities" || apiEntityType === "jobs" ? apiEntityType : null;
@@ -339,6 +346,7 @@ export default function CommunicationsDrawerSection({
         setSendOkNote(null);
         setShowOlderMessages(false);
         setExpandedBodies({});
+        markedReadSubmittedRef.current.clear();
     }, [entityId, apiEntityType]);
 
     /** When parent hides Communication (`active` false), drop thread detail state (no polling; next open is clean). */
@@ -348,6 +356,7 @@ export default function CommunicationsDrawerSection({
         setMsgErr(null);
         setShowOlderMessages(false);
         setExpandedBodies({});
+        markedReadSubmittedRef.current.clear();
     }, [active]);
 
     /** Fetches run only while `active`. */
@@ -502,7 +511,7 @@ export default function CommunicationsDrawerSection({
             const batches = await Promise.all(
                 scopeList.map(async (th) => {
                     const r = await fetch(
-                        `/api/admin/communications/threads/${encodeURIComponent(th.id)}/messages?limit=${MESSAGES_PER_THREAD_LIMIT}`,
+                        `/api/admin/communications/threads/${encodeURIComponent(th.id)}/messages?limit=${MESSAGES_PER_THREAD_LIMIT}&include_viewer_read=1`,
                         { credentials: "include" },
                     );
                     const j = await r.json().catch(() => ({}));
@@ -550,6 +559,37 @@ export default function CommunicationsDrawerSection({
         const id = window.setTimeout(() => setSendOkNote(null), SUCCESS_TOAST_MS);
         return () => window.clearTimeout(id);
     }, [sendOkNote]);
+
+    /** Mark inbound rows read for the current viewer after the thread is shown (per-user reads table). */
+    useEffect(() => {
+        if (!dataLayerActive || loadingMsgs) return;
+        const inboundUnreadIds = msgs
+            .filter((m) => (m.direction ?? "").toLowerCase() === "inbound" && m.viewer_has_read !== true)
+            .map((m) => m.id)
+            .filter((id) => id && !markedReadSubmittedRef.current.has(id));
+        if (inboundUnreadIds.length === 0) return;
+        const t = window.setTimeout(() => {
+            void (async () => {
+                try {
+                    const res = await fetch("/api/admin/communications/messages/mark-read", {
+                        method: "POST",
+                        credentials: "include",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ message_ids: inboundUnreadIds }),
+                    });
+                    if (!res.ok) return;
+                    inboundUnreadIds.forEach((id) => markedReadSubmittedRef.current.add(id));
+                    setMsgs((prev) =>
+                        prev.map((m) => (inboundUnreadIds.includes(m.id) ? { ...m, viewer_has_read: true } : m)),
+                    );
+                    window.dispatchEvent(new CustomEvent("alloy-comms-unread-refresh"));
+                } catch {
+                    /* ignore */
+                }
+            })();
+        }, 550);
+        return () => window.clearTimeout(t);
+    }, [dataLayerActive, loadingMsgs, msgs]);
 
     useEffect(() => {
         if (!dataLayerActive) return;
@@ -823,6 +863,7 @@ export default function CommunicationsDrawerSection({
                         provider_message_id: null,
                         metadata: { drawer_optimistic: true },
                         delivered_at: null,
+                        viewer_has_read: true,
                     } as MsgRowWithThread);
                 }
             }
@@ -893,168 +934,383 @@ export default function CommunicationsDrawerSection({
     const composerReady =
         (effectiveComposer === "email" && emailOutboundReady) || (effectiveComposer === "sms" && smsOutboundReady);
 
-    const composerBlockInner =
+    const composerRecipientsBlock: ReactNode =
+        composerReady && showDrawerComposerChrome && composerEntity ? (
+            loadingRecipients ? (
+                <div className="flex flex-wrap gap-1 py-0.5" aria-busy="true">
+                    <div className="skeleton-pulse h-7 w-24 rounded-full bg-alloy-stone/12" aria-hidden />
+                    <div className="skeleton-pulse h-7 w-28 rounded-full bg-alloy-stone/11" aria-hidden />
+                </div>
+            ) : recipientsErr ? (
+                <p className="text-[11px] text-alloy-ember">{recipientsErr}</p>
+            ) : recipientsForComposer.length === 0 ? (
+                <p className="text-[10px] text-alloy-midnight/58">
+                    {effectiveComposer === "email"
+                        ? "No linked people with email."
+                        : "No linked people with a mobile number for SMS."}
+                </p>
+            ) : (
+                <div className="flex max-h-[3.75rem] flex-wrap gap-0.5 overflow-y-auto pr-0.5">
+                    {recipientsForComposer.map((r) => {
+                        const on = selectedRecipientIds.has(r.person_id);
+                        const addr =
+                            effectiveComposer === "email" ? r.email ?? "" : formatDisplayPhoneUs(r.phone ?? "");
+                        return (
+                            <button
+                                key={r.person_id}
+                                type="button"
+                                aria-pressed={on}
+                                disabled={sendBusy}
+                                onClick={() => toggleRecipient(r.person_id)}
+                                title={r.relationship_hint ?? undefined}
+                                className={`max-w-full rounded-full border px-1.5 py-0.5 text-left text-[10px] leading-tight transition ${
+                                    on
+                                        ? "border-alloy-midnight bg-alloy-midnight/[0.08] font-semibold text-alloy-midnight ring-1 ring-alloy-midnight/18"
+                                        : "border-alloy-stone/20 bg-white font-medium text-alloy-forge hover:border-alloy-stone/35"
+                                }`}
+                            >
+                                <span className="block truncate">{r.display_name}</span>
+                                <span className="block truncate text-[9px] font-normal text-alloy-midnight/55">{addr}</span>
+                            </button>
+                        );
+                    })}
+                </div>
+            )
+        ) : null;
+
+    const composerSendBlock: ReactNode =
+        composerReady && showDrawerComposerChrome && composerEntity ? (
+            <div className="space-y-1">
+                {effectiveComposer === "email" ? (
+                    <label className="block space-y-0.5">
+                        <span className="text-[10px] font-medium text-alloy-midnight/75">Subject</span>
+                        <input
+                            type="text"
+                            value={composerSubject}
+                            onChange={(e) => setComposerSubject(e.target.value)}
+                            disabled={sendBusy}
+                            placeholder="Optional"
+                            className="w-full rounded-md border border-alloy-stone/20 bg-white px-2 py-1 text-[11px] text-alloy-midnight/85 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
+                            autoComplete="off"
+                        />
+                    </label>
+                ) : null}
+                <label className="block space-y-0.5">
+                    <span className="text-[10px] font-medium text-alloy-midnight/75">
+                        {effectiveComposer === "email" ? "Email body" : "Message"}
+                    </span>
+                    <textarea
+                        value={composerBody}
+                        onChange={(e) => setComposerBody(e.target.value)}
+                        disabled={sendBusy}
+                        rows={embedded ? 2 : 2}
+                        placeholder={effectiveComposer === "sms" ? "SMS…" : "Email…"}
+                        className="w-full resize-none rounded-md border border-alloy-stone/20 bg-white px-2 py-1 text-[11px] leading-snug text-alloy-midnight/85 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
+                        aria-label={effectiveComposer === "email" ? "Email body" : "SMS message"}
+                    />
+                </label>
+                <div className="flex flex-wrap items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={() => void sendFromComposer()}
+                        disabled={
+                            sendBusy ||
+                            selectedRecipientIds.size === 0 ||
+                            !composerBody.trim() ||
+                            (effectiveComposer === "email" && !emailOutboundReady) ||
+                            (effectiveComposer === "sms" && !smsOutboundReady)
+                        }
+                        className="rounded-md border border-alloy-midnight/20 bg-alloy-midnight px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-alloy-midnight/90 disabled:cursor-not-allowed disabled:opacity-45"
+                    >
+                        {sendBusy ? "Sending…" : effectiveComposer === "email" ? "Send email" : "Send SMS"}
+                    </button>
+                </div>
+                {sendErr ? <p className="text-[11px] text-alloy-ember">{sendErr}</p> : null}
+                {sendOkNote ? <p className="text-[11px] text-green-800/85">{sendOkNote}</p> : null}
+            </div>
+        ) : null;
+
+    const composerBindingsShell: ReactNode =
+        showDrawerComposerChrome && composerEntity ? (
+            loadingBindings ? (
+                <div className="space-y-1 py-1" aria-busy="true">
+                    <div className="skeleton-pulse h-3 w-[min(92%,240px)] rounded bg-alloy-stone/14" aria-hidden />
+                    <div className="skeleton-pulse h-8 w-full rounded-md bg-alloy-stone/12" aria-hidden />
+                </div>
+            ) : bindingsErr ? (
+                <p className="text-[11px] text-alloy-ember">{bindingsErr}</p>
+            ) : (
+                <div className="mt-1 space-y-1.5">
+                    {viewFilter === "all" ? (
+                        <div className="flex flex-wrap items-center gap-1">
+                            <span className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
+                                Send as
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => setAllComposerMode("email")}
+                                className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${
+                                    allComposerMode === "email"
+                                        ? "bg-alloy-midnight text-white"
+                                        : "border border-alloy-stone/22 bg-white text-alloy-forge"
+                                }`}
+                            >
+                                Email
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setAllComposerMode("sms")}
+                                className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${
+                                    allComposerMode === "sms"
+                                        ? "bg-alloy-midnight text-white"
+                                        : "border border-alloy-stone/22 bg-white text-alloy-forge"
+                                }`}
+                            >
+                                SMS
+                            </button>
+                        </div>
+                    ) : null}
+
+                    {effectiveComposer === "email" && !emailOutboundReady ? (
+                        <p className="text-[10px] leading-snug text-alloy-midnight/60">
+                            Add an active Resend email binding for this org.
+                        </p>
+                    ) : null}
+
+                    {effectiveComposer === "sms" && !smsOutboundReady ? (
+                        <p
+                            className="text-[10px] leading-snug text-alloy-midnight/60"
+                            title="SMS outbound requires a binding row with Twilio credentials"
+                        >
+                            SMS unavailable: set{" "}
+                            <code className="rounded bg-alloy-stone/10 px-0.5 text-[9px]">communication_provider_bindings</code>{" "}
+                            <code className="rounded bg-alloy-stone/10 px-0.5 text-[9px]">secret_ref</code> (not empty / not{" "}
+                            <code className="rounded bg-alloy-stone/10 px-0.5 text-[9px]">unconfigured</code>) on an active{" "}
+                            <code className="rounded bg-alloy-stone/10 px-0.5 text-[9px]">channel=sms</code> row for this org. Global Twilio env
+                            alone does not enable the composer — the send route uses binding rows only.
+                        </p>
+                    ) : null}
+                </div>
+            )
+        ) : null;
+
+    const composerBlockInner: ReactNode =
         showDrawerComposerChrome && composerEntity ? (
             <div className="w-full min-w-0">
                 <div className={COMPOSER_LABEL}>Compose</div>
-                {loadingBindings ? (
-                    <div className="space-y-1 py-1" aria-busy="true">
-                        <div className="skeleton-pulse h-3 w-[min(92%,240px)] rounded bg-alloy-stone/14" aria-hidden />
-                        <div className="skeleton-pulse h-8 w-full rounded-md bg-alloy-stone/12" aria-hidden />
-                    </div>
-                ) : bindingsErr ? (
-                    <p className="text-[11px] text-alloy-ember">{bindingsErr}</p>
+                {composerBindingsShell}
+                <div className="mt-1.5 space-y-1">{composerRecipientsBlock}</div>
+                {composerSendBlock}
+            </div>
+        ) : null;
+
+    const composerSplitLeft: ReactNode =
+        showDrawerComposerChrome && composerEntity ? (
+            <div className="w-full min-w-0">
+                <div className={COMPOSER_LABEL}>Recipients</div>
+                {composerBindingsShell}
+                <div className="mt-1.5 space-y-1">{composerRecipientsBlock}</div>
+            </div>
+        ) : null;
+
+    const composerSplitRight: ReactNode =
+        showDrawerComposerChrome && composerEntity ? (
+            <div className="w-full min-w-0 rounded-xl border border-alloy-stone/12 bg-white/[0.97] px-2 py-1.5 shadow-sm">
+                <div className={COMPOSER_LABEL}>Message</div>
+                {composerReady ? (
+                    composerSendBlock
                 ) : (
-                    <div className="mt-1 space-y-1.5">
-                        {viewFilter === "all" ? (
-                            <div className="flex flex-wrap items-center gap-1">
-                                <span className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/40">
-                                    Send as
-                                </span>
-                                <button
-                                    type="button"
-                                    onClick={() => setAllComposerMode("email")}
-                                    className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${
-                                        allComposerMode === "email"
-                                            ? "bg-alloy-midnight text-white"
-                                            : "border border-alloy-stone/22 bg-white text-alloy-forge"
-                                    }`}
-                                >
-                                    Email
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setAllComposerMode("sms")}
-                                    className={`rounded-md px-2 py-0.5 text-[11px] font-semibold ${
-                                        allComposerMode === "sms"
-                                            ? "bg-alloy-midnight text-white"
-                                            : "border border-alloy-stone/22 bg-white text-alloy-forge"
-                                    }`}
-                                >
-                                    SMS
-                                </button>
-                            </div>
-                        ) : null}
-
-                        {effectiveComposer === "email" && !emailOutboundReady ? (
-                            <p className="text-[10px] leading-snug text-alloy-midnight/60">
-                                Add an active Resend email binding for this org.
-                            </p>
-                        ) : null}
-
-                        {effectiveComposer === "sms" && !smsOutboundReady ? (
-                            <p className="text-[10px] leading-snug text-alloy-midnight/60" title="SMS outbound requires a binding row with Twilio credentials">
-                                SMS unavailable: set{" "}
-                                <code className="rounded bg-alloy-stone/10 px-0.5 text-[9px]">communication_provider_bindings</code>{" "}
-                                <code className="rounded bg-alloy-stone/10 px-0.5 text-[9px]">secret_ref</code> (not empty / not{" "}
-                                <code className="rounded bg-alloy-stone/10 px-0.5 text-[9px]">unconfigured</code>) on an active{" "}
-                                <code className="rounded bg-alloy-stone/10 px-0.5 text-[9px]">channel=sms</code> row for this org. Global Twilio
-                                env alone does not enable the composer — the send route uses binding rows only.
-                            </p>
-                        ) : null}
-
-                        {composerReady ? (
-                            loadingRecipients ? (
-                                <div className="flex flex-wrap gap-1 py-0.5" aria-busy="true">
-                                    <div className="skeleton-pulse h-7 w-24 rounded-full bg-alloy-stone/12" aria-hidden />
-                                    <div className="skeleton-pulse h-7 w-28 rounded-full bg-alloy-stone/11" aria-hidden />
-                                </div>
-                            ) : recipientsErr ? (
-                                <p className="text-[11px] text-alloy-ember">{recipientsErr}</p>
-                            ) : recipientsForComposer.length === 0 ? (
-                                <p className="text-[10px] text-alloy-midnight/58">
-                                    {effectiveComposer === "email"
-                                        ? "No linked people with email."
-                                        : "No linked people with a mobile number for SMS."}
-                                </p>
-                            ) : (
-                                <div className="space-y-1">
-                                    <div className="flex max-h-[3.75rem] flex-wrap gap-0.5 overflow-y-auto pr-0.5">
-                                        {recipientsForComposer.map((r) => {
-                                            const on = selectedRecipientIds.has(r.person_id);
-                                            const addr =
-                                                effectiveComposer === "email"
-                                                    ? r.email ?? ""
-                                                    : formatDisplayPhoneUs(r.phone ?? "");
-                                            return (
-                                                <button
-                                                    key={r.person_id}
-                                                    type="button"
-                                                    aria-pressed={on}
-                                                    disabled={sendBusy}
-                                                    onClick={() => toggleRecipient(r.person_id)}
-                                                    title={r.relationship_hint ?? undefined}
-                                                    className={`max-w-full rounded-full border px-1.5 py-0.5 text-left text-[10px] leading-tight transition ${
-                                                        on
-                                                            ? "border-alloy-midnight bg-alloy-midnight/[0.08] font-semibold text-alloy-midnight ring-1 ring-alloy-midnight/18"
-                                                            : "border-alloy-stone/20 bg-white font-medium text-alloy-forge hover:border-alloy-stone/35"
-                                                    }`}
-                                                >
-                                                    <span className="block truncate">{r.display_name}</span>
-                                                    <span className="block truncate text-[9px] font-normal text-alloy-midnight/55">
-                                                        {addr}
-                                                    </span>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                    {effectiveComposer === "email" ? (
-                                        <label className="block space-y-0.5">
-                                            <span className="text-[10px] font-medium text-alloy-midnight/75">Subject</span>
-                                            <input
-                                                type="text"
-                                                value={composerSubject}
-                                                onChange={(e) => setComposerSubject(e.target.value)}
-                                                disabled={sendBusy}
-                                                placeholder="Optional"
-                                                className="w-full rounded-md border border-alloy-stone/20 bg-white px-2 py-1 text-[11px] text-alloy-midnight/85 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
-                                                autoComplete="off"
-                                            />
-                                        </label>
-                                    ) : null}
-                                    <label className="block space-y-0.5">
-                                        <span className="text-[10px] font-medium text-alloy-midnight/75">
-                                            {effectiveComposer === "email" ? "Email body" : "Message"}
-                                        </span>
-                                        <textarea
-                                            value={composerBody}
-                                            onChange={(e) => setComposerBody(e.target.value)}
-                                            disabled={sendBusy}
-                                            rows={embedded ? 2 : 2}
-                                            placeholder={effectiveComposer === "sms" ? "SMS…" : "Email…"}
-                                            className="w-full resize-none rounded-md border border-alloy-stone/20 bg-white px-2 py-1 text-[11px] leading-snug text-alloy-midnight/85 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
-                                            aria-label={effectiveComposer === "email" ? "Email body" : "SMS message"}
-                                        />
-                                    </label>
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => void sendFromComposer()}
-                                            disabled={
-                                                sendBusy ||
-                                                selectedRecipientIds.size === 0 ||
-                                                !composerBody.trim() ||
-                                                (effectiveComposer === "email" && !emailOutboundReady) ||
-                                                (effectiveComposer === "sms" && !smsOutboundReady)
-                                            }
-                                            className="rounded-md border border-alloy-midnight/20 bg-alloy-midnight px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-alloy-midnight/90 disabled:cursor-not-allowed disabled:opacity-45"
-                                        >
-                                            {sendBusy
-                                                ? "Sending…"
-                                                : effectiveComposer === "email"
-                                                  ? "Send email"
-                                                  : "Send SMS"}
-                                        </button>
-                                    </div>
-                                    {sendErr ? <p className="text-[11px] text-alloy-ember">{sendErr}</p> : null}
-                                    {sendOkNote ? <p className="text-[11px] text-green-800/85">{sendOkNote}</p> : null}
-                                </div>
-                            )
-                        ) : null}
-                    </div>
+                    <p className="text-[10px] leading-snug text-alloy-midnight/55">
+                        Configure an active outbound binding for this channel to compose here.
+                    </p>
                 )}
             </div>
         ) : null;
+
+    const useWideComposerSplit = Boolean(showDrawerComposerChrome && composerEntity);
+
+    const inboundUnreadCountForFilter = (f: ViewFilter) =>
+        msgs.filter((m) => {
+            if ((m.direction ?? "").toLowerCase() !== "inbound") return false;
+            if (m.viewer_has_read === true) return false;
+            const ch = (m.channel ?? "").trim().toLowerCase();
+            if (f === "all") return true;
+            return ch === f;
+        }).length;
+
+    const unreadTabDot = (f: ViewFilter) =>
+        inboundUnreadCountForFilter(f) > 0 ? (
+            <span
+                className="ml-0.5 inline-block h-1.5 w-1.5 rounded-full bg-[#2563eb] align-middle opacity-90"
+                aria-hidden
+                title="Unread inbound in this view"
+            />
+        ) : null;
+
+    const channelFilterTabs: ReactNode = (
+        <div className="flex shrink-0 flex-wrap items-center gap-1" role="tablist" aria-label="Message channels">
+            <button
+                type="button"
+                role="tab"
+                aria-selected={viewFilter === "all"}
+                className={filterTabCls("all")}
+                onClick={() => onViewFilter("all")}
+            >
+                All{unreadTabDot("all")}
+            </button>
+            <button
+                type="button"
+                role="tab"
+                aria-selected={viewFilter === "email"}
+                className={filterTabCls("email")}
+                onClick={() => onViewFilter("email")}
+            >
+                Email{unreadTabDot("email")}
+            </button>
+            <button
+                type="button"
+                role="tab"
+                aria-selected={viewFilter === "sms"}
+                className={filterTabCls("sms")}
+                onClick={() => onViewFilter("sms")}
+            >
+                SMS{unreadTabDot("sms")}
+            </button>
+        </div>
+    );
+
+    const messageStream: ReactNode = loadingMsgs ? (
+        <div className="flex flex-1 flex-col justify-center gap-2 py-4" aria-busy="true">
+            <div className="skeleton-pulse h-12 w-[88%] rounded-2xl bg-alloy-stone/12" />
+            <div className="skeleton-pulse ml-auto h-12 w-[78%] rounded-2xl bg-alloy-stone/10" />
+            <div className="skeleton-pulse h-10 w-[70%] rounded-2xl bg-alloy-stone/11" />
+        </div>
+    ) : msgErr ? (
+        <p className="text-sm text-alloy-ember">{msgErr}</p>
+    ) : msgs.length === 0 ? (
+        <p className="py-4 text-center text-[13px] text-alloy-midnight/58">No messages in this view yet.</p>
+    ) : (
+        <ul className="flex flex-col gap-1 pb-0.5">
+            {hiddenOlderCount > 0 ? (
+                <li className="flex w-full justify-center pb-0.5">
+                    <button
+                        type="button"
+                        className="rounded-full border border-alloy-stone/22 bg-white/90 px-2.5 py-0.5 text-[11px] font-semibold text-alloy-midnight/70 shadow-sm hover:border-alloy-stone/40 hover:bg-white"
+                        onClick={() => setShowOlderMessages(true)}
+                    >
+                        View older messages ({hiddenOlderCount})
+                    </button>
+                </li>
+            ) : null}
+            {showOlderMessages && msgs.length > DEFAULT_VISIBLE_MESSAGE_COUNT ? (
+                <li className="flex w-full justify-center pb-0.5">
+                    <button
+                        type="button"
+                        className="text-[11px] font-semibold text-alloy-blue hover:underline"
+                        onClick={() => setShowOlderMessages(false)}
+                    >
+                        Show fewer messages
+                    </button>
+                </li>
+            ) : null}
+            {displayedMsgs.map((m) => {
+                const inbound = (m.direction ?? "").toLowerCase() === "inbound";
+                const pres = deliveryStatePresentation(mapToDeliveryState(m));
+                const fail = pres.highlightFailure;
+                const msgWhen = communicationMessageInstant(m);
+                const { headline, sub } = bubbleStatusLine(m);
+                const cp = counterpartyLabel(m, inbound, addressDisplayNameLookup);
+                return (
+                    <li
+                        key={`${m.id}-${m._thread_id ?? ""}`}
+                        className={`flex w-full ${inbound ? "justify-start" : "justify-end"}`}
+                    >
+                        <div
+                            className={`max-w-[min(100%,19.5rem)] rounded-2xl px-2 py-1 text-[13px] leading-snug shadow-sm ${
+                                inbound
+                                    ? "rounded-tl-sm border border-alloy-stone/16 bg-white text-alloy-forge"
+                                    : `rounded-tr-sm text-white ${
+                                          fail
+                                              ? "border border-alloy-ember/40 bg-alloy-ember/[0.92]"
+                                              : "bg-alloy-midnight/[0.92]"
+                                      }`
+                            }`}
+                        >
+                            <div
+                                className={`mb-0.5 flex flex-wrap items-baseline gap-x-1 text-[10px] font-semibold uppercase tracking-wide ${
+                                    inbound ? "text-alloy-midnight/38" : "text-white/55"
+                                }`}
+                            >
+                                <span className="opacity-90">{channelFacetLabel(m.channel)}</span>
+                                <span className="opacity-40">·</span>
+                                <span
+                                    className={
+                                        inbound
+                                            ? fail
+                                                ? "text-alloy-ember"
+                                                : "normal-case text-alloy-forge/88"
+                                            : "normal-case"
+                                    }
+                                >
+                                    {headline}
+                                </span>
+                                {inbound && m.viewer_has_read !== true ? (
+                                    <span
+                                        className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-[#2563eb] opacity-90"
+                                        title="Unread"
+                                        aria-label="Unread"
+                                    />
+                                ) : null}
+                                {msgWhen ? (
+                                    <span
+                                        className={`ml-auto tabular-nums normal-case font-normal opacity-75 ${
+                                            inbound ? "text-alloy-midnight/45" : "text-white/65"
+                                        }`}
+                                    >
+                                        {formatDateTimeForUserDisplay(msgWhen, viewerTz)}
+                                    </span>
+                                ) : null}
+                            </div>
+                            {sub ? (
+                                <p
+                                    className={`mb-0.5 text-[9px] font-normal normal-case leading-snug ${
+                                        inbound ? "text-alloy-midnight/42" : "text-white/48"
+                                    }`}
+                                >
+                                    {sub}
+                                </p>
+                            ) : null}
+                            <p
+                                className={`mb-1 text-[10px] font-medium leading-snug ${
+                                    inbound ? "text-alloy-forge/72" : "text-white/72"
+                                }`}
+                            >
+                                {cp.title}
+                                {cp.subtitle ? (
+                                    <span
+                                        className={`mt-0.5 block font-normal ${
+                                            inbound ? "text-alloy-midnight/45" : "text-white/50"
+                                        }`}
+                                    >
+                                        {cp.subtitle}
+                                    </span>
+                                ) : null}
+                            </p>
+                            {m.body ? (
+                                <TruncatedMessageBody
+                                    messageId={m.id}
+                                    body={m.body}
+                                    expanded={Boolean(expandedBodies[m.id])}
+                                    onToggle={toggleBodyExpand}
+                                    inbound={inbound}
+                                />
+                            ) : null}
+                        </div>
+                    </li>
+                );
+            })}
+        </ul>
+    );
 
     const headerTitle = !embedded ? (
         <h3 className={DRAWER_SECTION_HEADER_CLASS}>Communications</h3>
@@ -1078,171 +1334,34 @@ export default function CommunicationsDrawerSection({
                     <p className="text-sm text-alloy-ember">{thrErr}</p>
                 ) : threads.length === 0 ? (
                     emptyThreadsBody
+                ) : useWideComposerSplit ? (
+                    <div className="flex min-h-0 flex-1 flex-col gap-1.5 lg:flex-row lg:items-stretch lg:gap-2">
+                        <div className="flex min-h-0 min-w-0 flex-col gap-1.5 lg:w-[min(33%,17rem)] lg:max-w-[18rem] lg:shrink-0">
+                            {channelFilterTabs}
+                            {composerSplitLeft}
+                        </div>
+                        <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-1.5">
+                            <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-alloy-stone/15 bg-[linear-gradient(180deg,rgba(246,247,249,0.88)_0%,#ffffff_100%)] shadow-sm">
+                                <div
+                                    ref={conversationScrollRef}
+                                    className={`comms-drawer-conversation min-h-0 ${CONVERSATION_SCROLL_CLASS_SPLIT}`}
+                                >
+                                    {messageStream}
+                                </div>
+                            </div>
+                            {composerSplitRight}
+                        </div>
+                    </div>
                 ) : (
                     <div className="flex min-h-0 flex-1 flex-col gap-1.5">
-                        <div className="flex shrink-0 flex-wrap items-center gap-1" role="tablist" aria-label="Message channels">
-                            <button
-                                type="button"
-                                role="tab"
-                                aria-selected={viewFilter === "all"}
-                                className={filterTabCls("all")}
-                                onClick={() => onViewFilter("all")}
-                            >
-                                All
-                            </button>
-                            <button
-                                type="button"
-                                role="tab"
-                                aria-selected={viewFilter === "email"}
-                                className={filterTabCls("email")}
-                                onClick={() => onViewFilter("email")}
-                            >
-                                Email
-                            </button>
-                            <button
-                                type="button"
-                                role="tab"
-                                aria-selected={viewFilter === "sms"}
-                                className={filterTabCls("sms")}
-                                onClick={() => onViewFilter("sms")}
-                            >
-                                SMS
-                            </button>
-                        </div>
+                        {channelFilterTabs}
 
                         <div className="flex shrink-0 flex-col overflow-hidden rounded-xl border border-alloy-stone/15 bg-[linear-gradient(180deg,rgba(246,247,249,0.88)_0%,#ffffff_100%)] shadow-sm">
                             <div
                                 ref={conversationScrollRef}
-                                className={`comms-drawer-conversation min-h-0 overflow-x-hidden overflow-y-auto px-2 py-1 ${CONVERSATION_SCROLL_HEIGHT_CLASS}`}
+                                className={`comms-drawer-conversation min-h-0 overflow-x-hidden overflow-y-auto px-2 py-1 ${CONVERSATION_SCROLL_HEIGHT_CLASS_STACKED}`}
                             >
-                            {loadingMsgs ? (
-                                <div className="flex flex-1 flex-col justify-center gap-2 py-4" aria-busy="true">
-                                    <div className="skeleton-pulse h-12 w-[88%] rounded-2xl bg-alloy-stone/12" />
-                                    <div className="skeleton-pulse ml-auto h-12 w-[78%] rounded-2xl bg-alloy-stone/10" />
-                                    <div className="skeleton-pulse h-10 w-[70%] rounded-2xl bg-alloy-stone/11" />
-                                </div>
-                            ) : msgErr ? (
-                                <p className="text-sm text-alloy-ember">{msgErr}</p>
-                            ) : msgs.length === 0 ? (
-                                <p className="py-4 text-center text-[13px] text-alloy-midnight/58">
-                                    No messages in this view yet.
-                                </p>
-                            ) : (
-                                <ul className="flex flex-col gap-1 pb-0.5">
-                                    {hiddenOlderCount > 0 ? (
-                                        <li className="flex w-full justify-center pb-0.5">
-                                            <button
-                                                type="button"
-                                                className="rounded-full border border-alloy-stone/22 bg-white/90 px-2.5 py-0.5 text-[11px] font-semibold text-alloy-midnight/70 shadow-sm hover:border-alloy-stone/40 hover:bg-white"
-                                                onClick={() => setShowOlderMessages(true)}
-                                            >
-                                                View older messages ({hiddenOlderCount})
-                                            </button>
-                                        </li>
-                                    ) : null}
-                                    {showOlderMessages && msgs.length > DEFAULT_VISIBLE_MESSAGE_COUNT ? (
-                                        <li className="flex w-full justify-center pb-0.5">
-                                            <button
-                                                type="button"
-                                                className="text-[11px] font-semibold text-alloy-blue hover:underline"
-                                                onClick={() => setShowOlderMessages(false)}
-                                            >
-                                                Show fewer messages
-                                            </button>
-                                        </li>
-                                    ) : null}
-                                    {displayedMsgs.map((m) => {
-                                        const inbound = (m.direction ?? "").toLowerCase() === "inbound";
-                                        const state = mapToDeliveryState(m);
-                                        const pres = deliveryStatePresentation(state);
-                                        const fail = pres.highlightFailure;
-                                        const msgWhen = communicationMessageInstant(m);
-                                        const { headline, sub } = bubbleStatusLine(m);
-                                        const cp = counterpartyLabel(m, inbound, addressDisplayNameLookup);
-                                        return (
-                                            <li
-                                                key={`${m.id}-${m._thread_id ?? ""}`}
-                                                className={`flex w-full ${inbound ? "justify-start" : "justify-end"}`}
-                                            >
-                                                <div
-                                                    className={`max-w-[min(100%,19.5rem)] rounded-2xl px-2 py-1 text-[13px] leading-snug shadow-sm ${
-                                                        inbound
-                                                            ? "rounded-tl-sm border border-alloy-stone/16 bg-white text-alloy-forge"
-                                                            : `rounded-tr-sm text-white ${
-                                                                  fail
-                                                                      ? "border border-alloy-ember/40 bg-alloy-ember/[0.92]"
-                                                                      : "bg-alloy-midnight/[0.92]"
-                                                              }`
-                                                    }`}
-                                                >
-                                                    <div
-                                                        className={`mb-0.5 flex flex-wrap items-baseline gap-x-1 text-[10px] font-semibold uppercase tracking-wide ${
-                                                            inbound ? "text-alloy-midnight/38" : "text-white/55"
-                                                        }`}
-                                                    >
-                                                        <span className="opacity-90">{channelFacetLabel(m.channel)}</span>
-                                                        <span className="opacity-40">·</span>
-                                                        <span
-                                                            className={
-                                                                inbound
-                                                                    ? fail
-                                                                        ? "text-alloy-ember"
-                                                                        : "normal-case text-alloy-forge/88"
-                                                                    : "normal-case"
-                                                            }
-                                                        >
-                                                            {headline}
-                                                        </span>
-                                                        {msgWhen ? (
-                                                            <span
-                                                                className={`ml-auto tabular-nums normal-case font-normal opacity-75 ${
-                                                                    inbound ? "text-alloy-midnight/45" : "text-white/65"
-                                                                }`}
-                                                            >
-                                                                {formatDateTimeForUserDisplay(msgWhen, viewerTz)}
-                                                            </span>
-                                                        ) : null}
-                                                    </div>
-                                                    {sub ? (
-                                                        <p
-                                                            className={`mb-0.5 text-[9px] font-normal normal-case leading-snug ${
-                                                                inbound ? "text-alloy-midnight/42" : "text-white/48"
-                                                            }`}
-                                                        >
-                                                            {sub}
-                                                        </p>
-                                                    ) : null}
-                                                    <p
-                                                        className={`mb-1 text-[10px] font-medium leading-snug ${
-                                                            inbound ? "text-alloy-forge/72" : "text-white/72"
-                                                        }`}
-                                                    >
-                                                        {cp.title}
-                                                        {cp.subtitle ? (
-                                                            <span
-                                                                className={`mt-0.5 block font-normal ${
-                                                                    inbound ? "text-alloy-midnight/45" : "text-white/50"
-                                                                }`}
-                                                            >
-                                                                {cp.subtitle}
-                                                            </span>
-                                                        ) : null}
-                                                    </p>
-                                                    {m.body ? (
-                                                        <TruncatedMessageBody
-                                                            messageId={m.id}
-                                                            body={m.body}
-                                                            expanded={Boolean(expandedBodies[m.id])}
-                                                            onToggle={toggleBodyExpand}
-                                                            inbound={inbound}
-                                                        />
-                                                    ) : null}
-                                                </div>
-                                            </li>
-                                        );
-                                    })}
-                                </ul>
-                            )}
+                                {messageStream}
                             </div>
 
                             {composerBlockInner ? (

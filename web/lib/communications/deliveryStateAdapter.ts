@@ -23,6 +23,10 @@ export type CommunicationMessage = {
     status?: string | null;
     provider?: string | null;
     provider_message_id?: string | null;
+    /**
+     * May include `provider_webhook_events` from delivery webhooks; display logic still keys off
+     * {@link delivered_at} and status — do not treat metadata alone as handset delivery proof.
+     */
     metadata?: Record<string, unknown> | null;
     /** When set by API, indicates explicit delivery confirmation (webhook / reconciliation). */
     delivered_at?: string | null;

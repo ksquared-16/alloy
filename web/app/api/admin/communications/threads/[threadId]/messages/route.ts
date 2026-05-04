@@ -22,6 +22,7 @@ export async function GET(
     }
 
     const limit = Math.min(Math.max(Number(request.nextUrl.searchParams.get("limit")) || 60, 1), 200);
+    const includeViewerRead = request.nextUrl.searchParams.get("include_viewer_read") === "1";
 
     const supabase = createAdminClient();
 
@@ -48,5 +49,24 @@ export async function GET(
 
     if (mErr) return NextResponse.json({ error: mErr.message }, { status: 500 });
 
-    return NextResponse.json({ messages: msgs ?? [] });
+    let list = (msgs ?? []) as Record<string, unknown>[];
+    if (includeViewerRead && ctx.userId && list.length > 0) {
+        const ids = list.map((m) => String(m.id ?? "")).filter((id) => UUID_RE.test(id));
+        const { data: reads, error: rErr } = await supabase
+            .from("communication_message_reads")
+            .select("message_id")
+            .eq("user_id", ctx.userId)
+            .in("message_id", ids);
+        if (!rErr) {
+            const readSet = new Set((reads ?? []).map((r) => String((r as { message_id: string }).message_id)));
+            list = list.map((m) => {
+                const dir = String(m.direction ?? "").toLowerCase();
+                const id = String(m.id ?? "");
+                const viewer_has_read = dir !== "inbound" || readSet.has(id);
+                return { ...m, viewer_has_read };
+            });
+        }
+    }
+
+    return NextResponse.json({ messages: list });
 }

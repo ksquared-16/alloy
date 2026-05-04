@@ -102,6 +102,18 @@ export default function CommunicationsSetupClient() {
 
     return (
         <div className="space-y-4">
+            <div
+                className="rounded-xl border border-amber-200/80 bg-amber-50/90 p-3 text-[12px] leading-snug text-amber-950/90 shadow-sm"
+                role="status"
+            >
+                <p className="font-semibold text-amber-950">Communications settings — mid-build but useful</p>
+                <p className="mt-1 text-[11px] text-amber-950/88">
+                    Credential setup is currently <strong>admin-managed</strong> (deployment / vault / DB binding rows). Full self-service
+                    credential entry in this UI is coming. Here you can see read-only provider readiness, edit binding{" "}
+                    <strong>label</strong>, <strong>status</strong>, and <strong>primary</strong> only — never secret values.
+                </p>
+            </div>
+
             <section className="rounded-xl border border-alloy-stone/16 bg-white/90 p-3 shadow-sm">
                 <h2 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/44">Outbound readiness</h2>
                 <p className="mt-1 text-[11px] leading-snug text-alloy-midnight/58">
@@ -127,8 +139,9 @@ export default function CommunicationsSetupClient() {
             <section className="rounded-xl border border-alloy-stone/16 bg-white/90 p-3 shadow-sm">
                 <h2 className="text-xs font-semibold uppercase tracking-wide text-alloy-midnight/44">Provider bindings</h2>
                 <p className="mt-1 text-[11px] leading-snug text-alloy-midnight/55">
-                    Configure credentials via deployment / vault: set <code className="text-[10px]">secret_ref</code> on the binding row (see
-                    sprint runbooks). Here you can adjust label, active state, and primary flag only.
+                    Each row shows <strong>read-only</strong> provider/channel context and whether a credential ref is configured (no secrets).
+                    Use the <strong>Binding status</strong> dropdown and Save to enable/disable a row; changing <code className="text-[10px]">secret_ref</code>{" "}
+                    still happens outside this UI today (runbooks / migrations / ops).
                 </p>
 
                 {loading ? (

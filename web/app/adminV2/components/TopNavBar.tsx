@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import { createClient } from "@/lib/supabaseClient";
@@ -78,6 +78,31 @@ export default function TopNavBar() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [quickMessageOpen, setQuickMessageOpen] = useState(false);
+  const [commsUnreadHint, setCommsUnreadHint] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const r = await fetch("/api/admin/communications/unread-count", { credentials: "include" });
+        const j = (await r.json().catch(() => ({}))) as { unread_count?: number };
+        if (!cancelled && r.ok && typeof j.unread_count === "number") {
+          setCommsUnreadHint(j.unread_count > 0);
+        }
+      } catch {
+        if (!cancelled) setCommsUnreadHint(false);
+      }
+    };
+    void load();
+    const id = window.setInterval(() => void load(), 120_000);
+    const onRefresh = () => void load();
+    window.addEventListener("alloy-comms-unread-refresh", onRefresh);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+      window.removeEventListener("alloy-comms-unread-refresh", onRefresh);
+    };
+  }, []);
 
   const normalizedPath = useMemo(() => normalizeAdminPath(pathname), [pathname]);
 
@@ -166,12 +191,19 @@ export default function TopNavBar() {
         <button
           type="button"
           onClick={() => setQuickMessageOpen(true)}
-          className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium leading-none"
+          className="relative inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium leading-none"
           style={secondaryTabStyle(isMessaging || quickMessageOpen)}
           title="Send a quick email or SMS (opens modal)"
         >
           <MessageSquare className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden strokeWidth={2} />
           Messages
+          {commsUnreadHint ? (
+            <span
+              className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-sky-400 shadow ring-2 ring-[rgb(39,63,82)]"
+              aria-hidden
+              title="Unread inbound messages (recent)"
+            />
+          ) : null}
         </button>
         <AdminV2NavLink
           href="/adminV2/ai-activity"
