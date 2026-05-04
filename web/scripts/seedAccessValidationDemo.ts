@@ -10,23 +10,30 @@
  * Optional lanes: Billing / Operations workspace at each campus (proves department ≠ geography).
  *
  * Presets when ACCESS_VALIDATION_APPLY_USER_SCOPES=true:
- * - Corporate — all departments, all sites.
- * - Regional — all departments; sites restricted to both seeded campuses.
- * - Director — **Enrollment department only** + **North Campus site only** (Enrollment @ North lane only).
+ * - Corporate — `admin` role only; all departments, all sites (admin shell eligible).
+ * - Regional — **`ops` + `regional_lead`** (shell needs `ops` or `admin`; scope unchanged: all departments, both seeded campuses).
+ * - Director — **`ops` + `school_director`**; Enrollment dept + North Campus only.
  *
- * Does not delete existing rows; inserts only when markers are absent per keyed entity.
+ * Optional cleanup (same org): set ACCESS_VALIDATION_CLEAN_OLD_DEMO=true to **delete only** rows whose
+ * `metadata.demo_seed_package` is `access_validation_demo_v1` (legacy “North/South department” demo). Does **not**
+ * touch v2 rows or unmarked data.
+ *
+ * Inserts only when markers are absent per keyed entity (v2 package).
  *
  * Env (required):
  *   ACCESS_VALIDATION_ORG_ID=<uuid>
  *
+ * Env (optional):
+ *   ACCESS_VALIDATION_CLEAN_OLD_DEMO=true   → delete legacy v1 demo rows for this org (see above), then continue
+ *
  * Env (optional — user scopes; only when ACCESS_VALIDATION_APPLY_USER_SCOPES=true):
  *   ACCESS_VALIDATION_APPLY_USER_SCOPES=true
  *   ACCESS_VALIDATION_CORPORATE_USER_ID=<auth uuid>   → all/all profile (upsert)
- *   ACCESS_VALIDATION_REGIONAL_USER_ID=<auth uuid>    → both campuses; all departments
- *   ACCESS_VALIDATION_DIRECTOR_USER_ID=<auth uuid>    → Enrollment dept + North Campus only
+ *   ACCESS_VALIDATION_REGIONAL_USER_ID=<auth uuid>    → both campuses; all departments; roles ops + regional_lead
+ *   ACCESS_VALIDATION_DIRECTOR_USER_ID=<auth uuid>    → Enrollment dept + North Campus; roles ops + school_director
  *
- * When applying user scopes, membership rows are inserted only if the user has NO existing user_roles row
- * for the org (role is not overwritten).
+ * Each `user_roles` row is one role; a user may have multiple rows per org (`ops` + persona role). Missing role rows are
+ * inserted; existing rows are left unchanged.
  *
  * Run from `web/`:
  *   npx tsx --tsconfig tsconfig.json scripts/seedAccessValidationDemo.ts
@@ -42,6 +49,9 @@ loadEnv({ path: resolve(process.cwd(), ".env") });
 
 /** Bump when seed keys/navigation change so metadata distinguishes newer demo rows from legacy runs. */
 const PKG = "access_validation_demo_v2";
+
+/** Legacy package only removed when ACCESS_VALIDATION_CLEAN_OLD_DEMO=true (misleading North/South-as-department demo). */
+const LEGACY_DEMO_PKG = "access_validation_demo_v1";
 
 /** Functional departments (workspace pillars). */
 const SEED_KEY_DEPT_ENROLLMENT = "access_val_dept_enrollment";
@@ -68,6 +78,44 @@ function requireEnv(name: string): string {
         process.exit(1);
     }
     return v;
+}
+
+/**
+ * Deletes only rows explicitly tagged with the old demo package (v1). FK-safe order; scoped to org_id.
+ */
+async function deleteLegacyAccessValidationDemoV1(supabase: ReturnType<typeof createAdminClient>, orgId: string): Promise<void> {
+    console.log("\n--- ACCESS_VALIDATION_CLEAN_OLD_DEMO: removing rows where metadata.demo_seed_package =", LEGACY_DEMO_PKG, "---");
+    console.log("org_id:", orgId);
+
+    const tablesOrdered = [
+        "schedules",
+        "jobs",
+        "opportunities",
+        "customers",
+        "persons",
+        "work_units",
+        "departments",
+        "locations",
+    ] as const;
+
+    for (const table of tablesOrdered) {
+        const { data, error } = await supabase
+            .from(table)
+            .delete()
+            .eq("org_id", orgId)
+            .eq("metadata->>demo_seed_package", LEGACY_DEMO_PKG)
+            .select("id");
+
+        if (error) {
+            throw new Error(`[cleanup ${table}] ${error.message}`);
+        }
+        const n = (data ?? []).length;
+        if (n > 0) {
+            console.log(`  deleted ${n} row(s) from ${table}`);
+        }
+    }
+
+    console.log("--- Legacy v1 demo cleanup finished (v2 and unmarked rows untouched) ---\n");
 }
 
 async function ensureDepartment(supabase: ReturnType<typeof createAdminClient>, orgId: string, key: string, name: string): Promise<string> {
@@ -319,11 +367,17 @@ async function ensureUserRoleIfAbsent(
     userId: string,
     role: string
 ): Promise<{ inserted: boolean }> {
-    const { data: row } = await supabase.from("user_roles").select("user_id").eq("org_id", orgId).eq("user_id", userId).maybeSingle();
+    const { data: row } = await supabase
+        .from("user_roles")
+        .select("user_id")
+        .eq("org_id", orgId)
+        .eq("user_id", userId)
+        .eq("role", role)
+        .maybeSingle();
     if (row) return { inserted: false };
 
     const { error } = await supabase.from("user_roles").insert({ org_id: orgId, user_id: userId, role } as never);
-    if (error) throw new Error(`user_roles insert ${userId}: ${error.message}`);
+    if (error) throw new Error(`user_roles insert ${userId} role=${role}: ${error.message}`);
     return { inserted: true };
 }
 
@@ -367,6 +421,10 @@ async function applyUserAccessProfile(
 async function main() {
     const orgId = requireEnv("ACCESS_VALIDATION_ORG_ID");
     const supabase = createAdminClient();
+
+    if (process.env.ACCESS_VALIDATION_CLEAN_OLD_DEMO?.trim().toLowerCase() === "true") {
+        await deleteLegacyAccessValidationDemoV1(supabase, orgId);
+    }
 
     const deptEnrollmentId = await ensureDepartment(supabase, orgId, SEED_KEY_DEPT_ENROLLMENT, "Access Validation — Enrollment");
     const deptBillingOpsId = await ensureDepartment(supabase, orgId, SEED_KEY_DEPT_BILLING_OPS, "Access Validation — Billing / Operations");
@@ -508,23 +566,25 @@ async function main() {
         if (corporateId) {
             await ensureUserRoleIfAbsent(supabase, orgId, corporateId, "admin");
             await applyUserAccessProfile(supabase, orgId, corporateId, "all", "all", [], []);
-            console.log("\nCorporate user: all/all profile upserted for", corporateId);
+            console.log("\nCorporate user: role admin (admin shell); profile all/all for", corporateId);
         }
         if (regionalId) {
-            const rIns = await ensureUserRoleIfAbsent(supabase, orgId, regionalId, "regional_lead");
+            const rOps = await ensureUserRoleIfAbsent(supabase, orgId, regionalId, "ops");
+            const rLead = await ensureUserRoleIfAbsent(supabase, orgId, regionalId, "regional_lead");
             await applyUserAccessProfile(supabase, orgId, regionalId, "all", "restricted", [], [siteNorthCampusId, siteSouthCampusId]);
             console.log(
-                "Regional user: both seeded campuses (sites); all functional departments. role inserted?",
-                rIns.inserted,
+                "Regional user: roles ops + regional_lead (admin shell + persona); scope = all departments, both seeded campuses. inserted:",
+                { ops: rOps.inserted, regional_lead: rLead.inserted },
                 regionalId
             );
         }
         if (directorId) {
-            const dIns = await ensureUserRoleIfAbsent(supabase, orgId, directorId, "school_director");
+            const dOps = await ensureUserRoleIfAbsent(supabase, orgId, directorId, "ops");
+            const dDir = await ensureUserRoleIfAbsent(supabase, orgId, directorId, "school_director");
             await applyUserAccessProfile(supabase, orgId, directorId, "restricted", "restricted", [deptEnrollmentId], [siteNorthCampusId]);
             console.log(
-                "Director user: Enrollment department + North Campus site only (Enrollment · North lane). role inserted?",
-                dIns.inserted,
+                "Director user: roles ops + school_director; scope = Enrollment dept + North Campus only. inserted:",
+                { ops: dOps.inserted, school_director: dDir.inserted },
                 directorId
             );
         }

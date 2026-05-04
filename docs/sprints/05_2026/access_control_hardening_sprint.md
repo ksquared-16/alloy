@@ -68,7 +68,11 @@ Tests: `web/tests/admin/adminFinancialScope.test.ts` (helper-level).
 
 - **File:** `web/scripts/seedAccessValidationDemo.ts`
 - **npm script:** `npm run dev:seed:access-validation`
-- **Package marker:** `demo_seed_package = access_validation_demo_v2` on inserted rows (alongside `access_validation_seed_key`). Inserts only when that entity’s seed key is not already present; **does not** truncate org data. Orgs that ran an older demo (`access_validation_demo_v1`) may retain legacy rows alongside v2-keyed rows — prefer a clean dev org or ignore obsolete rows.
+- **Package marker:** `demo_seed_package = access_validation_demo_v2` on inserted rows (alongside `access_validation_seed_key`). Inserts only when that entity’s seed key is not already present; **does not** truncate org data.
+- **Admin shell compatibility:** Corporate test user gets **`admin`**. Regional and director test users get **`ops`** plus their persona role (**`regional_lead`** / **`school_director`**) so `portalEligible` passes while scope presets stay the same (`user_access_profiles` + department/site access tables unchanged).
+- **Legacy cleanup:** Optional env `ACCESS_VALIDATION_CLEAN_OLD_DEMO=true` deletes **only** rows with `metadata.demo_seed_package = access_validation_demo_v1` (old misleading labels). Never deletes v2 rows or data without that marker.
+
+Orgs that ran v1 before cleanup may still show stale rows until cleanup is run once.
 
 ### What the seed creates (terminology)
 
@@ -89,6 +93,8 @@ See **Seed instructions** below.
 
 Prerequisites: seed run (optional user scopes); three browser sessions or profile switches.
 
+**Roles (seed):** Corporate = `admin`. Regional = `ops` + `regional_lead`. Director = `ops` + `school_director`. Access scopes are unchanged from presets below.
+
 1. **Corporate / admin (`department_scope=all`, `site_scope=all`):** Sees both functional departments (**Enrollment**, **Billing / Operations**); both physical campuses (**North Campus**, **South Campus**); workspace queues for **both** work units; seeded opportunities/jobs across **all** demo lanes (Enrollment north/south + Billing/Ops north/south).
 2. **Regional (`site_scope=restricted`, both campuses):** `site_scope` allow-list includes **North Campus** and **South Campus** only; **all departments** remain visible — so Billing/Ops lanes **do** appear. Lists should exclude entities whose resolved site is outside those campuses (spot-check schedules/jobs).
 3. **Director (`department_scope=restricted` → Enrollment only; `site_scope=restricted` → North Campus only):** Should see **Enrollment · North Campus** lane only (same enrollment work unit as South, different site). Should **not** see Enrollment · South Campus, any Billing/Ops lane, or queues belonging to the Billing/Ops work unit.
@@ -106,10 +112,33 @@ Prerequisites: seed run (optional user scopes); three browser sessions or profil
 
 ---
 
+## Card F — Next UX (planned): AdminV2 header site filter
+
+**Goal:** Users with **multiple allowed sites** need a fast way to narrow what they see without opening another settings page.
+
+**Direction:**
+
+- Header-level **dropdown or combobox** (searchable when many sites), styled to match current AdminV2 chrome.
+- **Default:** “All allowed locations” (no extra filter).
+- **Options:** only site `location_type === 'site'` locations the user is already allowed to see (from access scope — not a permission change).
+- **Semantics:** _view filter_ only. Effective rows = **`access_scope ∩ selected_site`**. Changing the control does not elevate or bypass RBAC.
+
+**Scope of work (later card):** wire filter into workspace/queues and list surfaces that already respect server-side scope (client- or query-param–driven narrowing, consistent with existing patterns). **Not implemented in this sprint.**
+
+---
+
 ## Seed instructions
 
 1. Choose a **non-production** org: `ACCESS_VALIDATION_ORG_ID=<uuid>`.
-2. From `web/` with `.env.local` service role configured (same as other dev scripts):
+2. (Optional, once per org if you still see legacy **“Access Validation — North/South”** departments) remove **only** `access_validation_demo_v1`–tagged rows:
+
+   ```bash
+   ACCESS_VALIDATION_ORG_ID=<org-uuid> \
+   ACCESS_VALIDATION_CLEAN_OLD_DEMO=true \
+   npm run dev:seed:access-validation
+   ```
+
+3. From `web/` with `.env.local` service role configured (same as other dev scripts), seed v2 demo data:
 
    ```bash
    ACCESS_VALIDATION_ORG_ID=<org-uuid> npm run dev:seed:access-validation
@@ -117,7 +146,7 @@ Prerequisites: seed run (optional user scopes); three browser sessions or profil
 
    Console output maps **functional** departments/work units vs **physical** campuses and lists lane IDs (Enrollment north/south + optional Billing/Ops north/south).
 
-3. Optional — provision **test auth users** in Supabase Auth first, then apply scoped profiles (inserts `user_roles` **only if** no row exists for that user+org):
+4. Optional — provision **test auth users** in Supabase Auth first, then apply roles + scoped profiles (each `user_roles` **row** is one role; seed adds missing rows only):
 
    ```bash
    ACCESS_VALIDATION_ORG_ID=<org-uuid> \
@@ -128,11 +157,11 @@ Prerequisites: seed run (optional user scopes); three browser sessions or profil
    npm run dev:seed:access-validation
    ```
 
-   - **Corporate:** all departments, all sites.  
-   - **Regional:** all departments; sites restricted to **North Campus** + **South Campus** (both seeded campuses).  
-   - **Director:** **Enrollment** department only + **North Campus** site only.
+   - **Corporate:** `admin`; all departments, all sites.  
+   - **Regional:** `ops` + `regional_lead`; all departments; sites restricted to **North Campus** + **South Campus**.  
+   - **Director:** `ops` + `school_director`; **Enrollment** department only + **North Campus** site only.
 
-4. Ensure org has **`new_inquiry`** (or chosen `status_key`) allowed for opportunities if status-definition triggers apply.
+5. Ensure org has **`new_inquiry`** (or chosen `status_key`) allowed for opportunities if status-definition triggers apply.
 
 ---
 
