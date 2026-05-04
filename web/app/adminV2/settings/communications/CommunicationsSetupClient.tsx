@@ -110,7 +110,9 @@ export default function CommunicationsSetupClient() {
                 <p className="mt-1 text-[11px] text-amber-950/88">
                     Credential setup is currently <strong>admin-managed</strong> (deployment / vault / DB binding rows). Full self-service
                     credential entry in this UI is coming. Here you can see read-only provider readiness, edit binding{" "}
-                    <strong>label</strong>, <strong>status</strong>, and <strong>primary</strong> only — never secret values.
+                    <strong>label</strong>, <strong>status</strong>, and <strong>primary</strong> only — never secret values. The record
+                    drawer composer only enables <strong>Resend</strong> (email) and <strong>Twilio SMS</strong> rows that meet the rules in
+                    outbound readiness — other providers may show a secret ref but still not unlock compose.
                 </p>
             </div>
 
@@ -168,7 +170,7 @@ export default function CommunicationsSetupClient() {
                                             {channelLabel(b.channel)} · {providerLabel(b)}
                                         </span>
                                         <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium ${secretOk ? "bg-green-800/10 text-green-900/90" : "bg-alloy-ember/10 text-alloy-ember"}`}>
-                                            Credentials: {secretOk ? "configured" : "not configured"}
+                                            Composer outbound: {secretOk ? "ready" : "not ready"}
                                         </span>
                                     </div>
                                     <dl className="mt-1.5 grid gap-0.5 text-[10px] text-alloy-midnight/55 sm:grid-cols-2">

@@ -1,5 +1,6 @@
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
 import type { ApplyRegistryResolvedActionResult } from "@/lib/admin/actions/applyRegistryResolvedActionResult";
+import { invalidateCommunicationsDrawerPrefetch } from "@/lib/admin/communications/communicationsDrawerPrefetch";
 
 export type RegistryActionSurfaceContext = {
     surface: string;
@@ -115,6 +116,18 @@ export async function applyRegistryResolvedActionClient(
                 host.router.push(`/adminV2/workspace/dept/${encodeURIComponent(host.departmentId.trim())}`);
             } else {
                 host.router.push("/adminV2/workspace");
+            }
+            return { ok: true };
+        }
+        if (intent === "send_message_placeholder") {
+            const eid = host.entityId?.trim();
+            if (eid) {
+                invalidateCommunicationsDrawerPrefetch("opportunities", eid);
+                if (typeof window !== "undefined") {
+                    window.dispatchEvent(
+                        new CustomEvent("adminv2:opportunity-focus-comms", { detail: { opportunity_id: eid } })
+                    );
+                }
             }
             return { ok: true };
         }

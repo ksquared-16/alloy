@@ -23,7 +23,8 @@
     "test:tenant:e2e": "vitest run tests/admin/tenantEndToEnd.test.ts",
     "demo:reset:dry": "tsx scripts/resetStagingDemoData.ts --dry-run",
     "demo:reset": "tsx scripts/resetStagingDemoData.ts",
-    "demo:seed": "tsx scripts/seedRealisticChildcareDemoData.ts"
+    "demo:seed": "tsx scripts/seedRealisticChildcareDemoData.ts",
+    "demo:seed:scopes": "tsx scripts/seedRealisticChildcareDemoData.ts --scopes-only"
   },
   "dependencies": {
     "@radix-ui/react-dropdown-menu": "^2.1.16",

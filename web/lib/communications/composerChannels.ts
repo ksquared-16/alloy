@@ -30,6 +30,15 @@ function isEmailBindingReady(b: BindingSummary): boolean {
     return true;
 }
 
+/**
+ * True when this binding row is counted toward outbound email/SMS in {@link availableComposerChannels}
+ * (active + channel-specific credential rules — same as send route / drawer).
+ */
+export function bindingEligibleForOutboundComposer(b: BindingSummary): boolean {
+    if ((b.status || "").toLowerCase() !== "active") return false;
+    return isSmsBindingReady(b) || isEmailBindingReady(b);
+}
+
 /** Distinct channels user may pick; in_app always available (internal queue / no provider). */
 export function availableComposerChannels(bindings: BindingSummary[]): ("sms" | "email" | "in_app")[] {
     const out = new Set<"sms" | "email" | "in_app">();

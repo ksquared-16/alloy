@@ -4,6 +4,7 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import {
     activeOutboundBindings,
     availableComposerChannels,
+    bindingEligibleForOutboundComposer,
     type BindingSummary,
 } from "@/lib/communications/composerChannels";
 import { requireAdminOrOps } from "@/lib/adminAuth";
@@ -22,13 +23,8 @@ function sanitizeBindings(raw: BindingSummary[]): unknown[] {
             provider: b.provider ?? null,
             status: b.status ?? null,
             is_primary: b.is_primary ?? null,
-            /** Whether composer treats binding as actionable (SMS secret + Resend-ready). Derived — not raw secret. */
-            ready_for_composer:
-                Boolean(
-                    typeof b.secret_ref === "string" &&
-                        b.secret_ref.trim().toLowerCase() !== "" &&
-                        b.secret_ref.trim().toLowerCase() !== "unconfigured"
-                ),
+            /** Same rules as drawer/send route — not merely “has secret_ref”. */
+            ready_for_composer: bindingEligibleForOutboundComposer(b),
             inbound_to_e164: b.inbound_to_e164 ?? undefined,
             from_email_hint: fromEmail,
         };

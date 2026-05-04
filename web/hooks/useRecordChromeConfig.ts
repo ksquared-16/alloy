@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import type { RecordActionRow, RecordLayoutRow } from "@/lib/recordChrome/types";
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
@@ -11,35 +11,51 @@ export type RecordChromeEntityKind = "job" | "schedule" | "opportunity";
 
 /**
  * Fetches record layout + actions for a logical entity (above RRS).
- * Returns null layout/actions when entityKind is null or request fails (caller keeps static fallback).
+ * `configResolved` becomes true after the first fetch attempt for the current `entityKind` finishes
+ * (so callers can avoid rendering classic vs workflow layout before org/global config is known).
  */
-export function useRecordChromeConfig(entityKind: RecordChromeEntityKind | null) {
+export function useRecordChromeConfig(entityKind: RecordChromeEntityKind | null, orgScopeKey?: string | null) {
     const [layout, setLayout] = useState<RecordLayoutRow | null>(null);
     const [actions, setActions] = useState<RecordActionRow[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [configResolved, setConfigResolved] = useState(() => entityKind == null);
 
-    useEffect(() => {
+    useLayoutEffect(() => {
         if (!entityKind) {
             setLayout(null);
             setActions([]);
             setError(null);
+            setLoading(false);
+            setConfigResolved(true);
+            return;
+        }
+        setLayout(null);
+        setActions([]);
+        setError(null);
+        setLoading(true);
+        setConfigResolved(false);
+    }, [entityKind, orgScopeKey]);
+
+    useEffect(() => {
+        if (!entityKind) {
             return;
         }
         let cancelled = false;
+        const scope = (orgScopeKey ?? "").trim();
+        const scopeQs = scope ? `&_org_scope=${encodeURIComponent(scope)}` : "";
         (async () => {
-            setLoading(true);
             setError(null);
             try {
                 const init = workspaceDataFetchInit();
                 const [lRes, aRes] = await Promise.all([
                     dedupeAdminFetchWithTtl(
-                        `/api/admin/record-layouts?entity_type=${encodeURIComponent(entityKind)}`,
+                        `/api/admin/record-layouts?entity_type=${encodeURIComponent(entityKind)}${scopeQs}`,
                         init,
                         RECORD_CHROME_TTL_MS
                     ),
                     dedupeAdminFetchWithTtl(
-                        `/api/admin/record-actions?entity_type=${encodeURIComponent(entityKind)}`,
+                        `/api/admin/record-actions?entity_type=${encodeURIComponent(entityKind)}${scopeQs}`,
                         init,
                         RECORD_CHROME_TTL_MS
                     ),
@@ -68,13 +84,16 @@ export function useRecordChromeConfig(entityKind: RecordChromeEntityKind | null)
                     setError(e instanceof Error ? e.message : "Record chrome load failed");
                 }
             } finally {
-                if (!cancelled) setLoading(false);
+                if (!cancelled) {
+                    setLoading(false);
+                    setConfigResolved(true);
+                }
             }
         })();
         return () => {
             cancelled = true;
         };
-    }, [entityKind]);
+    }, [entityKind, orgScopeKey]);
 
-    return { layout, actions, loading, error };
+    return { layout, actions, loading, error, configResolved };
 }

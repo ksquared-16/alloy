@@ -25,6 +25,8 @@ export type WorkUnitLifecycleCoveragePanelProps = {
  * Operator-facing coverage copy + collapsible admin diagnostics for unmapped / "Other" lifecycle buckets.
  * Uses only data already loaded on the work-unit page (no extra API).
  */
+const SHOW_QUEUE_DIAGNOSTICS = process.env.NEXT_PUBLIC_SHOW_ADMIN_QUEUE_DIAGNOSTICS === "1";
+
 export function WorkUnitLifecycleCoveragePanel({
     hasLifecycleThroughput,
     showOtherPill,
@@ -65,11 +67,12 @@ export function WorkUnitLifecycleCoveragePanel({
                 </p>
             ) : null}
 
-            {!coverage?.isComplete && hasLifecycleThroughput ? (
+            {!coverage?.isComplete && hasLifecycleThroughput && SHOW_QUEUE_DIAGNOSTICS ? (
                 <p className="m-0 mt-1.5 text-alloy-forge/55">Loading queue counts… coverage check unavailable until summaries settle.</p>
             ) : null}
 
             <div className={showOtherPill || hasUnmappedFromSummaries ? "mt-2 border-t border-admin-border/25 pt-2" : ""}>
+                {SHOW_QUEUE_DIAGNOSTICS ? (
                 <button
                     type="button"
                     className="flex w-full items-center justify-between gap-2 text-left text-[11px] font-medium text-alloy-forge/60 hover:text-alloy-forge/85"
@@ -79,7 +82,8 @@ export function WorkUnitLifecycleCoveragePanel({
                     <span>Admin / diagnostics</span>
                     <span className="tabular-nums text-alloy-forge/45">{diagOpen ? "−" : "+"}</span>
                 </button>
-                {diagOpen ? (
+                ) : null}
+                {SHOW_QUEUE_DIAGNOSTICS && diagOpen ? (
                     <div className="mt-2 space-y-2 text-alloy-forge/80">
                         {hasUnmappedFromSummaries ? (
                             <p className="m-0 text-[10px] leading-snug text-alloy-forge/58">

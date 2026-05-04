@@ -284,6 +284,8 @@ export default function CommunicationsDrawerSection({
     const [channelsAvailable, setChannelsAvailable] = useState<string[]>([]);
     const [bindingsErr, setBindingsErr] = useState<string | null>(null);
     const [loadingBindings, setLoadingBindings] = useState(false);
+    /** Bumped on visibility return so bindings refetch after org config changes in another tab. */
+    const [bindingsRefreshGen, setBindingsRefreshGen] = useState(0);
 
     const [recipients, setRecipients] = useState<DrawerRecipient[]>([]);
     const [recipientsErr, setRecipientsErr] = useState<string | null>(null);
@@ -347,6 +349,7 @@ export default function CommunicationsDrawerSection({
         setShowOlderMessages(false);
         setExpandedBodies({});
         markedReadSubmittedRef.current.clear();
+        setBindingsRefreshGen(0);
     }, [entityId, apiEntityType]);
 
     /** When parent hides Communication (`active` false), drop thread detail state (no polling; next open is clean). */
@@ -598,6 +601,19 @@ export default function CommunicationsDrawerSection({
 
     useEffect(() => {
         if (!dataLayerActive || !showDrawerComposerChrome || !composerEntity) return;
+        const onBecameVisible = () => {
+            if (typeof document === "undefined" || document.visibilityState !== "visible") return;
+            invalidateCommunicationsDrawerPrefetch(apiEntityType, entityId);
+            setBindingsRefreshGen((g) => g + 1);
+        };
+        document.addEventListener("visibilitychange", onBecameVisible);
+        return () => {
+            document.removeEventListener("visibilitychange", onBecameVisible);
+        };
+    }, [dataLayerActive, showDrawerComposerChrome, composerEntity, apiEntityType, entityId]);
+
+    useEffect(() => {
+        if (!dataLayerActive || !showDrawerComposerChrome || !composerEntity) return;
 
         let cancelled = false;
         (async () => {
@@ -627,8 +643,17 @@ export default function CommunicationsDrawerSection({
 
             const bsnap = peekB?.bindings_snapshot;
             if (bsnap) {
-                applyBindingsPayload(bsnap, { event: "prefetch_reused", path: "snapshot" });
-                return;
+                if (bsnap.error) {
+                    applyBindingsPayload(bsnap, { event: "prefetch_reused", path: "snapshot" });
+                    return;
+                }
+                const hasOutbound =
+                    bsnap.channels.includes("email") || bsnap.channels.includes("sms");
+                if (hasOutbound) {
+                    applyBindingsPayload(bsnap, { event: "prefetch_reused", path: "snapshot" });
+                    return;
+                }
+                // Empty outbound snapshot (e.g. prefetch before credentials existed) — fetch fresh.
             }
 
             setLoadingBindings(true);
@@ -679,7 +704,7 @@ export default function CommunicationsDrawerSection({
         return () => {
             cancelled = true;
         };
-    }, [dataLayerActive, showDrawerComposerChrome, composerEntity, apiEntityType, entityId]);
+    }, [dataLayerActive, showDrawerComposerChrome, composerEntity, apiEntityType, entityId, bindingsRefreshGen]);
 
     useEffect(() => {
         if (!dataLayerActive || !showDrawerComposerChrome || !composerEntity || loadingBindings || (!emailOutboundReady && !smsOutboundReady)) {

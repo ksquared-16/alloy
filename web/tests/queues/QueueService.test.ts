@@ -192,5 +192,22 @@ describe("QueueService — pure helpers", () => {
             )
         ).toBe(false);
     });
+
+    it("needs attention: very stale new_inquiry excluded (not actionable as 'stale row' alone)", () => {
+        const now = new Date("2026-01-10T12:00:00.000Z");
+        expect(
+            __testing.opportunityNeedsAttention(
+                {
+                    updated_at: "2026-01-01T11:00:00.000Z",
+                    primary_person_id: "p1",
+                    primary_contact_id: null,
+                    customer_id: "c1",
+                    status_key: "new_inquiry",
+                    metadata: {},
+                },
+                now
+            )
+        ).toBe(false);
+    });
 });
 

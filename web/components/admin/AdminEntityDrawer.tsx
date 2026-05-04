@@ -13,6 +13,7 @@ import {
     type JobPrefill,
 } from "@/contexts/AdminDrawerContext";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import { useEntityLabels, getEntityLabel } from "@/contexts/EntityLabelsContext";
 import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
@@ -124,6 +125,7 @@ import {
     oppInqTabBtn,
 } from "@/components/admin/drawer/opportunityInquiryDrawerTypography";
 import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
+import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
 import { formatActivityRelativeShort, type ActivitySignalResult } from "@/lib/admin/activitySignals";
 import { formatOpportunityActivityTimelineEvent } from "@/lib/admin/opportunityActivityTimelineFormat";
 import OpportunityQuoteIntakeSection from "@/components/admin/quoteIntake/OpportunityQuoteIntakeSection";
@@ -1098,6 +1100,8 @@ function opportunityActivityStaleBadgeClass(severity: "low" | "medium" | "high")
 export default function AdminEntityDrawer() {
     const { drawer, openDrawer, closeDrawer, canGoBack, goBack, previousDrawer, stack } = useAdminDrawer();
     const { canMutate, role: adminRole } = useAdminAuth();
+    const { orgId: workspaceOrgId } = useWorkspaceOrg();
+    const recordChromeOrgScope = workspaceOrgId?.trim() || null;
     const { labels } = useEntityLabels();
     const memberSingular = labels.customer_members?.singular ?? "Member";
     const memberPlural = labels.customer_members?.plural ?? "Members";
@@ -2766,7 +2770,36 @@ export default function AdminEntityDrawer() {
                 openDrawer({ type: "opportunities", id: drawer.id });
                 return;
             }
-            if (a.action_type === "ui_intent") return;
+            if (a.action_type === "ui_intent") {
+                const workUnitIdForCtx =
+                    data && typeof data === "object" && (data as { work_unit_id?: unknown }).work_unit_id != null
+                        ? String((data as { work_unit_id?: unknown }).work_unit_id)
+                        : null;
+                const departmentIdForCtx =
+                    (drawer.opportunityWorkspaceContext?.department_id ?? "").trim() ||
+                    (opportunityWorkUnitDepartmentId?.trim() ?? "") ||
+                    (data && typeof data === "object" && String((data as { id?: unknown }).id ?? "") === String(drawer.id)
+                        ? String((data as { _work_unit_department_id?: unknown })._work_unit_department_id ?? "").trim()
+                        : "") ||
+                    null;
+                await applyRegistryResolvedActionClient(a, {
+                    router,
+                    openDrawer,
+                    openForm: (opts) =>
+                        setActionFormState({
+                            form_key: opts.form_key,
+                            action: opts.action,
+                            executeContext: { surface: "record_header" },
+                        }),
+                    entityId: drawer.id,
+                    context: {
+                        surface: "record_header",
+                        work_unit_id: workUnitIdForCtx,
+                        department_id: departmentIdForCtx || null,
+                    },
+                });
+                return;
+            }
             setOpportunityActionLoading(a.key);
             setSaveError(null);
             try {
@@ -2823,7 +2856,16 @@ export default function AdminEntityDrawer() {
                 setOpportunityActionLoading(null);
             }
         },
-        [drawer.id, drawer.type, openDrawer, refetch, router]
+        [
+            drawer.id,
+            drawer.type,
+            drawer.opportunityWorkspaceContext?.department_id,
+            openDrawer,
+            opportunityWorkUnitDepartmentId,
+            refetch,
+            router,
+            data,
+        ]
     );
 
     const opportunityWorkUnitId = useMemo(() => {
@@ -2846,6 +2888,26 @@ export default function AdminEntityDrawer() {
         if (String((data as { id?: unknown }).id ?? "") !== String(drawer.id)) return "";
         return String((data as { _work_unit_department_id?: unknown })._work_unit_department_id ?? "").trim();
     }, [drawer.type, drawer.opportunityWorkspaceContext?.department_id, opportunityWorkUnitDepartmentId, data, drawer.id]);
+
+    useEffect(() => {
+        const onFocusComms = (ev: Event) => {
+            const ce = ev as CustomEvent<{ opportunity_id?: string }>;
+            const id = typeof ce.detail?.opportunity_id === "string" ? ce.detail.opportunity_id.trim() : "";
+            if (!id || drawer.type !== "opportunities" || drawer.id !== id) return;
+            setFormData((prev) => {
+                if (!prev || typeof prev !== "object") return prev;
+                return { ...prev, _enrollment_panel: "communication" };
+            });
+            requestAnimationFrame(() => {
+                document.querySelector("[data-admin-opportunity-comms-panel]")?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "nearest",
+                });
+            });
+        };
+        window.addEventListener("adminv2:opportunity-focus-comms", onFocusComms as EventListener);
+        return () => window.removeEventListener("adminv2:opportunity-focus-comms", onFocusComms as EventListener);
+    }, [drawer.type, drawer.id]);
 
     useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
@@ -4933,13 +4995,15 @@ export default function AdminEntityDrawer() {
     const primaryContactDisabled = !hasCustomer || jobContactOptionsLoading || (hasCustomer && jobContactOptions.length === 0);
     const isJobExistingView = drawer.type === "jobs" && data && typeof data === "object" && !(data as Record<string, unknown>)._create;
     const isJobDrawerV2 = drawerShellVariant === "adminV2" && isJobExistingView;
-    const recordChromeJob = useRecordChromeConfig(isJobDrawerV2 ? "job" : null);
-    const recordChromeSchedule = useRecordChromeConfig(drawer.type === "schedules" ? "schedule" : null);
+    const recordChromeJob = useRecordChromeConfig(isJobDrawerV2 ? "job" : null, recordChromeOrgScope);
+    const recordChromeSchedule = useRecordChromeConfig(drawer.type === "schedules" ? "schedule" : null, recordChromeOrgScope);
     const recordChromeOpportunity = useRecordChromeConfig(
-        drawer.type === "opportunities" && drawer.id && drawer.id !== "new" ? "opportunity" : null
+        drawer.type === "opportunities" && drawer.id && drawer.id !== "new" ? "opportunity" : null,
+        recordChromeOrgScope
     );
     const opportunityInquiryWorkflowDrawer =
         drawer.type === "opportunities" &&
+        recordChromeOpportunity.configResolved &&
         (recordChromeOpportunity.layout?.config_json as RecordLayoutConfigJson | null)?.inquiry_drawer_mode === "workflow_v1";
     /** Modal shell for /adminV2 jobs — use before data loads so geometry never flashes sidebar-first. */
     const isJobRecordModalTarget =
@@ -4959,6 +5023,10 @@ export default function AdminEntityDrawer() {
         drawer.type === "opportunities" &&
         !!drawer.id &&
         drawer.id !== "new";
+    /** True when inquiry workflow is active, or record chrome is still resolving (workflow-shaped header without wrong subtitle). */
+    const opportunityInquiryWorkflowDrawerShell =
+        opportunityInquiryWorkflowDrawer ||
+        (drawer.type === "opportunities" && isOpportunityRecordModalTarget && !recordChromeOpportunity.configResolved);
     /** Centered record modal for jobs and for linked entities opened from a job (same Admin V2 stack). */
     const useAdminV2RecordModalPresentation =
         drawerShellVariant === "adminV2" &&
@@ -5555,14 +5623,23 @@ export default function AdminEntityDrawer() {
         !!overviewData &&
         !(overviewData as { _create?: boolean })._create;
 
+    const jobRecordChromePending = isJobRecordModalTarget && !recordChromeJob.configResolved;
+    const scheduleRecordChromePending = isScheduleRecordModalTarget && !recordChromeSchedule.configResolved;
+    const opportunityRecordChromePending = isOpportunityRecordModalTarget && !recordChromeOpportunity.configResolved;
+    const recordModalV2ChromePending =
+        jobRecordChromePending || scheduleRecordChromePending || opportunityRecordChromePending;
+    const drawerBodyGateLoading = drawerGateLoading || recordModalV2ChromePending;
+
     /** Keep Admin V2 record modal shell geometry during first-byte fetch — prevents min-height accent snap. */
     const scheduleRecordChromeBodyShell =
         isScheduleRecordModalTarget &&
         (drawerGateLoading ||
+            scheduleRecordChromePending ||
             !!(overviewData && !(overviewData as { _create?: boolean })._create));
     const opportunityRecordChromeBodyShell =
         isOpportunityRecordModalTarget &&
         (drawerGateLoading ||
+            opportunityRecordChromePending ||
             !!(overviewData && !(overviewData as { _create?: boolean })._create));
     /** Matches hydrated record body wrappers so height/width rails stay stable gate → ready. */
     const drawerRecordBodyRootClassName = `${
@@ -7517,7 +7594,11 @@ export default function AdminEntityDrawer() {
 
     if (!drawer.type || !drawer.id) return null;
 
-    const drawerStatusBadge = overviewData && !loading && !drawerGateLoading && !(overviewData as { _create?: boolean })?._create ? (
+    const drawerStatusBadge = overviewData &&
+        !loading &&
+        !drawerGateLoading &&
+        !opportunityRecordChromePending &&
+        !(overviewData as { _create?: boolean })?._create ? (
         drawer.type === "jobs" && isJobExistingView ? (
             isJobDrawerV2 ? null : (
                 <div className="flex flex-wrap items-center gap-2">
@@ -7817,14 +7898,19 @@ export default function AdminEntityDrawer() {
         );
 
     const workflowHeaderTitleRight =
-        drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer ? (
+        drawer.type === "opportunities" && opportunityInquiryWorkflowDrawerShell ? (
             <div className="flex flex-wrap items-start justify-end gap-2">
                 {opportunityHeaderQuickActionsNode}
             </div>
         ) : undefined;
 
+    const opportunityWorkflowHeaderChromePending =
+        drawer.type === "opportunities" &&
+        opportunityInquiryWorkflowDrawerShell &&
+        (drawerGateLoading || opportunityRecordChromePending);
+
     const headerSubtitleForDrawer =
-        drawerGateLoading && drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer ? (
+        opportunityWorkflowHeaderChromePending ? (
             <DrawerOpportunityWorkflowSubtitleGateSkeleton />
         ) : drawerGateLoading ? (
             <DrawerSubtitleGateSkeleton />
@@ -7833,14 +7919,14 @@ export default function AdminEntityDrawer() {
         );
 
     const headerTitleRightForDrawer =
-        drawerGateLoading && drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer ? (
+        opportunityWorkflowHeaderChromePending ? (
             <DrawerWorkflowHeaderQuickActionsSkeleton />
         ) : (
             workflowHeaderTitleRight
         );
 
     const headerSignalsForDrawer =
-        drawerGateLoading && drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer ? (
+        opportunityWorkflowHeaderChromePending ? (
             <DrawerOpportunityWorkflowTimelineGateSkeleton />
         ) : drawerGateLoading && isJobRecordModalTarget && drawer.type === "jobs" ? (
             <div className="min-h-[3.25rem] w-full" aria-busy="true">
@@ -7854,7 +7940,7 @@ export default function AdminEntityDrawer() {
 
     /** Inquiry workflow anchors primary actions beside the title row — omit empty headerActions row entirely. */
     const workflowOpportunityUsesTitleRailActions =
-        drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer;
+        drawer.type === "opportunities" && opportunityInquiryWorkflowDrawerShell;
 
     const headerActionsForDrawer = workflowOpportunityUsesTitleRailActions
         ? undefined
@@ -7904,7 +7990,7 @@ export default function AdminEntityDrawer() {
         >
             <div className="">
             {error && <p className="text-alloy-ember">Error: {error}</p>}
-            {drawerGateLoading ? (
+            {drawerBodyGateLoading ? (
                 <div
                     className={drawerRecordBodyRootClassName}
                     data-adminv2-drawer-record-gate-skeleton="true"
@@ -7918,10 +8004,17 @@ export default function AdminEntityDrawer() {
                         modalJob={isJobRecordModalTarget && drawer.type === "jobs"}
                         modalSchedule={Boolean(scheduleRecordChromeBodyShell && drawer.type === "schedules")}
                         modalOpportunityWorkflow={
-                            !!(opportunityRecordChromeBodyShell && opportunityInquiryWorkflowDrawer)
+                            !!(
+                                opportunityRecordChromeBodyShell &&
+                                (opportunityInquiryWorkflowDrawer || opportunityRecordChromePending)
+                            )
                         }
                         modalOpportunityClassic={
-                            !!(opportunityRecordChromeBodyShell && !opportunityInquiryWorkflowDrawer)
+                            !!(
+                                opportunityRecordChromeBodyShell &&
+                                !opportunityInquiryWorkflowDrawer &&
+                                !opportunityRecordChromePending
+                            )
                         }
                     />
                 </div>
@@ -10335,6 +10428,7 @@ export default function AdminEntityDrawer() {
                                                                             ) : panel === "communication" && drawer.id && drawer.id !== "new" ? (
                                                                                 <div
                                                                                     className={`${oppInqInnerCard} flex min-h-[min(18rem,52vh)] min-w-0 flex-1 flex-col`}
+                                                                                    data-admin-opportunity-comms-panel="true"
                                                                                 >
                                                                                     <CommunicationsDrawerSection
                                                                                         embedded

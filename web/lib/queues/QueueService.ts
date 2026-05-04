@@ -12,6 +12,7 @@ import {
 } from "@/lib/admin/statusDefinitionsResolve";
 import { logDbTiming, withDbTiming } from "@/lib/admin/dbQueryTiming";
 import { formatTourDateTime } from "@/lib/enrollment/formatTourDateTime";
+import { approximateAgeMonthsFromDobIso, programLabelAndAgeGroupFromAgeMonths } from "@/lib/childcare/childCareProgramFromDob";
 import { getOrgLocalTodayUtcBounds, type OrgLocalDayUtcBounds } from "@/lib/admin/orgLocalDayBounds";
 import { fetchOperationalTimezoneForOrgWithCache, UTC_FALLBACK_IANA } from "@/lib/admin/timezoneContract";
 import type { RecordScopeConstraints } from "@/lib/admin/accessScope";
@@ -320,6 +321,17 @@ function subtractDays(now: Date, days: number): Date {
     return new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 }
 
+/** Queue preview only — prepend timestamp when `metadata.notes_at` is set. */
+function formatQueueNotePreview(notesRaw: string | null | undefined, notesAtRaw: unknown): string | null {
+    const text = typeof notesRaw === "string" ? notesRaw.trim() : "";
+    if (!text) return null;
+    const at = typeof notesAtRaw === "string" ? notesAtRaw.trim() : "";
+    if (!at) return text;
+    const d = new Date(at);
+    if (Number.isNaN(d.getTime())) return `${at.length > 16 ? at.slice(0, 16) : at} — ${text}`;
+    return `${d.toISOString().slice(0, 16).replace("T", " ")} UTC — ${text}`;
+}
+
 function toIso(d: Date): string {
     return d.toISOString();
 }
@@ -350,6 +362,7 @@ type CustomerMemberChildInput = {
     last_name?: string | null;
     dob?: string | null;
     person_id?: string | null;
+    metadata?: Record<string, unknown> | null;
 };
 
 function opportunityProgramLineFromMetadata(md: Record<string, unknown> | null): string | null {
@@ -381,16 +394,75 @@ function displayBaseNameForCustomerMember(m: CustomerMemberChildInput): string {
     return [fn, ln].filter(Boolean).join(" ").trim();
 }
 
+function programSecondaryForCustomerMemberChild(
+    m: CustomerMemberChildInput,
+    childDobByPersonId: Map<string, string>,
+    personById: Map<string, { date_of_birth?: string | null }>
+): string | null {
+    const meta = m.metadata && typeof m.metadata === "object" && !Array.isArray(m.metadata) ? m.metadata : null;
+    const fromMetaPl = meta && typeof meta.program_label === "string" ? meta.program_label.trim() : "";
+    const fromMetaAg = meta && typeof meta.age_group === "string" ? meta.age_group.trim() : "";
+    if (fromMetaPl && fromMetaAg) return `${fromMetaPl} · ${fromMetaAg}`;
+    if (fromMetaPl) return fromMetaPl;
+
+    const pid = String(m.person_id ?? "").trim();
+    const memberDob = String(m.dob ?? "").trim();
+    const canonicalDob = pid
+        ? (childDobByPersonId.get(pid) ?? String(personById.get(pid)?.date_of_birth ?? "").trim())
+        : "";
+    const dob = canonicalDob || memberDob;
+    if (!dob) return null;
+    const months = approximateAgeMonthsFromDobIso(dob);
+    if (months == null) return null;
+    const { program_label, age_group } = programLabelAndAgeGroupFromAgeMonths(months);
+    return `${program_label} · ${age_group}`;
+}
+
 /**
- * One `_crm_compact_children` line per active child member; `secondary` is `metadata.program_label` (repeated per child).
+ * One `_crm_compact_children` line per active child member; `secondary` is per-child program (member metadata or DOB-derived).
  */
+function baseNameFromCrmChildPrimary(primary: string): string {
+    const s = primary.trim();
+    const idx = s.lastIndexOf(" (");
+    return (idx === -1 ? s : s.slice(0, idx)).trim().toLowerCase();
+}
+
+function inquiryProgramSecondaryFromRow(raw: unknown): string | null {
+    const row = raw as Record<string, unknown>;
+    const pl = typeof row.program_label === "string" ? row.program_label.trim() : "";
+    const ag = typeof row.age_group === "string" ? row.age_group.trim() : "";
+    if (pl && ag) return `${pl} · ${ag}`;
+    if (pl) return pl;
+    return null;
+}
+
+/** When the drawer saves `metadata.inquiry_children`, prefer those program lines for queue preview (matched by child display name). */
+function mergeInquiryChildrenIntoMemberStructuredLines(
+    lines: { primary: string; secondary: string | null }[],
+    inquiryChildren: unknown[]
+): { primary: string; secondary: string | null }[] {
+    if (!lines.length || !inquiryChildren.length) return lines;
+    const byDisplay = new Map<string, string>();
+    for (const raw of inquiryChildren) {
+        const row = raw as Record<string, unknown>;
+        const disp = typeof row.display_name === "string" ? row.display_name.trim().toLowerCase() : "";
+        const sec = inquiryProgramSecondaryFromRow(raw);
+        if (disp && sec) byDisplay.set(disp, sec);
+    }
+    if (!byDisplay.size) return lines;
+    return lines.map((line) => {
+        const key = baseNameFromCrmChildPrimary(line.primary);
+        const hit = byDisplay.get(key);
+        return hit ? { primary: line.primary, secondary: hit } : line;
+    });
+}
+
 function buildCrmCompactStructuredLinesFromCustomerMembers(
     members: CustomerMemberChildInput[],
     childDobByPersonId: Map<string, string>,
-    personById: Map<string, { date_of_birth?: string | null }>,
-    programSecondary: string | null
+    personById: Map<string, { date_of_birth?: string | null }>
 ): { primary: string; secondary: string | null }[] {
-    const withLabels: { primary: string; sort: string }[] = [];
+    const withLabels: { primary: string; secondary: string | null; sort: string }[] = [];
     for (const m of members) {
         const base = displayBaseNameForCustomerMember(m);
         if (!base) continue;
@@ -402,11 +474,11 @@ function buildCrmCompactStructuredLinesFromCustomerMembers(
         const dob = canonicalDob || memberDob;
         const age = dob ? ageLabelFromDob(dob) : null;
         const primary = age ? `${base} (${age})` : base;
-        withLabels.push({ primary, sort: primary.toLowerCase() });
+        const secondary = programSecondaryForCustomerMemberChild(m, childDobByPersonId, personById);
+        withLabels.push({ primary, secondary, sort: primary.toLowerCase() });
     }
     withLabels.sort((a, b) => a.sort.localeCompare(b.sort));
-    const sec = programSecondary?.trim() ? programSecondary.trim() : null;
-    return withLabels.map((w) => ({ primary: w.primary, secondary: sec }));
+    return withLabels.map((w) => ({ primary: w.primary, secondary: w.secondary }));
 }
 
 type OpportunityNeedsAttentionRow = {
@@ -437,14 +509,15 @@ function buildOpportunityHighValueStaleOrBranches(stale2dIso: string): string {
         .join(",");
 }
 
+/** Stale `updated_at` alone should not flag terminal / brand-new pipeline rows (seed + real ops). */
+const NEEDS_ATTENTION_STALE_UPDATE_EXCLUDED_STATUS_KEYS = new Set(["lost", "enrolled", "new_inquiry"]);
+
 function opportunityNeedsAttention(row: OpportunityNeedsAttentionRow, now: Date): boolean {
     const updatedAt = row.updated_at ? new Date(row.updated_at) : null;
     if (!updatedAt || Number.isNaN(updatedAt.getTime())) return false;
+    const sk = (row.status_key ?? "").trim().toLowerCase();
 
-    // 1) stale: updated_at < now - 3 days
-    if (updatedAt.getTime() < subtractDays(now, 3).getTime()) return true;
-
-    // 2) missing data (enrollment demo is person-backed).
+    // 1) Missing data (enrollment demo is person-backed).
     // LEGACY: contact-based identity (do not extend). TODO: migrate to person_id — legacy rows may only have primary_contact_id.
     const pkg = row.metadata && typeof row.metadata.demo_seed_package === "string" ? String(row.metadata.demo_seed_package) : "";
     const isDemoV2 = pkg === "enrollment_pipeline_demo_v2";
@@ -454,8 +527,15 @@ function opportunityNeedsAttention(row: OpportunityNeedsAttentionRow, now: Date)
     const missingContactLike = isDemoV2 ? !hasPerson : !(hasPerson || hasLegacyContact);
     if (missingContactLike || row.customer_id == null) return true;
 
+    // 2) stale: updated_at < now - 3 days (exclude statuses where age alone is not actionable)
+    if (
+        updatedAt.getTime() < subtractDays(now, 3).getTime() &&
+        !NEEDS_ATTENTION_STALE_UPDATE_EXCLUDED_STATUS_KEYS.has(sk)
+    ) {
+        return true;
+    }
+
     // 3) value/readiness: active funnel status AND updated_at < now - 2 days
-    const sk = (row.status_key ?? "").trim().toLowerCase();
     if (OPPORTUNITY_HIGH_VALUE_STALE_STATUS_KEY_SET.has(sk) && updatedAt.getTime() < subtractDays(now, 2).getTime()) {
         return true;
     }
@@ -466,6 +546,7 @@ function opportunityNeedsAttention(row: OpportunityNeedsAttentionRow, now: Date)
 function opportunityNeedsAttentionReasonLabel(row: OpportunityNeedsAttentionRow, now: Date): string | null {
     const updatedAt = row.updated_at ? new Date(row.updated_at) : null;
     if (!updatedAt || Number.isNaN(updatedAt.getTime())) return null;
+    const sk = (row.status_key ?? "").trim().toLowerCase();
     const pkg = row.metadata && typeof row.metadata.demo_seed_package === "string" ? String(row.metadata.demo_seed_package) : "";
     const isDemoV2 = pkg === "enrollment_pipeline_demo_v2";
     const hasPerson = row.primary_person_id != null && String(row.primary_person_id).trim() !== "";
@@ -473,8 +554,12 @@ function opportunityNeedsAttentionReasonLabel(row: OpportunityNeedsAttentionRow,
     const hasLegacyContact = row.primary_contact_id != null && String(row.primary_contact_id).trim() !== "";
     const missingContactLike = isDemoV2 ? !hasPerson : !(hasPerson || hasLegacyContact);
     if (missingContactLike || row.customer_id == null) return "Missing contact/customer";
-    if (updatedAt.getTime() < subtractDays(now, 3).getTime()) return "Stale > 3 days";
-    const sk = (row.status_key ?? "").trim().toLowerCase();
+    if (
+        updatedAt.getTime() < subtractDays(now, 3).getTime() &&
+        !NEEDS_ATTENTION_STALE_UPDATE_EXCLUDED_STATUS_KEYS.has(sk)
+    ) {
+        return "Stale > 3 days";
+    }
     if (OPPORTUNITY_HIGH_VALUE_STALE_STATUS_KEY_SET.has(sk) && updatedAt.getTime() < subtractDays(now, 2).getTime()) {
         return "High-value stale > 2 days";
     }
@@ -627,7 +712,7 @@ async function enrichOpportunityRows(params: {
             ? timedAwait(
                   supabase
                       .from("customer_members")
-                      .select("customer_id, display_name, first_name, last_name, dob, person_id, relationship, is_active")
+                      .select("customer_id, display_name, first_name, last_name, dob, person_id, relationship, is_active, metadata")
                       .eq("org_id", orgId)
                       .eq("relationship", "child")
                       .eq("is_active", true)
@@ -676,6 +761,7 @@ async function enrichOpportunityRows(params: {
             last_name: (raw as any).last_name,
             dob: (raw as any).dob,
             person_id: (raw as any).person_id,
+            metadata: (raw as any).metadata && typeof (raw as any).metadata === "object" ? (raw as any).metadata : null,
         };
         const list = activeChildrenByCustomerId.get(cid) ?? [];
         list.push(m);
@@ -733,7 +819,8 @@ async function enrichOpportunityRows(params: {
         const contactPhone = (person?.phone ?? contact?.phone ?? null) as string | null;
 
         const md = (r.metadata ?? null) as Record<string, unknown> | null;
-        const notes = typeof md?.notes === "string" ? md.notes : typeof md?.demo_note === "string" ? md.demo_note : null;
+        const notesRaw = typeof md?.notes === "string" ? md.notes : typeof md?.demo_note === "string" ? md.demo_note : null;
+        const notesPreview = formatQueueNotePreview(notesRaw, md?.notes_at);
         const nextStepPreview = typeof md?.next_step === "string" ? md.next_step.trim() : null;
 
         const customerIdStr = r.customer_id ? String(r.customer_id).trim() : "";
@@ -750,19 +837,28 @@ async function enrichOpportunityRows(params: {
         let tourTime: string | null = null;
 
         let structuredFromMembers: ReturnType<typeof buildCrmCompactStructuredLinesFromCustomerMembers> | null = null;
-        let programLabelForChildren: string | null = null;
 
         if (activeMemberChildren.length > 0) {
-            programLabelForChildren = opportunityProgramLabelOnlyFromMetadata(md);
             structuredFromMembers = buildCrmCompactStructuredLinesFromCustomerMembers(
                 activeMemberChildren,
                 childDobByPersonId,
-                personById,
-                programLabelForChildren
+                personById
             );
             childDisplay =
                 structuredFromMembers.length > 0 ? structuredFromMembers.map((line) => line.primary).join(" · ") : null;
-            programsDisplay = typeof md?.program_label === "string" ? md.program_label.trim() : null;
+            const secondaryParts = structuredFromMembers
+                .map((line) => (typeof line.secondary === "string" ? line.secondary.trim() : ""))
+                .filter(Boolean);
+            programsDisplay = [...new Set(secondaryParts)].join(" · ") || (typeof md?.program_label === "string" ? md.program_label.trim() : null);
+            if (inquiryChildren.length) {
+                structuredFromMembers = mergeInquiryChildrenIntoMemberStructuredLines(structuredFromMembers, inquiryChildren);
+                const secondaryAfterInquiry = structuredFromMembers
+                    .map((line) => (typeof line.secondary === "string" ? line.secondary.trim() : ""))
+                    .filter(Boolean);
+                programsDisplay =
+                    [...new Set(secondaryAfterInquiry)].join(" · ") ||
+                    (typeof md?.program_label === "string" ? md.program_label.trim() : null);
+            }
             desiredStart = typeof md?.desired_start_date === "string" ? md.desired_start_date : null;
             tourDate = typeof md?.tour_date === "string" ? md.tour_date : null;
             tourTime = typeof md?.tour_time === "string" ? md.tour_time : null;
@@ -828,12 +924,10 @@ async function enrichOpportunityRows(params: {
             _primary_email: contactEmail ?? null,
             _child_display_name: childDisplay,
             _crm_compact_children: crmCompactChildrenStructured,
-            _requested_program:
-                programLabelForChildren ??
-                (inquiryChildren.length > 0 ? programsDisplay ?? programCombined : programCombined),
+            _requested_program: programsDisplay ?? programCombined,
             _desired_start_date: desiredStart,
             _tour_context: tourContext,
-            _notes_preview: notes,
+            _notes_preview: notesPreview,
             _next_step_preview: nextStepPreview,
             _status_display: statusDisplay,
             _attention_reason_label: attentionReason,
