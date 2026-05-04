@@ -50,6 +50,12 @@ def _mask_binding_id(binding_id: Optional[str]) -> str:
     return f"{b[:4]}…{b[-4:]}"
 
 
+def _tail_digits_hint(raw: Optional[str]) -> str:
+    """Last digits only for ops logs — not full numbers."""
+    d = "".join(c for c in (raw or "") if c.isdigit())
+    return f"...{d[-4:]}" if len(d) >= 4 else "—"
+
+
 def _signature_validation_url(request: Request) -> str:
     base = COMMUNICATIONS_TWILIO_INBOUND_VALIDATION_BASE_URL.strip().rstrip("/")
     if base:
@@ -139,14 +145,19 @@ def _handle_inbound_with_optional_binding(
             logger.warning("sms_inbound: unknown binding_id=%s (legacy only)", _mask_binding_id(binding_id))
     else:
         matches = find_sms_bindings_by_inbound_to(base_url, headers, to_e164=to_num)
-        if len(matches) > 1:
+        if len(matches) == 0:
+            logger.info(
+                "sms_inbound: canonical_skip no_binding to_tail=%s (no active sms binding for normalized To)",
+                _tail_digits_hint(to_num),
+            )
+        elif len(matches) > 1:
             distinct_orgs = len({str(m.get("org_id")) for m in matches})
             logger.warning(
                 "sms_inbound: canonical_skip ambiguous_destination_binding bindings=%s distinct_orgs=%s",
                 len(matches),
                 distinct_orgs,
             )
-        elif len(matches) == 1:
+        else:
             eff_row = matches[0]
             rid = eff_row.get("id")
             eff_uuid = str(rid) if rid else None
@@ -155,7 +166,7 @@ def _handle_inbound_with_optional_binding(
         try:
             org_id_raw = eff_row.get("org_id")
             if org_id_raw:
-                persist_inbound_communication_sms(
+                row = persist_inbound_communication_sms(
                     org_id=str(org_id_raw),
                     binding_id=eff_uuid,
                     from_num=from_num,
@@ -164,6 +175,18 @@ def _handle_inbound_with_optional_binding(
                     external_sid=message_sid,
                     primary_entity_hint=None,
                 )
+                if row and row.get("id"):
+                    sid = str(row["id"])
+                    logger.info(
+                        "sms_inbound: canonical_ok message_id_tail=%s binding=%s",
+                        sid[-8:] if len(sid) > 8 else sid,
+                        _mask_binding_id(eff_uuid),
+                    )
+                else:
+                    logger.warning(
+                        "sms_inbound: canonical_persist noop binding=%s (see inbound_comm / PostgREST errors)",
+                        _mask_binding_id(eff_uuid),
+                    )
         except Exception as e:
             logger.warning("sms_inbound: communication inbound persist skipped %s", e)
     try:
@@ -245,5 +268,5 @@ async def post_sms_inbound_bound(binding_id: str, request: Request) -> Response:
 
 @router.post("/inbound")
 async def post_sms_inbound(request: Request) -> Response:
-    """Legacy webhook URL — inserts public.messages only (no binding_id route)."""
+    """Legacy webhook URL — canonical `communication_*` when one active SMS binding matches Twilio To; always legacy `public.messages`."""
     return await _inbound_guarded(request, None)

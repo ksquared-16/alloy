@@ -240,8 +240,6 @@ def persist_inbound_communication_sms(
     }
     if bid:
         payload_msg["communication_provider_binding_id"] = bid
-    if bid:
-        payload_msg["communication_provider_binding_id"] = bid
 
     h = dict(headers)
     h.update(_JSON_HEADERS)
