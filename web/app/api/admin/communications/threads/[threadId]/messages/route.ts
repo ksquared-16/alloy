@@ -39,7 +39,7 @@ export async function GET(
     const { data: msgs, error: mErr } = await supabase
         .from("communication_messages")
         .select(
-            "id, created_at, direction, channel, status, body, from_address, to_address, provider, sent_at"
+            "id, created_at, direction, channel, status, body, from_address, to_address, provider, sent_at, provider_message_id, metadata, delivered_at"
         )
         .eq("thread_id", threadId)
         .eq("org_id", ctx.orgId)

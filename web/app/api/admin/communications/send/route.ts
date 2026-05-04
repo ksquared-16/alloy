@@ -15,7 +15,9 @@ import {
 import { enqueueCanonicalOutboundMessage } from "@/lib/communications/canonicalOutboundEnqueue";
 import {
     assertRecipientPersonEligibleForDrawerEmail,
+    assertRecipientPersonEligibleForDrawerSms,
     getPersonEmailOrNull,
+    getPersonSmsToOrNull,
 } from "@/lib/communications/drawerEmailRecipients";
 import { normalizeRecipientKeyEmail, normalizeRecipientKeySms } from "@/lib/communications/recipientKey";
 import { triggerBackendMessagesQueue } from "@/lib/communications/triggerBackendMessagesQueue";
@@ -134,6 +136,27 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "Recipient person has no usable email" }, { status: 400 });
         }
         toRaw = em;
+    }
+
+    if (channel === "sms" && recipientPersonIdRaw && UUID_RE.test(recipientPersonIdRaw)) {
+        const elig = await assertRecipientPersonEligibleForDrawerSms(
+            supabase,
+            ctx.orgId,
+            entityType,
+            entityId,
+            recipientPersonIdRaw
+        );
+        if (!elig) {
+            return NextResponse.json(
+                { error: "recipient_person_id is not an eligible person-with-phone for this record" },
+                { status: 400 }
+            );
+        }
+        const sms = await getPersonSmsToOrNull(supabase, ctx.orgId, recipientPersonIdRaw);
+        if (!sms) {
+            return NextResponse.json({ error: "Recipient person has no usable SMS number" }, { status: 400 });
+        }
+        toRaw = sms;
     }
 
     const { data: rows, error: bindErr } = await supabase

@@ -1,18 +1,23 @@
 /**
- * Person-first email recipients for opportunity/job drawer composer (Cards 15–17).
+ * Person-first recipients for opportunity/job drawer composer (Cards 15–17, 26–27).
  * No contact_id as anchor; identities are persons rows only.
  */
 
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { normalizeRecipientKeySms } from "@/lib/communications/recipientKey";
+import { fetchRelatedPersonIdsForCommunicationsDrawer } from "@/lib/communications/threadRelatedPersonIds";
 
 type AdminSupabase = ReturnType<typeof createAdminClient>;
 
 export type DrawerEmailRecipientRow = {
     person_id: string;
-    email: string;
+    /** Lowercase trimmed email when present; omit empty. */
+    email: string | null;
+    /** E.164-style SMS destination when usable; omit when no valid phone digits. */
+    phone: string | null;
     display_name: string;
     relationship_hint: string | null;
-    /** Single primary default — used to pre-select one checkbox. */
+    /** Primary person or first deterministic row — refines when channel picker changes in UI. */
     is_suggested_default: boolean;
 };
 
@@ -20,6 +25,12 @@ function trimEmail(e: unknown): string | null {
     const s = typeof e === "string" ? e.trim() : "";
     if (!s || !s.includes("@")) return null;
     return s.toLowerCase();
+}
+
+function smsToOrNull(raw: unknown): string | null {
+    const n = normalizeRecipientKeySms(typeof raw === "string" ? raw : "");
+    const digits = n.replace(/\D/g, "");
+    return digits.length >= 10 ? n : null;
 }
 
 function personLabel(p: { full_name?: string | null; first_name?: string | null; last_name?: string | null } | null): string {
@@ -30,7 +41,7 @@ function personLabel(p: { full_name?: string | null; first_name?: string | null;
     return a || "—";
 }
 
-/** Opportunity: opportunity_persons + persons with email; always consider primary_person if present and not duplicated. */
+/** Opportunity: opportunity_persons + primary_person — include phone even when no email (Card 27). */
 export async function fetchOpportunityDrawerEmailRecipients(
     supabase: AdminSupabase,
     orgId: string,
@@ -67,7 +78,7 @@ export async function fetchOpportunityDrawerEmailRecipients(
 
     const { data: people } = await supabase
         .from("persons")
-        .select("id, first_name, last_name, full_name, email")
+        .select("id, first_name, last_name, full_name, email, phone")
         .eq("org_id", orgId)
         .in("id", [...pidSet]);
 
@@ -75,16 +86,16 @@ export async function fetchOpportunityDrawerEmailRecipients(
     for (const p of (people ?? []) as {
         id: string;
         email?: string | null;
+        phone?: string | null;
         first_name?: string | null;
         last_name?: string | null;
         full_name?: string | null;
     }[]) {
-        const email = trimEmail(p.email);
-        if (!email) continue;
         const pid = String(p.id);
         rows.push({
             person_id: pid,
-            email,
+            email: trimEmail(p.email),
+            phone: smsToOrNull(p.phone),
             display_name: personLabel(p),
             relationship_hint:
                 pid === primaryPid ? "Primary person" : roleMap.has(pid) ? (roleMap.get(pid) ?? "Linked") : "Linked person",
@@ -92,20 +103,17 @@ export async function fetchOpportunityDrawerEmailRecipients(
         });
     }
 
-    const byId = new Map(rows.map((r) => [r.person_id, r]));
-    /** Default: primary with email else first deterministic by name then id. */
-    const sortedForDefault = [...rows].sort((a, b) => {
+    const sortedRows = [...rows].sort((a, b) => {
         const dn = a.display_name.localeCompare(b.display_name);
         if (dn !== 0) return dn;
         return a.person_id.localeCompare(b.person_id);
     });
-
-    let defaultPid: string | null = primaryPid && byId.has(primaryPid) ? primaryPid : sortedForDefault[0]?.person_id ?? null;
-    rows.forEach((r) => {
+    let defaultPid: string | null = primaryPid && sortedRows.some((r) => r.person_id === primaryPid) ? primaryPid : sortedRows[0]?.person_id ?? null;
+    sortedRows.forEach((r) => {
         r.is_suggested_default = r.person_id === defaultPid;
     });
 
-    rows.sort((a, b) => {
+    sortedRows.sort((a, b) => {
         const d = Number(b.is_suggested_default) - Number(a.is_suggested_default);
         if (d !== 0) return d;
         const l = a.display_name.localeCompare(b.display_name);
@@ -113,10 +121,10 @@ export async function fetchOpportunityDrawerEmailRecipients(
         return a.person_id.localeCompare(b.person_id);
     });
 
-    return rows;
+    return sortedRows;
 }
 
-/** Job: customer_persons (+ optional opportunity_persons via job.opportunity_id) + primary person; person-first only. */
+/** Job: customer_persons + opportunity_persons (via opportunity_id) + primary person. */
 export async function fetchJobDrawerEmailRecipients(
     supabase: AdminSupabase,
     orgId: string,
@@ -193,7 +201,7 @@ export async function fetchJobDrawerEmailRecipients(
 
     const { data: people } = await supabase
         .from("persons")
-        .select("id, first_name, last_name, full_name, email")
+        .select("id, first_name, last_name, full_name, email, phone")
         .eq("org_id", orgId)
         .in("id", [...pidSet]);
 
@@ -201,36 +209,38 @@ export async function fetchJobDrawerEmailRecipients(
     for (const p of (people ?? []) as {
         id: string;
         email?: string | null;
+        phone?: string | null;
         first_name?: string | null;
         last_name?: string | null;
         full_name?: string | null;
     }[]) {
-        const email = trimEmail(p.email);
-        if (!email) continue;
         const pid = String(p.id);
         let hint = hintMap.get(pid) ?? null;
         if (primaryPid === pid) hint = "Primary person (job)";
         rows.push({
             person_id: pid,
-            email,
+            email: trimEmail(p.email),
+            phone: smsToOrNull(p.phone),
             display_name: personLabel(p),
             relationship_hint: hint,
             is_suggested_default: false,
         });
     }
 
-    const sortedForDefault = [...rows].sort((a, b) => {
+    const sortedRows = [...rows].sort((a, b) => {
         const dn = a.display_name.localeCompare(b.display_name);
         if (dn !== 0) return dn;
         return a.person_id.localeCompare(b.person_id);
     });
 
-    let defaultPid: string | null = primaryPid && rows.some((r) => r.person_id === primaryPid) ? primaryPid : sortedForDefault[0]?.person_id ?? null;
-    rows.forEach((r) => {
+    let defaultPid: string | null = primaryPid && sortedRows.some((r) => r.person_id === primaryPid)
+        ? primaryPid
+        : sortedRows[0]?.person_id ?? null;
+    sortedRows.forEach((r) => {
         r.is_suggested_default = r.person_id === defaultPid;
     });
 
-    rows.sort((a, b) => {
+    sortedRows.sort((a, b) => {
         const d = Number(b.is_suggested_default) - Number(a.is_suggested_default);
         if (d !== 0) return d;
         const l = a.display_name.localeCompare(b.display_name);
@@ -238,7 +248,7 @@ export async function fetchJobDrawerEmailRecipients(
         return a.person_id.localeCompare(b.person_id);
     });
 
-    return rows;
+    return sortedRows;
 }
 
 export async function assertRecipientPersonEligibleForDrawerEmail(
@@ -248,14 +258,29 @@ export async function assertRecipientPersonEligibleForDrawerEmail(
     entityId: string,
     personId: string
 ): Promise<boolean> {
-    const list =
-        entityType === "jobs"
-            ? await fetchJobDrawerEmailRecipients(supabase, orgId, entityId)
-            : await fetchOpportunityDrawerEmailRecipients(supabase, orgId, entityId);
-    return list.some((r) => r.person_id === personId);
+    const related = await fetchRelatedPersonIdsForCommunicationsDrawer(supabase, orgId, entityType, entityId);
+    if (!related.includes(personId)) return false;
+    return (await getPersonEmailOrNull(supabase, orgId, personId)) !== null;
+}
+
+export async function assertRecipientPersonEligibleForDrawerSms(
+    supabase: AdminSupabase,
+    orgId: string,
+    entityType: "opportunities" | "jobs",
+    entityId: string,
+    personId: string
+): Promise<boolean> {
+    const related = await fetchRelatedPersonIdsForCommunicationsDrawer(supabase, orgId, entityType, entityId);
+    if (!related.includes(personId)) return false;
+    return (await getPersonSmsToOrNull(supabase, orgId, personId)) !== null;
 }
 
 export async function getPersonEmailOrNull(supabase: AdminSupabase, orgId: string, personId: string): Promise<string | null> {
     const { data } = await supabase.from("persons").select("email").eq("id", personId).eq("org_id", orgId).maybeSingle();
     return trimEmail((data as { email?: string | null } | null)?.email);
+}
+
+export async function getPersonSmsToOrNull(supabase: AdminSupabase, orgId: string, personId: string): Promise<string | null> {
+    const { data } = await supabase.from("persons").select("phone").eq("id", personId).eq("org_id", orgId).maybeSingle();
+    return smsToOrNull((data as { phone?: string | null } | null)?.phone ?? null);
 }

@@ -33,6 +33,7 @@ export default function TopNavBar() {
       /^\/adminV2\/workspace\/dept\/[^/]+\/?$/.test(normalizedPath)) &&
     !isQueueContext;
   const isAiActivity = normalizedPath === "/adminV2/ai-activity";
+  const isMessaging = normalizedPath === "/adminV2/messages";
 
   const queueHref = useMemo(() => {
     if (isQueueContext) {
@@ -106,6 +107,15 @@ export default function TopNavBar() {
           }}
         >
           Queue
+        </AdminV2NavLink>
+        <AdminV2NavLink
+          href="/adminV2/messages"
+          active={isMessaging}
+          className="px-2 py-1 rounded text-[11px] font-normal"
+          style={secondaryTabStyle(isMessaging)}
+          title="Messaging (V1 scaffold — global inbox deferred)"
+        >
+          Messages
         </AdminV2NavLink>
         <AdminV2NavLink
           href="/adminV2/ai-activity"

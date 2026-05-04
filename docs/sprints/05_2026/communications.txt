@@ -1528,3 +1528,75 @@ Suggested **immediate implementation order:** **Card 23 (copy + mapping layer + 
 ---
 
 End design batch — Cards 22, 23, 25A.
+
+⸻
+
+## Cards 26–30 implementation batch (drawer UX + Messaging scaffold — Apr 2026)
+
+### Card 26 — Related person threads in drawer
+
+**Implemented:** Threads list API merges (1) threads where `primary_entity_type` / `primary_entity_id` match the requested record with (2) **person‑anchored** threads whose `primary_entity_type = persons` and `primary_entity_id` is in a **resolver‑computed, capped set** of related person ids (`opportunities`, `jobs`, `customers`). Result set is **deduped by thread id**, **sorted `updated_at` desc**, bounded with existing limits. Rows may include `anchor_kind` (`record` | `related_person`) and **`last_message_preview`** (batch‑loaded caps, avoids N+1).
+
+**Primary files:** `web/lib/communications/threadRelatedPersonIds.ts`, `web/app/api/admin/communications/threads/route.ts`.
+
+### Card 27 — Drawer communication channel composer
+
+**Implemented:** `CommunicationsDrawerSection` exposes **Email** / **SMS** tabs (**In‑app** disabled placeholder). Email: recipient checkboxes + subject + body. SMS: same person‑first recipients, **body only**. Send uses existing **`POST /api/admin/communications/send`** — SMS path resolves **E.164 via `recipient_person_id`** (`getPersonSmsToOrNull` / **`assertRecipientPersonEligibleForDrawerSms`**) aligned with **`opportunities` / `jobs`** entity guardrails. When bindings report channel unavailable, outbound is **explicitly unavailable** with copy (no “ready” implication).
+
+**Primary files:** `web/components/admin/communications/CommunicationsDrawerSection.tsx`, `web/lib/communications/drawerEmailRecipients.ts`, `web/app/api/admin/communications/send/route.ts`.
+
+### Card 28 — Conversation‑style drawer threads
+
+**Implemented:** Thread list shows **channel label**, **record vs related‑person hint**, **preview snippet**, and **delivery copy** via **`mapToDeliveryState` / `deliveryStatePresentation`**. Message list applies the same adapter; empty state tightened (“No communications yet” / compose CTA).
+
+**Primary files:** `CommunicationsDrawerSection.tsx`, `web/app/api/admin/communications/threads/[threadId]/messages/route.ts` (additional columns for adapters).
+
+### Card 29 — Header‑level Messaging scaffold
+
+**Implemented:** Minimal **V1 scaffold** route **`/adminV2/messages`** with placeholder panels (recent conversations / search recipient / compose + channel selector notes). **Top nav** includes a safe **Messages** link (does not remove other tabs).
+
+**Primary files:** `web/app/adminV2/messages/page.tsx`, `web/app/adminV2/components/TopNavBar.tsx`.
+
+**Deferred / APIs for a real Messaging v2:** unify “threads with related persons” across org; person/customer/global search backed by existing admin patterns; optionally lift send composer to shared module; unread state (not implemented).
+
+### Card 30 — Communications UX completion audit (post‑26–29)
+
+#### What works end‑to‑end (with current gates)
+
+| Area | Status |
+|------|--------|
+| Inbound SMS (Twilio webhook → canonical `communication_messages`, person‑first anchor) | **Works** where webhook + bindings are configured; **production hardening** (e.g. signature / kill‑switch tracks) remains a separate discipline. |
+| Outbound email (Resend enqueue path + drawer) | **Works** when org has active email binding + send permission + workers/cron behave as deployed. |
+| Drawer thread visibility — **direct** entity threads | **Works**. |
+| Drawer thread visibility — **related person** inbound SMS threads | **Works** on supported entity types (**opportunities**, **jobs**, **customers**) via threads API union. |
+| Composer — **Email** | **Works** unchanged in intent (`opportunities` / **`jobs`** only — **customers drawer composer not enabled** by existing product guard). |
+| Composer — **SMS** | **Works** same guardrails as send route: **`opportunities` / `jobs`**, active **SMS binding** + secret, **`recipient_person_id`** with eligible mobile on person; UI disabled with copy when bindings/channels disallow. |
+| Delivery presentation in drawer | **`deliveryStateAdapter`** — honest states (incl. “Received”, “Sent to provider”, “Delivery not confirmed”, failures) without inventing webhook truth. |
+
+#### Still blocked or not in this batch
+
+- **SMS outbound** — blocked when: no SMS binding / missing secret_ref, **`communications.send`** / role denial, unsupported entity (**customers drawer** composer off), person has **no usable mobile**, or infra queue/cron failure (same as before; UI surfaces binding gaps).
+- **Provider webhooks** — full bounce/delivery truth for email/SMS still requires ingestion + persistence (existing program note).
+- **Read/unread**, **templates**, **bulk**, **provider setup UI** — **explicitly out of scope** per sprint guards.
+- **Global Messaging inbox** — **scaffold only**; no cross‑record inbox or search wired.
+
+#### Recommended next sprint batch
+
+1. **Customer (and optionally schedule) composer** alignment — extend send route / drawer eligibility only where product confirms same **`assertRowOrg`** + person linkage rules.**  
+2. **Webhook ingestion** for delivery/bounce correlation (email + SMS status callbacks).  
+3. **Unread + notification** primitives (design + smallest schema/query if approved).  
+4. **Messaging page v2**: wire threads search + reuse drawer data hooks; optional command palette recipient pick.
+
+---
+
+**Manual test checklist (staging org)**
+
+- Org: **`93667019-bd28-49b5-a688-acc9bb1e0a19`**. Inbound: **`+15412408863`**, sender **`+16022904816`** (existing test pair).
+1. Receive inbound SMS bound to inbound number → canonical message row + **person‑anchored** thread.  
+2. Open **opportunity** or **job** drawer for a linked record → Communication section lists thread (**related person** path) alongside any **direct** threads.  
+3. **Email** send from drawer → confirm non‑413/403 and enqueue note.  
+4. **SMS** send (if SMS binding + secret + permission): composer enabled; send queued/sent notes as environment defines; if bindings missing, UI shows **explicit disabled** cause.
+
+**Suggested commit message:** `feat(communications): related-person drawer threads, SMS/email composer, messaging scaffold`
+
+(Separate KPI / **`COMMUNICATION_DUAL_WRITE`** / **`workflowRun.ts`** untouched in this batch per program rules.)
