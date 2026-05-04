@@ -7,6 +7,13 @@
 -- - No-op when user_roles_pkey already spans (user_id, org_id, role).
 -- - Drops legacy user_roles_pkey only when it is a single-column key on user_id.
 -- - Promotes existing uniq_user_roles_user_org_role when present; otherwise creates it then attaches PK.
+--
+-- USING INDEX must name the index without a schema qualifier (Postgres rejects public.idx).
+--
+-- Transactionality: migrations run in a single DB transaction by default. If this file fails mid-run,
+-- the transaction aborts — expect remote user_roles_pkey and uniq_user_roles_user_org_role unchanged
+-- from pre-migration state (legacy PK + baseline unique index still present). Safe to rerun after fix:
+-- composite_pk_present skips PK work; CREATE UNIQUE INDEX IF NOT EXISTS is idempotent.
 
 DO $$
 DECLARE
@@ -67,7 +74,7 @@ BEGIN
             ON public.user_roles (user_id, org_id, role);
 
         ALTER TABLE public.user_roles
-            ADD CONSTRAINT user_roles_pkey PRIMARY KEY USING INDEX public.uniq_user_roles_user_org_role;
+            ADD CONSTRAINT user_roles_pkey PRIMARY KEY USING INDEX uniq_user_roles_user_org_role;
 
         RAISE NOTICE 'user_roles: created composite PRIMARY KEY (user_id, org_id, role)';
     END IF;
