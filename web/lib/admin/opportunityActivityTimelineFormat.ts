@@ -63,13 +63,37 @@ export function getWorkflowActivityActorLabel(payload: Record<string, unknown>, 
 /** Re-export for queue rows & tests */
 export { formatQueueNoteDateTime } from "@/lib/admin/activityTimelineFormat";
 
+function stripLeadingNoteTimestampLike(raw: string): string {
+    let s = raw.trim();
+    if (!s) return s;
+    // Normalize common double-time artifacts before stripping.
+    s = s.replace(
+        /^(\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}\s+(?:AM|PM))\s+·\s+\d{1,2}:\d{2}\s+(?:AM|PM)\s+—\s+/i,
+        "$1 — "
+    );
+    // Remove "h:mm AM/PM — " prefix.
+    s = s.replace(/^\d{1,2}:\d{2}\s*(?:AM|PM)\s+—\s+/i, "");
+    // Remove "MM/DD/YYYY h:mm AM/PM — " prefix.
+    s = s.replace(/^\d{1,2}\/\d{1,2}\/\d{4},?\s+\d{1,2}:\d{2}\s+(?:AM|PM)\s+—\s+/i, "");
+    // Remove "MM/DD/YYYY — " prefix.
+    s = s.replace(/^\d{1,2}\/\d{1,2}\/\d{4}\s+—\s+/i, "");
+    return s.trim();
+}
+
 /** Opportunity CRM queue: composed from generic note blob formatter */
 /** Queue row: date/time before note body for triage scan. */
 export function formatOpportunityQueueNotesPreview(
     raw: string | null | undefined,
     displayTimeZone?: string
 ): string | null {
-    return formatActivityQueueNotesBlobPreview(raw, { dateFirst: true, displayTimeZone });
+    const parts = formatOpportunityQueueNotesPreviewParts(raw, displayTimeZone);
+    if (!parts) return null;
+    const ts = parts.timestamp?.trim() || null;
+    const body = parts.body.trim();
+    if (!ts && !body) return null;
+    if (!ts) return body || null;
+    if (!body) return ts;
+    return `${ts} — ${body}`;
 }
 
 /** Same selection as `formatOpportunityQueueNotesPreview`, split for timestamp vs body typography. */
@@ -77,7 +101,26 @@ export function formatOpportunityQueueNotesPreviewParts(
     raw: string | null | undefined,
     displayTimeZone?: string
 ): ActivityQueueNotesPreviewParts | null {
-    return formatActivityQueueNotesBlobPreviewParts(raw, { displayTimeZone });
+    const blob = (raw ?? "").trim();
+    if (!blob) return null;
+
+    /**
+     * Queue enrichment may already emit the final "MM/DD/YYYY h:mm AM/PM — Note" line (e.g. from `metadata.notes_at`).
+     * If we re-parse that via the generic dated-line parser we can lose time-of-day (US date parse assumes midnight)
+     * and end up with duplicate timestamps.
+     */
+    const alreadyFormatted = blob.match(
+        /^(\d{1,2}\/\d{1,2}\/\d{4},?\s+\d{1,2}:\d{2}\s+(?:AM|PM))\s+—\s+([\s\S]+)$/
+    );
+    if (alreadyFormatted) {
+        const ts = alreadyFormatted[1]!.replace(",", "").replace(/\s+/g, " ").trim();
+        const body = stripLeadingNoteTimestampLike(alreadyFormatted[2]!.trim().replace(/\s+/g, " "));
+        return { timestamp: ts || null, body };
+    }
+
+    const parts = formatActivityQueueNotesBlobPreviewParts(blob, { displayTimeZone });
+    if (!parts) return null;
+    return { ...parts, body: stripLeadingNoteTimestampLike(parts.body) };
 }
 
 /** Humanize with enrollment status key map (for callers/tests) */

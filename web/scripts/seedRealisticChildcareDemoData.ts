@@ -30,6 +30,7 @@ import { resolve } from "path";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
 import { demoSeedMetadata, STAGING_REALISTIC_CHILDCARE_SEED_PACKAGE } from "./lib/stagingDemoMarkers";
+import { fromZonedTime } from "date-fns-tz";
 import {
     ageGroupForProgramLabel,
     approximateAgeMonthsFromDobIso,
@@ -1301,6 +1302,115 @@ function mdString(md: Record<string, unknown> | null, key: string): string | nul
     return typeof v === "string" ? v : null;
 }
 
+function stripLeadingNoteTimestampLike(raw: string): string {
+    let s = raw.trim();
+    if (!s) return s;
+    s = s.replace(
+        /^(\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}\s+(?:AM|PM))\s+·\s+\d{1,2}:\d{2}\s+(?:AM|PM)\s+—\s+/i,
+        "$1 — "
+    );
+    s = s.replace(/^\d{1,2}:\d{2}\s*(?:AM|PM)\s+—\s+/i, "");
+    s = s.replace(/^\d{1,2}\/\d{1,2}\/\d{4},?\s+\d{1,2}:\d{2}\s+(?:AM|PM)\s+—\s+/i, "");
+    s = s.replace(/^\d{1,2}\/\d{1,2}\/\d{4}\s+—\s+/i, "");
+    return s.trim();
+}
+
+function looksLikeLeadingNoteTimestamp(raw: string): boolean {
+    const s = raw.trim();
+    if (!s) return false;
+    return (
+        /^\d{1,2}:\d{2}\s*(?:AM|PM)\s+—\s+/i.test(s) ||
+        /^\d{1,2}\/\d{1,2}\/\d{4}/.test(s) ||
+        /^\[[^\]]+\]/.test(s)
+    );
+}
+
+function zonedWallToUtcIso(params: {
+    ymd: string;
+    hour12: number;
+    minute: number;
+    ampm: "AM" | "PM";
+    timeZoneIana: string;
+}): string | null {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(params.ymd.trim());
+    if (!m) return null;
+    let h = params.hour12 % 12;
+    if (params.ampm === "PM") h += 12;
+    const wallUtc = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), h, params.minute, 0, 0));
+    try {
+        const d = fromZonedTime(wallUtc, params.timeZoneIana);
+        return Number.isFinite(d.getTime()) ? d.toISOString() : null;
+    } catch {
+        return null;
+    }
+}
+
+function extractBestNoteTimestampAndBody(params: {
+    raw: string;
+    fallbackYmd: string | null;
+    timeZoneIana: string;
+}): { notesAtIso: string | null; body: string } {
+    const s0 = params.raw.trim();
+    if (!s0) return { notesAtIso: null, body: "" };
+
+    // Case 1: already-enriched "MM/DD/YYYY h:mm AM/PM · h:mm AM/PM — Body" (choose embedded time).
+    const dot = s0.match(
+        /^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+\d{1,2}:\d{2}\s+(AM|PM)\s+·\s+(\d{1,2}):(\d{2})\s+(AM|PM)\s+—\s+([\s\S]+)$/i
+    );
+    if (dot) {
+        const ymd = `${dot[3]}-${String(dot[1]).padStart(2, "0")}-${String(dot[2]).padStart(2, "0")}`;
+        const iso = zonedWallToUtcIso({
+            ymd,
+            hour12: Number(dot[5]),
+            minute: Number(dot[6]),
+            ampm: String(dot[7]).toUpperCase() === "PM" ? "PM" : "AM",
+            timeZoneIana: params.timeZoneIana,
+        });
+        return { notesAtIso: iso, body: stripLeadingNoteTimestampLike(dot[8] ?? "") };
+    }
+
+    // Case 2: full US datetime prefix.
+    const full = s0.match(
+        /^(\d{1,2})\/(\d{1,2})\/(\d{4}),?\s+(\d{1,2}):(\d{2})\s+(AM|PM)\s+—\s+([\s\S]+)$/i
+    );
+    if (full) {
+        const ymd = `${full[3]}-${String(full[1]).padStart(2, "0")}-${String(full[2]).padStart(2, "0")}`;
+        const iso = zonedWallToUtcIso({
+            ymd,
+            hour12: Number(full[4]),
+            minute: Number(full[5]),
+            ampm: String(full[6]).toUpperCase() === "PM" ? "PM" : "AM",
+            timeZoneIana: params.timeZoneIana,
+        });
+        return { notesAtIso: iso, body: stripLeadingNoteTimestampLike(full[7] ?? "") };
+    }
+
+    // Case 3: time-only prefix — keep date from notes_at/created_at fallback.
+    const timeOnly = s0.match(/^(\d{1,2}):(\d{2})\s+(AM|PM)\s+—\s+([\s\S]+)$/i);
+    if (timeOnly && params.fallbackYmd) {
+        const iso = zonedWallToUtcIso({
+            ymd: params.fallbackYmd,
+            hour12: Number(timeOnly[1]),
+            minute: Number(timeOnly[2]),
+            ampm: String(timeOnly[3]).toUpperCase() === "PM" ? "PM" : "AM",
+            timeZoneIana: params.timeZoneIana,
+        });
+        return { notesAtIso: iso, body: stripLeadingNoteTimestampLike(timeOnly[4] ?? "") };
+    }
+
+    // Case 4: bracketed ISO timestamp.
+    const bracket = s0.match(/^\[([^\]]+)\]\s*([\s\S]*)$/);
+    if (bracket) {
+        const ms = Date.parse(bracket[1]!.trim());
+        return {
+            notesAtIso: Number.isFinite(ms) ? new Date(ms).toISOString() : null,
+            body: stripLeadingNoteTimestampLike(bracket[2] ?? ""),
+        };
+    }
+
+    return { notesAtIso: null, body: stripLeadingNoteTimestampLike(s0) };
+}
+
 function effectiveQuotePresent(o: {
     quote_total: number | null;
     estimated_price_cents: number | null;
@@ -1658,6 +1768,8 @@ async function printSeedValidationSummary(supabase: SupabaseAdmin, orgId: string
 
     let tourDateMissingTime = 0;
     let notesMissingAt = 0;
+    let notesBodyHasLeadingTimestamp = 0;
+    let notePreviewWouldDuplicateTimestamp = 0;
     let multiChildHomogeneousPrograms = 0;
     for (const o of opps) {
         const md = asMetaRecord(o.metadata);
@@ -1667,6 +1779,8 @@ async function printSeedValidationSummary(supabase: SupabaseAdmin, orgId: string
         const n = (mdString(md, "notes") ?? mdString(md, "demo_note") ?? "").trim();
         const na = (mdString(md, "notes_at") ?? "").trim();
         if (n && !na) notesMissingAt++;
+        if (n && looksLikeLeadingNoteTimestamp(n)) notesBodyHasLeadingTimestamp++;
+        if (na && n && /^\d{1,2}:\d{2}\s*(?:AM|PM)\s+—\s+/i.test(n)) notePreviewWouldDuplicateTimestamp++;
         const ic = md?.inquiry_children;
         if (Array.isArray(ic) && ic.length >= 2) {
             const labs = ic
@@ -1803,6 +1917,8 @@ async function printSeedValidationSummary(supabase: SupabaseAdmin, orgId: string
     console.log(`- child rows where metadata.program_label ≠ DOB-derived tier: ${childProgramMismatches}`);
     console.log(`- opportunities with tour_date but no tour_time: ${tourDateMissingTime}`);
     console.log(`- opportunities with notes/demo_note but no notes_at: ${notesMissingAt}`);
+    console.log(`- opportunities where note body still begins with date/time prefix: ${notesBodyHasLeadingTimestamp}`);
+    console.log(`- opportunities where notes_at + body-time would render duplicate timestamps: ${notePreviewWouldDuplicateTimestamp}`);
     console.log(
         `- opportunities with 2+ inquiry_children sharing one program_label (should be 0 after tiered DOB seed/patch): ${multiChildHomogeneousPrograms}`
     );
@@ -1894,8 +2010,18 @@ async function runMetadataPatchMain(): Promise<void> {
         metadata: unknown;
         created_at: string | null;
     }>;
+    const orgTz = await (async () => {
+        const { data: orgRow } = await supabase.from("org_settings").select("metadata").eq("org_id", orgId).maybeSingle();
+        const meta = asMetaRecord((orgRow as { metadata?: unknown } | null)?.metadata ?? null);
+        const tz = (mdString(meta, "timezone") ?? mdString(meta, "time_zone") ?? "").trim();
+        return isValidIanaTimeZone(tz) ? tz : "America/Los_Angeles";
+    })();
+    console.log(`[seed:patch-metadata] Effective org timezone for note parsing: ${orgTz}`);
     let oppUpdates = 0;
     let memberTouch = 0;
+    let notesBodiesWithLeadingPatternsBefore = 0;
+    let notesBodiesWithLeadingPatternsAfter = 0;
+    let notesAtAdjustedFromBody = 0;
     for (const o of opps) {
         const md = asMetaRecord(o.metadata);
         if (!md) continue;
@@ -1997,11 +2123,42 @@ async function runMetadataPatchMain(): Promise<void> {
             nextMd.tour_time = buildSeedTourTime(hash32(seedKey));
         }
 
-        const noteText = (mdString(nextMd, "notes") ?? mdString(nextMd, "demo_note") ?? "").trim();
+        const noteTextRaw = (mdString(nextMd, "notes") ?? "").trim();
+        const demoNoteRaw = (mdString(nextMd, "demo_note") ?? "").trim();
+        if (noteTextRaw && looksLikeLeadingNoteTimestamp(noteTextRaw)) notesBodiesWithLeadingPatternsBefore++;
+        if (demoNoteRaw && looksLikeLeadingNoteTimestamp(demoNoteRaw)) notesBodiesWithLeadingPatternsBefore++;
         const na0 = (mdString(nextMd, "notes_at") ?? "").trim();
-        if (noteText && !na0) {
-            const ca = o.created_at && String(o.created_at).trim() ? String(o.created_at).trim() : null;
-            nextMd.notes_at = ca ?? isoDate(new Date());
+        const fallbackYmd = (() => {
+            const refIso = na0 || (o.created_at && String(o.created_at).trim() ? String(o.created_at).trim() : "");
+            if (!refIso) return null;
+            const ms = Date.parse(refIso);
+            if (!Number.isFinite(ms)) return null;
+            // Date component in org TZ.
+            const d = new Date(ms);
+            const parts = new Intl.DateTimeFormat("en-CA", { timeZone: orgTz, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(d);
+            const y = parts.find((p) => p.type === "year")?.value;
+            const m = parts.find((p) => p.type === "month")?.value;
+            const day = parts.find((p) => p.type === "day")?.value;
+            return y && m && day ? `${y}-${m}-${day}` : null;
+        })();
+        const candidateForTimestamp = noteTextRaw || demoNoteRaw;
+        if (candidateForTimestamp) {
+            const extracted = extractBestNoteTimestampAndBody({
+                raw: candidateForTimestamp,
+                fallbackYmd,
+                timeZoneIana: orgTz,
+            });
+            const bodyPlain = extracted.body;
+            if (bodyPlain && looksLikeLeadingNoteTimestamp(bodyPlain)) notesBodiesWithLeadingPatternsAfter++;
+            if (noteTextRaw) nextMd.notes = bodyPlain;
+            if (demoNoteRaw) nextMd.demo_note = bodyPlain;
+            if (extracted.notesAtIso && extracted.notesAtIso !== na0) {
+                nextMd.notes_at = extracted.notesAtIso;
+                notesAtAdjustedFromBody++;
+            } else if (!na0) {
+                const ca = o.created_at && String(o.created_at).trim() ? String(o.created_at).trim() : null;
+                nextMd.notes_at = ca ?? isoDate(new Date());
+            }
         }
 
         const changed =
@@ -2009,7 +2166,9 @@ async function runMetadataPatchMain(): Promise<void> {
             (mdString(md, "program_label") ?? "").trim() !== (mdString(nextMd, "program_label") ?? "").trim() ||
             (mdString(md, "age_group") ?? "").trim() !== (mdString(nextMd, "age_group") ?? "").trim() ||
             (mdString(md, "tour_time") ?? "").trim() !== (mdString(nextMd, "tour_time") ?? "").trim() ||
-            (mdString(md, "notes_at") ?? "").trim() !== (mdString(nextMd, "notes_at") ?? "").trim();
+            (mdString(md, "notes_at") ?? "").trim() !== (mdString(nextMd, "notes_at") ?? "").trim() ||
+            (mdString(md, "notes") ?? "").trim() !== (mdString(nextMd, "notes") ?? "").trim() ||
+            (mdString(md, "demo_note") ?? "").trim() !== (mdString(nextMd, "demo_note") ?? "").trim();
 
         if (changed) {
             const patch = { metadata: nextMd, updated_at: isoDate(new Date()) };
@@ -2020,6 +2179,9 @@ async function runMetadataPatchMain(): Promise<void> {
     }
     console.log(`[seed:patch-metadata] Opportunities updated: ${oppUpdates} / ${opps.length}`);
     console.log(`[seed:patch-metadata] customer_members metadata program touch count: ${memberTouch}`);
+    console.log(`[seed:patch-metadata] note bodies with leading date/time patterns (before): ${notesBodiesWithLeadingPatternsBefore}`);
+    console.log(`[seed:patch-metadata] note bodies with leading date/time patterns (after strip): ${notesBodiesWithLeadingPatternsAfter}`);
+    console.log(`[seed:patch-metadata] notes_at adjusted from note body timestamp: ${notesAtAdjustedFromBody}`);
     await printSeedValidationSummary(supabase, orgId);
     console.log("[seed:patch-metadata] Done.");
 }

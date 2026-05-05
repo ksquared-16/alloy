@@ -6611,7 +6611,7 @@
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__footer--stress .adminv2-ws-crm-queue-preview__note-body {
-  font-style: italic;
+  font-style: normal;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__footer-notes {
@@ -7364,7 +7364,7 @@
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__footer--stress .adminv2-ws-crm-queue-preview__note-body {
-  font-style: italic;
+  font-style: normal;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-work-unit .adminv2-ws-crm-queue-preview__contact-segments {

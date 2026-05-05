@@ -50,12 +50,12 @@ describe("opportunityActivityTimelineFormat", () => {
         expect(getWorkflowActivityActorLabel({ actor: "system" }, null)).toBe("System");
     });
 
-    it("queue note picks latest dated line and formats date (datetime · note, local tz)", () => {
+    it("queue note picks latest dated line and formats date (datetime — note, local tz)", () => {
         const raw = `2025-06-10 First note\n2026-06-20 Second note wins`;
         const out = formatOpportunityQueueNotesPreview(raw);
         const wantDate = formatQueueNoteDateTime(Date.parse("2026-06-20"));
         expect(out).toBeTruthy();
-        expect(out).toBe(`${wantDate} · Second note wins`);
+        expect(out).toBe(`${wantDate} — Second note wins`);
         expect(wantDate).toMatch(/\d{1,2}\/\d{1,2}\/\d{4}/);
         expect(wantDate).not.toContain(",");
     });
@@ -68,14 +68,25 @@ describe("opportunityActivityTimelineFormat", () => {
             timestamp: formatQueueNoteDateTime(Date.parse("2026-04-29T21:15:05Z")),
             body: "Tried to contact via phone today",
         });
-        expect(line).toBe(`${parts!.timestamp} · ${parts!.body}`);
+        expect(line).toBe(`${parts!.timestamp} — ${parts!.body}`);
     });
 
     it("queue note parses bracketed ISO timestamp (local tz)", () => {
         const raw = "[2026-04-29T21:15:05Z] Tried to contact via phone today";
         const out = formatOpportunityQueueNotesPreview(raw);
         const wantDate = formatQueueNoteDateTime(Date.parse("2026-04-29T21:15:05Z"));
-        expect(out).toBe(`${wantDate} · Tried to contact via phone today`);
+        expect(out).toBe(`${wantDate} — Tried to contact via phone today`);
+    });
+
+    it("queue note keeps already-formatted enrichment line (no duplicate timestamps)", () => {
+        const raw = "05/04/2026, 10:28 PM — Left voicemail, will try again tomorrow afternoon.";
+        expect(formatOpportunityQueueNotesPreview(raw, "America/Los_Angeles")).toBe(
+            "05/04/2026 10:28 PM — Left voicemail, will try again tomorrow afternoon."
+        );
+        expect(formatOpportunityQueueNotesPreviewParts(raw, "America/Los_Angeles")).toEqual({
+            timestamp: "05/04/2026 10:28 PM",
+            body: "Left voicemail, will try again tomorrow afternoon.",
+        });
     });
 
     it("queue note uses last line when undated", () => {

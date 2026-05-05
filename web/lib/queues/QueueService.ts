@@ -333,13 +333,32 @@ function formatQueueNotePreview(
     notesAtRaw: unknown,
     displayTimeZoneIana: string
 ): string | null {
-    const text = typeof notesRaw === "string" ? notesRaw.trim() : "";
+    const stripLeadingTimestampLike = (raw: string): string => {
+        let s = raw.trim();
+        if (!s) return s;
+        // Normalize common double-time artifacts before stripping.
+        // e.g. "05/03/2026 5:00 PM · 3:28 PM — Note" → "05/03/2026 5:00 PM — Note"
+        s = s.replace(
+            /^(\d{1,2}\/\d{1,2}\/\d{4}\s+\d{1,2}:\d{2}\s+(?:AM|PM))\s+·\s+\d{1,2}:\d{2}\s+(?:AM|PM)\s+—\s+/i,
+            "$1 — "
+        );
+        // Remove "h:mm AM/PM — " prefix.
+        s = s.replace(/^\d{1,2}:\d{2}\s*(?:AM|PM)\s+—\s+/i, "");
+        // Remove "MM/DD/YYYY h:mm AM/PM — " prefix.
+        s = s.replace(/^\d{1,2}\/\d{1,2}\/\d{4},?\s+\d{1,2}:\d{2}\s+(?:AM|PM)\s+—\s+/i, "");
+        // Remove "MM/DD/YYYY — " prefix.
+        s = s.replace(/^\d{1,2}\/\d{1,2}\/\d{4}\s+—\s+/i, "");
+        return s.trim();
+    };
+
+    const text = typeof notesRaw === "string" ? stripLeadingTimestampLike(notesRaw) : "";
     if (!text) return null;
     const at = typeof notesAtRaw === "string" ? notesAtRaw.trim() : "";
     if (!at) return text;
     const d = new Date(at);
     if (Number.isNaN(d.getTime())) return `${at.length > 16 ? at.slice(0, 16) : at} — ${text}`;
-    return `${formatDateTimeForUserDisplay(d, displayTimeZoneIana)} — ${text}`;
+    const ts = formatDateTimeForUserDisplay(d, displayTimeZoneIana).replace(",", "").replace(/\s+/g, " ").trim();
+    return `${ts} — ${text}`;
 }
 
 function toIso(d: Date): string {

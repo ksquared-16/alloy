@@ -634,7 +634,7 @@ function CrmCompactQueuePreview({
                         <>
                           <span className="adminv2-ws-crm-queue-preview__note-sep" aria-hidden>
                             {" "}
-                            ·{" "}
+                            —{" "}
                           </span>
                           <span className="adminv2-ws-crm-queue-preview__note-body">{notePrev!.body.trim()}</span>
                         </>
