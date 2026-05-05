@@ -1,5 +1,22 @@
 -- Permission for delegated Settings: Users & Roles management (alongside org admin).
 -- Admins receive this grant automatically per org so existing behavior stays unchanged.
+--
+-- role_permission_grants.permission_key FK -> permission_keys(key), not permission_definitions.
+-- Seed permission_keys first, then permission_definitions (UI/catalog), then grants.
+
+INSERT INTO public.permission_keys (key, label, group_key, description, is_active)
+VALUES (
+    'settings.users_roles',
+    'Manage users and roles',
+    'settings',
+    NULL,
+    true
+)
+ON CONFLICT (key) DO UPDATE SET
+    label = EXCLUDED.label,
+    group_key = EXCLUDED.group_key,
+    description = EXCLUDED.description,
+    is_active = EXCLUDED.is_active;
 
 INSERT INTO public.permission_definitions (key, group_key, label, is_active)
 VALUES (
