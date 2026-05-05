@@ -91,6 +91,7 @@ Outbound and inbound messaging threads tied to **entities** (person-first anchor
 ## Related
 
 - **CRM / opportunities context:** `docs/product/crm-system.md`
+- **Legacy retirement phases (audit):** `docs/audits/legacy-messages-retirement-plan.md`
 
 ## When this doc must be updated
 

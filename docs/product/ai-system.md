@@ -18,6 +18,20 @@ Document **actual** admin/agent HTTP routes and env gates in `web/` — not futu
 - Callers must use normal **admin auth** paths (`getAdminContextCached` / related) as implemented per route.
 - Agent commits that touch config (e.g. field visibility) go through validation helpers in **`web/lib/agent/**`** — do not bypass DB invariants.
 
+### SECURITY DEFINER RPCs (config mutations)
+
+Canonical applies are **`SECURITY DEFINER`** functions in **`public`** (see **`docs/supabase/reference/supabase_functions.csv`**):
+
+| Function | Config target | Safety pattern (DB-enforced) |
+|----------|----------------|-------------------------------|
+| **`agent_v0_commit_queue_definition_apply`** | **`work_units.queue_definition`** | **`FOR UPDATE`** row lock; **`p_expected_version`** vs stored version → raises **`agent_v0:stale_queue_definition_version`** on mismatch; **`agent_v0_proposals`** + **`agent_v0_apply_audit`** rows on success. |
+| **`agent_v1_commit_record_overview_layout_apply`** | Record overview layout JSON | Same class of **expected version** check (**`agent_v1:stale_record_overview_layout_version`**); proposals + apply audit tables. |
+| **`agent_v2_commit_field_visibility_apply`** | **`field_definitions`** visibility flags | **`p_expected_updated_at`** stale check (**`agent_v2:stale_field_definition`**); proposals + apply audit tables. |
+
+Definitions use **`SET search_path TO 'public'`** in live exports — keep aligned with general DEFINER hardening doctrine.
+
+**Boundary:** AI (or any caller) must **not** write these config tables around the RPCs; use the same **`proposal_id` / `request_id` / `correlation_id` / `result_id`** tracing pattern the routes implement. Human admins should hit the same RPCs or equivalent server-validated paths, not ad hoc SQL.
+
 ## Source of truth / key files
 
 | Concern | Location |
@@ -31,7 +45,7 @@ Document **actual** admin/agent HTTP routes and env gates in `web/` — not futu
 
 - **No direct client DB secrets.**
 - **Do not** train or prompt against production PII without policy.
-- **Configuration updates** made by AI must use the same validation paths as human-submitted JSON (e.g. queue definition schema).
+- **Configuration updates** made by AI must use the same validation paths as human-submitted JSON (e.g. queue definition schema) and the **DEFINER RPC + stale-check + audit insert** pattern above — not raw table patches.
 - **Do not** bypass `executeAdminAction` / events when an operation is standardized there.
 
 ## Known gaps / risks

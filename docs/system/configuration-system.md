@@ -32,6 +32,12 @@ Config surfaces include (non-exhaustive):
 | Access scope (CRM) | `web/lib/admin/accessScope.ts`, `web/lib/admin/getAdminAccessContext.ts`, `web/app/api/admin/users/[userId]/access-scope/route.ts` |
 | Admin entity types for statuses | `web/lib/admin/statusDefinitionsAdminEntityTypes.ts` |
 
+## AI-mediated configuration mutations
+
+When **agents** or automation apply JSON config (queue definitions, record overview layouts, field visibility), the database layer expects **`agent_v0_*` / `agent_v1_*` / `agent_v2_*` `SECURITY DEFINER`** apply functions (**`docs/supabase/reference/supabase_functions.csv`**, **`docs/product/ai-system.md`**): **optimistic concurrency** (expected version / updated-at), **`FOR UPDATE`** where applicable, and **proposal + apply-audit** rows. Treat direct writes to those tables as **unsafe** unless they follow the same invariants.
+
+---
+
 ## Guardrails
 
 - **Opportunity `metadata`:** Treat it as **inquiry / enrollment context** (program interest, tour, desired start, notes, structured inquiry payloads), **not** as the canonical store for **household child identity**. Child names and DOB for queue previews must be enriched from **`customer_members`** via **`opportunities.customer_id`** (see **`docs/system/workspace-system.md`** and **`docs/system/entity-model.md`**). Do not add new features that **require** child names to live only in metadata.

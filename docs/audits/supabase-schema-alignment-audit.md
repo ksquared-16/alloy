@@ -80,7 +80,7 @@ Docs-only items are reflected in **`docs/product/communications.md`**, **`docs/p
 | **`workflow_events` writes** | **Proposed:** migration removes authenticated admin/ops **`ALL`**; app already uses **service_role** for inserts. **Confirm** no external authenticated Supabase clients relied on direct writes. |
 | **Legacy `messages`** | **Documented:** **`communication_*`** canonical V1; **`messages` / `messages_outbox`** compatibility; retirement needs **backfill/migration plan** — see **`docs/product/communications.md`**. |
 | **`customer_payment_methods`** | **Documented server-only** until portal/payment UX; then design **least-privilege** policies — see **`docs/product/billing-and-financials.md`**. |
-| **`workflows` RLS** | **Open:** migrate predicate from **`user_profiles.role`** to **`user_roles` + `role_permission_grants`** (or equivalent). |
+| **`workflows` RLS** | **Open:** migrate predicate from **`user_profiles.role`** to **`user_roles` + `role_permission_grants`** (or equivalent). See **`docs/audits/workflow-rbac-alignment-audit.md`**. |
 | **`SECURITY DEFINER` search_path** | **Proposed:** **`ALTER FUNCTION … SET search_path TO public, pg_temp`** for the three functions above (migration **`20260505180100_…`**). |
 
 ### Post-migration verification (SQL)

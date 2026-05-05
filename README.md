@@ -2,7 +2,7 @@
 
 Alloy is a **platform connecting homeowners with local service professionals**. The system of record is **Supabase**; the main application is the **Next.js web app** in `web/`, which handles marketing, quoting, booking, and a full admin for opportunities, jobs, schedules, vendors, and operations. The current production vertical is **home cleaning** (e.g. Bend, Oregon).
 
-**What’s working today:** A customer gets a quote (quote-start → quote-refine), selects a time (availability), and confirms (book-v2/confirm). That creates or reuses **Opportunity → Job → Schedule** and optionally **Customer/Contact** and **discount redemptions**. Admins manage **vendors** (approve/suspend), set a **job default vendor** (`assigned_vendor_id`), **apply it to upcoming schedules** (creates assignments with status “offered”), and handle **assignments** (accept/decline), **reschedule**, and **cancel**. **Subscriptions** can generate the next occurrence (generate-next). **Workflows** (e.g. `booking_confirmed`) run on confirm and can enqueue **messages_outbox** (Twilio/send integration TBD). A separate **sync** (Python) can pull contacts/opportunities/jobs from GoHighLevel into Supabase; a **backend** (Python) exists for GHL/Twilio flows and is optional relative to the web app.
+**What’s working today:** A customer gets a quote (quote-start → quote-refine), selects a time (availability), and confirms (book-v2/confirm). That creates or reuses **Opportunity → Job → Schedule** and optionally **Customer/Contact** and **discount redemptions**. Admins manage **vendors** (approve/suspend), set a **job default vendor** (`assigned_vendor_id`), **apply it to upcoming schedules** (creates assignments with status “offered”), and handle **assignments** (accept/decline), **reschedule**, and **cancel**. **Subscriptions** can generate the next occurrence (generate-next). **Workflows** run on business events and integrate with **Communications V1** (`communication_*`) and legacy **`messages` / `messages_outbox`** where workflows still enqueue SMS (see **`docs/product/communications.md`**). A separate **sync** (Python) can pull contacts/opportunities/jobs from GoHighLevel into Supabase; a **backend** (Python) supports GHL/Twilio/dispatcher flows and is optional relative to the core booking → job → schedule path in the web app.
 
 ---
 
@@ -10,26 +10,22 @@ Alloy is a **platform connecting homeowners with local service professionals**. 
 
 ```
 .
-├── web/                    # Next.js 16 app (main app + admin + API routes)
+├── web/                    # Next.js app (main app + admin + API routes)
 │   ├── app/                # App Router: pages + API routes
-│   │   ├── admin/          # Admin UI (dashboard, jobs, schedules, vendors, etc.)
-│   │   ├── api/            # API: book-v2, admin/*, action links, etc.
-│   │   ├── book-v2/        # Booking flow UI
-│   │   └── ...
 │   ├── components/         # React components (admin, cleaning, UI)
 │   ├── lib/                # Supabase clients, workflowRun, bookingResolver, etc.
 │   └── ...
 ├── supabase/
 │   └── migrations/         # SQL migrations (apply via Supabase CLI or dashboard)
-├── sync/                  # Python: GHL → Supabase sync (contacts, opportunities, jobs)
+├── sync/                   # Python: GHL → Supabase sync (contacts, opportunities, jobs)
 ├── backend/                # Python: GHL/Twilio dispatcher (optional; see below)
-└── docs/                   # Architecture, domain model, deployment, operations
+└── docs/                   # Active source pack + audits (see docs/README.md)
 ```
 
 - **web**: Primary app. Next.js runs both the public/marketing/booking frontend and the admin; API routes live under `web/app/api/`.
 - **supabase/migrations**: Source of truth for schema. Apply in order by timestamp prefix.
-- **sync**: Idempotent workers that pull from GoHighLevel and upsert into Supabase (see `sync/README.md`).
-- **backend**: Legacy/optional Python service for GHL webhooks and Twilio; not required for the core booking → job → schedule → assignment flow, which is handled in the web app.
+- **sync**: Idempotent workers that pull from GoHighLevel and upsert into Supabase (see **`sync/README.md`**).
+- **backend**: Optional Python service for GHL webhooks, Twilio, and message dispatch; not required for the core booking → job → schedule → assignment flow handled in the web app.
 
 ---
 
@@ -50,7 +46,7 @@ npm install
 npm run dev
 ```
 
-App runs at **http://localhost:3000**. Admin at **http://localhost:3000/admin** (requires Supabase Auth; see `web/lib/adminAuth` and login flow).
+App runs at **http://localhost:3000**. Admin at **http://localhost:3000/admin** (requires Supabase Auth; see **`web/lib/adminAuth`** and the login flow).
 
 **Required env (see `web/.env.local`):**
 
@@ -58,11 +54,11 @@ App runs at **http://localhost:3000**. Admin at **http://localhost:3000/admin** 
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY` – Supabase anon key  
 - `SUPABASE_SERVICE_ROLE_KEY` – Server-side (confirm, admin, workflows); never expose to client  
 
-Other keys (Stripe, Twilio, etc.) as needed for payment and messaging (TBD in codebase).
+Other keys (Stripe, Twilio, communications worker URLs, etc.) as needed per environment.
 
 ### 2. Database and migrations
 
-Migrations live in **`supabase/migrations/`** (root of repo). Apply via Supabase CLI:
+Migrations live in **`supabase/migrations/`** (repo root). Apply via Supabase CLI:
 
 ```bash
 # If using Supabase CLI linked to your project
@@ -89,7 +85,7 @@ See **`sync/README.md`** for details.
 
 ### 4. Backend (optional)
 
-Python dispatcher for GHL/Twilio; not required for booking/admin:
+Python dispatcher for GHL/Twilio; not required for booking/admin core paths:
 
 ```bash
 cd backend
@@ -103,39 +99,25 @@ pip install -r requirements.txt
 
 ## Staging / production workflow
 
-- **Branches:** `staging` is the main branch referenced for this doc. Production branch and strategy: **TBD** (confirm in your Vercel/project settings).
-- **Web deploy:** Typically **Vercel** (Next.js). Set env vars in Vercel (Supabase, Stripe, etc.); no application code changes in this doc.
+- **Branches:** `staging` is the main branch referenced for this doc. Production branch and strategy: confirm in your Vercel/project settings.
+- **Web deploy:** Typically **Vercel** (Next.js). Set env vars in Vercel (Supabase, Stripe, etc.).
 - **Supabase:** Separate projects for staging vs prod recommended. Point each deploy to the correct Supabase project via env.
 - **Migrations:** Apply to each environment (staging, prod) in the same order; avoid schema drift.
 
 ---
 
-## Next up (from current codebase)
+## Docs (active source pack)
 
-- **Messaging / workflows:** Harden workflow execution and messages_outbox processing (e.g. Twilio sender); RLS and audit where needed.
-- **RLS:** Row Level Security is not fully applied; admin currently uses service role / server-side auth.
-- **Job statuses:** Optional `job_statuses` table for human-readable labels; fallback in admin for known keys (scheduled, assigned, completed).
-- **Subscription cadence:** generate-next uses subscription `cadence`/`interval`; confirm schema source (table vs `pricing_frequencies`) if needed.
+**Start here:** **[docs/README.md](docs/README.md)** — load order for onboarding and AI context, the **16 topic files + this index**, **`docs/supabase/reference/*.csv`** (generated schema reference), archive layout, and sprint notes.
 
----
+**Stale paths:** Top-level **`docs/architecture/`** and **`docs/implementation/`** were removed in the **2026-05-02** documentation reset. Comparable material lives under **`docs/archive/2026-05-02-docs-reset/`** (e.g. **[architecture/README.md](docs/archive/2026-05-02-docs-reset/architecture/README.md)**, **[implementation/ARCHITECTURE.md](docs/archive/2026-05-02-docs-reset/implementation/ARCHITECTURE.md)**) — use only when you intentionally need historical context.
 
-## Docs
-
-**Index:** [docs/README.md](docs/README.md) — folder layout, canonical vs audits vs archive.
-
-| Doc | Purpose |
-|-----|--------|
-| [docs/architecture/README.md](docs/architecture/README.md) | **Canonical** platform doctrine (records, identity, workspace, gap audit) |
-| [docs/implementation/ARCHITECTURE.md](docs/implementation/ARCHITECTURE.md) | System overview, data flows, idempotency, where to add features |
-| [docs/audits/DOMAIN_MODEL.md](docs/audits/DOMAIN_MODEL.md) | Entities, relationships, assignment statuses, default vendor vs assignment |
-| [docs/implementation/DEPLOYMENT.md](docs/implementation/DEPLOYMENT.md) | Deploy process, env, validation |
-| [docs/implementation/OPERATIONS.md](docs/implementation/OPERATIONS.md) | How admins run the business; checklists for demo/QA |
-| [docs/implementation/EVENTS.md](docs/implementation/EVENTS.md) | System events implied by code (workflows, action links); optional |
+**Supplementary audits** (not part of the capped source pack unless loaded explicitly): **`docs/audits/`** — e.g. **`supabase-schema-alignment-audit.md`**, **`workflow-rbac-alignment-audit.md`**, **`legacy-messages-retirement-plan.md`**, **`event-integrity-audit.md`**.
 
 ---
 
 ## Notes / TBD
 
 - Confirm production branch and Vercel project(s).
-- Confirm which env vars are required for book-v2 payment (Stripe) and messaging (Twilio).
-- Backend and sync are optional; document which flows still depend on them, if any.
+- Confirm env vars required per vertical for book-v2 payment (Stripe) and messaging worker URLs.
+- Backend and sync are optional; align **`docs/product/communications.md`** with what each deployment actually runs.
