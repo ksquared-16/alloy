@@ -12,7 +12,6 @@ import type { CommunicationMessage, DeliveryState } from "@/lib/communications/d
 import { deliveryStatePresentation, mapToDeliveryState } from "@/lib/communications/deliveryStateAdapter";
 import { normalizeRecipientKeyEmail, normalizeRecipientKeySms } from "@/lib/communications/recipientKey";
 import type { OpportunityComposeContext } from "@/lib/communications/opportunityComposeTemplates";
-import { opportunityComposeDraftBody } from "@/lib/communications/opportunityComposeTemplates";
 
 type ThreadRow = {
     id: string;
@@ -263,7 +262,7 @@ export default function CommunicationsDrawerSection({
     active = true,
     embedded = true,
     className = "",
-    opportunityComposeContext = null,
+    opportunityComposeContext: _opportunityComposeContext = null,
 }: CommunicationsDrawerSectionProps) {
     const viewerTz = useAdminViewerTimezone();
     const [threads, setThreads] = useState<ThreadRow[]>([]);
@@ -281,7 +280,6 @@ export default function CommunicationsDrawerSection({
 
     const conversationScrollRef = useRef<HTMLDivElement>(null);
     const markedReadSubmittedRef = useRef<Set<string>>(new Set());
-    const composeTemplateAppliedRef = useRef(false);
 
     const composerEntity =
         apiEntityType === "opportunities" || apiEntityType === "jobs" ? apiEntityType : null;
@@ -335,16 +333,6 @@ export default function CommunicationsDrawerSection({
         return { phoneToName, emailToName };
     }, [recipients]);
 
-    const opportunityComposeContextSig = useMemo(() => {
-        if (!opportunityComposeContext) return "";
-        const c = opportunityComposeContext;
-        return [c.status_key ?? "", c.tour_date ?? "", c.tour_time ?? "", c.primary_first_name ?? ""].join("|");
-    }, [opportunityComposeContext]);
-
-    useEffect(() => {
-        composeTemplateAppliedRef.current = false;
-    }, [opportunityComposeContextSig]);
-
     useEffect(() => {
         setThreads([]);
         setThrErr(null);
@@ -367,7 +355,6 @@ export default function CommunicationsDrawerSection({
         setExpandedBodies({});
         markedReadSubmittedRef.current.clear();
         setBindingsRefreshGen(0);
-        composeTemplateAppliedRef.current = false;
     }, [entityId, apiEntityType]);
 
     /** When parent hides Communication (`active` false), drop thread detail state (no polling; next open is clean). */
@@ -611,31 +598,6 @@ export default function CommunicationsDrawerSection({
         }, 550);
         return () => window.clearTimeout(t);
     }, [dataLayerActive, loadingMsgs, msgs]);
-
-    useEffect(() => {
-        if (!opportunityComposeContext || apiEntityType !== "opportunities") return;
-        if (msgs.length > 0 || threads.length > 0) return;
-        if (loadingThreads || loadingMsgs) return;
-        if (composeTemplateAppliedRef.current) return;
-        const draft = opportunityComposeDraftBody({
-            ...opportunityComposeContext,
-            display_time_zone_iana: viewerTz,
-        });
-        if (!draft.trim()) return;
-        setComposerBody((prev) => {
-            if (prev.trim()) return prev;
-            composeTemplateAppliedRef.current = true;
-            return draft;
-        });
-    }, [
-        opportunityComposeContext,
-        apiEntityType,
-        msgs.length,
-        threads.length,
-        loadingThreads,
-        loadingMsgs,
-        viewerTz,
-    ]);
 
     useEffect(() => {
         if (!dataLayerActive) return;

@@ -123,7 +123,6 @@ import {
     oppInqMutedEmpty,
     oppInqNameLink,
     oppInqReadonlyField,
-    oppInqTabBtn,
 } from "@/components/admin/drawer/opportunityInquiryDrawerTypography";
 import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
@@ -138,6 +137,14 @@ function dispatchAfterPaymentRun(jobId: string, scheduleId: string | null) {
         window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "schedules", id: scheduleId } }));
     }
 }
+
+const OPPORTUNITY_INQUIRY_WORKFLOW_TAB_STRIP: DrawerTabKey[] = [
+    "overview",
+    "activity",
+    "documents",
+    "communications",
+    "notes",
+];
 
 type FieldCatalogEntry = { key: string; label: string; data_type: string; operators: string[]; source: string };
 
@@ -913,10 +920,13 @@ function DrawerRecordGateSkeleton(props: {
     modalSchedule: boolean;
     modalOpportunityWorkflow: boolean;
     modalOpportunityClassic: boolean;
+    /** Non-modal opportunity drawer: same workflow-shaped skeleton while record chrome resolves. */
+    recordGateOpportunityWorkflowShape: boolean;
 }) {
-    const { modalJob, modalSchedule, modalOpportunityWorkflow, modalOpportunityClassic } = props;
+    const { modalJob, modalSchedule, modalOpportunityWorkflow, modalOpportunityClassic, recordGateOpportunityWorkflowShape } =
+        props;
 
-    if (modalOpportunityWorkflow) {
+    if (modalOpportunityWorkflow || recordGateOpportunityWorkflowShape) {
         return (
             <div className="space-y-3">
                 <div className="mb-3 min-h-[132px] space-y-2 rounded-xl border border-alloy-stone/15 bg-white/80 px-2.5 py-2 shadow-sm">
@@ -2895,10 +2905,7 @@ export default function AdminEntityDrawer() {
             const ce = ev as CustomEvent<{ opportunity_id?: string }>;
             const id = typeof ce.detail?.opportunity_id === "string" ? ce.detail.opportunity_id.trim() : "";
             if (!id || drawer.type !== "opportunities" || drawer.id !== id) return;
-            setFormData((prev) => {
-                if (!prev || typeof prev !== "object") return prev;
-                return { ...prev, _enrollment_panel: "communication" };
-            });
+            setDrawerTab("communications");
             requestAnimationFrame(() => {
                 document.querySelector("[data-admin-opportunity-comms-panel]")?.scrollIntoView({
                     behavior: "smooth",
@@ -5016,6 +5023,12 @@ export default function AdminEntityDrawer() {
         drawer.type === "opportunities" &&
         recordChromeOpportunity.configResolved &&
         (recordChromeOpportunity.layout?.config_json as RecordLayoutConfigJson | null)?.inquiry_drawer_mode === "workflow_v1";
+    /** While chrome is loading or inquiry workflow v1 is active — never fall back to generic `EntityDrawerOverview` presentation sections. */
+    const opportunityRecordGateWorkflowLayout =
+        drawer.type === "opportunities" &&
+        !!drawer.id &&
+        drawer.id !== "new" &&
+        (!recordChromeOpportunity.configResolved || opportunityInquiryWorkflowDrawer);
     /** Modal shell for /adminV2 jobs — use before data loads so geometry never flashes sidebar-first. */
     const isJobRecordModalTarget =
         drawerShellVariant === "adminV2" &&
@@ -5034,10 +5047,10 @@ export default function AdminEntityDrawer() {
         drawer.type === "opportunities" &&
         !!drawer.id &&
         drawer.id !== "new";
-    /** True when inquiry workflow is active, or record chrome is still resolving (workflow-shaped header without wrong subtitle). */
+    /** Workflow chrome, or any existing opportunity while record layout fetch is in flight — keep inquiry-shaped header/tabs (no classic subtitle swap). */
     const opportunityInquiryWorkflowDrawerShell =
         opportunityInquiryWorkflowDrawer ||
-        (drawer.type === "opportunities" && isOpportunityRecordModalTarget && !recordChromeOpportunity.configResolved);
+        (drawer.type === "opportunities" && !!drawer.id && drawer.id !== "new" && !recordChromeOpportunity.configResolved);
     /** Centered record modal for jobs and for linked entities opened from a job (same Admin V2 stack). */
     const useAdminV2RecordModalPresentation =
         drawerShellVariant === "adminV2" &&
@@ -5636,7 +5649,17 @@ export default function AdminEntityDrawer() {
 
     const jobRecordChromePending = isJobRecordModalTarget && !recordChromeJob.configResolved;
     const scheduleRecordChromePending = isScheduleRecordModalTarget && !recordChromeSchedule.configResolved;
-    const opportunityRecordChromePending = isOpportunityRecordModalTarget && !recordChromeOpportunity.configResolved;
+    /** Block generic opportunity overview until org record layout is known (all surfaces; avoids presentation fallback flash). */
+    const opportunityRecordChromePending =
+        drawer.type === "opportunities" && !!drawer.id && drawer.id !== "new" && !recordChromeOpportunity.configResolved;
+
+    /** Workflow-shaped gate for sidebar opportunities while record chrome resolves (modal uses `modalOpportunityWorkflow`). */
+    const recordGateOpportunityWorkflowShape =
+        drawer.type === "opportunities" &&
+        !!drawer.id &&
+        drawer.id !== "new" &&
+        opportunityRecordChromePending &&
+        !isOpportunityRecordModalTarget;
     const recordModalV2ChromePending =
         jobRecordChromePending || scheduleRecordChromePending || opportunityRecordChromePending;
     const drawerBodyGateLoading = drawerGateLoading || recordModalV2ChromePending;
@@ -5762,7 +5785,8 @@ export default function AdminEntityDrawer() {
         financials: "Financials",
         automation: "Automation",
         activity: "Activity",
-        communications: "Communications",
+        communications: "Communication",
+        notes: "Notes",
         payments: "Payments",
         documents: "Documents",
         ledger: "Ledger",
@@ -5782,6 +5806,21 @@ export default function AdminEntityDrawer() {
             overview: "Record",
         };
     }, [isJobRecordModalTarget, drawer.type, tabLabels]);
+
+    /** Inquiry workflow (or record-chrome loading for an existing opportunity): fixed top tabs; no Related. */
+    const drawerTabStripKeys = useMemo((): DrawerTabKey[] => {
+        if (
+            drawer.type === "opportunities" &&
+            drawer.id &&
+            drawer.id !== "new" &&
+            overviewData &&
+            !(overviewData as { _create?: boolean })._create &&
+            opportunityRecordGateWorkflowLayout
+        ) {
+            return OPPORTUNITY_INQUIRY_WORKFLOW_TAB_STRIP;
+        }
+        return tabList;
+    }, [drawer.type, drawer.id, overviewData, opportunityRecordGateWorkflowLayout, tabList]);
 
     useEffect(() => {
         if (!isJobDrawerV2 || drawer.type !== "jobs" || !drawer.id || drawer.id === "new") return;
@@ -5807,18 +5846,18 @@ export default function AdminEntityDrawer() {
         }
     }, [isJobRecordModalTarget, drawer.type, drawerTab]);
 
-    /** Communications tab removed — threads live in Overview; migrate stale selection. */
+    /** Communications tab removed for jobs — migrate stale selection. */
     useEffect(() => {
-        if ((drawer.type === "opportunities" || drawer.type === "jobs") && drawerTab === "communications") {
+        if (drawer.type === "jobs" && drawerTab === "communications") {
             setDrawerTab("overview");
         }
     }, [drawer.type, drawerTab]);
 
     useEffect(() => {
-        if (drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer && drawerTab === "related") {
+        if (drawer.type === "opportunities" && opportunityRecordGateWorkflowLayout && drawerTab === "related") {
             setDrawerTab("overview");
         }
-    }, [drawer.type, opportunityInquiryWorkflowDrawer, drawerTab]);
+    }, [drawer.type, opportunityRecordGateWorkflowLayout, drawerTab]);
 
     const hasFieldDefsForOverview = useMemo(() => {
         if (!overviewData || (overviewData as { _create?: boolean })._create) return false;
@@ -7820,7 +7859,7 @@ export default function AdminEntityDrawer() {
           ) &&
           !(overviewData && (overviewData as { _create?: boolean })._create) ? (
             <div className="flex min-h-[2.875rem] flex-wrap gap-0.5 rounded-lg border border-admin-border bg-white p-0.5">
-                {tabList.map((tab) => (
+                {drawerTabStripKeys.map((tab) => (
                     <button
                         key={tab}
                         type="button"
@@ -8044,10 +8083,11 @@ export default function AdminEntityDrawer() {
                         modalOpportunityClassic={
                             !!(
                                 opportunityRecordChromeBodyShell &&
-                                !opportunityInquiryWorkflowDrawer &&
-                                !opportunityRecordChromePending
+                                recordChromeOpportunity.configResolved &&
+                                !opportunityInquiryWorkflowDrawer
                             )
                         }
+                        recordGateOpportunityWorkflowShape={recordGateOpportunityWorkflowShape}
                     />
                 </div>
             ) : drawerReady && data && dataMatchesDrawer ? (
@@ -9655,6 +9695,102 @@ export default function AdminEntityDrawer() {
                             />
                         </div>
                     )}
+                    {drawerTab === "communications" &&
+                        drawer.type === "opportunities" &&
+                        drawer.id &&
+                        drawer.id !== "new" &&
+                        opportunityRecordGateWorkflowLayout && (
+                            <div className="pt-2 space-y-3" data-admin-opportunity-comms-panel="true">
+                                <CommunicationsDrawerSection
+                                    embedded={false}
+                                    apiEntityType="opportunities"
+                                    entityId={drawer.id}
+                                    active={drawerTab === "communications"}
+                                />
+                            </div>
+                        )}
+                    {drawerTab === "notes" &&
+                        drawer.type === "opportunities" &&
+                        drawer.id &&
+                        drawer.id !== "new" &&
+                        overviewData &&
+                        !(overviewData as { _create?: boolean })._create &&
+                        opportunityRecordGateWorkflowLayout && (
+                            <div className="pt-2 space-y-3">
+                                {(() => {
+                                    const d = overviewData as Record<string, unknown>;
+                                    const followUpOverdue = isOpportunityFollowUpOverdue(d.next_follow_up_at);
+                                    const followNotesValue = String(formData.follow_up_notes ?? d.follow_up_notes ?? "");
+                                    return (
+                                        <div
+                                            className={`rounded-lg border border-alloy-stone/[0.1] bg-white/[0.97] p-2.5 shadow-sm ring-1 ring-alloy-stone/[0.06] ${
+                                                followUpOverdue
+                                                    ? "border-amber-200/75 bg-amber-50/[0.22] ring-amber-100/40"
+                                                    : ""
+                                            }`}
+                                        >
+                                            <div className={oppInqEyebrow}>
+                                                Notes & next step
+                                                {followUpOverdue ? (
+                                                    <span className="ml-2 font-semibold normal-case text-amber-900/85">
+                                                        Follow-up overdue
+                                                    </span>
+                                                ) : null}
+                                            </div>
+                                            <div className="mt-1 flex flex-wrap items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    disabled
+                                                    className="rounded-md border border-alloy-stone/25 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/40"
+                                                    title="Coming soon"
+                                                >
+                                                    Add note
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setDrawerTab("activity")}
+                                                    className="rounded-md border border-alloy-stone/25 bg-white px-2 py-1 text-[11px] font-semibold text-alloy-midnight/75 hover:border-alloy-blue/35 hover:text-alloy-blue"
+                                                >
+                                                    View activity
+                                                </button>
+                                            </div>
+                                            <textarea
+                                                value={followNotesValue}
+                                                onChange={(e) =>
+                                                    setFormData((prev) => ({ ...prev, follow_up_notes: e.target.value }))
+                                                }
+                                                onBlur={() => {
+                                                    if (nonJobFormDirty) saveEdit();
+                                                }}
+                                                rows={3}
+                                                disabled={!canMutate}
+                                                placeholder="Add follow-up notes…"
+                                                className="mt-1.5 w-full resize-none rounded-md border border-alloy-stone/20 bg-white px-2.5 py-2 text-[12px] leading-snug text-alloy-midnight/80 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
+                                            />
+                                            {(() => {
+                                                const md =
+                                                    data && typeof data === "object"
+                                                        ? ((data as { metadata?: unknown }).metadata as Record<
+                                                              string,
+                                                              unknown
+                                                          > | null)
+                                                        : null;
+                                                const rawNotes = md && typeof md.notes === "string" ? md.notes.trim() : "";
+                                                if (!rawNotes) return null;
+                                                return (
+                                                    <div className="mt-2.5 rounded-md border border-alloy-stone/15 bg-white px-2.5 py-2">
+                                                        <div className={oppInqEyebrow}>Logged notes (from actions)</div>
+                                                        <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap text-[12px] leading-snug text-alloy-midnight/75">
+                                                            {rawNotes}
+                                                        </pre>
+                                                    </div>
+                                                );
+                                            })()}
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+                        )}
                     {drawerTab === "documents" && drawer.type === "jobs" && drawer.id && drawer.id !== "new" && (
                         <div className="pt-2 space-y-3">
                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
@@ -10198,10 +10334,6 @@ export default function AdminEntityDrawer() {
                                                 };
 
                                                 if (opportunityInquiryWorkflowDrawer) {
-                                                    const followNotesRaw = formData.follow_up_notes ?? d.follow_up_notes;
-                                                    const followNotes = String(followNotesRaw ?? "").trim();
-                                                    const followUpOverdue = isOpportunityFollowUpOverdue(d.next_follow_up_at);
-                                                    const followNotesValue = String(formData.follow_up_notes ?? d.follow_up_notes ?? "");
                                                     const householdId =
                                                         ident?.household?.id ?? (String(d.customer_id ?? "").trim() || null);
                                                     const familyContactsInSummary =
@@ -10361,122 +10493,6 @@ export default function AdminEntityDrawer() {
                                                                     {/* Next step is now rendered inline in the drawer header (informational). */}
                                                                 </div>
                                                             </div>
-                                                            <div className="mt-2">
-                                                                {(() => {
-                                                                    const raw = (formData as { _enrollment_panel?: string })._enrollment_panel?.trim();
-                                                                    const panel =
-                                                                        raw === "notes"
-                                                                            ? "notes"
-                                                                            : raw === "communication"
-                                                                              ? "communication"
-                                                                              : null;
-                                                                    return (
-                                                                        <div className="space-y-1.5">
-                                                                            <div className="inline-flex rounded-lg border border-alloy-stone/15 bg-alloy-stone/[0.04] p-0.5">
-                                                                                <button
-                                                                                    type="button"
-                                                                                    className={oppInqTabBtn(panel === "communication")}
-                                                                                    onClick={() =>
-                                                                                        setFormData((p) => ({ ...p, _enrollment_panel: "communication" }))
-                                                                                    }
-                                                                                >
-                                                                                    Communication
-                                                                                </button>
-                                                                                <button
-                                                                                    type="button"
-                                                                                    className={oppInqTabBtn(panel === "notes")}
-                                                                                    onClick={() => setFormData((p) => ({ ...p, _enrollment_panel: "notes" }))}
-                                                                                >
-                                                                                    Notes
-                                                                                </button>
-                                                                            </div>
-
-                                                                            {panel === "notes" ? (
-                                                                                <div
-                                                                                    className={`rounded-lg border border-alloy-stone/[0.1] bg-white/[0.97] p-2.5 shadow-sm ring-1 ring-alloy-stone/[0.06] ${
-                                                                                        followUpOverdue
-                                                                                            ? "border-amber-200/75 bg-amber-50/[0.22] ring-amber-100/40"
-                                                                                            : ""
-                                                                                    }`}
-                                                                                >
-                                                                                    <div className={tinyLabel}>
-                                                                                        Notes & next step
-                                                                                        {followUpOverdue ? (
-                                                                                            <span className="ml-2 font-semibold normal-case text-amber-900/85">
-                                                                                                Follow-up overdue
-                                                                                            </span>
-                                                                                        ) : null}
-                                                                                    </div>
-                                                                                    <div className="mt-1 flex flex-wrap items-center gap-2">
-                                                                                        <button
-                                                                                            type="button"
-                                                                                            disabled
-                                                                                            className="rounded-md border border-alloy-stone/25 bg-alloy-stone/5 px-2 py-1 text-[11px] font-semibold text-alloy-midnight/40"
-                                                                                            title="Coming soon"
-                                                                                        >
-                                                                                            Add note
-                                                                                        </button>
-                                                                                        <button
-                                                                                            type="button"
-                                                                                            onClick={() => setDrawerTab("activity")}
-                                                                                            className="rounded-md border border-alloy-stone/25 bg-white px-2 py-1 text-[11px] font-semibold text-alloy-midnight/75 hover:border-alloy-blue/35 hover:text-alloy-blue"
-                                                                                        >
-                                                                                            View activity
-                                                                                        </button>
-                                                                                    </div>
-                                                                                    <textarea
-                                                                                        value={followNotesValue}
-                                                                                        onChange={(e) =>
-                                                                                            setFormData((prev) => ({
-                                                                                                ...prev,
-                                                                                                follow_up_notes: e.target.value,
-                                                                                            }))
-                                                                                        }
-                                                                                        onBlur={() => {
-                                                                                            if (nonJobFormDirty) saveEdit();
-                                                                                        }}
-                                                                                        rows={3}
-                                                                                        disabled={!canMutate}
-                                                                                        placeholder="Add follow-up notes…"
-                                                                                        className="mt-1.5 w-full resize-none rounded-md border border-alloy-stone/20 bg-white px-2.5 py-2 text-[12px] leading-snug text-alloy-midnight/80 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
-                                                                                    />
-                                                                                    {(() => {
-                                                                                        const md =
-                                                                                            data && typeof data === "object"
-                                                                                                ? ((data as { metadata?: unknown }).metadata as Record<string, unknown> | null)
-                                                                                                : null;
-                                                                                        const raw = md && typeof md.notes === "string" ? md.notes.trim() : "";
-                                                                                        if (!raw) return null;
-                                                                                        return (
-                                                                                            <div className="mt-2.5 rounded-md border border-alloy-stone/15 bg-white px-2.5 py-2">
-                                                                                                <div className={tinyLabel}>Logged notes (from actions)</div>
-                                                                                                <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap text-[12px] leading-snug text-alloy-midnight/75">
-                                                                                                    {raw}
-                                                                                                </pre>
-                                                                                            </div>
-                                                                                        );
-                                                                                    })()}
-                                                                                </div>
-                                                                            ) : panel === "communication" && drawer.id && drawer.id !== "new" ? (
-                                                                                <div
-                                                                                    className={`${oppInqInnerCard} flex min-h-[min(18rem,52vh)] min-w-0 flex-1 flex-col`}
-                                                                                    data-admin-opportunity-comms-panel="true"
-                                                                                >
-                                                                                    <CommunicationsDrawerSection
-                                                                                        embedded
-                                                                                        apiEntityType="opportunities"
-                                                                                        entityId={drawer.id}
-                                                                                        active
-                                                                                        opportunityComposeContext={
-                                                                                            opportunityCommunicationsComposeContext
-                                                                                        }
-                                                                                    />
-                                                                                </div>
-                                                                            ) : null}
-                                                                        </div>
-                                                                    );
-                                                                })()}
-                                                            </div>
                                                         </div>
                                                     );
                                                 }
@@ -10589,7 +10605,13 @@ export default function AdminEntityDrawer() {
                                     data={entityDrawerOverviewData}
                                     customSectionContent={overviewCustomContent}
                                     customSectionHeaderRight={overviewSectionHeaderRight as any}
-                                    overviewSectionsOverride={configDrivenOverviewSections.length > 0 ? configDrivenOverviewSections : undefined}
+                                    overviewSectionsOverride={
+                                        opportunityInquiryWorkflowDrawer
+                                            ? configDrivenOverviewSections
+                                            : configDrivenOverviewSections.length > 0
+                                              ? configDrivenOverviewSections
+                                              : undefined
+                                    }
                                     scheduleOverviewRows={
                                         drawer.type === "schedules"
                                             ? recordChromeSchedule.layout?.config_json?.overview_rows
