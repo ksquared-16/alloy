@@ -5,7 +5,11 @@ import { applyOutboundProviderDeliveryPatch } from "@/lib/communications/provide
 
 /**
  * POST /api/webhooks/resend — Resend email lifecycle (Svix-signed).
- * Configure URL in Resend dashboard; set RESEND_WEBHOOK_SECRET in env.
+ *
+ * **Public endpoint:** Session/admin auth MUST NOT gate this route. `web/middleware.ts` skips Supabase session
+ * work here; security is **Svix** headers + `RESEND_WEBHOOK_SECRET` (`Webhook.verify`).
+ *
+ * Configure URL in Resend dashboard; set `RESEND_WEBHOOK_SECRET` in env.
  */
 export async function POST(request: NextRequest) {
     const secret = (process.env.RESEND_WEBHOOK_SECRET ?? "").trim();

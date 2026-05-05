@@ -8,9 +8,13 @@ import { verifyTwilioRequestSignature } from "@/lib/communications/twilioWebhook
 
 /**
  * POST /api/webhooks/twilio/sms-status — Twilio status callback (form POST).
- * Point Twilio status callback URL here; set TWILIO_AUTH_TOKEN for signature validation.
- * If Alloy sits behind a proxy, set PUBLIC_TWILIO_WEBHOOK_BASE_URL to the public origin Twilio POSTs to
- * (same path `/api/webhooks/twilio/sms-status`) so the signature string matches Twilio’s.
+ *
+ * **Public endpoint:** Session/admin auth MUST NOT gate this route. `web/middleware.ts` skips Supabase session
+ * work for `/api/webhooks/twilio/sms-status`; security is **`X-Twilio-Signature` + `TWILIO_AUTH_TOKEN`**
+ * (`verifyTwilioRequestSignature`).
+ *
+ * If Alloy sits behind a proxy, set `PUBLIC_TWILIO_WEBHOOK_BASE_URL` to the origin Twilio uses so the signing
+ * URL matches (path + optional query appended from the incoming request).
  */
 type TwilioWebhookDiagnostic = {
     ok: boolean;
