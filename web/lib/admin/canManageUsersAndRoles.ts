@@ -5,7 +5,7 @@ import {
     type AdminAccessContextSuccess,
 } from "@/lib/admin/getAdminAccessContext";
 
-/** Permission key seeded in migration `20260505120000_settings_users_roles_permission.sql`. */
+/** Permission key seeded in migration `20260505120100_settings_users_roles_permission.sql`. */
 export const SETTINGS_USERS_ROLES_PERMISSION = "settings.users_roles" as const;
 
 /**
