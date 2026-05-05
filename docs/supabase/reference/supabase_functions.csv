@@ -850,6 +850,7 @@ public,is_org_member,function,sql,STABLE,true,p_org_id uuid,boolean,"CREATE OR R
  RETURNS boolean
  LANGUAGE sql
  STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
   select exists (
     select 1
@@ -952,6 +953,7 @@ public,post_ledger_transaction,function,plpgsql,VOLATILE,true,p_ledger_tx_id uui
  RETURNS uuid
  LANGUAGE plpgsql
  SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 declare
   v_tx public.ledger_transactions%rowtype;
@@ -1142,6 +1144,7 @@ public,seed_default_rbac,function,plpgsql,VOLATILE,true,p_org_id uuid,void,"CREA
  RETURNS void
  LANGUAGE plpgsql
  SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
 AS $function$
 begin
   -- Permission catalog (add as we expand; start with what we enforce now)

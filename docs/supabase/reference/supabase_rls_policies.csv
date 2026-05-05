@@ -368,8 +368,6 @@ public,workflow_action_runs,workflow_action_runs_select_org_members,PERMISSIVE,{
 public,workflow_action_runs,workflow_action_runs_update_service_role,PERMISSIVE,{authenticated},UPDATE,,
 public,workflow_actions,admin_full_access_workflow_actions,PERMISSIVE,{public},ALL,,
 public,workflow_conditions,admin_full_access_workflow_conditions,PERMISSIVE,{public},ALL,,
-public,workflow_events,workflow_events_modify,PERMISSIVE,{authenticated},ALL,,
-public,workflow_events,workflow_events_no_client_write,PERMISSIVE,{authenticated},ALL,,
 public,workflow_events,workflow_events_select,PERMISSIVE,{authenticated},SELECT,,
 public,workflow_events,workflow_events_select_org,PERMISSIVE,{authenticated},SELECT,,
 public,workflow_runs,workflow_runs_modify,PERMISSIVE,{authenticated},ALL,,
