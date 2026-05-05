@@ -1,4 +1,508 @@
 routine_schema,routine_name,routine_kind,language,volatility,security_definer,identity_args,result_data_type,definition
+public,agent_v0_commit_queue_definition_apply,function,plpgsql,VOLATILE,true,"p_org_id uuid, p_user_id uuid, p_work_unit_id uuid, p_expected_version integer, p_queue_definition jsonb, p_proposal_id uuid, p_request_id uuid, p_correlation_id uuid, p_intent_json jsonb, p_result_id uuid",jsonb,"CREATE OR REPLACE FUNCTION public.agent_v0_commit_queue_definition_apply(p_org_id uuid, p_user_id uuid, p_work_unit_id uuid, p_expected_version integer, p_queue_definition jsonb, p_proposal_id uuid, p_request_id uuid, p_correlation_id uuid, p_intent_json jsonb, p_result_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+    cur jsonb;
+    v_old integer;
+    before_h text;
+    after_h text;
+    out_row jsonb;
+BEGIN
+    SELECT coalesce(wu.queue_definition, '{}'::jsonb)
+    INTO cur
+    FROM public.work_units wu
+    WHERE wu.id = p_work_unit_id
+      AND wu.org_id = p_org_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'agent_v0:work_unit_not_found';
+    END IF;
+
+    v_old := coalesce((cur->>'version')::integer, 0);
+    IF v_old IS DISTINCT FROM p_expected_version THEN
+        RAISE EXCEPTION 'agent_v0:stale_queue_definition_version';
+    END IF;
+
+    before_h := encode(extensions.digest(convert_to(cur::text, 'UTF8'), 'sha256'), 'hex');
+    after_h := encode(extensions.digest(convert_to(p_queue_definition::text, 'UTF8'), 'sha256'), 'hex');
+
+    UPDATE public.work_units
+    SET
+        queue_definition = p_queue_definition,
+        updated_at = now()
+    WHERE id = p_work_unit_id
+      AND org_id = p_org_id;
+
+    INSERT INTO public.agent_v0_proposals (
+        proposal_id,
+        request_id,
+        correlation_id,
+        org_id,
+        user_id,
+        work_unit_id,
+        intent_json,
+        before_hash,
+        after_hash
+    )
+    VALUES (
+        p_proposal_id,
+        p_request_id,
+        p_correlation_id,
+        p_org_id,
+        p_user_id,
+        p_work_unit_id,
+        p_intent_json,
+        before_h,
+        after_h
+    );
+
+    INSERT INTO public.agent_v0_apply_audit (
+        result_id,
+        proposal_id,
+        org_id,
+        user_id,
+        work_unit_id,
+        terminal_status,
+        applied_queue_definition_version
+    )
+    VALUES (
+        p_result_id,
+        p_proposal_id,
+        p_org_id,
+        p_user_id,
+        p_work_unit_id,
+        'success',
+        coalesce((p_queue_definition->>'version')::integer, 0)
+    );
+
+    SELECT to_jsonb(wu.*)
+    INTO out_row
+    FROM public.work_units wu
+    WHERE wu.id = p_work_unit_id;
+
+    RETURN out_row;
+END;
+$function$
+"
+public,agent_v1_commit_record_overview_layout_apply,function,plpgsql,VOLATILE,true,"p_org_id uuid, p_user_id uuid, p_entity_type text, p_surface text, p_expected_version integer, p_config jsonb, p_proposal_id uuid, p_request_id uuid, p_correlation_id uuid, p_intent_json jsonb, p_result_id uuid",jsonb,"CREATE OR REPLACE FUNCTION public.agent_v1_commit_record_overview_layout_apply(p_org_id uuid, p_user_id uuid, p_entity_type text, p_surface text, p_expected_version integer, p_config jsonb, p_proposal_id uuid, p_request_id uuid, p_correlation_id uuid, p_intent_json jsonb, p_result_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+    layout_id uuid;
+    cur jsonb;
+    v_old integer;
+    before_h text;
+    after_h text;
+    out_row jsonb;
+BEGIN
+    SELECT rol.id, coalesce(rol.config, '{}'::jsonb)
+    INTO layout_id, cur
+    FROM public.record_overview_layouts rol
+    WHERE rol.org_id = p_org_id
+      AND rol.entity_type = p_entity_type
+      AND rol.surface = p_surface
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        IF p_expected_version IS DISTINCT FROM 0 THEN
+            RAISE EXCEPTION 'agent_v1:no_record_overview_layout_row';
+        END IF;
+
+        before_h := encode(extensions.digest(convert_to('{}'::jsonb::text, 'UTF8'), 'sha256'), 'hex');
+        after_h := encode(extensions.digest(convert_to(p_config::text, 'UTF8'), 'sha256'), 'hex');
+
+        INSERT INTO public.record_overview_layouts (org_id, entity_type, surface, template_key, config, is_active)
+        VALUES (p_org_id, p_entity_type, p_surface, 'default_record_overview', p_config, true)
+        RETURNING id INTO layout_id;
+
+        cur := '{}'::jsonb;
+    ELSE
+        v_old := coalesce((cur->>'version')::integer, 0);
+        IF v_old IS DISTINCT FROM p_expected_version THEN
+            RAISE EXCEPTION 'agent_v1:stale_record_overview_layout_version';
+        END IF;
+
+        before_h := encode(extensions.digest(convert_to(cur::text, 'UTF8'), 'sha256'), 'hex');
+        after_h := encode(extensions.digest(convert_to(p_config::text, 'UTF8'), 'sha256'), 'hex');
+
+        UPDATE public.record_overview_layouts
+        SET
+            config = p_config,
+            updated_at = now()
+        WHERE id = layout_id
+          AND org_id = p_org_id;
+    END IF;
+
+    INSERT INTO public.agent_v1_record_layout_proposals (
+        proposal_id,
+        request_id,
+        correlation_id,
+        org_id,
+        user_id,
+        record_overview_layout_id,
+        intent_json,
+        before_hash,
+        after_hash
+    )
+    VALUES (
+        p_proposal_id,
+        p_request_id,
+        p_correlation_id,
+        p_org_id,
+        p_user_id,
+        layout_id,
+        p_intent_json,
+        before_h,
+        after_h
+    );
+
+    INSERT INTO public.agent_v1_record_layout_apply_audit (
+        result_id,
+        proposal_id,
+        org_id,
+        user_id,
+        record_overview_layout_id,
+        terminal_status,
+        applied_config_version
+    )
+    VALUES (
+        p_result_id,
+        p_proposal_id,
+        p_org_id,
+        p_user_id,
+        layout_id,
+        'success',
+        coalesce((p_config->>'version')::integer, 0)
+    );
+
+    SELECT to_jsonb(rol.*)
+    INTO out_row
+    FROM public.record_overview_layouts rol
+    WHERE rol.id = layout_id;
+
+    RETURN out_row;
+END;
+$function$
+"
+public,agent_v2_commit_field_visibility_apply,function,plpgsql,VOLATILE,true,"p_org_id uuid, p_user_id uuid, p_field_definition_id uuid, p_expected_updated_at text, p_is_visible_in_form boolean, p_is_visible_in_drawer boolean, p_is_visible_in_table boolean, p_is_visible_in_public_booking boolean, p_proposal_id uuid, p_request_id uuid, p_correlation_id uuid, p_intent_json jsonb, p_result_id uuid",jsonb,"CREATE OR REPLACE FUNCTION public.agent_v2_commit_field_visibility_apply(p_org_id uuid, p_user_id uuid, p_field_definition_id uuid, p_expected_updated_at text, p_is_visible_in_form boolean, p_is_visible_in_drawer boolean, p_is_visible_in_table boolean, p_is_visible_in_public_booking boolean, p_proposal_id uuid, p_request_id uuid, p_correlation_id uuid, p_intent_json jsonb, p_result_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+    fd public.field_definitions%ROWTYPE;
+    v_lock timestamptz;
+    exp_ts timestamptz;
+    before_h text;
+    after_h text;
+    out_row jsonb;
+    before_vis jsonb;
+    after_vis jsonb;
+BEGIN
+    SELECT *
+    INTO fd
+    FROM public.field_definitions
+    WHERE id = p_field_definition_id
+      AND org_id = p_org_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'agent_v2:field_definition_not_found';
+    END IF;
+
+    v_lock := coalesce(fd.updated_at, fd.created_at);
+
+    IF v_lock IS NULL THEN
+        RAISE EXCEPTION 'agent_v2:field_definition_not_found';
+    END IF;
+
+    exp_ts := p_expected_updated_at::timestamptz;
+
+    IF v_lock IS DISTINCT FROM exp_ts THEN
+        RAISE EXCEPTION 'agent_v2:stale_field_definition';
+    END IF;
+
+    before_vis := jsonb_build_object(
+        'is_visible_in_form', fd.is_visible_in_form,
+        'is_visible_in_drawer', fd.is_visible_in_drawer,
+        'is_visible_in_table', fd.is_visible_in_table,
+        'is_visible_in_public_booking', fd.is_visible_in_public_booking
+    );
+    before_h := encode(extensions.digest(convert_to(before_vis::text, 'UTF8'), 'sha256'), 'hex');
+
+    after_vis := jsonb_build_object(
+        'is_visible_in_form', p_is_visible_in_form,
+        'is_visible_in_drawer', p_is_visible_in_drawer,
+        'is_visible_in_table', p_is_visible_in_table,
+        'is_visible_in_public_booking', p_is_visible_in_public_booking
+    );
+    after_h := encode(extensions.digest(convert_to(after_vis::text, 'UTF8'), 'sha256'), 'hex');
+
+    UPDATE public.field_definitions
+    SET
+        is_visible_in_form = p_is_visible_in_form,
+        is_visible_in_drawer = p_is_visible_in_drawer,
+        is_visible_in_table = p_is_visible_in_table,
+        is_visible_in_public_booking = p_is_visible_in_public_booking,
+        updated_at = now()
+    WHERE id = p_field_definition_id
+      AND org_id = p_org_id;
+
+    INSERT INTO public.agent_v2_field_visibility_proposals (
+        proposal_id,
+        request_id,
+        correlation_id,
+        org_id,
+        user_id,
+        field_definition_id,
+        intent_json,
+        before_hash,
+        after_hash
+    )
+    VALUES (
+        p_proposal_id,
+        p_request_id,
+        p_correlation_id,
+        p_org_id,
+        p_user_id,
+        p_field_definition_id,
+        p_intent_json,
+        before_h,
+        after_h
+    );
+
+    INSERT INTO public.agent_v2_field_visibility_apply_audit (
+        result_id,
+        proposal_id,
+        org_id,
+        user_id,
+        field_definition_id,
+        terminal_status,
+        applied_updated_at
+    )
+    VALUES (
+        p_result_id,
+        p_proposal_id,
+        p_org_id,
+        p_user_id,
+        p_field_definition_id,
+        'success',
+        (SELECT updated_at FROM public.field_definitions WHERE id = p_field_definition_id)
+    );
+
+    SELECT to_jsonb(f.*)
+    INTO out_row
+    FROM public.field_definitions f
+    WHERE f.id = p_field_definition_id;
+
+    RETURN out_row;
+END;
+$function$
+"
+public,audit_cleaning_quote_pricing_matrix_legacy_parity,function,sql,STABLE,true,,record,"CREATE OR REPLACE FUNCTION public.audit_cleaning_quote_pricing_matrix_legacy_parity()
+ RETURNS TABLE(slice_kind text, service_key text, tier_key text, frequency_key text, legacy_cents integer, matrix_cents integer, detail text)
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  WITH v AS (
+    SELECT id AS vertical_id
+    FROM public.verticals
+    WHERE slug = 'cleaning' AND is_active = true
+    LIMIT 1
+  ),
+  prereq_vertical AS (
+    SELECT
+      'prerequisite'::text AS slice_kind,
+      NULL::text AS service_key,
+      NULL::text AS tier_key,
+      NULL::text AS frequency_key,
+      NULL::integer AS legacy_cents,
+      NULL::integer AS matrix_cents,
+      'cleaning_vertical_missing_or_inactive'::text AS detail
+    WHERE NOT EXISTS (SELECT 1 FROM public.verticals WHERE slug = 'cleaning' AND is_active = true)
+  ),
+  prereq_service AS (
+    SELECT
+      'prerequisite'::text AS slice_kind,
+      NULL::text AS service_key,
+      NULL::text AS tier_key,
+      NULL::text AS frequency_key,
+      NULL::integer AS legacy_cents,
+      NULL::integer AS matrix_cents,
+      'no_active_standard_cleaning_pricing_service'::text AS detail
+    WHERE EXISTS (SELECT 1 FROM v)
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public.pricing_services ps
+        INNER JOIN v ON v.vertical_id = ps.vertical_id
+        WHERE ps.is_active = true AND ps.service_key = 'standard_cleaning'
+      )
+  ),
+  prereq_tiers AS (
+    SELECT
+      'prerequisite'::text AS slice_kind,
+      NULL::text AS service_key,
+      NULL::text AS tier_key,
+      NULL::text AS frequency_key,
+      NULL::integer AS legacy_cents,
+      NULL::integer AS matrix_cents,
+      'no_active_sqft_tiers_for_cleaning_vertical'::text AS detail
+    WHERE EXISTS (SELECT 1 FROM v)
+      AND EXISTS (
+        SELECT 1
+        FROM public.pricing_services ps
+        INNER JOIN v ON v.vertical_id = ps.vertical_id
+        WHERE ps.is_active = true AND ps.service_key = 'standard_cleaning'
+      )
+      AND NOT EXISTS (
+        SELECT 1
+        FROM public.pricing_square_footage_tiers st
+        INNER JOIN v ON v.vertical_id = st.vertical_id
+        WHERE st.is_active = true
+      )
+  ),
+  svc AS (
+    SELECT
+      ps.id AS service_id,
+      ps.service_key,
+      ps.service_offering_id,
+      so.org_id AS org_id,
+      ps.vertical_id,
+      (
+        SELECT pm.id
+        FROM public.pricing_modes pm
+        WHERE pm.org_id = so.org_id
+          AND pm.mode_key = 'initial'
+          AND pm.is_active = true
+          AND (pm.vertical_id IS NULL OR pm.vertical_id = ps.vertical_id)
+        ORDER BY pm.sort_order NULLS LAST, pm.id
+        LIMIT 1
+      ) AS initial_mode_id,
+      (
+        SELECT pm.id
+        FROM public.pricing_modes pm
+        WHERE pm.org_id = so.org_id
+          AND pm.mode_key = 'recurring'
+          AND pm.is_active = true
+          AND (pm.vertical_id IS NULL OR pm.vertical_id = ps.vertical_id)
+        ORDER BY pm.sort_order NULLS LAST, pm.id
+        LIMIT 1
+      ) AS recurring_mode_id
+    FROM public.pricing_services ps
+    INNER JOIN v ON v.vertical_id = ps.vertical_id
+    LEFT JOIN public.service_offerings so ON so.id = ps.service_offering_id
+    WHERE ps.is_active = true
+      AND ps.service_key = 'standard_cleaning'
+  ),
+  tier AS (
+    SELECT st.id AS tier_id, st.tier_key, st.dimension_value_id, st.vertical_id
+    FROM public.pricing_square_footage_tiers st
+    INNER JOIN v ON v.vertical_id = st.vertical_id
+    WHERE st.is_active = true
+  ),
+  first_clean AS (
+    SELECT
+      s.service_key,
+      t.tier_key,
+      f.amount_cents AS legacy_cents,
+      m.amount_cents AS matrix_cents,
+      CASE
+        WHEN s.service_offering_id IS NULL THEN 'service_missing_offering'
+        WHEN s.org_id IS NULL THEN 'service_offering_missing_org'
+        WHEN t.dimension_value_id IS NULL THEN 'tier_missing_dimension_value'
+        WHEN s.initial_mode_id IS NULL THEN 'missing_initial_pricing_mode'
+        WHEN f.amount_cents IS NULL AND m.amount_cents IS NULL THEN 'both_missing'
+        WHEN f.amount_cents IS NULL THEN 'missing_legacy'
+        WHEN m.amount_cents IS NULL THEN 'missing_matrix'
+        WHEN f.amount_cents IS DISTINCT FROM m.amount_cents THEN 'amount_mismatch'
+        ELSE NULL
+      END AS detail
+    FROM svc s
+    CROSS JOIN tier t
+    LEFT JOIN public.pricing_first_clean_prices f
+      ON f.vertical_id = t.vertical_id
+     AND f.service_id = s.service_id
+     AND f.sqft_tier_id = t.tier_id
+     AND f.is_active = true
+    LEFT JOIN public.pricing_matrix m
+      ON m.org_id = s.org_id
+     AND m.vertical_id = t.vertical_id
+     AND m.service_offering_id = s.service_offering_id
+     AND m.pricing_mode_id = s.initial_mode_id
+     AND m.pricing_dimension_value_id = t.dimension_value_id
+     AND m.service_plan_template_id IS NULL
+     AND m.currency = 'USD'
+     AND m.is_active = true
+  ),
+  recurring AS (
+    SELECT
+      s.service_key,
+      t.tier_key,
+      pf.frequency_key,
+      r.amount_cents AS legacy_cents,
+      m.amount_cents AS matrix_cents,
+      CASE
+        WHEN s.service_offering_id IS NULL THEN 'service_missing_offering'
+        WHEN s.org_id IS NULL THEN 'service_offering_missing_org'
+        WHEN t.dimension_value_id IS NULL THEN 'tier_missing_dimension_value'
+        WHEN s.recurring_mode_id IS NULL THEN 'missing_recurring_pricing_mode'
+        WHEN pf.service_plan_template_id IS NULL THEN 'frequency_missing_plan_template'
+        WHEN r.amount_cents IS NULL AND m.amount_cents IS NULL THEN 'both_missing'
+        WHEN r.amount_cents IS NULL THEN 'missing_legacy'
+        WHEN m.amount_cents IS NULL THEN 'missing_matrix'
+        WHEN r.amount_cents IS DISTINCT FROM m.amount_cents THEN 'amount_mismatch'
+        ELSE NULL
+      END AS detail
+    FROM svc s
+    CROSS JOIN tier t
+    INNER JOIN public.pricing_frequencies pf
+      ON pf.vertical_id = t.vertical_id
+     AND pf.is_active = true
+     AND pf.is_recurring = true
+    LEFT JOIN public.pricing_recurring_prices r
+      ON r.vertical_id = t.vertical_id
+     AND r.service_id = s.service_id
+     AND r.frequency_id = pf.id
+     AND r.sqft_tier_id = t.tier_id
+     AND r.is_active = true
+    LEFT JOIN public.pricing_matrix m
+      ON m.org_id = s.org_id
+     AND m.vertical_id = t.vertical_id
+     AND m.service_offering_id = s.service_offering_id
+     AND m.pricing_mode_id = s.recurring_mode_id
+     AND m.pricing_dimension_value_id = t.dimension_value_id
+     AND m.service_plan_template_id = pf.service_plan_template_id
+     AND m.currency = 'USD'
+     AND m.is_active = true
+  )
+  SELECT p.slice_kind, p.service_key, p.tier_key, p.frequency_key, p.legacy_cents, p.matrix_cents, p.detail
+  FROM prereq_vertical p
+  UNION ALL
+  SELECT p.slice_kind, p.service_key, p.tier_key, p.frequency_key, p.legacy_cents, p.matrix_cents, p.detail
+  FROM prereq_service p
+  UNION ALL
+  SELECT p.slice_kind, p.service_key, p.tier_key, p.frequency_key, p.legacy_cents, p.matrix_cents, p.detail
+  FROM prereq_tiers p
+  UNION ALL
+  SELECT 'first_clean'::text, fc.service_key, fc.tier_key, NULL::text, fc.legacy_cents, fc.matrix_cents, fc.detail
+  FROM first_clean fc
+  WHERE fc.detail IS NOT NULL
+  UNION ALL
+  SELECT 'recurring'::text, r.service_key, r.tier_key, r.frequency_key, r.legacy_cents, r.matrix_cents, r.detail
+  FROM recurring r
+  WHERE r.detail IS NOT NULL;
+$function$
+"
 public,current_org_id,function,sql,STABLE,true,,uuid,"CREATE OR REPLACE FUNCTION public.current_org_id()
  RETURNS uuid
  LANGUAGE sql
@@ -23,6 +527,66 @@ begin
   cents := round(base_cents * pct)::int;
   return public.round_to_nearest_5_cents(cents);
 end;
+$function$
+"
+public,enforce_jobs_work_unit_same_org,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.enforce_jobs_work_unit_same_org()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  w_org uuid;
+BEGIN
+  IF NEW.work_unit_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT w.org_id INTO w_org
+  FROM public.work_units AS w
+  WHERE w.id = NEW.work_unit_id;
+
+  IF w_org IS NULL THEN
+    RAISE EXCEPTION 'jobs.work_unit_id % does not reference an existing work unit', NEW.work_unit_id
+      USING ERRCODE = '23503';
+  END IF;
+
+  IF NEW.org_id IS DISTINCT FROM w_org THEN
+    RAISE EXCEPTION 'jobs.org_id (%) must match work_units.org_id (%) for work_unit_id % (job org and work unit org must be the same tenant)',
+      NEW.org_id, w_org, NEW.work_unit_id
+      USING ERRCODE = '23514';
+  END IF;
+
+  RETURN NEW;
+END;
+$function$
+"
+public,enforce_opportunities_work_unit_same_org,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.enforce_opportunities_work_unit_same_org()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  w_org uuid;
+BEGIN
+  IF NEW.work_unit_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  SELECT w.org_id INTO w_org
+  FROM public.work_units AS w
+  WHERE w.id = NEW.work_unit_id;
+
+  IF w_org IS NULL THEN
+    RAISE EXCEPTION 'opportunities.work_unit_id % does not reference an existing work unit', NEW.work_unit_id
+      USING ERRCODE = '23503';
+  END IF;
+
+  IF NEW.org_id IS DISTINCT FROM w_org THEN
+    RAISE EXCEPTION 'opportunities.org_id (%) must match work_units.org_id (%) for work_unit_id % (opportunity org and work unit org must be the same tenant)',
+      NEW.org_id, w_org, NEW.work_unit_id
+      USING ERRCODE = '23514';
+  END IF;
+
+  RETURN NEW;
+END;
 $function$
 "
 public,ensure_vendor_primary_contact_link,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.ensure_vendor_primary_contact_link()
@@ -62,7 +626,7 @@ public,get_quote_pricing,function,plpgsql,VOLATILE,true,"p_vertical_slug text, p
  SECURITY DEFINER
  SET search_path TO 'public'
 AS $function$
-declare
+DECLARE
   v_vertical_id uuid;
   v_service_id uuid;
   v_sqft_tier_id uuid;
@@ -72,98 +636,148 @@ declare
   v_addons integer;
   v_freq_label text;
   v_discount_label text;
-begin
-  -- Manual quote rule
-  if lower(p_service_key) in ('move_out_heavy', 'move-out', 'move_out', 'heavy_clean', 'moveout') then
+  v_org_id uuid;
+  v_service_offering_id uuid;
+  v_dimension_value_id uuid;
+  v_initial_mode_id uuid;
+  v_recurring_mode_id uuid;
+  v_plan_template_id uuid;
+BEGIN
+  IF lower(p_service_key) IN ('move_out_heavy', 'move-out', 'move_out', 'heavy_clean', 'moveout') THEN
     out_vertical_slug := p_vertical_slug;
     out_service_key := p_service_key;
     out_sqft_key := p_sqft_key;
     out_frequency_key := p_frequency_key;
-    first_clean_cents := null;
-    recurring_cents := null;
-    addons_total_cents := null;
-    total_first_visit_cents := null;
+    first_clean_cents := NULL;
+    recurring_cents := NULL;
+    addons_total_cents := NULL;
+    total_first_visit_cents := NULL;
     price_breakdown := 'Manual quote required';
     is_manual_quote := true;
-    return next;
-    return;
-  end if;
+    RETURN NEXT;
+    RETURN;
+  END IF;
 
-  select id into v_vertical_id
-  from public.verticals
-  where slug = p_vertical_slug and is_active = true
-  limit 1;
+  SELECT id INTO v_vertical_id
+  FROM public.verticals
+  WHERE slug = p_vertical_slug AND is_active = true
+  LIMIT 1;
 
-  if v_vertical_id is null then
-    raise exception 'Unknown vertical slug: %', p_vertical_slug;
-  end if;
+  IF v_vertical_id IS NULL THEN
+    RAISE EXCEPTION 'Unknown vertical slug: %', p_vertical_slug;
+  END IF;
 
-  select ps.id into v_service_id
-  from public.pricing_services ps
-  where ps.vertical_id = v_vertical_id
-    and ps.service_key = p_service_key
-    and ps.is_active = true
-  limit 1;
+  SELECT ps.id INTO v_service_id
+  FROM public.pricing_services ps
+  WHERE ps.vertical_id = v_vertical_id
+    AND ps.service_key = p_service_key
+    AND ps.is_active = true
+  LIMIT 1;
 
-  if v_service_id is null then
-    raise exception 'Unknown service_key for %: %', p_vertical_slug, p_service_key;
-  end if;
+  IF v_service_id IS NULL THEN
+    RAISE EXCEPTION 'Unknown service_key for %: %', p_vertical_slug, p_service_key;
+  END IF;
 
-  select st.id into v_sqft_tier_id
-  from public.pricing_square_footage_tiers st
-  where st.vertical_id = v_vertical_id
-    and st.sqft_key = p_sqft_key
-    and st.is_active = true
-  limit 1;
+  SELECT st.id, st.dimension_value_id INTO v_sqft_tier_id, v_dimension_value_id
+  FROM public.pricing_square_footage_tiers st
+  WHERE st.vertical_id = v_vertical_id
+    AND st.tier_key = p_sqft_key
+    AND st.is_active = true
+  LIMIT 1;
 
-  if v_sqft_tier_id is null then
-    raise exception 'Unknown sqft_key for %: %', p_vertical_slug, p_sqft_key;
-  end if;
+  IF v_sqft_tier_id IS NULL THEN
+    RAISE EXCEPTION 'Unknown sqft tier_key for %: %', p_vertical_slug, p_sqft_key;
+  END IF;
 
-  -- First clean price (service + sqft)
-  select f.amount_cents into v_first
-  from public.pricing_first_clean_prices f
-  where f.vertical_id = v_vertical_id
-    and f.service_id = v_service_id
-    and f.sqft_tier_id = v_sqft_tier_id
-    and f.is_active = true
-  limit 1;
+  SELECT ps.service_offering_id, so.org_id
+    INTO v_service_offering_id, v_org_id
+  FROM public.pricing_services ps
+  LEFT JOIN public.service_offerings so ON so.id = ps.service_offering_id
+  WHERE ps.id = v_service_id
+  LIMIT 1;
 
-  if v_first is null then
-    raise exception 'Missing first_clean price for % / % / %', p_vertical_slug, p_service_key, p_sqft_key;
-  end if;
+  IF v_service_offering_id IS NULL OR v_org_id IS NULL THEN
+    RAISE EXCEPTION 'Missing first_clean price for % / % / %', p_vertical_slug, p_service_key, p_sqft_key;
+  END IF;
 
-  -- Frequency (optional)
-  v_recurring := null;
-  v_freq_label := null;
-  v_discount_label := null;
+  IF v_dimension_value_id IS NULL THEN
+    RAISE EXCEPTION 'Missing first_clean price for % / % / %', p_vertical_slug, p_service_key, p_sqft_key;
+  END IF;
 
-  if coalesce(trim(p_frequency_key), '') <> '' then
-    select pf.id, pf.frequency_label, pf.discount_label
-      into v_frequency_id, v_freq_label, v_discount_label
-    from public.pricing_frequencies pf
-    where pf.vertical_id = v_vertical_id
-      and pf.frequency_key = p_frequency_key
-      and pf.is_active = true
-    limit 1;
+  SELECT pm.id INTO v_initial_mode_id
+  FROM public.pricing_modes pm
+  WHERE pm.org_id = v_org_id
+    AND pm.mode_key = 'initial'
+    AND pm.is_active = true
+    AND (pm.vertical_id IS NULL OR pm.vertical_id = v_vertical_id)
+  ORDER BY pm.sort_order NULLS LAST, pm.id
+  LIMIT 1;
 
-    if v_frequency_id is not null then
-      select r.amount_cents into v_recurring
-      from public.pricing_recurring_prices r
-      where r.vertical_id = v_vertical_id
-        and r.frequency_id = v_frequency_id
-        and r.sqft_tier_id = v_sqft_tier_id
-        and r.is_active = true
-      limit 1;
-    end if;
-  end if;
+  IF v_initial_mode_id IS NULL THEN
+    RAISE EXCEPTION 'Missing first_clean price for % / % / %', p_vertical_slug, p_service_key, p_sqft_key;
+  END IF;
 
-  -- Add-ons
-  select coalesce(sum(pa.amount_cents), 0) into v_addons
-  from public.pricing_addons pa
-  where pa.vertical_id = v_vertical_id
-    and pa.is_active = true
-    and (coalesce(array_length(p_addon_keys, 1), 0) > 0 and pa.addon_key = any(p_addon_keys));
+  SELECT pm.id INTO v_recurring_mode_id
+  FROM public.pricing_modes pm
+  WHERE pm.org_id = v_org_id
+    AND pm.mode_key = 'recurring'
+    AND pm.is_active = true
+    AND (pm.vertical_id IS NULL OR pm.vertical_id = v_vertical_id)
+  ORDER BY pm.sort_order NULLS LAST, pm.id
+  LIMIT 1;
+
+  SELECT mtx.amount_cents INTO v_first
+  FROM public.pricing_matrix mtx
+  WHERE mtx.org_id = v_org_id
+    AND mtx.vertical_id = v_vertical_id
+    AND mtx.service_offering_id = v_service_offering_id
+    AND mtx.pricing_mode_id = v_initial_mode_id
+    AND mtx.pricing_dimension_value_id = v_dimension_value_id
+    AND mtx.service_plan_template_id IS NULL
+    AND mtx.currency = 'USD'
+    AND mtx.is_active = true
+  LIMIT 1;
+
+  IF v_first IS NULL THEN
+    RAISE EXCEPTION 'Missing first_clean price for % / % / %', p_vertical_slug, p_service_key, p_sqft_key;
+  END IF;
+
+  v_recurring := NULL;
+  v_freq_label := NULL;
+  v_discount_label := NULL;
+  v_plan_template_id := NULL;
+
+  IF coalesce(trim(p_frequency_key), '') <> '' THEN
+    SELECT pf.id, pf.frequency_label, pf.discount_label, pf.service_plan_template_id
+      INTO v_frequency_id, v_freq_label, v_discount_label, v_plan_template_id
+    FROM public.pricing_frequencies pf
+    WHERE pf.vertical_id = v_vertical_id
+      AND pf.frequency_key = p_frequency_key
+      AND pf.is_active = true
+    LIMIT 1;
+
+    IF v_frequency_id IS NOT NULL
+       AND v_recurring_mode_id IS NOT NULL
+       AND v_plan_template_id IS NOT NULL THEN
+      SELECT mtx.amount_cents INTO v_recurring
+      FROM public.pricing_matrix mtx
+      WHERE mtx.org_id = v_org_id
+        AND mtx.vertical_id = v_vertical_id
+        AND mtx.service_offering_id = v_service_offering_id
+        AND mtx.pricing_mode_id = v_recurring_mode_id
+        AND mtx.pricing_dimension_value_id = v_dimension_value_id
+        AND mtx.service_plan_template_id = v_plan_template_id
+        AND mtx.currency = 'USD'
+        AND mtx.is_active = true
+      LIMIT 1;
+    END IF;
+  END IF;
+
+  SELECT coalesce(sum(pa.amount_cents), 0) INTO v_addons
+  FROM public.pricing_addons pa
+  WHERE pa.vertical_id = v_vertical_id
+    AND pa.is_active = true
+    AND (coalesce(array_length(p_addon_keys, 1), 0) > 0 AND pa.addon_key = ANY (p_addon_keys));
 
   out_vertical_slug := p_vertical_slug;
   out_service_key := p_service_key;
@@ -176,22 +790,23 @@ begin
   total_first_visit_cents := v_first + v_addons;
 
   price_breakdown :=
-    'Sq Ft: ' || p_sqft_key ||
+    'Sq Ft tier: ' || p_sqft_key ||
     ' | Service: ' || p_service_key ||
     ' | First cleaning (base): $' || to_char(v_first/100.0, 'FM999990.00') ||
-    case when v_addons > 0 then
+    CASE WHEN v_addons > 0 THEN
       ' | Add-ons: $' || to_char(v_addons/100.0, 'FM999990.00')
-    else '' end ||
+    ELSE '' END ||
     ' | First visit total: $' || to_char((v_first + v_addons)/100.0, 'FM999990.00') ||
-    case when v_recurring is not null then
+    CASE WHEN v_recurring IS NOT NULL THEN
       ' | Recurring (' || coalesce(v_freq_label,'') || '): $' ||
       to_char(v_recurring/100.0, 'FM999990.00') || ' / visit' ||
-      case when v_discount_label is not null then ' (' || v_discount_label || ')' else '' end
-    else '' end;
+      CASE WHEN v_discount_label IS NOT NULL THEN ' (' || v_discount_label || ')' ELSE '' END
+    ELSE '' END;
 
   is_manual_quote := false;
-  return next;
-end $function$
+  RETURN NEXT;
+END;
+$function$
 "
 public,handle_new_user,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.handle_new_user()
  RETURNS trigger
@@ -269,6 +884,68 @@ begin
 
   return new;
 end;
+$function$
+"
+public,next_org_scoped_record_number,function,plpgsql,VOLATILE,true,"p_org_id uuid, p_entity text",bigint,"CREATE OR REPLACE FUNCTION public.next_org_scoped_record_number(p_org_id uuid, p_entity text)
+ RETURNS bigint
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+DECLARE
+  v_entity text;
+  v_tbl text;
+  v_col text;
+  v_next bigint;
+BEGIN
+  IF p_org_id IS NULL THEN
+    RAISE EXCEPTION 'next_org_scoped_record_number: org_id is required';
+  END IF;
+
+  v_entity := lower(trim(p_entity));
+  IF v_entity IS NULL OR v_entity = '' THEN
+    RAISE EXCEPTION 'next_org_scoped_record_number: entity is required';
+  END IF;
+
+  -- Serialize allocators per org + entity (transaction-scoped; released at commit/rollback).
+  PERFORM pg_advisory_xact_lock(hashtext(p_org_id::text || '|' || v_entity));
+
+  CASE v_entity
+    WHEN 'customer' THEN
+      v_tbl := 'customers';
+      v_col := 'customer_number';
+    WHEN 'job' THEN
+      v_tbl := 'jobs';
+      v_col := 'job_number';
+    WHEN 'opportunity' THEN
+      v_tbl := 'opportunities';
+      v_col := 'opportunity_number';
+    WHEN 'location' THEN
+      v_tbl := 'locations';
+      v_col := 'location_number';
+    WHEN 'person' THEN
+      v_tbl := 'persons';
+      v_col := 'person_number';
+    WHEN 'vendor' THEN
+      v_tbl := 'vendors';
+      v_col := 'vendor_number';
+    WHEN 'schedule' THEN
+      v_tbl := 'schedules';
+      v_col := 'schedule_number';
+    ELSE
+      RAISE EXCEPTION 'next_org_scoped_record_number: unknown entity % (expected customer, job, opportunity, location, person, vendor, schedule)', p_entity;
+  END CASE;
+
+  EXECUTE format(
+    'SELECT COALESCE(MAX(%I), 0::bigint) + 1 FROM public.%I WHERE org_id = $1',
+    v_col,
+    v_tbl
+  )
+  INTO v_next
+  USING p_org_id;
+
+  RETURN v_next;
+END;
 $function$
 "
 public,post_ledger_transaction,function,plpgsql,VOLATILE,true,p_ledger_tx_id uuid,uuid,"CREATE OR REPLACE FUNCTION public.post_ledger_transaction(p_ledger_tx_id uuid)
@@ -541,6 +1218,99 @@ begin
 end;
 $function$
 "
+public,set_updated_at_opportunities,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.set_updated_at_opportunities()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    new_wo jsonb;
+    old_wo jsonb;
+BEGIN
+    new_wo := to_jsonb(NEW) - 'metadata' - 'updated_at';
+    old_wo := to_jsonb(OLD) - 'metadata' - 'updated_at';
+
+    IF NEW.metadata IS DISTINCT FROM OLD.metadata AND new_wo IS NOT DISTINCT FROM old_wo THEN
+        NEW.updated_at := OLD.updated_at;
+        RETURN NEW;
+    END IF;
+
+    NEW.updated_at := now();
+    RETURN NEW;
+END;
+$function$
+"
+public,trg_assign_org_scoped_record_number,function,plpgsql,VOLATILE,true,,trigger,"CREATE OR REPLACE FUNCTION public.trg_assign_org_scoped_record_number()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+BEGIN
+  CASE TG_TABLE_NAME::text
+    WHEN 'persons' THEN
+      IF NEW.person_number IS NULL THEN
+        IF NEW.org_id IS NULL THEN
+          RAISE EXCEPTION 'persons: org_id is required when person_number is omitted';
+        END IF;
+        NEW.person_number := public.next_org_scoped_record_number(NEW.org_id, 'person');
+      END IF;
+
+    WHEN 'customers' THEN
+      IF NEW.customer_number IS NULL THEN
+        IF NEW.org_id IS NULL THEN
+          RAISE EXCEPTION 'customers: org_id is required when customer_number is omitted';
+        END IF;
+        NEW.customer_number := public.next_org_scoped_record_number(NEW.org_id, 'customer');
+      END IF;
+
+    WHEN 'jobs' THEN
+      IF NEW.job_number IS NULL THEN
+        IF NEW.org_id IS NULL THEN
+          RAISE EXCEPTION 'jobs: org_id is required when job_number is omitted';
+        END IF;
+        NEW.job_number := public.next_org_scoped_record_number(NEW.org_id, 'job');
+      END IF;
+
+    WHEN 'opportunities' THEN
+      IF NEW.opportunity_number IS NULL THEN
+        IF NEW.org_id IS NULL THEN
+          RAISE EXCEPTION 'opportunities: org_id is required when opportunity_number is omitted';
+        END IF;
+        NEW.opportunity_number := public.next_org_scoped_record_number(NEW.org_id, 'opportunity');
+      END IF;
+
+    WHEN 'locations' THEN
+      IF NEW.location_number IS NULL THEN
+        IF NEW.org_id IS NULL THEN
+          RAISE EXCEPTION 'locations: org_id is required when location_number is omitted';
+        END IF;
+        NEW.location_number := public.next_org_scoped_record_number(NEW.org_id, 'location');
+      END IF;
+
+    WHEN 'vendors' THEN
+      IF NEW.vendor_number IS NULL THEN
+        IF NEW.org_id IS NULL THEN
+          RAISE EXCEPTION 'vendors: org_id is required when vendor_number is omitted';
+        END IF;
+        NEW.vendor_number := public.next_org_scoped_record_number(NEW.org_id, 'vendor');
+      END IF;
+
+    WHEN 'schedules' THEN
+      IF NEW.schedule_number IS NULL THEN
+        IF NEW.org_id IS NULL THEN
+          RAISE EXCEPTION 'schedules: org_id is required when schedule_number is omitted';
+        END IF;
+        NEW.schedule_number := public.next_org_scoped_record_number(NEW.org_id, 'schedule');
+      END IF;
+
+    ELSE
+      RAISE EXCEPTION 'trg_assign_org_scoped_record_number: unexpected table %', TG_TABLE_NAME::text;
+  END CASE;
+
+  RETURN NEW;
+END;
+$function$
+"
 public,trg_jobs_assign_pricing_tier,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.trg_jobs_assign_pricing_tier()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -659,6 +1429,137 @@ AS $function$
     where au.id = auth.uid()
       and au.org_id = target_org_id
   );
+$function$
+"
+public,validate_opportunity_customer_members_consistency,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_opportunity_customer_members_consistency()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    opp_org uuid;
+    opp_customer uuid;
+    mem_org uuid;
+    mem_customer uuid;
+BEGIN
+    SELECT o.org_id, o.customer_id
+    INTO opp_org, opp_customer
+    FROM public.opportunities o
+    WHERE o.id = NEW.opportunity_id;
+
+    IF opp_org IS NULL THEN
+        RAISE EXCEPTION 'opportunity_customer_members: opportunity_id % not found', NEW.opportunity_id;
+    END IF;
+    IF opp_org <> NEW.org_id THEN
+        RAISE EXCEPTION 'opportunity_customer_members: org_id mismatch (row %, opp %)', NEW.org_id, opp_org;
+    END IF;
+
+    SELECT cm.org_id, cm.customer_id
+    INTO mem_org, mem_customer
+    FROM public.customer_members cm
+    WHERE cm.id = NEW.customer_member_id;
+
+    IF mem_org IS NULL THEN
+        RAISE EXCEPTION 'opportunity_customer_members: customer_member_id % not found', NEW.customer_member_id;
+    END IF;
+    IF mem_org <> NEW.org_id THEN
+        RAISE EXCEPTION 'opportunity_customer_members: org_id mismatch (row %, member %)', NEW.org_id, mem_org;
+    END IF;
+
+    -- If the opportunity is linked to a family/customer, enforce member belongs to same family.
+    IF opp_customer IS NOT NULL AND mem_customer IS NOT NULL AND mem_customer <> opp_customer THEN
+        RAISE EXCEPTION 'opportunity_customer_members: customer_member.customer_id % does not match opportunity.customer_id %', mem_customer, opp_customer;
+    END IF;
+
+    RETURN NEW;
+END;
+$function$
+"
+public,validate_opportunity_persons_consistency,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_opportunity_persons_consistency()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    opp_org uuid;
+    person_org uuid;
+BEGIN
+    SELECT o.org_id INTO opp_org FROM public.opportunities o WHERE o.id = NEW.opportunity_id;
+    IF opp_org IS NULL THEN
+        RAISE EXCEPTION 'opportunity_persons: opportunity_id % not found', NEW.opportunity_id;
+    END IF;
+    IF NEW.org_id IS DISTINCT FROM opp_org THEN
+        RAISE EXCEPTION 'opportunity_persons: org_id mismatch (row %, opportunity %)', NEW.org_id, opp_org;
+    END IF;
+
+    SELECT p.org_id INTO person_org FROM public.persons p WHERE p.id = NEW.person_id;
+    IF person_org IS NULL THEN
+        RAISE EXCEPTION 'opportunity_persons: person_id % not found', NEW.person_id;
+    END IF;
+    IF NEW.org_id IS DISTINCT FROM person_org THEN
+        RAISE EXCEPTION 'opportunity_persons: org_id mismatch (row %, person %)', NEW.org_id, person_org;
+    END IF;
+
+    RETURN NEW;
+END;
+$function$
+"
+public,validate_user_department_access_org_match,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_user_department_access_org_match()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    d_org uuid;
+BEGIN
+    SELECT d.org_id INTO d_org
+    FROM public.departments AS d
+    WHERE d.id = NEW.department_id;
+
+    IF d_org IS NULL THEN
+        RAISE EXCEPTION 'user_department_access: department_id % does not exist', NEW.department_id
+            USING ERRCODE = '23503';
+    END IF;
+
+    IF d_org <> NEW.org_id THEN
+        RAISE EXCEPTION 'user_department_access: org_id on row (%) must match departments.org_id (%) for department_id %',
+            NEW.org_id, d_org, NEW.department_id
+            USING ERRCODE = '23514';
+    END IF;
+
+    RETURN NEW;
+END;
+$function$
+"
+public,validate_user_site_access_site_and_org,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.validate_user_site_access_site_and_org()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    loc_org uuid;
+    loc_type text;
+BEGIN
+    SELECT l.org_id, l.location_type
+    INTO loc_org, loc_type
+    FROM public.locations AS l
+    WHERE l.id = NEW.location_id;
+
+    IF loc_org IS NULL THEN
+        RAISE EXCEPTION 'user_site_access: location_id % does not exist', NEW.location_id
+            USING ERRCODE = '23503';
+    END IF;
+
+    IF loc_org <> NEW.org_id THEN
+        RAISE EXCEPTION 'user_site_access: org_id on row (%) must match locations.org_id (%) for location_id %',
+            NEW.org_id, loc_org, NEW.location_id
+            USING ERRCODE = '23514';
+    END IF;
+
+    IF loc_type IS DISTINCT FROM 'site'::text THEN
+        RAISE EXCEPTION 'user_site_access: location_id % must have location_type = site (got %)',
+            NEW.location_id, loc_type
+            USING ERRCODE = '23514';
+    END IF;
+
+    RETURN NEW;
+END;
 $function$
 "
 public,workflow_runs_set_org_id,function,plpgsql,VOLATILE,false,,trigger,"CREATE OR REPLACE FUNCTION public.workflow_runs_set_org_id()

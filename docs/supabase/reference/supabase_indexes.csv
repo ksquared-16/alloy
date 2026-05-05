@@ -1,11 +1,26 @@
 schemaname,tablename,indexname,is_unique,is_primary,index_method,indexdef
 public,access_methods,access_methods_key_key,true,false,btree,CREATE UNIQUE INDEX access_methods_key_key ON access_methods USING btree (key)
 public,access_methods,access_methods_pkey,true,true,btree,CREATE UNIQUE INDEX access_methods_pkey ON access_methods USING btree (id)
+public,action_definitions,action_definitions_pkey,true,true,btree,CREATE UNIQUE INDEX action_definitions_pkey ON action_definitions USING btree (id)
+public,action_definitions,idx_action_definitions_entity_active,false,false,btree,CREATE INDEX idx_action_definitions_entity_active ON action_definitions USING btree (entity_type) WHERE is_active = true
+public,action_definitions,idx_action_definitions_key_active_global,false,false,btree,"CREATE INDEX idx_action_definitions_key_active_global ON action_definitions USING btree (key, is_active) WHERE is_active = true AND org_id IS NULL"
+public,action_definitions,idx_action_definitions_org_active,false,false,btree,CREATE INDEX idx_action_definitions_org_active ON action_definitions USING btree (org_id) WHERE is_active = true AND org_id IS NOT NULL
+public,action_definitions,idx_action_definitions_org_key_active,false,false,btree,"CREATE INDEX idx_action_definitions_org_key_active ON action_definitions USING btree (org_id, key, is_active) WHERE is_active = true AND org_id IS NOT NULL"
+public,action_definitions,ux_action_definitions_global_key,true,false,btree,CREATE UNIQUE INDEX ux_action_definitions_global_key ON action_definitions USING btree (key) WHERE org_id IS NULL
+public,action_definitions,ux_action_definitions_org_key,true,false,btree,"CREATE UNIQUE INDEX ux_action_definitions_org_key ON action_definitions USING btree (org_id, key) WHERE org_id IS NOT NULL"
 public,action_links,action_links_entity_idx,false,false,btree,"CREATE INDEX action_links_entity_idx ON action_links USING btree (entity_type, entity_id)"
 public,action_links,action_links_pkey,true,true,btree,CREATE UNIQUE INDEX action_links_pkey ON action_links USING btree (id)
 public,action_links,action_links_short_code_key,true,false,btree,CREATE UNIQUE INDEX action_links_short_code_key ON action_links USING btree (short_code) WHERE short_code IS NOT NULL
 public,action_links,action_links_short_code_uidx,true,false,btree,CREATE UNIQUE INDEX action_links_short_code_uidx ON action_links USING btree (short_code) WHERE short_code IS NOT NULL
 public,action_links,action_links_token_key,true,false,btree,CREATE UNIQUE INDEX action_links_token_key ON action_links USING btree (token)
+public,action_placements,action_placements_pkey,true,true,btree,CREATE UNIQUE INDEX action_placements_pkey ON action_placements USING btree (id)
+public,action_placements,idx_action_placements_def,false,false,btree,CREATE INDEX idx_action_placements_def ON action_placements USING btree (action_definition_id)
+public,action_placements,idx_action_placements_org,false,false,btree,CREATE INDEX idx_action_placements_org ON action_placements USING btree (org_id) WHERE org_id IS NOT NULL
+public,action_placements,idx_action_placements_record_section_scope,false,false,btree,"CREATE INDEX idx_action_placements_record_section_scope ON action_placements USING btree (surface, entity_type, section_key, is_active) WHERE surface = 'record_section'::text AND is_active = true"
+public,action_placements,idx_action_placements_surface_active,false,false,btree,"CREATE INDEX idx_action_placements_surface_active ON action_placements USING btree (surface, is_active) WHERE is_active = true"
+public,action_placements,idx_action_placements_surface_org_active,false,false,btree,"CREATE INDEX idx_action_placements_surface_org_active ON action_placements USING btree (surface, org_id, is_active) WHERE is_active = true"
+public,action_placements,idx_action_placements_work_unit,false,false,btree,CREATE INDEX idx_action_placements_work_unit ON action_placements USING btree (work_unit_id) WHERE work_unit_id IS NOT NULL
+public,action_placements,idx_action_placements_work_unit_surface_active,false,false,btree,"CREATE INDEX idx_action_placements_work_unit_surface_active ON action_placements USING btree (work_unit_id, surface, is_active) WHERE is_active = true AND work_unit_id IS NOT NULL"
 public,activity_log,activity_log_pkey,true,true,btree,CREATE UNIQUE INDEX activity_log_pkey ON activity_log USING btree (id)
 public,activity_log,idx_activity_entity,false,false,btree,"CREATE INDEX idx_activity_entity ON activity_log USING btree (entity_type, entity_id)"
 public,addon_frequencies,addon_frequencies_key_key,true,false,btree,CREATE UNIQUE INDEX addon_frequencies_key_key ON addon_frequencies USING btree (key)
@@ -13,6 +28,30 @@ public,addon_frequencies,addon_frequencies_pkey,true,true,btree,CREATE UNIQUE IN
 public,addon_types,addon_types_key_key,true,false,btree,CREATE UNIQUE INDEX addon_types_key_key ON addon_types USING btree (key)
 public,addon_types,addon_types_pkey,true,true,btree,CREATE UNIQUE INDEX addon_types_pkey ON addon_types USING btree (id)
 public,addon_types,idx_addon_types_vertical_id,false,false,btree,CREATE INDEX idx_addon_types_vertical_id ON addon_types USING btree (vertical_id)
+public,agent_v0_apply_audit,agent_v0_apply_audit_pkey,true,true,btree,CREATE UNIQUE INDEX agent_v0_apply_audit_pkey ON agent_v0_apply_audit USING btree (id)
+public,agent_v0_apply_audit,idx_agent_v0_apply_audit_org_id,false,false,btree,CREATE INDEX idx_agent_v0_apply_audit_org_id ON agent_v0_apply_audit USING btree (org_id)
+public,agent_v0_apply_audit,idx_agent_v0_apply_audit_proposal,false,false,btree,CREATE INDEX idx_agent_v0_apply_audit_proposal ON agent_v0_apply_audit USING btree (proposal_id)
+public,agent_v0_apply_audit,ux_agent_v0_apply_audit_result_id,true,false,btree,CREATE UNIQUE INDEX ux_agent_v0_apply_audit_result_id ON agent_v0_apply_audit USING btree (result_id)
+public,agent_v0_proposals,agent_v0_proposals_pkey,true,true,btree,CREATE UNIQUE INDEX agent_v0_proposals_pkey ON agent_v0_proposals USING btree (id)
+public,agent_v0_proposals,idx_agent_v0_proposals_correlation,false,false,btree,CREATE INDEX idx_agent_v0_proposals_correlation ON agent_v0_proposals USING btree (correlation_id)
+public,agent_v0_proposals,idx_agent_v0_proposals_org_id,false,false,btree,CREATE INDEX idx_agent_v0_proposals_org_id ON agent_v0_proposals USING btree (org_id)
+public,agent_v0_proposals,ux_agent_v0_proposals_proposal_id,true,false,btree,CREATE UNIQUE INDEX ux_agent_v0_proposals_proposal_id ON agent_v0_proposals USING btree (proposal_id)
+public,agent_v1_record_layout_apply_audit,agent_v1_record_layout_apply_audit_pkey,true,true,btree,CREATE UNIQUE INDEX agent_v1_record_layout_apply_audit_pkey ON agent_v1_record_layout_apply_audit USING btree (id)
+public,agent_v1_record_layout_apply_audit,idx_agent_v1_rl_apply_org_id,false,false,btree,CREATE INDEX idx_agent_v1_rl_apply_org_id ON agent_v1_record_layout_apply_audit USING btree (org_id)
+public,agent_v1_record_layout_apply_audit,idx_agent_v1_rl_apply_proposal,false,false,btree,CREATE INDEX idx_agent_v1_rl_apply_proposal ON agent_v1_record_layout_apply_audit USING btree (proposal_id)
+public,agent_v1_record_layout_apply_audit,ux_agent_v1_rl_apply_result_id,true,false,btree,CREATE UNIQUE INDEX ux_agent_v1_rl_apply_result_id ON agent_v1_record_layout_apply_audit USING btree (result_id)
+public,agent_v1_record_layout_proposals,agent_v1_record_layout_proposals_pkey,true,true,btree,CREATE UNIQUE INDEX agent_v1_record_layout_proposals_pkey ON agent_v1_record_layout_proposals USING btree (id)
+public,agent_v1_record_layout_proposals,idx_agent_v1_rl_proposals_correlation,false,false,btree,CREATE INDEX idx_agent_v1_rl_proposals_correlation ON agent_v1_record_layout_proposals USING btree (correlation_id)
+public,agent_v1_record_layout_proposals,idx_agent_v1_rl_proposals_org_id,false,false,btree,CREATE INDEX idx_agent_v1_rl_proposals_org_id ON agent_v1_record_layout_proposals USING btree (org_id)
+public,agent_v1_record_layout_proposals,ux_agent_v1_rl_proposals_proposal_id,true,false,btree,CREATE UNIQUE INDEX ux_agent_v1_rl_proposals_proposal_id ON agent_v1_record_layout_proposals USING btree (proposal_id)
+public,agent_v2_field_visibility_apply_audit,agent_v2_field_visibility_apply_audit_pkey,true,true,btree,CREATE UNIQUE INDEX agent_v2_field_visibility_apply_audit_pkey ON agent_v2_field_visibility_apply_audit USING btree (id)
+public,agent_v2_field_visibility_apply_audit,idx_agent_v2_fv_apply_org_id,false,false,btree,CREATE INDEX idx_agent_v2_fv_apply_org_id ON agent_v2_field_visibility_apply_audit USING btree (org_id)
+public,agent_v2_field_visibility_apply_audit,idx_agent_v2_fv_apply_proposal,false,false,btree,CREATE INDEX idx_agent_v2_fv_apply_proposal ON agent_v2_field_visibility_apply_audit USING btree (proposal_id)
+public,agent_v2_field_visibility_apply_audit,ux_agent_v2_fv_apply_result_id,true,false,btree,CREATE UNIQUE INDEX ux_agent_v2_fv_apply_result_id ON agent_v2_field_visibility_apply_audit USING btree (result_id)
+public,agent_v2_field_visibility_proposals,agent_v2_field_visibility_proposals_pkey,true,true,btree,CREATE UNIQUE INDEX agent_v2_field_visibility_proposals_pkey ON agent_v2_field_visibility_proposals USING btree (id)
+public,agent_v2_field_visibility_proposals,idx_agent_v2_fv_proposals_correlation,false,false,btree,CREATE INDEX idx_agent_v2_fv_proposals_correlation ON agent_v2_field_visibility_proposals USING btree (correlation_id)
+public,agent_v2_field_visibility_proposals,idx_agent_v2_fv_proposals_org_id,false,false,btree,CREATE INDEX idx_agent_v2_fv_proposals_org_id ON agent_v2_field_visibility_proposals USING btree (org_id)
+public,agent_v2_field_visibility_proposals,ux_agent_v2_fv_proposals_proposal_id,true,false,btree,CREATE UNIQUE INDEX ux_agent_v2_fv_proposals_proposal_id ON agent_v2_field_visibility_proposals USING btree (proposal_id)
 public,app_users,app_users_auth_user_id_key,true,false,btree,CREATE UNIQUE INDEX app_users_auth_user_id_key ON app_users USING btree (auth_user_id)
 public,app_users,app_users_pkey,true,true,btree,CREATE UNIQUE INDEX app_users_pkey ON app_users USING btree (id)
 public,app_users,idx_app_users_org_id,false,false,btree,CREATE INDEX idx_app_users_org_id ON app_users USING btree (org_id)
@@ -23,12 +62,41 @@ public,assignments,idx_assignments_job,false,false,btree,CREATE INDEX idx_assign
 public,assignments,idx_assignments_org_id,false,false,btree,CREATE INDEX idx_assignments_org_id ON assignments USING btree (org_id)
 public,assignments,idx_assignments_schedule,false,false,btree,CREATE INDEX idx_assignments_schedule ON assignments USING btree (schedule_id)
 public,assignments,idx_assignments_status,false,false,btree,CREATE INDEX idx_assignments_status ON assignments USING btree (assignment_status_id)
+public,assignments,idx_assignments_status_key,false,false,btree,"CREATE INDEX idx_assignments_status_key ON assignments USING btree (org_id, status_key)"
 public,assignments,idx_assignments_vendor,false,false,btree,CREATE INDEX idx_assignments_vendor ON assignments USING btree (vendor_id)
 public,campaigns,campaigns_pkey,true,true,btree,CREATE UNIQUE INDEX campaigns_pkey ON campaigns USING btree (id)
+public,charge_line_items,charge_line_items_pkey,true,true,btree,CREATE UNIQUE INDEX charge_line_items_pkey ON charge_line_items USING btree (id)
+public,charge_line_items,idx_charge_line_items_org_charge,false,false,btree,"CREATE INDEX idx_charge_line_items_org_charge ON charge_line_items USING btree (org_id, charge_id)"
+public,charge_line_items,idx_charge_line_items_org_job_line_item_id_partial,false,false,btree,"CREATE INDEX idx_charge_line_items_org_job_line_item_id_partial ON charge_line_items USING btree (org_id, job_line_item_id) WHERE job_line_item_id IS NOT NULL"
+public,charges,charges_pkey,true,true,btree,CREATE UNIQUE INDEX charges_pkey ON charges USING btree (id)
+public,charges,idx_charges_org_charge_type,false,false,btree,"CREATE INDEX idx_charges_org_charge_type ON charges USING btree (org_id, charge_type)"
+public,charges,idx_charges_org_due_date,false,false,btree,"CREATE INDEX idx_charges_org_due_date ON charges USING btree (org_id, due_date)"
+public,charges,idx_charges_org_job,false,false,btree,"CREATE INDEX idx_charges_org_job ON charges USING btree (org_id, job_id)"
+public,charges,idx_charges_org_job_status,false,false,btree,"CREATE INDEX idx_charges_org_job_status ON charges USING btree (org_id, job_id, status)"
+public,charges,idx_charges_org_schedule_id_partial,false,false,btree,"CREATE INDEX idx_charges_org_schedule_id_partial ON charges USING btree (org_id, schedule_id) WHERE schedule_id IS NOT NULL"
+public,charges,idx_charges_org_source_charge_id_partial,false,false,btree,"CREATE INDEX idx_charges_org_source_charge_id_partial ON charges USING btree (org_id, source_charge_id) WHERE source_charge_id IS NOT NULL"
+public,charges,idx_charges_org_status,false,false,btree,"CREATE INDEX idx_charges_org_status ON charges USING btree (org_id, status)"
+public,charges,idx_charges_org_subscription_id_partial,false,false,btree,"CREATE INDEX idx_charges_org_subscription_id_partial ON charges USING btree (org_id, subscription_id) WHERE subscription_id IS NOT NULL"
 public,cleaning_job_addons,cleaning_job_addons_pkey,true,true,btree,"CREATE UNIQUE INDEX cleaning_job_addons_pkey ON cleaning_job_addons USING btree (job_id, addon_type_id)"
 public,cleaning_job_details,cleaning_job_details_pkey,true,true,btree,CREATE UNIQUE INDEX cleaning_job_details_pkey ON cleaning_job_details USING btree (job_id)
 public,cleaning_service_types,cleaning_service_types_key_key,true,false,btree,CREATE UNIQUE INDEX cleaning_service_types_key_key ON cleaning_service_types USING btree (key)
 public,cleaning_service_types,cleaning_service_types_pkey,true,true,btree,CREATE UNIQUE INDEX cleaning_service_types_pkey ON cleaning_service_types USING btree (id)
+public,communication_message_reads,communication_message_reads_pkey,true,true,btree,"CREATE UNIQUE INDEX communication_message_reads_pkey ON communication_message_reads USING btree (message_id, user_id)"
+public,communication_message_reads,idx_comm_reads_org,false,false,btree,CREATE INDEX idx_comm_reads_org ON communication_message_reads USING btree (org_id)
+public,communication_messages,communication_messages_pkey,true,true,btree,CREATE UNIQUE INDEX communication_messages_pkey ON communication_messages USING btree (id)
+public,communication_messages,idx_comm_msgs_org,false,false,btree,CREATE INDEX idx_comm_msgs_org ON communication_messages USING btree (org_id)
+public,communication_messages,idx_comm_msgs_org_thread_created,false,false,btree,"CREATE INDEX idx_comm_msgs_org_thread_created ON communication_messages USING btree (org_id, thread_id, created_at DESC)"
+public,communication_messages,idx_comm_msgs_queue,false,false,btree,"CREATE INDEX idx_comm_msgs_queue ON communication_messages USING btree (org_id, status, channel, direction) WHERE direction = 'outbound'::text AND status = 'queued'::text"
+public,communication_messages,idx_comm_msgs_thread,false,false,btree,CREATE INDEX idx_comm_msgs_thread ON communication_messages USING btree (thread_id)
+public,communication_provider_bindings,communication_bindings_org_inbound_to_uq,true,false,btree,"CREATE UNIQUE INDEX communication_bindings_org_inbound_to_uq ON communication_provider_bindings USING btree (org_id, inbound_to_e164) WHERE inbound_to_e164 IS NOT NULL"
+public,communication_provider_bindings,communication_provider_bindings_pkey,true,true,btree,CREATE UNIQUE INDEX communication_provider_bindings_pkey ON communication_provider_bindings USING btree (id)
+public,communication_provider_bindings,idx_comm_bindings_org_channel,false,false,btree,"CREATE INDEX idx_comm_bindings_org_channel ON communication_provider_bindings USING btree (org_id, channel) WHERE status = 'active'::text"
+public,communication_provider_bindings,idx_comm_bindings_org_location_scope,false,false,btree,"CREATE INDEX idx_comm_bindings_org_location_scope ON communication_provider_bindings USING btree (org_id, location_id, channel, scope) WHERE status = 'active'::text"
+public,communication_threads,communication_threads_identity_uq,true,false,btree,"CREATE UNIQUE INDEX communication_threads_identity_uq ON communication_threads USING btree (org_id, primary_entity_type, primary_entity_id, channel, recipient_key)"
+public,communication_threads,communication_threads_pkey,true,true,btree,CREATE UNIQUE INDEX communication_threads_pkey ON communication_threads USING btree (id)
+public,communication_threads,idx_comm_threads_org,false,false,btree,CREATE INDEX idx_comm_threads_org ON communication_threads USING btree (org_id)
+public,communication_threads,idx_comm_threads_org_channel,false,false,btree,"CREATE INDEX idx_comm_threads_org_channel ON communication_threads USING btree (org_id, channel)"
+public,communication_threads,idx_comm_threads_org_entity,false,false,btree,"CREATE INDEX idx_comm_threads_org_entity ON communication_threads USING btree (org_id, primary_entity_type, primary_entity_id)"
 public,contact_tags,contact_tags_pkey,true,true,btree,"CREATE UNIQUE INDEX contact_tags_pkey ON contact_tags USING btree (contact_id, tag_id)"
 public,contacts,contacts_email_unique,true,false,btree,CREATE UNIQUE INDEX contacts_email_unique ON contacts USING btree (lower(TRIM(BOTH FROM email))) WHERE email IS NOT NULL AND length(TRIM(BOTH FROM email)) > 0
 public,contacts,contacts_org_status_idx,false,false,btree,"CREATE INDEX contacts_org_status_idx ON contacts USING btree (org_id, status_key)"
@@ -91,6 +159,7 @@ public,customers,idx_customers_external,false,false,btree,"CREATE INDEX idx_cust
 public,customers,idx_customers_org_id,false,false,btree,CREATE INDEX idx_customers_org_id ON customers USING btree (org_id)
 public,customers,idx_customers_primary_contact,false,false,btree,CREATE INDEX idx_customers_primary_contact ON customers USING btree (primary_contact_id)
 public,customers,idx_customers_vertical_id,false,false,btree,CREATE INDEX idx_customers_vertical_id ON customers USING btree (vertical_id)
+public,customers,ux_customers_org_customer_number,true,false,btree,"CREATE UNIQUE INDEX ux_customers_org_customer_number ON customers USING btree (org_id, customer_number)"
 public,customers,ux_customers_stripe_customer_id_not_null,true,false,btree,CREATE UNIQUE INDEX ux_customers_stripe_customer_id_not_null ON customers USING btree (stripe_customer_id) WHERE stripe_customer_id IS NOT NULL AND stripe_customer_id <> ''::text
 public,departments,departments_pkey,true,true,btree,CREATE UNIQUE INDEX departments_pkey ON departments USING btree (id)
 public,departments,idx_departments_org_active_sort,false,false,btree,"CREATE INDEX idx_departments_org_active_sort ON departments USING btree (org_id, is_active, sort_order)"
@@ -171,6 +240,9 @@ public,external_mappings,idx_external_mappings_internal,false,false,btree,"CREAT
 public,external_mappings,ux_external_mappings_unique,true,false,btree,"CREATE UNIQUE INDEX ux_external_mappings_unique ON external_mappings USING btree (source, entity_type, external_id, internal_table)"
 public,field_definitions,field_definitions_pkey,true,true,btree,CREATE UNIQUE INDEX field_definitions_pkey ON field_definitions USING btree (id)
 public,field_definitions,ux_field_definitions_org_entity_key,true,false,btree,"CREATE UNIQUE INDEX ux_field_definitions_org_entity_key ON field_definitions USING btree (org_id, entity_type, field_key)"
+public,field_section_definitions,field_section_definitions_org_entity_section_key,true,false,btree,"CREATE UNIQUE INDEX field_section_definitions_org_entity_section_key ON field_section_definitions USING btree (org_id, entity_type, section_key)"
+public,field_section_definitions,field_section_definitions_pkey,true,true,btree,CREATE UNIQUE INDEX field_section_definitions_pkey ON field_section_definitions USING btree (id)
+public,field_section_definitions,idx_field_section_definitions_org_entity,false,false,btree,"CREATE INDEX idx_field_section_definitions_org_entity ON field_section_definitions USING btree (org_id, entity_type, sort_order)"
 public,field_values,field_values_pkey,true,true,btree,CREATE UNIQUE INDEX field_values_pkey ON field_values USING btree (id)
 public,field_values,idx_field_values_entity,false,false,btree,"CREATE INDEX idx_field_values_entity ON field_values USING btree (entity_type, entity_id)"
 public,field_values,idx_field_values_org_entity,false,false,btree,"CREATE INDEX idx_field_values_org_entity ON field_values USING btree (org_id, entity_type, entity_id)"
@@ -229,6 +301,7 @@ public,jobs,jobs_assigned_vendor_id_idx,false,false,btree,CREATE INDEX jobs_assi
 public,jobs,jobs_discount_program_id_idx,false,false,btree,CREATE INDEX jobs_discount_program_id_idx ON jobs USING btree (discount_program_id)
 public,jobs,jobs_org_status_idx,false,false,btree,"CREATE INDEX jobs_org_status_idx ON jobs USING btree (org_id, status_key)"
 public,jobs,jobs_pkey,true,true,btree,CREATE UNIQUE INDEX jobs_pkey ON jobs USING btree (id)
+public,jobs,ux_jobs_org_job_number,true,false,btree,"CREATE UNIQUE INDEX ux_jobs_org_job_number ON jobs USING btree (org_id, job_number)"
 public,ledger_transactions,ledger_transactions_pkey,true,true,btree,CREATE UNIQUE INDEX ledger_transactions_pkey ON ledger_transactions USING btree (id)
 public,ledger_transactions,ledger_tx_org_job_idx,false,false,btree,"CREATE INDEX ledger_tx_org_job_idx ON ledger_transactions USING btree (org_id, job_id)"
 public,ledger_transactions,ledger_tx_org_occurred_idx,false,false,btree,"CREATE INDEX ledger_tx_org_occurred_idx ON ledger_transactions USING btree (org_id, occurred_at)"
@@ -248,6 +321,7 @@ public,locations,idx_locations_org_type,false,false,btree,"CREATE INDEX idx_loca
 public,locations,idx_locations_org_vendor,false,false,btree,"CREATE INDEX idx_locations_org_vendor ON locations USING btree (org_id, vendor_id)"
 public,locations,locations_location_type_id_idx,false,false,btree,"CREATE INDEX locations_location_type_id_idx ON locations USING btree (org_id, location_type_id)"
 public,locations,locations_pkey,true,true,btree,CREATE UNIQUE INDEX locations_pkey ON locations USING btree (id)
+public,locations,ux_locations_org_location_number,true,false,btree,"CREATE UNIQUE INDEX ux_locations_org_location_number ON locations USING btree (org_id, location_number)"
 public,messages,idx_messages_contact,false,false,btree,CREATE INDEX idx_messages_contact ON messages USING btree (contact_id)
 public,messages,idx_messages_contact_created,false,false,btree,"CREATE INDEX idx_messages_contact_created ON messages USING btree (contact_id, created_at DESC)"
 public,messages,idx_messages_created_at,false,false,btree,CREATE INDEX idx_messages_created_at ON messages USING btree (created_at DESC)
@@ -264,6 +338,7 @@ public,messages_outbox,messages_outbox_pkey,true,true,btree,CREATE UNIQUE INDEX 
 public,messages_outbox,messages_outbox_status_idx,false,false,btree,"CREATE INDEX messages_outbox_status_idx ON messages_outbox USING btree (status, created_at DESC)"
 public,opportunities,idx_opportunities_org_id,false,false,btree,CREATE INDEX idx_opportunities_org_id ON opportunities USING btree (org_id)
 public,opportunities,idx_opportunities_primary_person,false,false,btree,CREATE INDEX idx_opportunities_primary_person ON opportunities USING btree (primary_person_id)
+public,opportunities,idx_opportunities_work_unit_id,false,false,btree,CREATE INDEX idx_opportunities_work_unit_id ON opportunities USING btree (work_unit_id)
 public,opportunities,idx_opps_contact,false,false,btree,CREATE INDEX idx_opps_contact ON opportunities USING btree (primary_contact_id)
 public,opportunities,idx_opps_customer,false,false,btree,CREATE INDEX idx_opps_customer ON opportunities USING btree (customer_id)
 public,opportunities,idx_opps_external,false,false,btree,"CREATE INDEX idx_opps_external ON opportunities USING btree (external_source, external_id)"
@@ -271,7 +346,23 @@ public,opportunities,idx_opps_stage,false,false,btree,CREATE INDEX idx_opps_stag
 public,opportunities,opportunities_discount_program_id_idx,false,false,btree,CREATE INDEX opportunities_discount_program_id_idx ON opportunities USING btree (discount_program_id)
 public,opportunities,opportunities_org_status_idx,false,false,btree,"CREATE INDEX opportunities_org_status_idx ON opportunities USING btree (org_id, status_key)"
 public,opportunities,opportunities_pkey,true,true,btree,CREATE UNIQUE INDEX opportunities_pkey ON opportunities USING btree (id)
+public,opportunities,ux_opportunities_org_opportunity_number,true,false,btree,"CREATE UNIQUE INDEX ux_opportunities_org_opportunity_number ON opportunities USING btree (org_id, opportunity_number)"
+public,opportunity_customer_members,idx_opportunity_customer_members_org_customer_member,false,false,btree,"CREATE INDEX idx_opportunity_customer_members_org_customer_member ON opportunity_customer_members USING btree (org_id, customer_member_id)"
+public,opportunity_customer_members,idx_opportunity_customer_members_org_opportunity,false,false,btree,"CREATE INDEX idx_opportunity_customer_members_org_opportunity ON opportunity_customer_members USING btree (org_id, opportunity_id)"
+public,opportunity_customer_members,idx_opportunity_customer_members_org_outcome_status,false,false,btree,"CREATE INDEX idx_opportunity_customer_members_org_outcome_status ON opportunity_customer_members USING btree (org_id, outcome_status_key)"
+public,opportunity_customer_members,opportunity_customer_members_pkey,true,true,btree,CREATE UNIQUE INDEX opportunity_customer_members_pkey ON opportunity_customer_members USING btree (id)
+public,opportunity_customer_members,uq_opportunity_customer_members_unique,true,false,btree,"CREATE UNIQUE INDEX uq_opportunity_customer_members_unique ON opportunity_customer_members USING btree (org_id, opportunity_id, customer_member_id)"
+public,opportunity_persons,idx_opportunity_persons_org_opportunity,false,false,btree,"CREATE INDEX idx_opportunity_persons_org_opportunity ON opportunity_persons USING btree (org_id, opportunity_id)"
+public,opportunity_persons,idx_opportunity_persons_org_person,false,false,btree,"CREATE INDEX idx_opportunity_persons_org_person ON opportunity_persons USING btree (org_id, person_id)"
+public,opportunity_persons,opportunity_persons_pkey,true,true,btree,CREATE UNIQUE INDEX opportunity_persons_pkey ON opportunity_persons USING btree (id)
+public,opportunity_persons,uq_opportunity_persons_opp_person,true,false,btree,"CREATE UNIQUE INDEX uq_opportunity_persons_opp_person ON opportunity_persons USING btree (opportunity_id, person_id)"
 public,opportunity_tags,opportunity_tags_pkey,true,true,btree,"CREATE UNIQUE INDEX opportunity_tags_pkey ON opportunity_tags USING btree (opportunity_id, tag_id)"
+public,option_set_items,idx_option_set_items_set_id,false,false,btree,CREATE INDEX idx_option_set_items_set_id ON option_set_items USING btree (option_set_id)
+public,option_set_items,option_set_items_pkey,true,true,btree,CREATE UNIQUE INDEX option_set_items_pkey ON option_set_items USING btree (id)
+public,option_set_items,option_set_items_set_item_key,true,false,btree,"CREATE UNIQUE INDEX option_set_items_set_item_key ON option_set_items USING btree (option_set_id, item_key)"
+public,option_sets,idx_option_sets_org_id,false,false,btree,CREATE INDEX idx_option_sets_org_id ON option_sets USING btree (org_id)
+public,option_sets,option_sets_org_set_key,true,false,btree,"CREATE UNIQUE INDEX option_sets_org_set_key ON option_sets USING btree (org_id, set_key)"
+public,option_sets,option_sets_pkey,true,true,btree,CREATE UNIQUE INDEX option_sets_pkey ON option_sets USING btree (id)
 public,org_settings,org_settings_org_id_key,true,false,btree,CREATE UNIQUE INDEX org_settings_org_id_key ON org_settings USING btree (org_id)
 public,org_settings,org_settings_org_idx,false,false,btree,CREATE INDEX org_settings_org_idx ON org_settings USING btree (org_id)
 public,org_settings,org_settings_pkey,true,true,btree,CREATE UNIQUE INDEX org_settings_pkey ON org_settings USING btree (id)
@@ -279,6 +370,7 @@ public,orgs,orgs_industry_id_idx,false,false,btree,CREATE INDEX orgs_industry_id
 public,orgs,orgs_pkey,true,true,btree,CREATE UNIQUE INDEX orgs_pkey ON orgs USING btree (id)
 public,orgs,orgs_slug_key,true,false,btree,CREATE UNIQUE INDEX orgs_slug_key ON orgs USING btree (slug)
 public,payment_allocations,idx_payment_allocations_org_allocated_at,false,false,btree,"CREATE INDEX idx_payment_allocations_org_allocated_at ON payment_allocations USING btree (org_id, allocated_at DESC)"
+public,payment_allocations,idx_payment_allocations_org_charge_id_partial,false,false,btree,"CREATE INDEX idx_payment_allocations_org_charge_id_partial ON payment_allocations USING btree (org_id, charge_id) WHERE charge_id IS NOT NULL"
 public,payment_allocations,idx_payment_allocations_org_payment,false,false,btree,"CREATE INDEX idx_payment_allocations_org_payment ON payment_allocations USING btree (org_id, payment_id)"
 public,payment_allocations,idx_payment_allocations_org_status_target,false,false,btree,"CREATE INDEX idx_payment_allocations_org_status_target ON payment_allocations USING btree (org_id, status, target_entity_type, target_entity_id)"
 public,payment_allocations,idx_payment_allocations_org_target,false,false,btree,"CREATE INDEX idx_payment_allocations_org_target ON payment_allocations USING btree (org_id, target_entity_type, target_entity_id)"
@@ -325,9 +417,12 @@ public,persons,idx_persons_full_name,false,false,btree,CREATE INDEX idx_persons_
 public,persons,idx_persons_org_id,false,false,btree,CREATE INDEX idx_persons_org_id ON persons USING btree (org_id)
 public,persons,idx_persons_phone,false,false,btree,CREATE INDEX idx_persons_phone ON persons USING btree (phone)
 public,persons,persons_pkey,true,true,btree,CREATE UNIQUE INDEX persons_pkey ON persons USING btree (id)
+public,persons,ux_persons_org_person_number,true,false,btree,"CREATE UNIQUE INDEX ux_persons_org_person_number ON persons USING btree (org_id, person_number)"
+public,pipeline_stages,idx_pipeline_stages_org_key,false,false,btree,"CREATE INDEX idx_pipeline_stages_org_key ON pipeline_stages USING btree (org_id, key) WHERE key IS NOT NULL"
 public,pipeline_stages,pipeline_stages_org_id_idx,false,false,btree,CREATE INDEX pipeline_stages_org_id_idx ON pipeline_stages USING btree (org_id)
 public,pipeline_stages,pipeline_stages_pipeline_id_ghl_stage_uuid_key,true,false,btree,"CREATE UNIQUE INDEX pipeline_stages_pipeline_id_ghl_stage_uuid_key ON pipeline_stages USING btree (pipeline_id, ghl_stage_uuid)"
 public,pipeline_stages,pipeline_stages_pkey,true,true,btree,CREATE UNIQUE INDEX pipeline_stages_pkey ON pipeline_stages USING btree (id)
+public,pipeline_stages,ux_pipeline_stages_org_key,true,false,btree,"CREATE UNIQUE INDEX ux_pipeline_stages_org_key ON pipeline_stages USING btree (org_id, key) WHERE key IS NOT NULL"
 public,pipelines,pipelines_ghl_pipeline_id_key,true,false,btree,CREATE UNIQUE INDEX pipelines_ghl_pipeline_id_key ON pipelines USING btree (ghl_pipeline_id)
 public,pipelines,pipelines_org_id_idx,false,false,btree,CREATE INDEX pipelines_org_id_idx ON pipelines USING btree (org_id)
 public,pipelines,pipelines_pkey,true,true,btree,CREATE UNIQUE INDEX pipelines_pkey ON pipelines USING btree (id)
@@ -368,13 +463,25 @@ public,pricing_recurring_prices,ux_recurring_vertical_frequency_sqft,true,false,
 public,pricing_services,idx_pricing_services_unique,true,false,btree,"CREATE UNIQUE INDEX idx_pricing_services_unique ON pricing_services USING btree (vertical_id, service_key)"
 public,pricing_services,pricing_services_pkey,true,true,btree,CREATE UNIQUE INDEX pricing_services_pkey ON pricing_services USING btree (id)
 public,pricing_services,pricing_services_unique_vertical_service,true,false,btree,"CREATE UNIQUE INDEX pricing_services_unique_vertical_service ON pricing_services USING btree (vertical_id, service_key)"
-public,pricing_square_footage_tiers,idx_pricing_sqft_unique,true,false,btree,"CREATE UNIQUE INDEX idx_pricing_sqft_unique ON pricing_square_footage_tiers USING btree (vertical_id, sqft_key)"
-public,pricing_square_footage_tiers,pricing_sqft_unique_vertical_sqft_key,true,false,btree,"CREATE UNIQUE INDEX pricing_sqft_unique_vertical_sqft_key ON pricing_square_footage_tiers USING btree (vertical_id, sqft_key)"
+public,pricing_square_footage_tiers,idx_pricing_tier_unique,true,false,btree,"CREATE UNIQUE INDEX idx_pricing_tier_unique ON pricing_square_footage_tiers USING btree (vertical_id, tier_key)"
 public,pricing_square_footage_tiers,pricing_square_footage_tiers_pkey,true,true,btree,CREATE UNIQUE INDEX pricing_square_footage_tiers_pkey ON pricing_square_footage_tiers USING btree (id)
 public,quotes,idx_quotes_job,false,false,btree,CREATE INDEX idx_quotes_job ON quotes USING btree (job_id)
 public,quotes,idx_quotes_opp,false,false,btree,CREATE INDEX idx_quotes_opp ON quotes USING btree (opportunity_id)
 public,quotes,idx_quotes_org_id,false,false,btree,CREATE INDEX idx_quotes_org_id ON quotes USING btree (org_id)
 public,quotes,quotes_pkey,true,true,btree,CREATE UNIQUE INDEX quotes_pkey ON quotes USING btree (id)
+public,record_actions,idx_record_actions_entity_active,false,false,btree,CREATE INDEX idx_record_actions_entity_active ON record_actions USING btree (entity_type) WHERE is_active = true
+public,record_actions,record_actions_pkey,true,true,btree,CREATE UNIQUE INDEX record_actions_pkey ON record_actions USING btree (id)
+public,record_actions,ux_record_actions_entity_action,true,false,btree,"CREATE UNIQUE INDEX ux_record_actions_entity_action ON record_actions USING btree (entity_type, action_key)"
+public,record_drawer_layouts,idx_record_drawer_layouts_org_entity_surface,false,false,btree,"CREATE INDEX idx_record_drawer_layouts_org_entity_surface ON record_drawer_layouts USING btree (org_id, entity_type, surface) WHERE is_active = true"
+public,record_drawer_layouts,record_drawer_layouts_pkey,true,true,btree,CREATE UNIQUE INDEX record_drawer_layouts_pkey ON record_drawer_layouts USING btree (id)
+public,record_drawer_layouts,ux_record_drawer_layouts_org_entity_surface_key,true,false,btree,"CREATE UNIQUE INDEX ux_record_drawer_layouts_org_entity_surface_key ON record_drawer_layouts USING btree (org_id, entity_type, surface, key)"
+public,record_layouts,idx_record_layouts_entity_active,false,false,btree,CREATE INDEX idx_record_layouts_entity_active ON record_layouts USING btree (entity_type) WHERE is_active = true
+public,record_layouts,record_layouts_pkey,true,true,btree,CREATE UNIQUE INDEX record_layouts_pkey ON record_layouts USING btree (id)
+public,record_layouts,ux_record_layouts_entity_key,true,false,btree,"CREATE UNIQUE INDEX ux_record_layouts_entity_key ON record_layouts USING btree (entity_type, key)"
+public,record_overview_layouts,idx_record_overview_layouts_org_entity_active,false,false,btree,"CREATE INDEX idx_record_overview_layouts_org_entity_active ON record_overview_layouts USING btree (org_id, entity_type) WHERE is_active = true"
+public,record_overview_layouts,idx_record_overview_layouts_org_id,false,false,btree,CREATE INDEX idx_record_overview_layouts_org_id ON record_overview_layouts USING btree (org_id)
+public,record_overview_layouts,record_overview_layouts_pkey,true,true,btree,CREATE UNIQUE INDEX record_overview_layouts_pkey ON record_overview_layouts USING btree (id)
+public,record_overview_layouts,ux_record_overview_layouts_org_entity_surface,true,false,btree,"CREATE UNIQUE INDEX ux_record_overview_layouts_org_entity_surface ON record_overview_layouts USING btree (org_id, entity_type, surface)"
 public,recurrence_plans,recurrence_plans_job_id_key,true,false,btree,CREATE UNIQUE INDEX recurrence_plans_job_id_key ON recurrence_plans USING btree (job_id)
 public,recurrence_plans,recurrence_plans_pkey,true,true,btree,CREATE UNIQUE INDEX recurrence_plans_pkey ON recurrence_plans USING btree (id)
 public,role_definitions,role_definitions_org_role_key_uk,true,false,btree,"CREATE UNIQUE INDEX role_definitions_org_role_key_uk ON role_definitions USING btree (org_id, role_key)"
@@ -406,6 +513,7 @@ public,schedules,schedules_org_job_vendor_status_idx,false,false,btree,"CREATE I
 public,schedules,schedules_org_status_idx,false,false,btree,"CREATE INDEX schedules_org_status_idx ON schedules USING btree (org_id, status_key)"
 public,schedules,schedules_pkey,true,true,btree,CREATE UNIQUE INDEX schedules_pkey ON schedules USING btree (id)
 public,schedules,schedules_subscription_idx,false,false,btree,CREATE INDEX schedules_subscription_idx ON schedules USING btree (customer_subscription_id)
+public,schedules,ux_schedules_org_schedule_number,true,false,btree,"CREATE UNIQUE INDEX ux_schedules_org_schedule_number ON schedules USING btree (org_id, schedule_number)"
 public,service_offerings,service_offerings_org_active_idx,false,false,btree,"CREATE INDEX service_offerings_org_active_idx ON service_offerings USING btree (org_id, is_active)"
 public,service_offerings,service_offerings_org_key_uidx,true,false,btree,"CREATE UNIQUE INDEX service_offerings_org_key_uidx ON service_offerings USING btree (org_id, offering_key)"
 public,service_offerings,service_offerings_pkey,true,true,btree,CREATE UNIQUE INDEX service_offerings_pkey ON service_offerings USING btree (id)
@@ -424,14 +532,31 @@ public,sqft_bands,sqft_bands_pkey,true,true,btree,CREATE UNIQUE INDEX sqft_bands
 public,status_definitions,status_definitions_org_entity_sort_idx,false,false,btree,"CREATE INDEX status_definitions_org_entity_sort_idx ON status_definitions USING btree (org_id, entity_type, sort_order)"
 public,status_definitions,status_definitions_pkey,true,true,btree,CREATE UNIQUE INDEX status_definitions_pkey ON status_definitions USING btree (id)
 public,status_definitions,status_definitions_unique_scope,true,false,btree,"CREATE UNIQUE INDEX status_definitions_unique_scope ON status_definitions USING btree (COALESCE(org_id, '00000000-0000-0000-0000-000000000000'::uuid), COALESCE(industry_key, ''::text), entity_type, status_key)"
+public,status_transition_rules,idx_status_transition_rules_org_entity_action,false,false,btree,"CREATE INDEX idx_status_transition_rules_org_entity_action ON status_transition_rules USING btree (org_id, entity_type, action_key) WHERE is_active = true AND action_key IS NOT NULL"
+public,status_transition_rules,idx_status_transition_rules_org_entity_scope,false,false,btree,"CREATE INDEX idx_status_transition_rules_org_entity_scope ON status_transition_rules USING btree (org_id, entity_type, department_id, work_unit_id) WHERE is_active = true"
+public,status_transition_rules,idx_status_transition_rules_org_entity_to,false,false,btree,"CREATE INDEX idx_status_transition_rules_org_entity_to ON status_transition_rules USING btree (org_id, entity_type, to_status_key) WHERE is_active = true"
+public,status_transition_rules,status_transition_rules_pkey,true,true,btree,CREATE UNIQUE INDEX status_transition_rules_pkey ON status_transition_rules USING btree (id)
 public,tags,tags_name_key,true,false,btree,CREATE UNIQUE INDEX tags_name_key ON tags USING btree (name)
 public,tags,tags_pkey,true,true,btree,CREATE UNIQUE INDEX tags_pkey ON tags USING btree (id)
+public,user_access_profiles,idx_user_access_profiles_org_id,false,false,btree,CREATE INDEX idx_user_access_profiles_org_id ON user_access_profiles USING btree (org_id)
+public,user_access_profiles,idx_user_access_profiles_user_id,false,false,btree,CREATE INDEX idx_user_access_profiles_user_id ON user_access_profiles USING btree (user_id)
+public,user_access_profiles,uq_user_access_profiles_user_org,true,false,btree,"CREATE UNIQUE INDEX uq_user_access_profiles_user_org ON user_access_profiles USING btree (user_id, org_id)"
+public,user_access_profiles,user_access_profiles_pkey,true,true,btree,CREATE UNIQUE INDEX user_access_profiles_pkey ON user_access_profiles USING btree (id)
+public,user_department_access,idx_user_department_access_department_id,false,false,btree,CREATE INDEX idx_user_department_access_department_id ON user_department_access USING btree (department_id)
+public,user_department_access,idx_user_department_access_user_org,false,false,btree,"CREATE INDEX idx_user_department_access_user_org ON user_department_access USING btree (user_id, org_id)"
+public,user_department_access,uq_user_department_access_user_org_dept,true,false,btree,"CREATE UNIQUE INDEX uq_user_department_access_user_org_dept ON user_department_access USING btree (user_id, org_id, department_id)"
+public,user_department_access,user_department_access_pkey,true,true,btree,CREATE UNIQUE INDEX user_department_access_pkey ON user_department_access USING btree (id)
 public,user_profiles,user_profiles_pkey,true,true,btree,CREATE UNIQUE INDEX user_profiles_pkey ON user_profiles USING btree (id)
 public,user_roles,idx_user_roles_org_id,false,false,btree,CREATE INDEX idx_user_roles_org_id ON user_roles USING btree (org_id)
 public,user_roles,idx_user_roles_role,false,false,btree,CREATE INDEX idx_user_roles_role ON user_roles USING btree (role)
-public,user_roles,uniq_user_roles_user_org_role,true,false,btree,"CREATE UNIQUE INDEX uniq_user_roles_user_org_role ON user_roles USING btree (user_id, org_id, role)"
+public,user_roles,idx_user_roles_user_id,false,false,btree,CREATE INDEX idx_user_roles_user_id ON user_roles USING btree (user_id)
+public,user_roles,idx_user_roles_user_id_org_id,false,false,btree,"CREATE INDEX idx_user_roles_user_id_org_id ON user_roles USING btree (user_id, org_id)"
 public,user_roles,user_roles_org_user_idx,false,false,btree,"CREATE INDEX user_roles_org_user_idx ON user_roles USING btree (org_id, user_id)"
-public,user_roles,user_roles_pkey,true,true,btree,CREATE UNIQUE INDEX user_roles_pkey ON user_roles USING btree (user_id)
+public,user_roles,user_roles_pkey,true,true,btree,"CREATE UNIQUE INDEX user_roles_pkey ON user_roles USING btree (user_id, org_id, role)"
+public,user_site_access,idx_user_site_access_location_id,false,false,btree,CREATE INDEX idx_user_site_access_location_id ON user_site_access USING btree (location_id)
+public,user_site_access,idx_user_site_access_user_org,false,false,btree,"CREATE INDEX idx_user_site_access_user_org ON user_site_access USING btree (user_id, org_id)"
+public,user_site_access,uq_user_site_access_user_org_location,true,false,btree,"CREATE UNIQUE INDEX uq_user_site_access_user_org_location ON user_site_access USING btree (user_id, org_id, location_id)"
+public,user_site_access,user_site_access_pkey,true,true,btree,CREATE UNIQUE INDEX user_site_access_pkey ON user_site_access USING btree (id)
 public,vendor_statuses,vendor_statuses_key_key,true,false,btree,CREATE UNIQUE INDEX vendor_statuses_key_key ON vendor_statuses USING btree (key)
 public,vendor_statuses,vendor_statuses_pkey,true,true,btree,CREATE UNIQUE INDEX vendor_statuses_pkey ON vendor_statuses USING btree (id)
 public,vendor_tags,vendor_tags_pkey,true,true,btree,"CREATE UNIQUE INDEX vendor_tags_pkey ON vendor_tags USING btree (vendor_id, tag_id)"
@@ -449,6 +574,7 @@ public,vendors,idx_vendors_org_id,false,false,btree,CREATE INDEX idx_vendors_org
 public,vendors,idx_vendors_service_area_zip_codes_gin,false,false,gin,CREATE INDEX idx_vendors_service_area_zip_codes_gin ON vendors USING gin (service_area_zip_codes)
 public,vendors,idx_vendors_status,false,false,btree,CREATE INDEX idx_vendors_status ON vendors USING btree (status)
 public,vendors,idx_vendors_submitted_at,false,false,btree,CREATE INDEX idx_vendors_submitted_at ON vendors USING btree (submitted_at)
+public,vendors,ux_vendors_org_vendor_number,true,false,btree,"CREATE UNIQUE INDEX ux_vendors_org_vendor_number ON vendors USING btree (org_id, vendor_number)"
 public,vendors,vendors_drivers_license_doc_path_idx,false,false,btree,CREATE INDEX vendors_drivers_license_doc_path_idx ON vendors USING btree (drivers_license_doc_path)
 public,vendors,vendors_insurance_doc_path_idx,false,false,btree,CREATE INDEX vendors_insurance_doc_path_idx ON vendors USING btree (insurance_doc_path)
 public,vendors,vendors_org_payout_override_idx,false,false,btree,"CREATE INDEX vendors_org_payout_override_idx ON vendors USING btree (org_id, payout_override_type)"
@@ -497,3 +623,8 @@ public,workflows,idx_workflows_trigger,false,false,btree,CREATE INDEX idx_workfl
 public,workflows,workflows_org_id_idx,false,false,btree,CREATE INDEX workflows_org_id_idx ON workflows USING btree (org_id)
 public,workflows,workflows_org_id_name_uniq,true,false,btree,"CREATE UNIQUE INDEX workflows_org_id_name_uniq ON workflows USING btree (org_id, name)"
 public,workflows,workflows_pkey,true,true,btree,CREATE UNIQUE INDEX workflows_pkey ON workflows USING btree (id)
+public,workspace_kpi_placement,idx_workspace_kpi_placement_org_surface,false,false,btree,"CREATE INDEX idx_workspace_kpi_placement_org_surface ON workspace_kpi_placement USING btree (org_id, surface) WHERE is_visible = true"
+public,workspace_kpi_placement,ux_workspace_kpi_placement_department_active,true,false,btree,"CREATE UNIQUE INDEX ux_workspace_kpi_placement_department_active ON workspace_kpi_placement USING btree (org_id, department_id, metric_key) WHERE surface = 'department'::text AND work_unit_id IS NULL AND is_visible = true"
+public,workspace_kpi_placement,ux_workspace_kpi_placement_work_unit_active,true,false,btree,"CREATE UNIQUE INDEX ux_workspace_kpi_placement_work_unit_active ON workspace_kpi_placement USING btree (org_id, work_unit_id, metric_key) WHERE surface = 'work_unit'::text AND is_visible = true"
+public,workspace_kpi_placement,ux_workspace_kpi_placement_workspace_active,true,false,btree,"CREATE UNIQUE INDEX ux_workspace_kpi_placement_workspace_active ON workspace_kpi_placement USING btree (org_id, metric_key) WHERE surface = 'workspace'::text AND department_id IS NULL AND work_unit_id IS NULL AND is_visible = true"
+public,workspace_kpi_placement,workspace_kpi_placement_pkey,true,true,btree,CREATE UNIQUE INDEX workspace_kpi_placement_pkey ON workspace_kpi_placement USING btree (id)
