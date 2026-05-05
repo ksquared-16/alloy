@@ -43,6 +43,13 @@ Outbound and inbound messaging threads tied to **entities** (person-first anchor
 - Workflow **`send_message`** / **`create_message`** may still write **`public.messages`** / **`messages_outbox`** (`web/lib/workflowRun.ts`; **`/admin/messaging`**, **`/admin/messages-outbox`**). Dispatcher processes both until migrated.
 - **Dual-write:** **`COMMUNICATION_DUAL_WRITE`** + **`isCommunicationCanonicalDualWriteEnabled()`** — off unless env enables.
 
+### Legacy stores vs Communications V1 (retirement path)
+
+- **Canonical V1:** **`communication_*`** tables (`communication_threads`, `communication_messages`, `communication_provider_bindings`, `communication_message_reads`) are the intended product surface for new messaging features. **New work should extend these**, not **`messages`**.
+- **Compatibility surfaces:** **`public.messages`** (SMS / workflow-parallel history) and **`messages_outbox`** remain supported for existing flows, dual-write, and worker dequeue until an explicit cutover.
+- **Do not expand legacy schema** for new product capabilities — avoid new columns, new event types tied only to **`messages`**, or new RLS assumptions on **`messages`** without an approved migration plan.
+- **Retirement** (future): requires a defined **backfill / migration plan** from legacy rows into **`communication_*`** (or accepted feature parity drop), worker and workflow updates, and a policy review — **not** a schema delete in place.
+
 ## Not in V1 (explicit)
 
 - **No global inbox** — threads are **entity-scoped** in drawer/modal; there is no org-wide unified inbox product.

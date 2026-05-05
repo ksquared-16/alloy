@@ -8,6 +8,7 @@ Capture **payments**, **Stripe** linkage, and job pricing surfaces **as wired in
 
 - **`payments`** rows and admin presentation rollups (e.g. `getPaymentAllocationRollup` in entity route imports).
 - **Stripe:** archived notes under `docs/archive/2026-05-02-docs-reset/implementation/STRIPE_SUPABASE_LINKING.md`; live code paths include **`payment-collect-context`**, **`customer_payment_methods`** in schema, and Stripe usage in job/admin flows (grep `stripe` under `web/`).
+- **`customer_payment_methods`:** RLS is **deny-by-default** for browser/`authenticated` roles (no table policies). Treat as **service-role / server-only** today: reads and writes go through trusted API paths using the admin client or backend, not direct Supabase client access from the browser. **Do not add `authenticated` RLS policies** until product defines **customer portal / saved payment UX** and least-privilege rules are designed.
 - **Pricing:** `web/lib/pricing/` (`initializeJobPricing`, `overrideJobPricing`) integrates with workflow and admin flows.
 - **Discounts:** Admin job PATCH supports discount selection tokens per schema/routes.
 - **Ledger / financials APIs:** e.g. **`web/app/api/admin/financials/ledger/route.ts`**, **`web/app/api/admin/financials/snapshot/route.ts`** — org-scoped reads for privileged roles.
@@ -26,7 +27,7 @@ Capture **payments**, **Stripe** linkage, and job pricing surfaces **as wired in
 | Pricing init/override | `web/lib/pricing/initializeJobPricing.ts`, `web/lib/pricing/overrideJobPricing.ts` |
 | Payment context | `web/app/api/admin/jobs/[id]/payment-collect-context/route.ts` |
 | Financials read APIs | `web/app/api/admin/financials/**` |
-| Schema | `customer_payment_methods`, `payments` in `supabase/migrations` / baseline SQL |
+| Schema | `customer_payment_methods` (server-controlled; see note above), `payments` in `supabase/migrations` / baseline SQL |
 
 ## Guardrails
 
