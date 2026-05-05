@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requirePortalOrUsersRolesManageAuth, requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
+import { mergeRoleDefinitionsWithDefaults, type RoleDefinitionRow } from "@/lib/admin/defaultRoleDefinitions";
 
 /** GET: list roles for org. Portal (admin/ops) or Users & Roles managers. */
 export async function GET() {
@@ -20,13 +21,14 @@ export async function GET() {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const roles = (rows ?? []).map((r) => ({
+    const rolesRaw: RoleDefinitionRow[] = (rows ?? []).map((r) => ({
         role_key: (r as { role_key: string }).role_key,
         role_label: (r as { role_label: string }).role_label,
         is_system: (r as { is_system: boolean }).is_system,
         is_active: (r as { is_active: boolean }).is_active,
         created_at: (r as { created_at?: string }).created_at ?? null,
     }));
+    const roles = mergeRoleDefinitionsWithDefaults(rolesRaw);
 
     return NextResponse.json({ roles });
 }
