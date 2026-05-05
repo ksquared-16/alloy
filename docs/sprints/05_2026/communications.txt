@@ -1805,6 +1805,23 @@ End design batch — Cards 22, 23, 25A.
 | Resend lifecycle | `{ORIGIN}/api/webhooks/resend` | **`RESEND_WEBHOOK_SECRET`** (Svix signing secret from Resend dashboard) |
 | Twilio SMS status | `{ORIGIN}/api/webhooks/twilio/sms-status` | **`TWILIO_AUTH_TOKEN`**; optional **`PUBLIC_TWILIO_WEBHOOK_BASE_URL`** if Twilio hits a different public host than the app’s default origin |
 
+**Twilio status callback debugging (Vercel logs)**
+
+- **Where to look**: Vercel → Deployment → **Functions** → filter path `api/webhooks/twilio/sms-status` (or search for log prefix **`[twilio.sms_status]`**).
+- **What to expect** (structured logs; no secrets/phones/bodies):
+  - `event=webhook_received`: endpoint hit + content type observed.
+  - `event=signature_valid` / `event=signature_invalid`: signature check result; includes `url_source` (`env_base` vs `request_url`) and whether a query string was present.
+  - `event=parsed`: parsed `status` + `sid_tail` only.
+  - `event=patch_applied`: matching outbound row found by `provider_message_id` and updated.
+  - `event=patch_ignored reason=message_not_found_or_not_outbound`: SID didn’t match any outbound row (common causes: wrong environment URL in Twilio, or `provider_message_id` never persisted).
+
+**Twilio Console expectations**
+
+- On a message’s callback details, confirm the callback URL matches the signature URL we compute:
+  - If `PUBLIC_TWILIO_WEBHOOK_BASE_URL` is set: signing URL is **that base + request path + query**.
+  - Otherwise: signing URL is the literal `request.url` seen by the function.
+- Typical responses: **403** for invalid signature, **200** for accepted/ignored/applied, **422** for unexpected DB errors.
+
 **Still after this batch**
 
 - Persist **`provider_message_id`** reliably on outbound enqueue/send if webhooks are ignored today.
