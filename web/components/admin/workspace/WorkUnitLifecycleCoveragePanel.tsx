@@ -25,7 +25,10 @@ export type WorkUnitLifecycleCoveragePanelProps = {
  * Operator-facing coverage copy + collapsible admin diagnostics for unmapped / "Other" lifecycle buckets.
  * Uses only data already loaded on the work-unit page (no extra API).
  */
-/** Product builds never ship this copy unless explicitly enabled in local dev. */
+/**
+ * Staging/production: never show “Loading queue counts…”, “Admin / diagnostics”, or the collapsible
+ * diagnostics block unless both are true: local NODE_ENV=development and NEXT_PUBLIC_SHOW_ADMIN_QUEUE_DIAGNOSTICS=1.
+ */
 const SHOW_QUEUE_DIAGNOSTICS =
     process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_SHOW_ADMIN_QUEUE_DIAGNOSTICS === "1";
 

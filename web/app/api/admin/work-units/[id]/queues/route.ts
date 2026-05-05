@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { fetchEffectiveUserDisplayTimezone } from "@/lib/admin/timezoneContract";
+import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getWorkUnitQueueSummaries, QueueServiceError } from "@/lib/queues/QueueService";
 
 function parseLimit(searchParams: URLSearchParams): number | undefined {
@@ -44,6 +46,12 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
+    const supabase = createAdminClient();
+    const viewerDisplayTimeZone = await fetchEffectiveUserDisplayTimezone(supabase, {
+        orgId: ctx.orgId,
+        userId: ctx.userId,
+    });
+
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
@@ -80,6 +88,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             focusQueueKey: effectiveSummaryMode === "priority" ? focusQueue : null,
             priorityBudget,
             partialQueueKeys: effectiveSummaryMode === "partial" ? onlyQueueKeys : undefined,
+            viewerDisplayTimeZone,
         });
         const ms = Date.now() - t0;
         if (ms > 150) {

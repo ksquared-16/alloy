@@ -10,6 +10,7 @@
  * Env:
  *   DEMO_RESET_ORG_ID (required)
  *   DEMO_CORPORATE_USER_ID, DEMO_REGIONAL_USER_ID, DEMO_DIRECTOR_USER_ID (optional — updates access profiles + roles)
+ *   DEMO_STAGING_TIMEZONE (optional IANA, default America/Los_Angeles) — sets org + demo user display timezones when unset
  *
  * @see docs/sprints/05_2026/staging-demo-data-reset-realistic-seed.md
  *
@@ -18,6 +19,10 @@
  * - Staged import tables + single MERGE into core tables
  * - Batch opportunity_customer_members + quotes
  * - Background import job with progress + downloadable error report
+ *
+ * Demo communications: ~37% of opportunities get 1–3 canonical rows (communication_threads +
+ * communication_messages) on the opportunity, mixed inbound/outbound email or SMS, timestamps after
+ * created_at. Idempotent per opportunity (threads tagged metadata.demo_realistic_comm).
  */
 
 import { config as loadEnv } from "dotenv";
@@ -31,8 +36,15 @@ import {
     programLabelAndAgeGroupFromAgeMonths,
 } from "@/lib/childcare/childCareProgramFromDob";
 import { __testing as queueServiceTesting } from "@/lib/queues/QueueService";
+import { isValidIanaTimeZone } from "@/lib/admin/timezoneContract";
+import { normalizeRecipientKeyEmail, normalizeRecipientKeySms } from "@/lib/communications/recipientKey";
 
 const PRICED_STATUS_KEYS = new Set(["enrolled", "enrolling"]);
+
+/** ~37% of opportunities get seeded canonical communication_threads + messages (mix inbound/outbound). */
+const DEMO_COMM_SEED_PERCENT = 37;
+
+const DEMO_COMM_MSG_META = { demo_seed_kind: "realistic_childcare_demo" } as const;
 
 const FORBIDDEN_VISIBLE_SUBSTRINGS = ["Access Validation", "demo", "parent last name"] as const;
 
@@ -142,11 +154,12 @@ const CHILD_FIRST = ["Mia", "Liam", "Sophia", "Ethan", "Ava", "Lucas", "Harper",
 const EMAIL_DOMAINS = ["example.com", "example.net", "testmail.local"] as const;
 
 const PROG_LABELS = [
-    "Toddler (2–3)",
-    "Preschool (3–4)",
-    "Pre-K (4–5)",
-    "Infant (6–12 mo)",
-    "Young Toddler (12–24 mo)",
+    "Toddler — 2–3 years",
+    "Preschool — 3–4 years",
+    "Pre-K — 4–5 years",
+    "Infant — 0–18 months",
+    "Young Toddler — 18–24 months",
+    "School Age — 5+ years",
 ] as const;
 
 const SEED_STRING_POOLS: ReadonlyArray<{ label: string; values: readonly string[] }> = [
@@ -1037,6 +1050,234 @@ async function ensureQuoteForOpportunity(
     }
 }
 
+function assertDemoVisibleText(label: string, text: string): void {
+    const bad = visibleTextHasForbiddenSubstring(text);
+    if (bad) {
+        throw new Error(`Demo communications copy hit forbidden substring "${bad}" (${label})`);
+    }
+}
+
+type DemoCommChannel = "email" | "sms";
+
+function demoCommRecipientKey(channel: DemoCommChannel, emailRaw: string, phoneRaw: string): string {
+    if (channel === "email") return normalizeRecipientKeyEmail(emailRaw);
+    return normalizeRecipientKeySms(phoneRaw);
+}
+
+function demoCommMessagePlan(count: number, h: number): Array<"inbound" | "outbound"> {
+    if (count <= 0) return [];
+    if (count === 1) return [modLength(h >>> 19, 2) === 0 ? "outbound" : "inbound"];
+    if (count === 2) {
+        const flip = modLength(h >>> 21, 2) === 0;
+        return flip ? ["outbound", "inbound"] : ["inbound", "outbound"];
+    }
+    return ["outbound", "inbound", "outbound"];
+}
+
+function demoCommBody(
+    channel: DemoCommChannel,
+    direction: "inbound" | "outbound",
+    idx: number,
+    ctx: { g0First: string; siteLabel: string; title: string },
+    h: number
+): { body: string; subject: string | null } {
+    const { g0First, siteLabel, title } = ctx;
+    const site = siteLabel.trim() || "our campus";
+    const pick = (pool: readonly string[], salt: number) => pickPoolMod(pool, h ^ salt, "demo_comm");
+
+    if (channel === "sms") {
+        if (direction === "outbound") {
+            const line =
+                idx === 0
+                    ? `Hi ${g0First}, confirming we received your inquiry for ${site}. Reply YES if you would like a tour link.`
+                    : `Reminder: we saved a spot on the tour waitlist for ${site}. Text back if you need a different time.`;
+            return { body: pick([line, `${line} Thanks!`], 3), subject: null };
+        }
+        const line =
+            idx === 0
+                ? `Yes, ${g0First} here — can we visit ${site} this week?`
+                : `Running 5 min late for pickup, still on the way.`;
+        return { body: pick([line, `${line} Appreciate it.`], 5), subject: null };
+    }
+
+    if (direction === "outbound") {
+        if (idx === 0) {
+            const body = pick(
+                [
+                    `Thanks for contacting ${site} about enrollment. I would love to help with schedules, tuition, or a tour.`,
+                    `Hello ${g0First},\n\nThank you for your interest in ${site}. I attached a quick overview of classrooms and ratios. Let me know what questions you have.`,
+                ],
+                7
+            );
+            const subject = pick(
+                [`Welcome — next steps for ${site}`, `Your inquiry at ${site}`, `Following up: ${title.slice(0, 60)}`],
+                9
+            );
+            return { body, subject };
+        }
+        const body = pick(
+            [
+                `Hi ${g0First},\n\nAbsolutely — I blocked a time that should work. If you prefer a virtual walkthrough instead, say the word and I will send a link.`,
+                `${g0First},\n\nGreat question on start dates. We usually have rolling openings in that classroom; I will confirm with the director and circle back today.`,
+            ],
+            11
+        );
+        const subject = pick([`Re: enrollment at ${site}`, `Update from ${site}`], 13);
+        return { body, subject };
+    }
+
+    const body = pick(
+        [
+            `${g0First} here — quick question on the tour: is parking easiest in the front lot or around the side?`,
+            `Hi,\n\nCould you send the tuition sheet for two days per week? Also wondering if lunch is included for preschool.\n\nThanks,\n${g0First}`,
+            `We are comparing a few centers. What is your typical wait time for the toddler room at ${site}?`,
+        ],
+        15
+    );
+    const subject = pick([`Question about ${site}`, `Re: ${title.slice(0, 50)}`, `Tour / enrollment question`], 17);
+    return { body, subject };
+}
+
+function demoCommTimestamps(createdAt: Date, count: number, h: number): string[] {
+    const base = createdAt.getTime();
+    const offsetsHours = [
+        6 + modLength(h, 18),
+        36 + modLength(h >>> 3, 60),
+        96 + modLength(h >>> 5, 72),
+    ];
+    const out: string[] = [];
+    for (let i = 0; i < count; i++) {
+        const ms = base + offsetsHours[i]! * 3600_000 + modLength(h >>> (7 + i), 45) * 60_000;
+        out.push(new Date(ms).toISOString());
+    }
+    return out;
+}
+
+/**
+ * Idempotent demo rows: removes prior demo-tagged threads for this opportunity, then inserts 1–3 messages (~37% of opps).
+ */
+async function ensureDemoOpportunityCommunications(
+    supabase: SupabaseAdmin,
+    orgId: string,
+    opportunityId: string,
+    customerId: string,
+    seedKey: string,
+    h: number,
+    createdAt: Date,
+    channel: DemoCommChannel,
+    emailRaw: string,
+    phoneRaw: string,
+    siteLabel: string,
+    g0First: string,
+    title: string
+): Promise<void> {
+    if (modLength(h, 100) >= DEMO_COMM_SEED_PERCENT) return;
+
+    const recipientKey = demoCommRecipientKey(channel, emailRaw, phoneRaw);
+    if (channel === "email" && !recipientKey) return;
+    if (channel === "sms" && !recipientKey) return;
+
+    const { data: staleThreads, error: delSelErr } = await supabase
+        .from("communication_threads")
+        .select("id")
+        .eq("org_id", orgId)
+        .eq("primary_entity_type", "opportunities")
+        .eq("primary_entity_id", opportunityId)
+        .eq("metadata->>demo_realistic_comm", "1");
+    if (delSelErr) throw new Error(`communication_threads (pre-clean select): ${delSelErr.message}`);
+    const staleIds = (staleThreads ?? []).map((r) => (r as { id: string }).id).filter(Boolean);
+    if (staleIds.length) {
+        const { error: delErr } = await supabase.from("communication_threads").delete().in("id", staleIds);
+        if (delErr) throw new Error(`communication_threads (pre-clean delete): ${delErr.message}`);
+    }
+
+    const msgCount = 1 + modLength(h >>> 11, 3);
+    const plan = demoCommMessagePlan(msgCount, h);
+    const stamps = demoCommTimestamps(createdAt, msgCount, h);
+    const ctx = { g0First, siteLabel, title };
+
+    const threadMeta: Record<string, unknown> = {
+        demo_realistic_comm: "1",
+        demo_seed_package: STAGING_REALISTIC_CHILDCARE_SEED_PACKAGE,
+        seed_key: seedKey,
+    };
+
+    const { data: insThread, error: tErr } = await supabase
+        .from("communication_threads")
+        .insert({
+            org_id: orgId,
+            primary_entity_type: "opportunities",
+            primary_entity_id: opportunityId,
+            channel,
+            recipient_key: recipientKey,
+            metadata: threadMeta,
+            created_at: stamps[0]!,
+            updated_at: stamps[stamps.length - 1]!,
+        } as never)
+        .select("id")
+        .single();
+    if (tErr) throw new Error(`communication_threads insert ${seedKey}: ${tErr.message}`);
+    const threadId = (insThread as { id: string }).id;
+
+    const slug = String(seedKey).replace(/[^a-z0-9]+/gi, "").slice(0, 24) || "campus";
+    const centerEmail = `enrollment.messages@${slug}.example.org`.toLowerCase();
+    const centerSmsE164 = `+1555000${String(1000 + modLength(h >>> 23, 8999)).slice(-4)}`;
+
+    for (let i = 0; i < msgCount; i++) {
+        const direction = plan[i]!;
+        const { body, subject } = demoCommBody(channel, direction, i, ctx, h ^ (i * 997));
+        assertDemoVisibleText(`comm body ${seedKey}:${i}`, body);
+        if (subject) assertDemoVisibleText(`comm subject ${seedKey}:${i}`, subject);
+
+        const created_at = stamps[i]!;
+        const meta = { ...DEMO_COMM_MSG_META, customer_id: customerId, opportunity_id: opportunityId, seq: i };
+
+        let from_address: string | null = null;
+        let to_address: string | null = null;
+        if (channel === "email") {
+            if (direction === "outbound") {
+                from_address = centerEmail;
+                to_address = recipientKey;
+            } else {
+                from_address = recipientKey;
+                to_address = centerEmail;
+            }
+        } else if (direction === "outbound") {
+            from_address = centerSmsE164;
+            to_address = recipientKey;
+        } else {
+            from_address = recipientKey;
+            to_address = centerSmsE164;
+        }
+
+        const status = direction === "inbound" ? "delivered" : "sent";
+        const sent_at = direction === "outbound" ? created_at : null;
+
+        const row: Record<string, unknown> = {
+            org_id: orgId,
+            thread_id: threadId,
+            channel,
+            direction,
+            status,
+            body,
+            body_format: "plain",
+            from_address,
+            to_address,
+            metadata: meta,
+            workflow_run_id: null,
+            communication_provider_binding_id: null,
+            created_at,
+            sent_at,
+        };
+        if (channel === "email") {
+            row.subject = subject;
+        }
+
+        const { error: mErr } = await supabase.from("communication_messages").insert(row as never);
+        if (mErr) throw new Error(`communication_messages insert ${seedKey}:${i}: ${mErr.message}`);
+    }
+}
+
 async function ensureUserRoleIfAbsent(supabase: SupabaseAdmin, orgId: string, userId: string, role: string): Promise<void> {
     const { data: row } = await supabase.from("user_roles").select("user_id").eq("org_id", orgId).eq("user_id", userId).eq("role", role).maybeSingle();
     if (row) return;
@@ -1459,9 +1700,28 @@ async function printSeedValidationSummary(supabase: SupabaseAdmin, orgId: string
     }
     const naPct = opps.length ? (100 * needsAttentionHits) / opps.length : 0;
 
+    const { count: demoCommThreadCount } = await supabase
+        .from("communication_threads")
+        .select("*", { count: "exact", head: true })
+        .eq("org_id", orgId)
+        .eq("metadata->>demo_realistic_comm", "1");
+
+    const { count: demoCommMessageCount } = await supabase
+        .from("communication_messages")
+        .select("*", { count: "exact", head: true })
+        .eq("org_id", orgId)
+        .eq("metadata->>demo_seed_kind", DEMO_COMM_MSG_META.demo_seed_kind);
+
+    const { data: orgTzRow } = await supabase.from("org_settings").select("metadata").eq("org_id", orgId).maybeSingle();
+    const orgMeta = asMetaRecord((orgTzRow as { metadata?: unknown } | null)?.metadata ?? null);
+    const orgTz = (mdString(orgMeta, "timezone") ?? mdString(orgMeta, "time_zone") ?? "").trim() || "(unset — Admin previews fall back to UTC)";
+
     console.log("\n--- SEED VALIDATION SUMMARY ---\n");
     console.log("A. Volume");
+    console.log(`- org display/operational timezone (org_settings.metadata): ${orgTz}`);
     console.log(`- total opportunities: ${opps.length}`);
+    console.log(`- demo communication threads (canonical, seeded): ${demoCommThreadCount ?? 0}`);
+    console.log(`- demo communication messages (canonical, seeded): ${demoCommMessageCount ?? 0}`);
     for (const s of siteRows) {
         const n = bySiteId.get(s.id) ?? 0;
         console.log(`- opportunities at ${s.label ?? s.id}: ${n}`);
@@ -1790,6 +2050,7 @@ async function runScopesOnlyMain(): Promise<void> {
     }
     const enrollmentDeptId = (enrollmentDeptRow as { id: string }).id;
 
+    await ensureStagingDemoTimezoneDefaults(supabase, orgId);
     await wireDemoUserScopes(supabase, orgId, northId, southId, enrollmentDeptId);
     console.log("\n[seed:scopes-only] Validation");
     console.log("- Mode: user_roles + user_access_profiles + department/site junctions only (no customers/opportunities touched).");
@@ -1851,6 +2112,42 @@ async function runSeedDbStep<T>(table: string, ctx: SeedFamilyLoopCtx, fn: () =>
     }
 }
 
+/**
+ * Sets `org_settings.metadata.timezone` when absent and normalizes DEMO_* `user_profiles.timezone`
+ * so AdminV2 queue/drawer previews resolve to a US-west wall clock by default (override with DEMO_STAGING_TIMEZONE).
+ */
+async function ensureStagingDemoTimezoneDefaults(supabase: SupabaseAdmin, orgId: string): Promise<void> {
+    const raw = process.env.DEMO_STAGING_TIMEZONE?.trim() || "America/Los_Angeles";
+    const iana = isValidIanaTimeZone(raw) ? raw : "America/Los_Angeles";
+
+    const { data: existing, error: fetchErr } = await supabase.from("org_settings").select("metadata").eq("org_id", orgId).maybeSingle();
+    if (fetchErr) throw new Error(`org_settings read: ${fetchErr.message}`);
+    const cur = ((existing as { metadata?: Record<string, unknown> } | null)?.metadata ?? {}) as Record<string, unknown>;
+    const existingTz = typeof cur.timezone === "string" ? cur.timezone.trim() : "";
+    if (!existingTz || !isValidIanaTimeZone(existingTz)) {
+        const next = { ...cur, timezone: iana };
+        const { error: upErr } = await supabase.from("org_settings").upsert({ org_id: orgId, metadata: next } as never, { onConflict: "org_id" });
+        if (upErr) throw new Error(`org_settings timezone: ${upErr.message}`);
+    }
+
+    const touchUser = async (uid: string | undefined) => {
+        const id = uid?.trim();
+        if (!id) return;
+        const { data: prof, error: rErr } = await supabase.from("user_profiles").select("timezone").eq("id", id).maybeSingle();
+        if (rErr) {
+            console.warn(`[seed] user_profiles read ${id}: ${rErr.message}`);
+            return;
+        }
+        const utz = typeof (prof as { timezone?: string | null } | null)?.timezone === "string" ? String((prof as { timezone: string }).timezone).trim() : "";
+        if (utz && isValidIanaTimeZone(utz)) return;
+        const { error: uErr } = await supabase.from("user_profiles").update({ timezone: iana }).eq("id", id);
+        if (uErr) console.warn(`[seed] user_profiles timezone ${id}: ${uErr.message}`);
+    };
+    await touchUser(process.env.DEMO_CORPORATE_USER_ID);
+    await touchUser(process.env.DEMO_REGIONAL_USER_ID);
+    await touchUser(process.env.DEMO_DIRECTOR_USER_ID);
+}
+
 async function main(): Promise<void> {
     const orgId = requireEnv("DEMO_RESET_ORG_ID");
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()) {
@@ -1908,6 +2205,10 @@ async function main(): Promise<void> {
     console.log(
         `[seed] Locations / rooms / work-unit bootstrap done (${Date.now() - phaseStart}ms) — ${roomRows} classroom rows, enrollment work unit resolved`
     );
+
+    phaseStart = Date.now();
+    await ensureStagingDemoTimezoneDefaults(supabase, orgId);
+    console.log(`[seed] Staging timezone defaults (${Date.now() - phaseStart}ms) — org + DEMO_* user_profiles when missing`);
 
     const northId = siteIds[0]!;
     const southId = siteIds[1]!;
@@ -2030,6 +2331,25 @@ async function main(): Promise<void> {
                 ensureOppChildJoin(supabase, orgId, oppId, mid, `${p.seedKey}:ocm:${mid}`)
             );
         }
+
+        const demoCommChannel: DemoCommChannel = modLength(p.h >>> 13, 2) === 0 ? "sms" : "email";
+        await runSeedDbStep("communication_threads", loopCtx, () =>
+            ensureDemoOpportunityCommunications(
+                supabase,
+                orgId,
+                oppId,
+                customerId,
+                p.seedKey,
+                p.h,
+                createdAt,
+                demoCommChannel,
+                p.g0Email,
+                g0Phone,
+                site,
+                p.g0First,
+                p.title
+            )
+        );
 
         if (tuitionCents != null) {
             const q0 = Date.now();

@@ -1,4 +1,7 @@
-import type { OperationalTimezoneSource } from "@/lib/admin/timezoneContract";
+import type { OperationalTimezoneSource, UserDisplayTimezoneSource } from "@/lib/admin/timezoneContract";
+
+/** Resolved viewer wall clock for queue preview strings (user → org → UTC). */
+export type QueueViewerTimezoneMeta = { iana: string; source: UserDisplayTimezoneSource };
 
 /** Present when a queue uses org operational calendar day filters (`today` / `past_due`). */
 export type QueueOperationalCalendarMeta = {
@@ -42,5 +45,7 @@ export type QueueItemsResult = {
     total_omitted?: boolean;
     /** Org operational day bounds when this queue uses calendar date filters. */
     calendar_meta?: QueueOperationalCalendarMeta;
+    /** Echo of the IANA zone used for note/tour preview strings on `items` (devtools / QA). */
+    viewer_timezone?: QueueViewerTimezoneMeta;
 };
 

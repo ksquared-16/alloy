@@ -10,6 +10,7 @@ import {
     scopeDimensionsFromAccess,
     type RecordScopeConstraints,
 } from "@/lib/admin/accessScope";
+import { fetchEffectiveUserDisplayTimezone } from "@/lib/admin/timezoneContract";
 import { getWorkUnitQueueItems, QueueServiceError } from "@/lib/queues/QueueService";
 import { perfQueueRowsServer } from "@/lib/perf/adminV2PerfLog";
 
@@ -110,6 +111,10 @@ export async function GET(
     try {
         const { limit, offset } = parseLimitOffset(request.nextUrl.searchParams);
         const { countAccuracy, omitTotalCount } = parseQueueItemsCountOptions(request.nextUrl.searchParams);
+        const viewerDisplayTimeZone = await fetchEffectiveUserDisplayTimezone(supabase, {
+            orgId: ctx.orgId,
+            userId: ctx.userId,
+        });
         const { result, rowsPerf } = await getWorkUnitQueueItems({
             orgId: ctx.orgId,
             workUnitId,
@@ -120,6 +125,7 @@ export async function GET(
             omitTotalCount,
             recordScopeImpossible,
             recordScopeConstraints,
+            viewerDisplayTimeZone,
         });
 
         const tSer0 = Date.now();

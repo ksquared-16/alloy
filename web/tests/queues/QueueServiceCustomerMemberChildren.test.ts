@@ -22,7 +22,7 @@ describe("QueueService — customer_members → CRM compact children (pure helpe
     function secondaryFromDob(dob: string): string {
         const months = approximateAgeMonthsFromDobIso(dob, fixedNow) ?? 0;
         const t = programLabelAndAgeGroupFromAgeMonths(months);
-        return `${t.program_label} · ${t.age_group}`;
+        return t.age_group ? `${t.program_label} · ${t.age_group}` : t.program_label;
     }
 
     it("one active child → one structured row; secondary from DOB-derived program", () => {
@@ -74,14 +74,14 @@ describe("QueueService — customer_members → CRM compact children (pure helpe
                     display_name: "Test Child",
                     person_id: "p9",
                     dob: "2021-06-01",
-                    metadata: { program_label: "Preschool (3–4)", age_group: "Ages 36–48 mo" },
+                    metadata: { program_label: "Preschool — 3–4 years", age_group: "Ages 36–48 mo" },
                 },
             ],
             childDobByPersonId,
             personById
         );
         expect(lines).toHaveLength(1);
-        expect(lines[0]!.secondary).toBe("Preschool (3–4) · Ages 36–48 mo");
+        expect(lines[0]!.secondary).toBe("Preschool — 3–4 years");
     });
 
     it("ignores non-child relationship rows (filter predicate)", () => {
@@ -107,8 +107,8 @@ describe("QueueService — customer_members → CRM compact children (pure helpe
     it("opportunityProgramLineFromMetadata uses program_label (+ optional age_group)", () => {
         expect(
             opportunityProgramLineFromMetadata({
-                program_label: "Young Toddler (12–24 mo)",
-                age_group: "12–24 mo",
+                program_label: "Young Toddler — 18–24 months",
+                age_group: "",
             })
         ).toContain("Young Toddler");
     });
@@ -116,9 +116,9 @@ describe("QueueService — customer_members → CRM compact children (pure helpe
     it("program label only helper excludes age_group for per-child secondary", () => {
         expect(
             __testing.opportunityProgramLabelOnlyFromMetadata({
-                program_label: "Infant (6–12 mo)",
-                age_group: "6–12 mo",
+                program_label: "Infant — 0–18 months",
+                age_group: "",
             })
-        ).toBe("Infant (6–12 mo)");
+        ).toBe("Infant — 0–18 months");
     });
 });

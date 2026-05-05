@@ -11,6 +11,8 @@ import {
 import type { CommunicationMessage, DeliveryState } from "@/lib/communications/deliveryStateAdapter";
 import { deliveryStatePresentation, mapToDeliveryState } from "@/lib/communications/deliveryStateAdapter";
 import { normalizeRecipientKeyEmail, normalizeRecipientKeySms } from "@/lib/communications/recipientKey";
+import type { OpportunityComposeContext } from "@/lib/communications/opportunityComposeTemplates";
+import { opportunityComposeDraftBody } from "@/lib/communications/opportunityComposeTemplates";
 
 type ThreadRow = {
     id: string;
@@ -94,6 +96,8 @@ export interface CommunicationsDrawerSectionProps {
     /** When embedded inside a drawer section that already shows a "Communication(s)" heading, omit duplicate title. */
     embeddedHeaderMode?: "full" | "description_only";
     className?: string;
+    /** Opportunity-only: lightweight starter templates when there is no message history yet. */
+    opportunityComposeContext?: OpportunityComposeContext | null;
 }
 
 const COMPOSER_LABEL = "mb-1 text-[8px] font-semibold tracking-[0.12em] text-alloy-midnight/45";
@@ -259,6 +263,7 @@ export default function CommunicationsDrawerSection({
     active = true,
     embedded = true,
     className = "",
+    opportunityComposeContext = null,
 }: CommunicationsDrawerSectionProps) {
     const viewerTz = useAdminViewerTimezone();
     const [threads, setThreads] = useState<ThreadRow[]>([]);
@@ -276,6 +281,7 @@ export default function CommunicationsDrawerSection({
 
     const conversationScrollRef = useRef<HTMLDivElement>(null);
     const markedReadSubmittedRef = useRef<Set<string>>(new Set());
+    const composeTemplateAppliedRef = useRef(false);
 
     const composerEntity =
         apiEntityType === "opportunities" || apiEntityType === "jobs" ? apiEntityType : null;
@@ -306,6 +312,7 @@ export default function CommunicationsDrawerSection({
         channelsAvailable.includes("email") && !bindingsErr && !loadingBindings;
     const smsOutboundReady =
         channelsAvailable.includes("sms") && !bindingsErr && !loadingBindings;
+    const anyOutboundReady = emailOutboundReady || smsOutboundReady;
 
     const effectiveComposer = useMemo((): "email" | "sms" => {
         if (viewFilter === "all") return allComposerMode;
@@ -327,6 +334,16 @@ export default function CommunicationsDrawerSection({
         }
         return { phoneToName, emailToName };
     }, [recipients]);
+
+    const opportunityComposeContextSig = useMemo(() => {
+        if (!opportunityComposeContext) return "";
+        const c = opportunityComposeContext;
+        return [c.status_key ?? "", c.tour_date ?? "", c.tour_time ?? "", c.primary_first_name ?? ""].join("|");
+    }, [opportunityComposeContext]);
+
+    useEffect(() => {
+        composeTemplateAppliedRef.current = false;
+    }, [opportunityComposeContextSig]);
 
     useEffect(() => {
         setThreads([]);
@@ -350,6 +367,7 @@ export default function CommunicationsDrawerSection({
         setExpandedBodies({});
         markedReadSubmittedRef.current.clear();
         setBindingsRefreshGen(0);
+        composeTemplateAppliedRef.current = false;
     }, [entityId, apiEntityType]);
 
     /** When parent hides Communication (`active` false), drop thread detail state (no polling; next open is clean). */
@@ -593,6 +611,31 @@ export default function CommunicationsDrawerSection({
         }, 550);
         return () => window.clearTimeout(t);
     }, [dataLayerActive, loadingMsgs, msgs]);
+
+    useEffect(() => {
+        if (!opportunityComposeContext || apiEntityType !== "opportunities") return;
+        if (msgs.length > 0 || threads.length > 0) return;
+        if (loadingThreads || loadingMsgs) return;
+        if (composeTemplateAppliedRef.current) return;
+        const draft = opportunityComposeDraftBody({
+            ...opportunityComposeContext,
+            display_time_zone_iana: viewerTz,
+        });
+        if (!draft.trim()) return;
+        setComposerBody((prev) => {
+            if (prev.trim()) return prev;
+            composeTemplateAppliedRef.current = true;
+            return draft;
+        });
+    }, [
+        opportunityComposeContext,
+        apiEntityType,
+        msgs.length,
+        threads.length,
+        loadingThreads,
+        loadingMsgs,
+        viewerTz,
+    ]);
 
     useEffect(() => {
         if (!dataLayerActive) return;
@@ -922,8 +965,6 @@ export default function CommunicationsDrawerSection({
         }
     };
 
-    if (!active) return null;
-
     const recipientsForComposer =
         effectiveComposer === "email"
             ? recipients.filter((r) => !!r.email)
@@ -949,18 +990,95 @@ export default function CommunicationsDrawerSection({
         }`;
 
     const emptyThreadsClass = embedded ? "text-[12px] text-alloy-midnight/60" : "text-sm text-alloy-midnight/60";
-    const emptyThreadsBody = (
-        <div className={emptyThreadsClass}>
-            <p className="font-medium text-alloy-midnight/75">No communications yet</p>
-            <p className="mt-1 leading-relaxed">Send an email or SMS below once outbound is configured.</p>
-        </div>
-    );
+    const emptyThreadsBody = useMemo(() => {
+        if (bindingsErr) {
+            return (
+                <div className={emptyThreadsClass}>
+                    <p className="font-medium text-alloy-midnight/75">Communications unavailable</p>
+                    <p className="mt-1 leading-relaxed">{bindingsErr}</p>
+                </div>
+            );
+        }
+        if (loadingBindings) {
+            return (
+                <div className={emptyThreadsClass}>
+                    <p className="font-medium text-alloy-midnight/75">Loading communication setup…</p>
+                </div>
+            );
+        }
+        const outboundConfigured = channelsAvailable.length > 0;
+        if (!outboundConfigured) {
+            return (
+                <div className={emptyThreadsClass}>
+                    <p className="font-medium text-alloy-midnight/75">Outbound messaging is not configured yet.</p>
+                    <p className="mt-1 leading-relaxed">
+                        Add an active outbound provider binding for this org (Resend for email; Twilio-backed{" "}
+                        <code className="rounded bg-alloy-stone/10 px-0.5 text-[10px]">communication_provider_bindings</code> row for
+                        SMS). Until at least one channel is active, message history stays empty here.
+                    </p>
+                </div>
+            );
+        }
+        const hasAnyRecipient = recipients.some((r) => !!(r.email?.trim() || r.phone?.trim()));
+        if (!loadingRecipients && !recipientsErr && showDrawerComposerChrome && composerEntity && !hasAnyRecipient) {
+            return (
+                <div className={emptyThreadsClass}>
+                    <p className="font-medium text-alloy-midnight/75">
+                        No eligible email or SMS recipients found for this record.
+                    </p>
+                </div>
+            );
+        }
+        if (recipientsErr) {
+            return (
+                <div className={emptyThreadsClass}>
+                    <p className="font-medium text-alloy-midnight/75">Recipients unavailable</p>
+                    <p className="mt-1 leading-relaxed">{recipientsErr}</p>
+                </div>
+            );
+        }
+        return (
+            <div className={emptyThreadsClass}>
+                <p className="font-medium text-alloy-midnight/75">No communications yet</p>
+                <p className="mt-1 leading-relaxed">Start the conversation below.</p>
+            </div>
+        );
+    }, [
+        bindingsErr,
+        loadingBindings,
+        channelsAvailable.length,
+        recipients,
+        loadingRecipients,
+        recipientsErr,
+        showDrawerComposerChrome,
+        composerEntity,
+        emptyThreadsClass,
+    ]);
+
+    if (!active) return null;
 
     const composerReady =
         (effectiveComposer === "email" && emailOutboundReady) || (effectiveComposer === "sms" && smsOutboundReady);
 
+    const sendDisabledReason: string | null = (() => {
+        if (sendBusy) return null;
+        if (!composerReady) {
+            return effectiveComposer === "email"
+                ? "Configure an active email (Resend) binding to send."
+                : "Configure an active SMS binding to send.";
+        }
+        if (recipientsForComposer.length === 0) {
+            return effectiveComposer === "email"
+                ? "No linked person has an email address for this channel."
+                : "No linked person has a mobile number for SMS.";
+        }
+        if (selectedRecipientIds.size === 0) return "Select at least one recipient.";
+        if (!composerBody.trim()) return "Enter a message to send.";
+        return null;
+    })();
+
     const composerRecipientsBlock: ReactNode =
-        composerReady && showDrawerComposerChrome && composerEntity ? (
+        anyOutboundReady && showDrawerComposerChrome && composerEntity ? (
             loadingRecipients ? (
                 <div className="flex flex-wrap gap-1 py-0.5" aria-busy="true">
                     <div className="skeleton-pulse h-7 w-24 rounded-full bg-alloy-stone/12" aria-hidden />
@@ -1004,7 +1122,7 @@ export default function CommunicationsDrawerSection({
         ) : null;
 
     const composerSendBlock: ReactNode =
-        composerReady && showDrawerComposerChrome && composerEntity ? (
+        anyOutboundReady && showDrawerComposerChrome && composerEntity ? (
             <div className="space-y-1">
                 {effectiveComposer === "email" ? (
                     <label className="block space-y-0.5">
@@ -1013,7 +1131,7 @@ export default function CommunicationsDrawerSection({
                             type="text"
                             value={composerSubject}
                             onChange={(e) => setComposerSubject(e.target.value)}
-                            disabled={sendBusy}
+                            disabled={sendBusy || !emailOutboundReady}
                             placeholder="Optional"
                             className="w-full rounded-md border border-alloy-stone/20 bg-white px-2 py-1 text-[11px] text-alloy-midnight/85 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
                             autoComplete="off"
@@ -1027,7 +1145,7 @@ export default function CommunicationsDrawerSection({
                     <textarea
                         value={composerBody}
                         onChange={(e) => setComposerBody(e.target.value)}
-                        disabled={sendBusy}
+                        disabled={sendBusy || !composerReady}
                         rows={embedded ? 2 : 2}
                         placeholder={effectiveComposer === "sms" ? "SMS…" : "Email…"}
                         className="w-full resize-none rounded-md border border-alloy-stone/20 bg-white px-2 py-1 text-[11px] leading-snug text-alloy-midnight/85 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
@@ -1038,18 +1156,16 @@ export default function CommunicationsDrawerSection({
                     <button
                         type="button"
                         onClick={() => void sendFromComposer()}
-                        disabled={
-                            sendBusy ||
-                            selectedRecipientIds.size === 0 ||
-                            !composerBody.trim() ||
-                            (effectiveComposer === "email" && !emailOutboundReady) ||
-                            (effectiveComposer === "sms" && !smsOutboundReady)
-                        }
+                        disabled={sendBusy || sendDisabledReason !== null}
+                        title={sendDisabledReason ?? undefined}
                         className="rounded-md border border-alloy-midnight/20 bg-alloy-midnight px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-alloy-midnight/90 disabled:cursor-not-allowed disabled:opacity-45"
                     >
                         {sendBusy ? "Sending…" : effectiveComposer === "email" ? "Send email" : "Send SMS"}
                     </button>
                 </div>
+                {!sendBusy && sendDisabledReason ? (
+                    <p className="text-[10px] leading-snug text-alloy-midnight/55">{sendDisabledReason}</p>
+                ) : null}
                 {sendErr ? <p className="text-[11px] text-alloy-ember">{sendErr}</p> : null}
                 {sendOkNote ? <p className="text-[11px] text-green-800/85">{sendOkNote}</p> : null}
             </div>
@@ -1142,7 +1258,7 @@ export default function CommunicationsDrawerSection({
         showDrawerComposerChrome && composerEntity ? (
             <div className="w-full min-w-0 rounded-xl border border-alloy-stone/12 bg-white/[0.97] px-2 py-1.5 shadow-sm">
                 <div className={COMPOSER_LABEL}>Message</div>
-                {composerReady ? (
+                {anyOutboundReady ? (
                     composerSendBlock
                 ) : (
                     <p className="text-[10px] leading-snug text-alloy-midnight/55">
@@ -1337,6 +1453,15 @@ export default function CommunicationsDrawerSection({
         </ul>
     );
 
+    /** History pane: thread load error, empty canonical threads (show setup copy), or merged messages. */
+    const conversationPaneBody: ReactNode = thrErr ? (
+        <p className="px-1 py-2 text-sm text-alloy-ember">{thrErr}</p>
+    ) : threads.length === 0 ? (
+        emptyThreadsBody
+    ) : (
+        messageStream
+    );
+
     const headerTitle = !embedded ? (
         <h3 className={DRAWER_SECTION_HEADER_CLASS}>Communications</h3>
     ) : null;
@@ -1355,10 +1480,6 @@ export default function CommunicationsDrawerSection({
 
                 {loadingThreads ? (
                     <CommsQuietSkeletonLines dense={Boolean(embedded)} />
-                ) : thrErr ? (
-                    <p className="text-sm text-alloy-ember">{thrErr}</p>
-                ) : threads.length === 0 ? (
-                    emptyThreadsBody
                 ) : useWideComposerSplit ? (
                     <div className="flex min-h-0 flex-1 flex-col gap-1.5 lg:flex-row lg:items-stretch lg:gap-2">
                         <div className="flex min-h-0 min-w-0 flex-col gap-1.5 lg:w-[min(33%,17rem)] lg:max-w-[18rem] lg:shrink-0">
@@ -1371,7 +1492,7 @@ export default function CommunicationsDrawerSection({
                                     ref={conversationScrollRef}
                                     className={`comms-drawer-conversation min-h-0 ${CONVERSATION_SCROLL_CLASS_SPLIT}`}
                                 >
-                                    {messageStream}
+                                    {conversationPaneBody}
                                 </div>
                             </div>
                             {composerSplitRight}
@@ -1386,7 +1507,7 @@ export default function CommunicationsDrawerSection({
                                 ref={conversationScrollRef}
                                 className={`comms-drawer-conversation min-h-0 overflow-x-hidden overflow-y-auto px-2 py-1 ${CONVERSATION_SCROLL_HEIGHT_CLASS_STACKED}`}
                             >
-                                {messageStream}
+                                {conversationPaneBody}
                             </div>
 
                             {composerBlockInner ? (

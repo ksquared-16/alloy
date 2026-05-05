@@ -1,6 +1,11 @@
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { validateQueueDefinition, type QueueConfig, type QueueDefinitionV1, type QueueFilter } from "@/lib/config/queueDefinitionSchema";
-import type { QueueItemsResult, QueueOperationalCalendarMeta, QueueSummary } from "@/lib/queues/types";
+import type {
+    QueueItemsResult,
+    QueueOperationalCalendarMeta,
+    QueueSummary,
+    QueueViewerTimezoneMeta,
+} from "@/lib/queues/types";
 import { workUnitScopeTotalFromSummaries, findAllRecordsQueueKey } from "@/lib/workspace/workUnitQueueDerived";
 import { getQueueUiConfig, type QueueUiConfig } from "@/lib/ui-v2/queueUiConfig";
 import {
@@ -15,6 +20,7 @@ import { formatTourDateTime } from "@/lib/enrollment/formatTourDateTime";
 import { approximateAgeMonthsFromDobIso, programLabelAndAgeGroupFromAgeMonths } from "@/lib/childcare/childCareProgramFromDob";
 import { getOrgLocalTodayUtcBounds, type OrgLocalDayUtcBounds } from "@/lib/admin/orgLocalDayBounds";
 import { fetchOperationalTimezoneForOrgWithCache, UTC_FALLBACK_IANA } from "@/lib/admin/timezoneContract";
+import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
 import type { RecordScopeConstraints } from "@/lib/admin/accessScope";
 import { applyRecordScopeConstraintsToQuery } from "@/lib/admin/accessScope";
 
@@ -321,15 +327,19 @@ function subtractDays(now: Date, days: number): Date {
     return new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
 }
 
-/** Queue preview only — prepend timestamp when `metadata.notes_at` is set. */
-function formatQueueNotePreview(notesRaw: string | null | undefined, notesAtRaw: unknown): string | null {
+/** Queue preview only — prepend timestamp when `metadata.notes_at` is set (instant in DB → wall clock in viewer TZ). */
+function formatQueueNotePreview(
+    notesRaw: string | null | undefined,
+    notesAtRaw: unknown,
+    displayTimeZoneIana: string
+): string | null {
     const text = typeof notesRaw === "string" ? notesRaw.trim() : "";
     if (!text) return null;
     const at = typeof notesAtRaw === "string" ? notesAtRaw.trim() : "";
     if (!at) return text;
     const d = new Date(at);
     if (Number.isNaN(d.getTime())) return `${at.length > 16 ? at.slice(0, 16) : at} — ${text}`;
-    return `${d.toISOString().slice(0, 16).replace("T", " ")} UTC — ${text}`;
+    return `${formatDateTimeForUserDisplay(d, displayTimeZoneIana)} — ${text}`;
 }
 
 function toIso(d: Date): string {
@@ -369,8 +379,10 @@ function opportunityProgramLineFromMetadata(md: Record<string, unknown> | null):
     if (!md) return null;
     const programLabel = typeof md.program_label === "string" ? md.program_label.trim() : "";
     const ageGroup = typeof md.age_group === "string" ? md.age_group.trim() : "";
-    const combined = [programLabel || null, ageGroup || null].filter(Boolean).join(" · ").trim();
-    return combined || programLabel || null;
+    if (!programLabel) return null;
+    if (programLabel.includes("—")) return programLabel;
+    const combined = [programLabel, ageGroup].filter(Boolean).join(" · ").trim();
+    return combined || programLabel;
 }
 
 /** CRM compact Program column / per-child `secondary`: `program_label` only (not age_band duplication in the name column). */
@@ -402,8 +414,11 @@ function programSecondaryForCustomerMemberChild(
     const meta = m.metadata && typeof m.metadata === "object" && !Array.isArray(m.metadata) ? m.metadata : null;
     const fromMetaPl = meta && typeof meta.program_label === "string" ? meta.program_label.trim() : "";
     const fromMetaAg = meta && typeof meta.age_group === "string" ? meta.age_group.trim() : "";
-    if (fromMetaPl && fromMetaAg) return `${fromMetaPl} · ${fromMetaAg}`;
-    if (fromMetaPl) return fromMetaPl;
+    if (fromMetaPl) {
+        if (fromMetaPl.includes("—")) return fromMetaPl;
+        if (fromMetaAg) return `${fromMetaPl} · ${fromMetaAg}`;
+        return fromMetaPl;
+    }
 
     const pid = String(m.person_id ?? "").trim();
     const memberDob = String(m.dob ?? "").trim();
@@ -415,7 +430,8 @@ function programSecondaryForCustomerMemberChild(
     const months = approximateAgeMonthsFromDobIso(dob);
     if (months == null) return null;
     const { program_label, age_group } = programLabelAndAgeGroupFromAgeMonths(months);
-    return `${program_label} · ${age_group}`;
+    const ag = typeof age_group === "string" ? age_group.trim() : "";
+    return ag ? `${program_label} · ${age_group}` : program_label;
 }
 
 /**
@@ -431,8 +447,11 @@ function inquiryProgramSecondaryFromRow(raw: unknown): string | null {
     const row = raw as Record<string, unknown>;
     const pl = typeof row.program_label === "string" ? row.program_label.trim() : "";
     const ag = typeof row.age_group === "string" ? row.age_group.trim() : "";
-    if (pl && ag) return `${pl} · ${ag}`;
-    if (pl) return pl;
+    if (pl) {
+        if (pl.includes("—")) return pl;
+        if (ag) return `${pl} · ${ag}`;
+        return pl;
+    }
     return null;
 }
 
@@ -510,36 +529,74 @@ function buildOpportunityHighValueStaleOrBranches(stale2dIso: string): string {
         .join(",");
 }
 
-/** Stale `updated_at` alone should not flag terminal / brand-new pipeline rows (seed + real ops). */
-const NEEDS_ATTENTION_STALE_UPDATE_EXCLUDED_STATUS_KEYS = new Set(["lost", "enrolled", "new_inquiry"]);
+/** Never surface in needs_attention — terminal or handled in primary pipeline lanes. */
+const NEEDS_ATTENTION_EXCLUDED_STATUS_KEYS = new Set(["lost", "enrolled", "new_inquiry"]);
+
+/** Mid-funnel rows where a quiet record for 7+ days usually means a dropped follow-up. */
+const NEEDS_ATTENTION_STALE_7D_STATUS_KEYS = new Set([
+    "contact_attempted",
+    "contacted",
+    "waitlisted",
+    "enrolling",
+]);
+
+function opportunityMetadataRecord(row: OpportunityNeedsAttentionRow): Record<string, unknown> | null {
+    const m = row.metadata;
+    if (!m || typeof m !== "object" || Array.isArray(m)) return null;
+    return m as Record<string, unknown>;
+}
+
+function parseMetadataInstantMs(md: Record<string, unknown> | null, key: string): number | null {
+    if (!md) return null;
+    const v = md[key];
+    if (typeof v !== "string") return null;
+    const t = Date.parse(v.trim());
+    return Number.isFinite(t) ? t : null;
+}
+
+function parseTourDateYmdUtcMs(raw: unknown): number | null {
+    if (typeof raw !== "string") return null;
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw.trim());
+    if (!m) return null;
+    return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
 
 function opportunityNeedsAttention(row: OpportunityNeedsAttentionRow, now: Date): boolean {
     const updatedAt = row.updated_at ? new Date(row.updated_at) : null;
     if (!updatedAt || Number.isNaN(updatedAt.getTime())) return false;
     const sk = (row.status_key ?? "").trim().toLowerCase();
+    if (NEEDS_ATTENTION_EXCLUDED_STATUS_KEYS.has(sk)) return false;
 
-    // 1) Missing data (enrollment demo is person-backed).
-    // LEGACY: contact-based identity (do not extend). TODO: migrate to person_id — legacy rows may only have primary_contact_id.
-    const pkg = row.metadata && typeof row.metadata.demo_seed_package === "string" ? String(row.metadata.demo_seed_package) : "";
-    const isDemoV2 = pkg === "enrollment_pipeline_demo_v2";
-    const hasPerson = row.primary_person_id != null && String(row.primary_person_id).trim() !== "";
-    // LEGACY: contact-based identity (do not extend). TODO: migrate to person_id
-    const hasLegacyContact = row.primary_contact_id != null && String(row.primary_contact_id).trim() !== "";
-    const missingContactLike = isDemoV2 ? !hasPerson : !(hasPerson || hasLegacyContact);
-    if (missingContactLike || row.customer_id == null) return true;
+    const md = opportunityMetadataRecord(row);
 
-    // 2) stale: updated_at < now - 3 days (exclude statuses where age alone is not actionable)
-    if (
-        updatedAt.getTime() < subtractDays(now, 3).getTime() &&
-        !NEEDS_ATTENTION_STALE_UPDATE_EXCLUDED_STATUS_KEYS.has(sk)
-    ) {
-        return true;
+    // 1) Explicit follow-up date passed (metadata; enrollment drawer / seeds).
+    const nfu = parseMetadataInstantMs(md, "next_follow_up_at");
+    if (nfu != null && nfu < now.getTime()) return true;
+
+    // 2) Tour window passed while still scheduled (confirm / complete tour).
+    if (sk === "tour_scheduled") {
+        const tourMs = md ? parseTourDateYmdUtcMs(md.tour_date) : null;
+        const startTodayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+        if (tourMs != null && tourMs < startTodayUtc) return true;
     }
 
-    // 3) value/readiness: active funnel status AND updated_at < now - 2 days
+    // 3) High-value funnel stale >2d (tour / application momentum).
     if (OPPORTUNITY_HIGH_VALUE_STALE_STATUS_KEY_SET.has(sk) && updatedAt.getTime() < subtractDays(now, 2).getTime()) {
         return true;
     }
+
+    // 4) Mid-funnel stale >7d (replaces broad 3d sweep that over-flagged).
+    if (NEEDS_ATTENTION_STALE_7D_STATUS_KEYS.has(sk) && updatedAt.getTime() < subtractDays(now, 7).getTime()) {
+        return true;
+    }
+
+    // 5) Data quality — never for excluded statuses (handled above).
+    const pkg = md && typeof md.demo_seed_package === "string" ? String(md.demo_seed_package) : "";
+    const isDemoV2 = pkg === "enrollment_pipeline_demo_v2";
+    const hasPerson = row.primary_person_id != null && String(row.primary_person_id).trim() !== "";
+    const hasLegacyContact = row.primary_contact_id != null && String(row.primary_contact_id).trim() !== "";
+    const missingContactLike = isDemoV2 ? !hasPerson : !(hasPerson || hasLegacyContact);
+    if (missingContactLike || row.customer_id == null) return true;
 
     return false;
 }
@@ -548,22 +605,32 @@ function opportunityNeedsAttentionReasonLabel(row: OpportunityNeedsAttentionRow,
     const updatedAt = row.updated_at ? new Date(row.updated_at) : null;
     if (!updatedAt || Number.isNaN(updatedAt.getTime())) return null;
     const sk = (row.status_key ?? "").trim().toLowerCase();
-    const pkg = row.metadata && typeof row.metadata.demo_seed_package === "string" ? String(row.metadata.demo_seed_package) : "";
-    const isDemoV2 = pkg === "enrollment_pipeline_demo_v2";
-    const hasPerson = row.primary_person_id != null && String(row.primary_person_id).trim() !== "";
-    // LEGACY: contact-based identity (do not extend). TODO: migrate to person_id
-    const hasLegacyContact = row.primary_contact_id != null && String(row.primary_contact_id).trim() !== "";
-    const missingContactLike = isDemoV2 ? !hasPerson : !(hasPerson || hasLegacyContact);
-    if (missingContactLike || row.customer_id == null) return "Missing contact/customer";
-    if (
-        updatedAt.getTime() < subtractDays(now, 3).getTime() &&
-        !NEEDS_ATTENTION_STALE_UPDATE_EXCLUDED_STATUS_KEYS.has(sk)
-    ) {
-        return "Stale > 3 days";
+    if (NEEDS_ATTENTION_EXCLUDED_STATUS_KEYS.has(sk)) return null;
+
+    const md = opportunityMetadataRecord(row);
+    const nfu = parseMetadataInstantMs(md, "next_follow_up_at");
+    if (nfu != null && nfu < now.getTime()) return "Follow-up date passed";
+
+    if (sk === "tour_scheduled") {
+        const tourMs = md ? parseTourDateYmdUtcMs(md.tour_date) : null;
+        const startTodayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+        if (tourMs != null && tourMs < startTodayUtc) return "Tour date passed — follow up";
     }
+
     if (OPPORTUNITY_HIGH_VALUE_STALE_STATUS_KEY_SET.has(sk) && updatedAt.getTime() < subtractDays(now, 2).getTime()) {
         return "High-value stale > 2 days";
     }
+    if (NEEDS_ATTENTION_STALE_7D_STATUS_KEYS.has(sk) && updatedAt.getTime() < subtractDays(now, 7).getTime()) {
+        return "Stale > 7 days";
+    }
+
+    const pkg = md && typeof md.demo_seed_package === "string" ? String(md.demo_seed_package) : "";
+    const isDemoV2 = pkg === "enrollment_pipeline_demo_v2";
+    const hasPerson = row.primary_person_id != null && String(row.primary_person_id).trim() !== "";
+    const hasLegacyContact = row.primary_contact_id != null && String(row.primary_contact_id).trim() !== "";
+    const missingContactLike = isDemoV2 ? !hasPerson : !(hasPerson || hasLegacyContact);
+    if (missingContactLike || row.customer_id == null) return "Missing contact/customer";
+
     return null;
 }
 
@@ -643,8 +710,19 @@ async function enrichOpportunityRows(params: {
         customers: boolean;
         customerMembers: boolean;
     };
+    /** User → org → UTC for `_notes_preview` / `_tour_context` (Timezone Contract v1). */
+    viewerDisplayTimeZoneIana?: string;
 }): Promise<{ rows: Array<Record<string, unknown>>; queueListSubtimings?: QueueListEnrichmentSubtimingsMs }> {
-    const { supabase, orgId, rows, effectiveStatusDefs: preloadedDefs, enrichment = "full", relationFetchPlan } = params;
+    const {
+        supabase,
+        orgId,
+        rows,
+        effectiveStatusDefs: preloadedDefs,
+        enrichment = "full",
+        relationFetchPlan,
+        viewerDisplayTimeZoneIana: viewerTzRaw,
+    } = params;
+    const displayTz = typeof viewerTzRaw === "string" && viewerTzRaw.trim() ? viewerTzRaw.trim() : UTC_FALLBACK_IANA;
     const previewLite = enrichment === "queue_preview" || enrichment === "queue_list";
     if (!rows.length) {
         return { rows: [] };
@@ -821,7 +899,7 @@ async function enrichOpportunityRows(params: {
 
         const md = (r.metadata ?? null) as Record<string, unknown> | null;
         const notesRaw = typeof md?.notes === "string" ? md.notes : typeof md?.demo_note === "string" ? md.demo_note : null;
-        const notesPreview = formatQueueNotePreview(notesRaw, md?.notes_at);
+        const notesPreview = formatQueueNotePreview(notesRaw, md?.notes_at, displayTz);
         const nextStepPreview = typeof md?.next_step === "string" ? md.next_step.trim() : null;
 
         const customerIdStr = r.customer_id ? String(r.customer_id).trim() : "";
@@ -904,7 +982,7 @@ async function enrichOpportunityRows(params: {
         const statusDisplay = sk ? labelByKey.get(sk) ?? sk : null;
 
         const attentionReason = opportunityNeedsAttentionReasonLabel(r, nowForAttention);
-        const tourContext = tourDate ? `Tour: ${formatTourDateTime(tourDate, tourTime).display}` : null;
+        const tourContext = tourDate ? `Tour: ${formatTourDateTime(tourDate, tourTime, { displayTimeZoneIana: displayTz }).display}` : null;
 
         const structuredFromInquiry = buildStructuredCrmCompactChildren([], inquiryChildren);
         const crmCompactChildrenStructured =
@@ -966,14 +1044,18 @@ async function enrichOpportunityRows(params: {
 }
 
 function buildOpportunityNeedsAttentionOrExpr(now: Date): string {
-    const stale3d = toIso(subtractDays(now, 3));
+    const stale7d = toIso(subtractDays(now, 7));
     const stale2d = toIso(subtractDays(now, 2));
+    const nowIso = toIso(now);
+    const todayYmd = now.toISOString().slice(0, 10);
     // PostgREST `or` grammar (used by tests / future SQL); enrollment `needs_attention` queue is evaluated in-memory instead.
     return [
-        `updated_at.lt.${stale3d}`,
+        `updated_at.lt.${stale7d}`,
         "primary_contact_id.is.null",
         "customer_id.is.null",
         buildOpportunityHighValueStaleOrBranches(stale2d),
+        `metadata->>next_follow_up_at.lt.${nowIso}`,
+        `and(status_key.eq.tour_scheduled,metadata->>tour_date.lt.${todayYmd})`,
     ].join(",");
 }
 
@@ -983,14 +1065,18 @@ function buildOpportunityNeedsAttentionOrExpr(now: Date): string {
  * rows scanned/sorted before the capped fetch.
  */
 function buildOpportunityNeedsAttentionCandidateOrExpr(now: Date): string {
-    const stale3d = toIso(subtractDays(now, 3));
+    const stale7d = toIso(subtractDays(now, 7));
     const stale2d = toIso(subtractDays(now, 2));
+    const nowIso = toIso(now);
+    const todayYmd = now.toISOString().slice(0, 10);
     return [
-        `updated_at.lt.${stale3d}`,
+        `updated_at.lt.${stale7d}`,
         "customer_id.is.null",
         "primary_person_id.is.null",
         "primary_contact_id.is.null",
         buildOpportunityHighValueStaleOrBranches(stale2d),
+        `metadata->>next_follow_up_at.lt.${nowIso}`,
+        `and(status_key.eq.tour_scheduled,metadata->>tour_date.lt.${todayYmd})`,
     ].join(",");
 }
 
@@ -1305,6 +1391,8 @@ export type WorkUnitQueueSummariesResult = {
      */
     work_unit_scope_total?: number | null;
     work_unit_scope_queue_key?: string | null;
+    /** Echo of viewer wall-clock zone used when `includePreviews` built CRM strings (QA / devtools). */
+    viewer_timezone?: QueueViewerTimezoneMeta;
 };
 
 function buildPriorityQueueKeySet(def: QueueDefinitionV1, focusKey: string | null | undefined, budget: number): Set<string> {
@@ -1386,6 +1474,8 @@ export async function getWorkUnitQueueSummaries(params: {
     partialQueueKeys?: Set<string>;
     /** Department batch: reuse one operational-day + opportunity status-def fetch per request. */
     sharedBootstrap?: QueueSummariesSharedBootstrap;
+    /** Viewer IANA for opportunity preview enrichment (notes/tour lines). */
+    viewerDisplayTimeZone?: QueueViewerTimezoneMeta;
 }): Promise<WorkUnitQueueSummariesResult> {
     const includePreviews = params.includePreviews !== false;
     const countSel = queueCountSelect(params.countAccuracy);
@@ -1393,6 +1483,9 @@ export async function getWorkUnitQueueSummaries(params: {
     const supabase = createAdminClient();
     const refUtc = new Date();
     const sharedBootstrap = params.sharedBootstrap;
+    const viewerTimeZoneMeta = params.viewerDisplayTimeZone;
+    const viewerPreviewIana = viewerTimeZoneMeta?.iana?.trim() ? viewerTimeZoneMeta.iana.trim() : UTC_FALLBACK_IANA;
+    const viewerTimeZonePayload = viewerTimeZoneMeta ? { viewer_timezone: viewerTimeZoneMeta } : {};
     const tParallelBoot0 = Date.now();
     const [def, operationalDay] = await Promise.all([
         loadWorkUnitQueueDefinition({ orgId: params.orgId, workUnitId: params.workUnitId }),
@@ -1623,6 +1716,7 @@ export async function getWorkUnitQueueSummaries(params: {
                 rows: previewRows,
                 effectiveStatusDefs: preloadStatusDefs,
                 enrichment: "queue_preview",
+                viewerDisplayTimeZoneIana: viewerPreviewIana,
             });
             enrichMs = Date.now() - tE0;
 
@@ -1704,6 +1798,7 @@ export async function getWorkUnitQueueSummaries(params: {
             rows: previewRows,
             effectiveStatusDefs,
             enrichment: "queue_preview",
+            viewerDisplayTimeZoneIana: viewerPreviewIana,
         });
         enrichMs = Date.now() - tE0;
 
@@ -1743,7 +1838,7 @@ export async function getWorkUnitQueueSummaries(params: {
         });
     }
     if (summaryMode === "partial") {
-        return { queues: rowResults.filter((x): x is QueueSummary => x != null) };
+        return { queues: rowResults.filter((x): x is QueueSummary => x != null), ...viewerTimeZonePayload };
     }
 
     const summaries: QueueSummary[] = def.queues.map((q, i) => {
@@ -1757,7 +1852,9 @@ export async function getWorkUnitQueueSummaries(params: {
         work_unit_scope_total: scopeMeta.total,
         work_unit_scope_queue_key: scopeMeta.queueKey,
     };
-    return deferredQueueKeys?.length ? { queues: summaries, deferred_queue_keys: deferredQueueKeys, ...scopePayload } : { queues: summaries, ...scopePayload };
+    return deferredQueueKeys?.length
+        ? { queues: summaries, deferred_queue_keys: deferredQueueKeys, ...scopePayload, ...viewerTimeZonePayload }
+        : { queues: summaries, ...scopePayload, ...viewerTimeZonePayload };
 }
 
 const DEPARTMENT_WU_SUMMARY_CONCURRENCY = 3;
@@ -1789,6 +1886,7 @@ export async function getDepartmentWorkUnitQueueSummaries(params: {
     summaryMode?: QueueSummaryRequestMode;
     focusQueueKey?: string | null;
     priorityBudget?: number;
+    viewerDisplayTimeZone?: QueueViewerTimezoneMeta;
 }): Promise<{ work_units: DepartmentWorkUnitQueueSummaryRow[] }> {
     const includePreviews = params.includePreviews !== false;
     const countAccuracy = params.countAccuracy;
@@ -1836,6 +1934,7 @@ export async function getDepartmentWorkUnitQueueSummaries(params: {
                     focusQueueKey: params.focusQueueKey ?? null,
                     priorityBudget,
                     sharedBootstrap,
+                    viewerDisplayTimeZone: params.viewerDisplayTimeZone,
                 });
                 const ms = Date.now() - tWu0;
                 console.warn("[queue-perf] getDepartmentWorkUnitQueueSummaries work_unit", {
@@ -1894,9 +1993,12 @@ export async function getWorkUnitQueueItems(params: {
     recordScopeImpossible?: boolean;
     /** Site/department filters for job & opportunity queue rows. */
     recordScopeConstraints?: RecordScopeConstraints | null;
+    viewerDisplayTimeZone?: QueueViewerTimezoneMeta;
 }): Promise<WorkUnitQueueItemsWithPerf> {
     const tSvc0 = Date.now();
     const supabase = createAdminClient();
+    const viewerTzMeta = params.viewerDisplayTimeZone;
+    const viewerPreviewIana = viewerTzMeta?.iana?.trim() ? viewerTzMeta.iana.trim() : UTC_FALLBACK_IANA;
     const refUtc = new Date();
 
     const [defTimed, opsTimed] = await Promise.all([
@@ -1921,7 +2023,10 @@ export async function getWorkUnitQueueItems(params: {
         queueItems: QueueItemsResult,
         timings: Omit<QueueRowsPerfBreakdown, "service_total_ms">
     ): WorkUnitQueueItemsWithPerf => ({
-        result: queueItems,
+        result: {
+            ...queueItems,
+            ...(viewerTzMeta ? { viewer_timezone: viewerTzMeta } : {}),
+        },
         rowsPerf: {
             ...timings,
             service_total_ms: Date.now() - tSvc0,
@@ -2107,6 +2212,7 @@ export async function getWorkUnitQueueItems(params: {
             effectiveStatusDefs,
             enrichment: "queue_list",
             relationFetchPlan: queueListRelationPlan,
+            viewerDisplayTimeZoneIana: viewerPreviewIana,
         });
         const enrichment_ms = Date.now() - tEn0;
         return finalize(
@@ -2171,6 +2277,7 @@ export async function getWorkUnitQueueItems(params: {
             effectiveStatusDefs,
             enrichment: "queue_list",
             relationFetchPlan: queueListRelationPlan,
+            viewerDisplayTimeZoneIana: viewerPreviewIana,
         });
         const enrichment_ms = Date.now() - tEn0;
         return finalize(
@@ -2239,6 +2346,7 @@ export async function getWorkUnitQueueItems(params: {
         effectiveStatusDefs,
         enrichment: "queue_list",
         relationFetchPlan: queueListRelationPlan,
+        viewerDisplayTimeZoneIana: viewerPreviewIana,
     });
     const enrichment_ms = Date.now() - tEn0;
 

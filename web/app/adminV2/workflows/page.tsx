@@ -7,6 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { derived } from "@/styles/tokens/colors";
+import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import { formatTourDateTime } from "@/lib/enrollment/formatTourDateTime";
 
 type WorkflowSummaryRow = {
@@ -172,6 +173,7 @@ function summarizeCondition(c: WorkflowConditionRow): string {
 export default function AdminV2WorkflowsPage() {
     const searchParams = useSearchParams();
     const router = useRouter();
+    const viewerTz = useAdminViewerTimezone();
     const highlightRunId = (searchParams?.get("run") ?? "").trim();
 
     const [kpis, setKpis] = useState<WorkflowKpis>(DEFAULT_KPIS);
@@ -735,7 +737,7 @@ export default function AdminV2WorkflowsPage() {
                                                 ? ((ep as any).action_form as Record<string, unknown>)
                                                 : null;
                                         if (!af) return null;
-                                        const fmt = formatTourDateTime(af.tour_date, af.tour_time);
+                                        const fmt = formatTourDateTime(af.tour_date, af.tour_time, { displayTimeZoneIana: viewerTz });
                                         if (!fmt.hasDate) return null;
                                         return (
                                             <div className="mt-2 rounded-md border border-alloy-stone/20 bg-alloy-stone/5 px-2 py-1 text-xs text-alloy-midnight/70">

@@ -41,11 +41,11 @@ type SeedSpec = {
 };
 
 const DEMO_PROGRAMS: Array<{ program_label: string; age_group: string }> = [
-    { program_label: "Toddler (2–3)", age_group: "Ages 24–36 mo" },
-    { program_label: "Preschool (3–4)", age_group: "Ages 36–48 mo" },
-    { program_label: "Pre-K (4–5)", age_group: "Ages 48–60 mo" },
-    { program_label: "Infant (6–12 mo)", age_group: "Ages 6–12 mo" },
-    { program_label: "Young Toddler (12–24 mo)", age_group: "Ages 12–24 mo" },
+    { program_label: "Toddler — 2–3 years", age_group: "Ages 24–36 mo" },
+    { program_label: "Preschool — 3–4 years", age_group: "Ages 36–48 mo" },
+    { program_label: "Pre-K — 4–5 years", age_group: "Ages 48–60 mo" },
+    { program_label: "Infant — 0–18 months", age_group: "Ages 0–18 mo" },
+    { program_label: "Young Toddler — 18–24 months", age_group: "Ages 18–24 mo" },
 ];
 
 function isoDateOnly(d: Date): string {

@@ -115,6 +115,8 @@ describe("QueueService — pure helpers", () => {
         expect(expr).toContain("primary_person_id.is.null");
         expect(expr).toContain("primary_contact_id.is.null");
         expect(expr).toContain("updated_at.lt.");
+        expect(expr).toContain("metadata->>next_follow_up_at.lt.");
+        expect(expr).toContain("and(status_key.eq.tour_scheduled,metadata->>tour_date.lt.");
     });
 
     it("opportunity exception queue returns 501 when evaluated", () => {
@@ -128,15 +130,78 @@ describe("QueueService — pure helpers", () => {
         expect(plan.ops.some((op: any) => op.kind === "or")).toBe(true);
     });
 
-    it("needs attention: stale opportunity included", () => {
+    it("needs attention: mid-funnel stale >7d included", () => {
         const now = new Date("2026-01-10T12:00:00.000Z");
         expect(
             __testing.opportunityNeedsAttention(
                 {
-                    updated_at: "2026-01-06T11:59:59.000Z", // >3 days stale
+                    updated_at: "2025-12-20T11:00:00.000Z",
+                    primary_person_id: "p1",
                     primary_contact_id: "pc1",
                     customer_id: "c1",
                     status_key: "contacted",
+                    metadata: {},
+                },
+                now
+            )
+        ).toBe(true);
+    });
+
+    it("needs attention: enrolled and lost never flagged", () => {
+        const now = new Date("2026-01-10T12:00:00.000Z");
+        const stale = "2025-12-01T11:00:00.000Z";
+        expect(
+            __testing.opportunityNeedsAttention(
+                {
+                    updated_at: stale,
+                    primary_person_id: "p1",
+                    customer_id: "c1",
+                    status_key: "enrolled",
+                    metadata: { next_follow_up_at: "2020-01-01T00:00:00.000Z" },
+                },
+                now
+            )
+        ).toBe(false);
+        expect(
+            __testing.opportunityNeedsAttention(
+                {
+                    updated_at: stale,
+                    primary_person_id: "p1",
+                    customer_id: "c1",
+                    status_key: "lost",
+                    metadata: {},
+                },
+                now
+            )
+        ).toBe(false);
+    });
+
+    it("needs attention: overdue next_follow_up_at in metadata", () => {
+        const now = new Date("2026-01-10T12:00:00.000Z");
+        expect(
+            __testing.opportunityNeedsAttention(
+                {
+                    updated_at: "2026-01-10T11:00:00.000Z",
+                    primary_person_id: "p1",
+                    customer_id: "c1",
+                    status_key: "waitlisted",
+                    metadata: { next_follow_up_at: "2026-01-05T15:00:00.000Z" },
+                },
+                now
+            )
+        ).toBe(true);
+    });
+
+    it("needs attention: tour date passed while still tour_scheduled", () => {
+        const now = new Date("2026-01-10T12:00:00.000Z");
+        expect(
+            __testing.opportunityNeedsAttention(
+                {
+                    updated_at: "2026-01-10T11:00:00.000Z",
+                    primary_person_id: "p1",
+                    customer_id: "c1",
+                    status_key: "tour_scheduled",
+                    metadata: { tour_date: "2026-01-08" },
                 },
                 now
             )
@@ -187,6 +252,23 @@ describe("QueueService — pure helpers", () => {
                     primary_contact_id: "pc1",
                     customer_id: "c1",
                     status_key: "contacted",
+                },
+                now
+            )
+        ).toBe(false);
+    });
+
+    it("needs attention: contacted stale 4d excluded (7d threshold)", () => {
+        const now = new Date("2026-01-10T12:00:00.000Z");
+        expect(
+            __testing.opportunityNeedsAttention(
+                {
+                    updated_at: "2026-01-06T12:00:00.000Z",
+                    primary_person_id: "p1",
+                    primary_contact_id: "pc1",
+                    customer_id: "c1",
+                    status_key: "contacted",
+                    metadata: {},
                 },
                 now
             )

@@ -46,15 +46,32 @@ describe("Queue API routes (thin wrappers)", () => {
             allowedSiteLocationIds: null,
         });
         mockCreateAdminClient.mockReturnValue({
-            from: vi.fn(() => ({
-                select: vi.fn(() => ({
-                    eq: vi.fn(() => ({
+            from: vi.fn((table: string) => {
+                if (table === "work_units") {
+                    return {
+                        select: vi.fn(() => ({
+                            eq: vi.fn(() => ({
+                                eq: vi.fn(() => ({
+                                    maybeSingle: vi.fn().mockResolvedValue({ data: { id: "wu1" }, error: null }),
+                                })),
+                            })),
+                        })),
+                    };
+                }
+                return {
+                    select: vi.fn(() => ({
                         eq: vi.fn(() => ({
-                            maybeSingle: vi.fn().mockResolvedValue({ data: { id: "wu1" }, error: null }),
+                            maybeSingle: vi.fn().mockResolvedValue({
+                                data:
+                                    table === "user_profiles"
+                                        ? { timezone: "America/Los_Angeles" }
+                                        : { metadata: { timezone: "America/Los_Angeles" } },
+                                error: null,
+                            }),
                         })),
                     })),
-                })),
-            })),
+                };
+            }),
         });
     });
 

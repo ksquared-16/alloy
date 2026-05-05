@@ -1,32 +1,76 @@
+import { fromZonedTime } from "date-fns-tz";
+import { isValidIanaTimeZone, UTC_FALLBACK_IANA } from "@/lib/admin/timezoneContract";
+
+function resolveDisplayTz(iana?: string | null): string {
+    const t = typeof iana === "string" ? iana.trim() : "";
+    return t && isValidIanaTimeZone(t) ? t : UTC_FALLBACK_IANA;
+}
+
+/**
+ * Enrollment tour preview: `tour_date` (YYYY-MM-DD) + optional `tour_time` (HH:MM 24h).
+ * When `displayTimeZoneIana` is set, date/time are interpreted as wall time in that zone (org/user operational view).
+ * When omitted, formatting matches the historical client-local style (no explicit IANA; not recommended for Admin).
+ */
 export function formatTourDateTime(
     tourDateRaw: unknown,
-    tourTimeRaw: unknown
+    tourTimeRaw: unknown,
+    opts?: { displayTimeZoneIana?: string | null }
 ): { display: string; hasDate: boolean; hasTime: boolean } {
     const tourDate = typeof tourDateRaw === "string" ? tourDateRaw.trim() : "";
     const tourTime = typeof tourTimeRaw === "string" ? tourTimeRaw.trim() : "";
+    const tz = resolveDisplayTz(opts?.displayTimeZoneIana ?? null);
 
     const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(tourDate);
-    const mmddyyyy = dateMatch ? `${dateMatch[2]}/${dateMatch[3]}/${dateMatch[1]}` : "";
+    if (!dateMatch) {
+        return { display: "—", hasDate: false, hasTime: false };
+    }
+    const y = Number(dateMatch[1]);
+    const mo = Number(dateMatch[2]);
+    const d = Number(dateMatch[3]);
 
-    // Accept HTML <input type="time"> output: "HH:MM"
     const timeMatch24 = /^(\d{1,2}):(\d{2})$/.exec(tourTime);
-    let hmAmPm = "";
+    let hh = 12;
+    let mm = 0;
+    let hasTime = false;
     if (timeMatch24) {
-        const hh = Math.min(23, Math.max(0, Number(timeMatch24[1])));
-        const mm = Math.min(59, Math.max(0, Number(timeMatch24[2])));
-        const ampm = hh >= 12 ? "PM" : "AM";
-        const h12 = hh % 12 === 0 ? 12 : hh % 12;
-        hmAmPm = `${h12}:${String(mm).padStart(2, "0")} ${ampm}`;
+        hh = Math.min(23, Math.max(0, Number(timeMatch24[1])));
+        mm = Math.min(59, Math.max(0, Number(timeMatch24[2])));
+        hasTime = true;
     } else if (tourTime) {
-        // Light normalization for "9:30AM" / "9:30 am" etc.
         const m = /^(\d{1,2}):(\d{2})\s*([AaPp])[Mm]$/.exec(tourTime.replace(/\s+/g, ""));
-        if (m) hmAmPm = `${Number(m[1])}:${m[2]} ${m[3].toUpperCase()}M`;
+        if (m) {
+            let h = Number(m[1]);
+            const minutes = Number(m[2]);
+            const ap = m[3].toUpperCase();
+            if (ap === "P" && h !== 12) h += 12;
+            if (ap === "A" && h === 12) h = 0;
+            hh = Math.min(23, Math.max(0, h));
+            mm = Math.min(59, Math.max(0, minutes));
+            hasTime = true;
+        }
     }
 
-    const hasDate = Boolean(mmddyyyy);
-    const hasTime = Boolean(hmAmPm);
-    if (!hasDate) return { display: "—", hasDate: false, hasTime: false };
-    if (!hasTime) return { display: mmddyyyy, hasDate: true, hasTime: false };
-    return { display: `${mmddyyyy} ${hmAmPm}`, hasDate: true, hasTime: true };
-}
+    const anchorH = hasTime ? hh : 12;
+    const anchorM = hasTime ? mm : 0;
+    const wallAsUtcFields = new Date(Date.UTC(y, mo - 1, d, anchorH, anchorM, 0));
+    const instant = fromZonedTime(wallAsUtcFields, tz);
 
+    const dateFmt: Intl.DateTimeFormatOptions = {
+        month: "2-digit",
+        day: "2-digit",
+        year: "numeric",
+        timeZone: tz,
+    };
+    const dateStr = new Intl.DateTimeFormat("en-US", dateFmt).format(instant);
+    if (!hasTime) {
+        return { display: dateStr, hasDate: true, hasTime: false };
+    }
+    const withTime = new Intl.DateTimeFormat("en-US", {
+        ...dateFmt,
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+        timeZone: tz,
+    }).format(instant);
+    return { display: withTime, hasDate: true, hasTime: true };
+}

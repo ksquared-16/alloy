@@ -53,6 +53,14 @@ export default async function AdminV2WorkspaceLayout({
     console.error("[adminV2/workspace/layout] operational org timezone failed:", e);
   }
 
+  if (process.env.NODE_ENV === "development") {
+    console.info("[adminV2/workspace] resolved_timezones", {
+      viewer: viewerTimezone,
+      operational_org_iana: operationalTimezoneIana,
+      org_id: orgId,
+    });
+  }
+
   return (
     <AdminV2WorkspaceClientProviders
       userEmail={typeof auth.user.email === "string" && auth.user.email ? auth.user.email : "Unknown"}

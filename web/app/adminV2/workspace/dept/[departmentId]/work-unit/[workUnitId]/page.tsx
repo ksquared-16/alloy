@@ -1350,6 +1350,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 fetchQueueSummaries(workUnitId, selectedQueueKey),
             ]);
         };
+        /** Drawer saves dispatch `adminv2:opportunity-updated` — bust row cache + refetch summaries for this lane (not drawer-only). */
         window.addEventListener("adminv2:opportunity-updated", onUpdated as EventListener);
         return () => window.removeEventListener("adminv2:opportunity-updated", onUpdated as EventListener);
     }, [fetchQueueItems, fetchQueueSummaries, selectedQueueKey, workUnitId]);

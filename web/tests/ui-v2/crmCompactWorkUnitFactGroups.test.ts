@@ -30,14 +30,14 @@ describe("buildCrmCompactWorkUnitFactGroups (child columns)", () => {
         const groups = buildCrmCompactWorkUnitFactGroups({
             row: {},
             want: wantAll,
-            childrenLines: [{ primary: "Case Stale (2y)", programInline: "Young Toddler (12–24 mo)" }],
+            childrenLines: [{ primary: "Case Stale (2y)", programInline: "Young Toddler — 18–24 months" }],
             childNameSingle: null,
             programSingle: null,
         });
 
         const ch = groups.find((g) => g.kind === "children_programs");
         expect(ch?.columnGrid?.headers).toEqual(["Child", "Program"]);
-        expect(ch?.columnGrid?.rows).toEqual([["Case Stale (2y)", "Young Toddler (12–24 mo)"]]);
+        expect(ch?.columnGrid?.rows).toEqual([["Case Stale (2y)", "Young Toddler — 18–24 months"]]);
     });
 
     it("renders every child row with aligned programs", () => {
@@ -45,8 +45,8 @@ describe("buildCrmCompactWorkUnitFactGroups (child columns)", () => {
             row: {},
             want: wantAll,
             childrenLines: [
-                { primary: "Liam Patel (4y 3mo)", programInline: "Infant (6–12 mo)" },
-                { primary: "Mia Patel (3y 3mo)", programInline: "Infant (6–12 mo)" },
+                { primary: "Liam Patel (4y 3mo)", programInline: "Preschool — 3–4 years" },
+                { primary: "Mia Patel (3y 3mo)", programInline: "Toddler — 2–3 years" },
             ],
             childNameSingle: null,
             programSingle: null,
@@ -54,8 +54,8 @@ describe("buildCrmCompactWorkUnitFactGroups (child columns)", () => {
 
         const ch = groups.find((g) => g.kind === "children_programs");
         expect(ch?.columnGrid?.rows).toEqual([
-            ["Liam Patel (4y 3mo)", "Infant (6–12 mo)"],
-            ["Mia Patel (3y 3mo)", "Infant (6–12 mo)"],
+            ["Liam Patel (4y 3mo)", "Preschool — 3–4 years"],
+            ["Mia Patel (3y 3mo)", "Toddler — 2–3 years"],
         ]);
     });
 
@@ -117,10 +117,10 @@ describe("buildWorkUnitQueueCrmCompactRowSlice (work-unit page path)", () => {
         const slice = buildWorkUnitQueueCrmCompactRowSlice(
             {
                 id: "wu-row-1",
-                _requested_program: "Young Toddler (12–24 mo)",
+                _requested_program: "Young Toddler — 18–24 months",
                 _child_display_name: "Case Stale (2y)",
                 _crm_compact_children: [
-                    { primary: "Case Stale (2y)", secondary: "Young Toddler (12–24 mo)" },
+                    { primary: "Case Stale (2y)", secondary: "Young Toddler — 18–24 months" },
                 ],
             },
             wantAll,

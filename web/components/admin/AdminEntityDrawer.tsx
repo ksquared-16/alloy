@@ -3029,7 +3029,9 @@ export default function AdminEntityDrawer() {
             const ce = ev as CustomEvent<{ id?: string; action_key?: string }>;
             const id = typeof ce.detail?.id === "string" ? ce.detail.id : "";
             if (!id || id !== drawer.id) return;
-            console.info("[drawer] opportunity updated", { id, action_key: ce.detail?.action_key ?? null });
+            if (process.env.NODE_ENV === "development") {
+                console.info("[drawer] opportunity updated", { id, action_key: ce.detail?.action_key ?? null });
+            }
             refetch();
             setOpportunityActivitySignalNonce((n) => n + 1);
             // Also refetch resolved header actions so conditional actions swap (schedule ↔ reschedule).
@@ -5844,6 +5846,23 @@ export default function AdminEntityDrawer() {
             _job_payment_status_label: jobPaymentStatusKeyLabel(summ.payment_status_key),
         };
     }, [drawer.type, overviewData, jobPaymentSummaryFromApi]);
+
+    const opportunityCommunicationsComposeContext = useMemo(() => {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") return null;
+        if (!overviewData || (overviewData as { _create?: boolean })._create) return null;
+        const d = overviewData as Record<string, unknown>;
+        const sk = String(formData.status_key ?? d.status_key ?? "").trim() || null;
+        const ident = (d._identity as { primary_person?: { label?: string | null } } | null) ?? null;
+        const label = String(ident?.primary_person?.label ?? "").trim();
+        const first = label.split(/\s+/)[0] || null;
+        const md =
+            d.metadata && typeof d.metadata === "object" && !Array.isArray(d.metadata)
+                ? (d.metadata as Record<string, unknown>)
+                : null;
+        const tour_date = md && typeof md.tour_date === "string" ? md.tour_date : null;
+        const tour_time = md && typeof md.tour_time === "string" ? md.tour_time : null;
+        return { status_key: sk, primary_first_name: first, tour_date, tour_time };
+    }, [drawer.type, drawer.id, overviewData, formData.status_key]);
 
     const overviewCustomContent = useMemo(() => {
         if (!overviewData || !drawer.type) return {};
@@ -10328,7 +10347,7 @@ export default function AdminEntityDrawer() {
                                                                             <div className={`${oppInqReadonlyField}`} aria-label="Tour date (managed by actions)">
                                                                                 {(() => {
                                                                                     const md = (d.metadata ?? null) as Record<string, unknown> | null;
-                                                                                    const fmt = formatTourDateTime(md?.tour_date, md?.tour_time);
+                                                                                    const fmt = formatTourDateTime(md?.tour_date, md?.tour_time, { displayTimeZoneIana: viewerTz });
                                                                                     return fmt.display;
                                                                                 })()}
                                                                             </div>
@@ -10443,6 +10462,9 @@ export default function AdminEntityDrawer() {
                                                                                         apiEntityType="opportunities"
                                                                                         entityId={drawer.id}
                                                                                         active
+                                                                                        opportunityComposeContext={
+                                                                                            opportunityCommunicationsComposeContext
+                                                                                        }
                                                                                     />
                                                                                 </div>
                                                                             ) : null}
@@ -10596,6 +10618,7 @@ export default function AdminEntityDrawer() {
                                                 apiEntityType="opportunities"
                                                 entityId={drawer.id}
                                                 active
+                                                opportunityComposeContext={opportunityCommunicationsComposeContext}
                                             />
                                         </div>
                                     )}

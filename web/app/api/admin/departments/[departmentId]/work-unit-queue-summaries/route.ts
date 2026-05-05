@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { fetchEffectiveUserDisplayTimezone } from "@/lib/admin/timezoneContract";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { getDepartmentWorkUnitQueueSummaries, QueueServiceError, type QueueSummaryRequestMode } from "@/lib/queues/QueueService";
 
@@ -68,6 +69,11 @@ export async function GET(request: NextRequest, context: { params: Promise<{ dep
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
+    const viewerDisplayTimeZone = await fetchEffectiveUserDisplayTimezone(supabase, {
+        orgId: ctx.orgId,
+        userId: ctx.userId,
+    });
+
     const t0 = Date.now();
     try {
         const limit = parseLimit(request.nextUrl.searchParams);
@@ -87,6 +93,7 @@ export async function GET(request: NextRequest, context: { params: Promise<{ dep
             summaryMode,
             focusQueueKey,
             priorityBudget,
+            viewerDisplayTimeZone,
         });
         const ms = Date.now() - t0;
         if (ms > 400) {
