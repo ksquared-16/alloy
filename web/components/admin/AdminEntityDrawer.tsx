@@ -140,10 +140,10 @@ function dispatchAfterPaymentRun(jobId: string, scheduleId: string | null) {
 
 const OPPORTUNITY_INQUIRY_WORKFLOW_TAB_STRIP: DrawerTabKey[] = [
     "overview",
-    "activity",
-    "documents",
     "communications",
     "notes",
+    "documents",
+    "activity",
 ];
 
 type FieldCatalogEntry = { key: string; label: string; data_type: string; operators: string[]; source: string };
@@ -9682,19 +9682,6 @@ export default function AdminEntityDrawer() {
                             />
                         </div>
                     )}
-                    {drawerTab === "documents" && drawer.type === "opportunities" && drawer.id && drawer.id !== "new" && (
-                        <div className="pt-2 space-y-3">
-                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
-                            <EntityDocumentsSection
-                                documents={opportunityRelatedData?.documents ?? []}
-                                loading={opportunityRelatedLoading}
-                                uploadEntityType="opportunity"
-                                entityId={drawer.id}
-                                canMutate={canMutate}
-                                onAfterUpload={() => setOpportunityRelatedData(null)}
-                            />
-                        </div>
-                    )}
                     {drawerTab === "communications" &&
                         drawer.type === "opportunities" &&
                         drawer.id &&
@@ -9702,10 +9689,11 @@ export default function AdminEntityDrawer() {
                         opportunityRecordGateWorkflowLayout && (
                             <div className="pt-2 space-y-3" data-admin-opportunity-comms-panel="true">
                                 <CommunicationsDrawerSection
-                                    embedded={false}
+                                    embedded
                                     apiEntityType="opportunities"
                                     entityId={drawer.id}
                                     active={drawerTab === "communications"}
+                                    opportunityComposeContext={opportunityCommunicationsComposeContext}
                                 />
                             </div>
                         )}
@@ -9791,6 +9779,19 @@ export default function AdminEntityDrawer() {
                                 })()}
                             </div>
                         )}
+                    {drawerTab === "documents" && drawer.type === "opportunities" && drawer.id && drawer.id !== "new" && (
+                        <div className="pt-2 space-y-3">
+                            <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
+                            <EntityDocumentsSection
+                                documents={opportunityRelatedData?.documents ?? []}
+                                loading={opportunityRelatedLoading}
+                                uploadEntityType="opportunity"
+                                entityId={drawer.id}
+                                canMutate={canMutate}
+                                onAfterUpload={() => setOpportunityRelatedData(null)}
+                            />
+                        </div>
+                    )}
                     {drawerTab === "documents" && drawer.type === "jobs" && drawer.id && drawer.id !== "new" && (
                         <div className="pt-2 space-y-3">
                             <h3 className={DRAWER_SECTION_HEADER_CLASS}>Documents</h3>
