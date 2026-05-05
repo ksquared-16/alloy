@@ -1495,11 +1495,14 @@ export async function getWorkUnitQueueSummaries(params: {
     sharedBootstrap?: QueueSummariesSharedBootstrap;
     /** Viewer IANA for opportunity preview enrichment (notes/tour lines). */
     viewerDisplayTimeZone?: QueueViewerTimezoneMeta;
+    /** Site/department filters for job & opportunity queue rows (admin access scope). */
+    recordScopeConstraints?: RecordScopeConstraints | null;
 }): Promise<WorkUnitQueueSummariesResult> {
     const includePreviews = params.includePreviews !== false;
     const countSel = queueCountSelect(params.countAccuracy);
     const tW0 = Date.now();
     const supabase = createAdminClient();
+    const scopeFilter = params.recordScopeConstraints ?? null;
     const refUtc = new Date();
     const sharedBootstrap = params.sharedBootstrap;
     const viewerTimeZoneMeta = params.viewerDisplayTimeZone;
@@ -1590,10 +1593,12 @@ export async function getWorkUnitQueueSummaries(params: {
                     .select("id", { count: countSel, head: true })
                     .eq("org_id", params.orgId)
                     .eq("work_unit_id", params.workUnitId);
+            const scopedCountBase = () =>
+                scopeFilter ? (applyRecordScopeConstraintsToQuery(countBase() as never, scopeFilter) as any) : countBase();
 
             if (!includePreviews) {
                 const tC0 = Date.now();
-                const countQ = applyOpsToJobQuery(countBase() as never, ops);
+                const countQ = applyOpsToJobQuery(scopedCountBase() as never, ops);
                 const { count, error: countErr } = await countQ;
                 countMs = Date.now() - tC0;
                 if (countErr) {
@@ -1615,13 +1620,14 @@ export async function getWorkUnitQueueSummaries(params: {
             }
 
             const tParallel0 = Date.now();
-            const countQ = applyOpsToJobQuery(countBase() as never, ops);
+            const countQ = applyOpsToJobQuery(scopedCountBase() as never, ops);
             const previewQ0 = supabase
                 .from("jobs")
                 .select("id, title, status_key, work_unit_id, assigned_vendor_id, created_at, updated_at")
                 .eq("org_id", params.orgId)
                 .eq("work_unit_id", params.workUnitId);
-            const previewQ1 = applySortToJobQuery(applyOpsToJobQuery(previewQ0 as never, ops) as never, sort);
+            const previewQ0Scoped = scopeFilter ? applyRecordScopeConstraintsToQuery(previewQ0 as never, scopeFilter) : (previewQ0 as never);
+            const previewQ1 = applySortToJobQuery(applyOpsToJobQuery(previewQ0Scoped as never, ops) as never, sort);
             const [countRes, previewRes] = await Promise.all([countQ, previewQ1.limit(previewLimit)]);
             const parallelMs = Date.now() - tParallel0;
             countMs = parallelMs;
@@ -1693,6 +1699,7 @@ export async function getWorkUnitQueueSummaries(params: {
                         sort,
                         now: refUtc,
                         fetchCap: undefined,
+                        recordScopeConstraints: scopeFilter,
                     }),
                     sharedOpportunityStatusDefs(),
                 ]);
@@ -1706,6 +1713,7 @@ export async function getWorkUnitQueueSummaries(params: {
                     sort,
                     now: refUtc,
                     fetchCap: NEEDS_ATTENTION_COUNT_ONLY_FETCH_CAP,
+                    recordScopeConstraints: scopeFilter,
                 });
             }
             needsAttentionLoadMs = Date.now() - tN0;
@@ -1760,10 +1768,12 @@ export async function getWorkUnitQueueSummaries(params: {
                 .select("id", { count: countSel, head: true })
                 .eq("org_id", params.orgId)
                 .eq("work_unit_id", params.workUnitId);
+        const oppScopedCountBase = () =>
+            scopeFilter ? (applyRecordScopeConstraintsToQuery(oppCountBase() as never, scopeFilter) as any) : oppCountBase();
 
         if (!includePreviews) {
             const tC0 = Date.now();
-            const countQ = applyOpsToJobQuery(oppCountBase() as never, ops);
+            const countQ = applyOpsToJobQuery(oppScopedCountBase() as never, ops);
             const { count, error: countErr } = await countQ;
             countMs = Date.now() - tC0;
             if (countErr) {
@@ -1785,13 +1795,14 @@ export async function getWorkUnitQueueSummaries(params: {
         }
 
         const tParallelOpp0 = Date.now();
-        const countQ = applyOpsToJobQuery(oppCountBase() as never, ops);
+        const countQ = applyOpsToJobQuery(oppScopedCountBase() as never, ops);
         const previewQ0 = supabase
             .from("opportunities")
             .select("id, name, title, status_key, customer_id, primary_person_id, primary_contact_id, work_unit_id, metadata, created_at, updated_at")
             .eq("org_id", params.orgId)
             .eq("work_unit_id", params.workUnitId);
-        const previewQ1 = applySortToJobQuery(applyOpsToJobQuery(previewQ0 as never, ops) as never, sort);
+        const previewQ0Scoped = scopeFilter ? applyRecordScopeConstraintsToQuery(previewQ0 as never, scopeFilter) : (previewQ0 as never);
+        const previewQ1 = applySortToJobQuery(applyOpsToJobQuery(previewQ0Scoped as never, ops) as never, sort);
         const [countRes, previewRes, effectiveStatusDefs] = await Promise.all([
             countQ,
             previewQ1.limit(previewLimit),
@@ -1906,6 +1917,10 @@ export async function getDepartmentWorkUnitQueueSummaries(params: {
     focusQueueKey?: string | null;
     priorityBudget?: number;
     viewerDisplayTimeZone?: QueueViewerTimezoneMeta;
+    /** Scope layer could not resolve any jobs/opps (restricted user). */
+    recordScopeImpossible?: boolean;
+    /** Site/department filters for job & opportunity queue rows. */
+    recordScopeConstraints?: RecordScopeConstraints | null;
 }): Promise<{ work_units: DepartmentWorkUnitQueueSummaryRow[] }> {
     const includePreviews = params.includePreviews !== false;
     const countAccuracy = params.countAccuracy;
@@ -1932,6 +1947,8 @@ export async function getDepartmentWorkUnitQueueSummaries(params: {
     }
 
     const sharedBootstrap: QueueSummariesSharedBootstrap = { operationalDay, opportunityStatusDefs };
+    const recordScopeImpossible = params.recordScopeImpossible === true;
+    const recordScopeConstraints = params.recordScopeConstraints ?? null;
 
     const ids = (rows ?? []).map((r) => String((r as { id: string }).id ?? "").trim()).filter(Boolean);
     const previewLimit = clampLimit(params.limit ?? 50, 1, 100);
@@ -1954,6 +1971,7 @@ export async function getDepartmentWorkUnitQueueSummaries(params: {
                     priorityBudget,
                     sharedBootstrap,
                     viewerDisplayTimeZone: params.viewerDisplayTimeZone,
+                    recordScopeConstraints: recordScopeImpossible ? null : recordScopeConstraints,
                 });
                 const ms = Date.now() - tWu0;
                 console.warn("[queue-perf] getDepartmentWorkUnitQueueSummaries work_unit", {

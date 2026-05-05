@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import SettingsEntityTabBar from "@/components/adminV2/settings/SettingsEntityTabBar";
-import { PERMISSION_UI_AREA_ORDER, permissionUiArea } from "@/lib/admin/permissionUiArea";
+import {
+    PERMISSION_GRID_ROWS,
+    applyGridRowSelection,
+    levelFromGrantedKeys,
+    type PermissionGridLevel,
+} from "@/lib/admin/permissionGrid";
 
 type MainTab = "users" | "roles";
 
@@ -172,18 +177,12 @@ export default function UsersRolesSettingsClient({ canManageUsersRoles }: { canM
 
     const activeRoles = useMemo(() => roles.filter((r) => r.is_active !== false), [roles]);
 
-    const permissionsByUiArea = useMemo(() => {
-        const map = new Map<string, PermissionRow[]>();
+    const permissionLabelByKey = useMemo(() => {
+        const m = new Map<string, string>();
         for (const p of permissions) {
-            const area = permissionUiArea(p.group_key);
-            const cur = map.get(area) ?? [];
-            cur.push(p);
-            map.set(area, cur);
+            if (p?.key) m.set(p.key, p.label);
         }
-        for (const [, list] of map) {
-            list.sort((a, b) => a.label.localeCompare(b.label));
-        }
-        return map;
+        return m;
     }, [permissions]);
 
     const saveUserRole = async () => {
@@ -302,6 +301,12 @@ export default function UsersRolesSettingsClient({ canManageUsersRoles }: { canM
         }
     };
 
+    const setGridLevel = (rowId: string, level: PermissionGridLevel) => {
+        const row = PERMISSION_GRID_ROWS.find((r) => r.id === rowId);
+        if (!row) return;
+        setGrantKeys((prev) => applyGridRowSelection({ row, level, granted: prev }));
+    };
+
     const createRole = async () => {
         if (!canManageUsersRoles) return;
         setNewRoleBusy(true);
@@ -361,9 +366,8 @@ export default function UsersRolesSettingsClient({ canManageUsersRoles }: { canM
             />
 
             <p className="text-xs leading-snug text-alloy-midnight/55">
-                <span className="font-semibold text-alloy-midnight/70">Roles</span> control what someone can do (capabilities).{" "}
-                <span className="font-semibold text-alloy-midnight/70">Data access</span> (department / site) controls which CRM records they
-                see — stored on the user access profile and allow lists.
+                <span className="font-semibold text-alloy-midnight/70">Roles</span> control what people can do.{" "}
+                <span className="font-semibold text-alloy-midnight/70">Location and department access</span> control what records they can see.
             </p>
 
             {err ? <div className="rounded border border-red-200 bg-red-50/80 px-3 py-2 text-red-900">{err}</div> : null}
@@ -684,41 +688,61 @@ export default function UsersRolesSettingsClient({ canManageUsersRoles }: { canM
                                         Save role
                                     </button>
                                 </div>
-                                <p className="text-[11px] text-alloy-midnight/50">
-                                    System roles cannot be deactivated. Permission grants apply per org in{" "}
-                                    <code className="rounded bg-alloy-forge/8 px-0.5">role_permission_grants</code>.
-                                </p>
-
-                                <div className="max-h-[420px] space-y-4 overflow-auto border-t border-alloy-forge/10 pt-3">
-                                    {PERMISSION_UI_AREA_ORDER.map((area) => {
-                                        const list = permissionsByUiArea.get(area);
-                                        if (!list?.length) return null;
-                                        return (
-                                            <div key={area}>
-                                                <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/50">
-                                                    {area}
-                                                </h3>
-                                                <ul className="space-y-1">
-                                                    {list.map((p) => (
-                                                        <li key={p.key}>
-                                                            <label className="flex cursor-pointer items-start gap-2 text-xs">
-                                                                <input
-                                                                    type="checkbox"
-                                                                    className="mt-0.5"
-                                                                    checked={grantKeys.has(p.key)}
-                                                                    onChange={() => toggleGrant(p.key)}
-                                                                />
-                                                                <span>
-                                                                    <span className="font-medium text-alloy-midnight">{p.label}</span>
-                                                                    <span className="ml-1 text-alloy-midnight/45">({p.key})</span>
-                                                                </span>
-                                                            </label>
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            </div>
-                                        );
-                                    })}
+                                <div className="overflow-hidden rounded-lg border border-alloy-forge/10 bg-white/40">
+                                    <table className="w-full min-w-[680px] text-left text-xs">
+                                        <thead className="bg-alloy-forge/5 text-alloy-midnight/65">
+                                            <tr>
+                                                <th className="px-3 py-2 font-semibold">Capability area</th>
+                                                <th className="px-3 py-2 font-semibold">No access</th>
+                                                <th className="px-3 py-2 font-semibold">Read</th>
+                                                <th className="px-3 py-2 font-semibold">Write / Manage</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {PERMISSION_GRID_ROWS.map((row) => {
+                                                const level = levelFromGrantedKeys(row, grantKeys);
+                                                const readHint = row.readKeys
+                                                    .map((k) => permissionLabelByKey.get(k) ?? k)
+                                                    .filter(Boolean)
+                                                    .join(", ");
+                                                const writeHint = row.writeKeys
+                                                    .map((k) => permissionLabelByKey.get(k) ?? k)
+                                                    .filter(Boolean)
+                                                    .join(", ");
+                                                return (
+                                                    <tr key={row.id} className="border-t border-alloy-forge/10">
+                                                        <td className="px-3 py-2">
+                                                            <div className="font-medium text-alloy-midnight">{row.label}</div>
+                                                            <div className="mt-0.5 text-[11px] text-alloy-midnight/45">
+                                                                {readHint || writeHint ? (
+                                                                    <span>
+                                                                        {readHint ? `Read: ${readHint}` : null}
+                                                                        {readHint && writeHint ? " · " : null}
+                                                                        {writeHint ? `Write: ${writeHint}` : null}
+                                                                    </span>
+                                                                ) : (
+                                                                    <span>—</span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                        {(["none", "read", "write"] as const).map((opt) => (
+                                                            <td key={opt} className="px-3 py-2 align-top">
+                                                                <label className="inline-flex items-center gap-2">
+                                                                    <input
+                                                                        type="radio"
+                                                                        name={`perm-${row.id}`}
+                                                                        checked={level === opt}
+                                                                        onChange={() => setGridLevel(row.id, opt)}
+                                                                    />
+                                                                    <span className="sr-only">{opt}</span>
+                                                                </label>
+                                                            </td>
+                                                        ))}
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
                                 </div>
                                 <button
                                     type="button"

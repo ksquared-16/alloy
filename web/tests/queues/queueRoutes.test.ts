@@ -155,5 +155,104 @@ describe("Queue API routes (thin wrappers)", () => {
             })
         );
     });
+
+    it("GET /api/admin/departments/[id]/work-unit-queue-summaries passes scope constraints when restricted", async () => {
+        mockGetAdminAccessContext.mockResolvedValue({
+            ok: true,
+            userId: "u1",
+            orgId: "org1",
+            roleKeys: ["school_director"],
+            permissionKeys: [],
+            departmentScope: "all",
+            allowedDepartmentIds: null,
+            siteScope: "restricted",
+            allowedSiteLocationIds: ["site-south"],
+        });
+
+        // Department exists
+        mockCreateAdminClient.mockReturnValue({
+            from: vi.fn((table: string) => {
+                if (table === "departments") {
+                    return {
+                        select: vi.fn(() => ({
+                            eq: vi.fn(() => ({
+                                eq: vi.fn(() => ({
+                                    maybeSingle: vi.fn().mockResolvedValue({ data: { id: "dept1" }, error: null }),
+                                })),
+                            })),
+                        })),
+                    };
+                }
+                if (table === "user_profiles") {
+                    return {
+                        select: vi.fn(() => ({
+                            eq: vi.fn(() => ({
+                                maybeSingle: vi.fn().mockResolvedValue({ data: { timezone: "America/Los_Angeles" }, error: null }),
+                            })),
+                        })),
+                    };
+                }
+                if (table === "org_settings") {
+                    return {
+                        select: vi.fn(() => ({
+                            eq: vi.fn(() => ({
+                                maybeSingle: vi.fn().mockResolvedValue({ data: { metadata: { timezone: "America/Los_Angeles" } }, error: null }),
+                            })),
+                        })),
+                    };
+                }
+                if (table === "work_units") {
+                    return {
+                        select: vi.fn(() => ({
+                            eq: vi.fn(() => ({
+                                eq: vi.fn(() => ({
+                                    order: vi.fn().mockResolvedValue({ data: [{ id: "wu1" }], error: null }),
+                                })),
+                            })),
+                        })),
+                    };
+                }
+                // resolveRecordScopeConstraints will query work_units/locations/etc via accessScope helpers; keep permissive fallbacks
+                return {
+                    select: vi.fn(() => ({
+                        eq: vi.fn(() => ({
+                            in: vi.fn(() => Promise.resolve({ data: [], error: null })),
+                            maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+                            limit: vi.fn().mockResolvedValue({ data: [], error: null }),
+                        })),
+                    })),
+                };
+            }),
+        });
+
+        const svc = vi.fn(async (p: any) => ({ work_units: [] }));
+        vi.doMock("@/lib/queues/QueueService", () => ({
+            QueueServiceError: class QueueServiceError extends Error {
+                status: number;
+                code: string;
+                constructor(m: string, s: number, c: string) {
+                    super(m);
+                    this.status = s;
+                    this.code = c;
+                }
+            },
+            getDepartmentWorkUnitQueueSummaries: svc,
+        }));
+
+        const { GET } = await import("@/app/api/admin/departments/[departmentId]/work-unit-queue-summaries/route");
+        const req = new NextRequest(
+            "http://localhost/api/admin/departments/dept1/work-unit-queue-summaries?include_previews=false&count_mode=exact&summary_mode=priority&priority_budget=5"
+        );
+        const res = await GET(req, { params: Promise.resolve({ departmentId: "dept1" }) });
+        expect(res.status).toBe(200);
+        expect(svc).toHaveBeenCalledWith(
+            expect.objectContaining({
+                orgId: "org1",
+                departmentId: "dept1",
+                recordScopeImpossible: false,
+                recordScopeConstraints: expect.anything(),
+            })
+        );
+    });
 });
 

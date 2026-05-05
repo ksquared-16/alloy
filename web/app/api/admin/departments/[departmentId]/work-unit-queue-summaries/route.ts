@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { accessScopeRestrictsData, resolveRecordScopeConstraints, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { fetchEffectiveUserDisplayTimezone } from "@/lib/admin/timezoneContract";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { getDepartmentWorkUnitQueueSummaries, QueueServiceError, type QueueSummaryRequestMode } from "@/lib/queues/QueueService";
@@ -59,6 +61,9 @@ function parsePriorityBudget(searchParams: URLSearchParams): number | undefined 
 export async function GET(request: NextRequest, context: { params: Promise<{ departmentId: string }> }) {
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const dim = scopeDimensionsFromAccess(access);
 
     const { departmentId } = await context.params;
     if (!departmentId) return NextResponse.json({ error: "Missing department id" }, { status: 400 });
@@ -76,6 +81,14 @@ export async function GET(request: NextRequest, context: { params: Promise<{ dep
 
     const t0 = Date.now();
     try {
+        let recordScopeImpossible = false;
+        let recordScopeConstraints: import("@/lib/admin/accessScope").RecordScopeConstraints | null = null;
+        if (accessScopeRestrictsData(dim)) {
+            const c = await resolveRecordScopeConstraints(supabase, ctx.orgId, dim);
+            if (c.impossible) recordScopeImpossible = true;
+            else recordScopeConstraints = c;
+        }
+
         const limit = parseLimit(request.nextUrl.searchParams);
         const workUnitConcurrency = parseWuConcurrency(request.nextUrl.searchParams);
         const includePreviews = request.nextUrl.searchParams.get("include_previews") !== "false";
@@ -94,6 +107,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ dep
             focusQueueKey,
             priorityBudget,
             viewerDisplayTimeZone,
+            recordScopeImpossible,
+            recordScopeConstraints,
         });
         const ms = Date.now() - t0;
         if (ms > 400) {
