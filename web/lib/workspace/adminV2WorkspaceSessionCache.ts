@@ -7,7 +7,7 @@ import type { KPIVm } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceRootMetrics } from "@/components/admin/workspace/WorkspaceRootShell";
 import type { WorkspaceRootDepartmentRow, WorkspaceRootDeptTileStats } from "@/components/admin/workspace/WorkspaceRootDepartmentGrid";
 
-const SCHEMA_V = 3 as const;
+const SCHEMA_V = 4 as const;
 
 export type CachedWorkspaceRoot = {
     v: typeof SCHEMA_V;
@@ -33,14 +33,21 @@ export type CachedDepartmentPage = {
     summariesComplete: boolean;
 };
 
-function workspaceRootKey(orgId: string, principalUserId: string | null): string {
+function workspaceRootKey(orgId: string, principalUserId: string | null, accessScopeFingerprint: string): string {
     const u = (principalUserId ?? "").trim() || "__anon__";
-    return `alloy:v${SCHEMA_V}:admV2:ws:root:${orgId}:${u}`;
+    const fp = (accessScopeFingerprint ?? "").trim() || "scope:unknown";
+    return `alloy:v${SCHEMA_V}:admV2:ws:root:${orgId}:${u}:${fp}`;
 }
 
-function departmentPageKey(orgId: string, departmentId: string, principalUserId: string | null): string {
+function departmentPageKey(
+    orgId: string,
+    departmentId: string,
+    principalUserId: string | null,
+    accessScopeFingerprint: string
+): string {
     const u = (principalUserId ?? "").trim() || "__anon__";
-    return `alloy:v${SCHEMA_V}:admV2:ws:dept:${orgId}:${departmentId}:${u}`;
+    const fp = (accessScopeFingerprint ?? "").trim() || "scope:unknown";
+    return `alloy:v${SCHEMA_V}:admV2:ws:dept:${orgId}:${departmentId}:${u}:${fp}`;
 }
 
 function readJson(raw: string | null): unknown {
@@ -52,9 +59,14 @@ function readJson(raw: string | null): unknown {
     }
 }
 
-export function readWorkspaceRootCache(orgId: string | null, principalUserId: string | null): CachedWorkspaceRoot | null {
+export function readWorkspaceRootCache(
+    orgId: string | null,
+    principalUserId: string | null,
+    accessScopeFingerprint: string
+): CachedWorkspaceRoot | null {
     if (!orgId || typeof window === "undefined") return null;
-    const data = readJson(sessionStorage.getItem(workspaceRootKey(orgId, principalUserId)));
+    const fp = (accessScopeFingerprint ?? "").trim() || "scope:unknown";
+    const data = readJson(sessionStorage.getItem(workspaceRootKey(orgId, principalUserId, fp)));
     if (!data || typeof data !== "object") return null;
     const row = data as Partial<CachedWorkspaceRoot>;
     if (row.v !== SCHEMA_V || !Array.isArray(row.departments)) return null;
@@ -64,16 +76,18 @@ export function readWorkspaceRootCache(orgId: string | null, principalUserId: st
 export function writeWorkspaceRootCache(
     orgId: string | null,
     principalUserId: string | null,
+    accessScopeFingerprint: string,
     snapshot: WritableWorkspaceRootSnapshot
 ): void {
     if (!orgId || typeof window === "undefined") return;
+    const fp = (accessScopeFingerprint ?? "").trim() || "scope:unknown";
     try {
         const body: CachedWorkspaceRoot = {
             ...snapshot,
             v: SCHEMA_V,
             savedAtMs: Date.now(),
         };
-        sessionStorage.setItem(workspaceRootKey(orgId, principalUserId), JSON.stringify(body));
+        sessionStorage.setItem(workspaceRootKey(orgId, principalUserId, fp), JSON.stringify(body));
     } catch {
         /* quota / privacy mode */
     }
@@ -84,10 +98,12 @@ export type WritableDepartmentPageSnapshot = Omit<CachedDepartmentPage, "v" | "s
 export function readDepartmentPageCache(
     orgId: string | null,
     departmentId: string,
-    principalUserId: string | null
+    principalUserId: string | null,
+    accessScopeFingerprint: string
 ): CachedDepartmentPage | null {
     if (!orgId || !departmentId || typeof window === "undefined") return null;
-    const data = readJson(sessionStorage.getItem(departmentPageKey(orgId, departmentId, principalUserId)));
+    const fp = (accessScopeFingerprint ?? "").trim() || "scope:unknown";
+    const data = readJson(sessionStorage.getItem(departmentPageKey(orgId, departmentId, principalUserId, fp)));
     if (!data || typeof data !== "object") return null;
     const row = data as Partial<CachedDepartmentPage>;
     if (row.v !== SCHEMA_V || !row.dept?.id || !Array.isArray(row.workUnits)) return null;
@@ -97,25 +113,39 @@ export function readDepartmentPageCache(
 export function writeDepartmentPageCache(
     orgId: string | null,
     principalUserId: string | null,
+    accessScopeFingerprint: string,
     payload: WritableDepartmentPageSnapshot
 ): void {
     if (!orgId || !payload.dept?.id || typeof window === "undefined") return;
+    const fp = (accessScopeFingerprint ?? "").trim() || "scope:unknown";
     try {
         const body: CachedDepartmentPage = {
             ...payload,
             v: SCHEMA_V,
             savedAtMs: Date.now(),
         };
-        sessionStorage.setItem(departmentPageKey(orgId, payload.dept.id, principalUserId), JSON.stringify(body));
+        sessionStorage.setItem(departmentPageKey(orgId, payload.dept.id, principalUserId, fp), JSON.stringify(body));
     } catch {
         /* quota / privacy mode */
     }
 }
 
-export function invalidateAdminV2WorkspaceSessionCache(orgId: string | null, principalUserId: string | null = null): void {
+export function invalidateAdminV2WorkspaceSessionCache(
+    orgId: string | null,
+    principalUserId: string | null = null,
+    accessScopeFingerprint?: string | null
+): void {
     if (!orgId || typeof window === "undefined") return;
     try {
-        sessionStorage.removeItem(workspaceRootKey(orgId, principalUserId));
+        if (accessScopeFingerprint != null && String(accessScopeFingerprint).trim()) {
+            sessionStorage.removeItem(workspaceRootKey(orgId, principalUserId, String(accessScopeFingerprint).trim()));
+            return;
+        }
+        const prefix = `alloy:v${SCHEMA_V}:admV2:ws:root:${orgId}:`;
+        for (let i = sessionStorage.length - 1; i >= 0; i--) {
+            const k = sessionStorage.key(i);
+            if (k && k.startsWith(prefix)) sessionStorage.removeItem(k);
+        }
     } catch {
         /* ignore */
     }
@@ -124,12 +154,23 @@ export function invalidateAdminV2WorkspaceSessionCache(orgId: string | null, pri
 export function invalidateAdminV2DepartmentSessionCache(
     orgId: string | null,
     departmentId: string,
-    principalUserId: string | null = null
+    principalUserId: string | null = null,
+    accessScopeFingerprint?: string | null
 ): void {
     const did = (departmentId ?? "").trim();
     if (!orgId || !did || typeof window === "undefined") return;
     try {
-        sessionStorage.removeItem(departmentPageKey(orgId, did, principalUserId));
+        if (accessScopeFingerprint != null && String(accessScopeFingerprint).trim()) {
+            sessionStorage.removeItem(
+                departmentPageKey(orgId, did, principalUserId, String(accessScopeFingerprint).trim())
+            );
+            return;
+        }
+        const prefix = `alloy:v${SCHEMA_V}:admV2:ws:dept:${orgId}:${did}:`;
+        for (let i = sessionStorage.length - 1; i >= 0; i--) {
+            const k = sessionStorage.key(i);
+            if (k && k.startsWith(prefix)) sessionStorage.removeItem(k);
+        }
     } catch {
         /* ignore */
     }

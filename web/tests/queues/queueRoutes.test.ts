@@ -103,6 +103,91 @@ describe("Queue API routes (thin wrappers)", () => {
         expect(Array.isArray(j.queues)).toBe(true);
     });
 
+    it("GET /api/admin/work-units/[id]/queues passes record scope into QueueService (never omits for scoped callers)", async () => {
+        vi.resetModules();
+        const getSummaries = vi.fn(async () => ({
+            queues: [{ key: "needs_attention", label: "NA", entity_type: "opportunity", priority: "critical", display: "list", count: 2, preview: [] }],
+            work_unit_scope_total: 2,
+            work_unit_scope_queue_key: "pipeline_total",
+        }));
+        vi.doMock("@/lib/queues/QueueService", () => ({
+            QueueServiceError: class QueueServiceError extends Error {
+                status: number;
+                code: string;
+                constructor(m: string, s: number, c: string) {
+                    super(m);
+                    this.status = s;
+                    this.code = c;
+                }
+            },
+            getWorkUnitQueueSummaries: getSummaries,
+        }));
+
+        mockGetAdminAccessContext.mockResolvedValue({
+            ok: true,
+            userId: "u1",
+            orgId: "org1",
+            roleKeys: ["school_director"],
+            permissionKeys: [],
+            departmentScope: "all",
+            allowedDepartmentIds: null,
+            siteScope: "restricted",
+            allowedSiteLocationIds: ["site-south"],
+        });
+
+        mockCreateAdminClient.mockReturnValue({
+            from: vi.fn((table: string) => {
+                if (table === "work_units") {
+                    return {
+                        select: vi.fn(() => ({
+                            eq: vi.fn(() => ({
+                                eq: vi.fn(() => ({
+                                    maybeSingle: vi.fn().mockResolvedValue({ data: { id: "wu1" }, error: null }),
+                                })),
+                            })),
+                        })),
+                    };
+                }
+                if (table === "locations") {
+                    return {
+                        select: vi.fn(() => ({
+                            eq: vi.fn(() => ({
+                                in: vi.fn().mockResolvedValue({ data: [], error: null }),
+                            })),
+                        })),
+                    };
+                }
+                return {
+                    select: vi.fn(() => ({
+                        eq: vi.fn(() => ({
+                            maybeSingle: vi.fn().mockResolvedValue({
+                                data:
+                                    table === "user_profiles"
+                                        ? { timezone: "America/Los_Angeles" }
+                                        : { metadata: { timezone: "America/Los_Angeles" } },
+                                error: null,
+                            }),
+                        })),
+                    })),
+                };
+            }),
+        });
+
+        const { GET } = await import("@/app/api/admin/work-units/[id]/queues/route");
+        const req = new NextRequest("http://localhost/api/admin/work-units/wu1/queues");
+        const res = await GET(req, { params: Promise.resolve({ id: "wu1" }) });
+        expect(res.status).toBe(200);
+        expect(getSummaries).toHaveBeenCalledWith(
+            expect.objectContaining({
+                workUnitId: "wu1",
+                recordScopeImpossible: false,
+                recordScopeConstraints: expect.objectContaining({
+                    locationIds: expect.arrayContaining(["site-south"]),
+                }),
+            })
+        );
+    });
+
     it("GET /api/admin/queues/[workUnitId]/[queueKey] caps limit at 100", async () => {
         const getItems = vi.fn(async (p: any) => ({
             result: {

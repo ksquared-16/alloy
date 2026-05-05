@@ -12,6 +12,20 @@ export type AdminAccessScopeDimensions = Pick<
     "departmentScope" | "allowedDepartmentIds" | "siteScope" | "allowedSiteLocationIds"
 >;
 
+/**
+ * Stable string for client session cache keys — distinguishes corp vs restricted (site/dept) snapshots for the same principal.
+ * Not a security boundary; server routes still enforce scope.
+ */
+export function buildAccessScopeCacheFingerprint(dim: AdminAccessScopeDimensions): string {
+    const deptPart =
+        dim.departmentScope === "all"
+            ? "dept:all"
+            : `dept:r:${[...(dim.allowedDepartmentIds ?? [])].map(String).sort().join("|")}`;
+    const sitePart =
+        dim.siteScope === "all" ? "site:all" : `site:r:${[...(dim.allowedSiteLocationIds ?? [])].map(String).sort().join("|")}`;
+    return `${deptPart};${sitePart}`;
+}
+
 export function scopeDimensionsFromAccess(access: AdminAccessContextSuccess): AdminAccessScopeDimensions {
     return {
         departmentScope: access.departmentScope,

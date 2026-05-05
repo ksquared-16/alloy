@@ -1,5 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import {
+    accessScopeRestrictsData,
+    departmentIdAllowed,
+    fetchWorkUnitDepartmentId,
+    resolveRecordScopeConstraints,
+    scopeDimensionsFromAccess,
+} from "@/lib/admin/accessScope";
+import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { fetchEffectiveUserDisplayTimezone } from "@/lib/admin/timezoneContract";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getWorkUnitQueueSummaries, QueueServiceError } from "@/lib/queues/QueueService";
@@ -46,6 +55,10 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
 
+    const access = await getAdminAccessContextCached();
+    if (!access.ok) return adminContextFailureResponse(access);
+    const dim = scopeDimensionsFromAccess(access);
+
     const supabase = createAdminClient();
     const viewerDisplayTimeZone = await fetchEffectiveUserDisplayTimezone(supabase, {
         orgId: ctx.orgId,
@@ -54,6 +67,26 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
 
     const { id } = await context.params;
     if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
+
+    const wuOk = await assertRowOrg(supabase, "work_units", id, ctx.orgId);
+    if (!wuOk.ok) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    if (accessScopeRestrictsData(dim) && dim.departmentScope === "restricted") {
+        const deptId = await fetchWorkUnitDepartmentId(supabase, ctx.orgId, id);
+        if (!departmentIdAllowed(dim, deptId)) {
+            return NextResponse.json({ error: "Not found" }, { status: 404 });
+        }
+    }
+
+    let recordScopeImpossible = false;
+    let recordScopeConstraints: import("@/lib/admin/accessScope").RecordScopeConstraints | null = null;
+    if (accessScopeRestrictsData(dim)) {
+        const c = await resolveRecordScopeConstraints(supabase, ctx.orgId, dim);
+        if (c.impossible) recordScopeImpossible = true;
+        else recordScopeConstraints = c;
+    }
 
     const t0 = Date.now();
     try {
@@ -89,6 +122,8 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
             priorityBudget,
             partialQueueKeys: effectiveSummaryMode === "partial" ? onlyQueueKeys : undefined,
             viewerDisplayTimeZone,
+            recordScopeImpossible,
+            recordScopeConstraints,
         });
         const ms = Date.now() - t0;
         if (ms > 150) {

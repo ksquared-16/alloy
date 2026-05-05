@@ -186,7 +186,7 @@ async function loadWorkspaceRollup(
  * Departments load from GET /api/admin/departments (real org rows; no redirect).
  */
 export default function AdminV2WorkspaceIndexPage() {
-    const { orgName: orgNameFromContext, orgId, principalUserId } = useWorkspaceOrg();
+    const { orgName: orgNameFromContext, orgId, principalUserId, accessScopeFingerprint } = useWorkspaceOrg();
     const hydratedCacheRef = useRef(false);
     const [departments, setDepartments] = useState<WorkspaceRootDepartmentRow[]>([]);
     const [loading, setLoading] = useState(true);
@@ -204,7 +204,7 @@ export default function AdminV2WorkspaceIndexPage() {
     /** Session cache hydrate before paint — avoids revisit blank shell when SSR showed the route loader momentarily. */
     useLayoutEffect(() => {
         hydratedCacheRef.current = false;
-        const hit = readWorkspaceRootCache(orgId, principalUserId);
+        const hit = readWorkspaceRootCache(orgId, principalUserId, accessScopeFingerprint);
         if (!hit?.departments?.length) return;
         hydratedCacheRef.current = true;
         setDepartments(hit.departments);
@@ -223,7 +223,7 @@ export default function AdminV2WorkspaceIndexPage() {
             org_id: orgId,
             client_cache_hit: true,
         });
-    }, [orgId, principalUserId]);
+    }, [orgId, principalUserId, accessScopeFingerprint]);
 
     useEffect(() => {
         /** Network revalidation always runs — only show full skeleton when nothing was seeded from cache. */
@@ -288,7 +288,7 @@ export default function AdminV2WorkspaceIndexPage() {
                         setWorkspaceKpiStrip(undefined);
                         setWorkspaceKpiPlacementPending(true);
                         setWorkspaceRollupRefined(false);
-                        writeWorkspaceRootCache(orgId, principalUserId, {
+                        writeWorkspaceRootCache(orgId, principalUserId, accessScopeFingerprint, {
                             departments: active,
                             deptTileStats: quick.deptTileStats,
                             metrics: quick.metrics,
@@ -299,8 +299,8 @@ export default function AdminV2WorkspaceIndexPage() {
                         });
                     } else {
                         /** Silent revalidate — keep KPI cells stable until refined rollup + placements finish. */
-                        const preserved = readWorkspaceRootCache(orgId, principalUserId);
-                        writeWorkspaceRootCache(orgId, principalUserId, {
+                        const preserved = readWorkspaceRootCache(orgId, principalUserId, accessScopeFingerprint);
+                        writeWorkspaceRootCache(orgId, principalUserId, accessScopeFingerprint, {
                             departments: active,
                             deptTileStats: quick.deptTileStats,
                             metrics: quick.metrics,
@@ -330,7 +330,7 @@ export default function AdminV2WorkspaceIndexPage() {
                                 ...m,
                                 departments: active.length,
                             };
-                            writeWorkspaceRootCache(orgId, principalUserId, {
+                            writeWorkspaceRootCache(orgId, principalUserId, accessScopeFingerprint, {
                                 departments: active,
                                 deptTileStats: stats,
                                 metrics: m,
@@ -375,7 +375,7 @@ export default function AdminV2WorkspaceIndexPage() {
                                     if (applyResults) {
                                         setWorkspaceKpiStrip(placementStrip);
                                         setWorkspaceKpiPlacementPending(false);
-                                        writeWorkspaceRootCache(orgId, principalUserId, {
+                                        writeWorkspaceRootCache(orgId, principalUserId, accessScopeFingerprint, {
                                             departments: active,
                                             deptTileStats: stats,
                                             metrics: metricsForPlacement,
@@ -434,7 +434,7 @@ export default function AdminV2WorkspaceIndexPage() {
         return () => {
             applyResults = false;
         };
-    }, [orgId, principalUserId]);
+    }, [orgId, principalUserId, accessScopeFingerprint]);
 
     const metricsResolved = useMemo(() => {
         if (!metrics) return null;

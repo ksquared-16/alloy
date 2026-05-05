@@ -7,6 +7,7 @@ import { useSearchParams } from "next/navigation";
 import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import WorkUnitWorkspace from "@/app/adminV2/components/workspace/shells/WorkUnitWorkspace";
 import { AutomationWorkflowsBlock } from "@/app/adminV2/components/workspace/blocks/AutomationWorkflowsBlock";
+import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import { AdminV2RouteLoadingState } from "@/components/admin/workspace/AdminV2RouteLoadingState";
@@ -61,7 +62,7 @@ import {
 } from "@/lib/workspace/workUnitQueueDerived";
 import { isEnrollmentLikeDepartmentKey } from "@/lib/workspace/enrollmentDepartmentKey";
 import {
-    deleteQueueRowCacheKeysForPrefix,
+    deleteQueueRowCacheKeysForWorkUnit,
     logQueueRowClientCache,
     peekFreshQueueRowCache,
     putQueueRowCache,
@@ -287,6 +288,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const workUnitId = workspaceRouteParam(params.workUnitId);
     const searchParams = useSearchParams();
     const router = useRouter();
+    const { accessScopeFingerprint } = useWorkspaceOrg();
     const { openDrawer } = useAdminDrawer();
     const viewerTz = useAdminViewerTimezone();
 
@@ -712,7 +714,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             void _summaries;
             const fetchSig = `${workUnitId}|${queueKey}|omit`;
             const logicalUm = options?.logicalUnmapped ?? unmappedOnly;
-            const logicalKey = queueRowLogicalCacheKey(workUnitId, queueKey, logicalUm);
+            const logicalKey = queueRowLogicalCacheKey(accessScopeFingerprint, workUnitId, queueKey, logicalUm);
             const qs = new URLSearchParams({
                 limit: "20",
                 offset: "0",
@@ -723,8 +725,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
             const cache = queueRowClientCacheRef.current;
 
             if (options?.force) {
-                cache.delete(queueRowLogicalCacheKey(workUnitId, queueKey, false));
-                cache.delete(queueRowLogicalCacheKey(workUnitId, queueKey, true));
+                cache.delete(queueRowLogicalCacheKey(accessScopeFingerprint, workUnitId, queueKey, false));
+                cache.delete(queueRowLogicalCacheKey(accessScopeFingerprint, workUnitId, queueKey, true));
             }
 
             if (!options?.force && !options?.prefetchOnly && !options?.quietStaleRefresh) {
@@ -794,18 +796,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 const stillSelected =
                     selectedQueueKeyRef.current === queueKey && unmappedOnlyRef.current === logicalUm;
                 if (options?.prefetchOnly) {
-                    putQueueRowCache(cache, workUnitId, queueKey, payload);
+                    putQueueRowCache(cache, accessScopeFingerprint, workUnitId, queueKey, payload);
                     return;
                 }
                 if (options?.quietStaleRefresh) {
                     if (seq === queueItemsRequestSeq.current && stillSelected) {
-                        putQueueRowCache(cache, workUnitId, queueKey, payload);
+                        putQueueRowCache(cache, accessScopeFingerprint, workUnitId, queueKey, payload);
                         setQueueItems(payload);
                     }
                     return;
                 }
                 if (seq === queueItemsRequestSeq.current) {
-                    putQueueRowCache(cache, workUnitId, queueKey, payload);
+                    putQueueRowCache(cache, accessScopeFingerprint, workUnitId, queueKey, payload);
                     setQueueItems(payload);
                     if (pendingQueueTabPerfRef.current && typeof window !== "undefined" && typeof performance !== "undefined") {
                         pendingQueueTabPerfRef.current = false;
@@ -915,7 +917,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 }
             }
         },
-        [requestWorkUnitDeferredSupplement, markFirstUsefulPaintOnce, unmappedOnly]
+        [requestWorkUnitDeferredSupplement, markFirstUsefulPaintOnce, unmappedOnly, accessScopeFingerprint]
     );
 
     const fetchQueueSummaries = useCallback(async (wuId: string, focusQueueKey: string | null) => {
@@ -1328,7 +1330,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         (opts?: { entity_type?: string; entity_id?: string; action_key?: string }) => {
             void opts;
             if (!workUnitId || !selectedQueueKey) return;
-            deleteQueueRowCacheKeysForPrefix(queueRowClientCacheRef.current, workUnitId);
+            deleteQueueRowCacheKeysForWorkUnit(queueRowClientCacheRef.current, accessScopeFingerprint, workUnitId);
             void Promise.all([
                 fetchQueueItems(workUnitId, selectedQueueKey, queueSummaries, { force: true }),
                 fetchQueueSummaries(workUnitId, selectedQueueKey),
@@ -1344,7 +1346,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         if (!workUnitId || !selectedQueueKey) return;
         const onUpdated = (_ev: Event) => {
             const summaries = queueSummariesRef.current;
-            deleteQueueRowCacheKeysForPrefix(queueRowClientCacheRef.current, workUnitId);
+            deleteQueueRowCacheKeysForWorkUnit(queueRowClientCacheRef.current, accessScopeFingerprint, workUnitId);
             void Promise.all([
                 fetchQueueItems(workUnitId, selectedQueueKey, summaries, { force: true }),
                 fetchQueueSummaries(workUnitId, selectedQueueKey),

@@ -15,18 +15,32 @@ export type QueueRowClientCacheBucket<TPayload> = {
 
 export type QueueRowClientCacheEvent = "hit" | "miss" | "prefetch" | "stale_refresh";
 
-/** `${workUnitId}:${queueKey}:${unmappedOnly ? "unmapped" : "all"}` */
-export function queueRowLogicalCacheKey(workUnitId: string, queueKey: string, unmappedOnly: boolean): string {
-    return `${workUnitId}:${queueKey}:${unmappedOnly ? "unmapped" : "all"}`;
+/** `${fingerprint}:${workUnitId}:${queueKey}:${unmappedOnly ? "unmapped" : "all"}` */
+export function queueRowLogicalCacheKey(
+    accessScopeFingerprint: string,
+    workUnitId: string,
+    queueKey: string,
+    unmappedOnly: boolean
+): string {
+    const fp = (accessScopeFingerprint ?? "").trim() || "scope:unknown";
+    return `${fp}:${workUnitId}:${queueKey}:${unmappedOnly ? "unmapped" : "all"}`;
 }
 
-export function queueRowPrefetchLogicalKeys(workUnitId: string, queueKey: string): [string, string] {
-    return [queueRowLogicalCacheKey(workUnitId, queueKey, false), queueRowLogicalCacheKey(workUnitId, queueKey, true)];
+export function queueRowPrefetchLogicalKeys(
+    accessScopeFingerprint: string,
+    workUnitId: string,
+    queueKey: string
+): [string, string] {
+    return [
+        queueRowLogicalCacheKey(accessScopeFingerprint, workUnitId, queueKey, false),
+        queueRowLogicalCacheKey(accessScopeFingerprint, workUnitId, queueKey, true),
+    ];
 }
 
 /** Store one network payload under both mapped/unmapped logical keys (same GET). */
 export function putQueueRowCache<TPayload>(
     map: Map<string, QueueRowClientCacheBucket<TPayload>>,
+    accessScopeFingerprint: string,
     workUnitId: string,
     queueKey: string,
     payload: TPayload
@@ -35,7 +49,7 @@ export function putQueueRowCache<TPayload>(
         payload,
         fetchedAt: Date.now(),
     };
-    for (const k of queueRowPrefetchLogicalKeys(workUnitId, queueKey)) {
+    for (const k of queueRowPrefetchLogicalKeys(accessScopeFingerprint, workUnitId, queueKey)) {
         map.set(k, ent);
     }
 }
@@ -62,8 +76,14 @@ export function shouldStaleBackgroundRefresh(
     return age >= STALE_REFRESH_AFTER_MS && age < ttlMs;
 }
 
-export function deleteQueueRowCacheKeysForPrefix(map: Map<string, unknown>, workUnitIdPrefix: string): number {
-    const p = `${workUnitIdPrefix}:`;
+/** Invalidate cached rows for one work unit within the current access scope fingerprint. */
+export function deleteQueueRowCacheKeysForWorkUnit(
+    map: Map<string, unknown>,
+    accessScopeFingerprint: string,
+    workUnitId: string
+): number {
+    const fp = (accessScopeFingerprint ?? "").trim() || "scope:unknown";
+    const p = `${fp}:${workUnitId}:`;
     let n = 0;
     for (const k of [...map.keys()]) {
         if (k.startsWith(p)) {

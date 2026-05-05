@@ -23,6 +23,8 @@ interface AdminV2WorkspaceClientProvidersProps {
   orgName?: string | null;
   /** Server-resolved organization id for admin session cache scope. */
   orgId?: string | null;
+  /** Dept/site scope fingerprint — isolates sessionStorage snapshots when access narrows. */
+  accessScopeFingerprint: string;
   /** Server-resolved user → org → UTC display timezone. */
   initialViewerTimezone?: AdminViewerTimezoneValue;
   /** Org operational IANA for schedule defaults. */
@@ -37,6 +39,7 @@ export default function AdminV2WorkspaceClientProviders({
   initialEntityLabels,
   orgName = null,
   orgId = null,
+  accessScopeFingerprint,
   initialViewerTimezone,
   initialOperationalTimezoneIana,
 }: AdminV2WorkspaceClientProvidersProps) {
@@ -66,7 +69,12 @@ export default function AdminV2WorkspaceClientProviders({
         <EntityLabelsProvider initialLabels={labels}>
           <AdminOrgOperationalTimezoneProvider iana={operationalTz}>
             <AdminViewerTimezoneProvider value={tzValue}>
-              <WorkspaceOrgProvider orgName={orgName} orgId={orgId} principalUserId={principalUserId}>
+              <WorkspaceOrgProvider
+                orgName={orgName}
+                orgId={orgId}
+                principalUserId={principalUserId}
+                accessScopeFingerprint={accessScopeFingerprint}
+              >
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                   <AdminDrawerProvider>
                     <div

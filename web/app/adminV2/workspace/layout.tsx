@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { getAdminAuth } from "@/lib/adminAuth";
 import { getAdminOrgIdForUser } from "@/lib/admin/entityLabelsServer";
 import { createAdminClient } from "@/lib/supabaseAdmin";
+import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
+import { buildAccessScopeCacheFingerprint, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import AdminV2WorkspaceClientProviders from "./AdminV2WorkspaceClientProviders";
 import type { AdminViewerTimezoneValue } from "@/contexts/AdminViewerTimezoneContext";
 import { loadAdminViewerTimezoneBootstrap } from "@/lib/admin/viewerTimezoneBootstrap";
@@ -61,6 +63,12 @@ export default async function AdminV2WorkspaceLayout({
     });
   }
 
+  const access = await getAdminAccessContextCached();
+  if (!access.ok) {
+    redirect("/unauthorized");
+  }
+  const accessScopeFingerprint = buildAccessScopeCacheFingerprint(scopeDimensionsFromAccess(access));
+
   return (
     <AdminV2WorkspaceClientProviders
       userEmail={typeof auth.user.email === "string" && auth.user.email ? auth.user.email : "Unknown"}
@@ -68,6 +76,7 @@ export default async function AdminV2WorkspaceLayout({
       role={auth.role}
       orgName={orgName}
       orgId={orgId}
+      accessScopeFingerprint={accessScopeFingerprint}
       initialViewerTimezone={viewerTimezone}
       initialOperationalTimezoneIana={operationalTimezoneIana}
     >

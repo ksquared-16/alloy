@@ -90,7 +90,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
     const params = useParams();
     const router = useRouter();
     const { openDrawer } = useAdminDrawer();
-    const { orgId, principalUserId } = useWorkspaceOrg();
+    const { orgId, principalUserId, accessScopeFingerprint } = useWorkspaceOrg();
     const departmentId = workspaceRouteParam(params.departmentId);
 
     /** True when layout applied readDepartmentPageCache for this dept (mirrors workspace root seeded shell). */
@@ -137,13 +137,14 @@ export default function AdminV2WorkspaceDepartmentPage() {
         deptActionsPerfKeyRef.current = null;
         deptKpisPerfKeyRef.current = null;
         if (!departmentId || !orgId) return;
-        const hit = readDepartmentPageCache(orgId, departmentId, principalUserId);
+        const hit = readDepartmentPageCache(orgId, departmentId, principalUserId, accessScopeFingerprint);
         if (!hit || hit.dept.id !== departmentId) return;
         seededDeptShellRef.current = true;
         setDept(hit.dept);
         setDeptWorkUnits(hit.workUnits);
-        setDeptWorkUnitSummaries(hit.workUnitSummaries ?? {});
-        setDeptQueueSummariesLoading(hit.summariesComplete ? false : true);
+        /** Never hydrate numeric summaries from sessionStorage — avoids stale org-wide counts when scope narrows. */
+        setDeptWorkUnitSummaries({});
+        setDeptQueueSummariesLoading(true);
         setDeptQueueSummariesError(null);
         setDeptLoading(false);
         perfDeptLoad({
@@ -154,7 +155,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
             department_id: departmentId,
             client_cache_hit: true,
         });
-    }, [departmentId, orgId, principalUserId]);
+    }, [departmentId, orgId, principalUserId, accessScopeFingerprint]);
 
     /** Workflow KPIs deferred until department shell geometry has committed — off the navigation critical path. */
     useEffect(() => {
@@ -227,14 +228,12 @@ export default function AdminV2WorkspaceDepartmentPage() {
         deptKpisPerfKeyRef.current = null;
         const tAnchor =
             typeof performance !== "undefined" && typeof window !== "undefined" ? performance.now() : 0;
-        const seedSnap = seededDeptShellRef.current ? readDepartmentPageCache(orgId, departmentId, principalUserId) : null;
-
         if (!seededDeptShellRef.current) {
             setDeptLoading(true);
         }
         setDeptError(null);
         setDeptWorkUnitsError(null);
-        setDeptQueueSummariesLoading(seedSnap ? !seedSnap.summariesComplete : true);
+        setDeptQueueSummariesLoading(true);
         setDeptQueueSummariesError(null);
 
         const summariesRoute = `/api/admin/departments/${encodeURIComponent(departmentId)}/work-unit-queue-summaries?include_previews=false&count_mode=exact&summary_mode=priority&priority_budget=5`;
@@ -320,7 +319,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 });
 
                 if (orgId && deptCommit) {
-                    writeDepartmentPageCache(orgId, principalUserId, {
+                    writeDepartmentPageCache(orgId, principalUserId, accessScopeFingerprint, {
                         dept: deptCommit,
                         workUnits: wuCommit,
                         workUnitSummaries: nextSummaries,
@@ -391,19 +390,12 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     setDeptWorkUnitsError(null);
                 }
 
-                const cachedMidFetch = seededDeptShellRef.current
-                    ? readDepartmentPageCache(orgId, departmentId, principalUserId)
-                    : null;
                 if (orgId && deptCommit) {
-                    writeDepartmentPageCache(orgId, principalUserId, {
+                    writeDepartmentPageCache(orgId, principalUserId, accessScopeFingerprint, {
                         dept: deptCommit,
                         workUnits: wuCommit,
-                        workUnitSummaries:
-                            cachedMidFetch?.summariesComplete && cachedMidFetch.dept.id === departmentId ?
-                                cachedMidFetch.workUnitSummaries
-                            :   {},
-                        summariesComplete:
-                            !!(cachedMidFetch?.summariesComplete && cachedMidFetch.dept.id === departmentId),
+                        workUnitSummaries: {},
+                        summariesComplete: false,
                     });
                 }
 
@@ -444,7 +436,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
         return () => {
             cancelled = true;
         };
-    }, [departmentId, orgId, principalUserId]);
+    }, [departmentId, orgId, principalUserId, accessScopeFingerprint]);
 
     useEffect(() => {
         if (!departmentId) return;
@@ -499,7 +491,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
         return () => {
             cancelled = true;
         };
-    }, [departmentId, orgId, principalUserId]);
+    }, [departmentId, orgId, principalUserId, accessScopeFingerprint]);
 
     const departmentPageBlockingLoad = useMemo(() => {
         if (!departmentId) return false;

@@ -1,33 +1,38 @@
 import { describe, expect, it } from "vitest";
 import {
-    deleteQueueRowCacheKeysForPrefix,
+    deleteQueueRowCacheKeysForWorkUnit,
     peekFreshQueueRowCache,
     putQueueRowCache,
     queueRowLogicalCacheKey,
 } from "@/lib/workspace/queueRowClientCache";
 
+const FP = "dept:all;site:all";
+
 describe("queueRowClientCache", () => {
-    it("logical key encodes unmapped flag", () => {
-        expect(queueRowLogicalCacheKey("wu1", "q1", false)).toBe("wu1:q1:all");
-        expect(queueRowLogicalCacheKey("wu1", "q1", true)).toBe("wu1:q1:unmapped");
+    it("logical key encodes scope fingerprint and unmapped flag", () => {
+        expect(queueRowLogicalCacheKey(FP, "wu1", "q1", false)).toBe(`${FP}:wu1:q1:all`);
+        expect(queueRowLogicalCacheKey(FP, "wu1", "q1", true)).toBe(`${FP}:wu1:q1:unmapped`);
     });
 
     it("put stores payload under both all and unmapped logical keys", () => {
         const m = new Map<string, { payload: { n: number }; fetchedAt: number }>();
-        putQueueRowCache(m, "wu1", "q1", { n: 1 });
+        putQueueRowCache(m, FP, "wu1", "q1", { n: 1 });
         const longTtl = 9_000_000;
-        expect(peekFreshQueueRowCache(m, "wu1:q1:all", longTtl)?.payload).toEqual({ n: 1 });
-        expect(peekFreshQueueRowCache(m, "wu1:q1:unmapped", longTtl)?.payload).toEqual({ n: 1 });
+        expect(peekFreshQueueRowCache(m, `${FP}:wu1:q1:all`, longTtl)?.payload).toEqual({ n: 1 });
+        expect(peekFreshQueueRowCache(m, `${FP}:wu1:q1:unmapped`, longTtl)?.payload).toEqual({ n: 1 });
     });
 
-    it("deleteQueueRowCacheKeysForPrefix removes only matching work unit prefix", () => {
+    it("deleteQueueRowCacheKeysForWorkUnit removes only matching scope + work unit prefix", () => {
         const m = new Map<string, { payload: object; fetchedAt: number }>();
-        putQueueRowCache(m, "wu1", "a", {});
-        putQueueRowCache(m, "wu2", "b", {});
-        const n = deleteQueueRowCacheKeysForPrefix(m, "wu1");
+        putQueueRowCache(m, FP, "wu1", "a", {});
+        putQueueRowCache(m, FP, "wu2", "b", {});
+        const otherFp = "dept:r:x;site:all";
+        putQueueRowCache(m, otherFp, "wu1", "c", {});
+        const n = deleteQueueRowCacheKeysForWorkUnit(m, FP, "wu1");
         expect(n).toBeGreaterThan(0);
         const longTtl = 9_000_000;
-        expect(peekFreshQueueRowCache(m, "wu1:a:all", longTtl)).toBeNull();
-        expect(peekFreshQueueRowCache(m, "wu2:b:all", longTtl)?.payload).toEqual({});
+        expect(peekFreshQueueRowCache(m, `${FP}:wu1:a:all`, longTtl)).toBeNull();
+        expect(peekFreshQueueRowCache(m, `${FP}:wu2:b:all`, longTtl)?.payload).toEqual({});
+        expect(peekFreshQueueRowCache(m, `${otherFp}:wu1:c:all`, longTtl)?.payload).toEqual({});
     });
 });

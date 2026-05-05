@@ -1497,6 +1497,8 @@ export async function getWorkUnitQueueSummaries(params: {
     viewerDisplayTimeZone?: QueueViewerTimezoneMeta;
     /** Site/department filters for job & opportunity queue rows (admin access scope). */
     recordScopeConstraints?: RecordScopeConstraints | null;
+    /** Restricted viewer scope could not resolve any rows — return zeroed summaries (never org-wide). */
+    recordScopeImpossible?: boolean;
 }): Promise<WorkUnitQueueSummariesResult> {
     const includePreviews = params.includePreviews !== false;
     const countSel = queueCountSelect(params.countAccuracy);
@@ -1517,6 +1519,24 @@ export async function getWorkUnitQueueSummaries(params: {
     ]);
     const loadDefMs = Date.now() - tParallelBoot0;
     assertSupportedEntityType(def);
+
+    if (params.recordScopeImpossible === true) {
+        const et = def.entity_type === "job" ? "job" : "opportunity";
+        const summaries: QueueSummary[] = def.queues.map((q) => ({
+            key: q.key,
+            label: q.label,
+            description: q.description,
+            entity_type: et,
+            priority: q.priority ?? "standard",
+            display: q.display ?? "list",
+            count: 0,
+            preview: [],
+        }));
+        const scopeMeta = workUnitScopeTotalFromSummaries(def, summaries);
+        const totalMsImp = Date.now() - tW0;
+        console.log("[queue-opt]", { phase: "summary_impossible", duration_ms: totalMsImp, work_unit_id: params.workUnitId });
+        return { queues: summaries, ...scopeMeta, ...viewerTimeZonePayload };
+    }
 
     const previewLimit = clampLimit(params.limit ?? 3, 1, 10);
 
@@ -1971,7 +1991,8 @@ export async function getDepartmentWorkUnitQueueSummaries(params: {
                     priorityBudget,
                     sharedBootstrap,
                     viewerDisplayTimeZone: params.viewerDisplayTimeZone,
-                    recordScopeConstraints: recordScopeImpossible ? null : recordScopeConstraints,
+                    recordScopeImpossible,
+                    recordScopeConstraints,
                 });
                 const ms = Date.now() - tWu0;
                 console.warn("[queue-perf] getDepartmentWorkUnitQueueSummaries work_unit", {
