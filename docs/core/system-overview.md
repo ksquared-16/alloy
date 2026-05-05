@@ -7,7 +7,8 @@ Orient engineers and AI agents to how Alloy is structured today: org-scoped mult
 ## Current state
 
 - Primary app surface is **Next.js** under `web/` with **Supabase** (Postgres + RLS) as the backing store.
-- Every tenant operation is scoped by **`org_id`** (directly on rows or verified through FKs in admin APIs). **CRM admin** routes additionally enforce **department** and **site** visibility via **`getAdminAccessContextCached`** (`user_access_profiles`, `user_department_access`, `user_site_access`) — see **`docs/system/configuration-system.md`** and **`web/lib/admin/accessScope.ts`**.
+- Every tenant operation is scoped by **`org_id`** (directly on rows or verified through FKs in admin APIs). **CRM admin** routes additionally enforce **department** and **site** visibility via **`getAdminAccessContextCached`** (`user_access_profiles`, `user_department_access`, `user_site_access`) — see **`docs/system/roles-and-permissions.md`**, **`docs/system/configuration-system.md`**, and **`web/lib/admin/accessScope.ts`**.
+- **Communications V1** (canonical threads/messages, entity-scoped UI, provider webhooks, backend dispatcher) is summarized under **`docs/product/crm-system.md`** — not a separate topic file.
 - **Human identity:** **`persons`** + **`customer_persons`** are the canonical model in code for CRM/booking writes; **`contacts`** remain for compatibility (messaging, documents, workflows, aged rows). Opportunity identity normalization is centralized in **`web/lib/opportunityIdentity.ts`**.
 - Side effects that matter for business state are **intended** to run through **events**, **workflows**, and **admin actions**; high-risk gaps and exceptions are tracked in **`docs/audits/event-integrity-audit.md`** (not assumed fully closed until that audit says so).
 
@@ -38,7 +39,7 @@ Aligned with platform intent; if code disagrees, fix code **or** update docs in 
 | Admin action router | `web/lib/admin/actions/executeAdminAction.ts` |
 | Example event + workflow fan-out | `web/app/api/action/[token]/consume/route.ts` |
 | Org-scoped admin context | `web/lib/admin/getAdminContext.ts` |
-| CRM scope dimensions (dept/site) | `web/lib/admin/getAdminAccessContext.ts`, `web/lib/admin/resolveAdminAccessCore.ts`, `web/lib/admin/accessScope.ts` |
+| CRM scope + capabilities | `docs/system/roles-and-permissions.md`; `web/lib/admin/getAdminAccessContext.ts`, `web/lib/admin/resolveAdminAccessCore.ts`, `web/lib/admin/accessScope.ts` |
 | Identity/linking helpers | `web/lib/bookingCustomerPersonLink.ts`, `web/lib/bookingPersonCustomerResolve.ts`, `web/lib/opportunityIdentity.ts` |
 
 ## Guardrails

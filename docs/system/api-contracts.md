@@ -7,7 +7,7 @@ High-level map of **server boundaries** for admin, public booking, and action li
 ## Current state
 
 - **Next.js route handlers** under `web/app/api/**` implement REST-ish JSON endpoints.
-- **Admin** routes generally require auth + org context via **`getAdminContextCached`** / **`loadAdminAccessBundleCached`** / `createAdminClient`. Full scope dimensions (departments/sites, permission union) resolve through **`getAdminAccessContextCached`** (`web/lib/admin/getAdminAccessContext.ts`); **list/read/mutation routes apply scope helpers** — restricted callers receive empty lists or **404** on out-of-scope single-record targets (deny-by-default).
+- **Admin** routes generally require auth + org context via **`getAdminContextCached`** / **`loadAdminAccessBundleCached`** / `createAdminClient`. Capability vs visibility model: **`docs/system/roles-and-permissions.md`**. Full scope dimensions (departments/sites, permission union) resolve through **`getAdminAccessContextCached`** (`web/lib/admin/getAdminAccessContext.ts`); **list/read/mutation routes apply scope helpers** — restricted callers receive empty lists or **404** on out-of-scope single-record targets (deny-by-default).
 - **Public/booking** routes use their own validation (e.g. book-v2 flow) and may reference `ALLOY_PUBLIC_ORG_ID` where applicable.
 
 ## How it works (representative)
@@ -18,7 +18,10 @@ High-level map of **server boundaries** for admin, public booking, and action li
 | Admin actions | `POST` paths delegated to `executeAdminAction` | Check router module for exact URLs |
 | Workflows | `web/app/api/admin/workflows/[id]/run/route.ts` | Executes/runs workflows (admin) |
 | Action links | `web/app/api/action/[token]/consume/route.ts`, `action-links/*` | Emit events → workflows |
-| Communications | `web/app/api/admin/communications/*` | Threads, send, unread, etc. |
+| Communications (admin) | `web/app/api/admin/communications/*` | Threads, send, unread, bindings |
+| Webhooks (delivery / lifecycle) | `POST /api/webhooks/twilio/sms-status`, `POST /api/webhooks/resend` | Twilio status callback (signed), Resend lifecycle (Svix); public routes, provider-authenticated |
+| Message dequeue (worker) | Python **`POST /internal/messages/process`** (`backend/`, `x-cron-token`) | Drains **`public.messages`** (legacy SMS) **and** **`communication_messages`** (canonical SMS/email); Next may wake worker via **`INTERNAL_MESSAGES_PROCESS_URL`** after enqueue (see `web/lib/workflowRun.ts` helpers) |
+| Inbound SMS (ingest) | Python backend route (e.g. **`backend/app/routes/sms_inbound.py`**) | Persists inbound into canonical store **person-first**; not a Next `web/app/api` handler |
 | Admin agent (AI) | `web/app/api/admin/agent/**` | Versioned agent routes; env-gated (e.g. `AGENT_V2_FIELD_VISIBILITY_ENABLED`) |
 | Booking v2 | `web/app/api/book-v2/*` | Quote, confirm, specialty flows |
 | Jobs patch | `web/app/api/admin/jobs/[id]/route.ts` | Includes workflow triggers for actions |

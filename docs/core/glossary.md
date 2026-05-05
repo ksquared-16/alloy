@@ -29,7 +29,9 @@ Use these meanings in code review and prompts.
 | **Queue / queue definition** | Work-unit-level JSON (`queue_definition`, v1 schema) interpreted by `QueueService` for preview lists. |
 | **Work unit** | Scoped workspace unit under a department; carries queue config and operational ownership. |
 | **Department** | Grouping of work units for Admin V2 workspace navigation. |
-| **Access profile (CRM)** | Row in **`user_access_profiles`**: per `(user_id, org_id)`, declares **`department_scope`** and **`site_scope`** (`all` or `restricted`). Separate from role capabilities. |
+| **Role key** | String on **`user_roles.role`** matching **`role_definitions.role_key`** — membership in an **org role**, one of several inputs to capability checks. |
+| **Permission key** | String granted via **`role_permission_grants`** (unioned into runtime **`permissionKeys`**) — preferred gate for **capabilities**. |
+| **Access profile (CRM)** | Row in **`user_access_profiles`**: per `(user_id, org_id)`, declares **`department_scope`** and **`site_scope`** (`all` or `restricted`). **Visibility**, separate from **permission** union. |
 | **Department scope** | **`all`** = every department in the org; **`restricted`** + **`user_department_access`** = explicit department allow list. Unknown / unlinked department on a scoped record ⇒ **deny** for restricted users (enforced on CRM admin reads/mutations that carry `work_unit_id` / department resolution). |
 | **Site scope** | **`all`** = every site in the org; **`restricted`** + **`user_site_access`** = explicit allow list of **`locations`** where **`location_type = 'site'`**. Unknown or non-site location on a scoped record ⇒ **deny** for restricted users (enforced on CRM admin routes using location linkage). |
 | **Communication thread (canonical)** | Row in **`communication_threads`**: org + primary entity + channel + `recipient_key` (see `canonicalOutboundEnqueue.ts`). |

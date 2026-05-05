@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Cover **opportunities**, pipeline status, CRM-adjacent admin behavior, **communications** in the lead/inquiry operational loop, and **scheduling** as it shows up today (tours, enrollment lanes, and `schedules` tied to CRM/booking)—with correct identity anchors (**persons** / **customer_persons**).
+Cover **opportunities**, pipeline status, CRM-adjacent admin behavior, and **scheduling** as it shows up today (tours, enrollment lanes, and `schedules` tied to CRM/booking)—with correct identity anchors (**persons** / **customer_persons**). **Communications** in the lead loop are documented in **`docs/product/communications.md`**.
 
 ## Current state
 
@@ -42,48 +42,7 @@ Cover **opportunities**, pipeline status, CRM-adjacent admin behavior, **communi
 
 ## Communications (operational loop)
 
-### Purpose
-
-Outbound/inbound messaging threads tied to **entities** and **workflows** — without duplicating send logic in UI.
-
-### Current state (Communications V1 — as implemented in `web/`)
-
-- **Canonical store:** **`communication_threads`** (per org + primary entity + channel + `recipient_key`) and **`communication_messages`** (outbound rows with `status`, `workflow_run_id`, optional **`communication_provider_binding_id`**, body/subject, `metadata`).
-- **Canonical enqueue:** **`enqueueCanonicalOutboundMessage`** (`web/lib/communications/canonicalOutboundEnqueue.ts`) upserts the thread, inserts **`communication_messages`** with `status: queued`, then **`emitEvent`** with **`event_type: message_queued`** and fans out to enabled workflows on that event (same file).
-- **Admin composer:** **`POST /api/admin/communications/send`** documents a guarded path through canonical enqueue + `message_queued` (see route header).
-- **Threads / reads:** APIs under **`web/app/api/admin/communications/`** (threads, thread messages, unread counts on **`communication_messages`**, etc.).
-- **Legacy parallel:** Workflow **`send_message`** / **`create_message`** paths may still write **`public.messages`** and **`messages_outbox`** (`web/lib/workflowRun.ts`, admin **`/admin/messaging`**, **`/admin/messages-outbox`**). Delivery often expects **`INTERNAL_MESSAGES_PROCESS_URL`** / cron — **no `web/app/api/internal/**` route** found in this repo; treat worker deployment as **Needs verification** per environment.
-- **Opt-in dual-write mirror:** **`COMMUNICATION_DUAL_WRITE`** env + **`isCommunicationCanonicalDualWriteEnabled()`** (`web/lib/communications/communicationsEnabled.ts`) — **Partially implemented** (off unless env enables).
-- **Inbound:** **`communication_messages`** with inbound direction / read tracking (e.g. unread route) — **Partially implemented**; full provider inbound matrix **Needs verification** per org.
-
-### How it works
-
-1. UI loads threads for an entity via admin API with org context (and **CRM scope** dimensions where the route applies **`getAdminAccessContextCached`**).
-2. Send requests reference entity type/id; server validates membership and org.
-3. Workflow and drawer sends should converge on **canonical enqueue** where wired; legacy SMS/email rows may still bypass until all workflows migrate.
-
-### Source of truth / key files
-
-| Concern | Location |
-|---------|-----------|
-| Thread listing | `web/app/api/admin/communications/threads/route.ts` |
-| Send | `web/app/api/admin/communications/send/route.ts` |
-| Canonical enqueue + `message_queued` | `web/lib/communications/canonicalOutboundEnqueue.ts` |
-| Dual-write flag | `web/lib/communications/communicationsEnabled.ts`, `web/lib/communications/mirrorQueuedMessage.ts` |
-| Workflow send / legacy queue | `web/lib/workflowRun.ts` (search `send_message`, `messages_outbox`) |
-| Drawer integration | `web/components/admin/AdminEntityDrawer.tsx` (communications UI sections) |
-
-### Guardrails
-
-- **Do not** bypass org checks or send from the client with secrets.
-- **Do not** fork template composition in the drawer when a workflow/helper already defines canonical content.
-- Map entity types using shared normalization — avoid ad hoc string switches in new code.
-- **Identity:** Outbound pipelines that resolve **`contact_id`** / **`to_contact_id`** are **compatibility exceptions** — do not assume contacts are canonical people; align new work with **person-backed** drawer recipients where implemented (`drawer-recipients`).
-
-### Known gaps / risks
-
-- **Needs verification:** Production provider bindings matrix and which channels are enabled per org.
-- **Needs verification:** Where **`INTERNAL_MESSAGES_PROCESS_URL`** is hosted for a given deployment (may be outside this Next app).
+Canonical documentation: **`docs/product/communications.md`** (threads, enqueue, worker delivery, webhooks, bindings, legacy parallel paths).
 
 ---
 
@@ -130,4 +89,4 @@ Outbound/inbound messaging threads tied to **entities** and **workflows** — wi
 
 ## When this doc must be updated
 
-Pipeline or CRM table changes; opportunity status/role semantics; communications channels, enqueue model, or attachment types; schedule states, workforce features, or calendar integration changes.
+Pipeline or CRM table changes; opportunity status/role semantics; schedule states, workforce features, or calendar integration changes. Communications channels/enqueue — **`docs/product/communications.md`**.

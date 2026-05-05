@@ -6,9 +6,9 @@ For any merge that changes behavior, include `docs/execution/operating-doctrine.
 
 ## Source pack (markdown + Supabase reference)
 
-- **Active markdown:** **15** files (this README plus **14** topic files). Cap: **15** `.md` unless intentionally approved (`docs/execution/operating-doctrine.md`).
+- **Active markdown:** **17** files (this README plus **16** topic files). Limits and growth rules are in `docs/execution/operating-doctrine.md`.
 - **Supabase reference CSVs:** **8** generated files under `docs/supabase/reference/` — **do not edit by hand**; regenerate with `npm run export:supabase-schema` and `DATABASE_URL`.
-- **Total GPT/Cursor stack:** target **25 or fewer** files — **currently 15 + 8 = 23**.
+- **Total GPT/Cursor stack:** target **25 or fewer** files — **currently 17 + 8 = 25**.
 
 ## Load order for AI / onboarding
 
@@ -18,12 +18,14 @@ For any merge that changes behavior, include `docs/execution/operating-doctrine.
 4. **`system/actions-and-workflows.md`** — Events, workflows, admin actions; do not bypass.
 5. **`system/record-system.md`** — Resolver-backed records (RRS), drawer/API truth vs previews.
 6. **`system/workspace-system.md`** — Departments, work units, queues, Admin V2 workspace.
-7. **`system/configuration-system.md`** — What config may steer vs what must stay in code/workflows.
-8. **`system/api-contracts.md`** — Representative admin/public API boundaries.
+7. **`system/roles-and-permissions.md`** — Capabilities (`role_permission_grants`) vs visibility (`user_access_profiles`); API enforcement.
+8. **`system/configuration-system.md`** — What config may steer vs what must stay in code/workflows.
+9. **`system/api-contracts.md`** — Representative admin/public API boundaries.
 
 **Product (load when touching that area):**
 
-- `product/crm-system.md` — Opportunities, CRM, communications in the lead loop, scheduling (CRM/tour focus).
+- `product/crm-system.md` — Opportunities, CRM, scheduling (CRM/tour focus).
+- `product/communications.md` — Threads, canonical enqueue, worker delivery, webhooks, provider bindings (lead loop + workflows).
 - `product/documents-and-forms.md`
 - `product/billing-and-financials.md`
 - `product/ai-system.md`
@@ -48,7 +50,7 @@ For any merge that changes behavior, include `docs/execution/operating-doctrine.
 
 - **Archived docs (2026-05-02 reset):** `docs/archive/2026-05-02-docs-reset/` (prior `architecture/`, `audits/`, `implementation/`, `specs/`, root `README`, and former `archive/` shard).
 - **Sprints:** `docs/sprints/` — intentionally **not** moved.
-- **Supplementary audits** (not counted in the **15**-file GPT pack unless you explicitly load them): `docs/audits/` — e.g. person vs contact, event integrity, workflow consistency, Admin V2 hardening.
+- **Supplementary audits** (not counted in the active markdown cap unless you explicitly load them): `docs/audits/` — e.g. person vs contact, event integrity, workflow consistency, Admin V2 hardening.
 
 ## When this README must be updated
 

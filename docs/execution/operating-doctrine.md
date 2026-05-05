@@ -6,9 +6,9 @@ Normative rules for **documentation**, **GPT/Cursor source-pack usage**, **deplo
 
 ## Current state — documentation and source pack
 
-- **Active markdown:** **15** `.md` files total (`docs/README.md` plus **14** topic files under `docs/core`, `docs/system`, `docs/product`, `docs/execution`). **Keep the active documentation set at 15 `.md` files unless intentionally approved.** That count **includes** `docs/README.md` and **excludes** `docs/sprints/**` and `docs/archive/**`.
+- **Active markdown:** **17** `.md` files total (`docs/README.md` plus **16** topic files under `docs/core`, `docs/system`, `docs/product`, `docs/execution`). The stack is intentionally compact; **expand only when a topic cannot fit an existing file** — then update **`docs/README.md`** load order and keep total stack ≤ **25** files (markdown + Supabase CSVs) unless there is explicit approval to exceed it. That count **includes** `docs/README.md` and **excludes** `docs/sprints/**` and `docs/archive/**`.
 - **Supabase reference CSVs (generated):** **8** files under `docs/supabase/reference/` (`supabase_*.csv`) — do not hand-edit; regenerate via `npm run export:supabase-schema` with a live `DATABASE_URL`.
-- **GPT/Cursor source pack:** Target **25 or fewer** total files in the stack. **Current stack: 15 active markdown + 8 Supabase CSVs = 23 files.** Historical narrative docs live under **`docs/archive/2026-05-02-docs-reset/`**. **`docs/sprints/`** is exempt from archive passes.
+- **GPT/Cursor source pack:** Target **25 or fewer** total files in the stack. **Current stack: 17 active markdown + 8 Supabase CSVs = 25 files.** Historical narrative docs live under **`docs/archive/2026-05-02-docs-reset/`**. **`docs/sprints/`** is exempt from archive passes.
 
 ## How documentation works
 
@@ -43,7 +43,7 @@ must update the **matching topic file** in `docs/core`, `docs/system`, `docs/pro
 
 ## Anti-patterns
 
-- Creating a new markdown file for every feature (**forbidden** unless the topic cannot fit any existing file — then update `docs/README.md` load order and seek intentional approval to go beyond **15** active `.md` files).
+- Creating a new markdown file for every feature (**forbidden** unless the topic cannot fit any existing file — then update `docs/README.md` load order and reassess the **≤25** source-pack budget).
 - Writing aspirational architecture that is not reflected in `web/` or `supabase/`.
 - Duplicating long specifications that belong in archived materials — link to archive path if historical context helps.
 
@@ -73,7 +73,7 @@ If implementation must change doctrine, **update docs with the code** and record
 | Admin client | `web/lib/supabaseAdmin.ts` |
 | Server service client | `web/lib/supabase/serverServiceClient.ts` |
 | Admin context | `web/lib/admin/getAdminContext.ts` |
-| CRM access scope | `web/lib/admin/getAdminAccessContext.ts`, `web/lib/admin/resolveAdminAccessCore.ts`, `web/lib/admin/accessScope.ts` |
+| CRM access scope | `docs/system/roles-and-permissions.md`; `web/lib/admin/getAdminAccessContext.ts`, `web/lib/admin/resolveAdminAccessCore.ts`, `web/lib/admin/accessScope.ts` |
 | Perf overlay | `web/components/admin/AdminV2PerfOverlay.tsx`, `web/lib/perf/alloyPerfGlobal.ts` |
 | Queue hot path | `web/lib/queues/QueueService.ts` |
 
@@ -98,4 +98,4 @@ If implementation must change doctrine, **update docs with the code** and record
 
 ## When this doc must be updated
 
-Process or source-pack limits change; hosting/tenancy/secrets change; meaningful perf instrumentation change; or intentional expansion beyond **15** `.md` files or **25** source-pack files.
+Process or source-pack limits change; hosting/tenancy/secrets change; meaningful perf instrumentation change; or intentional expansion beyond **17** active `.md` files or **25** source-pack files.
