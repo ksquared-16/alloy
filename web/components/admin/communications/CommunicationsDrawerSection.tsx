@@ -1123,33 +1123,29 @@ export default function CommunicationsDrawerSection({
 
     const composerSendBlock: ReactNode =
         anyOutboundReady && showDrawerComposerChrome && composerEntity ? (
-            <div className="space-y-1">
+            <div className="space-y-2">
                 {effectiveComposer === "email" ? (
                     <label className="block space-y-0.5">
-                        <span className="text-[10px] font-medium text-alloy-midnight/75">Subject</span>
                         <input
                             type="text"
                             value={composerSubject}
                             onChange={(e) => setComposerSubject(e.target.value)}
                             disabled={sendBusy || !emailOutboundReady}
-                            placeholder="Optional"
-                            className="w-full rounded-md border border-alloy-stone/20 bg-white px-2 py-1 text-[11px] text-alloy-midnight/85 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
+                            placeholder="Subject"
+                            className="w-full rounded-md border border-alloy-stone/20 bg-white px-3 py-2 text-[12px] text-alloy-midnight/85 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
                             autoComplete="off"
                         />
                     </label>
                 ) : null}
                 <label className="block space-y-0.5">
-                    <span className="text-[10px] font-medium text-alloy-midnight/75">
-                        {effectiveComposer === "email" ? "Email body" : "Message"}
-                    </span>
                     <textarea
                         value={composerBody}
                         onChange={(e) => setComposerBody(e.target.value)}
                         disabled={sendBusy || !composerReady}
                         rows={embedded ? 2 : 2}
-                        placeholder={effectiveComposer === "sms" ? "SMS…" : "Email…"}
-                        className="w-full resize-none rounded-md border border-alloy-stone/20 bg-white px-2 py-1 text-[11px] leading-snug text-alloy-midnight/85 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60"
-                        aria-label={effectiveComposer === "email" ? "Email body" : "SMS message"}
+                        placeholder="Write your message…"
+                        className="w-full resize-none rounded-md border border-alloy-stone/20 bg-white px-3 py-2 text-[14px] leading-snug text-alloy-midnight/85 shadow-sm focus:border-alloy-blue focus:outline-none focus:ring-1 focus:ring-alloy-blue/20 disabled:opacity-60 min-h-[160px] lg:min-h-[220px]"
+                        aria-label="Message body"
                     />
                 </label>
                 <div className="flex flex-wrap items-center gap-2">
