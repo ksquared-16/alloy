@@ -196,6 +196,7 @@ export type DrawerTabKey =
     | "automation"
     | "activity"
     | "communications"
+    | "notes"
     | "payments"
     | "documents"
     | "ledger";
