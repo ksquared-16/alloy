@@ -42,7 +42,10 @@ Scripts cannot infer HTTP methods reliably from filenames alone; methods below a
 | `related/[entity]/[id]` | GET | Related records | org_id | **Medium** | Apply same entity-type gates as drawer |
 | `communications/*` | various | Threads / send | org_id | **Medium** | Case-by-case participant linkage to scoped entities |
 | `pipelines`, `pipeline-stages`, `status-definitions`, `field-definitions`, `workflows`, `pricing/*`, `rbac/*`, `locations` (POST), `tenant-bootstrap`, `agent/*` | various | Config / catalog | org_id / admin | **Low** | Keep admin-only; optional future “settings role” split |
-| `users/[userId]/access-scope` | GET/PATCH | Profiles | admin role | **N/A** | Intentionally uses admin gate, not viewer scope |
+| `users/[userId]/access-scope` | GET/PATCH | Profiles | **`requireUsersRolesManageAuth`** (org admin or `settings.users_roles`) | **N/A** | Settings → **Users & Roles** (`/adminV2/settings/users-roles`); legacy **`/adminV2/settings/user-access`** redirects |
+| `settings/users-roles/members` | GET | Member list + scope summary | **`requireUsersRolesManageAuth`** | **N/A** | Same gate as access-scope / role PATCH |
+| `rbac/roles` (GET) / `rbac/permissions` (GET) / `rbac/grants` (GET) | GET | Catalog | **`requirePortalOrUsersRolesManageAuth`** | **Low** | Portal can read; managers without ops still allowed if they have `settings.users_roles` |
+| `rbac/grants` (PUT), `rbac/roles` POST/PATCH | mutates | Grants / role defs | **`requireUsersRolesManageAuth`** | **Low** | Aligns with Users & Roles tab |
 
 **Note:** Routes that only use **`requireAdminOrOps`** still depend on **`getAdminContextCached`** for `org_id`; they were included in the mechanical grep if they did not import access context. Many are **low risk** (settings, RBAC, pricing matrices).
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
 import {
     resolveAdminAccessDimensionsForOrgMember,
     type DepartmentScopeMode,
@@ -32,13 +32,11 @@ function uniqStrings(ids: unknown): string[] {
     return [...new Set(out)];
 }
 
-/** GET: stored scope + effective dimensions for one org member (admin only). */
+/** GET: stored scope + effective dimensions for one org member (settings users/roles managers only). */
 export async function GET(_request: NextRequest, context: { params: Promise<{ userId: string }> }) {
-    const ctx = await getAdminContextCached();
-    if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const auth = await requireUsersRolesManageAuth();
+    if (!auth.ok) return auth.response;
+    const { access } = auth;
 
     const { userId } = await context.params;
     if (!userId?.trim()) {
@@ -46,7 +44,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ us
     }
 
     const supabase = createAdminClient();
-    const effective = await resolveAdminAccessDimensionsForOrgMember(supabase, userId.trim(), ctx.orgId);
+    const effective = await resolveAdminAccessDimensionsForOrgMember(supabase, userId.trim(), access.orgId);
     if (!effective) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
@@ -56,7 +54,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ us
 
     return NextResponse.json({
         user_id: userId.trim(),
-        org_id: ctx.orgId,
+        org_id: access.orgId,
         effective,
         department_ids,
         site_location_ids,
@@ -68,11 +66,9 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ us
  * Requires full payload; restricted scopes must include non-empty allow lists (deny-by-default safe UX).
  */
 export async function PATCH(request: NextRequest, context: { params: Promise<{ userId: string }> }) {
-    const ctx = await getAdminContextCached();
-    if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const auth = await requireUsersRolesManageAuth();
+    if (!auth.ok) return auth.response;
+    const { access } = auth;
 
     const { userId } = await context.params;
     const uid = typeof userId === "string" ? userId.trim() : "";
@@ -111,14 +107,14 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ u
 
     const supabase = createAdminClient();
 
-    const { data: membership, error: memErr } = await supabase.from("user_roles").select("user_id").eq("user_id", uid).eq("org_id", ctx.orgId).limit(1);
+    const { data: membership, error: memErr } = await supabase.from("user_roles").select("user_id").eq("user_id", uid).eq("org_id", access.orgId).limit(1);
     if (memErr) return NextResponse.json({ error: memErr.message }, { status: 500 });
     if (!membership?.length) {
         return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
     if (department_scope === "restricted") {
-        const { data: deptRows, error: dErr } = await supabase.from("departments").select("id").eq("org_id", ctx.orgId).in("id", department_ids);
+        const { data: deptRows, error: dErr } = await supabase.from("departments").select("id").eq("org_id", access.orgId).in("id", department_ids);
         if (dErr) return NextResponse.json({ error: dErr.message }, { status: 500 });
         if ((deptRows ?? []).length !== department_ids.length) {
             return NextResponse.json({ error: "One or more department_ids are invalid for this org" }, { status: 400 });
@@ -129,7 +125,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ u
         const { data: locRows, error: lErr } = await supabase
             .from("locations")
             .select("id")
-            .eq("org_id", ctx.orgId)
+            .eq("org_id", access.orgId)
             .eq("location_type", "site")
             .in("id", site_location_ids);
         if (lErr) return NextResponse.json({ error: lErr.message }, { status: 500 });
@@ -147,7 +143,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ u
     const { error: upErr } = await supabase.from("user_access_profiles").upsert(
         {
             user_id: uid,
-            org_id: ctx.orgId,
+            org_id: access.orgId,
             department_scope,
             site_scope,
         },
@@ -155,27 +151,27 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ u
     );
     if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
 
-    const { error: delDeptErr } = await supabase.from("user_department_access").delete().eq("user_id", uid).eq("org_id", ctx.orgId);
+    const { error: delDeptErr } = await supabase.from("user_department_access").delete().eq("user_id", uid).eq("org_id", access.orgId);
     if (delDeptErr) return NextResponse.json({ error: delDeptErr.message }, { status: 500 });
 
-    const { error: delSiteErr } = await supabase.from("user_site_access").delete().eq("user_id", uid).eq("org_id", ctx.orgId);
+    const { error: delSiteErr } = await supabase.from("user_site_access").delete().eq("user_id", uid).eq("org_id", access.orgId);
     if (delSiteErr) return NextResponse.json({ error: delSiteErr.message }, { status: 500 });
 
     if (department_scope === "restricted") {
         const { error: insDeptErr } = await supabase
             .from("user_department_access")
-            .insert(department_ids.map((department_id) => ({ user_id: uid, org_id: ctx.orgId, department_id })));
+            .insert(department_ids.map((department_id) => ({ user_id: uid, org_id: access.orgId, department_id })));
         if (insDeptErr) return NextResponse.json({ error: insDeptErr.message }, { status: 500 });
     }
 
     if (site_scope === "restricted") {
         const { error: insSiteErr } = await supabase
             .from("user_site_access")
-            .insert(site_location_ids.map((location_id) => ({ user_id: uid, org_id: ctx.orgId, location_id })));
+            .insert(site_location_ids.map((location_id) => ({ user_id: uid, org_id: access.orgId, location_id })));
         if (insSiteErr) return NextResponse.json({ error: insSiteErr.message }, { status: 500 });
     }
 
-    const effective = await resolveAdminAccessDimensionsForOrgMember(supabase, uid, ctx.orgId);
+    const effective = await resolveAdminAccessDimensionsForOrgMember(supabase, uid, access.orgId);
     return NextResponse.json({
         ok: true,
         effective,

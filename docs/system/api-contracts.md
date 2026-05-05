@@ -22,8 +22,13 @@ High-level map of **server boundaries** for admin, public booking, and action li
 | Admin agent (AI) | `web/app/api/admin/agent/**` | Versioned agent routes; env-gated (e.g. `AGENT_V2_FIELD_VISIBILITY_ENABLED`) |
 | Booking v2 | `web/app/api/book-v2/*` | Quote, confirm, specialty flows |
 | Jobs patch | `web/app/api/admin/jobs/[id]/route.ts` | Includes workflow triggers for actions |
-| User access scope | `GET`/`PATCH /api/admin/users/[userId]/access-scope` | Admin-only; replaces profile + allow lists; validates site `location_type` server-side; **`PATCH`** rejects restricted scopes with empty allow lists |
-| User role key | `PATCH /api/admin/users/[userId]/role` | Admin-only; `role` = `role_definitions.role_key` |
+| Users & Roles (Settings) | `GET /api/admin/settings/users-roles/members` | Org **`admin`** or **`settings.users_roles`**; returns members + `departments` + **`site_locations`** (`location_type = site` only) |
+| User access scope | `GET`/`PATCH /api/admin/users/[userId]/access-scope` | Same gate as above; replaces profile + allow lists; validates site `location_type` server-side; **`PATCH`** rejects restricted scopes with empty allow lists |
+| User role key | `PATCH /api/admin/users/[userId]/role` | Same gate; `role` = `role_definitions.role_key`; replaces all `user_roles` rows for that user/org with one role |
+| User invite | `POST /api/admin/users` | Same gate; invites by email and inserts `user_roles` |
+| User remove from org | `POST /api/admin/users/[userId]/remove` | Same gate; deletes `user_roles` for org |
+| RBAC catalog | `GET /api/admin/rbac/roles`, `GET /api/admin/rbac/permissions`, `GET /api/admin/rbac/grants?role_key=` | Portal (**admin/ops**) **or** org admin / **`settings.users_roles`** |
+| RBAC mutations | `POST /api/admin/rbac/roles`, `PATCH /api/admin/rbac/roles/[role_key]`, `PUT /api/admin/rbac/grants?role_key=` | Org **`admin`** or **`settings.users_roles`** |
 
 ## Source of truth / key files
 

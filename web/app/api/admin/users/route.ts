@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
 import { displayRoleForAdminPicker, groupSortedRoleKeysByUserId } from "@/lib/admin/userRolesMembership";
 
 export type AdminUserRow = {
@@ -62,13 +63,11 @@ export async function GET() {
     return NextResponse.json({ users: result });
 }
 
-/** POST: invite user to org. Admin only. Body: { email, role } (role = role_key from role_definitions). */
+/** POST: invite user to org. Requires org admin or `settings.users_roles` permission. Body: { email, role } (role = role_key from role_definitions). */
 export async function POST(request: Request) {
-    const ctx = await getAdminContextCached();
-    if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const auth = await requireUsersRolesManageAuth();
+    if (!auth.ok) return auth.response;
+    const { access } = auth;
 
     let body: { email?: string; role?: string } = {};
     try {
@@ -84,7 +83,7 @@ export async function POST(request: Request) {
 
     const supabase = createAdminClient();
 
-    const { data: roleRow } = await supabase.from("role_definitions").select("role_key").eq("org_id", ctx.orgId).eq("role_key", role).eq("is_active", true).maybeSingle();
+    const { data: roleRow } = await supabase.from("role_definitions").select("role_key").eq("org_id", access.orgId).eq("role_key", role).eq("is_active", true).maybeSingle();
     if (!roleRow) {
         return NextResponse.json({ error: "Invalid or inactive role for this org" }, { status: 400 });
     }
@@ -101,7 +100,7 @@ export async function POST(request: Request) {
     }
 
     const { error: insertError } = await supabase.from("user_roles").insert({
-        org_id: ctx.orgId,
+        org_id: access.orgId,
         user_id: user.id,
         role,
     });

@@ -82,6 +82,16 @@ function crumbsForPath(path: string): Crumb[] {
         return base;
     }
 
+    if (tail === "/users-roles" || tail.startsWith("/users-roles/")) {
+        base.push({ label: "Users & Roles", href: null });
+        return base;
+    }
+
+    if (tail === "/user-access" || tail.startsWith("/user-access/")) {
+        base.push({ label: "User access scope", href: null });
+        return base;
+    }
+
     if (tail === "/fields" || tail.startsWith("/fields")) {
         base.push({ label: "Fields", href: null });
         return base;

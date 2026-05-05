@@ -114,8 +114,8 @@ export default function AdminV2SettingsIndexPage() {
                         <SettingsCard href="/adminV2/settings/kpis" title="Workspace KPIs" accent="organization">
                             Visibility and order for registry metrics on AdminV2 workspace surfaces.
                         </SettingsCard>
-                        <SettingsCard href="/adminV2/settings/user-access" title="User access scope" accent="organization">
-                            Per-user department and site visibility (CRM), plus role key assignment.
+                        <SettingsCard href="/adminV2/settings/users-roles" title="Users & Roles" accent="organization">
+                            Org members, primary role, CRM data access (departments / sites), and role permission grants.
                         </SettingsCard>
                     </SettingsTileGrid>
                 </Group>

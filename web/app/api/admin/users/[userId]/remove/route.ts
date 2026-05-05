@@ -1,18 +1,15 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
 
-/** POST: remove user from org (delete user_roles row). Admin only. Does not delete auth.users. */
+/** POST: remove user from org (delete user_roles row). Requires org admin or `settings.users_roles`. Does not delete auth.users. */
 export async function POST(
   _request: Request,
   context: { params: Promise<{ userId: string }> }
 ) {
-  const ctx = await getAdminContextCached();
-  if (!ctx.ok) return NextResponse.json({ error: ctx.status === 401 ? "Unauthorized" : "Forbidden" }, { status: ctx.status });
-
-  if (ctx.role !== "admin") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+  const auth = await requireUsersRolesManageAuth();
+  if (!auth.ok) return auth.response;
+  const { orgId } = auth.access;
 
   const { userId } = await context.params;
   if (!userId) {
@@ -24,7 +21,7 @@ export async function POST(
     .from("user_roles")
     .delete()
     .eq("user_id", userId)
-    .eq("org_id", ctx.orgId);
+    .eq("org_id", orgId);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

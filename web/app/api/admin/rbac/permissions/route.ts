@@ -1,16 +1,11 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { requirePortalOrUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
 
-/** GET: list active permissions. Admin + ops can read. */
+/** GET: list active permissions. Portal (admin/ops) or Users & Roles managers. */
 export async function GET() {
-    const ctx = await getAdminContextCached();
-    if (!ctx.ok) {
-        return NextResponse.json(
-            { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
-            { status: ctx.status }
-        );
-    }
+    const auth = await requirePortalOrUsersRolesManageAuth();
+    if (!auth.ok) return auth.response;
 
     const supabase = createAdminClient();
     const { data: rows, error } = await supabase

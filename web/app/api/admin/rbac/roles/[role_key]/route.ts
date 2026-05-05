@@ -1,22 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { requireUsersRolesManageAuth } from "@/lib/admin/canManageUsersAndRoles";
 
-/** PATCH: update role (role_label, is_active). Admin only. Cannot edit role_key, org_id, is_system. */
+/** PATCH: update role (role_label, is_active). Requires org admin or `settings.users_roles` permission. */
 export async function PATCH(
     request: NextRequest,
     context: { params: Promise<{ role_key: string }> }
 ) {
-    const ctx = await getAdminContextCached();
-    if (!ctx.ok) {
-        return NextResponse.json(
-            { error: ctx.status === 401 ? "Unauthorized" : "Forbidden" },
-            { status: ctx.status }
-        );
-    }
-    if (ctx.role !== "admin") {
-        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
+    const auth = await requireUsersRolesManageAuth();
+    if (!auth.ok) return auth.response;
+    const { orgId } = auth.access;
 
     const { role_key } = await context.params;
     if (!role_key) {
@@ -35,7 +28,7 @@ export async function PATCH(
     const { data: existing, error: fetchErr } = await supabase
         .from("role_definitions")
         .select("role_key, is_system")
-        .eq("org_id", ctx.orgId)
+        .eq("org_id", orgId)
         .eq("role_key", role_key)
         .maybeSingle();
 
@@ -59,7 +52,7 @@ export async function PATCH(
         const { data: current } = await supabase
             .from("role_definitions")
             .select("role_key, role_label, is_system, is_active, created_at")
-            .eq("org_id", ctx.orgId)
+            .eq("org_id", orgId)
             .eq("role_key", role_key)
             .single();
         return NextResponse.json(current ?? {});
@@ -68,7 +61,7 @@ export async function PATCH(
     const { data: updated, error: updateErr } = await supabase
         .from("role_definitions")
         .update(updates)
-        .eq("org_id", ctx.orgId)
+        .eq("org_id", orgId)
         .eq("role_key", role_key)
         .select("role_key, role_label, is_system, is_active, created_at")
         .single();
