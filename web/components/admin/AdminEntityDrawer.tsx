@@ -114,6 +114,7 @@ import {
     type RecordLayoutConfigJson,
 } from "@/lib/recordChrome/types";
 import { executeOpportunityRecordAction } from "@/lib/recordChrome/executeOpportunityRecordAction";
+import { OPPORTUNITY_WORKFLOW_V1_LEGACY_OVERVIEW_SECTION_KEYS } from "@/lib/admin/opportunityDrawerLayoutPolicy";
 import {
     oppInqDisplayName,
     oppInqEyebrow,
@@ -6621,7 +6622,9 @@ export default function AdminEntityDrawer() {
                 );
             }
             const order = oppCfg?.overview_section_order ?? null;
-            const allowInquiryChildren = Array.isArray(order) && order.includes("inquiry_children");
+            const allowInquiryChildren =
+                oppCfg?.inquiry_drawer_mode === "workflow_v1" ||
+                (Array.isArray(order) && order.includes("inquiry_children"));
             if (allowInquiryChildren) {
                 const raw = (d._inquiry_children as unknown[]) ?? [];
                 const rows: InquiryChildRow[] = Array.isArray(raw)
@@ -7091,13 +7094,11 @@ export default function AdminEntityDrawer() {
         }
         if (drawer.type === "opportunities" && overviewData && !(overviewData as { _create?: boolean })._create) {
             const oppLayoutJson = (recordChromeOpportunity.layout?.config_json ?? null) as RecordLayoutConfigJson | null;
-            if (
-                oppLayoutJson?.inquiry_drawer_mode === "workflow_v1" &&
-                Array.isArray(oppLayoutJson.inquiry_workflow_sections) &&
-                oppLayoutJson.inquiry_workflow_sections.length > 0
-            ) {
+            if (oppLayoutJson?.inquiry_drawer_mode === "workflow_v1") {
                 const hidden = new Set(oppLayoutJson.overview_hidden_sections ?? []);
                 result = result.filter((s) => !hidden.has(s.key));
+                result = result.filter((s) => !OPPORTUNITY_WORKFLOW_V1_LEGACY_OVERVIEW_SECTION_KEYS.has(s.key));
+
                 const defByKey = new Map<
                     string,
                     { field_key: string; field_type: string; label: string | null; sort_order: number }
@@ -7109,7 +7110,10 @@ export default function AdminEntityDrawer() {
                     }
                 }
                 const virtuals: EntityDrawerSectionConfig[] = [];
-                for (const ws of oppLayoutJson.inquiry_workflow_sections) {
+                const wfSections = Array.isArray(oppLayoutJson.inquiry_workflow_sections)
+                    ? oppLayoutJson.inquiry_workflow_sections
+                    : [];
+                for (const ws of wfSections) {
                     const allowEmpty = ws.allow_empty === true;
                     const fields = (ws.field_keys ?? [])
                         .filter((k) => !OPPORTUNITY_INQUIRY_HEADER_BODY_FIELD_KEYS.has(k))
@@ -7215,12 +7219,12 @@ export default function AdminEntityDrawer() {
         if (drawer.type === "schedules" && scheduleOrder?.length) {
             overviewSections = applyOverviewSectionOrder(overviewSections, scheduleOrder);
         }
-        const oppOrder = recordChromeOpportunity.layout?.config_json?.overview_section_order;
-        if (drawer.type === "opportunities" && oppOrder?.length) {
-            overviewSections = applyOverviewSectionOrder(overviewSections, oppOrder);
-        }
         const oppDrawerCfg = (recordChromeOpportunity.layout?.config_json ?? null) as RecordLayoutConfigJson | null;
         const oppInquiryWorkflowV1 = drawer.type === "opportunities" && oppDrawerCfg?.inquiry_drawer_mode === "workflow_v1";
+        const oppOrder = oppDrawerCfg?.overview_section_order;
+        if (drawer.type === "opportunities" && oppOrder?.length && !oppInquiryWorkflowV1) {
+            overviewSections = applyOverviewSectionOrder(overviewSections, oppOrder);
+        }
         if (drawer.type === "opportunities" && (oppDrawerCfg?.suppress_body_status || oppInquiryWorkflowV1)) {
             overviewSections = overviewSections.filter((s) => s.key !== "__unified_status");
         }
@@ -7239,6 +7243,7 @@ export default function AdminEntityDrawer() {
             }
             overviewSections = overviewSections.filter((s) => !isOpportunityTourFollowUpSection(s));
             overviewSections = overviewSections.filter((s) => !isOpportunityWorkflowStandaloneExternalDuplicate(overviewSections, s));
+            overviewSections = overviewSections.filter((s) => !OPPORTUNITY_WORKFLOW_V1_LEGACY_OVERVIEW_SECTION_KEYS.has(s.key));
         }
         if (
             drawer.type === "opportunities" &&
