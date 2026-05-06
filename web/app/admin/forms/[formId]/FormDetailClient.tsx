@@ -18,6 +18,13 @@ import {
     resolvePurposeParagraph,
     resolveWhoCompletesParagraph,
 } from "@/lib/forms/operatorFormGuidance";
+import {
+    ADMIN_PREVIEW_LINK_LABEL,
+    ADMIN_PREVIEW_LINK_METADATA,
+    appendPreviewQueryToFullUrl,
+    buildPreviewEmbedUrl,
+    previewEmbedSessionStorageKey,
+} from "@/lib/forms/adminFormPreview";
 import { linkRequiresLeadCapture } from "@/lib/public/forms/publicFormTypes";
 
 type VersionRow = {
@@ -71,6 +78,8 @@ export default function FormDetailClient() {
     const [createdOnce, setCreatedOnce] = useState<CreatedLinkPayload | null>(null);
     const [copied, setCopied] = useState<string | null>(null);
     const [copyWarn, setCopyWarn] = useState<string | null>(null);
+    const [previewBusy, setPreviewBusy] = useState(false);
+    const [previewErr, setPreviewErr] = useState<string | null>(null);
 
     const load = useCallback(async () => {
         if (!formId) return;
@@ -156,6 +165,66 @@ export default function FormDetailClient() {
         }
     };
 
+    const handlePreviewForm = useCallback(async () => {
+        if (!formId || !canMutate) return;
+        setPreviewErr(null);
+        if (typeof window !== "undefined") {
+            try {
+                const stored = sessionStorage.getItem(previewEmbedSessionStorageKey(formId));
+                if (stored) {
+                    const u = new URL(stored);
+                    if (u.origin === window.location.origin) {
+                        window.open(stored, "_blank", "noopener,noreferrer");
+                        return;
+                    }
+                }
+            } catch {
+                /* fall through — mint fresh preview link */
+            }
+        }
+
+        if (typeof window === "undefined") return;
+
+        setPreviewBusy(true);
+        try {
+            const res = await fetch(`/api/admin/forms/${encodeURIComponent(formId)}/public-links`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    metadata: { ...ADMIN_PREVIEW_LINK_METADATA, label: ADMIN_PREVIEW_LINK_LABEL },
+                }),
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                setPreviewErr((json as { error?: string }).error ?? "Could not start preview");
+                return;
+            }
+            const payload = (json as { data?: Record<string, unknown> }).data;
+            const embedPath = payload?.embed_path;
+            if (typeof embedPath !== "string" || !embedPath.startsWith("/")) {
+                setPreviewErr("Preview response missing embed path");
+                return;
+            }
+            const embedUrlFromServer = payload?.embed_url;
+            const previewUrl =
+                typeof embedUrlFromServer === "string" && embedUrlFromServer.startsWith("http")
+                    ? appendPreviewQueryToFullUrl(embedUrlFromServer)
+                    : buildPreviewEmbedUrl(window.location.origin, embedPath);
+
+            try {
+                sessionStorage.setItem(previewEmbedSessionStorageKey(formId), previewUrl);
+            } catch {
+                /* quota / privacy mode */
+            }
+            window.open(previewUrl, "_blank", "noopener,noreferrer");
+            void load();
+        } catch (e) {
+            setPreviewErr((e as Error).message);
+        } finally {
+            setPreviewBusy(false);
+        }
+    }, [formId, canMutate, load]);
+
     const published = detail?.versions.filter((v) => v.status === "published") ?? [];
     const latestPublished = published.sort((a, b) => b.version_number - a.version_number)[0];
 
@@ -222,6 +291,52 @@ export default function FormDetailClient() {
                 }
             />
 
+            {detail && !loading ? (
+                <div className="rounded-lg border border-[#e6e8ec] bg-[#fafbfd] px-4 py-4 sm:px-5">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0 flex-1 space-y-1">
+                            <p className="text-sm font-semibold text-[#31394d]">Preview the public form</p>
+                            <p className="text-sm leading-relaxed text-[#59678b]">
+                                Opens the real embed experience (same page families and staff see) in a{" "}
+                                <strong className="font-medium text-[#31394d]">new browser tab</strong>. Alloy cannot
+                                reconstruct old share URLs from this screen, so preview creates a dedicated link tagged{" "}
+                                <span className="whitespace-nowrap font-mono text-xs text-[#31394d]">
+                                    {ADMIN_PREVIEW_LINK_LABEL}
+                                </span>{" "}
+                                — you can deactivate it later if you do not want extra links.
+                            </p>
+                            {!canMutate ? (
+                                <p className="text-sm text-amber-900">
+                                    Admin role is required to create a preview link.
+                                </p>
+                            ) : null}
+                            {!latestPublished ? (
+                                <p className="text-sm text-amber-900">
+                                    Publish at least one version before preview — the public page needs a published schema.
+                                </p>
+                            ) : null}
+                            {previewErr ? <p className="text-sm text-red-700">{previewErr}</p> : null}
+                        </div>
+                        <div className="flex flex-shrink-0 flex-col items-stretch gap-2 sm:items-end">
+                            <PrimaryButton
+                                type="button"
+                                className="!px-4 !py-2.5 text-sm whitespace-nowrap sm:min-w-[148px]"
+                                onClick={() => void handlePreviewForm()}
+                                disabled={
+                                    previewBusy || creating || !canMutate || !latestPublished
+                                }
+                            >
+                                {previewBusy ? "Opening…" : "Preview form"}
+                            </PrimaryButton>
+                            <p className="max-w-[220px] text-center text-[11px] leading-snug text-[#59678b] sm:text-right">
+                                Reuses this browser tab&apos;s session when possible so you may not get a new link every
+                                click.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
+
             {loading ? (
                 <p className="text-sm text-[#59678b]">Loading…</p>
             ) : error ? (
@@ -266,11 +381,17 @@ export default function FormDetailClient() {
                                 <h3 className="text-xs font-bold uppercase tracking-wide text-[#59678b]">Next steps</h3>
                                 <ol className="mt-1.5 list-decimal space-y-1.5 pl-5 leading-relaxed">
                                     <li>
+                                        Use{" "}
+                                        <strong className="font-medium text-[#31394d]">Preview form</strong> above to open
+                                        the live public page in a new tab (creates a short-lived preview link — full URLs are
+                                        never recovered from old links).
+                                    </li>
+                                    <li>
                                         <a href="#form-public-embed-links" className="font-medium text-[#00458C] hover:underline">
-                                            Create or copy a public link
+                                            Create or copy an operational public link
                                         </a>{" "}
-                                        (full URL and token are only shown when you create a link — they are not stored in
-                                        plaintext afterward).
+                                        when you are ready to share with families or staff (token and URL are shown only once
+                                        at creation).
                                     </li>
                                     <li>Send the link to the family or staff member who should fill it out.</li>
                                     <li>
