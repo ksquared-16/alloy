@@ -1409,7 +1409,7 @@ export async function POST(request: NextRequest) {
             opportunityId = newOpp.id;
             console.log(`[BOOK_V2_CONFIRM] Created new opportunity booking_attempt_id=${booking_attempt_id ?? "None"} opportunity_id=${opportunityId}`);
 
-            const insertOrgIdForEvent = String((insertPayload.org_id ?? process.env.ALLOY_PUBLIC_ORG_ID ?? "").trim());
+            const insertOrgIdForEvent = String(insertPayload.org_id ?? process.env.ALLOY_PUBLIC_ORG_ID ?? "").trim();
             if (insertOrgIdForEvent) {
                 try {
                     await emitStatusChangedEvent({
