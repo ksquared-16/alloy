@@ -27,6 +27,15 @@ This note aligns **what Settings claims** with **what the product actually reads
 
 Workspace job exception summaries use **job** predicates (`getNeedsAttentionSummary`, etc.) — separate from opportunity attention.
 
+## Work unit & department `metadata` (read-only in Settings)
+
+**AdminV2 → Settings → Work units / Departments:** opening **Edit** on a row shows **Runtime metadata (read-only)** — the effective JSON from the list API, grouped by known feature areas (`web/lib/admin/runtimeEntityMetadataCatalog.ts`). This is **visibility only**; there is no metadata editor in Settings yet.
+
+- **Active runtime keys** (examples): `opportunity_attention_rules`, `activity_signal_rules` — consumed by `resolveOpportunityAttentionConfigFromMetadata`, queue paths, and activity-signal APIs.
+- **Bootstrap / routing:** `tenant_slice` on departments (tenant bootstrap validation).
+- **Internal / seed:** `placeholder`, `lifecycle_stage` (bootstrap) — not substitute for `status_definitions.metadata.lifecycle_stage` in CRM logic.
+- **Unknown keys** still appear under **Other keys (not cataloged)**.
+
 ---
 
 ## Future work (out of scope for this doc)

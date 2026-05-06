@@ -9,6 +9,7 @@ import { getQueueDefinitionStoredVersion } from "@/lib/rrs/queue/queueDefinition
 import { validateQueueDefinition } from "@/lib/config/queueDefinitionSchema";
 import type { DepartmentRow } from "../departments/DepartmentsClient";
 import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
+import RuntimeMetadataReadOnlyPanel from "@/components/adminV2/settings/RuntimeMetadataReadOnlyPanel";
 
 type QueueSummary = {
     key: string;
@@ -46,6 +47,8 @@ export type WorkUnitRow = {
     sort_order: number;
     is_active: boolean;
     queue_definition: Record<string, unknown>;
+    /** JSONB — opportunity attention, activity signals, etc. (read-only in Settings UI). */
+    metadata?: unknown;
     created_at: string;
     updated_at: string | null;
 };
@@ -79,6 +82,8 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
     const [modalQueueJson, setModalQueueJson] = useState("{}");
     /** Optimistic concurrency for PATCH `queue_definition` (see `expected_queue_definition_version`). */
     const [modalQueueExpectedVersion, setModalQueueExpectedVersion] = useState(0);
+    /** Effective metadata from list API — not edited in this modal */
+    const [modalMetadata, setModalMetadata] = useState<unknown>(null);
     const [modalSaving, setModalSaving] = useState(false);
     const [modalError, setModalError] = useState<string | null>(null);
 
@@ -402,6 +407,7 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
         setModalActive(true);
         setModalQueueJson("{}");
         setModalQueueExpectedVersion(0);
+        setModalMetadata(null);
         setModalError(null);
         setQueuesLoading(false);
         setQueuesError(null);
@@ -425,6 +431,7 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
         setModalActive(row.is_active);
         setModalQueueJson(stringifyQueue(row.queue_definition));
         setModalQueueExpectedVersion(getQueueDefinitionStoredVersion(row.queue_definition));
+        setModalMetadata(row.metadata ?? null);
         setModalError(null);
         setQueuesLoading(false);
         setQueuesError(null);
@@ -703,7 +710,7 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
 
             {modalOpen && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-alloy-midnight/40 overflow-y-auto">
-                    <div className="bg-admin-surface-card border border-admin-border rounded-xl shadow-lg max-w-3xl w-full p-6 my-8">
+                    <div className="bg-admin-surface-card border border-admin-border rounded-xl shadow-lg max-w-3xl w-full p-6 my-8 max-h-[min(92vh,900px)] overflow-y-auto">
                         <h2 className="text-lg font-semibold text-alloy-forge">{modalId ? "Edit work unit" : "New work unit"}</h2>
                         <div className="mt-4 space-y-3">
                             <label className="block text-sm">
@@ -754,6 +761,7 @@ export default function WorkUnitsClient({ adminV2Chrome = false }: { adminV2Chro
                                     onChange={(e) => setModalSortOrder(Number(e.target.value))}
                                 />
                             </label>
+                            <RuntimeMetadataReadOnlyPanel metadata={modalMetadata} entity="work_unit" isNewRow={!modalId} />
                             <label className="block text-sm">
                                 <span className="text-alloy-forge/80">Queue definition (JSON)</span>
                                 <textarea

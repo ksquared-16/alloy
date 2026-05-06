@@ -5,6 +5,7 @@ import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SettingsPageHeader from "@/components/adminV2/settings/SettingsPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import RuntimeMetadataReadOnlyPanel from "@/components/adminV2/settings/RuntimeMetadataReadOnlyPanel";
 
 export type DepartmentRow = {
     id: string;
@@ -14,6 +15,8 @@ export type DepartmentRow = {
     description: string | null;
     sort_order: number;
     is_active: boolean;
+    /** JSONB — attention rules, activity signals, tenant_slice, etc. (read-only in Settings UI). */
+    metadata?: unknown;
     created_at: string;
     updated_at: string | null;
 };
@@ -33,6 +36,8 @@ export default function DepartmentsClient({ adminV2Chrome = false }: { adminV2Ch
     const [modalDescription, setModalDescription] = useState("");
     const [modalSortOrder, setModalSortOrder] = useState(0);
     const [modalActive, setModalActive] = useState(true);
+    /** Effective metadata from list API — not edited in this modal */
+    const [modalMetadata, setModalMetadata] = useState<unknown>(null);
     const [modalSaving, setModalSaving] = useState(false);
     const [modalError, setModalError] = useState<string | null>(null);
 
@@ -63,6 +68,7 @@ export default function DepartmentsClient({ adminV2Chrome = false }: { adminV2Ch
         setModalDescription("");
         setModalSortOrder(0);
         setModalActive(true);
+        setModalMetadata(null);
         setModalError(null);
         setModalOpen(true);
     };
@@ -74,6 +80,7 @@ export default function DepartmentsClient({ adminV2Chrome = false }: { adminV2Ch
         setModalDescription(row.description ?? "");
         setModalSortOrder(row.sort_order);
         setModalActive(row.is_active);
+        setModalMetadata(row.metadata ?? null);
         setModalError(null);
         setModalOpen(true);
     };
@@ -223,8 +230,8 @@ export default function DepartmentsClient({ adminV2Chrome = false }: { adminV2Ch
             </SectionCard>
 
             {modalOpen && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-alloy-midnight/40">
-                    <div className="bg-admin-surface-card border border-admin-border rounded-xl shadow-lg max-w-md w-full p-6">
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-alloy-midnight/40 overflow-y-auto">
+                    <div className="bg-admin-surface-card border border-admin-border rounded-xl shadow-lg max-w-2xl w-full p-6 my-8 max-h-[min(92vh,880px)] overflow-y-auto">
                         <h2 className="text-lg font-semibold text-alloy-forge">{modalId ? "Edit department" : "New department"}</h2>
                         <div className="mt-4 space-y-3">
                             <label className="block text-sm">
@@ -264,6 +271,7 @@ export default function DepartmentsClient({ adminV2Chrome = false }: { adminV2Ch
                                 <input type="checkbox" checked={modalActive} onChange={(e) => setModalActive(e.target.checked)} />
                                 <span>Active</span>
                             </label>
+                            <RuntimeMetadataReadOnlyPanel metadata={modalMetadata} entity="department" isNewRow={!modalId} />
                             {modalError ? <p className="text-sm text-red-600">{modalError}</p> : null}
                         </div>
                         <div className="mt-6 flex justify-end gap-2">
