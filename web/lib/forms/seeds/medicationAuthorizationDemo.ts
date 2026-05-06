@@ -1,8 +1,11 @@
 /**
  * Demo / example-only form (not an official state compliance form).
- * DB seed: `supabase/migrations/20260506120000_forms_medication_authorization_demo_seed.sql` (idempotent; optional org).
+ * DB seed: `supabase/migrations/20260506120000_forms_medication_authorization_demo_seed.sql` (idempotent; **fixed org** below).
  * Demo option_sets/items: `supabase/migrations/20260507130000_forms_medication_demo_option_sets.sql`.
+ * **Other orgs (staging):** run `scripts/seedMedicationAuthorizationDemoForOrg.ts` with `DEMO_RESET_ORG_ID` or `--org=`.
  */
+/** Alloy Bend / cleaning staging UUID — matches medication demo SQL migrations when that org exists. */
+export const ALLY_BEND_STAGING_ORG_FORMS_DEMO_ID = "7803388d-cdee-4afb-89cf-23a137f39423" as const;
 export const MEDICATION_AUTHORIZATION_DEMO_FORM_KEY = "medication_authorization_demo" as const;
 
 /** Seeded `item_key` values for `med_demo_schedule` (must stay aligned with demo option_sets migration). */

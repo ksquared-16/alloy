@@ -24,6 +24,7 @@
     "demo:reset:dry": "tsx scripts/resetStagingDemoData.ts --dry-run",
     "demo:reset": "tsx scripts/resetStagingDemoData.ts",
     "demo:seed": "tsx scripts/seedRealisticChildcareDemoData.ts",
+    "demo:seed:medication-form": "tsx --tsconfig tsconfig.json scripts/seedMedicationAuthorizationDemoForOrg.ts",
     "demo:seed:scopes": "tsx scripts/seedRealisticChildcareDemoData.ts --scopes-only",
     "demo:seed:patch-metadata": "tsx scripts/seedRealisticChildcareDemoData.ts --patch-metadata"
   },

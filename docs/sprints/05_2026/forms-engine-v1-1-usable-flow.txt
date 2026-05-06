@@ -94,7 +94,12 @@ This sprint extends the **completed V1 foundation** with **minimal admin APIs, e
 - **Status:** **Complete**  
 - **Purpose:** Operators use **AdminV2**, not legacy **`/admin/forms`**, for review: canonical UI at **`/adminV2/forms`** (+ nested routes); **workspace** org root **Orientation** rail includes a **Forms** action; **`AdminV2Shell`** treats **`/adminV2/forms/**`** like settings/workflows (sidebar + main chrome). Reuses existing **`FormsHubClient`** / detail / submissions clients; links use shared **`ADMIN_FORMS_UI_BASE`**. Legacy **`/admin/forms/**`** → **`redirect`** to V2. No new APIs or duplicated CRM/documents/workflows logic.
 
-### Card 8 — Admin Draft Submission PATCH *(optional)*
+### Card 8 — Staging Forms demo seed alignment
+
+- **Status:** **Complete**  
+- **Purpose:** Medication demo SQL migrations seed **only** org **`7803388d-cdee-4afb-89cf-23a137f39423`** (Alloy Bend). Admin **`orgId`** is the user’s **resolved membership org** (often different on staging), so **`/adminV2/forms`** can be empty. **Fix:** idempotent script **`web/scripts/seedMedicationAuthorizationDemoForOrg.ts`** — org via **`DEMO_RESET_ORG_ID`**, **`FORMS_MED_DEMO_ORG_ID`**, or **`--org=<uuid>`**; optional **`FORMS_MED_DEMO_EMBED_ORIGINS`** for staging URLs. NPM: **`npm run demo:seed:medication-form`** from **`web/`**.
+
+### Card 9 — Admin Draft Submission PATCH *(optional)*
 
 - **Status:** Pending / only if ops confirms need  
 - **Purpose:** **`PATCH /api/admin/forms/submissions/[submissionId]`** for draft payloads under same validation rules as public PATCH — **skip if** staff never edit drafts without public token.
@@ -127,7 +132,7 @@ This sprint extends the **completed V1 foundation** with **minimal admin APIs, e
 
 ## 6. Implementation notes (handoff)
 
-- **Card ordering:** 1 → 2 enables demo path; 3 → 4 delivers ops review; **7 = AdminV2 placement** for Forms; 5 improves recipient UX; 2.5 seeds demo options; **6 = QA/smoke**; optional draft PATCH = **Card 8**.  
+- **Card ordering:** 1 → 2 enables demo path; 3 → 4 delivers ops review; **7 = AdminV2 placement** for Forms; **8 = staging org alignment** for medication demo seed; 5 improves recipient UX; 2.5 seeds demo options; **6 = QA/smoke**; optional draft PATCH = **Card 9**.  
 - **Staging:** Apply/maintain V1 migrations + demo seed per environment policy (`forms-engine-v1.txt` validation notes).  
 - **Security:** Keep **`org_id`** off public JSON; admin submission **`GET`** detail response omits **`org_id`**; enforce **`allowed_embed_origins`**; rate limiting remains a **follow-up** unless pulled into this sprint explicitly.
 
