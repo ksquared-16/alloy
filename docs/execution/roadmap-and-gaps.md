@@ -17,7 +17,7 @@ Phases are **planning buckets** aligned to current product direction (as of **20
 ### Next phase (May–June 2026)
 
 - **CRM completion:**
-  - Forms (inquiry + intake)
+  - Forms (inquiry + intake) — long-term platform vision: **`docs/strategy/forms-platform.md`**
   - Tour scheduling
   - Document upload (non-AI) — upload exists; “completion” = product hardening + reporting surfaces as planned
   - Reporting V1
@@ -115,6 +115,20 @@ Shipped features list **capabilities that exist in repo** at a high level. **Not
 
 - Track detailed requirements in the issue tracker when prioritized.
 
+### Feature: Forms Platform — program vision (active)
+
+- **Start:** 2026-05-05
+- **Shipped:** TBD
+
+#### Capabilities (directional)
+
+- Long-term vision for unified **intake**, **documents**, and **compliance-oriented** capture — see **`docs/strategy/forms-platform.md`**.
+- Near-term engineering still rolls up under CRM/go-live items (e.g., inquiry + intake); this feature row tracks the **program**, not a single ship milestone.
+
+#### Notes
+
+- **Not V1** per strategy doc: full PDF builder, full compliance engine, AI document ingestion as a critical path.
+
 ---
 
 ## Active fix / cleanup items
@@ -160,6 +174,7 @@ Short buckets for deeper planning — **supplement** feature tracking and timeli
 
 ### Documents / forms / AI
 
+- Long-term forms direction: **`docs/strategy/forms-platform.md`** (**program start:** 2026-05-05).
 - Storage path: `product/documents-and-forms.md` — unified **forms engine** **not implemented** as a single primitive.
 - AI: `product/ai-system.md` — agent HTTP routes + env gates; broader “agents” product is **later phase**.
 
