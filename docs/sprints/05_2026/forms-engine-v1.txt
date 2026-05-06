@@ -1,0 +1,308 @@
+# Forms Engine V1 Sprint — Alloy (May 2026)
+
+---
+
+## Current status
+
+- **Sprint doc created:** this document.
+- **Implementation not started:** no code, migrations, or product changes until Phase 2 design lock is complete and reviewed.
+- **Next step:** run **Card 0 — System Alignment Audit** (findings feed Card 0.5 and subsequent design).
+
+---
+
+## 1. Sprint title
+
+**Forms Engine V1 — Foundational enrollment, compliance, intake, signatures, and PDF artifacts**
+
+---
+
+## 2. Purpose / north star
+
+Alloy needs a **single, coherent Forms Engine** that supports childcare **enrollment**, **compliance**, **web intake**, **signatures**, **generated PDFs**, and future **financial / subsidy** workflows—without fragmenting CRM, documents, or workflow semantics.
+
+The north star is: **structured form submissions are the durable source of truth**; **PDFs are reproducible compliance artifacts** derived from those submissions and integrated with the **existing documents system**.
+
+---
+
+## 3. Core doctrine
+
+- **Structured form submissions are the source of truth.** All business logic, reporting, and CRM linkage should reason over structured data (validated payloads and/or normalized storage), not over PDF bytes.
+- **PDFs are generated compliance artifacts, not the source of truth.** Official-looking outputs must be **reproducible** from versioned form definitions and submission data.
+- **Do not create a second documents system.** Generated PDFs must **integrate with the existing documents system** (storage, metadata, permissions, UI patterns).
+- **Do not create a generic drag-and-drop form builder.** Prefer versioned schemas, templates, and controlled configuration over an open-ended builder abstraction.
+- **Do not create a second custom field system unless the audit proves it is necessary.** Prefer reuse of existing field definition/value patterns where they fit; only introduce parallel systems with explicit audit justification.
+- **Do not create a second CRM intake model.** Reuse **persons**, **customers**, **customer_persons**, **customer_members**, and **opportunities**. **Customer members are the canonical child records.**
+- **Web intake must create CRM records through existing person-first CRM helpers where possible** (consistency, fewer code paths, fewer security footguns).
+- **Forms must be versioned.** Submissions must bind to the definition version used at capture time so compliance and audits hold.
+- **State-required forms** must preserve **exact required fields** and be **reproducible as official PDFs** (layout and field fidelity per regulatory needs).
+- **Center-level forms** can be **more flexible and config-driven** while still versioned and validated.
+- **Signatures in V1:** support capture, storage contract, and workflow hooks; **external signature providers** are **designed for**, not fully implemented in V1.
+- **PDF generation via a mapping layer**, not a general-purpose PDF engine inside the product core. Treat mapping as a contract between structured data and document output.
+- **Do not conflict with the existing workflow/event system.** Emit events such as **`form.submitted`**, **`form.signed`**, and **`form.document_generated`** **only after design approval** (post Card 1.5 review), with explicit payload contracts.
+- **Public iframe / web forms are critical for lead capture** and must be first-class in routing, security, and abuse controls.
+- **No implementation begins until Cards 0, 0.5, 1, and 1.5 are complete and reviewed.**
+
+---
+
+## 4. What Forms Engine V1 is
+
+- A **versioned** system for defining forms, capturing **validated structured submissions**, linking them to **existing CRM entities**, and producing **compliance PDFs** through a **mapping layer**.
+- A path for **public web intake** that can **safely** create or update **person / customer / customer_member / opportunity** records using **shared CRM helpers**.
+- A foundation for **signatures** (internal representation + lifecycle) with a **pluggable** path to external providers later.
+- An integration surface for **workflow/events** that **extends** current patterns rather than replacing them.
+
+---
+
+## 5. What it is NOT
+
+- Not a second **documents** product or DMS.
+- Not a **generic form builder** (drag/drop, arbitrary page builders, marketing “canvas” forms).
+- Not a parallel **custom fields** platform unless **proven necessary** by audit.
+- Not a new **intake/lead** data model separate from **opportunities** and related entities.
+- Not a **full PDF composition engine** as the core abstraction (no open-ended WYSIWYG PDF designer in V1).
+- Not a replacement for the **workflow/event** framework.
+
+---
+
+## 6. State-required forms vs center-level forms
+
+| Dimension | State-required forms | Center-level forms |
+|-----------|----------------------|--------------------|
+| **Regulatory fidelity** | Must preserve **exact required fields**; official PDF reproduction is a hard requirement. | More room for **config-driven** fields and flows; still validated and versioned. |
+| **Change control** | Strong **versioning**, audit trail, and controlled publishing. | Versioning + center-scoped configuration where appropriate. |
+| **PDF output** | Must map to **official templates** / layouts (mapping layer drives fidelity). | PDFs may be simpler or internal; still via **mapping**, not ad hoc one-offs. |
+| **Flexibility** | Low (by design). | Higher (within guardrails). |
+
+---
+
+## 7. Existing systems that must be reused
+
+- **Documents system:** storage, linkage, permissions, existing UI/listing patterns—**generated PDFs land here**.
+- **Entity model:** `persons`, `customers`, `customer_persons`, **customer_members (canonical children)**, `opportunities`.
+- **CRM intake helpers:** person-first creation/update flows for intake (no parallel “lead object” unless audit forces a minimal extension—default is **no**).
+- **Config system:** existing patterns for environment/center/feature configuration where applicable.
+- **Field system (conditional):** `field_definitions`, `field_values`, `field_section_definitions`, `record_layouts`—**reuse vs parallel schema** is an explicit Card 0 / 0.5 decision.
+- **Workflow / events:** extend with **approved** events only; no second orchestration layer.
+
+---
+
+## 8. Explicit anti-drift / anti-redundancy rules
+
+- **One documents system of record** for stored files and metadata; Forms Engine **links** into it.
+- **One CRM entity path** for intake: prefer **existing helpers** and tables; avoid “forms-specific” copies of person/child/opportunity state.
+- **One field/custom metadata strategy:** either **reuse** field_definitions/values or **isolate** form payloads with a documented reason—**not both** without boundaries.
+- **One PDF strategy:** **mapping contract** + template assets; avoid embedding unconstrained PDF logic across services.
+- **One event vocabulary** for forms: names and payloads **approved** before build; no ad hoc `console.log`-style event sprawl.
+- **Version everything that affects compliance:** definitions, mappings, and submission binding.
+
+---
+
+## 9. Success criteria
+
+- **Structured submissions** are authoritative for operational and compliance queries; PDFs can be **regenerated** from submission + version + mapping.
+- **No second documents system**; staff can find generated PDFs **alongside** existing document UX.
+- **Public iframe intake** works for lead capture with **clear security model** (abuse, rate limits, auth where needed, PII handling).
+- **Entity linking** uses **customer_members** as canonical child records and ties cleanly to **opportunities** where required.
+- **State form path** demonstrates **field fidelity** and **reproducible** official PDF output for at least one concrete example (see Card 10 seed).
+- **Signatures** have a **defined contract** (what is stored, what is shown, audit metadata) even if external providers are stubbed.
+- **Workflow integration** does not fork the existing system; **approved** events are emitted at the right lifecycle points.
+- **Tests and documentation** cover the above; **architecture freeze** respected through build.
+
+---
+
+## 10. Phase plan
+
+### Phase 1 — Alignment + Audit
+
+- **Card 0:** System Alignment Audit  
+- **Card 0.5:** Architecture Risk Review  
+
+### Phase 2 — Design Lock
+
+- **Card 1:** Final Data Model  
+- **Card 1.5:** API + Rendering Design  
+
+### Phase 3 — Build Loop
+
+- **Card 2:** Supabase migrations  
+- **Card 3:** Zod schema engine  
+- **Card 4:** Internal form renderer  
+- **Card 5:** Submission APIs  
+- **Card 6:** Entity linking  
+- **Card 7:** Public iframe intake  
+- **Card 8:** PDF mapping layer  
+- **Card 9:** Signature support  
+- **Card 10:** Medication Authorization seed / example  
+- **Card 11:** Events / workflow integration  
+- **Card 12:** Tests + validation  
+- **Card 13:** Documentation update pass  
+
+**Gate:** Phase 3 may begin only after **Cards 0, 0.5, 1, and 1.5** are **complete and reviewed**.
+
+---
+
+## 11. Card list
+
+| ID | Card | Phase |
+|----|------|-------|
+| 0 | System Alignment Audit | 1 |
+| 0.5 | Architecture Risk Review | 1 |
+| 1 | Final Data Model | 2 |
+| 1.5 | API + Rendering Design | 2 |
+| 2 | Supabase migrations | 3 |
+| 3 | Zod schema engine | 3 |
+| 4 | Internal form renderer | 3 |
+| 5 | Submission APIs | 3 |
+| 6 | Entity linking | 3 |
+| 7 | Public iframe intake | 3 |
+| 8 | PDF mapping layer | 3 |
+| 9 | Signature support | 3 |
+| 10 | Medication Authorization seed / example | 3 |
+| 11 | Events / workflow integration | 3 |
+| 12 | Tests + validation | 3 |
+| 13 | Documentation update pass | 3 |
+
+---
+
+## 12. Detailed Card 0: System Alignment Audit
+
+**Objective:** Map the real codebase and data model so Forms Engine V1 **reuses** what exists and **does not** accidentally fork documents, CRM, fields, or workflow.
+
+**Cursor must audit:**
+
+1. **Existing documents system** — tables, storage, ownership, RLS, lifecycle.  
+2. **Existing document tables / APIs / UI** — how files are listed, uploaded, linked to entities.  
+3. **Existing config system** — feature flags, center config, env patterns.  
+4. **Field system:** `field_definitions`, `field_values`, `field_section_definitions`, `record_layouts` — how they are queried, validated, and scoped.  
+5. **Existing entity model** — persons, customers, customer_persons, customer_members, opportunities (and relevant junctions).  
+6. **Existing CRM intake / opportunity creation helpers** — person-first flows, idempotency, validation.  
+7. **Existing workflow / event system** — event names, buses, consumers, idempotency, failure handling.  
+8. **Existing signature / PDF / document generation behavior** — any current PDFs, renders, third-party libs, legacy paths.  
+9. **Existing public routes or intake routes** — middleware, CSRF/CORS, rate limits, anonymous access patterns.
+
+**Card 0 output must include:**
+
+- **Existing assets to reuse** (tables, helpers, UI, libs) with **file paths** and **brief rationale**.  
+- **Gaps that require new tables/code** — minimal set, justified.  
+- **Risks of redundancy / drift** — what must not be duplicated; where the team historically forked behavior.  
+- **Recommended Forms Engine V1 table list** (proposal only; finalized in Card 1).  
+- **Recommended APIs** (admin vs public; read vs write).  
+- **Likely files impacted** (directories and hot spots).  
+- **Implementation sequence** — dependency-ordered suggestion for Phase 3 (may refine after 1.5).  
+- **Explicit do-not-build list** — aligned with doctrine (e.g., no second documents system, no drag/drop builder).
+
+---
+
+## 13. Detailed Card 0.5: Architecture Risk Review
+
+**Objective:** Resolve open decisions and record **risks / mitigations** before data model lock.
+
+**Required open design questions (must be addressed in the Card 0.5 write-up):**
+
+1. **Schema strategy:** Should form schemas **reuse** `field_definitions` (and related structures) or **remain separate** with explicit boundaries?  
+2. **Submission storage:** Should form submissions **write to** `field_values`, **only** store payload JSON (validated), or a **hybrid**—and why?  
+3. **PDF ↔ documents:** How should **generated PDFs** **link** to the existing **documents** model (FKs, metadata, naming, idempotency, regeneration)?  
+4. **Public intake → CRM:** How does **public** intake **safely** create/update **person / customer / customer_member / opportunity** records (validation, duplicate detection, abuse, auth)?  
+5. **Signatures:** How should **signatures** be **stored** (cryptographic hash, image, provider ref, audit fields)? What is **not** stored?  
+6. **Events:** What **events** should be emitted (`form.submitted`, `form.signed`, `form.document_generated`, others)? Payload shape? Ordering guarantees?  
+7. **Approval gate:** What items need **explicit approval** before any Phase 3 build (schema boundaries, RLS, public surface, PDF contract)?
+
+**Output:** decision log (with options, pick, rationale), residual risks, and **conditions** for entering Card 1.
+
+---
+
+## 14. Detailed Card 1: Final Data Model
+
+**Objective:** Lock the **database and versioning** design for V1.
+
+**Must deliver:**
+
+- **Final proposed tables** — names, purposes, and boundaries vs existing tables.  
+- **Columns** — types, nullability, defaults, constraints.  
+- **Relationships** — PK/FK graph; how submissions bind to **form version** and **entities**.  
+- **Indexes** — query patterns (listing by center, by opportunity, by person, by document).  
+- **RLS approach** — roles, service role, public/anonymous constraints, center scoping.  
+- **JSON schema structure** — where JSON lives; validation ownership (DB vs app).  
+- **Versioning strategy** — immutable published versions, draft states, migration of in-flight drafts.  
+- **Entity-linking strategy** — how links to person, customer, customer_member, opportunity are stored and enforced.
+
+---
+
+## 15. Detailed Card 1.5: API + Rendering Design
+
+**Objective:** Lock **runtime behavior** and contracts before migrations/code.
+
+**Must deliver:**
+
+- **Admin API design** — CRUD for definitions/versions, publishing, read APIs for staff UI.  
+- **Public iframe route design** — embedding, origin policy, session model, abuse controls.  
+- **Submission lifecycle** — draft → submitted → locked; correction / amendment rules (if any in V1).  
+- **Validation flow** — Zod (or chosen) validation, server-side enforcement, error shape.  
+- **PDF mapping contract** — inputs (submission + version + template id), outputs (bytes + metadata), idempotency keys, linkage to documents.  
+- **Signature contract** — fields required, audit trail, provider placeholder interface.  
+- **Internal rendering approach** — how staff vs public renderers share schema; component boundaries.  
+- **Test strategy** — unit vs integration vs E2E; minimum compliance cases (state vs center examples).
+
+---
+
+## 16. Future implementation cards after design lock
+
+*(Phase 3 — execute only after Cards 0, 0.5, 1, 1.5 are approved.)*
+
+- **Card 2:** Supabase migrations implementing Card 1 (plus roll-forward plan).  
+- **Card 3:** Zod schema engine shared by API and clients (single source of validation rules).  
+- **Card 4:** Internal form renderer for staff workflows.  
+- **Card 5:** Submission APIs (admin + public) with consistent validation and errors.  
+- **Card 6:** Entity linking implementation (customer_member canonical child, opportunity ties).  
+- **Card 7:** Public iframe intake (embeddable, secure, observable).  
+- **Card 8:** PDF mapping layer + first template(s).  
+- **Card 9:** Signature support per Card 1.5 contract (provider hooks stubbed).  
+- **Card 10:** Medication Authorization seed/example (state-style fidelity + PDF path).  
+- **Card 11:** Events/workflow integration with **approved** event names/payloads.  
+- **Card 12:** Tests + validation suite.  
+- **Card 13:** Documentation update pass (internal + operator-facing as needed).
+
+---
+
+## 17. Architecture freeze rules
+
+**After Card 1.5 is approved:**
+
+- **No new tables** without explicit approval (scope creep lives in a new design pass).  
+- **No alternate documents system** (no shadow file store, no parallel “form_files” product).  
+- **No alternate CRM intake model** (no parallel lead/child tables duplicating persons/customer_members/opportunities).  
+- **No replacing** the **workflow/event system** (extend only per approved contracts).  
+- **No new entity concepts** (no inventing “form_contact” or similar without design review).  
+- **No drag/drop builder abstraction.**  
+- **No AI form generation** in scope for V1 (and not a freeze-breaker hack).  
+- **No architecture changes during implementation cards** unless **explicitly approved** (security/RLS hotfixes may be allowed via narrow written exception tied to Card 1/1.5 intent).
+
+---
+
+## 18. Required Cursor output format for each card
+
+For **every** card execution, Cursor must produce:
+
+1. **Card ID + title**  
+2. **Goal** (1–3 sentences)  
+3. **Scope in / scope out**  
+4. **Deliverables** (bulleted, verifiable)  
+5. **Findings or design** (as applicable)  
+6. **Files touched or likely touched** (paths)  
+7. **Risks & mitigations**  
+8. **Open questions** (if any; for Cards 0–1.5, carry forward until resolved)  
+9. **Approval / sign-off checklist** (what must be true before closing the card)  
+10. **Next card** (what it unblocks)
+
+---
+
+## Assumptions (documented for the team)
+
+- **File extension is `.txt`** per request; content is **Markdown** for readability in-repo.  
+- **Sprint folder path** uses `docs/Sprints/05_2026/` as specified (may coexist with `docs/sprints/` on case-sensitive systems—align folder naming if the repo standard is lowercase only).  
+- **Card 10** “Medication Authorization” is a **concrete example** for state-style fidelity and PDF mapping; the exact form set may be adjusted per jurisdiction/product priority without changing the engine plan.  
+- **Event names** (`form.submitted`, `form.signed`, `form.document_generated`) are **placeholders** until matched to existing workflow naming conventions during Card 0.
+
+---
+
+*End of sprint document.*
