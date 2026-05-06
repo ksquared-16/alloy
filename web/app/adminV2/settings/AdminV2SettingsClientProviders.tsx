@@ -9,6 +9,8 @@ import SettingsHierarchyBreadcrumb from "./SettingsHierarchyBreadcrumb";
 interface AdminV2SettingsClientProvidersProps {
     children: ReactNode;
     userEmail: string;
+    userId: string;
+    orgId: string;
     role: string;
     /** Same `user_roles.role` keys as admin APIs — drives `canMutate` authoritatively. */
     roleKeys: string[];
@@ -22,11 +24,15 @@ interface AdminV2SettingsClientProvidersProps {
 export default function AdminV2SettingsClientProviders({
     children,
     userEmail,
+    userId,
+    orgId,
     role,
     roleKeys,
     initialEntityLabels,
 }: AdminV2SettingsClientProvidersProps) {
     const safeEmail = typeof userEmail === "string" && userEmail.length > 0 ? userEmail : "Unknown";
+    const safeUserId = typeof userId === "string" ? userId : "";
+    const safeOrgId = typeof orgId === "string" ? orgId : "";
     const safeRole = typeof role === "string" ? role : "";
     const safeRoleKeys = Array.isArray(roleKeys) ? roleKeys : [];
 
@@ -35,7 +41,7 @@ export default function AdminV2SettingsClientProviders({
         : undefined;
 
     return (
-        <AdminAuthProvider userEmail={safeEmail} role={safeRole} roleKeys={safeRoleKeys}>
+        <AdminAuthProvider userEmail={safeEmail} userId={safeUserId} orgId={safeOrgId} role={safeRole} roleKeys={safeRoleKeys}>
             <EntityLabelsProvider initialLabels={labels}>
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                     <div className="shrink-0 border-b border-alloy-forge/10 bg-white/25 px-4 py-2 backdrop-blur-sm sm:px-5">

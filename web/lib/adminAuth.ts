@@ -21,6 +21,8 @@ export interface AdminAuthResult {
     role: string;
     /** Raw `user_roles.role` keys for the resolved org — authoritative for admin-vs-ops mutate gates. */
     roleKeys: string[];
+    /** Primary org from {@link resolveAdminAccessCore} — same id used by Settings → Users & Roles members API. */
+    orgId: string;
 }
 
 async function loadAdminAuth(): Promise<AdminAuthResult | null> {
@@ -47,7 +49,7 @@ async function loadAdminAuth(): Promise<AdminAuthResult | null> {
             total_ms: totalMs,
         });
     }
-    return { user, role, roleKeys: bundle.roleKeys };
+    return { user, role, roleKeys: bundle.roleKeys, orgId: bundle.orgId };
 }
 
 const resolveAdminAuthOnce = cache(async (): Promise<AdminAuthResult | null> => {

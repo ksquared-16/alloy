@@ -67,7 +67,13 @@ export default function AdminV2WorkspaceClientProviders({
   } as CSSProperties;
 
   return (
-    <AdminAuthProvider userEmail={safeEmail} role={safeRole} roleKeys={safeRoleKeys}>
+    <AdminAuthProvider
+      userEmail={safeEmail}
+      userId={principalUserId}
+      orgId={typeof orgId === "string" ? orgId : ""}
+      role={safeRole}
+      roleKeys={safeRoleKeys}
+    >
       <AdminVerticalProvider>
         <EntityLabelsProvider initialLabels={labels}>
           <AdminOrgOperationalTimezoneProvider iana={operationalTz}>

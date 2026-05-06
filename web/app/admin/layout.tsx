@@ -1,10 +1,6 @@
 import { redirect } from "next/navigation";
 import { getAdminAuth } from "@/lib/adminAuth";
-import {
-    loadEntityLabelsMapForUser,
-    getAdminOrgIdForUser,
-    type EntityLabelsBootstrapMap,
-} from "@/lib/admin/entityLabelsServer";
+import { loadEntityLabelsMapForUser, type EntityLabelsBootstrapMap } from "@/lib/admin/entityLabelsServer";
 import AdminLayout from "@/components/admin/AdminLayout";
 import type { AdminViewerTimezoneValue } from "@/contexts/AdminViewerTimezoneContext";
 import { loadAdminViewerTimezoneBootstrap } from "@/lib/admin/viewerTimezoneBootstrap";
@@ -30,7 +26,7 @@ export default async function AdminLayoutWrapper({
         console.error("[admin/layout] loadEntityLabelsMapForUser failed:", e);
     }
 
-    const orgId = await getAdminOrgIdForUser(auth.user.id);
+    const orgId = auth.orgId;
     if (!orgId) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-admin-page p-6 text-alloy-midnight">
@@ -56,6 +52,8 @@ export default async function AdminLayoutWrapper({
     return (
         <AdminLayout
             userEmail={typeof auth.user.email === "string" && auth.user.email ? auth.user.email : "Unknown"}
+            userId={auth.user.id}
+            orgId={orgId}
             role={auth.role}
             roleKeys={auth.roleKeys}
             initialEntityLabels={initialEntityLabels}

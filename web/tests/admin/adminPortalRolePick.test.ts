@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { compatibilityPortalRole, hasPortalAdminMutateAccess } from "@/lib/admin/adminPortalRolePick";
+import { displayRoleForAdminPicker } from "@/lib/admin/userRolesMembership";
 
 describe("adminPortalRolePick", () => {
     it("hasPortalAdminMutateAccess matches admin membership", () => {
@@ -14,5 +15,12 @@ describe("adminPortalRolePick", () => {
         for (const k of keys) {
             expect(compatibilityPortalRole(k) === "admin").toBe(hasPortalAdminMutateAccess(k));
         }
+    });
+
+    it("ops + school_director: Settings primary picker shows ops and portal mutate stays false without admin key", () => {
+        const keys = ["ops", "school_director"];
+        expect(displayRoleForAdminPicker(keys)).toBe("ops");
+        expect(hasPortalAdminMutateAccess(keys)).toBe(false);
+        expect(compatibilityPortalRole(keys)).toBe("ops");
     });
 });

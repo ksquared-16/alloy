@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { getAdminAuth } from "@/lib/adminAuth";
-import { getAdminOrgIdForUser } from "@/lib/admin/entityLabelsServer";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { buildAccessScopeCacheFingerprint, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
@@ -22,7 +21,7 @@ export default async function AdminV2WorkspaceLayout({
     redirect("/unauthorized");
   }
 
-  const orgId = await getAdminOrgIdForUser(auth.user.id);
+  const orgId = auth.orgId;
   if (!orgId) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-admin-page p-6 text-alloy-midnight">

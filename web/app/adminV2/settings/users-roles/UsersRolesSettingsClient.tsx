@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import SettingsEntityTabBar from "@/components/adminV2/settings/SettingsEntityTabBar";
 import {
     PERMISSION_GRID_ROWS,
@@ -43,6 +44,7 @@ function displayName(m: MemberRow): string {
 }
 
 export default function UsersRolesSettingsClient({ canManageUsersRoles }: { canManageUsersRoles: boolean }) {
+    const router = useRouter();
     const [mainTab, setMainTab] = useState<MainTab>("users");
     const [members, setMembers] = useState<MemberRow[]>([]);
     const [departments, setDepartments] = useState<DeptOpt[]>([]);
@@ -200,6 +202,8 @@ export default function UsersRolesSettingsClient({ canManageUsersRoles }: { canM
             if (!res.ok) throw new Error(typeof json.error === "string" ? json.error : "Role save failed");
             setMsg("Role updated.");
             await loadMembers();
+            /** Re-run settings layout server props so `AdminAuthProvider` roleKeys match fresh `user_roles` (layout does not refetch on client nav). */
+            router.refresh();
         } catch (e) {
             setErr(e instanceof Error ? e.message : "Role save failed");
         } finally {

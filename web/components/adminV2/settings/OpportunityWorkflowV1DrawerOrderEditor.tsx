@@ -29,7 +29,7 @@ function move<T>(arr: T[], index: number, delta: number): T[] {
 }
 
 export default function OpportunityWorkflowV1DrawerOrderEditor({ onSaved }: { onSaved?: () => void }) {
-    const { canMutate, role, roleKeys } = useAdminAuth();
+    const { canMutate, role, roleKeys, userEmail, userId, orgId, roleKeysSource } = useAdminAuth();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [preview, setPreview] = useState<PreviewPayload | null>(null);
@@ -210,6 +210,21 @@ export default function OpportunityWorkflowV1DrawerOrderEditor({ onSaved }: { on
             ) : (
                 <div className="mt-3 space-y-1 rounded-lg border border-alloy-forge/12 bg-alloy-stone/5 px-3 py-2 text-[11px] leading-snug text-alloy-midnight/65">
                     <p className="font-medium text-alloy-midnight/80">View only — cannot save drawer order</p>
+                    <p className="text-alloy-midnight/55">
+                        Org id:{" "}
+                        <span className="font-mono text-[10px] text-alloy-midnight/75">{orgId || "—"}</span>
+                        {" · "}
+                        Auth user id: <span className="font-mono text-[10px] text-alloy-midnight/75">{userId || "—"}</span>
+                        {userEmail ? (
+                            <>
+                                {" · "}
+                                Email: <span className="font-mono text-[10px] text-alloy-midnight/75">{userEmail}</span>
+                            </>
+                        ) : null}
+                    </p>
+                    <p className="text-alloy-midnight/55">
+                        Role keys source: <span className="text-alloy-midnight/70">{roleKeysSource}</span>
+                    </p>
                     <p>
                         Resolved portal role: <span className="font-mono text-[10px]">{role || "—"}</span>
                         {roleKeys.length > 0 ? (

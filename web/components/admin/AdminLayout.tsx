@@ -263,6 +263,8 @@ function getInitials(email: string): string {
 interface AdminLayoutProps {
     children: ReactNode;
     userEmail: string;
+    userId: string;
+    orgId: string;
     role: string;
     roleKeys?: string[];
     initialEntityLabels?: EntityLabelsMap;
@@ -286,7 +288,7 @@ function pathnameMatchesNavHref(href: string, pathname: string): boolean {
     return false;
 }
 
-function AdminLayoutInner({ children, userEmail, role }: Omit<AdminLayoutProps, "initialEntityLabels">) {
+function AdminLayoutInner({ children, userEmail, role }: { children: ReactNode; userEmail: string; role: string }) {
     const pathname = usePathname();
     const router = useRouter();
     const sidebarScrollRef = useRef<HTMLElement | null>(null);
@@ -631,9 +633,20 @@ function AdminLayoutInner({ children, userEmail, role }: Omit<AdminLayoutProps, 
 }
 
 export default function AdminLayout(props: AdminLayoutProps) {
-    const { initialEntityLabels, userEmail, role, roleKeys, children, initialViewerTimezone, initialOperationalTimezoneIana } =
-        props;
+    const {
+        initialEntityLabels,
+        userEmail,
+        userId,
+        orgId,
+        role,
+        roleKeys,
+        children,
+        initialViewerTimezone,
+        initialOperationalTimezoneIana,
+    } = props;
     const safeEmail = typeof userEmail === "string" && userEmail.length > 0 ? userEmail : "Unknown";
+    const safeUserId = typeof userId === "string" ? userId : "";
+    const safeOrgId = typeof orgId === "string" ? orgId : "";
     const safeRole = typeof role === "string" ? role : "";
     const safeRoleKeys = Array.isArray(roleKeys) ? roleKeys : undefined;
     const tzValue: AdminViewerTimezoneValue = initialViewerTimezone ?? {
@@ -645,7 +658,7 @@ export default function AdminLayout(props: AdminLayoutProps) {
             ? initialOperationalTimezoneIana.trim()
             : "UTC";
     return (
-        <AdminAuthProvider userEmail={safeEmail} role={safeRole} roleKeys={safeRoleKeys}>
+        <AdminAuthProvider userEmail={safeEmail} userId={safeUserId} orgId={safeOrgId} role={safeRole} roleKeys={safeRoleKeys}>
             <AdminVerticalProvider>
                 <EntityLabelsProvider initialLabels={initialEntityLabels}>
                     <AdminOrgOperationalTimezoneProvider iana={operationalTz}>
