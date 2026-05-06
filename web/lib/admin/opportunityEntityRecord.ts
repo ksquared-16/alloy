@@ -18,6 +18,7 @@ import { logDbTiming, withDbTiming } from "@/lib/admin/dbQueryTiming";
 import { perfDrawerFullHydrate, timingOpportunityApiVisible } from "@/lib/perf/adminV2PerfLog";
 import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 import { assertOpportunityInAccessScope } from "@/lib/admin/accessScope";
+import { computeOperationalAttentionAttachment } from "@/lib/admin/operationalAttentionEntityAttachment";
 
 type AdminSupabase = ReturnType<typeof createAdminClient>;
 
@@ -710,7 +711,7 @@ export async function respondOpportunityEntityGet(
       wuidForDept
         ? supabase
             .from("work_units")
-            .select("department_id")
+            .select("department_id, metadata")
             .eq("id", wuidForDept)
             .eq("org_id", orgId)
             .maybeSingle()
@@ -853,6 +854,17 @@ export async function respondOpportunityEntityGet(
       inquiry: { title: inquiryTitleEarlyV, lines: [], section_key: "quote" },
     };
     markVisiblePhase("visible_after_identity_block");
+    const wuMetaVisible =
+      wuidForDept && wuDeptRowV.data
+        ? (wuDeptRowV.data as { metadata?: unknown }).metadata ?? null
+        : null;
+    const attnVisible = computeOperationalAttentionAttachment({
+      opportunityRow: vis as Record<string, unknown>,
+      defs: opportunityDefsVisible,
+      attentionConfigMetadata: wuMetaVisible,
+      nowMs: Date.now(),
+    });
+    Object.assign(vis, attnVisible);
     const enrichTotalMsV = Date.now() - enrichStartedAt;
     const enrichHeaderV =
       JSON.stringify({ total_ms: enrichTotalMsV, phases_ms: enrichPhaseMs })
@@ -916,7 +928,7 @@ export async function respondOpportunityEntityGet(
     wuidForDept
       ? supabase
           .from("work_units")
-          .select("department_id")
+          .select("department_id, metadata")
           .eq("id", wuidForDept)
           .eq("org_id", orgId)
           .maybeSingle()
@@ -1140,6 +1152,17 @@ export async function respondOpportunityEntityGet(
       inquiry: { title: inquiryTitleEarly, lines: [], section_key: "quote" },
     };
     markPhase("after_identity_block");
+    const wuMetaInitial =
+      wuidForDept && wuDeptRow.data
+        ? (wuDeptRow.data as { metadata?: unknown }).metadata ?? null
+        : null;
+    const attnInitial = computeOperationalAttentionAttachment({
+      opportunityRow: out as Record<string, unknown>,
+      defs: opportunityDefs,
+      attentionConfigMetadata: wuMetaInitial,
+      nowMs: Date.now(),
+    });
+    Object.assign(out, attnInitial);
     const enrichTotalMsDi = Date.now() - enrichStartedAt;
     const enrichHeaderDi =
       JSON.stringify({ total_ms: enrichTotalMsDi, phases_ms: enrichPhaseMs })
@@ -1693,6 +1716,18 @@ export async function respondOpportunityEntityGet(
 
   const serverRouteMs = Date.now() - opportunityRouteStartedAt;
   out._record_surface = "full";
+
+  const wuMetaFull =
+    wuidForDept && wuDeptRow.data
+      ? (wuDeptRow.data as { metadata?: unknown }).metadata ?? null
+      : null;
+  const attnFull = computeOperationalAttentionAttachment({
+    opportunityRow: out as Record<string, unknown>,
+    defs: opportunityDefs,
+    attentionConfigMetadata: wuMetaFull,
+    nowMs: Date.now(),
+  });
+  Object.assign(out, attnFull);
 
   const tSerialize0 = Date.now();
   const bodyJson = JSON.stringify(out);

@@ -20,6 +20,7 @@ import type { QueueUiRowPreviewField } from "@/lib/ui-v2/queueUiConfig";
 import { normalizePhone } from "@/lib/contactNormalize";
 import { formatWorkspaceUsdGrouped } from "@/lib/ui-v2/formatWorkspaceCurrency";
 import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
+import { buildQueueOperationalAttentionPresentation } from "@/lib/opportunities/operationalAttentionExplain";
 
 type OppRow = WorkspaceOpportunityQueueRuntime["items"][number];
 
@@ -108,6 +109,13 @@ function laneQuickActionsForAttentionRow(row: OppRow, workUnitKey: string): Queu
                 { id: "mark_lost", label: "Lost" },
             ];
         }
+        if (reason === "waiting_on_staff") {
+            return [
+                { id: "open_quote", label: "Open inquiry" },
+                { id: "qualify_opportunity", label: "Conversation had" },
+                { id: "mark_lost", label: "Lost" },
+            ];
+        }
         return [
             { id: "qualify_opportunity", label: "Conversation had" },
             { id: "start_quote", label: "Schedule tour" },
@@ -186,7 +194,11 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
 
     const roomContext = (row as { _room_label?: string | null })._room_label?.trim() || null;
 
-    const attentionReason = (row as { _attention_reason_label?: string | null })._attention_reason_label?.trim() || null;
+    const attnPres = buildQueueOperationalAttentionPresentation(row as Record<string, unknown>);
+    const attentionReason =
+        attnPres.summaryLine ??
+        ((row as { _attention_reason_label?: string | null })._attention_reason_label?.trim() || null);
+    const operationalNextHint = attnPres.nextHintLine;
     const notesRaw = (row as { _notes_preview?: string | null })._notes_preview;
     const familyNotePreview = formatOpportunityQueueNotesPreviewParts(notesRaw, options?.viewerTimezone ?? undefined);
     const familyNote = formatOpportunityQueueNotesPreview(notesRaw, options?.viewerTimezone ?? undefined);
@@ -242,6 +254,7 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
         programContext,
         roomContext,
         attentionReason,
+        operationalNextHint,
         familyNote,
         familyNotePreview,
         activityStale,
@@ -268,6 +281,11 @@ export function buildEnrollmentOpportunityQueueItemVm(
             : opportunityQuickActionsForLane(ctx.workUnitKey);
     const quickActions = [...crmContactQuickActions(row), ...laneActions];
 
+    const wk = ctx.workUnitKey.trim().toLowerCase();
+    const hasOperationalAttention = Boolean(
+        (row as { _attention_reason?: string | null })._attention_reason?.trim() ||
+            (row as { _attention_reason_label?: string | null })._attention_reason_label?.trim()
+    );
     const item: QueueItemVm = {
         id: row.id,
         title,
@@ -278,7 +296,12 @@ export function buildEnrollmentOpportunityQueueItemVm(
         valueLabel: slots.commercialValue ?? undefined,
         quickActions,
         semanticCrmCompact: slots,
-        urgencyTier: ctx.workUnitKey.trim().toLowerCase() === "priced_followup" ? "warning" : "standard",
+        urgencyTier:
+            wk === "needs_attention" && hasOperationalAttention
+                ? "warning"
+                : wk === "priced_followup"
+                  ? "warning"
+                  : "standard",
     };
     if (statusLabel) {
         item.groupKey = status;

@@ -207,7 +207,7 @@ type JobQueryPlanOp =
 type JobSortPlan = { column: string; ascending: boolean };
 
 type OpportunityQueryPlanOp = JobQueryPlanOp;
-type OpportunitySortPlan = { column: string; ascending: boolean };
+export type OpportunitySortPlan = { column: string; ascending: boolean };
 
 function buildJobPlan(
     queue: QueueConfig,
@@ -357,7 +357,7 @@ function minLifecycleStaleHoursFromResolvedConfig(thresholdsHours: OpportunityAt
     );
 }
 
-function opportunityPreviewToResolverEntity(row: OpportunityRowPreview): OpportunityAttentionEntityInput {
+export function opportunityPreviewToResolverEntity(row: OpportunityRowPreview): OpportunityAttentionEntityInput {
     const md = row.metadata;
     return {
         id: row.id,
@@ -1061,6 +1061,7 @@ async function enrichOpportunityRows(params: {
         let attentionReasonLabel: string | null;
         let attentionReasonCode: string | null = null;
         let attentionSeverity: "critical" | "high" | "medium" | "low" | null = null;
+        let attentionExtras: Record<string, unknown> = {};
         if (opportunityAttentionResolution) {
             const attn = resolveOpportunityAttention({
                 opportunity: opportunityPreviewToResolverEntity(r),
@@ -1072,6 +1073,12 @@ async function enrichOpportunityRows(params: {
             attentionReasonCode = attn.primary_reason?.code ?? null;
             attentionReasonLabel = attn.primary_reason?.label ?? null;
             attentionSeverity = attn.primary_reason?.severity ?? null;
+            attentionExtras = {
+                _attention_priority_score: attn.priority_score,
+                _attention_waiting_bucket: attn.waiting.bucket,
+                _attention_reasons_detail: attn.reasons,
+                _attention_priority_breakdown: attn.priority_breakdown,
+            };
         } else {
             attentionReasonLabel = opportunityNeedsAttentionReasonLabel(r, nowForAttention);
         }
@@ -1107,6 +1114,7 @@ async function enrichOpportunityRows(params: {
                 ? {
                       _attention_reason: attentionReasonCode,
                       _attention_severity: attentionSeverity,
+                      ...attentionExtras,
                   }
                 : {}),
         };
@@ -1149,6 +1157,14 @@ function buildOpportunityNeedsAttentionOrExpr(now: Date, minLifecycleStaleHours:
     const todayYmd = now.toISOString().slice(0, 10);
     const lifecycleStaleCut = toIso(subtractHours(now, minLifecycleStaleHours));
     // PostgREST `or` grammar (used by tests / future SQL); enrollment `needs_attention` queue is evaluated in-memory instead.
+    const waitBucketBranches = [
+        "waiting_on_family",
+        "waiting_on_staff",
+        "waiting_on_documents",
+        "waiting_on_payment",
+        "blocked_internal",
+        "blocked_external",
+    ].map((b) => `metadata->enrollment_operational->>wait_bucket.eq.${b}`);
     return [
         `updated_at.lt.${stale7d}`,
         `updated_at.lt.${lifecycleStaleCut}`,
@@ -1157,7 +1173,9 @@ function buildOpportunityNeedsAttentionOrExpr(now: Date, minLifecycleStaleHours:
         "customer_id.is.null",
         buildOpportunityHighValueStaleOrBranches(stale2d),
         `metadata->>next_follow_up_at.lt.${nowIso}`,
+        `metadata->>commitment_due_at.lt.${nowIso}`,
         `and(status_key.eq.tour_scheduled,metadata->>tour_date.lt.${todayYmd})`,
+        ...waitBucketBranches,
     ].join(",");
 }
 
@@ -1172,6 +1190,14 @@ function buildOpportunityNeedsAttentionCandidateOrExpr(now: Date, minLifecycleSt
     const nowIso = toIso(now);
     const todayYmd = now.toISOString().slice(0, 10);
     const lifecycleStaleCut = toIso(subtractHours(now, minLifecycleStaleHours));
+    const waitBucketBranches = [
+        "waiting_on_family",
+        "waiting_on_staff",
+        "waiting_on_documents",
+        "waiting_on_payment",
+        "blocked_internal",
+        "blocked_external",
+    ].map((b) => `metadata->enrollment_operational->>wait_bucket.eq.${b}`);
     return [
         `updated_at.lt.${stale7d}`,
         `updated_at.lt.${lifecycleStaleCut}`,
@@ -1181,7 +1207,9 @@ function buildOpportunityNeedsAttentionCandidateOrExpr(now: Date, minLifecycleSt
         "primary_contact_id.is.null",
         buildOpportunityHighValueStaleOrBranches(stale2d),
         `metadata->>next_follow_up_at.lt.${nowIso}`,
+        `metadata->>commitment_due_at.lt.${nowIso}`,
         `and(status_key.eq.tour_scheduled,metadata->>tour_date.lt.${todayYmd})`,
+        ...waitBucketBranches,
     ].join(",");
 }
 
@@ -1210,7 +1238,7 @@ function sortOpportunityRowsByPlan(rows: OpportunityRowPreview[], sort: Opportun
     });
 }
 
-async function loadOpportunityNeedsAttentionRows(params: {
+export async function loadOpportunityNeedsAttentionRows(params: {
     supabase: ReturnType<typeof createAdminClient>;
     orgId: string;
     workUnitId: string;

@@ -8,40 +8,36 @@ import { computeOpportunityAttentionReason } from "@/lib/workspace/opportunityAt
 import { isOpportunityActiveForExecution, terminalOpportunityStatusKeysFromDefs } from "@/lib/workspace/opportunityExecutionEligibility";
 import {
     createDefaultOpportunityAttentionResolvedConfig,
+    effectivePrimaryReasonPriorityOrder,
     labelForReasonCode,
     type OpportunityAttentionResolvedConfig,
-    severityForReasonCode,
     type OpportunityAttentionSeverity,
+    severityForReasonCode,
 } from "@/lib/opportunities/opportunityAttentionConfig";
+import {
+    PLATFORM_PRIMARY_REASON_PRIORITY_ORDER,
+    waitBucketToAttentionReasonCode,
+    type OpportunityAttentionReasonCode,
+} from "@/lib/opportunities/attentionPlatformCatalog";
+import { parseEnrollmentOperationalFromMetadata, type EnrollmentOperationalValidated } from "@/lib/opportunities/enrollmentOperationalMetadata";
+import {
+    attentionReasonCodeToWaitBucket,
+    computeCommitmentReasonSla,
+    computeStaleReasonSla,
+    computeWaitReasonSla,
+    type AttentionReasonSlaSlice,
+    type AttentionSlaClockConfidence,
+    type AttentionSlaTier,
+} from "@/lib/opportunities/attentionSla";
+import {
+    computeAttentionPriorityScore,
+    type PriorityDimensionContribution,
+} from "@/lib/opportunities/attentionPriorityScore";
 
-/** Stable platform codes: legacy lifecycle + QueueService-style queue lane reasons. */
-export type OpportunityAttentionReasonCode =
-    | OpportunityAttentionReason
-    | "follow_up_date_passed"
-    | "tour_date_passed"
-    | "high_value_stale"
-    | "mid_funnel_stale"
-    | "missing_identity";
+export type { OpportunityAttentionReasonCode } from "@/lib/opportunities/attentionPlatformCatalog";
 
-/**
- * Lower index = higher precedence for `primary_reason` and display ordering
- * (aligned with legacy QueueService label chain, then lifecycle reasons).
- */
-export const OPPORTUNITY_ATTENTION_REASON_PRIORITY_ORDER: readonly OpportunityAttentionReasonCode[] = [
-    "follow_up_date_passed",
-    "tour_date_passed",
-    "high_value_stale",
-    "mid_funnel_stale",
-    "missing_identity",
-    "stale_new_inquiry",
-    "stale_qualified",
-    "missing_quote_after_execution",
-    "stale_quote_followup",
-] as const;
-
-const PRIORITY_INDEX: Map<OpportunityAttentionReasonCode, number> = new Map(
-    OPPORTUNITY_ATTENTION_REASON_PRIORITY_ORDER.map((code, i) => [code, i])
-);
+/** @deprecated Use PLATFORM_PRIMARY_REASON_PRIORITY_ORDER from attentionPlatformCatalog — alias for tests/back-compat */
+export const OPPORTUNITY_ATTENTION_REASON_PRIORITY_ORDER = PLATFORM_PRIMARY_REASON_PRIORITY_ORDER;
 
 /** Enrollment funnel stages: stale >N days (matches QueueService defaults). */
 export const OPPORTUNITY_HIGH_VALUE_STALE_STATUS_KEY_SET = new Set([
@@ -62,13 +58,9 @@ export const QUEUE_LANE_MID_FUNNEL_STALE_STATUS_KEYS = new Set([
     "enrolling",
 ]);
 
-export const OPPORTUNITY_ATTENTION_RESOLVER_VERSION = 1 as const;
+export const OPPORTUNITY_ATTENTION_RESOLVER_VERSION = 2 as const;
 
 export type OpportunityAttentionSignalInput = {
-    /**
-     * Optional workflow/activity-derived signal — never required for core membership in v1.
-     * When `config.auxiliary_signals_enabled` is true, surfaces as `auxiliary.activity_stale` only.
-     */
     activityStale?: ActivityStaleSignalVm | null;
 };
 
@@ -90,25 +82,38 @@ export type OpportunityAttentionResolverInput = {
     opportunity: OpportunityAttentionEntityInput;
     nowMs: number;
     defs: StatusDefinitionRow[];
-    /**
-     * Prefer passing explicit config (e.g. from {@link resolveOpportunityAttentionConfigFromMetadata}).
-     * When omitted, uses defaults from {@link createDefaultOpportunityAttentionResolvedConfig}.
-     */
     config?: OpportunityAttentionResolvedConfig;
     optionalSignals?: OpportunityAttentionSignalInput | null;
+    /**
+     * Optional row context for SLA clock fallback (status transition time when available).
+     * QueueService standalone paths omit this in GATE 3.
+     */
+    rowContext?: {
+        lastStatusTransitionAtIso?: string | null;
+    } | null;
 };
 
 export type ResolvedOpportunityAttentionReason = {
     code: OpportunityAttentionReasonCode;
     label: string;
     severity: OpportunityAttentionSeverity;
+    sla_tier: AttentionSlaTier;
+    sla_clock_confidence: AttentionSlaClockConfidence;
+};
+
+export type AttentionWaitingFacet = {
+    bucket: EnrollmentOperationalValidated["wait_bucket"];
+    since_iso: string | null;
+    active: boolean;
 };
 
 export type OpportunityAttentionResult = {
     needs_attention: boolean;
     reasons: ResolvedOpportunityAttentionReason[];
     primary_reason: ResolvedOpportunityAttentionReason | null;
-    /** Informational only unless future work wires membership to activity. */
+    waiting: AttentionWaitingFacet;
+    priority_score: number;
+    priority_breakdown: PriorityDimensionContribution[];
     auxiliary: {
         activity_stale: ActivityStaleSignalVm | null;
     };
@@ -140,13 +145,77 @@ function parseTourDateYmdUtcMs(raw: unknown): number | null {
     return Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
 }
 
-function sortReasonCodes(codes: OpportunityAttentionReasonCode[]): OpportunityAttentionReasonCode[] {
+function sortReasonCodes(codes: OpportunityAttentionReasonCode[], cfg: OpportunityAttentionResolvedConfig): OpportunityAttentionReasonCode[] {
+    const order = effectivePrimaryReasonPriorityOrder(cfg);
+    const idx = new Map(order.map((c, i) => [c, i]));
     return [...codes].sort((a, b) => {
-        const ia = PRIORITY_INDEX.get(a) ?? 999;
-        const ib = PRIORITY_INDEX.get(b) ?? 999;
+        const ia = idx.get(a) ?? 1000;
+        const ib = idx.get(b) ?? 1000;
         if (ia !== ib) return ia - ib;
         return a.localeCompare(b);
     });
+}
+
+function resolveWaitElapsedMs(params: {
+    eo: EnrollmentOperationalValidated;
+    row: OpportunityAttentionEntityInput;
+    rowContext?: OpportunityAttentionResolverInput["rowContext"];
+    nowMs: number;
+}): { elapsedMs: number | null; confidence: AttentionSlaClockConfidence } {
+    const { eo, row, rowContext, nowMs } = params;
+    if (eo.wait_since) {
+        const t = Date.parse(eo.wait_since);
+        if (Number.isFinite(t)) return { elapsedMs: Math.max(0, nowMs - t), confidence: "high" };
+    }
+    const trans = rowContext?.lastStatusTransitionAtIso;
+    if (trans) {
+        const t = Date.parse(trans);
+        if (Number.isFinite(t)) return { elapsedMs: Math.max(0, nowMs - t), confidence: "medium" };
+    }
+    if (row.updated_at) {
+        const t = Date.parse(row.updated_at);
+        if (Number.isFinite(t)) return { elapsedMs: Math.max(0, nowMs - t), confidence: "low" };
+    }
+    if (row.created_at) {
+        const t = Date.parse(row.created_at);
+        if (Number.isFinite(t)) return { elapsedMs: Math.max(0, nowMs - t), confidence: "low" };
+    }
+    return { elapsedMs: null, confidence: "low" };
+}
+
+function slaSliceForReason(
+    code: OpportunityAttentionReasonCode,
+    ctx: {
+        eo: EnrollmentOperationalValidated;
+        md: Record<string, unknown> | null;
+        row: OpportunityAttentionEntityInput;
+        nowMs: number;
+        config: OpportunityAttentionResolvedConfig;
+        rowContext?: OpportunityAttentionResolverInput["rowContext"];
+    }
+): AttentionReasonSlaSlice {
+    const wb = attentionReasonCodeToWaitBucket(code);
+    if (wb) {
+        const { elapsedMs, confidence } = resolveWaitElapsedMs({
+            eo: ctx.eo,
+            row: ctx.row,
+            rowContext: ctx.rowContext,
+            nowMs: ctx.nowMs,
+        });
+        return computeWaitReasonSla({
+            bucket: wb,
+            elapsedMs,
+            clockConfidence: confidence,
+            config: ctx.config,
+        });
+    }
+    if (code === "follow_up_date_passed" || code === "tour_date_passed" || code === "overdue_commitment") {
+        return computeCommitmentReasonSla();
+    }
+    if (code === "missing_identity") {
+        return { tier: "breached", clock_confidence: "medium", elapsed_ms: null };
+    }
+    return computeStaleReasonSla();
 }
 
 function collectQueueLaneCodes(input: {
@@ -174,6 +243,11 @@ function collectQueueLaneCodes(input: {
         out.push("follow_up_date_passed");
     }
 
+    const commitmentDue = parseMetadataInstantMs(md, "commitment_due_at");
+    if (commitmentDue != null && commitmentDue < now.getTime()) {
+        out.push("overdue_commitment");
+    }
+
     if (sk === "tour_scheduled") {
         const tourMs = md ? parseTourDateYmdUtcMs(md.tour_date) : null;
         const startTodayUtc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
@@ -192,17 +266,20 @@ function collectQueueLaneCodes(input: {
         out.push("mid_funnel_stale");
     }
 
-    const pkg = md && typeof md.demo_seed_package === "string" ? String(md.demo_seed_package) : "";
-    const isDemoV2 = pkg === "enrollment_pipeline_demo_v2";
     const hasPerson = row.primary_person_id != null && String(row.primary_person_id).trim() !== "";
     const hasLegacyContact = row.primary_contact_id != null && String(row.primary_contact_id).trim() !== "";
-    const missingContactLike = isDemoV2 ? !hasPerson : !(hasPerson || hasLegacyContact);
+    const missingContactLike = !(hasPerson || hasLegacyContact);
     if (missingContactLike || row.customer_id == null) {
         out.push("missing_identity");
     }
 
-    const dedup = [...new Set(out)];
-    return dedup;
+    return [...new Set(out)];
+}
+
+function collectWaitingCodes(md: Record<string, unknown> | null): OpportunityAttentionReasonCode[] {
+    const eo = parseEnrollmentOperationalFromMetadata(md);
+    if (eo.wait_bucket === "none") return [];
+    return [waitBucketToAttentionReasonCode(eo.wait_bucket)];
 }
 
 function collectLifecycleCode(input: {
@@ -239,20 +316,31 @@ function applyPolicies(
 }
 
 function toResolvedList(
-    codes: OpportunityAttentionReasonCode[],
-    config: OpportunityAttentionResolvedConfig
+    orderedCodes: OpportunityAttentionReasonCode[],
+    config: OpportunityAttentionResolvedConfig,
+    slaCtx: {
+        eo: EnrollmentOperationalValidated;
+        md: Record<string, unknown> | null;
+        row: OpportunityAttentionEntityInput;
+        nowMs: number;
+        rowContext?: OpportunityAttentionResolverInput["rowContext"];
+    }
 ): ResolvedOpportunityAttentionReason[] {
-    const ordered = sortReasonCodes(codes);
-    return ordered.map((code) => ({
-        code,
-        label: labelForReasonCode(code, config),
-        severity: severityForReasonCode(code, config),
-    }));
+    return orderedCodes.map((code) => {
+        const sla = slaSliceForReason(code, { ...slaCtx, config });
+        return {
+            code,
+            label: labelForReasonCode(code, config),
+            severity: severityForReasonCode(code, config),
+            sla_tier: sla.tier,
+            sla_clock_confidence: sla.clock_confidence,
+        };
+    });
 }
 
 /**
- * Canonical opportunity Needs Attention evaluator (resolver v1).
- * Union of QueueService lane rules + legacy attention-queue lifecycle rules; single implementation.
+ * Canonical opportunity operational attention evaluator (resolver v2).
+ * Single implementation for QueueService + workspace + APIs.
  */
 export function resolveOpportunityAttention(input: OpportunityAttentionResolverInput): OpportunityAttentionResult {
     const now = new Date(input.nowMs);
@@ -260,6 +348,9 @@ export function resolveOpportunityAttention(input: OpportunityAttentionResolverI
 
     const rulesV1: OpportunityAttentionRuleConfigV1 = { version: 1, thresholdsHours: { ...cfg.thresholdsHours } };
     const terminalStatusKeys = terminalOpportunityStatusKeysFromDefs(input.defs);
+
+    const md = opportunityMetadataRecord(input.opportunity.metadata);
+    const eo = parseEnrollmentOperationalFromMetadata(md);
 
     const queueCodes = collectQueueLaneCodes({
         row: input.opportunity,
@@ -275,20 +366,58 @@ export function resolveOpportunityAttention(input: OpportunityAttentionResolverI
         nowMs: input.nowMs,
     });
 
+    const waitingCodes = collectWaitingCodes(md);
+
     const merged: OpportunityAttentionReasonCode[] = [...queueCodes];
     if (life) merged.push(life);
+    merged.push(...waitingCodes);
 
     const enabledCodes = applyPolicies([...new Set(merged)], cfg);
-    const reasons = toResolvedList(enabledCodes, cfg);
+    const orderedCodes = sortReasonCodes(enabledCodes, cfg);
+
+    const slaCtxBase = {
+        eo,
+        md,
+        row: input.opportunity,
+        nowMs: input.nowMs,
+        rowContext: input.rowContext,
+    };
+
+    const reasons = toResolvedList(orderedCodes, cfg, slaCtxBase);
+
     const activityStale = input.optionalSignals?.activityStale ?? null;
+
+    const commitmentCodes: OpportunityAttentionReasonCode[] = [
+        "follow_up_date_passed",
+        "tour_date_passed",
+        "overdue_commitment",
+    ];
+    const hasCommitmentReason = reasons.some((r) => commitmentCodes.includes(r.code));
+
+    const { score, breakdown } = computeAttentionPriorityScore({
+        severities: reasons.map((r) => r.severity),
+        slaTiers: reasons.map((r) => r.sla_tier),
+        monetary_value_cents: input.opportunity.monetary_value_cents,
+        distinctReasonCount: reasons.length,
+        hasCommitmentReason,
+        weights: cfg.priority_score_weights,
+    });
+
+    const waitingFacet: AttentionWaitingFacet = {
+        bucket: eo.wait_bucket,
+        since_iso: eo.wait_since,
+        active: eo.wait_bucket !== "none",
+    };
 
     return {
         needs_attention: reasons.length > 0,
         reasons,
         primary_reason: reasons[0] ?? null,
+        waiting: waitingFacet,
+        priority_score: reasons.length > 0 ? score : 0,
+        priority_breakdown: breakdown,
         auxiliary: {
-            activity_stale:
-                cfg.auxiliary_signals_enabled && activityStale ? activityStale : null,
+            activity_stale: cfg.auxiliary_signals_enabled && activityStale ? activityStale : null,
         },
         resolver_version: OPPORTUNITY_ATTENTION_RESOLVER_VERSION,
         computed_at_iso: now.toISOString(),

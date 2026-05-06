@@ -26,7 +26,13 @@ function displayLabelForReasonKey(reason_key: string, labelRaw: string): string 
     return reason_key.trim() || "Needs attention";
 }
 
-/** Histogram by primary attention reason code (resolver `primary_reason.code`). */
+/**
+ * Histogram by attention reason code — **multi-reason semantics:** one opportunity can increment **multiple**
+ * reason buckets. Totals are **reason occurrences**, not unique inquiries unless the caller passes one pair per row.
+ *
+ * For **primary-only** counts (at most one bucket per opportunity), build pairs from `primary_reason` only and use
+ * {@link summarizeAttentionReasonCountsPrimaryOnly}.
+ */
 export function summarizeAttentionReasonCounts(
     pairs: ReadonlyArray<{ reason_key: string; label: string }>
 ): AttentionReasonCountSummary[] {
@@ -45,6 +51,17 @@ export function summarizeAttentionReasonCounts(
     }));
     rows.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
     return rows;
+}
+
+/**
+ * Same aggregation as {@link summarizeAttentionReasonCounts}, but intended for **one pair per opportunity row**
+ * (typically `primary_reason`). Use when product surfaces must match “unique records per primary reason,” not
+ * multi-reason operational breadth.
+ */
+export function summarizeAttentionReasonCountsPrimaryOnly(
+    pairs: ReadonlyArray<{ reason_key: string; label: string }>
+): AttentionReasonCountSummary[] {
+    return summarizeAttentionReasonCounts(pairs);
 }
 
 /** Parse JSON array from attention-queue API responses (clients). */

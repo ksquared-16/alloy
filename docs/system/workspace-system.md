@@ -35,6 +35,16 @@ All authoritative reads must come from:
 
 **Never:** Queue → execute logic directly.
 
+## Operational attention (Needs attention) — filtered lens
+
+**Operational attention** is not a separate workspace subsystem: it is a **resolver-backed filter and explainability overlay** on the same opportunity queues and entity payloads.
+
+- **Department (`/adminV2/workspace/dept/:id`):** The **Needs Attention** paired lane lists **configured buckets** from `metadata.opportunity_attention_rules.needs_attention_buckets` (with **work unit → department → platform default** precedence — `web/lib/opportunities/needsAttentionBuckets.ts`). **Trust rule:** when a **`needs_attention`** work unit exists, lane counts use **`buildWorkUnitScopedNeedsAttentionLaneBuckets`** so bucket totals align with the **same work-unit Needs attention queue** (same `work_unit_id`, resolver, and **`NEEDS_ATTENTION_OPPORTUNITY_FETCH_CAP`** window as `getWorkUnitQueueItems`). Response field **`bucket_count_scope`** tells clients whether numbers are execution-aligned (`work_unit_needs_attention_list_cap`) or org-preview fallback (`org_preview_cap_500`). Tiles mirror **work-unit compact cards**.
+- **Work unit (`…/work-unit/:workUnitId`):** Execution stays on the **existing** Needs attention queue surface (CRM compact rows). Operators refine via stable query **`attention_reason_code`** when the bucket maps a **single** reason code (legacy label param still accepted). Queue rows remain preview-only (see **[Queue truth boundary](#queue-truth-boundary-critical-rule)**).
+- **Drawer:** Explainability lives on **`_operational_attention`** from entity GET — not a second evaluator.
+
+Org/work-unit tuning for visible buckets: `metadata.opportunity_attention_rules.needs_attention_buckets`. See **`docs/execution/crm-opportunity-needs-attention-count-semantics.md`** for histogram vs unique-inquiry bucket counting and saturation notes.
+
 ## Opportunity CRM compact previews — child vs program (doctrine)
 
 Work-unit **CRM compact** queue rows show **Child** and **Program** columns using enriched preview fields, not raw opportunity rows alone.

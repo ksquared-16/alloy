@@ -14,6 +14,10 @@ import {
     type OpportunityPricingExistingRow,
 } from "@/lib/admin/opportunityQuotePatch";
 import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
+import {
+    mergeEnrollmentOperationalIntoMetadata,
+    sanitizeEnrollmentOperationalPatch,
+} from "@/lib/opportunities/enrollmentOperationalMetadata";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { assertExistingOpportunityMutableInAdminScope, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 
@@ -177,8 +181,27 @@ export async function PATCH(
 
         // Legacy quote_inputs path removed — handled exclusively by mergeOpportunityQuotePricing when present.
 
-        if (Object.keys(metadataUpdates).length > 0) {
-            updates.metadata = { ...metadataBase, ...metadataUpdates };
+        const metadataMergedBase = { ...metadataBase, ...metadataUpdates };
+        if (body.enrollment_operational !== undefined) {
+            const rawEo = body.enrollment_operational;
+            const eoPatch = sanitizeEnrollmentOperationalPatch(rawEo);
+            if (eoPatch) {
+                updates.metadata = mergeEnrollmentOperationalIntoMetadata(metadataMergedBase, eoPatch);
+            } else if (
+                rawEo != null &&
+                typeof rawEo === "object" &&
+                !Array.isArray(rawEo) &&
+                Object.keys(rawEo as Record<string, unknown>).length > 0
+            ) {
+                console.warn("[ADMIN_PATCH_OPPORTUNITY] enrollment_operational ignored after validation", {
+                    opportunity_id: id,
+                    org_id: orgId,
+                    keys: Object.keys(rawEo as Record<string, unknown>),
+                });
+            }
+        }
+        if (!updates.metadata && Object.keys(metadataUpdates).length > 0) {
+            updates.metadata = metadataMergedBase;
         }
 
         const explicitStatusKey = body.status_key !== undefined;

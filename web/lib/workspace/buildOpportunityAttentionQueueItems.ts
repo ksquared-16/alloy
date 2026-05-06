@@ -198,15 +198,19 @@ export async function buildOpportunityAttentionQueueItems(params: {
             _attention_reason: pr.code,
             _attention_reason_label: pr.label,
             _attention_severity: pr.severity,
+            _attention_priority_score: resolved.priority_score,
+            _attention_waiting_bucket: resolved.waiting.bucket,
+            _attention_reasons_detail: resolved.reasons,
+            _attention_priority_breakdown: resolved.priority_breakdown,
             ...lifecycle,
         };
     });
 
+    /** Multi-reason histogram: one row may increment multiple bins — not primary-only (see execution docs). */
     const attention_reason_counts = summarizeAttentionReasonCounts(
-        withAttention.map(({ resolved }) => {
-            const pr = resolved.primary_reason!;
-            return { reason_key: pr.code, label: pr.label };
-        })
+        withAttention.flatMap(({ resolved }) =>
+            resolved.reasons.map((rr) => ({ reason_key: rr.code, label: rr.label }))
+        )
     );
 
     return {

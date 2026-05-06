@@ -86,6 +86,21 @@ type V1QueueSummary = {
 
 type DeptRow = { id: string; name: string | null; key: string | null };
 
+type DeptAttentionBucket = {
+    key: string;
+    label: string;
+    description: string | null;
+    count: number;
+    reason_codes: string[];
+};
+
+type DeptAttentionSemantics = {
+    candidate_fetch_cap: number;
+    raw_candidates_fetched: number;
+    candidate_window_saturated: boolean;
+    fetch_mode: string;
+};
+
 export default function AdminV2WorkspaceDepartmentPage() {
     const params = useParams();
     const router = useRouter();
@@ -125,6 +140,13 @@ export default function AdminV2WorkspaceDepartmentPage() {
     const [workflowKpis, setWorkflowKpis] = useState<WorkflowKpis>(DEFAULT_WF_KPIS);
     const [workflowKpisLoading, setWorkflowKpisLoading] = useState(false);
     const [workflowsSummary, setWorkflowsSummary] = useState<WorkflowSummaryRow[] | null>(null);
+
+    const [deptAttentionBuckets, setDeptAttentionBuckets] = useState<DeptAttentionBucket[] | null>(null);
+    const [deptAttentionPreviewTotal, setDeptAttentionPreviewTotal] = useState<number | null>(null);
+    const [deptAttentionBucketsLoading, setDeptAttentionBucketsLoading] = useState(false);
+    const [deptAttentionBucketsError, setDeptAttentionBucketsError] = useState<string | null>(null);
+    const [deptAttentionSemantics, setDeptAttentionSemantics] = useState<DeptAttentionSemantics | null>(null);
+    const [deptBucketCountScope, setDeptBucketCountScope] = useState<string | null>(null);
 
     const primaryWorkUnit = useMemo(() => {
         const fromDeptList = deptWorkUnits?.[0] ?? null;
@@ -493,6 +515,70 @@ export default function AdminV2WorkspaceDepartmentPage() {
         };
     }, [departmentId, orgId, principalUserId, accessScopeFingerprint]);
 
+    useEffect(() => {
+        if (!departmentId || deptLoading || !dept?.id) {
+            setDeptAttentionBuckets(null);
+            setDeptAttentionPreviewTotal(null);
+            setDeptAttentionBucketsLoading(false);
+            setDeptAttentionBucketsError(null);
+            setDeptAttentionSemantics(null);
+            setDeptBucketCountScope(null);
+            return;
+        }
+        let cancelled = false;
+        setDeptAttentionBucketsLoading(true);
+        setDeptAttentionBucketsError(null);
+        void (async () => {
+            try {
+                const init = workspaceDataFetchInit();
+                const naWu = (deptWorkUnits ?? []).find(
+                    (w) => (w.key ?? "").trim().toLowerCase() === "needs_attention"
+                );
+                const baseUrl = `/api/admin/departments/${encodeURIComponent(departmentId)}/opportunity-attention-preview`;
+                const url =
+                    naWu != null
+                        ? `${baseUrl}?work_unit_id=${encodeURIComponent(naWu.id)}`
+                        : baseUrl;
+                const res = await dedupeAdminFetch(url, init ?? {});
+                const j = (await res.json().catch(() => ({}))) as {
+                    error?: string;
+                    total?: number;
+                    needs_attention_buckets?: DeptAttentionBucket[];
+                    opportunity_needs_attention_semantics?: DeptAttentionSemantics | null;
+                    bucket_count_scope?: string | null;
+                };
+                if (cancelled) return;
+                if (!res.ok) {
+                    setDeptAttentionBuckets(null);
+                    setDeptAttentionPreviewTotal(null);
+                    setDeptAttentionSemantics(null);
+                    setDeptBucketCountScope(null);
+                    setDeptAttentionBucketsError(j.error ?? "Needs attention preview failed");
+                    return;
+                }
+                const buckets = Array.isArray(j.needs_attention_buckets) ? j.needs_attention_buckets : [];
+                setDeptAttentionBuckets(buckets);
+                setDeptAttentionPreviewTotal(typeof j.total === "number" ? j.total : null);
+                setDeptAttentionSemantics(j.opportunity_needs_attention_semantics ?? null);
+                setDeptBucketCountScope(typeof j.bucket_count_scope === "string" ? j.bucket_count_scope : null);
+                setDeptAttentionBucketsError(null);
+            } catch (e) {
+                if (!cancelled) {
+                    setDeptAttentionBucketsError(e instanceof Error ? e.message : "Needs attention preview failed");
+                    setDeptAttentionBuckets(null);
+                    setDeptAttentionPreviewTotal(null);
+                    setDeptAttentionSemantics(null);
+                    setDeptBucketCountScope(null);
+                }
+            } finally {
+                if (!cancelled) setDeptAttentionBucketsLoading(false);
+            }
+        })();
+        return () => {
+            cancelled = true;
+        };
+    }, [departmentId, dept?.id, deptLoading, deptWorkUnits]);
+
     const departmentPageBlockingLoad = useMemo(() => {
         if (!departmentId) return false;
         return deptLoading;
@@ -578,17 +664,17 @@ export default function AdminV2WorkspaceDepartmentPage() {
     const needsAttentionSummary = useMemo(() => {
         const list = deptWorkUnits ?? [];
         const explicitNeedsAttentionWu = list.find((w) => (w.key ?? "").trim().toLowerCase() === "needs_attention") ?? null;
-        const total: number | null =
-            list.length === 0 || deptQueueSummariesLoading || deptQueueSummariesError
-                ? null
-                : Object.values(deptWorkUnitSummaries).reduce((acc, s) => acc + (s.needs_attention ?? 0), 0);
         const targetWu = explicitNeedsAttentionWu ?? list[0] ?? null;
         const href =
             targetWu != null
                 ? `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(targetWu.id)}?queue=needs_attention`
                 : `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}`;
-        return { total, href };
-    }, [departmentId, deptQueueSummariesError, deptQueueSummariesLoading, deptWorkUnitSummaries, deptWorkUnits]);
+        return {
+            href,
+            targetWuId: targetWu?.id ?? null,
+            needsAttentionWorkUnitId: explicitNeedsAttentionWu?.id ?? null,
+        };
+    }, [departmentId, deptWorkUnits]);
 
     const needsAttentionHref = needsAttentionSummary.href;
 
@@ -681,39 +767,115 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 titleClassName="adminv2-ws-queue-title--section-primary-type"
             >
                 <ul className="adminv2-ws-queue-list" role="list">
-                    <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
-                        <Link
-                            href={needsAttentionSummary.href}
-                            prefetch={shouldDisableAdminV2LinkPrefetch(needsAttentionSummary.href) ? false : undefined}
-                            onClick={markWorkUnitNavigationStart}
-                            className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-warning no-underline text-inherit hover:opacity-[0.98]"
-                            data-ws-wu-urgency="attention"
-                        >
-                            <div className="adminv2-ws-wu-queue-card-compact-text">
-                                <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">
-                                    Needs attention
-                                </div>
-                                <div
-                                    className="adminv2-ws-paired-oper-queue-meta mt-2 grid grid-cols-2 gap-x-3 gap-y-1 tabular-nums"
-                                    style={{ color: "var(--d-muted)" }}
+                    {deptAttentionBucketsError ? (
+                        <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
+                            <div className="rounded-lg border border-admin-border bg-white/50 px-3 py-2 text-xs text-alloy-ember">
+                                {deptAttentionBucketsError}
+                            </div>
+                        </li>
+                    ) : null}
+                    {deptAttentionBucketsLoading && !deptAttentionBuckets?.length ? (
+                        <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
+                            <div className="rounded-lg border border-admin-border bg-white/50 px-3 py-3 text-xs text-alloy-midnight/55">
+                                Loading operational buckets…
+                            </div>
+                        </li>
+                    ) : null}
+                    {(deptAttentionBuckets ?? []).map((b) => {
+                        const drillWuId =
+                            needsAttentionSummary.needsAttentionWorkUnitId ?? needsAttentionSummary.targetWuId;
+                        const drillBase =
+                            drillWuId != null
+                                ? `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(drillWuId)}`
+                                : needsAttentionHref;
+                        const singleCode = b.reason_codes.length === 1 ? (b.reason_codes[0] ?? "").trim() : "";
+                        const query =
+                            drillWuId != null
+                                ? singleCode !== ""
+                                    ? `queue=needs_attention&attention_reason_code=${encodeURIComponent(singleCode)}`
+                                    : "queue=needs_attention"
+                                : "";
+                        const href = query !== "" ? `${drillBase}?${query}` : drillBase;
+                        const summaryLine = (b.description ?? "").trim();
+                        return (
+                            <li key={`attn:${b.key}`} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
+                                <Link
+                                    href={href}
+                                    prefetch={shouldDisableAdminV2LinkPrefetch(href) ? false : undefined}
+                                    onClick={markWorkUnitNavigationStart}
+                                    className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-warning no-underline text-inherit hover:opacity-[0.98]"
+                                    data-ws-wu-urgency="attention"
+                                    data-attention-bucket-key={b.key}
                                 >
-                                    <div>
-                                        <span className="font-medium text-alloy-midnight/75">Total</span>{" "}
-                                        <span className="text-alloy-midnight/85">{needsAttentionSummary.total ?? "—"}</span>
+                                    <div className="adminv2-ws-wu-queue-card-compact-text">
+                                        <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">
+                                            {b.label}
+                                        </div>
+                                        {summaryLine ? (
+                                            <div
+                                                className="mt-1 text-[11px] leading-snug line-clamp-2"
+                                                style={{ color: "var(--d-muted)" }}
+                                            >
+                                                {summaryLine}
+                                            </div>
+                                        ) : null}
+                                        <div
+                                            className="adminv2-ws-paired-oper-queue-meta mt-2 tabular-nums text-[11px]"
+                                            style={{ color: "var(--d-muted)" }}
+                                        >
+                                            <span className="font-medium text-alloy-midnight/75">
+                                                {deptBucketCountScope === "work_unit_needs_attention_list_cap"
+                                                    ? "Inquiries in bucket"
+                                                    : "Reason occurrences"}
+                                            </span>{" "}
+                                            <span className="text-alloy-midnight/85">{b.count}</span>
+                                            {b.reason_codes.length > 1 ? (
+                                                <span className="block mt-0.5 text-[10px] text-alloy-midnight/45">
+                                                    Multi-code bucket — opens full queue (single-code filters only).
+                                                </span>
+                                            ) : null}
+                                        </div>
                                     </div>
-                                    <div className="text-right">
-                                        <span className="font-medium text-alloy-midnight/75 whitespace-nowrap">
-                                            Needs attention
-                                        </span>{" "}
-                                        <span className="text-alloy-midnight/85">{needsAttentionSummary.total ?? "—"}</span>
+                                    <div className="adminv2-ws-wu-queue-card-compact-aside">
+                                        <span className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open">
+                                            Open
+                                        </span>
                                     </div>
-                                </div>
-                            </div>
-                            <div className="adminv2-ws-wu-queue-card-compact-aside">
-                                <span className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open">Open</span>
-                            </div>
-                        </Link>
-                    </li>
+                                </Link>
+                            </li>
+                        );
+                    })}
+                    {(needsAttentionSummary.needsAttentionWorkUnitId ?? needsAttentionSummary.targetWuId) != null ? (
+                        <li className="adminv2-ws-wu-queue-item-wrap pt-1" role="listitem">
+                            <Link
+                                href={needsAttentionHref}
+                                prefetch={shouldDisableAdminV2LinkPrefetch(needsAttentionHref) ? false : undefined}
+                                onClick={markWorkUnitNavigationStart}
+                                className="text-[11px] font-medium text-alloy-blue hover:underline"
+                            >
+                                Open full Needs attention queue
+                            </Link>
+                        </li>
+                    ) : null}
+                    {!deptAttentionBucketsLoading && (deptAttentionBuckets?.length ?? 0) > 0 ? (
+                        <li className="px-1 pt-1 text-[10px] leading-snug text-alloy-midnight/45" role="note">
+                            {deptBucketCountScope === "work_unit_needs_attention_list_cap" ? (
+                                <>
+                                    Counts match the Needs attention work-unit queue (unique inquiries per bucket). Resolver
+                                    window: up to {deptAttentionSemantics?.candidate_fetch_cap ?? "—"} candidate rows
+                                    {deptAttentionSemantics?.candidate_window_saturated ? " · window may be saturated" : ""}.
+                                </>
+                            ) : (
+                                <>
+                                    Org-wide preview ({deptBucketCountScope ?? "legacy"}) — bucket totals are histogram sums,
+                                    not guaranteed to match a work-unit tab.{" "}
+                                    {deptAttentionPreviewTotal != null
+                                        ? `Preview matches: ${deptAttentionPreviewTotal}.`
+                                        : null}
+                                </>
+                            )}
+                        </li>
+                    ) : null}
                 </ul>
             </WorkspacePairedOperPanel>
         </WorkspacePairedOperPanelsGrid>

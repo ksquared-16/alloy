@@ -23,6 +23,7 @@ import type {
 } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
 import { parseAttentionReasonCountsPayload } from "@/lib/workspace/attentionReasonCountsSummary";
+import { buildQueueOperationalAttentionPresentation } from "@/lib/opportunities/operationalAttentionExplain";
 import { buildRealOpportunityWorkUnitWorkspaceModel } from "@/lib/ui-v2/adapters/realWorkUnitFromOpportunities";
 import { buildWorkUnitQueueCrmCompactRowSlice } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
 import { mergeEnrollmentRightRailActions } from "@/lib/workspace/viewModels/enrollmentRightRailMerge";
@@ -1814,8 +1815,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         typeof r?._notes_preview === "string" ? r._notes_preview : null,
                         viewerTz
                     ) ?? "";
+                const attnPres = buildQueueOperationalAttentionPresentation(r as Record<string, unknown>);
                 const attentionReason =
-                    typeof r?._attention_reason_label === "string" ? r._attention_reason_label.trim() : "";
+                    attnPres.summaryLine ||
+                    (typeof r?._attention_reason_label === "string" ? r._attention_reason_label.trim() : "");
 
                 const wfAt = typeof r?.last_activity_at === "string" && r.last_activity_at.trim() ? r.last_activity_at.trim() : null;
                 const wfSummary =
@@ -1895,7 +1898,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     urgencyTier:
                         activeQueue?.priority === "critical"
                             ? ("critical" as const)
-                            : activeQueue?.priority === "attention"
+                            : activeQueue?.priority === "attention" ||
+                                (String(activeQueue?.key ?? "").trim().toLowerCase() === "needs_attention" &&
+                                    Boolean(attentionReason?.trim()))
                               ? ("warning" as const)
                               : ("standard" as const),
                     quickActions,
@@ -1940,6 +1945,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                           : null,
                                       roomContext: null,
                                       attentionReason: attentionReason || null,
+                                      operationalNextHint: attnPres.nextHintLine,
                                       familyNote: note || null,
                                       familyNotePreview: notePreview,
                                       activityStale,
@@ -2130,6 +2136,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                   .filter(Boolean)
             : [];
         const attentionReason = (searchParams?.get("attention_reason") ?? "").trim();
+        const attentionReasonCode = (searchParams?.get("attention_reason_code") ?? "").trim();
         const activitySignalKey = (searchParams?.get("activity_signal_key") ?? "").trim();
 
         const filteredItems = rawItems.filter((it) => {
@@ -2137,7 +2144,20 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 const sk = String(it.status_key ?? "").trim().toLowerCase();
                 if (!statusKeys.includes(sk)) return false;
             }
-            if (attentionReason) {
+            if (attentionReasonCode) {
+                const rcPrimary = String((it as { _attention_reason?: string | null })._attention_reason ?? "").trim();
+                const details = (it as { _attention_reasons_detail?: unknown })._attention_reasons_detail;
+                let codeMatch = rcPrimary === attentionReasonCode;
+                if (!codeMatch && Array.isArray(details)) {
+                    codeMatch = details.some(
+                        (x) =>
+                            x != null &&
+                            typeof x === "object" &&
+                            String((x as { code?: unknown }).code ?? "").trim() === attentionReasonCode
+                    );
+                }
+                if (!codeMatch) return false;
+            } else if (attentionReason) {
                 const rl = String((it as { _attention_reason_label?: string | null })._attention_reason_label ?? "").trim();
                 if (rl !== attentionReason) return false;
             }

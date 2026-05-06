@@ -6455,6 +6455,11 @@
   color: color-mix(in srgb, var(--d-muted) 35%, var(--d-text-primary, #273f52));
 }
 
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-preview-stale--muted-footnote {
+  opacity: 0.85;
+  font-weight: 580;
+}
+
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__group {
   display: flex;
   flex-direction: column;

@@ -531,8 +531,9 @@ function LegacyCrmCompactQueueMiddle({ slots }: { slots: CrmCompactRowSemanticSl
 /**
  * CRM-compact queue preview — 3 zones: identity (left), fact groups (middle), actions (host).
  * Middle follows work-unit queue row doctrine when `crmFactGroups` is set.
+ * Exported for dev-only visual review fixtures (`/dev/p1c-operational-attention-review`).
  */
-function CrmCompactQueuePreview({
+export function CrmCompactQueuePreview({
   slots,
   urgencyTier = "standard",
 }: {
@@ -544,6 +545,8 @@ function CrmCompactQueuePreview({
       ? `${slots.stageLabel} · ${slots.statusLabel}`
       : slots.stageLabel || slots.statusLabel || null;
   const noteStress = Boolean(slots.attentionReason?.trim());
+  const operationalStrong = Boolean(slots.attentionReason?.trim());
+  const nextHint = slots.operationalNextHint?.trim() ?? "";
 
   const staleTone =
     slots.activityStale?.severity === "high"
@@ -551,6 +554,10 @@ function CrmCompactQueuePreview({
       : slots.activityStale?.severity === "medium"
         ? "adminv2-ws-queue-preview-stale adminv2-ws-queue-preview-stale--medium"
         : "adminv2-ws-queue-preview-stale adminv2-ws-queue-preview-stale--low";
+  const staleToneResolved =
+    operationalStrong && slots.activityStale
+      ? `${staleTone} adminv2-ws-queue-preview-stale--muted-footnote`
+      : staleTone;
 
   const useDoctrine = slots.crmFactGroups != null;
   const hasMiddle = useDoctrine ? (slots.crmFactGroups?.length ?? 0) > 0 : legacyMiddleHasContent(slots);
@@ -602,7 +609,12 @@ function CrmCompactQueuePreview({
           {slots.attentionReason?.trim() ? (
             <div className="adminv2-ws-crm-queue-preview__attention">{slots.attentionReason.trim()}</div>
           ) : null}
-          {slots.activityStale ? <span className={staleTone}>{slots.activityStale.label}</span> : null}
+          {nextHint ? (
+            <div className="adminv2-ws-crm-queue-preview__operational-next text-[11px] leading-snug text-alloy-midnight/58">
+              Next: {nextHint}
+            </div>
+          ) : null}
+          {slots.activityStale ? <span className={staleToneResolved}>{slots.activityStale.label}</span> : null}
         </div>
 
         {hasMiddle ? (

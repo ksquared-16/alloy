@@ -89,6 +89,9 @@ import {
 } from "@/components/admin/drawer/JobDrawerV2";
 import JobRecordModalV2, { isCleaningJobRecord } from "@/components/admin/drawer/JobRecordModalV2";
 import ScheduleRecordModalV2 from "@/components/admin/drawer/ScheduleRecordModalV2";
+import OperationalAttentionDrawerPanel from "@/components/admin/drawer/OperationalAttentionDrawerPanel";
+import type { OperationalAttentionAttachmentError } from "@/lib/admin/operationalAttentionEntityAttachment";
+import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
 import { isScheduleCanceledStatusKey } from "@/lib/admin/scheduleCanceledStatus";
 import { AdminCollectPaymentModal, type AdminCollectPaymentModalContext } from "@/components/admin/AdminCollectPaymentModal";
 import { JobReceivableChargesPanel, jobTotalSummaryLabel } from "@/components/admin/JobReceivableChargesPanel";
@@ -6676,7 +6679,6 @@ export default function AdminEntityDrawer() {
                     />
                 );
             }
-            if (Object.keys(out).length === 0) return {};
             return out;
         }
         return {};
@@ -7265,6 +7267,9 @@ export default function AdminEntityDrawer() {
         if (drawer.type === "schedules" && overviewSections.length > 0) {
             const keepScheduleOverview = new Set<string>(["property_service", "reschedule_history"]);
             overviewSections = overviewSections.filter((s) => keepScheduleOverview.has(s.key));
+        }
+        if (drawer.type === "opportunities") {
+            overviewSections = overviewSections.filter((s) => s.key !== "operational_attention");
         }
         return overviewSections;
     }, [drawer.type, overviewData, presentationType, recordChromeSchedule.layout, recordChromeOpportunity.layout]);
@@ -10567,6 +10572,43 @@ export default function AdminEntityDrawer() {
                                                 );
                                             })()}
                                         </section>
+                                        {overviewData && !(overviewData as { _create?: boolean })._create ? (
+                                            (() => {
+                                                const od = overviewData as Record<string, unknown>;
+                                                const payload = od._operational_attention as
+                                                    | OpportunityAttentionResult
+                                                    | null
+                                                    | undefined;
+                                                const err = od._operational_attention_error as
+                                                    | OperationalAttentionAttachmentError
+                                                    | null
+                                                    | undefined;
+                                                if (
+                                                    !err &&
+                                                    payload &&
+                                                    !payload.needs_attention &&
+                                                    !payload.auxiliary?.activity_stale
+                                                ) {
+                                                    return null;
+                                                }
+                                                const stress = Boolean(payload?.needs_attention);
+                                                return (
+                                                    <div
+                                                        className={
+                                                            stress
+                                                                ? "mb-3 rounded-xl border border-admin-border border-l-[3px] border-l-[rgb(188,67,0)] bg-white/85 px-2.5 py-2.5 shadow-sm"
+                                                                : "mb-3 rounded-xl border border-admin-border bg-white/80 px-2.5 py-2.5 shadow-sm"
+                                                        }
+                                                        data-drawer-slot="operational_attention"
+                                                    >
+                                                        <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-alloy-midnight/45 mb-1.5">
+                                                            Operational attention
+                                                        </div>
+                                                        <OperationalAttentionDrawerPanel payload={payload} error={err} />
+                                                    </div>
+                                                );
+                                            })()
+                                        ) : null}
                                         {/* Enrollment direction: lifecycle is not a drawer section. */}
                                     </>
                                 ) : null}

@@ -4,15 +4,20 @@ import Link from "next/link";
 import type { WorkspaceRuntimeData } from "@/lib/workspace/types";
 import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
 
-function groupAttentionReasons(items: Array<{ _attention_reason_label?: string | null }>) {
-    const m = new Map<string, number>();
+function groupAttentionReasons(
+    items: Array<{ _attention_reason?: string | null; _attention_reason_label?: string | null }>
+) {
+    type Row = { reason_key: string; label: string; count: number };
+    const m = new Map<string, Row>();
     for (const it of items) {
+        const code = String(it._attention_reason ?? "").trim();
         const label = String(it._attention_reason_label ?? "").trim() || "Needs attention";
-        m.set(label, (m.get(label) ?? 0) + 1);
+        const key = code || `label:${label}`;
+        const cur = m.get(key);
+        if (cur) cur.count += 1;
+        else m.set(key, { reason_key: code, label, count: 1 });
     }
-    return [...m.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .map(([label, count]) => ({ label, count }));
+    return [...m.values()].sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }
 
 export function OpportunityAttentionLaneBlock({
@@ -20,7 +25,7 @@ export function OpportunityAttentionLaneBlock({
     runtime,
     workspaceBasePath,
     title = "Needs attention",
-    subtitle = "Interventions needed right now, grouped by reason.",
+    subtitle = "Operational prioritization — drill into the execution queue by reason code.",
 }: {
     departmentId: string;
     runtime: WorkspaceRuntimeData;
@@ -35,7 +40,11 @@ export function OpportunityAttentionLaneBlock({
     const pf = (u: string) => (shouldDisableAdminV2LinkPrefetch(u) ? false : undefined);
 
     const total = oq?.total ?? 0;
-    const groups = oq?.items ? groupAttentionReasons(oq.items as Array<{ _attention_reason_label?: string | null }>) : [];
+    const groups = oq?.items
+        ? groupAttentionReasons(
+              oq.items as Array<{ _attention_reason?: string | null; _attention_reason_label?: string | null }>
+          )
+        : [];
 
     return (
         <section
@@ -45,7 +54,7 @@ export function OpportunityAttentionLaneBlock({
         >
             <header className="adminv2-ws-attention-panel-header">
                 <div>
-                    <div className="adminv2-ws-attention-panel-kicker">Exception lane</div>
+                    <div className="adminv2-ws-attention-panel-kicker">Operational lane</div>
                     <h3 className="adminv2-ws-attention-panel-title">{title}</h3>
                     {subtitle ? (
                         <p className="adminv2-ws-attention-card-sub" style={{ marginTop: 6 }}>
@@ -66,8 +75,10 @@ export function OpportunityAttentionLaneBlock({
                         }}
                     >
                         <div style={{ minWidth: 0 }}>
-                            <div className="adminv2-ws-attention-card-title">Needs attention</div>
-                            <div className="adminv2-ws-attention-card-sub">Stale or blocked inquiries requiring a next step.</div>
+                            <div className="adminv2-ws-attention-card-title">Needs attention queue</div>
+                            <div className="adminv2-ws-attention-card-sub">
+                                Same resolver as work-unit execution — counts are reason-level in the preview window.
+                            </div>
                         </div>
                         <div className="adminv2-ws-attention-panel-meta">
                             <span className="adminv2-ws-attention-panel-count" aria-label={`${total} records`}>
@@ -89,11 +100,24 @@ export function OpportunityAttentionLaneBlock({
                                 borderColor: "color-mix(in srgb, #bc4300 28%, var(--d-border))",
                             }}
                         >
-                            {groups.slice(0, 6).map((g) => (
-                                <li key={g.label} className="text-[11px] truncate" style={{ color: "var(--d-muted)" }}>
-                                    <span className="font-medium text-alloy-midnight/75">{g.count}</span> · {g.label}
-                                </li>
-                            ))}
+                            {groups.slice(0, 6).map((g) => {
+                                const qs =
+                                    g.reason_key !== ""
+                                        ? `queue=needs_attention&attention_reason_code=${encodeURIComponent(g.reason_key)}`
+                                        : `queue=needs_attention&attention_reason=${encodeURIComponent(g.label)}`;
+                                const reasonHref = wu ? `${base}/work-unit/${encodeURIComponent(wu.id)}?${qs}` : href;
+                                return (
+                                    <li key={`${g.reason_key || "nocode"}:${g.label}`} className="text-[11px] truncate">
+                                        <Link
+                                            href={reasonHref}
+                                            prefetch={pf(reasonHref)}
+                                            className="text-alloy-midnight/75 hover:text-alloy-blue hover:underline"
+                                        >
+                                            <span className="font-medium text-alloy-midnight/75">{g.count}</span> · {g.label}
+                                        </Link>
+                                    </li>
+                                );
+                            })}
                         </ul>
                     ) : (
                         <p className="text-[11px]" style={{ color: "var(--d-muted)" }}>

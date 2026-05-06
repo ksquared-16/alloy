@@ -3,6 +3,7 @@ import type { StatusDefinitionRow } from "@/lib/admin/statusDefinitionsResolve";
 import {
     resolveOpportunityAttention,
     OPPORTUNITY_ATTENTION_REASON_PRIORITY_ORDER,
+    OPPORTUNITY_ATTENTION_RESOLVER_VERSION,
     QUEUE_LANE_EXCLUDED_STATUS_KEYS,
     type OpportunityAttentionReasonCode,
 } from "@/lib/opportunities/opportunityAttentionResolver";
@@ -36,9 +37,32 @@ function defFor(sk: string, lifecycle: string): StatusDefinitionRow {
 
 describe("resolveOpportunityAttention", () => {
     it("exposes stable priority ordering that includes every canonical code", () => {
-        expect(OPPORTUNITY_ATTENTION_REASON_PRIORITY_ORDER.length).toBe(9);
+        expect(OPPORTUNITY_ATTENTION_REASON_PRIORITY_ORDER.length).toBe(16);
         const set = new Set(OPPORTUNITY_ATTENTION_REASON_PRIORITY_ORDER);
-        expect(set.size).toBe(9);
+        expect(set.size).toBe(16);
+    });
+
+    it("reports resolver v2 with waiting facet and priority score fields", () => {
+        const nowMs = Date.parse("2026-06-01T12:00:00.000Z");
+        const r = resolveOpportunityAttention({
+            opportunity: {
+                id: "1",
+                status_key: "contacted",
+                created_at: "2026-05-01T12:00:00.000Z",
+                updated_at: "2026-05-20T12:00:00.000Z",
+                metadata: { next_follow_up_at: "2026-05-30T12:00:00.000Z" },
+                customer_id: "c1",
+                primary_person_id: "p1",
+            },
+            nowMs,
+            defs: [defFor("contacted", "qualification")],
+        });
+        expect(r.resolver_version).toBe(OPPORTUNITY_ATTENTION_RESOLVER_VERSION);
+        expect(r.waiting.bucket).toBe("none");
+        expect(r.waiting.active).toBe(false);
+        expect(typeof r.priority_score).toBe("number");
+        expect(Array.isArray(r.priority_breakdown)).toBe(true);
+        expect(r.reasons[0]?.sla_tier).toBeDefined();
     });
 
     it("matches QueueService-style follow-up metadata rule", () => {
@@ -78,6 +102,73 @@ describe("resolveOpportunityAttention", () => {
         });
         expect(r.needs_attention).toBe(true);
         expect(r.primary_reason?.code).toBe("tour_date_passed");
+    });
+
+    it("emits overdue_commitment when commitment_due_at is past", () => {
+        const nowMs = Date.parse("2026-06-02T12:00:00.000Z");
+        const r = resolveOpportunityAttention({
+            opportunity: {
+                id: "1",
+                status_key: "contacted",
+                created_at: "2026-05-01T12:00:00.000Z",
+                updated_at: "2026-06-01T12:00:00.000Z",
+                metadata: { commitment_due_at: "2026-06-01T10:00:00.000Z" },
+                customer_id: "c1",
+                primary_person_id: "p1",
+            },
+            nowMs,
+            defs: [defFor("contacted", "qualification")],
+        });
+        expect(r.reasons.map((x) => x.code)).toContain("overdue_commitment");
+    });
+
+    it("emits waiting_on_staff from enrollment_operational metadata", () => {
+        const nowMs = Date.parse("2026-06-02T12:00:00.000Z");
+        const r = resolveOpportunityAttention({
+            opportunity: {
+                id: "1",
+                status_key: "contacted",
+                created_at: "2026-05-01T12:00:00.000Z",
+                updated_at: "2026-06-01T12:00:00.000Z",
+                metadata: {
+                    enrollment_operational: {
+                        wait_bucket: "waiting_on_staff",
+                        wait_since: "2026-06-01T08:00:00.000Z",
+                    },
+                },
+                customer_id: "c1",
+                primary_person_id: "p1",
+            },
+            nowMs,
+            defs: [defFor("contacted", "qualification")],
+        });
+        expect(r.waiting.active).toBe(true);
+        expect(r.waiting.bucket).toBe("waiting_on_staff");
+        expect(r.reasons.map((x) => x.code)).toContain("waiting_on_staff");
+    });
+
+    it("does not suppress stale when waiting facet is active", () => {
+        const nowMs = Date.parse("2026-06-10T12:00:00.000Z");
+        const r = resolveOpportunityAttention({
+            opportunity: {
+                id: "1",
+                status_key: "contacted",
+                created_at: "2026-05-01T12:00:00.000Z",
+                updated_at: "2026-05-01T12:00:00.000Z",
+                metadata: {
+                    enrollment_operational: {
+                        wait_bucket: "waiting_on_family",
+                        wait_since: "2026-06-08T12:00:00.000Z",
+                    },
+                },
+                customer_id: "c1",
+                primary_person_id: "p1",
+            },
+            nowMs,
+            defs: [defFor("contacted", "qualification")],
+        });
+        expect(r.reasons.map((x) => x.code)).toContain("waiting_on_family");
+        expect(r.reasons.map((x) => x.code)).toContain("mid_funnel_stale");
     });
 
     it("matches legacy computeOpportunityAttentionReason for intake stale", () => {
@@ -148,7 +239,7 @@ describe("resolveOpportunityAttention", () => {
             } as Record<string, unknown>,
             customer_id: "c1",
             primary_person_id: null as string | null,
-            primary_contact_id: null as string | null,
+            primary_contact_id: "pc1" as string | null,
         };
 
         const defs = [defFor("new_inquiry", "intake")];
@@ -163,7 +254,7 @@ describe("resolveOpportunityAttention", () => {
         expect(r.needs_attention).toBe(true);
     });
 
-    it("returns no reasons when updated_at is invalid (QueueService lane parity) even if lifecycle could apply", () => {
+    it("returns no lane reasons when updated_at is invalid (QueueService lane parity) but lifecycle may still apply", () => {
         const nowMs = Date.parse("2026-06-10T12:00:00.000Z");
         const r = resolveOpportunityAttention({
             opportunity: {
@@ -262,7 +353,7 @@ describe("resolveOpportunityAttention", () => {
         expect(r.auxiliary.activity_stale?.label).toBe("Stale (activity)");
     });
 
-    it("sorts multi-reason outputs by canonical priority order", () => {
+    it("sorts multi-reason outputs by canonical platform priority order", () => {
         const codes: OpportunityAttentionReasonCode[] = ["stale_new_inquiry", "follow_up_date_passed"];
         codes.sort((a, b) => {
             const ia = OPPORTUNITY_ATTENTION_REASON_PRIORITY_ORDER.indexOf(a as never);
@@ -270,5 +361,26 @@ describe("resolveOpportunityAttention", () => {
             return ia - ib;
         });
         expect(codes[0]).toBe("follow_up_date_passed");
+    });
+
+    it("blocked_internal wins primary over follow-up when both fire", () => {
+        const nowMs = Date.parse("2026-06-01T12:00:00.000Z");
+        const r = resolveOpportunityAttention({
+            opportunity: {
+                id: "1",
+                status_key: "contacted",
+                created_at: "2026-05-01T12:00:00.000Z",
+                updated_at: "2026-05-20T12:00:00.000Z",
+                metadata: {
+                    next_follow_up_at: "2026-05-30T12:00:00.000Z",
+                    enrollment_operational: { wait_bucket: "blocked_internal", wait_since: "2026-05-31T12:00:00.000Z" },
+                },
+                customer_id: "c1",
+                primary_person_id: "p1",
+            },
+            nowMs,
+            defs: [defFor("contacted", "qualification")],
+        });
+        expect(r.primary_reason?.code).toBe("blocked_internal");
     });
 });

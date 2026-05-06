@@ -246,9 +246,12 @@ export function buildEnrollmentNeedsAttentionPreviewVm(
         const reason = String(it._attention_reason_label ?? "").trim() || "Needs attention";
         const detail = [reason, stage && st ? `${stage} · ${st}` : stage || st].filter(Boolean).join(" — ");
         const label = reason;
-        const href = wu?.id
-            ? `${base}/work-unit/${encodeURIComponent(wu.id)}?attention_reason=${encodeURIComponent(label)}`
-            : base;
+        const reasonCode = String((it as { _attention_reason?: string | null })._attention_reason ?? "").trim();
+        const qs =
+            reasonCode !== ""
+                ? `attention_reason_code=${encodeURIComponent(reasonCode)}`
+                : `attention_reason=${encodeURIComponent(label)}`;
+        const href = wu?.id ? `${base}/work-unit/${encodeURIComponent(wu.id)}?${qs}` : base;
         return { id: it.id, headline, detail, openQueueHref: href };
     });
 }
@@ -267,12 +270,15 @@ export function buildEnrollmentNeedsAttentionGroupsVm(
 
     return summary.map((row) => {
         const label = row.label.trim() || String(row.reason_key ?? "").trim() || "Needs attention";
+        const rk = String(row.reason_key ?? "").trim();
+        const qs =
+            rk !== ""
+                ? `attention_reason_code=${encodeURIComponent(rk)}`
+                : `attention_reason=${encodeURIComponent(label)}`;
         return {
             label,
             count: Math.max(0, Math.floor(Number(row.count) || 0)),
-            openQueueHref: wu?.id
-                ? `${base}/work-unit/${encodeURIComponent(wu.id)}?attention_reason=${encodeURIComponent(label)}`
-                : base,
+            openQueueHref: wu?.id ? `${base}/work-unit/${encodeURIComponent(wu.id)}?${qs}` : base,
         };
     });
 }

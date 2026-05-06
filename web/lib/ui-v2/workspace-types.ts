@@ -163,6 +163,8 @@ export type CrmCompactRowSemanticSlots = {
   roomContext: string | null;
   ageContext: string | null;
   attentionReason: string | null;
+  /** Deterministic resolver-backed next-step hint (enrollment operational attention). */
+  operationalNextHint?: string | null;
   familyNote: string | null;
   /**
    * CRM queue footer: latest note only, split for typography (`timestamp` may be semibold; `body` regular).

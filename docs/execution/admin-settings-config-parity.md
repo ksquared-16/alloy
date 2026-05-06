@@ -37,8 +37,12 @@ Job and schedule previews use a **presentation-ordered skeleton** (`entityPresen
 ## Opportunity “Needs attention” (source of truth)
 
 - **Not** controlled by **Settings → Attention & SLA Rules** (that UI is **not active** / planned).
-- **Evaluator:** `resolveOpportunityAttention` (canonical resolver in application code).
-- **Tuning:** `resolveOpportunityAttentionConfigFromMetadata` — typically `opportunity_attention_rules` inside **work unit** or **department** `metadata`.
+- **Evaluator:** `resolveOpportunityAttention` (canonical resolver **v2** in application code).
+- **Tuning:** `resolveOpportunityAttentionConfigFromMetadata` — typically `opportunity_attention_rules` inside **work unit** or **department** `metadata` (optional keys: `primary_reason_priority_order`, `sla_wait_hours`, `priority_score_weights`).
+- **Operational wait facet (per opportunity):** validated subtree **`metadata.enrollment_operational`** — updated via **`PATCH /api/admin/opportunities/:id`** body field **`enrollment_operational`** (`wait_bucket`, `wait_since`, `wait_reason`, `next_expected_action_owner`, `next_expected_action_at`). Not edited from Settings UI yet.
+- **PATCH validation (transition):** Non-empty **`enrollment_operational`** bodies that fail sanitization are **not** applied; the API logs a **warning** (`[ADMIN_PATCH_OPPORTUNITY] enrollment_operational ignored after validation`). Long-term: optional strict mode / 400 responses — see sprint follow-ups.
+- **Resolver outputs:** Per-reason **`sla_clock_confidence`** (`high` \| `medium` \| `low`) indicates how the SLA clock was derived (explicit `wait_since` vs fallbacks such as `updated_at`). This must eventually surface in explainability / debug tooling — do not treat as internal-only forever.
+- **Architectural watch:** Stale and wait SLAs still partially depend on **`updated_at`**, which conflates meaningful engagement with incidental writes. Future foundation: canonical timestamps (e.g. last meaningful contact, last staff action, last operational transition) — not rushed in foundation phase; see sprint doc.
 - **Counts across surfaces:** Different cohorts and caps (500 / 800 / 5000 windows, work-unit vs org scope). See `docs/execution/crm-opportunity-needs-attention-count-semantics.md`.
 
 ## Job “Needs attention”
@@ -49,7 +53,7 @@ Workspace job exception summaries use **job** predicates (`getNeedsAttentionSumm
 
 **AdminV2 → Settings → Work units / Departments:** opening **Edit** on a row shows **Runtime metadata (read-only)** — the effective JSON from the list API, grouped by known feature areas (`web/lib/admin/runtimeEntityMetadataCatalog.ts`). This is **visibility only**; there is no metadata editor in Settings yet.
 
-- **Active runtime keys** (examples): `opportunity_attention_rules`, `activity_signal_rules` — consumed by `resolveOpportunityAttentionConfigFromMetadata`, queue paths, and activity-signal APIs.
+- **Active runtime keys** (examples): `opportunity_attention_rules`, `activity_signal_rules`, **`enrollment_operational`** (on **opportunity** `metadata`) — consumed by attention resolver / queue paths and activity-signal APIs respectively.
 - **Bootstrap / routing:** `tenant_slice` on departments (tenant bootstrap validation).
 - **Internal / seed:** `placeholder`, `lifecycle_stage` (bootstrap) — not substitute for `status_definitions.metadata.lifecycle_stage` in CRM logic.
 - **Unknown keys** still appear under **Other keys (not cataloged)**.

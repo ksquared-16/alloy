@@ -262,6 +262,13 @@ export type WorkspaceOpportunityQueueRuntime = {
         _attention_reason_label?: string | null;
         /** Resolver primary_reason.severity — optional extension for sorting/filtering UI. */
         _attention_severity?: "critical" | "high" | "medium" | "low" | null;
+        /** Resolver v2 — deterministic priority score (0–100). */
+        _attention_priority_score?: number | null;
+        /** enrollment_operational.wait_bucket snapshot */
+        _attention_waiting_bucket?: string | null;
+        /** Full multi-reason list from resolver v2 */
+        _attention_reasons_detail?: unknown;
+        _attention_priority_breakdown?: unknown;
         _primary_email?: string | null;
         _primary_phone?: string | null;
         _primary_contact_line?: string | null;

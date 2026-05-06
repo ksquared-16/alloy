@@ -4,7 +4,14 @@ import {
     parseOpportunityAttentionRuleConfigV1FromMetadata,
     type OpportunityAttentionRuleConfigV1,
 } from "@/lib/workspace/opportunityAttentionRules";
-import type { OpportunityAttentionReasonCode } from "@/lib/opportunities/opportunityAttentionResolver";
+import {
+    DEFAULT_WAIT_BUCKET_SLA_HOURS,
+    PLATFORM_PRIMARY_REASON_PRIORITY_ORDER,
+    type EnrollmentWaitBucket,
+    type OpportunityAttentionReasonCode,
+    DEFAULT_SEVERITY_BY_REASON,
+    isOpportunityAttentionReasonCode,
+} from "@/lib/opportunities/attentionPlatformCatalog";
 
 export type OpportunityAttentionSeverity = "critical" | "high" | "medium" | "low";
 
@@ -12,6 +19,11 @@ export type OpportunityAttentionReasonPolicy = {
     enabled: boolean;
     label?: string;
     severity?: OpportunityAttentionSeverity;
+};
+
+export type WaitBucketSlaHoursConfig = {
+    warning_hours: number;
+    critical_hours: number;
 };
 
 /**
@@ -29,6 +41,22 @@ export type OpportunityAttentionResolvedConfig = {
     /** Optional informational copy for auxiliary inputs (workflow/activity UI). Ignored unless future flags enable it. */
     auxiliary_signals_enabled: boolean;
     policies: Record<OpportunityAttentionReasonCode, OpportunityAttentionReasonPolicy>;
+    /**
+     * Platform SLA defaults for wait buckets (calendar-hour placeholders).
+     * Tenants override via {@link wait_bucket_sla_hours}.
+     */
+    default_wait_bucket_sla_hours: Record<Exclude<EnrollmentWaitBucket, "none">, WaitBucketSlaHoursConfig>;
+    /** Optional per-bucket SLA overrides (hours). */
+    wait_bucket_sla_hours?: Partial<Record<Exclude<EnrollmentWaitBucket, "none">, WaitBucketSlaHoursConfig>>;
+    /**
+     * When set, replaces {@link PLATFORM_PRIMARY_REASON_PRIORITY_ORDER} for primary_reason selection.
+     * Must only contain known reason codes (unknown entries stripped at parse time).
+     */
+    primary_reason_priority_order: OpportunityAttentionReasonCode[] | null;
+    /** Optional weights for {@link computeAttentionPriorityScore} (sum normalization handled there). */
+    priority_score_weights?: Partial<
+        Record<"severity" | "sla" | "value" | "multi_reason" | "commitment", number>
+    >;
 };
 
 const LEGACY_KEYS: OpportunityAttentionReason[] = [
@@ -51,30 +79,47 @@ type ReasonOverridesPartial = Partial<
 
 function defaultPolicies(): Record<OpportunityAttentionReasonCode, OpportunityAttentionReasonPolicy> {
     const defaults: Record<OpportunityAttentionReasonCode, OpportunityAttentionReasonPolicy> = {
-        follow_up_date_passed: { enabled: true, severity: "high" },
-        tour_date_passed: { enabled: true, severity: "high" },
-        high_value_stale: { enabled: true, severity: "medium" },
-        mid_funnel_stale: { enabled: true, severity: "medium" },
-        missing_identity: { enabled: true, severity: "high" },
-        stale_new_inquiry: { enabled: true, severity: "medium" },
-        stale_qualified: { enabled: true, severity: "medium" },
-        stale_quote_followup: { enabled: true, severity: "medium" },
-        missing_quote_after_execution: { enabled: true, severity: "medium" },
+        blocked_internal: { enabled: true, severity: DEFAULT_SEVERITY_BY_REASON.blocked_internal },
+        waiting_on_staff: { enabled: true, severity: DEFAULT_SEVERITY_BY_REASON.waiting_on_staff },
+        missing_identity: { enabled: true, severity: DEFAULT_SEVERITY_BY_REASON.missing_identity },
+        overdue_commitment: { enabled: true, severity: DEFAULT_SEVERITY_BY_REASON.overdue_commitment },
+        tour_date_passed: { enabled: true, severity: DEFAULT_SEVERITY_BY_REASON.tour_date_passed },
+        follow_up_date_passed: { enabled: true, severity: DEFAULT_SEVERITY_BY_REASON.follow_up_date_passed },
+        missing_quote_after_execution: {
+            enabled: true,
+            severity: DEFAULT_SEVERITY_BY_REASON.missing_quote_after_execution,
+        },
+        stale_quote_followup: { enabled: true, severity: DEFAULT_SEVERITY_BY_REASON.stale_quote_followup },
+        waiting_on_family: { enabled: true, severity: DEFAULT_SEVERITY_BY_REASON.waiting_on_family },
+        waiting_on_documents: { enabled: true, severity: DEFAULT_SEVERITY_BY_REASON.waiting_on_documents },
+        waiting_on_payment: { enabled: true, severity: DEFAULT_SEVERITY_BY_REASON.waiting_on_payment },
+        blocked_external: { enabled: true, severity: DEFAULT_SEVERITY_BY_REASON.blocked_external },
+        high_value_stale: { enabled: true, severity: DEFAULT_SEVERITY_BY_REASON.high_value_stale },
+        mid_funnel_stale: { enabled: true, severity: DEFAULT_SEVERITY_BY_REASON.mid_funnel_stale },
+        stale_qualified: { enabled: true, severity: DEFAULT_SEVERITY_BY_REASON.stale_qualified },
+        stale_new_inquiry: { enabled: true, severity: DEFAULT_SEVERITY_BY_REASON.stale_new_inquiry },
     };
     return defaults;
 }
 
 function defaultLabels(): Record<OpportunityAttentionReasonCode, string> {
     return {
-        follow_up_date_passed: "Follow-up date passed",
+        blocked_internal: "Blocked internally",
+        waiting_on_staff: "Waiting on staff",
+        missing_identity: "Missing contact/customer",
+        overdue_commitment: "Commitment overdue",
         tour_date_passed: "Tour date passed — follow up",
+        follow_up_date_passed: "Follow-up date passed",
+        missing_quote_after_execution: "Quoting started but no offer yet",
+        stale_quote_followup: "Priced follow-up is stale",
+        waiting_on_family: "Waiting on family",
+        waiting_on_documents: "Waiting on documents",
+        waiting_on_payment: "Waiting on payment",
+        blocked_external: "Blocked externally",
         high_value_stale: "High-value stale > 2 days",
         mid_funnel_stale: "Stale > 7 days",
-        missing_identity: "Missing contact/customer",
-        stale_new_inquiry: "New inquiry is stale",
         stale_qualified: "Qualified but not progressing",
-        stale_quote_followup: "Priced follow-up is stale",
-        missing_quote_after_execution: "Quoting started but no offer yet",
+        stale_new_inquiry: "New inquiry is stale",
     };
 }
 
@@ -89,6 +134,10 @@ export function createDefaultOpportunityAttentionResolvedConfig(): OpportunityAt
         midFunnelStaleDays: 7,
         auxiliary_signals_enabled: false,
         policies: defaultPolicies(),
+        default_wait_bucket_sla_hours: { ...DEFAULT_WAIT_BUCKET_SLA_HOURS },
+        wait_bucket_sla_hours: undefined,
+        primary_reason_priority_order: null,
+        priority_score_weights: undefined,
     };
 }
 
@@ -111,6 +160,62 @@ function parseAuxiliarySignalsEnabled(raw: unknown): boolean {
     if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return false;
     const v = (raw as Record<string, unknown>).auxiliary_signals_enabled;
     return v === true;
+}
+
+function parsePrimaryReasonPriorityOrder(raw: unknown): OpportunityAttentionReasonCode[] | null {
+    if (!Array.isArray(raw)) return null;
+    const canon = new Set(PLATFORM_PRIMARY_REASON_PRIORITY_ORDER as readonly string[]);
+    const out: OpportunityAttentionReasonCode[] = [];
+    for (const x of raw) {
+        if (typeof x !== "string") continue;
+        const c = x.trim();
+        if (canon.has(c) && isOpportunityAttentionReasonCode(c)) out.push(c);
+    }
+    return out.length ? out : null;
+}
+
+function parseWaitBucketSlaOverrides(
+    raw: unknown
+): Partial<Record<Exclude<EnrollmentWaitBucket, "none">, WaitBucketSlaHoursConfig>> | undefined {
+    if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+    const o = raw as Record<string, unknown>;
+    const buckets = [
+        "waiting_on_staff",
+        "blocked_internal",
+        "waiting_on_family",
+        "waiting_on_documents",
+        "waiting_on_payment",
+        "blocked_external",
+    ] as const;
+    const out: Partial<Record<Exclude<EnrollmentWaitBucket, "none">, WaitBucketSlaHoursConfig>> = {};
+    for (const b of buckets) {
+        const v = o[b];
+        if (v == null || typeof v !== "object" || Array.isArray(v)) continue;
+        const r = v as Record<string, unknown>;
+        const wh = r.warning_hours;
+        const ch = r.critical_hours;
+        if (typeof wh !== "number" || typeof ch !== "number" || !Number.isFinite(wh) || !Number.isFinite(ch)) continue;
+        out[b] = {
+            warning_hours: Math.max(0, Math.floor(wh)),
+            critical_hours: Math.max(0, Math.floor(ch)),
+        };
+    }
+    return Object.keys(out).length ? out : undefined;
+}
+
+function parsePriorityScoreWeights(
+    raw: unknown
+): Partial<Record<"severity" | "sla" | "value" | "multi_reason" | "commitment", number>> | undefined {
+    if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+    const o = raw as Record<string, unknown>;
+    const dims = ["severity", "sla", "value", "multi_reason", "commitment"] as const;
+    const out: Partial<Record<(typeof dims)[number], number>> = {};
+    for (const d of dims) {
+        const v = o[d];
+        if (typeof v !== "number" || !Number.isFinite(v) || v <= 0) continue;
+        out[d] = Math.min(1, Math.max(0.05, v));
+    }
+    return Object.keys(out).length ? out : undefined;
 }
 
 function mergeOverrides(
@@ -136,6 +241,7 @@ function mergeOverrides(
  * - `reason_overrides`
  * - `stale_high_value_days`, `stale_mid_funnel_days`
  * - `auxiliary_signals_enabled` (reserved; core membership ignores unless enabled elsewhere)
+ * - `primary_reason_priority_order`, `sla_wait_hours`, `priority_score_weights`
  */
 export function resolveOpportunityAttentionConfigFromMetadata(metadata: unknown): OpportunityAttentionResolvedConfig {
     const out = createDefaultOpportunityAttentionResolvedConfig();
@@ -156,9 +262,26 @@ export function resolveOpportunityAttentionConfigFromMetadata(metadata: unknown)
         out.auxiliary_signals_enabled = parseAuxiliarySignalsEnabled(root);
         const ro = parseReasonOverridesDeep(root);
         if (ro) mergeOverrides(out.policies, ro);
+
+        const po = parsePrimaryReasonPriorityOrder(root.primary_reason_priority_order);
+        if (po) out.primary_reason_priority_order = po;
+
+        const sla = parseWaitBucketSlaOverrides(root.sla_wait_hours);
+        if (sla) out.wait_bucket_sla_hours = sla;
+
+        const pw = parsePriorityScoreWeights(root.priority_score_weights);
+        if (pw) out.priority_score_weights = pw;
     }
 
     return out;
+}
+
+export function effectivePrimaryReasonPriorityOrder(
+    config: OpportunityAttentionResolvedConfig
+): readonly OpportunityAttentionReasonCode[] {
+    return config.primary_reason_priority_order?.length
+        ? config.primary_reason_priority_order
+        : PLATFORM_PRIMARY_REASON_PRIORITY_ORDER;
 }
 
 export function labelForReasonCode(
@@ -174,5 +297,7 @@ export function severityForReasonCode(
     code: OpportunityAttentionReasonCode,
     config: OpportunityAttentionResolvedConfig
 ): OpportunityAttentionSeverity {
-    return config.policies[code]?.severity ?? "medium";
+    const pol = config.policies[code]?.severity;
+    if (pol) return pol;
+    return DEFAULT_SEVERITY_BY_REASON[code] ?? "medium";
 }

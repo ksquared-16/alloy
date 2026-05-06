@@ -12,6 +12,7 @@
     "test:pricing-smoke": "vitest run tests/pricing/jobPricing.smoke.test.ts",
     "test:payments-smoke": "vitest run tests/payments/paymentsTask2.smoke.test.ts",
     "test:playwright-smoke": "playwright test playwright/tests/smoke-field-registry.spec.ts",
+    "screenshots:p1c-review": "playwright test playwright/tests/p1c-operational-attention-review.spec.ts",
     "dev:tenant:childcare": "tsx --tsconfig tsconfig.json scripts/spinupChildcareTenant.ts",
     "dev:seed:work-unit-job-queues": "tsx --tsconfig tsconfig.json scripts/seedWorkUnitJobQueueDefinitionV1.ts",
     "dev:seed:enrollment-opportunity-queues": "tsx --tsconfig tsconfig.json scripts/seedEnrollmentOpportunityQueuesV1.ts",
