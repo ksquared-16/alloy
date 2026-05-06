@@ -126,7 +126,7 @@ export default function AdminV2SettingsIndexPage() {
                             Field definitions by entity for forms and drawers.
                         </SettingsCard>
                         <SettingsCard href="/adminV2/settings/field-sections" title="Field sections" accent="records">
-                            Group and order fields on layouts.
+                            Catalog for field groups (section_key) — separate from record drawer layouts.
                         </SettingsCard>
                         <SettingsCard href="/adminV2/settings/statuses" title="Statuses" accent="records">
                             Status keys and labels per entity type.
@@ -135,7 +135,7 @@ export default function AdminV2SettingsIndexPage() {
                             Guardrails that block invalid status changes (server-enforced).
                         </SettingsCard>
                         <SettingsCard href="/adminV2/settings/attention-sla-rules" title="Attention & SLA Rules" accent="records">
-                            Coming next — define deadlines/SLA rules that feed Needs Attention.
+                            Planned — UI not active. Opportunity Needs Attention uses the code resolver + metadata today.
                         </SettingsCard>
                         <SettingsCard href="/adminV2/settings/entity-labels" title="Entity labels" accent="records">
                             Display names (Family, Inquiry, etc.).
@@ -175,7 +175,7 @@ export default function AdminV2SettingsIndexPage() {
                 <Group label="Layouts" accentClass="border-alloy-pine/25">
                     <SettingsTileGrid variant="two">
                         <SettingsCard href="/adminV2/settings/layouts" title="Layouts" accent="records">
-                            Record layouts, drawer sections, and header/section action placement surfaces (read-only for now).
+                            Read-only hub: runtime drawer = record_drawer_layouts → record_layouts (see page for truth).
                         </SettingsCard>
                     </SettingsTileGrid>
                 </Group>

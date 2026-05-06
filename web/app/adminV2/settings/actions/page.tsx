@@ -113,7 +113,7 @@ export default function AdminV2SettingsActionsPage() {
                     Many placements are scoped by work unit (right rail, queue row).
                 </Card>
                 <Card href="/adminV2/settings/layouts" title="Layouts">
-                    Layout configuration (sections/fields) — editing experiences come next.
+                    Hub only: drawer shell comes from record_drawer_layouts → record_layouts (no editor here yet).
                 </Card>
                 <Card href="/adminV2/settings/statuses" title="Statuses">
                     Status keys/labels per entity (used by forms like “Update status”).

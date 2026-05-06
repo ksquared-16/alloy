@@ -1,5 +1,7 @@
 # CRM opportunity Needs attention — count semantics (Card 2C)
 
+**Tuning / product truth:** Thresholds and policies are **not** edited in Admin Settings → “Attention & SLA Rules” (that UI is planned / inactive). See `docs/execution/admin-settings-config-parity.md`.
+
 All **membership** for opportunity “needs attention” in CRM surfaces uses the same canonical evaluator: `resolveOpportunityAttention` (resolver v1), with config from `resolveOpportunityAttentionConfigFromMetadata` (work unit or department `metadata`).
 
 **Counts still differ across surfaces** because each path applies a different **row cohort** and **fetch cap** before the resolver runs. No single number is universally “the org total” unless you run an uncapped query scoped to the cohort you care about.
