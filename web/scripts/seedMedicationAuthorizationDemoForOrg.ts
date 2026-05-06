@@ -30,6 +30,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import {
     MEDICATION_AUTHORIZATION_DEMO_FORM_KEY,
     MEDICATION_AUTHORIZATION_DEMO_DEFINITION_METADATA,
+    MEDICATION_AUTHORIZATION_DEMO_OPERATOR_CONTEXT,
     MEDICATION_AUTHORIZATION_DEMO_PDF_MAPPING,
     MEDICATION_AUTHORIZATION_DEMO_PUBLIC_TOKEN,
     MEDICATION_AUTHORIZATION_DEMO_SCHEMA,
@@ -140,7 +141,10 @@ async function upsertFormDefinition(orgId: string): Promise<string> {
                 description: "Demo/example-only schema — not an official state compliance form.",
                 kind: "center",
                 is_active: true,
-                metadata: jsonClone(MEDICATION_AUTHORIZATION_DEMO_DEFINITION_METADATA),
+                metadata: {
+                    ...jsonClone(MEDICATION_AUTHORIZATION_DEMO_DEFINITION_METADATA),
+                    operator_context: jsonClone(MEDICATION_AUTHORIZATION_DEMO_OPERATOR_CONTEXT),
+                },
             },
             { onConflict: "org_id,key" }
         )

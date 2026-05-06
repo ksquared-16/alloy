@@ -101,7 +101,7 @@ export async function dbUpdateFormDefinition(
 export async function dbListVersionsForForm(supabase: SupabaseClient, orgId: string, formId: string) {
     return supabase
         .from("form_definition_versions")
-        .select("id, version_number, status, published_at, created_at, updated_at")
+        .select("id, version_number, status, published_at, created_at, updated_at, pdf_mapping_json")
         .eq("org_id", orgId)
         .eq("form_definition_id", formId)
         .order("version_number", { ascending: false });

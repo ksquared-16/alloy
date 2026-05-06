@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import PrimaryButton from "@/components/PrimaryButton";
@@ -10,6 +10,15 @@ import { StatusBadge, getStatusVariant } from "@/components/admin/StatusBadge";
 import { formatDateTime } from "@/lib/adminFormatters";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
+import {
+    buildConnectedSystemsBullets,
+    formVersionHasDocumentMapping,
+    parseOperatorContext,
+    resolveAfterSubmissionParagraph,
+    resolvePurposeParagraph,
+    resolveWhoCompletesParagraph,
+} from "@/lib/forms/operatorFormGuidance";
+import { linkRequiresLeadCapture } from "@/lib/public/forms/publicFormTypes";
 
 type VersionRow = {
     id: string;
@@ -18,14 +27,17 @@ type VersionRow = {
     published_at: string | null;
     created_at: string;
     updated_at: string | null;
+    pdf_mapping_json?: unknown | null;
 };
 
 type FormDetail = {
     id: string;
     key: string;
     name: string;
+    description: string | null;
     kind: string;
     is_active: boolean;
+    metadata: Record<string, unknown>;
     versions: VersionRow[];
 };
 
@@ -36,6 +48,7 @@ type PublicLinkRow = {
     token_prefix: string | null;
     pinned_form_definition_version_id: string | null;
     created_at: string;
+    metadata?: Record<string, unknown>;
 };
 
 type CreatedLinkPayload = {
@@ -146,6 +159,38 @@ export default function FormDetailClient() {
     const published = detail?.versions.filter((v) => v.status === "published") ?? [];
     const latestPublished = published.sort((a, b) => b.version_number - a.version_number)[0];
 
+    const operatorContext = useMemo(() => parseOperatorContext(detail?.metadata), [detail?.metadata]);
+
+    const leadCaptureConfigured = useMemo(
+        () => links.some((L) => linkRequiresLeadCapture(L.metadata)),
+        [links]
+    );
+
+    const documentGenerationConfigured = useMemo(
+        () => (latestPublished ? formVersionHasDocumentMapping(latestPublished.pdf_mapping_json) : false),
+        [latestPublished]
+    );
+
+    const connectedBullets = useMemo(
+        () =>
+            buildConnectedSystemsBullets({
+                leadCaptureConfigured,
+                documentGenerationConfigured,
+                operatorNotes: operatorContext?.connected_notes ?? null,
+            }),
+        [leadCaptureConfigured, documentGenerationConfigured, operatorContext?.connected_notes]
+    );
+
+    const openPublicEmbedUrl = useMemo(() => {
+        if (!createdOnce) return null;
+        return (
+            createdOnce.embed_url ??
+            (typeof window !== "undefined" ? `${window.location.origin}${createdOnce.embed_path}` : null)
+        );
+    }, [createdOnce]);
+
+    const submissionsHref = `${ADMIN_FORMS_UI_BASE}/${encodeURIComponent(formId)}/submissions`;
+
     if (!formId) {
         return <p className="p-6 text-sm text-red-700">Missing form id.</p>;
     }
@@ -157,10 +202,17 @@ export default function FormDetailClient() {
                 subtitle={detail ? `Key ${detail.key}` : "Loading…"}
                 actions={
                     <div className="flex flex-wrap items-center gap-3">
-                        <Link
-                            href={`${ADMIN_FORMS_UI_BASE}/${encodeURIComponent(formId)}/submissions`}
-                            className="text-sm font-medium text-[#00458C] hover:underline"
-                        >
+                        {openPublicEmbedUrl ? (
+                            <a
+                                href={openPublicEmbedUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-sm font-semibold text-[#00458C] hover:underline"
+                            >
+                                Open public form
+                            </a>
+                        ) : null}
+                        <Link href={submissionsHref} className="text-sm font-medium text-[#00458C] hover:underline">
                             Submissions
                         </Link>
                         <Link href={ADMIN_FORMS_UI_BASE} className="text-sm font-medium text-[#00458C] hover:underline">
@@ -176,6 +228,85 @@ export default function FormDetailClient() {
                 <p className="text-sm text-red-700">{error}</p>
             ) : detail ? (
                 <>
+                    <SectionCard title="Operator guide">
+                        <div className="space-y-5 text-sm text-[#31394d]">
+                            <section>
+                                <h3 className="text-xs font-bold uppercase tracking-wide text-[#59678b]">
+                                    What this form is for
+                                </h3>
+                                <p className="mt-1.5 leading-relaxed">
+                                    {resolvePurposeParagraph(operatorContext, detail.description, detail.name)}
+                                </p>
+                            </section>
+                            <section>
+                                <h3 className="text-xs font-bold uppercase tracking-wide text-[#59678b]">
+                                    Who completes this?
+                                </h3>
+                                <p className="mt-1.5 leading-relaxed">
+                                    {resolveWhoCompletesParagraph(operatorContext, detail.kind)}
+                                </p>
+                            </section>
+                            <section>
+                                <h3 className="text-xs font-bold uppercase tracking-wide text-[#59678b]">
+                                    What happens after submission?
+                                </h3>
+                                <p className="mt-1.5 leading-relaxed">{resolveAfterSubmissionParagraph(operatorContext)}</p>
+                            </section>
+                            <section>
+                                <h3 className="text-xs font-bold uppercase tracking-wide text-[#59678b]">
+                                    Connected systems
+                                </h3>
+                                <ul className="mt-1.5 list-disc space-y-1.5 pl-5 leading-relaxed text-[#31394d]">
+                                    {connectedBullets.map((b) => (
+                                        <li key={b.id}>{b.text}</li>
+                                    ))}
+                                </ul>
+                            </section>
+                            <section>
+                                <h3 className="text-xs font-bold uppercase tracking-wide text-[#59678b]">Next steps</h3>
+                                <ol className="mt-1.5 list-decimal space-y-1.5 pl-5 leading-relaxed">
+                                    <li>
+                                        <a href="#form-public-embed-links" className="font-medium text-[#00458C] hover:underline">
+                                            Create or copy a public link
+                                        </a>{" "}
+                                        (full URL and token are only shown when you create a link — they are not stored in
+                                        plaintext afterward).
+                                    </li>
+                                    <li>Send the link to the family or staff member who should fill it out.</li>
+                                    <li>
+                                        <Link href={submissionsHref} className="font-medium text-[#00458C] hover:underline">
+                                            Review submissions
+                                        </Link>{" "}
+                                        as they arrive; open one to see answers and linked records.
+                                    </li>
+                                    <li>
+                                        From a submission, generate or open linked documents when your form supports document
+                                        mapping.
+                                    </li>
+                                </ol>
+                                {openPublicEmbedUrl ? (
+                                    <p className="mt-3 text-xs text-[#59678b]">
+                                        You have a fresh link from this session — use{" "}
+                                        <a
+                                            href={openPublicEmbedUrl}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="font-medium text-[#00458C] hover:underline"
+                                        >
+                                            Open public form
+                                        </a>{" "}
+                                        to see exactly what recipients see.
+                                    </p>
+                                ) : null}
+                            </section>
+                            <p className="border-t border-[#e6e8ec] pt-3 text-xs text-[#59678b]">
+                                Optional: admins can add tailored operator text by setting{" "}
+                                <code className="rounded bg-[#F4F6F9] px-1 font-mono text-[11px]">metadata.operator_context</code>{" "}
+                                on this form (purpose, who completes, after submission, connected notes) via the forms API.
+                            </p>
+                        </div>
+                    </SectionCard>
+
                     <SectionCard title="Published versions">
                         {latestPublished ? (
                             <p className="text-sm text-[#31394d]">
@@ -214,105 +345,122 @@ export default function FormDetailClient() {
                         </div>
                     </SectionCard>
 
-                    <SectionCard title="Public embed links">
-                        {!canMutate ? (
-                            <p className="text-sm text-[#59678b]">Admin role required to create links.</p>
-                        ) : (
-                            <div className="flex flex-wrap gap-2">
-                                <PrimaryButton
-                                    type="button"
-                                    className="!px-3 !py-2 text-sm"
-                                    onClick={() => void createPublicLink()}
-                                    disabled={creating}
-                                >
-                                    {creating ? "Creating…" : "Create public link"}
-                                </PrimaryButton>
-                            </div>
-                        )}
-                        {createErr ? <p className="mt-2 text-sm text-red-700">{createErr}</p> : null}
-
-                        {createdOnce ? (
-                            <div className="mt-4 rounded-lg border border-[#DBC078]/50 bg-[#e6d3a0]/15 p-4">
-                                <p className="text-sm font-semibold text-[#31394d]">
-                                    Copy now — token is shown only once
-                                </p>
-                                <div className="mt-2 space-y-2 text-sm">
-                                    <div>
-                                        <span className="text-[#59678b]">Token</span>
-                                        <div className="mt-1 flex flex-wrap items-center gap-2">
-                                            <code className="break-all rounded bg-white px-2 py-1 font-mono text-xs">
-                                                {createdOnce.plaintext_token}
-                                            </code>
-                                            <button
-                                                type="button"
-                                                className="text-[#00458C] hover:underline"
-                                                onClick={() => void copyText("token", createdOnce.plaintext_token)}
-                                            >
-                                                {copied === "token" ? "Copied" : "Copy"}
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <span className="text-[#59678b]">Embed URL</span>
-                                        <div className="mt-1 flex flex-wrap items-center gap-2">
-                                            <code className="break-all rounded bg-white px-2 py-1 font-mono text-xs">
-                                                {createdOnce.embed_url ?? `${window.location.origin}${createdOnce.embed_path}`}
-                                            </code>
-                                            <button
-                                                type="button"
-                                                className="text-[#00458C] hover:underline"
-                                                onClick={() =>
-                                                    void copyText(
-                                                        "url",
-                                                        createdOnce.embed_url ??
-                                                            `${window.location.origin}${createdOnce.embed_path}`
-                                                    )
-                                                }
-                                            >
-                                                {copied === "url" ? "Copied" : "Copy"}
-                                            </button>
-                                        </div>
-                                    </div>
+                    <div id="form-public-embed-links">
+                        <SectionCard title="Public embed links">
+                            {!canMutate ? (
+                                <p className="text-sm text-[#59678b]">Admin role required to create links.</p>
+                            ) : (
+                                <div className="flex flex-wrap gap-2">
+                                    <PrimaryButton
+                                        type="button"
+                                        className="!px-3 !py-2 text-sm"
+                                        onClick={() => void createPublicLink()}
+                                        disabled={creating}
+                                    >
+                                        {creating ? "Creating…" : "Create public link"}
+                                    </PrimaryButton>
                                 </div>
-                                {copyWarn ? <p className="mt-3 text-xs text-[#59678b]">{copyWarn}</p> : null}
-                            </div>
-                        ) : null}
+                            )}
+                            {createErr ? <p className="mt-2 text-sm text-red-700">{createErr}</p> : null}
 
-                        {links.length > 0 ? (
-                            <div className="mt-4 overflow-x-auto">
-                                <p className="mb-2 text-xs text-[#59678b]">
-                                    Existing links (token prefix only; full token not stored in plaintext)
+                            <div className="mt-3 rounded-md bg-[#F4F6F9]/80 p-3 text-sm text-[#59678b]">
+                                <p className="font-medium text-[#31394d]">About links and tokens</p>
+                                <p className="mt-1 leading-relaxed">
+                                    The table below only shows a short <strong>prefix</strong> for each existing link — not
+                                    the full secret URL. Alloy stores a hash of the token, so you cannot copy an old link
+                                    from this screen alone.
                                 </p>
-                                <table className="w-full text-sm">
-                                    <thead>
-                                        <tr className="border-b border-[#e6e8ec]">
-                                            <th className="pb-2 pr-4 text-left font-semibold text-[#59678b]">Prefix</th>
-                                            <th className="pb-2 pr-4 text-left font-semibold text-[#59678b]">Active</th>
-                                            <th className="pb-2 pr-4 text-left font-semibold text-[#59678b]">Expires</th>
-                                            <th className="pb-2 text-left font-semibold text-[#59678b]">Created</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-[#e6e8ec]">
-                                        {links.map((L) => (
-                                            <tr key={L.id}>
-                                                <td className="py-2 pr-4 font-mono text-xs">{L.token_prefix ?? "—"}</td>
-                                                <td className="py-2 pr-4">
-                                                    <StatusBadge
-                                                        label={L.is_active ? "yes" : "no"}
-                                                        variant={L.is_active ? "success" : "neutral"}
-                                                    />
-                                                </td>
-                                                <td className="py-2 pr-4 text-[#59678b]">
-                                                    {L.expires_at ? formatDateTime(L.expires_at) : "—"}
-                                                </td>
-                                                <td className="py-2 text-[#59678b]">{formatDateTime(L.created_at)}</td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                <p className="mt-2 leading-relaxed">
+                                    <strong>Need a shareable URL?</strong> Click <strong>Create public link</strong>. Copy the
+                                    embed URL or token immediately; it will not be shown again. Create another link anytime
+                                    you need a fresh URL for the same form.
+                                </p>
                             </div>
-                        ) : null}
-                    </SectionCard>
+
+                            {createdOnce ? (
+                                <div className="mt-4 rounded-lg border border-[#DBC078]/50 bg-[#e6d3a0]/15 p-4">
+                                    <p className="text-sm font-semibold text-[#31394d]">
+                                        Copy now — token is shown only once
+                                    </p>
+                                    <div className="mt-2 space-y-2 text-sm">
+                                        <div>
+                                            <span className="text-[#59678b]">Token</span>
+                                            <div className="mt-1 flex flex-wrap items-center gap-2">
+                                                <code className="break-all rounded bg-white px-2 py-1 font-mono text-xs">
+                                                    {createdOnce.plaintext_token}
+                                                </code>
+                                                <button
+                                                    type="button"
+                                                    className="text-[#00458C] hover:underline"
+                                                    onClick={() => void copyText("token", createdOnce.plaintext_token)}
+                                                >
+                                                    {copied === "token" ? "Copied" : "Copy"}
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <span className="text-[#59678b]">Embed URL</span>
+                                            <div className="mt-1 flex flex-wrap items-center gap-2">
+                                                <code className="break-all rounded bg-white px-2 py-1 font-mono text-xs">
+                                                    {createdOnce.embed_url ??
+                                                        `${typeof window !== "undefined" ? window.location.origin : ""}${createdOnce.embed_path}`}
+                                                </code>
+                                                <button
+                                                    type="button"
+                                                    className="text-[#00458C] hover:underline"
+                                                    onClick={() =>
+                                                        void copyText(
+                                                            "url",
+                                                            createdOnce.embed_url ??
+                                                                `${typeof window !== "undefined" ? window.location.origin : ""}${createdOnce.embed_path}`
+                                                        )
+                                                    }
+                                                >
+                                                    {copied === "url" ? "Copied" : "Copy"}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {copyWarn ? <p className="mt-3 text-xs text-[#59678b]">{copyWarn}</p> : null}
+                                </div>
+                            ) : null}
+
+                            {links.length > 0 ? (
+                                <div className="mt-4 overflow-x-auto">
+                                    <p className="mb-2 text-xs text-[#59678b]">
+                                        Existing links — prefix only (no full URL without creating a new link)
+                                    </p>
+                                    <table className="w-full text-sm">
+                                        <thead>
+                                            <tr className="border-b border-[#e6e8ec]">
+                                                <th className="pb-2 pr-4 text-left font-semibold text-[#59678b]">Prefix</th>
+                                                <th className="pb-2 pr-4 text-left font-semibold text-[#59678b]">Active</th>
+                                                <th className="pb-2 pr-4 text-left font-semibold text-[#59678b]">Expires</th>
+                                                <th className="pb-2 text-left font-semibold text-[#59678b]">Created</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-[#e6e8ec]">
+                                            {links.map((L) => (
+                                                <tr key={L.id}>
+                                                    <td className="py-2 pr-4 font-mono text-xs">{L.token_prefix ?? "—"}</td>
+                                                    <td className="py-2 pr-4">
+                                                        <StatusBadge
+                                                            label={L.is_active ? "yes" : "no"}
+                                                            variant={L.is_active ? "success" : "neutral"}
+                                                        />
+                                                    </td>
+                                                    <td className="py-2 pr-4 text-[#59678b]">
+                                                        {L.expires_at ? formatDateTime(L.expires_at) : "—"}
+                                                    </td>
+                                                    <td className="py-2 text-[#59678b]">{formatDateTime(L.created_at)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ) : null}
+                        </SectionCard>
+                    </div>
                 </>
             ) : null}
         </div>

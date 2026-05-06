@@ -23,6 +23,18 @@ export const MEDICATION_AUTHORIZATION_DEMO_DEFINITION_METADATA = {
     not_official_state_form: true,
 } as const;
 
+/** Shown on AdminV2 form detail via `metadata.operator_context` when seeded by `seedMedicationAuthorizationDemoForOrg.ts`. */
+export const MEDICATION_AUTHORIZATION_DEMO_OPERATOR_CONTEXT = {
+    purpose:
+        "Collect medication consent and administration details for a child (demo only — not an official state form). Use it to practice the full flow: link → submit → review → stub PDF.",
+    who_completes:
+        "A parent or guardian completes this using the public link or embed you share. They do not sign into Alloy admin.",
+    after_submission:
+        "The response appears under Submissions. Open it to review answers, signatures, and linked documents; use Generate document when you want the demo PDF on file.",
+    connected_notes:
+        "Public submissions can tie to CRM IDs when intake/lead capture is enabled on the link (not enabled by default on the seeded demo link).",
+} as const;
+
 export const MEDICATION_AUTHORIZATION_DEMO_VERSION_METADATA = {
     demo: true,
     compliance_status: "example_only",
