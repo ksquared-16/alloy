@@ -44,6 +44,7 @@ import {
     type EntityLabelsMap,
 } from "@/contexts/EntityLabelsContext";
 import AlloyLogo from "@/components/admin/AlloyLogo";
+import { pathnameMatchesNavHref } from "@/lib/admin/adminNavMatch";
 
 const SIDEBAR_STORAGE_KEY = "admin_sidebar_collapsed";
 const SIDEBAR_SCROLL_KEY = "adminSidebarScrollTop";
@@ -282,13 +283,6 @@ function navLinkLabel(link: NavLink, labels: EntityLabelsMap, labelsLoading: boo
         return getEntityLabel(labels, link.entityType, "plural");
     }
     return link.label;
-}
-
-/** Workspace V2 routes nest under `/admin/workspace/...`; treat as active for sidebar expansion. */
-function pathnameMatchesNavHref(href: string, pathname: string): boolean {
-    if (href === pathname) return true;
-    if (href === "/admin/workspace" && pathname.startsWith("/admin/workspace")) return true;
-    return false;
 }
 
 function AdminLayoutInner({ children, userEmail, role }: { children: ReactNode; userEmail: string; role: string }) {

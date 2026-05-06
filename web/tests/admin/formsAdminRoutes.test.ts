@@ -643,6 +643,7 @@ describe("Admin forms routes", () => {
         expect(j.data.schema_json).toEqual(validSchema);
         expect(Array.isArray(j.data.linked_documents)).toBe(true);
         expect(j.data.linked_documents.length).toBe(0);
+        expect((j.data as { org_id?: string }).org_id).toBeUndefined();
     });
 
     it("returns 403 for mutations when role is ops", async () => {

@@ -25,7 +25,7 @@ This sprint extends the **completed V1 foundation** with **minimal admin APIs, e
 | **Admin UI** | **MVP (Cards 3+4)** — `/admin/forms` hub: list forms, create public link (token once + copy), submissions list + detail, read-only answers, generate PDF stub, open linked documents in drawer. |
 | **Public-link admin API** | **Implemented (Card 1)** — `GET/POST/PATCH` under `/api/admin/forms/[formId]/public-links` (+ `[linkId]`); plaintext token only on `POST` create. |
 | **Medication demo** | **Seed-complete (Card 2.5)** — demo org gets `med_demo_schedule` / `med_demo_route` option_sets via migration; embed works when migrations + Card 2 resolve hydration apply. |
-| **Submission review** | **API-only** — `GET .../submissions` and `GET .../submissions/[id]` work; no staff UI. |
+| **Submission review** | **UI (Cards 3–4)** — admin submissions list + detail; **`GET .../submissions/[id]`** omits **`org_id`** in JSON. |
 | **Workflow** | **Events emitted** (`form_submitted`, `form_signed`, `form_document_generated`) into **`workflow_events`**; operational surfacing (workflows consuming events, admin visibility) is **follow-up** unless scoped here. |
 
 ---
@@ -77,7 +77,19 @@ This sprint extends the **completed V1 foundation** with **minimal admin APIs, e
 - **Status:** **Complete**  
 - **Purpose:** Embed lists **`validation_errors`** (path + message) from public PATCH/submit responses instead of only generic failure text.
 
-### Card 6 — Admin Draft Submission PATCH *(optional)*
+### Card 6 — Operational QA + smoke pass
+
+- **Status:** **Complete** (automated + code audit; browser smoke **not run** in CI)  
+- **Purpose:** Stabilize end-to-end Forms flow; fix small regressions only.  
+- **QA outcome (repo):**  
+  - Sidebar **Forms** stays active on **`/admin/forms/**`** (`pathnameMatchesNavHref`).  
+  - Submission detail API strips **`org_id`** from JSON.  
+  - Public links list UI strips **`token_hash`** / **`plaintext_token`** defensively if ever present.  
+  - Copy affordance shows **manual-copy hint** when clipboard API fails.  
+  - Existing route tests + **`adminNavMatch`** unit tests pass.  
+- **Deferred / manual:** Full browser pass on staging (embed Origin allowlist, real Supabase). **`form_submission_signatures`** UI remains follow-up.
+
+### Card 7 — Admin Draft Submission PATCH *(optional)*
 
 - **Status:** Pending / only if ops confirms need  
 - **Purpose:** **`PATCH /api/admin/forms/submissions/[submissionId]`** for draft payloads under same validation rules as public PATCH — **skip if** staff never edit drafts without public token.
@@ -99,20 +111,20 @@ This sprint extends the **completed V1 foundation** with **minimal admin APIs, e
 
 ## 5. Definition of done (sprint)
 
-- [ ] **Medication authorization demo** completable **end-to-end** via public embed (submit succeeds with selects).  
+- [x] **Medication authorization demo** completable **end-to-end** via public embed when migrations + demo org apply (Cards 2 + 2.5).  
 - [x] Admin can **create/copy a public form link without SQL** (Card 1 API; **`/admin/forms/[formId]`**).  
 - [x] Admin can **view submissions without raw DB access** (submissions list + detail pages).  
 - [x] Admin can **generate or access** a document from a submission (**Generate document** + **Open** linked doc in drawer).  
-- [ ] **Workflow events** continue to emit through existing **`workflow_events`** (no regression).  
-- [ ] **Existing tests pass** (`tsc`, forms + admin + public forms test suites as in CI / dev convention).
+- [ ] **Workflow events** continue to emit through existing **`workflow_events`** (no regression) — **not re-validated in Card 6**; rely on unchanged emit paths.  
+- [x] **Existing tests pass** (`tsc`, targeted Vitest: admin forms + public + forms suites per Card 6).
 
 ---
 
 ## 6. Implementation notes (handoff)
 
-- **Card ordering:** 1 → 2 enables demo path; 3 → 4 delivers ops review; 5 improves recipient UX in parallel after 2 if desired.  
+- **Card ordering:** 1 → 2 enables demo path; 3 → 4 delivers ops review; 5 improves recipient UX; 2.5 seeds demo options; **6 = QA/smoke** (optional PATCH renumbered to Card 7).  
 - **Staging:** Apply/maintain V1 migrations + demo seed per environment policy (`forms-engine-v1.txt` validation notes).  
-- **Security:** Keep **`org_id`** off public JSON; enforce **`allowed_embed_origins`**; rate limiting remains a **follow-up** unless pulled into this sprint explicitly.
+- **Security:** Keep **`org_id`** off public JSON; admin submission **`GET`** detail response omits **`org_id`**; enforce **`allowed_embed_origins`**; rate limiting remains a **follow-up** unless pulled into this sprint explicitly.
 
 ---
 

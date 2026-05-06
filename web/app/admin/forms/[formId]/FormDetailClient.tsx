@@ -56,6 +56,7 @@ export default function FormDetailClient() {
     const [createErr, setCreateErr] = useState<string | null>(null);
     const [createdOnce, setCreatedOnce] = useState<CreatedLinkPayload | null>(null);
     const [copied, setCopied] = useState<string | null>(null);
+    const [copyWarn, setCopyWarn] = useState<string | null>(null);
 
     const load = useCallback(async () => {
         if (!formId) return;
@@ -71,7 +72,15 @@ export default function FormDetailClient() {
             if (!formRes.ok) throw new Error((formJson as { error?: string }).error ?? "Failed to load form");
             setDetail((formJson as { data?: FormDetail }).data ?? null);
             if (linksRes.ok) {
-                setLinks((linksJson as { data?: PublicLinkRow[] }).data ?? []);
+                const raw = (linksJson as { data?: Record<string, unknown>[] }).data ?? [];
+                setLinks(
+                    raw.map((row) => {
+                        const { token_hash: _h, plaintext_token: _p, ...rest } = row;
+                        void _h;
+                        void _p;
+                        return rest as PublicLinkRow;
+                    })
+                );
             } else {
                 setLinks([]);
             }
@@ -88,12 +97,14 @@ export default function FormDetailClient() {
     }, [load]);
 
     const copyText = async (key: string, text: string) => {
+        setCopyWarn(null);
         try {
             await navigator.clipboard.writeText(text);
             setCopied(key);
             setTimeout(() => setCopied(null), 2000);
         } catch {
             setCopied(null);
+            setCopyWarn("Clipboard unavailable in this browser — select the text above and copy manually.");
         }
     };
 
@@ -101,6 +112,7 @@ export default function FormDetailClient() {
         if (!formId || !canMutate) return;
         setCreating(true);
         setCreateErr(null);
+        setCopyWarn(null);
         try {
             const res = await fetch(`/api/admin/forms/${encodeURIComponent(formId)}/public-links`, {
                 method: "POST",
@@ -261,6 +273,7 @@ export default function FormDetailClient() {
                                         </div>
                                     </div>
                                 </div>
+                                {copyWarn ? <p className="mt-3 text-xs text-[#59678b]">{copyWarn}</p> : null}
                             </div>
                         ) : null}
 

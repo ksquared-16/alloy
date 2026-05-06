@@ -27,8 +27,12 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
     const schema_json = ver ? (ver as { schema_json: unknown }).schema_json : null;
 
+    const row = data as Record<string, unknown>;
+    const { org_id: _orgStrip, ...submissionRest } = row;
+    void _orgStrip;
+
     return jsonData({
-        ...data,
+        ...submissionRest,
         schema_json,
         linked_documents: linked ?? [],
     });
