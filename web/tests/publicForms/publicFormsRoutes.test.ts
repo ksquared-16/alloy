@@ -11,9 +11,14 @@ const validSchema = {
 };
 
 const mockResolve = vi.fn();
+const mockHydrate = vi.fn();
 
 vi.mock("@/lib/public/forms/resolvePublicFormLink", () => ({
     resolvePublicFormLinkByToken: (...args: unknown[]) => mockResolve(...args),
+}));
+
+vi.mock("@/lib/public/forms/hydratePublicFormSelectOptions", () => ({
+    hydrateSelectOptionsForSchema: (...args: unknown[]) => mockHydrate(...args),
 }));
 
 const insertSubmission = vi.fn(async () => ({
@@ -67,6 +72,10 @@ describe("public forms routes", () => {
     beforeEach(() => {
         vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "test-key");
         mockResolve.mockResolvedValue(resolvedValue([]));
+        mockHydrate.mockResolvedValue({
+            option_values_by_field_id: {},
+            option_choices_by_field_id: {},
+        });
     });
 
     afterEach(() => {
@@ -79,9 +88,53 @@ describe("public forms routes", () => {
             params: Promise.resolve({ token: "plain-token" }),
         });
         expect(res.status).toBe(200);
-        const j = (await res.json()) as { ok: boolean; data?: { schema_json: unknown } };
+        const j = (await res.json()) as {
+            ok: boolean;
+            data?: {
+                schema_json: unknown;
+                option_values_by_field_id?: Record<string, string[]>;
+                option_choices_by_field_id?: Record<string, { value: string; label: string }[]>;
+            };
+        };
         expect(j.ok).toBe(true);
         expect(j.data?.schema_json).toEqual(validSchema);
+        expect(j.data?.option_values_by_field_id).toEqual({});
+        expect(j.data?.option_choices_by_field_id).toEqual({});
+        expect(mockHydrate).toHaveBeenCalledOnce();
+    });
+
+    it("GET resolve includes option_values_by_field_id for select fields", async () => {
+        const schemaWithSelect = {
+            schema_version: 1 as const,
+            title: "Public",
+            sections: [{ id: "s1", field_ids: ["color"] }],
+            fields: [{ id: "color", type: "select" as const, label: "Color", option_set_key: "colors" }],
+        };
+        mockResolve.mockResolvedValueOnce({
+            ok: true as const,
+            value: {
+                ...resolvedValue([]).value,
+                schemaJson: schemaWithSelect,
+            },
+        });
+        mockHydrate.mockResolvedValueOnce({
+            option_values_by_field_id: { color: ["red", "blue"] },
+            option_choices_by_field_id: {
+                color: [
+                    { value: "red", label: "Red" },
+                    { value: "blue", label: "Blue" },
+                ],
+            },
+        });
+        const res = await resolveGet(new NextRequest("http://localhost/x"), {
+            params: Promise.resolve({ token: "plain-token" }),
+        });
+        expect(res.status).toBe(200);
+        const j = (await res.json()) as {
+            ok: boolean;
+            data?: { option_values_by_field_id?: Record<string, string[]> };
+        };
+        expect(j.data?.option_values_by_field_id?.color).toEqual(["red", "blue"]);
     });
 
     it("GET resolve rejects disallowed Origin when embed allowlist is set", async () => {

@@ -32,4 +32,24 @@ describe("FormEngineRenderer", () => {
         expect(html).toContain("Name");
         expect(html).toContain("Ada");
     });
+
+    it("renders select labels from optionChoicesByFieldId when provided", () => {
+        const pickSchema: FormSchemaV1 = {
+            schema_version: 1,
+            title: "Opts",
+            sections: [{ id: "s1", field_ids: ["pick"] }],
+            fields: [{ id: "pick", type: "select", label: "Pick", required: false, option_set_key: "colors" }],
+        };
+        const html = renderToStaticMarkup(
+            <FormEngineRenderer
+                schema={pickSchema}
+                payload={{ values: {} }}
+                onChange={() => {}}
+                mode="edit"
+                optionChoicesByFieldId={{ pick: [{ value: "a", label: "Alpha label" }] }}
+            />
+        );
+        expect(html).toContain("Alpha label");
+        expect(html).toContain('value="a"');
+    });
 });

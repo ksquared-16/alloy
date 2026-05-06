@@ -7,12 +7,16 @@ import type { FormPayload, FormPayloadGroupRow, FormPayloadSignature } from "@/l
 import { evaluateFieldVisibility } from "@/lib/forms/validateSubmission";
 import { emptyPayload, ensureGroupRows, setSignature, setTopLevelValue } from "./formEnginePayload";
 
+export type FormEngineOptionChoice = { value: string; label: string };
+
 export type FormEngineRendererProps = {
     schema: FormSchemaV1;
     payload: FormPayload;
     onChange: (next: FormPayload) => void;
     mode: "edit" | "readonly";
     optionValuesByFieldId?: Record<string, readonly string[]>;
+    /** When set, select/multiselect use value + label (from public resolve). Falls back to optionValuesByFieldId. */
+    optionChoicesByFieldId?: Record<string, readonly FormEngineOptionChoice[]>;
     variant?: "default" | "embed";
 };
 
@@ -31,6 +35,7 @@ export function FormEngineRenderer({
     onChange,
     mode,
     optionValuesByFieldId,
+    optionChoicesByFieldId,
     variant = "default",
 }: FormEngineRendererProps) {
     const readonly = mode === "readonly";
@@ -124,7 +129,9 @@ export function FormEngineRenderer({
                         </div>
                     );
                 case "select": {
-                    const opts = optionValuesByFieldId?.[field.id] ?? [];
+                    const choices =
+                        optionChoicesByFieldId?.[field.id] ??
+                        (optionValuesByFieldId?.[field.id] ?? []).map((v) => ({ value: v, label: v }));
                     return (
                         <div className="space-y-1">
                             {commonLabel}
@@ -134,9 +141,9 @@ export function FormEngineRenderer({
                                 onChange={(e) => onCellChange(field.id, e.target.value)}
                             >
                                 <option value="">Select…</option>
-                                {opts.map((o) => (
-                                    <option key={o} value={o}>
-                                        {o}
+                                {choices.map((o) => (
+                                    <option key={o.value} value={o.value}>
+                                        {o.label}
                                     </option>
                                 ))}
                             </select>
@@ -144,25 +151,27 @@ export function FormEngineRenderer({
                     );
                 }
                 case "multiselect": {
-                    const opts = optionValuesByFieldId?.[field.id] ?? [];
+                    const choices =
+                        optionChoicesByFieldId?.[field.id] ??
+                        (optionValuesByFieldId?.[field.id] ?? []).map((v) => ({ value: v, label: v }));
                     const selected = Array.isArray(raw) ? raw.filter((x): x is string => typeof x === "string") : [];
                     return (
                         <div className="space-y-1">
                             {commonLabel}
                             <div className="flex flex-col gap-1 rounded border border-neutral-200 p-2">
-                                {opts.map((o) => (
-                                    <label key={o} className="flex items-center gap-2 text-sm">
+                                {choices.map((o) => (
+                                    <label key={o.value} className="flex items-center gap-2 text-sm">
                                         <input
                                             type="checkbox"
-                                            checked={selected.includes(o)}
+                                            checked={selected.includes(o.value)}
                                             onChange={() => {
-                                                const next = selected.includes(o)
-                                                    ? selected.filter((x) => x !== o)
-                                                    : [...selected, o];
+                                                const next = selected.includes(o.value)
+                                                    ? selected.filter((x) => x !== o.value)
+                                                    : [...selected, o.value];
                                                 onCellChange(field.id, next);
                                             }}
                                         />
-                                        {o}
+                                        {o.label}
                                     </label>
                                 ))}
                             </div>
@@ -183,7 +192,7 @@ export function FormEngineRenderer({
                     return null;
             }
         },
-        [loose, optionValuesByFieldId, readonly]
+        [loose, optionChoicesByFieldId, optionValuesByFieldId, readonly]
     );
 
     const renderSignatureControl = useCallback(

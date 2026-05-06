@@ -1,8 +1,10 @@
 import { NextRequest } from "next/server";
 import { ZodError } from "zod";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
+import type { FormSchemaV1 } from "@/lib/forms/schema";
 import { validateFormSchema } from "@/lib/forms/schema";
 import { normalizeValidationErrors } from "@/lib/forms/validateSubmission";
+import { hydrateSelectOptionsForSchema } from "@/lib/public/forms/hydratePublicFormSelectOptions";
 import { resolvePublicFormLinkByToken } from "@/lib/public/forms/resolvePublicFormLink";
 import { isEmbedOriginAllowed, requestEmbedOrigin } from "@/lib/public/forms/embedOrigin";
 import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
@@ -38,8 +40,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         return publicErr("Origin not allowed for this form embed", 403, { code: "ORIGIN_FORBIDDEN" });
     }
 
+    let schema: FormSchemaV1;
     try {
-        validateFormSchema(v.schemaJson);
+        schema = validateFormSchema(v.schemaJson);
     } catch (e) {
         if (e instanceof ZodError) {
             return publicErr("Invalid published schema", 500, {
@@ -49,6 +52,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         }
         throw e;
     }
+
+    const hydrated = await hydrateSelectOptionsForSchema(supabase, v.orgId, schema);
 
     return publicOk({
         form_definition_id: v.formDefinitionId,
@@ -61,5 +66,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             allowed_embed_origins: v.allowedEmbedOrigins,
             metadata: v.linkMetadata,
         },
+        option_values_by_field_id: hydrated.option_values_by_field_id,
+        option_choices_by_field_id: hydrated.option_choices_by_field_id,
     });
 }

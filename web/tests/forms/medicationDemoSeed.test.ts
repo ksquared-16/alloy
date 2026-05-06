@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { validateFormSchema } from "@/lib/forms/schema";
 import { parseFormPdfMappingJson } from "@/lib/forms/pdf/pdfMappingContract";
+import { validateFormPayload } from "@/lib/forms/validateSubmission";
 import {
     MEDICATION_AUTHORIZATION_DEMO_DEFINITION_METADATA,
     MEDICATION_AUTHORIZATION_DEMO_PDF_MAPPING,
@@ -25,5 +26,98 @@ describe("Medication authorization demo seed", () => {
         expect(MEDICATION_AUTHORIZATION_DEMO_DEFINITION_METADATA.demo).toBe(true);
         expect(MEDICATION_AUTHORIZATION_DEMO_DEFINITION_METADATA.compliance_status).toBe("example_only");
         expect(MEDICATION_AUTHORIZATION_DEMO_DEFINITION_METADATA.not_official_state_form).toBe(true);
+    });
+
+    it("submit succeeds with hydrated select/multiselect option lists", () => {
+        const schema = validateFormSchema(MEDICATION_AUTHORIZATION_DEMO_SCHEMA);
+        const optionValuesByFieldId = {
+            schedule: ["bid"],
+            route: ["oral"],
+        };
+        const r = validateFormPayload({
+            schemaJson: schema,
+            payload: {
+                values: {
+                    child_first_name: "Ada",
+                    child_last_name: "Lovelace",
+                    child_dob: "2020-01-15",
+                    guardian_full_name: "Parent Example",
+                    guardian_email: "parent@example.com",
+                    needs_special_instructions: false,
+                    authorization_acknowledgement: true,
+                },
+                groups: {
+                    medications: [
+                        {
+                            instance_key: "row-1",
+                            values: {
+                                med_name: "Demo Med",
+                                dose_strength: "10mg",
+                                schedule: "bid",
+                                route: ["oral"],
+                            },
+                        },
+                    ],
+                },
+                signatures: {
+                    signature_guardian: {
+                        kind: "typed",
+                        typed_full_name: "Parent Example",
+                        acknowledged_at: new Date().toISOString(),
+                    },
+                },
+            },
+            mode: "submit",
+            optionValuesByFieldId,
+        });
+        expect(r.ok).toBe(true);
+    });
+
+    it("submit rejects select value not in option_values_by_field_id", () => {
+        const schema = validateFormSchema(MEDICATION_AUTHORIZATION_DEMO_SCHEMA);
+        const optionValuesByFieldId = {
+            schedule: ["bid"],
+            route: ["oral"],
+        };
+        const r = validateFormPayload({
+            schemaJson: schema,
+            payload: {
+                values: {
+                    child_first_name: "Ada",
+                    child_last_name: "Lovelace",
+                    child_dob: "2020-01-15",
+                    guardian_full_name: "Parent Example",
+                    guardian_email: "parent@example.com",
+                    needs_special_instructions: false,
+                    authorization_acknowledgement: true,
+                },
+                groups: {
+                    medications: [
+                        {
+                            instance_key: "row-1",
+                            values: {
+                                med_name: "Demo Med",
+                                dose_strength: "10mg",
+                                schedule: "not_in_list",
+                                route: [],
+                            },
+                        },
+                    ],
+                },
+                signatures: {
+                    signature_guardian: {
+                        kind: "typed",
+                        typed_full_name: "Parent Example",
+                        acknowledged_at: new Date().toISOString(),
+                    },
+                },
+            },
+            mode: "submit",
+            optionValuesByFieldId,
+        });
+        expect(r.ok).toBe(false);
+        if (!r.ok) {
+            expect(r.errors.some((e) => e.message.includes("Invalid option"))).toBe(true);
+        }
     });
 });
