@@ -36,6 +36,7 @@ export default async function AdminV2SettingsLayout({
         <AdminV2SettingsClientProviders
             userEmail={typeof auth.user.email === "string" && auth.user.email ? auth.user.email : "Unknown"}
             role={auth.role}
+            roleKeys={auth.roleKeys ?? []}
             initialEntityLabels={initialEntityLabels}
         >
             {children}

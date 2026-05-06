@@ -17,6 +17,7 @@ interface AdminV2WorkspaceClientProvidersProps {
   /** Supabase auth user id — scopes workspace sessionStorage cache per principal. */
   principalUserId: string;
   role: string;
+  roleKeys: string[];
   /** Same server bootstrap as `/admin` — shape matches `EntityLabelsMap`. */
   initialEntityLabels?: EntityLabelsBootstrapMap;
   /** Display name from `orgs.name` (server-loaded). */
@@ -36,6 +37,7 @@ export default function AdminV2WorkspaceClientProviders({
   userEmail,
   principalUserId,
   role,
+  roleKeys,
   initialEntityLabels,
   orgName = null,
   orgId = null,
@@ -45,6 +47,7 @@ export default function AdminV2WorkspaceClientProviders({
 }: AdminV2WorkspaceClientProvidersProps) {
   const safeEmail = typeof userEmail === "string" && userEmail.length > 0 ? userEmail : "Unknown";
   const safeRole = typeof role === "string" ? role : "";
+  const safeRoleKeys = Array.isArray(roleKeys) ? roleKeys : [];
   const tzValue: AdminViewerTimezoneValue = initialViewerTimezone ?? {
     iana: "UTC",
     source: "utc_fallback",
@@ -64,7 +67,7 @@ export default function AdminV2WorkspaceClientProviders({
   } as CSSProperties;
 
   return (
-    <AdminAuthProvider userEmail={safeEmail} role={safeRole}>
+    <AdminAuthProvider userEmail={safeEmail} role={safeRole} roleKeys={safeRoleKeys}>
       <AdminVerticalProvider>
         <EntityLabelsProvider initialLabels={labels}>
           <AdminOrgOperationalTimezoneProvider iana={operationalTz}>

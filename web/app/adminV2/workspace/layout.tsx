@@ -74,6 +74,7 @@ export default async function AdminV2WorkspaceLayout({
       userEmail={typeof auth.user.email === "string" && auth.user.email ? auth.user.email : "Unknown"}
       principalUserId={auth.user.id}
       role={auth.role}
+      roleKeys={auth.roleKeys ?? []}
       orgName={orgName}
       orgId={orgId}
       accessScopeFingerprint={accessScopeFingerprint}

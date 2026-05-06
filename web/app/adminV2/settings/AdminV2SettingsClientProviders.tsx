@@ -10,6 +10,8 @@ interface AdminV2SettingsClientProvidersProps {
     children: ReactNode;
     userEmail: string;
     role: string;
+    /** Same `user_roles.role` keys as admin APIs — drives `canMutate` authoritatively. */
+    roleKeys: string[];
     initialEntityLabels?: EntityLabelsBootstrapMap;
 }
 
@@ -21,17 +23,19 @@ export default function AdminV2SettingsClientProviders({
     children,
     userEmail,
     role,
+    roleKeys,
     initialEntityLabels,
 }: AdminV2SettingsClientProvidersProps) {
     const safeEmail = typeof userEmail === "string" && userEmail.length > 0 ? userEmail : "Unknown";
     const safeRole = typeof role === "string" ? role : "";
+    const safeRoleKeys = Array.isArray(roleKeys) ? roleKeys : [];
 
     const labels: EntityLabelsMap | undefined = initialEntityLabels
         ? (initialEntityLabels as EntityLabelsMap)
         : undefined;
 
     return (
-        <AdminAuthProvider userEmail={safeEmail} role={safeRole}>
+        <AdminAuthProvider userEmail={safeEmail} role={safeRole} roleKeys={safeRoleKeys}>
             <EntityLabelsProvider initialLabels={labels}>
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                     <div className="shrink-0 border-b border-alloy-forge/10 bg-white/25 px-4 py-2 backdrop-blur-sm sm:px-5">

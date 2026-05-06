@@ -17,7 +17,10 @@ export type AdminRole = (typeof ALLOWED_ROLES)[number];
 
 export interface AdminAuthResult {
     user: User;
+    /** Compat role: `admin` if any membership key is `admin`, else `ops`. */
     role: string;
+    /** Raw `user_roles.role` keys for the resolved org — authoritative for admin-vs-ops mutate gates. */
+    roleKeys: string[];
 }
 
 async function loadAdminAuth(): Promise<AdminAuthResult | null> {
@@ -44,7 +47,7 @@ async function loadAdminAuth(): Promise<AdminAuthResult | null> {
             total_ms: totalMs,
         });
     }
-    return { user, role };
+    return { user, role, roleKeys: bundle.roleKeys };
 }
 
 const resolveAdminAuthOnce = cache(async (): Promise<AdminAuthResult | null> => {

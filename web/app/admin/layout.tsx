@@ -57,6 +57,7 @@ export default async function AdminLayoutWrapper({
         <AdminLayout
             userEmail={typeof auth.user.email === "string" && auth.user.email ? auth.user.email : "Unknown"}
             role={auth.role}
+            roleKeys={auth.roleKeys}
             initialEntityLabels={initialEntityLabels}
             initialViewerTimezone={viewerTimezone}
             initialOperationalTimezoneIana={operationalTimezoneIana}

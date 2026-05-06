@@ -264,6 +264,7 @@ interface AdminLayoutProps {
     children: ReactNode;
     userEmail: string;
     role: string;
+    roleKeys?: string[];
     initialEntityLabels?: EntityLabelsMap;
     initialViewerTimezone?: AdminViewerTimezoneValue;
     /** Org operational IANA for schedule/booking form defaults (not user display). */
@@ -630,10 +631,11 @@ function AdminLayoutInner({ children, userEmail, role }: Omit<AdminLayoutProps, 
 }
 
 export default function AdminLayout(props: AdminLayoutProps) {
-    const { initialEntityLabels, userEmail, role, children, initialViewerTimezone, initialOperationalTimezoneIana } =
+    const { initialEntityLabels, userEmail, role, roleKeys, children, initialViewerTimezone, initialOperationalTimezoneIana } =
         props;
     const safeEmail = typeof userEmail === "string" && userEmail.length > 0 ? userEmail : "Unknown";
     const safeRole = typeof role === "string" ? role : "";
+    const safeRoleKeys = Array.isArray(roleKeys) ? roleKeys : undefined;
     const tzValue: AdminViewerTimezoneValue = initialViewerTimezone ?? {
         iana: "UTC",
         source: "utc_fallback",
@@ -643,7 +645,7 @@ export default function AdminLayout(props: AdminLayoutProps) {
             ? initialOperationalTimezoneIana.trim()
             : "UTC";
     return (
-        <AdminAuthProvider userEmail={safeEmail} role={safeRole}>
+        <AdminAuthProvider userEmail={safeEmail} role={safeRole} roleKeys={safeRoleKeys}>
             <AdminVerticalProvider>
                 <EntityLabelsProvider initialLabels={initialEntityLabels}>
                     <AdminOrgOperationalTimezoneProvider iana={operationalTz}>

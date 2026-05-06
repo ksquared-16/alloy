@@ -29,7 +29,7 @@ function move<T>(arr: T[], index: number, delta: number): T[] {
 }
 
 export default function OpportunityWorkflowV1DrawerOrderEditor({ onSaved }: { onSaved?: () => void }) {
-    const { canMutate } = useAdminAuth();
+    const { canMutate, role, roleKeys } = useAdminAuth();
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [preview, setPreview] = useState<PreviewPayload | null>(null);
@@ -208,7 +208,29 @@ export default function OpportunityWorkflowV1DrawerOrderEditor({ onSaved }: { on
                     </button>
                 </div>
             ) : (
-                <p className="mt-3 text-[11px] text-alloy-midnight/50">View only — need mutate access to save.</p>
+                <div className="mt-3 space-y-1 rounded-lg border border-alloy-forge/12 bg-alloy-stone/5 px-3 py-2 text-[11px] leading-snug text-alloy-midnight/65">
+                    <p className="font-medium text-alloy-midnight/80">View only — cannot save drawer order</p>
+                    <p>
+                        Resolved portal role: <span className="font-mono text-[10px]">{role || "—"}</span>
+                        {roleKeys.length > 0 ? (
+                            <>
+                                {" "}
+                                · Membership keys for this org:{" "}
+                                <span className="font-mono text-[10px]">{roleKeys.join(", ")}</span>
+                            </>
+                        ) : (
+                            <span className="text-alloy-midnight/50">
+                                {" "}
+                                (membership keys were not passed by this shell — using compat role string only.)
+                            </span>
+                        )}
+                    </p>
+                    <p>
+                        Saving requires the <strong className="text-alloy-midnight/85">admin</strong> portal membership role for this org (
+                        same check as <span className="font-mono text-[10px]">PATCH …/opportunity-workflow-v1-order</span>).{" "}
+                        <strong className="text-alloy-midnight/85">Ops</strong> can preview but not persist layout order here.
+                    </p>
+                </div>
             )}
         </div>
     );
