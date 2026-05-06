@@ -9,6 +9,7 @@ import PrimaryButton from "@/components/PrimaryButton";
 import { StatusBadge, getStatusVariant } from "@/components/admin/StatusBadge";
 import { formatDateTime } from "@/lib/adminFormatters";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
 
 type VersionRow = {
     id: string;
@@ -157,12 +158,12 @@ export default function FormDetailClient() {
                 actions={
                     <div className="flex flex-wrap items-center gap-3">
                         <Link
-                            href={`/admin/forms/${encodeURIComponent(formId)}/submissions`}
+                            href={`${ADMIN_FORMS_UI_BASE}/${encodeURIComponent(formId)}/submissions`}
                             className="text-sm font-medium text-[#00458C] hover:underline"
                         >
                             Submissions
                         </Link>
-                        <Link href="/admin/forms" className="text-sm font-medium text-[#00458C] hover:underline">
+                        <Link href={ADMIN_FORMS_UI_BASE} className="text-sm font-medium text-[#00458C] hover:underline">
                             All forms
                         </Link>
                     </div>

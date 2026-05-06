@@ -1,7 +1,11 @@
-import FormDetailClient from "./FormDetailClient";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
-export default function AdminFormDetailPage() {
-    return <FormDetailClient />;
+/** Legacy path — operational UI lives under `/adminV2/forms/[formId]`. */
+export default async function AdminFormDetailRedirectPage({
+  params,
+}: {
+  params: Promise<{ formId: string }>;
+}) {
+  const { formId } = await params;
+  redirect(`/adminV2/forms/${formId}`);
 }

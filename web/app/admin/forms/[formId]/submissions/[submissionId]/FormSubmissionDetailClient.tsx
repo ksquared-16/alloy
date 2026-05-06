@@ -13,6 +13,7 @@ import { safeParseFormSchema, type FormSchemaV1 } from "@/lib/forms/schema";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
 
 type LinkedDoc = {
     role: string;
@@ -148,13 +149,13 @@ export default function FormSubmissionDetailClient() {
                 actions={
                     <div className="flex flex-wrap gap-3">
                         <Link
-                            href={`/admin/forms/${encodeURIComponent(formId)}/submissions`}
+                            href={`${ADMIN_FORMS_UI_BASE}/${encodeURIComponent(formId)}/submissions`}
                             className="text-sm font-medium text-[#00458C] hover:underline"
                         >
                             Submissions
                         </Link>
                         <Link
-                            href={`/admin/forms/${encodeURIComponent(formId)}`}
+                            href={`${ADMIN_FORMS_UI_BASE}/${encodeURIComponent(formId)}`}
                             className="text-sm font-medium text-[#00458C] hover:underline"
                         >
                             Form

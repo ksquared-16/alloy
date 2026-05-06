@@ -14,6 +14,7 @@ export function shouldDisableAdminV2LinkPrefetch(href: string): boolean {
     if (path === "/adminV2/workflows" || path.startsWith("/adminV2/workflows/")) return true;
     if (path === "/adminV2/ai-activity" || path.startsWith("/adminV2/ai-activity/")) return true;
     if (path === "/adminV2/settings" || path.startsWith("/adminV2/settings/")) return true;
+    if (path === "/adminV2/forms" || path.startsWith("/adminV2/forms/")) return true;
     if (path === "/admin/v2" || path.startsWith("/admin/v2/")) return true;
     if (path === "/adminv2" || path.startsWith("/adminv2/")) return true;
     if (path.startsWith("/admin/opportunities")) return true;

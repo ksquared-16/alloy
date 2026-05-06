@@ -1,7 +1,6 @@
-import FormsHubClient from "./FormsHubClient";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
-export default function AdminFormsPage() {
-    return <FormsHubClient />;
+/** Legacy path — operational UI lives under `/adminV2/forms`. */
+export default function AdminFormsRedirectPage() {
+  redirect("/adminV2/forms");
 }

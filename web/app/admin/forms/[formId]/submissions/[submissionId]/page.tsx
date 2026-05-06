@@ -1,7 +1,11 @@
-import FormSubmissionDetailClient from "./FormSubmissionDetailClient";
+import { redirect } from "next/navigation";
 
-export const dynamic = "force-dynamic";
-
-export default function AdminFormSubmissionDetailPage() {
-    return <FormSubmissionDetailClient />;
+/** Legacy path — operational UI lives under `/adminV2/forms/.../submissions/[submissionId]`. */
+export default async function AdminFormSubmissionDetailRedirectPage({
+  params,
+}: {
+  params: Promise<{ formId: string; submissionId: string }>;
+}) {
+  const { formId, submissionId } = await params;
+  redirect(`/adminV2/forms/${formId}/submissions/${submissionId}`);
 }

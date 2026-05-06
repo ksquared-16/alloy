@@ -7,6 +7,7 @@ import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import { StatusBadge, getStatusVariant } from "@/components/admin/StatusBadge";
 import { formatDateTime } from "@/lib/adminFormatters";
+import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
 
 type SubmissionListRow = {
     id: string;
@@ -69,12 +70,12 @@ export default function FormSubmissionsClient() {
                 actions={
                     <div className="flex flex-wrap gap-3">
                         <Link
-                            href={`/admin/forms/${encodeURIComponent(formId)}`}
+                            href={`${ADMIN_FORMS_UI_BASE}/${encodeURIComponent(formId)}`}
                             className="text-sm font-medium text-[#00458C] hover:underline"
                         >
                             Form detail
                         </Link>
-                        <Link href="/admin/forms" className="text-sm font-medium text-[#00458C] hover:underline">
+                        <Link href={ADMIN_FORMS_UI_BASE} className="text-sm font-medium text-[#00458C] hover:underline">
                             All forms
                         </Link>
                     </div>
@@ -111,7 +112,7 @@ export default function FormSubmissionsClient() {
                                         </td>
                                         <td className="py-2.5">
                                             <Link
-                                                href={`/admin/forms/${encodeURIComponent(formId)}/submissions/${encodeURIComponent(r.id)}`}
+                                                href={`${ADMIN_FORMS_UI_BASE}/${encodeURIComponent(formId)}/submissions/${encodeURIComponent(r.id)}`}
                                                 className="font-medium text-[#00458C] hover:underline"
                                             >
                                                 View

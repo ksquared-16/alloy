@@ -130,6 +130,14 @@ export function WorkspaceRootShell({
             <span className="adminv2-ws-workspace-orientation-meta-v">Department → work unit → record</span>
           </div>
           <div className="adminv2-ws-actions-rail-list adminv2-ws-actions-rail-list--column mt-3">
+            {/* TODO(card-handoff): replace hardcoded rail links with workspace KPI / resolver-driven actions when that pipeline lands. */}
+            <Link
+              href="/adminV2/forms"
+              prefetch={shouldDisableAdminV2LinkPrefetch("/adminV2/forms") ? false : undefined}
+              className="adminv2-ws-actions-rail-secondary adminv2-ws-workspace-orientation-link text-center no-underline rounded-md font-bold text-[11px] w-full"
+            >
+              Forms (definitions & submissions)
+            </Link>
             <Link
               href="/admin/opportunities"
               prefetch={shouldDisableAdminV2LinkPrefetch("/admin/opportunities") ? false : undefined}
