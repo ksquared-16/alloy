@@ -24,7 +24,7 @@ This sprint extends the **completed V1 foundation** with **minimal admin APIs, e
 | **Public embed** | **Exists** — `/forms/embed/[token]` + `FormEmbedClient` + `FormEngineRenderer`. |
 | **Admin UI** | **Missing** — no `app/admin/forms` surfaces; ops rely on APIs or DB. |
 | **Public-link admin API** | **Implemented (Card 1)** — `GET/POST/PATCH` under `/api/admin/forms/[formId]/public-links` (+ `[linkId]`); plaintext token only on `POST` create. |
-| **Medication demo** | **Blocked in embed** — select/multiselect require `option_values_by_field_id` on submit; embed does not hydrate/pass options. |
+| **Medication demo** | **Seed-complete (Card 2.5)** — demo org gets `med_demo_schedule` / `med_demo_route` option_sets via migration; embed works when migrations + Card 2 resolve hydration apply. |
 | **Submission review** | **API-only** — `GET .../submissions` and `GET .../submissions/[id]` work; no staff UI. |
 | **Workflow** | **Events emitted** (`form_submitted`, `form_signed`, `form_document_generated`) into **`workflow_events`**; operational surfacing (workflows consuming events, admin visibility) is **follow-up** unless scoped here. |
 
@@ -53,9 +53,13 @@ This sprint extends the **completed V1 foundation** with **minimal admin APIs, e
 
 ### Card 2 — Option Hydration + Embed Submit Fix
 
-- **Status:** Pending  
-- **Purpose:** Public **resolve** and/or embed pipeline must supply option lists so **`FormEmbedClient`** sends valid **`option_values_by_field_id`** on PATCH/submit.  
-  - **Medication authorization demo** (`medication_authorization_demo`) must be **completable end-to-end** via embed (subject to org seed + env).
+- **Status:** **Complete**  
+- **Purpose:** Public **resolve** hydrates **`option_values_by_field_id`** / **`option_choices_by_field_id`**; embed submits them on PATCH/submit.
+
+### Card 2.5 — Demo medication option_sets seed
+
+- **Status:** **Complete**  
+- **Purpose:** Idempotent migration seeds **`med_demo_schedule`** and **`med_demo_route`** (`option_sets` + **`option_set_items`**) for the same demo org UUID as the medication form seed — no manual SQL for demo dropdowns.
 
 ### Card 3 — Minimal Admin Forms Hub
 
@@ -72,8 +76,8 @@ This sprint extends the **completed V1 foundation** with **minimal admin APIs, e
 
 ### Card 5 — Embed Validation UX
 
-- **Status:** Pending  
-- **Purpose:** Surface **`validation_errors`** from public API responses in embed UI instead of generic failure text only.
+- **Status:** **Complete**  
+- **Purpose:** Embed lists **`validation_errors`** (path + message) from public PATCH/submit responses instead of only generic failure text.
 
 ### Card 6 — Admin Draft Submission PATCH *(optional)*
 

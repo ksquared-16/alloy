@@ -3,6 +3,7 @@
 -- =============================================================================
 -- Idempotent when Alloy Bend staging org exists; otherwise skipped with NOTICE.
 -- Maintained in sync with `web/lib/forms/seeds/medicationAuthorizationDemo.ts`.
+-- Select/multiselect option_sets: `20260507130000_forms_medication_demo_option_sets.sql`.
 -- Regenerate JSON via: `node --experimental-strip-types scripts/dumpMedicationDemoSchemaJson.ts`
 -- =============================================================================
 

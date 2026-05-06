@@ -1,8 +1,15 @@
 /**
  * Demo / example-only form (not an official state compliance form).
  * DB seed: `supabase/migrations/20260506120000_forms_medication_authorization_demo_seed.sql` (idempotent; optional org).
+ * Demo option_sets/items: `supabase/migrations/20260507130000_forms_medication_demo_option_sets.sql`.
  */
 export const MEDICATION_AUTHORIZATION_DEMO_FORM_KEY = "medication_authorization_demo" as const;
+
+/** Seeded `item_key` values for `med_demo_schedule` (must stay aligned with demo option_sets migration). */
+export const MEDICATION_DEMO_SCHEDULE_ITEM_KEYS = ["daily", "twice_daily", "as_needed", "other"] as const;
+
+/** Seeded `item_key` values for `med_demo_route` (must stay aligned with demo option_sets migration). */
+export const MEDICATION_DEMO_ROUTE_ITEM_KEYS = ["oral", "topical", "inhaled", "injection", "other"] as const;
 
 /** Plaintext token for the optional public link row (hash stored in DB). */
 export const MEDICATION_AUTHORIZATION_DEMO_PUBLIC_TOKEN = "alloy_demo_medication_authorization_v1" as const;

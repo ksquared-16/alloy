@@ -6,6 +6,8 @@ import {
     MEDICATION_AUTHORIZATION_DEMO_DEFINITION_METADATA,
     MEDICATION_AUTHORIZATION_DEMO_PDF_MAPPING,
     MEDICATION_AUTHORIZATION_DEMO_SCHEMA,
+    MEDICATION_DEMO_ROUTE_ITEM_KEYS,
+    MEDICATION_DEMO_SCHEDULE_ITEM_KEYS,
 } from "@/lib/forms/seeds/medicationAuthorizationDemo";
 
 describe("Medication authorization demo seed", () => {
@@ -28,11 +30,25 @@ describe("Medication authorization demo seed", () => {
         expect(MEDICATION_AUTHORIZATION_DEMO_DEFINITION_METADATA.not_official_state_form).toBe(true);
     });
 
+    it("demo option item keys align with med_demo_schedule / med_demo_route seeds", () => {
+        expect(MEDICATION_DEMO_SCHEDULE_ITEM_KEYS).toEqual(["daily", "twice_daily", "as_needed", "other"]);
+        expect(MEDICATION_DEMO_ROUTE_ITEM_KEYS).toEqual(["oral", "topical", "inhaled", "injection", "other"]);
+        const medGroup = MEDICATION_AUTHORIZATION_DEMO_SCHEMA.fields.find((f) => f.id === "medications" && f.type === "group");
+        expect(medGroup?.type).toBe("group");
+        if (medGroup?.type !== "group") return;
+        const scheduleField = medGroup.fields.find((c) => c.id === "schedule");
+        const routeField = medGroup.fields.find((c) => c.id === "route");
+        expect(scheduleField?.type).toBe("select");
+        expect(routeField?.type).toBe("multiselect");
+        if (scheduleField?.type === "select") expect(scheduleField.option_set_key).toBe("med_demo_schedule");
+        if (routeField?.type === "multiselect") expect(routeField.option_set_key).toBe("med_demo_route");
+    });
+
     it("submit succeeds with hydrated select/multiselect option lists", () => {
         const schema = validateFormSchema(MEDICATION_AUTHORIZATION_DEMO_SCHEMA);
         const optionValuesByFieldId = {
-            schedule: ["bid"],
-            route: ["oral"],
+            schedule: [...MEDICATION_DEMO_SCHEDULE_ITEM_KEYS],
+            route: [...MEDICATION_DEMO_ROUTE_ITEM_KEYS],
         };
         const r = validateFormPayload({
             schemaJson: schema,
@@ -53,7 +69,7 @@ describe("Medication authorization demo seed", () => {
                             values: {
                                 med_name: "Demo Med",
                                 dose_strength: "10mg",
-                                schedule: "bid",
+                                schedule: "twice_daily",
                                 route: ["oral"],
                             },
                         },
@@ -76,8 +92,8 @@ describe("Medication authorization demo seed", () => {
     it("submit rejects select value not in option_values_by_field_id", () => {
         const schema = validateFormSchema(MEDICATION_AUTHORIZATION_DEMO_SCHEMA);
         const optionValuesByFieldId = {
-            schedule: ["bid"],
-            route: ["oral"],
+            schedule: [...MEDICATION_DEMO_SCHEDULE_ITEM_KEYS],
+            route: [...MEDICATION_DEMO_ROUTE_ITEM_KEYS],
         };
         const r = validateFormPayload({
             schemaJson: schema,
