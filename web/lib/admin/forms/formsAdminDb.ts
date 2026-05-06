@@ -52,6 +52,15 @@ export async function dbListFormDefinitions(supabase: SupabaseClient, orgId: str
     return supabase.from("form_definitions").select("*").eq("org_id", orgId).order("key", { ascending: true });
 }
 
+/** IDs of definitions that have ≥1 published version (hub list enrichment; single query per org). */
+export async function dbListFormIdsWithPublishedVersion(supabase: SupabaseClient, orgId: string) {
+    return supabase
+        .from("form_definition_versions")
+        .select("form_definition_id")
+        .eq("org_id", orgId)
+        .eq("status", "published");
+}
+
 export async function dbInsertFormDefinition(
     supabase: SupabaseClient,
     row: {

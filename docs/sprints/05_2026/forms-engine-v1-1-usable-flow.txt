@@ -138,4 +138,10 @@ This sprint extends the **completed V1 foundation** with **minimal admin APIs, e
 
 ---
 
+## 7. V1.2 operator usability — manual QA (cross-sprint)
+
+Hub onboarding, preview, and submission outcome copy: see **`docs/sprints/05_2026/forms-engine-v1-2-operator-usability.md`** for Kelly’s step-by-step checklist, expected results, and known limitations.
+
+---
+
 *End of V1.1 Usable Flow sprint document.*

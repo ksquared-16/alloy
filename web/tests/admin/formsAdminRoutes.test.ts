@@ -107,6 +107,24 @@ function makeSupabaseMock() {
         if (q.table === "form_submission_documents" && q.mode === "select") {
             return { data: [], error: null };
         }
+        if (
+            q.table === "form_definition_versions" &&
+            q.mode === "select" &&
+            q.filters.org_id &&
+            q.filters.status === "published" &&
+            q.filters.form_definition_id === undefined
+        ) {
+            const org = q.filters.org_id as string;
+            const rows = Object.values(storeRef.versions).filter(
+                (r) =>
+                    (r as { org_id: string }).org_id === org &&
+                    (r as { status: string }).status === "published"
+            );
+            const slim = rows.map((r) => ({
+                form_definition_id: (r as { form_definition_id: string }).form_definition_id,
+            }));
+            return { data: slim, error: null };
+        }
         if (q.table === "form_definitions" && q.mode === "select" && q.filters.org_id && !q.filters.id) {
             const org = q.filters.org_id as string;
             let rows = Object.values(storeRef.forms).filter((r) => (r as { org_id: string }).org_id === org);

@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { dbInsertFormDefinition, dbListFormDefinitions } from "@/lib/admin/forms/formsAdminDb";
+import {
+    dbInsertFormDefinition,
+    dbListFormDefinitions,
+    dbListFormIdsWithPublishedVersion,
+} from "@/lib/admin/forms/formsAdminDb";
 import { jsonData, jsonError } from "@/lib/admin/forms/formsAdminResponses";
 
 /** GET /api/admin/forms — list form definitions for org. */
@@ -12,7 +16,25 @@ export async function GET() {
     const supabase = createAdminClient();
     const { data, error } = await dbListFormDefinitions(supabase, ctx.orgId);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return jsonData(data ?? []);
+
+    const forms = data ?? [];
+    if (forms.length === 0) {
+        return jsonData([]);
+    }
+
+    const { data: pubRows, error: pubErr } = await dbListFormIdsWithPublishedVersion(supabase, ctx.orgId);
+    if (pubErr) return NextResponse.json({ error: pubErr.message }, { status: 500 });
+
+    const publishedFormIds = new Set(
+        (pubRows ?? []).map((r) => (r as { form_definition_id: string }).form_definition_id).filter(Boolean)
+    );
+
+    const enriched = forms.map((row) => ({
+        ...(row as Record<string, unknown>),
+        has_published_version: publishedFormIds.has((row as { id: string }).id),
+    }));
+
+    return jsonData(enriched);
 }
 
 /** POST /api/admin/forms — create form definition (admin only). */
