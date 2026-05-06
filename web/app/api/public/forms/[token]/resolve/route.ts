@@ -1,0 +1,59 @@
+import { NextRequest } from "next/server";
+import { ZodError } from "zod";
+import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
+import { validateFormSchema } from "@/lib/forms/schema";
+import { normalizeValidationErrors } from "@/lib/forms/validateSubmission";
+import { resolvePublicFormLinkByToken } from "@/lib/public/forms/resolvePublicFormLink";
+import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
+
+function plaintextToken(raw: string): string {
+    try {
+        return decodeURIComponent(raw);
+    } catch {
+        return raw;
+    }
+}
+
+/** GET /api/public/forms/[token]/resolve — bootstrap schema + version for embed/mobile. */
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+        return publicErr("Server misconfiguration", 500);
+    }
+
+    const { token: rawToken } = await params;
+    const token = plaintextToken(rawToken ?? "");
+    if (!token.trim()) return publicErr("Missing token", 400);
+
+    const supabase = createServiceRoleClient();
+    const resolved = await resolvePublicFormLinkByToken(supabase, token);
+    if (!resolved.ok) {
+        const codeMap = { NOT_FOUND: 404, INACTIVE: 403, EXPIRED: 403, NO_PUBLISHED_VERSION: 409 };
+        return publicErr(resolved.error.message, codeMap[resolved.error.code] ?? 400, { code: resolved.error.code });
+    }
+
+    const v = resolved.value;
+    try {
+        validateFormSchema(v.schemaJson);
+    } catch (e) {
+        if (e instanceof ZodError) {
+            return publicErr("Invalid published schema", 500, {
+                validation_errors: normalizeValidationErrors(e),
+                code: "INVALID_SCHEMA",
+            });
+        }
+        throw e;
+    }
+
+    return publicOk({
+        form_definition_id: v.formDefinitionId,
+        form_definition_version_id: v.formDefinitionVersionId,
+        schema_json: v.schemaJson,
+        pdf_mapping_json: v.pdfMappingJson,
+        form: { key: v.formKey, name: v.formName, kind: v.formKind },
+        link: {
+            expires_at: v.expiresAt,
+            allowed_embed_origins: v.allowedEmbedOrigins,
+            metadata: v.linkMetadata,
+        },
+    });
+}
