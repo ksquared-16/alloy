@@ -110,8 +110,7 @@ BEGIN
         ARRAY['http://localhost:3000', 'http://127.0.0.1:3000']::text[],
         jsonb_build_object(
             'demo', true,
-            'seed', 'medication_authorization_demo',
-            'plaintext_token_hint', 'alloy_demo_medication_authorization_v1'
+            'seed', 'medication_authorization_demo'
         )
     )
     ON CONFLICT (token_hash) DO NOTHING;
