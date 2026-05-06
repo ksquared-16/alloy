@@ -11,6 +11,8 @@ import { hashClientIp } from "@/lib/public/forms/clientIpHash";
 import { mergePublicSubmissionMeta } from "@/lib/public/forms/publicPayloadMeta";
 import { linkRequiresLeadCapture } from "@/lib/public/forms/publicFormTypes";
 import { applyFormLeadCaptureIntake } from "@/lib/forms/intake/applyFormLeadCaptureIntake";
+import { persistFormSubmissionSignatures } from "@/lib/forms/signatures/persistFormSubmissionSignatures";
+import { emitFormSignedSafe, emitFormSubmittedSafe } from "@/lib/forms/workflow/formSubmissionEvents";
 
 const UUID_RE =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -209,8 +211,28 @@ export async function POST(
         return publicErr(upErr.message, 400);
     }
 
-    const row = updated as Record<string, unknown>;
-    const { org_id: _o, ...rest } = row;
+    const submittedRow = updated as Record<string, unknown>;
+    const meta = finalPayload.meta as Record<string, unknown> | undefined;
+    const signerIpHash =
+        typeof meta?.client_ip_hash === "string" && meta.client_ip_hash.trim() ? meta.client_ip_hash.trim() : ipHash;
+
+    const sigRes = await persistFormSubmissionSignatures(supabase, {
+        orgId: ctx.orgId,
+        formSubmissionId: submissionId,
+        schema: validated.schema,
+        payload: finalPayload,
+        signerIpHash,
+    });
+    if ("error" in sigRes) {
+        return publicErr(sigRes.error, 500, { code: "SIGNATURE_PERSIST" });
+    }
+
+    await emitFormSubmittedSafe(submittedRow as Parameters<typeof emitFormSubmittedSafe>[0]);
+    if (sigRes.inserted > 0) {
+        await emitFormSignedSafe(submittedRow as Parameters<typeof emitFormSignedSafe>[0]);
+    }
+
+    const { org_id: _o, ...rest } = submittedRow;
     void _o;
     return publicOk(rest);
 }

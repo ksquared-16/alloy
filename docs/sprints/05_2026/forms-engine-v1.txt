@@ -7,7 +7,9 @@
 - **Cards 0, 0.5, 1, and 1.5 are complete** (outputs appended below as **Appendices A–D**).
 - **Architecture / design lock is accepted** (see **Approved architecture decisions** and **§17 Architecture freeze rules**).
 - **Card 2 — Migrations:** **complete** — migration **`supabase/migrations/20260506100000_forms_engine_v1_foundation.sql`** implements **Appendix C** (tables, RLS, triggers).
-- **Next step:** **Card 3 — Shared schema + validator** (compile `schema_json` → draft/submit validation; Card 2 foundation required).
+- **Cards 3–7 — Application layer:** **complete** (shared schema/validator, admin + public APIs, renderer/embed, person-first intake helper; see repo tests under `web/tests/forms` and `web/tests/publicForms`).
+- **Cards 8–11 — PDF boundary, signatures, demo seed, workflow events:** **complete** — bounded **`pdf_mapping_json` → stub PDF** → **`documents` + `form_submission_documents`**, **`form_submission_signatures`** persistence on submit, demo **`medication_authorization_demo`** seed (**`supabase/migrations/20260506120000_forms_medication_authorization_demo_seed.sql`** + **`web/lib/forms/seeds/medicationAuthorizationDemo.ts`**), and **`form_submitted` / `form_signed` / `form_document_generated`** emits (**`entity_type = form_submissions`**).
+- **Next step:** Extend **`v1DocumentEntities`** / admin picker for **`customer_member`** when shipping staff UX; apply pending migrations to real Supabase staging when ready.
 
 ### Card 2 — validation note (engineering)
 

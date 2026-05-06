@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { validateFormPayload } from "@/lib/forms/validateSubmission";
+import { validateFormPayload, type FormPayload } from "@/lib/forms/validateSubmission";
 import { dbGetSubmission, dbGetVersion, dbSubmitSubmission } from "@/lib/admin/forms/formsAdminDb";
 import { jsonData, jsonError, jsonValidationErrors, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
+import { persistFormSubmissionSignatures } from "@/lib/forms/signatures/persistFormSubmissionSignatures";
+import { emitFormSignedSafe, emitFormSubmittedSafe } from "@/lib/forms/workflow/formSubmissionEvents";
 
 /** POST /api/admin/forms/submissions/[submissionId]/submit — draft → submitted (admin only). */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ submissionId: string }> }) {
@@ -81,5 +83,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }
         return NextResponse.json({ error: error.message }, { status: 400 });
     }
+
+    const submittedRow = data as Record<string, unknown>;
+    const sigRes = await persistFormSubmissionSignatures(supabase, {
+        orgId: ctx.orgId,
+        formSubmissionId: submissionId,
+        schema: validated.schema,
+        payload: validated.payload as FormPayload,
+        signerIpHash: null,
+    });
+    if ("error" in sigRes) {
+        return NextResponse.json({ error: sigRes.error, code: "SIGNATURE_PERSIST" }, { status: 500 });
+    }
+
+    await emitFormSubmittedSafe(submittedRow as Parameters<typeof emitFormSubmittedSafe>[0]);
+    if (sigRes.inserted > 0) {
+        await emitFormSignedSafe(submittedRow as Parameters<typeof emitFormSignedSafe>[0]);
+    }
+
     return jsonData(data);
 }
