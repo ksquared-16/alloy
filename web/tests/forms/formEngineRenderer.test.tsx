@@ -11,7 +11,7 @@ const schema: FormSchemaV1 = {
     sections: [{ id: "s1", field_ids: ["name", "active"] }],
     fields: [
         { id: "name", type: "text", label: "Name", required: true },
-        { id: "active", type: "boolean", label: "Active" },
+        { id: "active", type: "boolean", label: "Active", required: false },
     ],
 };
 

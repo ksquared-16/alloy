@@ -84,6 +84,19 @@ describe("public forms routes", () => {
         expect(j.data?.schema_json).toEqual(validSchema);
     });
 
+    it("GET resolve rejects disallowed Origin when embed allowlist is set", async () => {
+        mockResolve.mockResolvedValueOnce(resolvedValue(["https://parent.site"]));
+        const res = await resolveGet(
+            new NextRequest("http://localhost/x", {
+                headers: { Origin: "https://evil.site" },
+            }),
+            { params: Promise.resolve({ token: "plain-token" }) }
+        );
+        expect(res.status).toBe(403);
+        const j = (await res.json()) as { ok: boolean; code?: string };
+        expect(j.ok).toBe(false);
+    });
+
     it("POST submissions rejects forbidden origin when allowlist set", async () => {
         mockResolve.mockResolvedValueOnce(resolvedValue(["https://allowed.example"]));
         const res = await submissionsPost(

@@ -4,6 +4,7 @@ import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { validateFormSchema } from "@/lib/forms/schema";
 import { normalizeValidationErrors } from "@/lib/forms/validateSubmission";
 import { resolvePublicFormLinkByToken } from "@/lib/public/forms/resolvePublicFormLink";
+import { isEmbedOriginAllowed, requestEmbedOrigin } from "@/lib/public/forms/embedOrigin";
 import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
 
 function plaintextToken(raw: string): string {
@@ -15,7 +16,7 @@ function plaintextToken(raw: string): string {
 }
 
 /** GET /api/public/forms/[token]/resolve — bootstrap schema + version for embed/mobile. */
-export async function GET(_request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ token: string }> }) {
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
         return publicErr("Server misconfiguration", 500);
     }
@@ -32,6 +33,11 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     }
 
     const v = resolved.value;
+    const origin = requestEmbedOrigin(request);
+    if (!isEmbedOriginAllowed(origin, v.allowedEmbedOrigins)) {
+        return publicErr("Origin not allowed for this form embed", 403, { code: "ORIGIN_FORBIDDEN" });
+    }
+
     try {
         validateFormSchema(v.schemaJson);
     } catch (e) {

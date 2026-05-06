@@ -8,6 +8,7 @@ import { resolvePublicFormLinkByToken } from "@/lib/public/forms/resolvePublicFo
 import { isEmbedOriginAllowed, requestEmbedOrigin } from "@/lib/public/forms/embedOrigin";
 import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
 import { hashClientIp } from "@/lib/public/forms/clientIpHash";
+import { mergePublicSubmissionMeta } from "@/lib/public/forms/publicPayloadMeta";
 
 function plaintextToken(raw: string): string {
     try {
@@ -88,10 +89,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const ipHash = hashClientIp(request);
     const mergedPayload = {
         ...validated.payload,
-        meta: {
-            ...(validated.payload.meta ?? {}),
-            ...(ipHash ? { client_ip_hash: ipHash } : {}),
-        },
+        meta: mergePublicSubmissionMeta(validated.payload.meta as Record<string, unknown> | undefined, ipHash),
     };
 
     const { data, error } = await supabase

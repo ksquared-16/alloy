@@ -8,6 +8,7 @@ import { resolvePublicFormLinkByToken } from "@/lib/public/forms/resolvePublicFo
 import { isEmbedOriginAllowed, requestEmbedOrigin } from "@/lib/public/forms/embedOrigin";
 import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
 import { hashClientIp } from "@/lib/public/forms/clientIpHash";
+import { mergePublicSubmissionMeta } from "@/lib/public/forms/publicPayloadMeta";
 import { linkRequiresLeadCapture } from "@/lib/public/forms/publicFormTypes";
 import { applyFormLeadCaptureIntake } from "@/lib/forms/intake/applyFormLeadCaptureIntake";
 
@@ -137,10 +138,7 @@ export async function POST(
     const ipHash = hashClientIp(request);
     let finalPayload: FormPayload = {
         ...validated.payload,
-        meta: {
-            ...(validated.payload.meta as Record<string, unknown> | undefined),
-            ...(ipHash ? { client_ip_hash: ipHash } : {}),
-        },
+        meta: mergePublicSubmissionMeta(validated.payload.meta as Record<string, unknown> | undefined, ipHash),
     };
 
     let personId = sub.person_id;
@@ -196,6 +194,7 @@ export async function POST(
         })
         .eq("id", submissionId)
         .eq("org_id", ctx.orgId)
+        .eq("created_via_public_link_id", ctx.linkId)
         .eq("status", "draft")
         .select("*")
         .single();

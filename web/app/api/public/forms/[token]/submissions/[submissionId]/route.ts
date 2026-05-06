@@ -8,6 +8,7 @@ import { resolvePublicFormLinkByToken } from "@/lib/public/forms/resolvePublicFo
 import { isEmbedOriginAllowed, requestEmbedOrigin } from "@/lib/public/forms/embedOrigin";
 import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
 import { hashClientIp } from "@/lib/public/forms/clientIpHash";
+import { mergePublicSubmissionMeta } from "@/lib/public/forms/publicPayloadMeta";
 
 const UUID_RE =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -188,10 +189,7 @@ export async function PATCH(
     const ipHash = hashClientIp(request);
     const mergedPayload = {
         ...validated.payload,
-        meta: {
-            ...(validated.payload.meta ?? {}),
-            ...(ipHash ? { client_ip_hash: ipHash } : {}),
-        },
+        meta: mergePublicSubmissionMeta(validated.payload.meta as Record<string, unknown> | undefined, ipHash),
     };
 
     const { data: updated, error: upErr } = await supabase
@@ -199,6 +197,7 @@ export async function PATCH(
         .update({ payload: mergedPayload as unknown as Record<string, unknown> })
         .eq("id", submissionId)
         .eq("org_id", ctx.orgId)
+        .eq("created_via_public_link_id", ctx.linkId)
         .eq("status", "draft")
         .select("*")
         .single();
