@@ -3,6 +3,7 @@ import {
     buildEntityConnectionRows,
     describeDocumentOutcome,
     describeSubmissionLifecycle,
+    intakeFollowUpNotes,
     payloadHasCapturedSignatures,
     recommendedNextAction,
 } from "@/lib/forms/submissionOutcomeSummary";
@@ -117,5 +118,33 @@ describe("submissionOutcomeSummary", () => {
             hasAnyCrmEntityLink: true,
         });
         expect(r.some((l) => /open/i.test(l) && /person|crm/i.test(l))).toBe(true);
+    });
+
+    it("intakeFollowUpNotes — applied", () => {
+        const n = intakeFollowUpNotes({ intake_resolution_path: "applied" });
+        expect(n.length).toBeGreaterThan(0);
+        expect(n.join(" ").toLowerCase()).toMatch(/lead capture|intake|crm/);
+    });
+
+    it("intakeFollowUpNotes — skipped_missing_config uses operator copy", () => {
+        const n = intakeFollowUpNotes({
+            intake_resolution_path: "skipped_missing_config",
+            intake_skip_reason: "Public link is missing default_vertical_id",
+        });
+        expect(n.some((l) => /not configured to create\/link records yet/i.test(l))).toBe(true);
+        expect(n.some((l) => /detail:/i.test(l))).toBe(true);
+    });
+
+    it("intakeFollowUpNotes — skipped_error", () => {
+        const n = intakeFollowUpNotes({
+            intake_resolution_path: "skipped_error",
+            intake_error: "Opportunity insert failed",
+        });
+        expect(n.some((l) => /skipped/i.test(l))).toBe(true);
+        expect(n.some((l) => /Opportunity insert failed/.test(l))).toBe(true);
+    });
+
+    it("intakeFollowUpNotes — empty when no path", () => {
+        expect(intakeFollowUpNotes({})).toEqual([]);
     });
 });

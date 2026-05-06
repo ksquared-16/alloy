@@ -198,6 +198,17 @@ async function ensurePublicLink(
 ): Promise<{ plaintext: string; reusedGlobalToken: boolean }> {
     const supabase = createAdminClient();
 
+    const { data: verticalRow } = await supabase
+        .from("verticals")
+        .select("id")
+        .eq("slug", "cleaning")
+        .eq("is_active", true)
+        .maybeSingle();
+    const intakeMeta =
+        verticalRow?.id != null
+            ? { lead_capture: true as const, default_vertical_id: verticalRow.id as string }
+            : {};
+
     const { data: alreadyForForm, error: linkErr } = await supabase
         .from("form_public_links")
         .select("id")
@@ -207,6 +218,30 @@ async function ensurePublicLink(
         .maybeSingle();
     if (linkErr) throw new Error(`public link lookup: ${linkErr.message}`);
     if (alreadyForForm?.id) {
+        if (Object.keys(intakeMeta).length > 0) {
+            const { data: metaRow, error: metaErr } = await supabase
+                .from("form_public_links")
+                .select("metadata")
+                .eq("id", alreadyForForm.id)
+                .maybeSingle();
+            if (!metaErr && metaRow && typeof metaRow.metadata === "object" && metaRow.metadata) {
+                const merged = {
+                    ...(metaRow.metadata as Record<string, unknown>),
+                    ...intakeMeta,
+                };
+                const { error: upErr } = await supabase
+                    .from("form_public_links")
+                    .update({ metadata: merged })
+                    .eq("id", alreadyForForm.id);
+                if (upErr) {
+                    console.warn("[seed-medication-demo] could not merge lead_capture metadata:", upErr.message);
+                }
+            }
+        } else {
+            console.warn(
+                "[seed-medication-demo] no active cleaning vertical — existing link left without lead_capture (document attach may fail until configured)."
+            );
+        }
         console.log("[seed-medication-demo] public link already exists for this form — skipping insert.");
         return { plaintext: "(existing link — token not printed)", reusedGlobalToken: true };
     }
@@ -239,7 +274,12 @@ async function ensurePublicLink(
         pinned_form_definition_version_id: versionId,
         is_active: true,
         allowed_embed_origins: dedupe,
-        metadata: { demo: true, seed: "medication_authorization_demo", seeded_by: "seedMedicationAuthorizationDemoForOrg.ts" },
+        metadata: {
+            demo: true,
+            seed: "medication_authorization_demo",
+            seeded_by: "seedMedicationAuthorizationDemoForOrg.ts",
+            ...intakeMeta,
+        },
     });
     if (insErr) throw new Error(`public link insert: ${insErr.message}`);
 

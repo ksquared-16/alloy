@@ -31,7 +31,13 @@ type SubmissionRow = {
     opportunity_id: string | null;
 };
 
-function resolveDocumentParent(sub: SubmissionRow): { entity_type: string; entity_id: string } | null {
+/** Prefer member → opportunity → customer → person for document parent attachment. */
+export function resolveFormSubmissionDocumentParent(sub: {
+    person_id: string | null;
+    customer_id: string | null;
+    customer_member_id: string | null;
+    opportunity_id: string | null;
+}): { entity_type: string; entity_id: string } | null {
     if (sub.customer_member_id) {
         return { entity_type: "customer_member", entity_id: sub.customer_member_id };
     }
@@ -128,7 +134,7 @@ export async function createGeneratedPdfForSubmission(
         }
     }
 
-    const parent = resolveDocumentParent(sub);
+    const parent = resolveFormSubmissionDocumentParent(sub);
     if (!parent) {
         return {
             ok: false,

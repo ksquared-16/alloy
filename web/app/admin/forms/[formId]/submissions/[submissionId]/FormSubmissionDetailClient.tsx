@@ -18,6 +18,7 @@ import {
     buildEntityConnectionRows,
     describeDocumentOutcome,
     describeSubmissionLifecycle,
+    intakeFollowUpNotes,
     payloadHasCapturedSignatures,
     recommendedNextAction,
     WORKFLOW_SIGNALS_OPERATOR_COPY,
@@ -166,6 +167,8 @@ export default function FormSubmissionDetailClient() {
 
     const entityRows = useMemo(() => (row ? buildEntityConnectionRows(row) : []), [row]);
 
+    const intakeNotes = useMemo(() => (row ? intakeFollowUpNotes(row.payload?.meta) : []), [row]);
+
     const documentOutcome = useMemo(() => {
         if (!row) return null;
         return describeDocumentOutcome({
@@ -286,6 +289,18 @@ export default function FormSubmissionDetailClient() {
                                     />
                                 ))}
                             </div>
+                            {intakeNotes.length ? (
+                                <div className="mt-3 rounded-lg border border-[#e6e8ec] bg-[#fafbfd] px-3 py-2.5 sm:px-4">
+                                    <p className="text-xs font-bold uppercase tracking-wide text-[#59678b]">
+                                        CRM / lead capture
+                                    </p>
+                                    <ul className="mt-1.5 list-disc space-y-1 pl-5 text-sm text-[#31394d]">
+                                        {intakeNotes.map((n, i) => (
+                                            <li key={`intake-${i}`}>{n}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            ) : null}
                         </section>
 
                         <section className="space-y-2 border-b border-[#e6e8ec] py-4">

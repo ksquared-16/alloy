@@ -52,17 +52,21 @@ describe("public form lib", () => {
         expect(normalizeEmbedAllowlistEntry("https://example.com/embed/foo")).toBe("https://example.com");
     });
 
-    it("mergePublicSubmissionMeta drops spoofed server meta then applies hash", () => {
+    it("mergePublicSubmissionMeta drops spoofed server meta and client intake then applies hash", () => {
         const m = mergePublicSubmissionMeta(
             {
                 client_ip_hash: "fake",
                 intake_resolution_path: "bogus",
-                intake: { vertical_id: "x" },
+                intake_error: "nope",
+                intake_skip_reason: "x",
+                intake: { vertical_id: "x", guardian: { email: "evil@x.com" } },
             } as Record<string, unknown>,
             "realhash"
         );
         expect(m.client_ip_hash).toBe("realhash");
         expect(m.intake_resolution_path).toBeUndefined();
-        expect((m as { intake?: unknown }).intake).toEqual({ vertical_id: "x" });
+        expect(m.intake_error).toBeUndefined();
+        expect(m.intake_skip_reason).toBeUndefined();
+        expect((m as { intake?: unknown }).intake).toBeUndefined();
     });
 });

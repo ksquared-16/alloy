@@ -11,6 +11,7 @@ import { hashClientIp } from "@/lib/public/forms/clientIpHash";
 import { mergePublicSubmissionMeta } from "@/lib/public/forms/publicPayloadMeta";
 import { linkRequiresLeadCapture } from "@/lib/public/forms/publicFormTypes";
 import { applyFormLeadCaptureIntake } from "@/lib/forms/intake/applyFormLeadCaptureIntake";
+import { buildFormIntakeMetaFromPayload } from "@/lib/forms/intake/buildFormIntakeMetaFromPayload";
 import { persistFormSubmissionSignatures } from "@/lib/forms/signatures/persistFormSubmissionSignatures";
 import { emitFormSignedSafe, emitFormSubmittedSafe } from "@/lib/forms/workflow/formSubmissionEvents";
 
@@ -150,35 +151,64 @@ export async function POST(
 
     const metaRecord = ctx.linkMetadata as Record<string, unknown> | undefined;
     if (linkRequiresLeadCapture(metaRecord)) {
-        try {
-            const intakeResult = await applyFormLeadCaptureIntake(supabase, {
-                orgId: ctx.orgId,
-                defaultVerticalId:
-                    typeof metaRecord?.default_vertical_id === "string" ? metaRecord.default_vertical_id : null,
-                defaultOpportunityStatusKey:
-                    typeof metaRecord?.default_opportunity_status_key === "string"
-                        ? metaRecord.default_opportunity_status_key
-                        : null,
-                payload: finalPayload,
-                existingPersonId: personId,
-                existingCustomerId: customerId,
-                existingCustomerMemberId: customerMemberId,
-                existingOpportunityId: opportunityId,
-            });
-            personId = intakeResult.person_id;
-            customerId = intakeResult.customer_id;
-            customerMemberId = intakeResult.customer_member_id;
-            opportunityId = intakeResult.opportunity_id;
+        const built = buildFormIntakeMetaFromPayload({
+            values: finalPayload.values as Record<string, unknown>,
+            linkMetadata: metaRecord,
+            submissionId,
+        });
+
+        if (!built.ok) {
             finalPayload = {
                 ...finalPayload,
                 meta: {
                     ...((finalPayload.meta ?? {}) as Record<string, unknown>),
-                    intake_resolution_path: intakeResult.resolution_path,
+                    intake_resolution_path: "skipped_missing_config",
+                    intake_skip_reason: built.reason,
                 },
             };
-        } catch (e) {
-            const msg = e instanceof Error ? e.message : "Intake failed";
-            return publicErr(msg, 400, { code: "INTAKE_FAILED" });
+        } else {
+            finalPayload = {
+                ...finalPayload,
+                meta: {
+                    ...((finalPayload.meta ?? {}) as Record<string, unknown>),
+                    intake: built.intake,
+                },
+            };
+            try {
+                const intakeResult = await applyFormLeadCaptureIntake(supabase, {
+                    orgId: ctx.orgId,
+                    defaultVerticalId:
+                        typeof metaRecord?.default_vertical_id === "string" ? metaRecord.default_vertical_id : null,
+                    defaultOpportunityStatusKey:
+                        typeof metaRecord?.default_opportunity_status_key === "string"
+                            ? metaRecord.default_opportunity_status_key
+                            : null,
+                    payload: finalPayload,
+                    existingPersonId: personId,
+                    existingCustomerId: customerId,
+                    existingCustomerMemberId: customerMemberId,
+                    existingOpportunityId: opportunityId,
+                });
+                personId = intakeResult.person_id;
+                customerId = intakeResult.customer_id;
+                customerMemberId = intakeResult.customer_member_id;
+                opportunityId = intakeResult.opportunity_id;
+                const cleanedMeta = { ...((finalPayload.meta ?? {}) as Record<string, unknown>) };
+                delete cleanedMeta.intake;
+                cleanedMeta.intake_resolution_path =
+                    intakeResult.resolution_path === "applied" ? "applied" : intakeResult.resolution_path;
+                delete cleanedMeta.intake_error;
+                delete cleanedMeta.intake_skip_reason;
+                finalPayload = { ...finalPayload, meta: cleanedMeta };
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : "Intake failed";
+                const cleanedMeta = { ...((finalPayload.meta ?? {}) as Record<string, unknown>) };
+                delete cleanedMeta.intake;
+                cleanedMeta.intake_resolution_path = "skipped_error";
+                cleanedMeta.intake_error = msg.slice(0, 500);
+                delete cleanedMeta.intake_skip_reason;
+                finalPayload = { ...finalPayload, meta: cleanedMeta };
+            }
         }
     }
 

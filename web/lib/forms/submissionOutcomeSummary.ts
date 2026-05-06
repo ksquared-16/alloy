@@ -85,6 +85,41 @@ export function buildEntityConnectionRows(sub: {
 export const WORKFLOW_SIGNALS_OPERATOR_COPY =
     "When this submission moves through its lifecycle, Alloy emits workflow signals (for example when it is submitted, when signatures are saved, or when a linked document is generated). Automations you configure can listen for those signals — live event history from this screen is not shown yet.";
 
+/** Operator-facing notes from submit-time CRM intake (stored on `payload.meta`). */
+export function intakeFollowUpNotes(payloadMeta: unknown): string[] {
+    if (!payloadMeta || typeof payloadMeta !== "object" || Array.isArray(payloadMeta)) return [];
+    const m = payloadMeta as Record<string, unknown>;
+    const path = typeof m.intake_resolution_path === "string" ? m.intake_resolution_path.trim() : "";
+    if (!path) return [];
+
+    if (path === "applied") {
+        return [
+            "Lead capture intake ran on submit — CRM records were linked when person-first helpers succeeded (person, customer, opportunity; child as customer member when child fields mapped).",
+        ];
+    }
+
+    if (path === "skipped_missing_config") {
+        const lines = [
+            "This form is not configured to create/link records yet, or the public link is missing required intake settings (for example default_vertical_id or guardian email/phone in mapped form fields).",
+            "Submission was still saved. Generate document needs a linked person, customer, customer member, or opportunity — configure lead capture on the public link or attach records manually.",
+        ];
+        const detail = typeof m.intake_skip_reason === "string" && m.intake_skip_reason.trim();
+        if (detail) lines.push(`Detail: ${detail}`);
+        return lines;
+    }
+
+    if (path === "skipped_error") {
+        const lines = [
+            "CRM intake was skipped because linking failed on submit; the submission was still saved for human review.",
+        ];
+        const err = typeof m.intake_error === "string" && m.intake_error.trim();
+        if (err) lines.push(`Detail: ${err}`);
+        return lines;
+    }
+
+    return [];
+}
+
 export type DocumentOutcomeOperator = {
     headline: string;
     bullets: string[];
