@@ -294,3 +294,99 @@ export async function dbSubmitSubmission(
         .select("*")
         .single();
 }
+
+const FORM_PUBLIC_LINK_SAFE_SELECT =
+    "id, form_definition_id, pinned_form_definition_version_id, is_active, expires_at, allowed_embed_origins, metadata, token_prefix, rate_limit_profile, created_at, updated_at, last_used_at";
+
+export type FormPublicLinkSafeRow = {
+    id: string;
+    form_definition_id: string;
+    pinned_form_definition_version_id: string | null;
+    is_active: boolean;
+    expires_at: string | null;
+    allowed_embed_origins: string[] | null;
+    metadata: Record<string, unknown>;
+    token_prefix: string | null;
+    rate_limit_profile: string | null;
+    created_at: string;
+    updated_at: string | null;
+    last_used_at: string | null;
+};
+
+export async function dbListPublicLinksForForm(supabase: SupabaseClient, orgId: string, formDefinitionId: string) {
+    return supabase
+        .from("form_public_links")
+        .select(FORM_PUBLIC_LINK_SAFE_SELECT)
+        .eq("org_id", orgId)
+        .eq("form_definition_id", formDefinitionId)
+        .order("created_at", { ascending: false });
+}
+
+export async function dbInsertFormPublicLink(
+    supabase: SupabaseClient,
+    row: {
+        org_id: string;
+        form_definition_id: string;
+        token_hash: string;
+        token_prefix: string | null;
+        pinned_form_definition_version_id?: string | null;
+        is_active?: boolean;
+        expires_at?: string | null;
+        allowed_embed_origins?: string[] | null;
+        metadata?: Record<string, unknown>;
+    }
+) {
+    return supabase
+        .from("form_public_links")
+        .insert({
+            org_id: row.org_id,
+            form_definition_id: row.form_definition_id,
+            token_hash: row.token_hash,
+            token_prefix: row.token_prefix,
+            pinned_form_definition_version_id: row.pinned_form_definition_version_id ?? null,
+            is_active: row.is_active ?? true,
+            expires_at: row.expires_at ?? null,
+            allowed_embed_origins: row.allowed_embed_origins ?? null,
+            metadata: row.metadata ?? {},
+        })
+        .select(FORM_PUBLIC_LINK_SAFE_SELECT)
+        .single();
+}
+
+export async function dbGetPublicLinkForForm(
+    supabase: SupabaseClient,
+    orgId: string,
+    formDefinitionId: string,
+    linkId: string
+) {
+    return supabase
+        .from("form_public_links")
+        .select(FORM_PUBLIC_LINK_SAFE_SELECT)
+        .eq("org_id", orgId)
+        .eq("form_definition_id", formDefinitionId)
+        .eq("id", linkId)
+        .maybeSingle();
+}
+
+export async function dbUpdateFormPublicLinkForForm(
+    supabase: SupabaseClient,
+    orgId: string,
+    formDefinitionId: string,
+    linkId: string,
+    patch: {
+        is_active?: boolean;
+        expires_at?: string | null;
+        allowed_embed_origins?: string[] | null;
+        metadata?: Record<string, unknown>;
+        pinned_form_definition_version_id?: string | null;
+    }
+) {
+    return supabase
+        .from("form_public_links")
+        .update(patch)
+        .eq("org_id", orgId)
+        .eq("form_definition_id", formDefinitionId)
+        .eq("id", linkId)
+        .select(FORM_PUBLIC_LINK_SAFE_SELECT)
+        .single();
+}

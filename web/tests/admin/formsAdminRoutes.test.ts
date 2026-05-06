@@ -9,8 +9,11 @@ import {
     POST as createSubmission,
 } from "@/app/api/admin/forms/submissions/route";
 import { POST as submitSubmission } from "@/app/api/admin/forms/submissions/[submissionId]/submit/route";
+import { GET as listPublicLinks, POST as createPublicLink } from "@/app/api/admin/forms/[formId]/public-links/route";
+import { PATCH as patchPublicLink } from "@/app/api/admin/forms/[formId]/public-links/[linkId]/route";
 
 const ORG = "11111111-1111-4111-8111-111111111111";
+const OTHER_ORG = "99999999-9999-4999-8999-999999999999";
 const USER = "22222222-2222-4222-8222-222222222222";
 
 const { mockGetAdminContext, storeRef } = vi.hoisted(() => {
@@ -18,7 +21,8 @@ const { mockGetAdminContext, storeRef } = vi.hoisted(() => {
         forms: Record<string, Record<string, unknown>>;
         versions: Record<string, Record<string, unknown>>;
         submissions: Record<string, Record<string, unknown>>;
-    } = { forms: {}, versions: {}, submissions: {} };
+        publicLinks: Record<string, Record<string, unknown>>;
+    } = { forms: {}, versions: {}, submissions: {}, publicLinks: {} };
     return { mockGetAdminContext: vi.fn(), storeRef };
 });
 
@@ -143,6 +147,33 @@ function makeSupabaseMock() {
             if (q.limitN != null) rows = rows.slice(0, q.limitN);
             return { data: rows, error: null };
         }
+        if (
+            q.table === "form_public_links" &&
+            q.mode === "select" &&
+            q.filters.org_id &&
+            q.filters.form_definition_id &&
+            !q.filters.id
+        ) {
+            const org = q.filters.org_id as string;
+            const fd = q.filters.form_definition_id as string;
+            let rows = Object.values(storeRef.publicLinks).filter(
+                (r) =>
+                    (r as { org_id: string }).org_id === org && (r as { form_definition_id: string }).form_definition_id === fd
+            );
+            if (q.orderCol === "created_at") {
+                rows = [...rows].sort((a, b) => {
+                    const ta = new Date((a as { created_at: string }).created_at).getTime();
+                    const tb = new Date((b as { created_at: string }).created_at).getTime();
+                    return q.orderAsc ? ta - tb : tb - ta;
+                });
+            }
+            const stripped = rows.map((r) => {
+                const copy = { ...(r as Record<string, unknown>) };
+                delete copy.token_hash;
+                return copy;
+            });
+            return { data: stripped, error: null };
+        }
         return resolveMaybeSingle(q);
     }
 
@@ -188,6 +219,22 @@ function makeSupabaseMock() {
             const row = storeRef.submissions[id] ?? null;
             if (row && (row as { org_id: string }).org_id !== org) return { data: null, error: null };
             return { data: row, error: null };
+        }
+        if (q.table === "form_public_links" && q.mode === "select" && q.filters.id) {
+            const org = q.filters.org_id as string;
+            const fd = q.filters.form_definition_id as string;
+            const id = q.filters.id as string;
+            const row = storeRef.publicLinks[id] ?? null;
+            if (
+                !row ||
+                (row as { org_id: string }).org_id !== org ||
+                (row as { form_definition_id: string }).form_definition_id !== fd
+            ) {
+                return { data: null, error: null };
+            }
+            const safe = { ...(row as Record<string, unknown>) };
+            delete safe.token_hash;
+            return { data: safe, error: null };
         }
         return { data: null, error: null };
     }
@@ -267,6 +314,38 @@ function makeSupabaseMock() {
             storeRef.submissions[id] = row;
             return { data: row, error: null };
         }
+        if (q.table === "form_public_links" && q.mode === "insert" && q.insertRow) {
+            const id = crypto.randomUUID();
+            const row = {
+                ...q.insertRow,
+                id,
+                created_at: new Date().toISOString(),
+                updated_at: null,
+                last_used_at: null,
+            };
+            storeRef.publicLinks[id] = row;
+            const safe = { ...(row as Record<string, unknown>) };
+            delete safe.token_hash;
+            return { data: safe, error: null };
+        }
+        if (q.table === "form_public_links" && q.mode === "update" && q.updatePatch) {
+            const org = q.filters.org_id as string;
+            const fd = q.filters.form_definition_id as string;
+            const id = q.filters.id as string;
+            const cur = storeRef.publicLinks[id];
+            if (
+                !cur ||
+                (cur as { org_id: string }).org_id !== org ||
+                (cur as { form_definition_id: string }).form_definition_id !== fd
+            ) {
+                return { data: null, error: { code: "PGRST116", message: "No rows" } };
+            }
+            const row = { ...cur, ...q.updatePatch, updated_at: new Date().toISOString() };
+            storeRef.publicLinks[id] = row;
+            const safe = { ...(row as Record<string, unknown>) };
+            delete safe.token_hash;
+            return { data: safe, error: null };
+        }
         return { data: null, error: { message: "unmocked single" } };
     }
 
@@ -297,6 +376,7 @@ beforeEach(() => {
     storeRef.forms = {};
     storeRef.versions = {};
     storeRef.submissions = {};
+    storeRef.publicLinks = {};
     mockGetAdminContext.mockResolvedValue({
         ok: true,
         orgId: ORG,
@@ -543,5 +623,177 @@ describe("Admin forms routes", () => {
         mockGetAdminContext.mockResolvedValue({ ok: false, status: 401 });
         const res = await listForms();
         expect(res.status).toBe(401);
+    });
+
+    it("POST public link returns plaintext_token once and embed_path", async () => {
+        const fid = crypto.randomUUID();
+        storeRef.forms[fid] = { id: fid, org_id: ORG, key: "k", name: "N", kind: "center", is_active: true, metadata: {} };
+        const res = await createPublicLink(
+            new NextRequest("http://localhost:3000/api/x", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Host: "localhost:3000",
+                    "x-forwarded-proto": "http",
+                },
+                body: JSON.stringify({ label: "Camp", allowed_embed_origins: ["http://localhost:3000"] }),
+            }),
+            { params: Promise.resolve({ formId: fid }) }
+        );
+        expect(res.status).toBe(201);
+        const j = (await res.json()) as {
+            data: {
+                plaintext_token: string;
+                embed_path: string;
+                embed_url: string | null;
+                token_hash?: string;
+                metadata: Record<string, unknown>;
+            };
+        };
+        expect(j.data.plaintext_token.length).toBeGreaterThan(20);
+        expect(j.data.embed_path).toContain("/forms/embed/");
+        expect(j.data.embed_url?.startsWith("http://localhost:3000/forms/embed/")).toBe(true);
+        expect(j.data.token_hash).toBeUndefined();
+        expect(j.data.metadata.label).toBe("Camp");
+    });
+
+    it("GET public links omits token_hash and plaintext", async () => {
+        const fid = crypto.randomUUID();
+        const lid = crypto.randomUUID();
+        storeRef.forms[fid] = { id: fid, org_id: ORG, key: "k", name: "N", kind: "center", is_active: true, metadata: {} };
+        storeRef.publicLinks[lid] = {
+            id: lid,
+            org_id: ORG,
+            form_definition_id: fid,
+            token_hash: "secret-hash",
+            token_prefix: "abc",
+            pinned_form_definition_version_id: null,
+            is_active: true,
+            expires_at: null,
+            allowed_embed_origins: null,
+            metadata: {},
+            rate_limit_profile: null,
+            created_at: new Date().toISOString(),
+            updated_at: null,
+            last_used_at: null,
+        };
+        const res = await listPublicLinks(new NextRequest("http://x"), { params: Promise.resolve({ formId: fid }) });
+        expect(res.status).toBe(200);
+        const j = (await res.json()) as { data: Array<Record<string, unknown>> };
+        expect(j.data.length).toBe(1);
+        expect(j.data[0].token_hash).toBeUndefined();
+        expect(j.data[0].plaintext_token).toBeUndefined();
+        expect(j.data[0].id).toBe(lid);
+    });
+
+    it("PATCH public link updates mutable fields", async () => {
+        const fid = crypto.randomUUID();
+        const lid = crypto.randomUUID();
+        storeRef.forms[fid] = { id: fid, org_id: ORG, key: "k", name: "N", kind: "center", is_active: true, metadata: {} };
+        storeRef.publicLinks[lid] = {
+            id: lid,
+            org_id: ORG,
+            form_definition_id: fid,
+            token_hash: "h",
+            token_prefix: "pre",
+            pinned_form_definition_version_id: null,
+            is_active: true,
+            expires_at: null,
+            allowed_embed_origins: null,
+            metadata: {},
+            rate_limit_profile: null,
+            created_at: new Date().toISOString(),
+            updated_at: null,
+            last_used_at: null,
+        };
+        const res = await patchPublicLink(
+            new NextRequest("http://x", {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    is_active: false,
+                    metadata: { note: "paused" },
+                    allowed_embed_origins: ["https://example.com"],
+                }),
+            }),
+            { params: Promise.resolve({ formId: fid, linkId: lid }) }
+        );
+        expect(res.status).toBe(200);
+        const j = (await res.json()) as { data: { is_active: boolean; metadata: { note: string } } };
+        expect(j.data.is_active).toBe(false);
+        expect(j.data.metadata.note).toBe("paused");
+        expect(storeRef.publicLinks[lid].token_hash).toBe("h");
+    });
+
+    it("returns 404 when form belongs to another org", async () => {
+        const fid = crypto.randomUUID();
+        storeRef.forms[fid] = {
+            id: fid,
+            org_id: OTHER_ORG,
+            key: "k",
+            name: "N",
+            kind: "center",
+            is_active: true,
+            metadata: {},
+        };
+        const res = await listPublicLinks(new NextRequest("http://x"), { params: Promise.resolve({ formId: fid }) });
+        expect(res.status).toBe(404);
+    });
+
+    it("rejects pinned version from another form", async () => {
+        const fid = crypto.randomUUID();
+        const otherFid = crypto.randomUUID();
+        const vid = crypto.randomUUID();
+        storeRef.forms[fid] = { id: fid, org_id: ORG, key: "a", name: "A", kind: "center", is_active: true, metadata: {} };
+        storeRef.forms[otherFid] = {
+            id: otherFid,
+            org_id: ORG,
+            key: "b",
+            name: "B",
+            kind: "center",
+            is_active: true,
+            metadata: {},
+        };
+        storeRef.versions[vid] = {
+            id: vid,
+            org_id: ORG,
+            form_definition_id: otherFid,
+            version_number: 1,
+            status: "published",
+            schema_json: validSchema,
+            pdf_mapping_json: null,
+            metadata: {},
+        };
+        const res = await createPublicLink(
+            new NextRequest("http://x", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ pinned_form_definition_version_id: vid }),
+            }),
+            { params: Promise.resolve({ formId: fid }) }
+        );
+        expect(res.status).toBe(400);
+        const j = (await res.json()) as { error: string };
+        expect(j.error.toLowerCase()).toContain("pinned");
+    });
+
+    it("returns 403 when ops tries to create public link", async () => {
+        mockGetAdminContext.mockResolvedValue({
+            ok: true,
+            orgId: ORG,
+            userId: USER,
+            role: "ops",
+        });
+        const fid = crypto.randomUUID();
+        storeRef.forms[fid] = { id: fid, org_id: ORG, key: "k", name: "N", kind: "center", is_active: true, metadata: {} };
+        const res = await createPublicLink(
+            new NextRequest("http://x", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({}),
+            }),
+            { params: Promise.resolve({ formId: fid }) }
+        );
+        expect(res.status).toBe(403);
     });
 });

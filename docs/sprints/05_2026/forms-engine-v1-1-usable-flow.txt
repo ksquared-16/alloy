@@ -23,7 +23,7 @@ This sprint extends the **completed V1 foundation** with **minimal admin APIs, e
 | **Public APIs** | **Exists** — `/api/public/forms/[token]/**` (resolve, submissions, patch, submit). |
 | **Public embed** | **Exists** — `/forms/embed/[token]` + `FormEmbedClient` + `FormEngineRenderer`. |
 | **Admin UI** | **Missing** — no `app/admin/forms` surfaces; ops rely on APIs or DB. |
-| **Public-link admin API** | **Missing** — `form_public_links` rows require manual/SQL; design doc described CRUD not yet implemented. |
+| **Public-link admin API** | **Implemented (Card 1)** — `GET/POST/PATCH` under `/api/admin/forms/[formId]/public-links` (+ `[linkId]`); plaintext token only on `POST` create. |
 | **Medication demo** | **Blocked in embed** — select/multiselect require `option_values_by_field_id` on submit; embed does not hydrate/pass options. |
 | **Submission review** | **API-only** — `GET .../submissions` and `GET .../submissions/[id]` work; no staff UI. |
 | **Workflow** | **Events emitted** (`form_submitted`, `form_signed`, `form_document_generated`) into **`workflow_events`**; operational surfacing (workflows consuming events, admin visibility) is **follow-up** unless scoped here. |
@@ -44,10 +44,11 @@ This sprint extends the **completed V1 foundation** with **minimal admin APIs, e
 
 ### Card 1 — Public Link Admin API
 
-- **Status:** Pending  
+- **Status:** **Complete**  
 - **Purpose:** Minimal admin API for **`form_public_links`**:  
-  - **`GET`** / **`POST`** / **`PATCH`** under **`/api/admin/forms/[formId]/public-links`** (exact route shape to match existing Next patterns and org-scoped auth).  
-  - Return **plaintext token once on create**; persist **hash only** via existing **`hashFormLinkToken`** (`web/lib/public/forms/tokenHash.ts`).  
+  - **`GET`** / **`POST`** — **`/api/admin/forms/[formId]/public-links`**  
+  - **`PATCH`** — **`/api/admin/forms/[formId]/public-links/[linkId]`**  
+  - **POST** returns **plaintext token once** + **`embed_path`** + optional **`embed_url`** (from `Host` / `x-forwarded-*`); DB stores **hash only** via **`hashFormLinkToken`**.  
   - **No UI** in this card.
 
 ### Card 2 — Option Hydration + Embed Submit Fix
