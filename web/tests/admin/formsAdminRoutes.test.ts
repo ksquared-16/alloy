@@ -1,0 +1,547 @@
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { NextRequest } from "next/server";
+import { GET as listForms, POST as createForm } from "@/app/api/admin/forms/route";
+import { POST as createVersion } from "@/app/api/admin/forms/[formId]/versions/route";
+import { PATCH as patchVersion } from "@/app/api/admin/forms/[formId]/versions/[versionId]/route";
+import { POST as publishVersion } from "@/app/api/admin/forms/[formId]/versions/[versionId]/publish/route";
+import {
+    GET as listSubmissions,
+    POST as createSubmission,
+} from "@/app/api/admin/forms/submissions/route";
+import { POST as submitSubmission } from "@/app/api/admin/forms/submissions/[submissionId]/submit/route";
+
+const ORG = "11111111-1111-4111-8111-111111111111";
+const USER = "22222222-2222-4222-8222-222222222222";
+
+const { mockGetAdminContext, storeRef } = vi.hoisted(() => {
+    const storeRef: {
+        forms: Record<string, Record<string, unknown>>;
+        versions: Record<string, Record<string, unknown>>;
+        submissions: Record<string, Record<string, unknown>>;
+    } = { forms: {}, versions: {}, submissions: {} };
+    return { mockGetAdminContext: vi.fn(), storeRef };
+});
+
+vi.mock("@/lib/admin/getAdminContext", async () => {
+    const actual = await vi.importActual<typeof import("@/lib/admin/getAdminContext")>(
+        "@/lib/admin/getAdminContext"
+    );
+    return {
+        ...actual,
+        getAdminContextCached: mockGetAdminContext,
+        getAdminContext: mockGetAdminContext,
+    };
+});
+
+function makeSupabaseMock() {
+    type Q = {
+        table: string;
+        filters: Record<string, unknown>;
+        mode: "none" | "insert" | "update" | "select";
+        insertRow: Record<string, unknown> | null;
+        updatePatch: Record<string, unknown> | null;
+        orderCol: string | null;
+        orderAsc: boolean;
+        limitN: number | null;
+        selectCols: string;
+    };
+
+    function createQuery(table: string): Q & Record<string, unknown> {
+        const q: Q = {
+            table,
+            filters: {},
+            mode: "none",
+            insertRow: null,
+            updatePatch: null,
+            orderCol: null,
+            orderAsc: true,
+            limitN: null,
+            selectCols: "*",
+        };
+
+        const chain: Record<string, unknown> = {
+            insert: (row: Record<string, unknown>) => {
+                q.mode = "insert";
+                q.insertRow = row;
+                return chain;
+            },
+            update: (patch: Record<string, unknown>) => {
+                q.mode = "update";
+                q.updatePatch = patch;
+                return chain;
+            },
+            select: (cols?: string) => {
+                if (q.mode === "none") q.mode = "select";
+                q.selectCols = cols ?? "*";
+                return chain;
+            },
+            eq: (col: string, val: unknown) => {
+                q.filters[col] = val;
+                return chain;
+            },
+            order: (col: string, opts?: { ascending?: boolean }) => {
+                q.orderCol = col;
+                q.orderAsc = opts?.ascending !== false;
+                return chain;
+            },
+            limit: (n: number) => {
+                q.limitN = n;
+                return chain;
+            },
+            maybeSingle: async () => resolveMaybeSingle(q),
+            single: async () => resolveSingle(q),
+        };
+
+        chain.then = (onFulfilled: (v: unknown) => unknown, onRejected?: (e: unknown) => unknown) =>
+            resolveThenable(q).then(onFulfilled, onRejected);
+
+        return chain as Q & Record<string, unknown>;
+    }
+
+    async function resolveThenable(q: Q) {
+        if (q.table === "form_definitions" && q.mode === "select" && q.filters.org_id && !q.filters.id) {
+            const org = q.filters.org_id as string;
+            let rows = Object.values(storeRef.forms).filter((r) => (r as { org_id: string }).org_id === org);
+            if (q.orderCol === "key") {
+                rows = [...rows].sort((a, b) =>
+                    String((a as { key: string }).key).localeCompare(String((b as { key: string }).key))
+                );
+            }
+            return { data: rows, error: null };
+        }
+        if (q.table === "form_definition_versions" && q.mode === "select" && q.filters.form_definition_id) {
+            const org = q.filters.org_id as string;
+            const fd = q.filters.form_definition_id as string;
+            let rows = Object.values(storeRef.versions).filter(
+                (r) =>
+                    (r as { org_id: string; form_definition_id: string }).org_id === org &&
+                    (r as { form_definition_id: string }).form_definition_id === fd
+            );
+            if (q.orderCol === "version_number") {
+                rows = [...rows].sort((a, b) => {
+                    const va = (a as { version_number: number }).version_number;
+                    const vb = (b as { version_number: number }).version_number;
+                    return q.orderAsc ? va - vb : vb - va;
+                });
+            }
+            return { data: rows, error: null };
+        }
+        if (q.table === "form_submissions" && q.mode === "select" && q.filters.org_id && !q.filters.id) {
+            const org = q.filters.org_id as string;
+            let rows = Object.values(storeRef.submissions).filter((r) => (r as { org_id: string }).org_id === org);
+            for (const k of Object.keys(q.filters)) {
+                if (k === "org_id") continue;
+                rows = rows.filter((r) => (r as Record<string, unknown>)[k] === q.filters[k]);
+            }
+            if (q.orderCol === "created_at") {
+                rows = [...rows].sort((a, b) => {
+                    const ta = new Date((a as { created_at: string }).created_at).getTime();
+                    const tb = new Date((b as { created_at: string }).created_at).getTime();
+                    return q.orderAsc ? ta - tb : tb - ta;
+                });
+            }
+            if (q.limitN != null) rows = rows.slice(0, q.limitN);
+            return { data: rows, error: null };
+        }
+        return resolveMaybeSingle(q);
+    }
+
+    async function resolveMaybeSingle(q: Q) {
+        if (q.table === "form_definitions" && q.mode === "select" && q.filters.id) {
+            const org = q.filters.org_id as string;
+            const id = q.filters.id as string;
+            const row = storeRef.forms[id] ?? null;
+            if (row && (row as { org_id: string }).org_id !== org) return { data: null, error: null };
+            return { data: row, error: null };
+        }
+        if (q.table === "form_definition_versions" && q.mode === "select") {
+            const org = q.filters.org_id as string | undefined;
+            if (
+                q.limitN === 1 &&
+                q.selectCols.includes("version_number") &&
+                q.filters.form_definition_id &&
+                !q.filters.id
+            ) {
+                const fd = q.filters.form_definition_id as string;
+                const rows = Object.values(storeRef.versions).filter((r) => {
+                    const matchFd = (r as { form_definition_id: string }).form_definition_id === fd;
+                    if (!org) return matchFd;
+                    return matchFd && (r as { org_id: string }).org_id === org;
+                });
+                const sorted = rows.sort(
+                    (a, b) =>
+                        ((b as { version_number: number }).version_number ?? 0) -
+                        ((a as { version_number: number }).version_number ?? 0)
+                );
+                return { data: sorted[0] ?? null, error: null };
+            }
+            if (q.filters.id) {
+                const id = q.filters.id as string;
+                const row = storeRef.versions[id] ?? null;
+                if (row && (row as { org_id: string }).org_id !== org) return { data: null, error: null };
+                return { data: row, error: null };
+            }
+        }
+        if (q.table === "form_submissions" && q.mode === "select" && q.filters.id) {
+            const org = q.filters.org_id as string;
+            const id = q.filters.id as string;
+            const row = storeRef.submissions[id] ?? null;
+            if (row && (row as { org_id: string }).org_id !== org) return { data: null, error: null };
+            return { data: row, error: null };
+        }
+        return { data: null, error: null };
+    }
+
+    async function resolveSingle(q: Q) {
+        if (q.table === "form_definitions" && q.mode === "insert" && q.insertRow) {
+            const id = crypto.randomUUID();
+            const row = { ...q.insertRow, id, created_at: new Date().toISOString(), updated_at: null };
+            storeRef.forms[id] = row;
+            return { data: row, error: null };
+        }
+        if (q.table === "form_definitions" && q.mode === "update" && q.updatePatch) {
+            const org = q.filters.org_id as string;
+            const id = q.filters.id as string;
+            const cur = storeRef.forms[id];
+            if (!cur || (cur as { org_id: string }).org_id !== org) {
+                return { data: null, error: { code: "PGRST116", message: "No rows" } };
+            }
+            const row = { ...cur, ...q.updatePatch, updated_at: new Date().toISOString() };
+            storeRef.forms[id] = row;
+            return { data: row, error: null };
+        }
+        if (q.table === "form_definition_versions" && q.mode === "insert" && q.insertRow) {
+            const id = crypto.randomUUID();
+            const row = { ...q.insertRow, id, created_at: new Date().toISOString(), updated_at: null };
+            storeRef.versions[id] = row;
+            return { data: row, error: null };
+        }
+        if (q.table === "form_definition_versions" && q.mode === "update" && q.updatePatch) {
+            const org = q.filters.org_id as string;
+            const id = q.filters.id as string;
+            const cur = storeRef.versions[id];
+            if (!cur || (cur as { org_id: string }).org_id !== org) {
+                return { data: null, error: { code: "PGRST116", message: "No rows" } };
+            }
+            const curRow = cur as { status: string };
+            if (q.filters.status === "draft" && curRow.status !== "draft") {
+                return { data: null, error: { code: "PGRST116", message: "No rows" } };
+            }
+            if ((q.updatePatch as { status?: string }).status === "published" && q.filters.status === "draft") {
+                if (curRow.status !== "draft") {
+                    return { data: null, error: { code: "PGRST116", message: "No rows" } };
+                }
+                const row = { ...cur, ...q.updatePatch, updated_at: new Date().toISOString() };
+                storeRef.versions[id] = row;
+                return { data: row, error: null };
+            }
+            if ((q.updatePatch as { status?: string }).status === "archived" && q.filters.status === "published") {
+                if (curRow.status !== "published") {
+                    return { data: null, error: { code: "PGRST116", message: "No rows" } };
+                }
+                const row = { ...cur, ...q.updatePatch, updated_at: new Date().toISOString() };
+                storeRef.versions[id] = row;
+                return { data: row, error: null };
+            }
+            const row = { ...cur, ...q.updatePatch, updated_at: new Date().toISOString() };
+            storeRef.versions[id] = row;
+            return { data: row, error: null };
+        }
+        if (q.table === "form_submissions" && q.mode === "insert" && q.insertRow) {
+            const id = crypto.randomUUID();
+            const row = { ...q.insertRow, id, created_at: new Date().toISOString(), updated_at: null };
+            storeRef.submissions[id] = row;
+            return { data: row, error: null };
+        }
+        if (q.table === "form_submissions" && q.mode === "update" && q.updatePatch) {
+            const org = q.filters.org_id as string;
+            const id = q.filters.id as string;
+            const cur = storeRef.submissions[id];
+            if (!cur || (cur as { org_id: string }).org_id !== org) {
+                return { data: null, error: { code: "PGRST116", message: "No rows" } };
+            }
+            if (q.filters.status === "draft" && (cur as { status: string }).status !== "draft") {
+                return { data: null, error: { code: "PGRST116", message: "No rows" } };
+            }
+            const row = { ...cur, ...q.updatePatch, updated_at: new Date().toISOString() };
+            storeRef.submissions[id] = row;
+            return { data: row, error: null };
+        }
+        return { data: null, error: { message: "unmocked single" } };
+    }
+
+    return { from: (table: string) => createQuery(table) };
+}
+
+vi.mock("@/lib/supabaseAdmin", () => ({
+    createAdminClient: vi.fn(() => makeSupabaseMock()),
+}));
+
+const validSchema = {
+    schema_version: 1 as const,
+    title: "Form",
+    sections: [{ id: "s1", field_ids: ["name", "color"] }],
+    fields: [
+        { id: "name", type: "text" as const, label: "Name", required: true },
+        {
+            id: "color",
+            type: "select" as const,
+            label: "Color",
+            required: true,
+            option_set_key: "colors",
+        },
+    ],
+};
+
+beforeEach(() => {
+    storeRef.forms = {};
+    storeRef.versions = {};
+    storeRef.submissions = {};
+    mockGetAdminContext.mockResolvedValue({
+        ok: true,
+        orgId: ORG,
+        userId: USER,
+        role: "admin",
+    });
+});
+
+afterEach(() => {
+    vi.clearAllMocks();
+});
+
+describe("Admin forms routes", () => {
+    it("creates a form", async () => {
+        const res = await createForm(
+            new NextRequest("http://x/api/admin/forms", {
+                method: "POST",
+                body: JSON.stringify({ key: "enrollment", name: "Enrollment", kind: "center" }),
+                headers: { "Content-Type": "application/json" },
+            })
+        );
+        expect(res.status).toBe(201);
+        const j = (await res.json()) as { data: { key: string; id: string } };
+        expect(j.data.key).toBe("enrollment");
+    });
+
+    it("creates a draft version with valid schema", async () => {
+        const fid = crypto.randomUUID();
+        storeRef.forms[fid] = {
+            id: fid,
+            org_id: ORG,
+            key: "k",
+            name: "N",
+            kind: "center",
+            is_active: true,
+            metadata: {},
+        };
+        const res = await createVersion(
+            new NextRequest("http://x/api/admin/forms/x/versions", {
+                method: "POST",
+                body: JSON.stringify({ schema_json: validSchema }),
+                headers: { "Content-Type": "application/json" },
+            }),
+            { params: Promise.resolve({ formId: fid }) }
+        );
+        expect(res.status).toBe(201);
+        const j = (await res.json()) as { data: { status: string; version_number: number } };
+        expect(j.data.status).toBe("draft");
+        expect(j.data.version_number).toBe(1);
+    });
+
+    it("rejects invalid schema on version create", async () => {
+        const fid = crypto.randomUUID();
+        storeRef.forms[fid] = { id: fid, org_id: ORG, key: "k", name: "N", kind: "center", is_active: true, metadata: {} };
+        const res = await createVersion(
+            new NextRequest("http://x/api/admin/forms/x/versions", {
+                method: "POST",
+                body: JSON.stringify({ schema_json: { bad: true } }),
+                headers: { "Content-Type": "application/json" },
+            }),
+            { params: Promise.resolve({ formId: fid }) }
+        );
+        expect(res.status).toBe(400);
+        const j = (await res.json()) as { error: string; validation_errors?: unknown[] };
+        expect(j.error).toBeTruthy();
+        expect(j.validation_errors?.length).toBeGreaterThan(0);
+    });
+
+    it("publishes a valid draft version", async () => {
+        const fid = crypto.randomUUID();
+        const vid = crypto.randomUUID();
+        storeRef.forms[fid] = { id: fid, org_id: ORG, key: "k", name: "N", kind: "center", is_active: true, metadata: {} };
+        storeRef.versions[vid] = {
+            id: vid,
+            org_id: ORG,
+            form_definition_id: fid,
+            version_number: 1,
+            status: "draft",
+            schema_json: validSchema,
+            pdf_mapping_json: null,
+            metadata: {},
+        };
+        const res = await publishVersion(new NextRequest("http://x"), {
+            params: Promise.resolve({ formId: fid, versionId: vid }),
+        });
+        expect(res.status).toBe(200);
+        const j = (await res.json()) as { data: { status: string } };
+        expect(j.data.status).toBe("published");
+    });
+
+    it("rejects PATCH on published version", async () => {
+        const fid = crypto.randomUUID();
+        const vid = crypto.randomUUID();
+        storeRef.forms[fid] = { id: fid, org_id: ORG, key: "k", name: "N", kind: "center", is_active: true, metadata: {} };
+        storeRef.versions[vid] = {
+            id: vid,
+            org_id: ORG,
+            form_definition_id: fid,
+            version_number: 1,
+            status: "published",
+            schema_json: validSchema,
+            pdf_mapping_json: null,
+            metadata: {},
+        };
+        const res = await patchVersion(
+            new NextRequest("http://x", {
+                method: "PATCH",
+                body: JSON.stringify({ schema_json: validSchema }),
+                headers: { "Content-Type": "application/json" },
+            }),
+            { params: Promise.resolve({ formId: fid, versionId: vid }) }
+        );
+        expect(res.status).toBe(409);
+    });
+
+    it("creates draft submission and submits valid payload", async () => {
+        const fid = crypto.randomUUID();
+        const vid = crypto.randomUUID();
+        storeRef.forms[fid] = { id: fid, org_id: ORG, key: "k", name: "N", kind: "center", is_active: true, metadata: {} };
+        storeRef.versions[vid] = {
+            id: vid,
+            org_id: ORG,
+            form_definition_id: fid,
+            version_number: 1,
+            status: "published",
+            schema_json: validSchema,
+            pdf_mapping_json: null,
+            metadata: {},
+        };
+
+        const cr = await createSubmission(
+            new NextRequest("http://x", {
+                method: "POST",
+                body: JSON.stringify({
+                    form_definition_version_id: vid,
+                    payload: { values: {} },
+                }),
+                headers: { "Content-Type": "application/json" },
+            })
+        );
+        expect(cr.status).toBe(201);
+        const cj = (await cr.json()) as { data: { id: string; status: string } };
+        expect(cj.data.status).toBe("draft");
+
+        const sr = await submitSubmission(
+            new NextRequest("http://x", {
+                method: "POST",
+                body: JSON.stringify({
+                    payload: {
+                        values: { name: "Ada", color: "blue" },
+                    },
+                    option_values_by_field_id: { color: ["blue", "red"] },
+                }),
+                headers: { "Content-Type": "application/json" },
+            }),
+            { params: Promise.resolve({ submissionId: cj.data.id }) }
+        );
+        expect(sr.status).toBe(200);
+        const sj = (await sr.json()) as { data: { status: string } };
+        expect(sj.data.status).toBe("submitted");
+    });
+
+    it("rejects submit with invalid payload", async () => {
+        const fid = crypto.randomUUID();
+        const vid = crypto.randomUUID();
+        storeRef.forms[fid] = { id: fid, org_id: ORG, key: "k", name: "N", kind: "center", is_active: true, metadata: {} };
+        storeRef.versions[vid] = {
+            id: vid,
+            org_id: ORG,
+            form_definition_id: fid,
+            version_number: 1,
+            status: "published",
+            schema_json: validSchema,
+            pdf_mapping_json: null,
+            metadata: {},
+        };
+
+        const cr = await createSubmission(
+            new NextRequest("http://x", {
+                method: "POST",
+                body: JSON.stringify({
+                    form_definition_version_id: vid,
+                    payload: { values: {} },
+                }),
+                headers: { "Content-Type": "application/json" },
+            })
+        );
+        const cj = (await cr.json()) as { data: { id: string } };
+
+        const sr = await submitSubmission(
+            new NextRequest("http://x", {
+                method: "POST",
+                body: JSON.stringify({
+                    payload: { values: { name: "", color: "blue" } },
+                    option_values_by_field_id: { color: ["blue"] },
+                }),
+                headers: { "Content-Type": "application/json" },
+            }),
+            { params: Promise.resolve({ submissionId: cj.data.id }) }
+        );
+        expect(sr.status).toBe(400);
+    });
+
+    it("filters submissions list", async () => {
+        const fid = crypto.randomUUID();
+        const vid = crypto.randomUUID();
+        const sid = crypto.randomUUID();
+        storeRef.submissions[sid] = {
+            id: sid,
+            org_id: ORG,
+            form_definition_id: fid,
+            form_definition_version_id: vid,
+            status: "draft",
+            payload: {},
+            created_at: new Date().toISOString(),
+        };
+        const res = await listSubmissions(
+            new NextRequest(`http://x/api/admin/forms/submissions?form_definition_id=${fid}&status=draft`)
+        );
+        expect(res.status).toBe(200);
+        const j = (await res.json()) as { data: Array<{ id: string }> };
+        expect(j.data.length).toBe(1);
+        expect(j.data[0].id).toBe(sid);
+    });
+
+    it("returns 403 for mutations when role is ops", async () => {
+        mockGetAdminContext.mockResolvedValue({
+            ok: true,
+            orgId: ORG,
+            userId: USER,
+            role: "ops",
+        });
+        const res = await createForm(
+            new NextRequest("http://x", {
+                method: "POST",
+                body: JSON.stringify({ key: "a", name: "A", kind: "center" }),
+                headers: { "Content-Type": "application/json" },
+            })
+        );
+        expect(res.status).toBe(403);
+    });
+
+    it("returns 401 when context fails unauthenticated", async () => {
+        mockGetAdminContext.mockResolvedValue({ ok: false, status: 401 });
+        const res = await listForms();
+        expect(res.status).toBe(401);
+    });
+});
