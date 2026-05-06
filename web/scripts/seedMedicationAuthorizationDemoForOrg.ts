@@ -206,7 +206,14 @@ async function ensurePublicLink(
         .maybeSingle();
     const intakeMeta =
         verticalRow?.id != null
-            ? { lead_capture: true as const, default_vertical_id: verticalRow.id as string }
+            ? {
+                  lead_capture: true as const,
+                  default_vertical_id: verticalRow.id as string,
+                  auto_create_person: true as const,
+                  auto_create_customer: true as const,
+                  auto_create_customer_member: true as const,
+                  auto_create_opportunity: true as const,
+              }
             : {};
 
     const { data: alreadyForForm, error: linkErr } = await supabase

@@ -14,6 +14,11 @@ export type FormPublicLinkMetadata = {
      * Defaults match common demo shapes (`guardian_email`, `child_first_name`, …).
      */
     intake_field_paths?: FormIntakeValueFieldPaths;
+    /** Default false — production-safe. Demo links should set true for end-to-end smoke. */
+    auto_create_person?: boolean;
+    auto_create_customer?: boolean;
+    auto_create_customer_member?: boolean;
+    auto_create_opportunity?: boolean;
 };
 
 export function linkRequiresLeadCapture(metadata: Record<string, unknown> | null | undefined): boolean {

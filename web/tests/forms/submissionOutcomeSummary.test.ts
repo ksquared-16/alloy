@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
     buildEntityConnectionRows,
+    buildIntakeOperatorSummary,
     describeDocumentOutcome,
     describeSubmissionLifecycle,
+    documentGenerationBlockedByIntake,
     intakeFollowUpNotes,
     payloadHasCapturedSignatures,
     recommendedNextAction,
+    submissionHasDocumentAttachTarget,
 } from "@/lib/forms/submissionOutcomeSummary";
 
 describe("submissionOutcomeSummary", () => {
@@ -120,10 +123,82 @@ describe("submissionOutcomeSummary", () => {
         expect(r.some((l) => /open/i.test(l) && /person|crm/i.test(l))).toBe(true);
     });
 
-    it("intakeFollowUpNotes — applied", () => {
-        const n = intakeFollowUpNotes({ intake_resolution_path: "applied" });
+    it("buildIntakeOperatorSummary — matched_email linked", () => {
+        const s = buildIntakeOperatorSummary({
+            intake_resolution_path: "matched_email",
+            intake_match_strategy: "matched_email",
+            intake_match_confidence: "high",
+            intake_needs_review: false,
+        });
+        expect(s?.statusLabel).toBe("Linked");
+        expect(s?.strategyLabel).toMatch(/email/i);
+    });
+
+    it("buildIntakeOperatorSummary — needs_human_review shows operator warning", () => {
+        const s = buildIntakeOperatorSummary({
+            intake_resolution_path: "needs_human_review",
+            intake_match_strategy: "no_match",
+            intake_match_confidence: "none",
+            intake_needs_review: true,
+            intake_review_reason: "No matching person",
+        });
+        expect(s?.statusLabel).toBe("Needs review");
+        expect(s?.detailLines.some((l) => /do not generate a document/i.test(l))).toBe(true);
+    });
+
+    it("buildIntakeOperatorSummary — ambiguous_contact blocks document copy", () => {
+        const s = buildIntakeOperatorSummary({
+            intake_resolution_path: "ambiguous_contact",
+            intake_match_strategy: "ambiguous_email",
+            intake_match_confidence: "none",
+            intake_needs_review: true,
+        });
+        expect(s?.statusLabel).toBe("Needs review");
+        expect(s?.detailLines.some((l) => /do not generate a document until the correct person/i.test(l))).toBe(true);
+    });
+
+    it("documentGenerationBlockedByIntake — ambiguous path blocks even with CRM row", () => {
+        const row = { person_id: "p1", customer_id: "c1", customer_member_id: null, opportunity_id: null };
+        expect(submissionHasDocumentAttachTarget(row)).toBe(true);
+        const r = documentGenerationBlockedByIntake(
+            { intake_resolution_path: "ambiguous_contact", intake_needs_review: true },
+            row
+        );
+        expect(r.blocked).toBe(true);
+        expect(r.reason?.toLowerCase()).toMatch(/human review|linked correctly/);
+    });
+
+    it("documentGenerationBlockedByIntake — linked matched_email with attach target allows", () => {
+        const row = { person_id: "p1", customer_id: null, customer_member_id: null, opportunity_id: null };
+        const r = documentGenerationBlockedByIntake(
+            {
+                intake_resolution_path: "matched_email",
+                intake_match_strategy: "matched_email",
+                intake_needs_review: false,
+            },
+            row
+        );
+        expect(r.blocked).toBe(false);
+    });
+
+    it("documentGenerationBlockedByIntake — intake_needs_review blocks", () => {
+        const row = { person_id: "p1", customer_id: "c1", customer_member_id: null, opportunity_id: null };
+        const r = documentGenerationBlockedByIntake(
+            { intake_resolution_path: "matched_phone", intake_needs_review: true },
+            row
+        );
+        expect(r.blocked).toBe(true);
+    });
+
+    it("intakeFollowUpNotes — matched_email via buildIntakeOperatorSummary detailLines", () => {
+        const n = intakeFollowUpNotes({
+            intake_resolution_path: "matched_email",
+            intake_match_strategy: "matched_email",
+            intake_match_confidence: "high",
+            intake_needs_review: false,
+        });
         expect(n.length).toBeGreaterThan(0);
-        expect(n.join(" ").toLowerCase()).toMatch(/lead capture|intake|crm/);
+        expect(n.some((l) => /resolution path: matched_email/i.test(l))).toBe(true);
     });
 
     it("intakeFollowUpNotes — skipped_missing_config uses operator copy", () => {

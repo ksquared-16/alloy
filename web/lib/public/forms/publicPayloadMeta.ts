@@ -6,6 +6,12 @@ const SERVER_CONTROLLED_META_KEYS = new Set([
     "intake_resolution_path",
     "intake_error",
     "intake_skip_reason",
+    "intake_match_strategy",
+    "intake_match_confidence",
+    "intake_needs_review",
+    "intake_review_reason",
+    "intake_candidate_email_count",
+    "intake_candidate_phone_count",
 ]);
 
 /**

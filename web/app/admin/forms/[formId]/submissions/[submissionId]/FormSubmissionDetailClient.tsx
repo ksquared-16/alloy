@@ -16,9 +16,10 @@ import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
 import {
     buildEntityConnectionRows,
+    buildIntakeOperatorSummary,
     describeDocumentOutcome,
     describeSubmissionLifecycle,
-    intakeFollowUpNotes,
+    documentGenerationBlockedByIntake,
     payloadHasCapturedSignatures,
     recommendedNextAction,
     WORKFLOW_SIGNALS_OPERATOR_COPY,
@@ -167,7 +168,17 @@ export default function FormSubmissionDetailClient() {
 
     const entityRows = useMemo(() => (row ? buildEntityConnectionRows(row) : []), [row]);
 
-    const intakeNotes = useMemo(() => (row ? intakeFollowUpNotes(row.payload?.meta) : []), [row]);
+    const intakeSummary = useMemo(() => (row ? buildIntakeOperatorSummary(row.payload?.meta) : null), [row]);
+
+    const docGenBlocked = useMemo(() => {
+        if (!row || row.status !== "submitted") return { blocked: false as const };
+        return documentGenerationBlockedByIntake(row.payload?.meta, {
+            person_id: row.person_id,
+            customer_id: row.customer_id,
+            customer_member_id: row.customer_member_id,
+            opportunity_id: row.opportunity_id,
+        });
+    }, [row]);
 
     const documentOutcome = useMemo(() => {
         if (!row) return null;
@@ -289,13 +300,28 @@ export default function FormSubmissionDetailClient() {
                                     />
                                 ))}
                             </div>
-                            {intakeNotes.length ? (
+                            {intakeSummary ? (
                                 <div className="mt-3 rounded-lg border border-[#e6e8ec] bg-[#fafbfd] px-3 py-2.5 sm:px-4">
-                                    <p className="text-xs font-bold uppercase tracking-wide text-[#59678b]">
-                                        CRM / lead capture
-                                    </p>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <p className="text-xs font-bold uppercase tracking-wide text-[#59678b]">
+                                            CRM / intake
+                                        </p>
+                                        <StatusBadge
+                                            label={intakeSummary.statusLabel}
+                                            variant={
+                                                intakeSummary.statusLabel === "Linked"
+                                                    ? "success"
+                                                    : intakeSummary.statusLabel === "Skipped"
+                                                      ? "neutral"
+                                                      : intakeSummary.statusLabel === "Error"
+                                                        ? "error"
+                                                        : "warning"
+                                            }
+                                        />
+                                    </div>
+                                    <p className="mt-2 text-sm text-[#31394d]">{intakeSummary.strategyLabel}</p>
                                     <ul className="mt-1.5 list-disc space-y-1 pl-5 text-sm text-[#31394d]">
-                                        {intakeNotes.map((n, i) => (
+                                        {intakeSummary.detailLines.map((n, i) => (
                                             <li key={`intake-${i}`}>{n}</li>
                                         ))}
                                     </ul>
@@ -411,10 +437,15 @@ export default function FormSubmissionDetailClient() {
                                     <p className="text-xs text-[#59678b]">Admin role required to generate PDF.</p>
                                 ) : (
                                     <>
+                                        {docGenBlocked.blocked && docGenBlocked.reason ? (
+                                            <p className="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950">
+                                                {docGenBlocked.reason}
+                                            </p>
+                                        ) : null}
                                         <PrimaryButton
                                             type="button"
                                             className="!px-3 !py-2 text-sm"
-                                            disabled={genBusy}
+                                            disabled={genBusy || docGenBlocked.blocked}
                                             onClick={() => void generateDocument()}
                                         >
                                             {genBusy ? "Generating…" : "Generate document (PDF stub)"}

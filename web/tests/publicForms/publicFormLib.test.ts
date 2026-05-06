@@ -59,6 +59,12 @@ describe("public form lib", () => {
                 intake_resolution_path: "bogus",
                 intake_error: "nope",
                 intake_skip_reason: "x",
+                intake_match_strategy: "spoof",
+                intake_match_confidence: "high",
+                intake_needs_review: false,
+                intake_review_reason: "x",
+                intake_candidate_email_count: 9,
+                intake_candidate_phone_count: 9,
                 intake: { vertical_id: "x", guardian: { email: "evil@x.com" } },
             } as Record<string, unknown>,
             "realhash"
@@ -67,6 +73,12 @@ describe("public form lib", () => {
         expect(m.intake_resolution_path).toBeUndefined();
         expect(m.intake_error).toBeUndefined();
         expect(m.intake_skip_reason).toBeUndefined();
+        expect((m as { intake_match_strategy?: unknown }).intake_match_strategy).toBeUndefined();
+        expect((m as { intake_match_confidence?: unknown }).intake_match_confidence).toBeUndefined();
+        expect((m as { intake_needs_review?: unknown }).intake_needs_review).toBeUndefined();
+        expect((m as { intake_review_reason?: unknown }).intake_review_reason).toBeUndefined();
+        expect((m as { intake_candidate_email_count?: unknown }).intake_candidate_email_count).toBeUndefined();
+        expect((m as { intake_candidate_phone_count?: unknown }).intake_candidate_phone_count).toBeUndefined();
         expect((m as { intake?: unknown }).intake).toBeUndefined();
     });
 });

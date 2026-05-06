@@ -1,4 +1,5 @@
 import type { FormPayload } from "@/lib/forms/validateSubmission";
+import { resolveFormSubmissionDocumentParent } from "@/lib/forms/pdf/createGeneratedPdfForSubmission";
 
 /** Rows for operator-facing “records connected” summary (truthful linked / not linked). */
 export type EntityConnectionRow = {
@@ -85,39 +86,140 @@ export function buildEntityConnectionRows(sub: {
 export const WORKFLOW_SIGNALS_OPERATOR_COPY =
     "When this submission moves through its lifecycle, Alloy emits workflow signals (for example when it is submitted, when signatures are saved, or when a linked document is generated). Automations you configure can listen for those signals — live event history from this screen is not shown yet.";
 
-/** Operator-facing notes from submit-time CRM intake (stored on `payload.meta`). */
-export function intakeFollowUpNotes(payloadMeta: unknown): string[] {
-    if (!payloadMeta || typeof payloadMeta !== "object" || Array.isArray(payloadMeta)) return [];
+export type IntakeOperatorSummary = {
+    /** Short label for badges: Linked / Needs review / Skipped / Error */
+    statusLabel: string;
+    /** Plain-language match / policy outcome */
+    strategyLabel: string;
+    detailLines: string[];
+};
+
+const STRATEGY_LABELS: Record<string, string> = {
+    matched_email: "Matched existing person by email (single unambiguous row).",
+    matched_phone: "Matched existing person by phone (single unambiguous row).",
+    created_person: "Created a new person from the form (auto_create_person enabled).",
+    reuse_submission_person_id: "Continued from person id already stored on this submission.",
+    ambiguous_email: "Multiple persons matched the email — CRM links were not applied.",
+    ambiguous_phone: "Multiple persons matched the phone — CRM links were not applied.",
+    no_match: "No person matched email/phone.",
+};
+
+/** Structured intake summary for submission detail (Card 8 metadata). */
+export function buildIntakeOperatorSummary(payloadMeta: unknown): IntakeOperatorSummary | null {
+    if (!payloadMeta || typeof payloadMeta !== "object" || Array.isArray(payloadMeta)) return null;
     const m = payloadMeta as Record<string, unknown>;
     const path = typeof m.intake_resolution_path === "string" ? m.intake_resolution_path.trim() : "";
-    if (!path) return [];
+    if (!path) return null;
 
-    if (path === "applied") {
-        return [
-            "Lead capture intake ran on submit — CRM records were linked when person-first helpers succeeded (person, customer, opportunity; child as customer member when child fields mapped).",
-        ];
+    const rawStrategy = typeof m.intake_match_strategy === "string" ? m.intake_match_strategy.trim() : "";
+    const strategyLabel = STRATEGY_LABELS[rawStrategy] ?? (rawStrategy ? `Strategy: ${rawStrategy}` : "Strategy recorded.");
+    const confidence = typeof m.intake_match_confidence === "string" ? m.intake_match_confidence : "—";
+    const needsReview = m.intake_needs_review === true;
+    const ec = m.intake_candidate_email_count;
+    const pc = m.intake_candidate_phone_count;
+
+    let statusLabel = "Linked";
+    if (path === "skipped_missing_config") statusLabel = "Skipped";
+    else if (path === "skipped_error") statusLabel = "Error";
+    else if (path === "ambiguous_contact" || path === "needs_human_review") statusLabel = "Needs review";
+    else if (needsReview) statusLabel = "Needs review";
+
+    const detailLines: string[] = [`Resolution path: ${path}.`, `Confidence: ${confidence}.`, strategyLabel];
+
+    if (typeof ec === "number" || typeof pc === "number") {
+        detailLines.push(
+            `Person lookup candidates — email: ${typeof ec === "number" ? ec : "—"}, phone: ${typeof pc === "number" ? pc : "—"}.`
+        );
     }
 
+    const rr = typeof m.intake_review_reason === "string" && m.intake_review_reason.trim();
+    if (rr) detailLines.push(rr);
+
     if (path === "skipped_missing_config") {
-        const lines = [
-            "This form is not configured to create/link records yet, or the public link is missing required intake settings (for example default_vertical_id or guardian email/phone in mapped form fields).",
-            "Submission was still saved. Generate document needs a linked person, customer, customer member, or opportunity — configure lead capture on the public link or attach records manually.",
-        ];
+        detailLines.push(
+            "This form is not configured to create/link records yet, or the public link is missing required intake settings."
+        );
         const detail = typeof m.intake_skip_reason === "string" && m.intake_skip_reason.trim();
-        if (detail) lines.push(`Detail: ${detail}`);
-        return lines;
+        if (detail) detailLines.push(`Detail: ${detail}`);
     }
 
     if (path === "skipped_error") {
-        const lines = [
-            "CRM intake was skipped because linking failed on submit; the submission was still saved for human review.",
-        ];
+        detailLines.push("CRM intake hit an error on submit — the submission was still saved.");
         const err = typeof m.intake_error === "string" && m.intake_error.trim();
-        if (err) lines.push(`Detail: ${err}`);
-        return lines;
+        if (err) detailLines.push(`Detail: ${err}`);
     }
 
-    return [];
+    if (path === "ambiguous_contact") {
+        detailLines.push("Do not generate a document until the correct person or household is linked manually.");
+    }
+
+    if (needsReview && path !== "ambiguous_contact" && path !== "skipped_missing_config" && path !== "skipped_error") {
+        detailLines.push(
+            "Do not generate a document until you confirm CRM linkage is correct for this submission."
+        );
+    }
+
+    return { statusLabel, strategyLabel, detailLines };
+}
+
+/** Operator-facing notes from submit-time CRM intake (stored on `payload.meta`). */
+export function intakeFollowUpNotes(payloadMeta: unknown): string[] {
+    return buildIntakeOperatorSummary(payloadMeta)?.detailLines ?? [];
+}
+
+export type SubmissionAttachRow = {
+    person_id: string | null;
+    customer_id: string | null;
+    customer_member_id: string | null;
+    opportunity_id: string | null;
+};
+
+/** True when stub PDF can attach to a CRM parent row. */
+export function submissionHasDocumentAttachTarget(row: SubmissionAttachRow): boolean {
+    return resolveFormSubmissionDocumentParent(row) !== null;
+}
+
+/**
+ * Blocks Generate document when intake policy requires human verification or no attach parent exists.
+ */
+export function documentGenerationBlockedByIntake(
+    payloadMeta: unknown,
+    row: SubmissionAttachRow
+): { blocked: boolean; reason?: string } {
+    if (!payloadMeta || typeof payloadMeta !== "object" || Array.isArray(payloadMeta)) {
+        if (!submissionHasDocumentAttachTarget(row)) {
+            return {
+                blocked: true,
+                reason: "Link this submission to a person, customer, customer member, or opportunity before generating a document.",
+            };
+        }
+        return { blocked: false };
+    }
+    const m = payloadMeta as Record<string, unknown>;
+    const path = typeof m.intake_resolution_path === "string" ? m.intake_resolution_path.trim() : "";
+
+    if (path === "ambiguous_contact" || path === "needs_human_review") {
+        return {
+            blocked: true,
+            reason: "CRM intake requires human review — do not generate a document until records are linked correctly.",
+        };
+    }
+
+    if (m.intake_needs_review === true) {
+        return {
+            blocked: true,
+            reason: "Do not generate a document until this submission is linked to the correct CRM records.",
+        };
+    }
+
+    if (!submissionHasDocumentAttachTarget(row)) {
+        return {
+            blocked: true,
+            reason: "Link this submission to a person, customer, customer member, or opportunity before generating a document.",
+        };
+    }
+
+    return { blocked: false };
 }
 
 export type DocumentOutcomeOperator = {

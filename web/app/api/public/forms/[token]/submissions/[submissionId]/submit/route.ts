@@ -10,7 +10,7 @@ import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
 import { hashClientIp } from "@/lib/public/forms/clientIpHash";
 import { mergePublicSubmissionMeta } from "@/lib/public/forms/publicPayloadMeta";
 import { linkRequiresLeadCapture } from "@/lib/public/forms/publicFormTypes";
-import { applyFormLeadCaptureIntake } from "@/lib/forms/intake/applyFormLeadCaptureIntake";
+import { applyFormIntakeSafe } from "@/lib/forms/intake/applyFormIntakeSafe";
 import { buildFormIntakeMetaFromPayload } from "@/lib/forms/intake/buildFormIntakeMetaFromPayload";
 import { persistFormSubmissionSignatures } from "@/lib/forms/signatures/persistFormSubmissionSignatures";
 import { emitFormSignedSafe, emitFormSubmittedSafe } from "@/lib/forms/workflow/formSubmissionEvents";
@@ -175,8 +175,9 @@ export async function POST(
                 },
             };
             try {
-                const intakeResult = await applyFormLeadCaptureIntake(supabase, {
+                const intakeResult = await applyFormIntakeSafe(supabase, {
                     orgId: ctx.orgId,
+                    linkMetadata: metaRecord,
                     defaultVerticalId:
                         typeof metaRecord?.default_vertical_id === "string" ? metaRecord.default_vertical_id : null,
                     defaultOpportunityStatusKey:
@@ -193,10 +194,11 @@ export async function POST(
                 customerId = intakeResult.customer_id;
                 customerMemberId = intakeResult.customer_member_id;
                 opportunityId = intakeResult.opportunity_id;
-                const cleanedMeta = { ...((finalPayload.meta ?? {}) as Record<string, unknown>) };
+                const cleanedMeta = {
+                    ...((finalPayload.meta ?? {}) as Record<string, unknown>),
+                    ...intakeResult.outcomeMeta,
+                };
                 delete cleanedMeta.intake;
-                cleanedMeta.intake_resolution_path =
-                    intakeResult.resolution_path === "applied" ? "applied" : intakeResult.resolution_path;
                 delete cleanedMeta.intake_error;
                 delete cleanedMeta.intake_skip_reason;
                 finalPayload = { ...finalPayload, meta: cleanedMeta };
@@ -204,6 +206,12 @@ export async function POST(
                 const msg = e instanceof Error ? e.message : "Intake failed";
                 const cleanedMeta = { ...((finalPayload.meta ?? {}) as Record<string, unknown>) };
                 delete cleanedMeta.intake;
+                delete cleanedMeta.intake_match_strategy;
+                delete cleanedMeta.intake_match_confidence;
+                delete cleanedMeta.intake_needs_review;
+                delete cleanedMeta.intake_review_reason;
+                delete cleanedMeta.intake_candidate_email_count;
+                delete cleanedMeta.intake_candidate_phone_count;
                 cleanedMeta.intake_resolution_path = "skipped_error";
                 cleanedMeta.intake_error = msg.slice(0, 500);
                 delete cleanedMeta.intake_skip_reason;
