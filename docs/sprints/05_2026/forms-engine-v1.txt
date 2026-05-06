@@ -7,7 +7,7 @@
 - **Cards 0, 0.5, 1, and 1.5 are complete** (outputs appended below as **Appendices A–D**).
 - **Architecture / design lock is accepted** (see **Approved architecture decisions** and **§17 Architecture freeze rules**).
 - **Implementation is now ready to begin** with **Phase 3 — Build Loop**.
-- **First build card:** **Card 2 — Supabase migrations** (per **§16**; implements **Appendix C — Card 1 data model**).
+- **First build card:** **Card 2 — Migrations** (per **§16**; implements **Appendix C — Card 1 data model**).
 
 ---
 
@@ -145,18 +145,16 @@ The north star is: **structured form submissions are the durable source of truth
 
 ### Phase 3 — Build Loop
 
-- **Card 2:** Supabase migrations  
-- **Card 3:** Zod schema engine  
-- **Card 4:** Internal form renderer  
-- **Card 5:** Submission APIs  
-- **Card 6:** Entity linking  
-- **Card 7:** Public iframe intake  
-- **Card 8:** PDF mapping layer  
-- **Card 9:** Signature support  
+- **Card 2:** Migrations  
+- **Card 3:** Shared schema + validator  
+- **Card 4:** Admin APIs  
+- **Card 5:** Public APIs + iframe resolve  
+- **Card 6:** Renderer  
+- **Card 7:** Person-first intake helper  
+- **Card 8:** Documents / PDF mapping service  
+- **Card 9:** Signatures  
 - **Card 10:** Medication Authorization seed / example  
-- **Card 11:** Events / workflow integration  
-- **Card 12:** Tests + validation  
-- **Card 13:** Documentation update pass  
+- **Card 11:** Events, tests, docs  
 
 **Gate:** Phase 3 may begin only after **Cards 0, 0.5, 1, and 1.5** are **complete and reviewed**.
 
@@ -170,18 +168,16 @@ The north star is: **structured form submissions are the durable source of truth
 | 0.5 | Architecture Risk Review | 1 |
 | 1 | Final Data Model | 2 |
 | 1.5 | API + Rendering Design | 2 |
-| 2 | Supabase migrations | 3 |
-| 3 | Zod schema engine | 3 |
-| 4 | Internal form renderer | 3 |
-| 5 | Submission APIs | 3 |
-| 6 | Entity linking | 3 |
-| 7 | Public iframe intake | 3 |
-| 8 | PDF mapping layer | 3 |
-| 9 | Signature support | 3 |
+| 2 | Migrations | 3 |
+| 3 | Shared schema + validator | 3 |
+| 4 | Admin APIs | 3 |
+| 5 | Public APIs + iframe resolve | 3 |
+| 6 | Renderer | 3 |
+| 7 | Person-first intake helper | 3 |
+| 8 | Documents / PDF mapping service | 3 |
+| 9 | Signatures | 3 |
 | 10 | Medication Authorization seed / example | 3 |
-| 11 | Events / workflow integration | 3 |
-| 12 | Tests + validation | 3 |
-| 13 | Documentation update pass | 3 |
+| 11 | Events, tests, docs | 3 |
 
 ---
 
@@ -225,7 +221,7 @@ The north star is: **structured form submissions are the durable source of truth
 3. **PDF ↔ documents:** How should **generated PDFs** **link** to the existing **documents** model (FKs, metadata, naming, idempotency, regeneration)?  
 4. **Public intake → CRM:** How does **public** intake **safely** create/update **person / customer / customer_member / opportunity** records (validation, duplicate detection, abuse, auth)?  
 5. **Signatures:** How should **signatures** be **stored** (cryptographic hash, image, provider ref, audit fields)? What is **not** stored?  
-6. **Events:** What **events** should be emitted (`form.submitted`, `form.signed`, `form.document_generated`, others)? Payload shape? Ordering guarantees?  
+6. **Events:** What **events** should be emitted (`form_submitted`, `form_signed`, `form_document_generated`, others)? Payload shape? Ordering guarantees?  
 7. **Approval gate:** What items need **explicit approval** before any Phase 3 build (schema boundaries, RLS, public surface, PDF contract)?
 
 **Output:** decision log (with options, pick, rationale), residual risks, and **conditions** for entering Card 1.
@@ -270,18 +266,16 @@ The north star is: **structured form submissions are the durable source of truth
 
 *(Phase 3 — execute only after Cards 0, 0.5, 1, 1.5 are approved.)*
 
-- **Card 2:** Supabase migrations implementing Card 1 (plus roll-forward plan).  
-- **Card 3:** Zod schema engine shared by API and clients (single source of validation rules).  
-- **Card 4:** Internal form renderer for staff workflows.  
-- **Card 5:** Submission APIs (admin + public) with consistent validation and errors.  
-- **Card 6:** Entity linking implementation (customer_member canonical child, opportunity ties).  
-- **Card 7:** Public iframe intake (embeddable, secure, observable).  
-- **Card 8:** PDF mapping layer + first template(s).  
-- **Card 9:** Signature support per Card 1.5 contract (provider hooks stubbed).  
-- **Card 10:** Medication Authorization seed/example (state-style fidelity + PDF path).  
-- **Card 11:** Events/workflow integration with **approved** event names/payloads.  
-- **Card 12:** Tests + validation suite.  
-- **Card 13:** Documentation update pass (internal + operator-facing as needed).
+- **Card 2:** Migrations — implement **Appendix C** (tables, constraints, indexes, RLS stubs as designed; roll-forward plan).  
+- **Card 3:** Shared schema + validator — compile **`schema_json`** to draft/submit validators (e.g. Zod); option sets, visibility, groups, signatures.  
+- **Card 4:** Admin APIs — `/api/admin/forms/**` per **Appendix D**.  
+- **Card 5:** Public APIs + iframe resolve — `/api/public/forms/**` (bootstrap, draft, submit, assets) per **Appendix D**; token → `org_id` via **`form_public_links`**.  
+- **Card 6:** Renderer — staff + public iframe/mobile; schema-driven only (no drag/drop builder).  
+- **Card 7:** Person-first intake helper — shared CRM side effects from submit; wire public (and staff if needed).  
+- **Card 8:** Documents / PDF mapping service — **`documents`** + **`form_submission_documents`** + mapping boundary; **`customer_member`** parent where applicable.  
+- **Card 9:** Signatures — **`form_submission_signatures`**, typed + drawn + assets route; **`form_signed`** behavior per **Appendix D**.  
+- **Card 10:** Medication Authorization seed / example — state-style fidelity + PDF path smoke.  
+- **Card 11:** Events, tests, docs — **`emitEvent`**, **`workflowVocab`**, integration/unit tests, update **`docs/product/documents-and-forms.md`** (and related) as needed.
 
 ---
 
@@ -512,19 +506,20 @@ For **every** card execution, Cursor must produce:
 
 - Unit: schema compile; integration: token resolution, submit + CRM helper, **`customer_member`** document parent, PDF idempotency, signatures, event payloads.
 
-### D.11 Build handoff (aligned to §16 with nuance)
+### D.11 Build handoff (Phase 3 — same order as §16)
 
-- **Card 2:** Migrations (Appendix C).  
-- **Card 3:** Validators (`schema_json` → draft/submit).  
-- **Card 4:** Admin APIs.  
-- **Card 5:** Public APIs + bootstrap.  
-- **Card 6:** Renderers (internal + iframe).  
-- **Card 7:** Intake helper + wire submit.  
-- **Card 8:** PDF mapping + documents + junction.  
-- **Card 9:** Signatures + assets route.  
-- **Card 10:** Example seed form (e.g. medication auth).  
-- **Card 11:** Events (`emitEvent`, `workflowVocab`) + tests + docs (incl. `documents-and-forms` update).  
-- **Ongoing:** extend **`v1DocumentEntities.ts`** + **entity-options** for picker when UI ships.
+- **Card 2 — Migrations**  
+- **Card 3 — Shared schema + validator**  
+- **Card 4 — Admin APIs**  
+- **Card 5 — Public APIs + iframe resolve**  
+- **Card 6 — Renderer**  
+- **Card 7 — Person-first intake helper**  
+- **Card 8 — Documents / PDF mapping service**  
+- **Card 9 — Signatures**  
+- **Card 10 — Medication Authorization seed / example**  
+- **Card 11 — Events, tests, docs**  
+
+**Ongoing (not numbered cards):** extend **`v1DocumentEntities.ts`** + **`entity-options`** for **`customer_member`** picker when UI ships.
 
 ---
 
