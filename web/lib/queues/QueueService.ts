@@ -26,6 +26,7 @@ import { applyRecordScopeConstraintsToQuery } from "@/lib/admin/accessScope";
 import { resolveOpportunityAttentionConfigFromMetadata, type OpportunityAttentionResolvedConfig } from "@/lib/opportunities/opportunityAttentionConfig";
 import { resolveOpportunityAttention, type OpportunityAttentionEntityInput } from "@/lib/opportunities/opportunityAttentionResolver";
 import { DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1 } from "@/lib/workspace/opportunityAttentionRules";
+import { buildQueueServiceAttentionSemantics } from "@/lib/workspace/opportunityAttentionCountSemantics";
 
 type JobRowPreview = {
     id: string;
@@ -1185,13 +1186,13 @@ function buildOpportunityNeedsAttentionCandidateOrExpr(now: Date, minLifecycleSt
 }
 
 /** Cap for in-memory needs_attention evaluation (avoids fragile nested `or`/`and` PostgREST URL parsing). */
-const NEEDS_ATTENTION_OPPORTUNITY_FETCH_CAP = 5000;
+export const NEEDS_ATTENTION_OPPORTUNITY_FETCH_CAP = 5000;
 
 /**
  * When queue summaries only need counts (department cards), use a smaller cap so we do not pull 5k rows
  * per work unit. Count may under-count if more opportunities match than this cap (same class as the 5k cap).
  */
-const NEEDS_ATTENTION_COUNT_ONLY_FETCH_CAP = 800;
+export const NEEDS_ATTENTION_COUNT_ONLY_FETCH_CAP = 800;
 
 function sortOpportunityRowsByPlan(rows: OpportunityRowPreview[], sort: OpportunitySortPlan[]): OpportunityRowPreview[] {
     if (!rows.length) return rows;
@@ -1221,7 +1222,11 @@ async function loadOpportunityNeedsAttentionRows(params: {
     /** Default full cap; use {@link NEEDS_ATTENTION_COUNT_ONLY_FETCH_CAP} for count-only summaries. */
     fetchCap?: number;
     recordScopeConstraints?: RecordScopeConstraints | null;
-}): Promise<OpportunityRowPreview[]> {
+}): Promise<{
+    filtered: OpportunityRowPreview[];
+    raw_candidates_fetched: number;
+    fetch_cap: number;
+}> {
     const cap = params.fetchCap ?? NEEDS_ATTENTION_OPPORTUNITY_FETCH_CAP;
     const attentionConfig = params.attentionConfig;
     const minLifecycleH = minLifecycleStaleHoursFromResolvedConfig(attentionConfig.thresholdsHours);
@@ -1246,8 +1251,8 @@ async function loadOpportunityNeedsAttentionRows(params: {
     if (error) {
         throw new QueueServiceError(error.message, 400, "DB_ERROR");
     }
-    const rows = (data ?? []) as OpportunityRowPreview[];
-    const filtered = rows.filter((r) =>
+    const rawRows = (data ?? []) as OpportunityRowPreview[];
+    const filtered = rawRows.filter((r) =>
         resolveOpportunityAttention({
             opportunity: opportunityPreviewToResolverEntity(r),
             defs: params.opportunityStatusDefs,
@@ -1256,7 +1261,11 @@ async function loadOpportunityNeedsAttentionRows(params: {
             optionalSignals: null,
         }).needs_attention
     );
-    return sortOpportunityRowsByPlan(filtered, params.sort);
+    return {
+        filtered: sortOpportunityRowsByPlan(filtered, params.sort),
+        raw_candidates_fetched: rawRows.length,
+        fetch_cap: cap,
+    };
 }
 
 function opportunityFilterToOps(f: QueueFilter, now: Date, dayBounds: OrgLocalDayUtcBounds): OpportunityQueryPlanOp[] {
@@ -1589,7 +1598,8 @@ export async function getWorkUnitQueueSummaries(params: {
     limit?: number;
     /**
      * When false, omit preview rows and skip enrichment (department KPI cards only need counts).
-     * `needs_attention` uses a smaller row cap; count may under-count if more rows match than that cap.
+     * Opportunity `needs_attention` uses a capped candidate fetch (see `opportunity_needs_attention_semantics`
+     * on the returned summary and `docs/execution/crm-opportunity-needs-attention-count-semantics.md`).
      */
     includePreviews?: boolean;
     /** Optional label for [queue-perf] logs (e.g. department id). */
@@ -1819,34 +1829,25 @@ export async function getWorkUnitQueueSummaries(params: {
         if (q.key === "needs_attention") {
             const attentionConfigResolved = resolveOpportunityAttentionConfigFromMetadata(workUnitMetadata ?? null);
             const tN0 = Date.now();
-            let matched: OpportunityRowPreview[];
             let preloadStatusDefs: StatusDefinitionRow[] | undefined;
             preloadStatusDefs = await sharedOpportunityStatusDefs();
-            if (includePreviews) {
-                matched = await loadOpportunityNeedsAttentionRows({
-                    supabase,
-                    orgId: params.orgId,
-                    workUnitId: params.workUnitId,
-                    sort,
-                    now: refUtc,
-                    opportunityStatusDefs: preloadStatusDefs,
-                    attentionConfig: attentionConfigResolved,
-                    fetchCap: undefined,
-                    recordScopeConstraints: scopeFilter,
-                });
-            } else {
-                matched = await loadOpportunityNeedsAttentionRows({
-                    supabase,
-                    orgId: params.orgId,
-                    workUnitId: params.workUnitId,
-                    sort,
-                    now: refUtc,
-                    opportunityStatusDefs: preloadStatusDefs,
-                    attentionConfig: attentionConfigResolved,
-                    fetchCap: NEEDS_ATTENTION_COUNT_ONLY_FETCH_CAP,
-                    recordScopeConstraints: scopeFilter,
-                });
-            }
+            const needsAttentionLoadOut = await loadOpportunityNeedsAttentionRows({
+                supabase,
+                orgId: params.orgId,
+                workUnitId: params.workUnitId,
+                sort,
+                now: refUtc,
+                opportunityStatusDefs: preloadStatusDefs,
+                attentionConfig: attentionConfigResolved,
+                fetchCap: includePreviews ? undefined : NEEDS_ATTENTION_COUNT_ONLY_FETCH_CAP,
+                recordScopeConstraints: scopeFilter,
+            });
+            const matched = needsAttentionLoadOut.filtered;
+            const opportunity_needs_attention_semantics = buildQueueServiceAttentionSemantics({
+                candidateFetchCap: needsAttentionLoadOut.fetch_cap,
+                rawCandidatesFetched: needsAttentionLoadOut.raw_candidates_fetched,
+                fetchMode: includePreviews ? "list_cap" : "summary_cap",
+            });
             needsAttentionLoadMs = Date.now() - tN0;
 
             if (!includePreviews) {
@@ -1860,6 +1861,7 @@ export async function getWorkUnitQueueSummaries(params: {
                         display: q.display ?? "list",
                         count: matched.length,
                         preview: [],
+                        opportunity_needs_attention_semantics,
                     },
                     undefined
                 );
@@ -1893,6 +1895,7 @@ export async function getWorkUnitQueueSummaries(params: {
                     display: q.display ?? "list",
                     count: matched.length,
                     preview: preview as unknown[],
+                    opportunity_needs_attention_semantics,
                 },
                 undefined
             );
@@ -2367,7 +2370,7 @@ export async function getWorkUnitQueueItems(params: {
         const { value: statusPack, ms: statusDefsMs } = await timedBranch(oppStatusDefsPromise);
         const effectiveStatusDefs = statusPack.rows;
         const statusDefsCacheHit = statusPack.combinedCacheHit;
-        const { value: matched, ms: naLoadMs } = await timedBranch(
+        const { value: attentionLoadPack, ms: naLoadMs } = await timedBranch(
             loadOpportunityNeedsAttentionRows({
                 supabase,
                 orgId: params.orgId,
@@ -2379,6 +2382,12 @@ export async function getWorkUnitQueueItems(params: {
                 recordScopeConstraints: scopeFilter,
             })
         );
+        const matched = attentionLoadPack.filtered;
+        const opportunity_needs_attention_semantics = buildQueueServiceAttentionSemantics({
+            candidateFetchCap: attentionLoadPack.fetch_cap,
+            rawCandidatesFetched: attentionLoadPack.raw_candidates_fetched,
+            fetchMode: "list_cap",
+        });
         const slice = matched.slice(effectiveOffset, effectiveOffset + effectiveLimit);
         const tEn0 = Date.now();
         const { rows: enrichedRows, queueListSubtimings } = await enrichOpportunityRows({
@@ -2410,6 +2419,7 @@ export async function getWorkUnitQueueItems(params: {
                 total: matched.length,
                 limit: effectiveLimit,
                 offset: effectiveOffset,
+                opportunity_needs_attention_semantics,
             },
             {
                 load_def_ms,

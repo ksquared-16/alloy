@@ -16,8 +16,13 @@ import {
     summarizeAttentionReasonCounts,
     type AttentionReasonCountSummary,
 } from "@/lib/workspace/attentionReasonCountsSummary";
+import {
+    buildStandaloneAttentionEvaluation,
+    type StandaloneOpportunityAttentionEvaluation,
+} from "@/lib/workspace/opportunityAttentionCountSemantics";
 
-const MAX_ROWS = 500;
+/** Rows pulled from `opportunities` before resolver filter — org + access scope only (not `work_unit_id`). */
+export const OPPORTUNITY_ATTENTION_QUEUE_BUILDER_MAX_ROWS = 500;
 
 export type { AttentionReasonCountSummary } from "@/lib/workspace/attentionReasonCountsSummary";
 
@@ -55,10 +60,13 @@ export async function buildOpportunityAttentionQueueItems(params: {
     /** Work unit / department `metadata` (or any object containing `opportunity_attention_rules`). */
     attentionConfigMetadata?: unknown | null;
     accessDim?: AdminAccessScopeDimensions | null;
+    /** Distinguishes standalone work-unit route vs department preview (config source only — same resolver + org scope). */
+    attentionQueueCohort: StandaloneOpportunityAttentionEvaluation["cohort"];
 }): Promise<{
     items: WorkspaceOpportunityQueueRuntime["items"];
     rules: OpportunityAttentionRuleConfigV1;
     attention_reason_counts: AttentionReasonCountSummary[];
+    attention_evaluation: StandaloneOpportunityAttentionEvaluation;
 }> {
     const { supabase, orgId, attentionConfigMetadata = null, accessDim = null } = params;
 
@@ -84,12 +92,21 @@ export async function buildOpportunityAttentionQueueItems(params: {
         )
         .eq("org_id", orgId)
         .order("updated_at", { ascending: true, nullsFirst: false })
-        .limit(MAX_ROWS);
+        .limit(OPPORTUNITY_ATTENTION_QUEUE_BUILDER_MAX_ROWS);
 
     if (accessDim && accessScopeRestrictsData(accessDim)) {
         const c = await resolveRecordScopeConstraints(supabase, orgId, accessDim);
         if (c.impossible) {
-            return { items: [], rules, attention_reason_counts: summarizeAttentionReasonCounts([]) };
+            return {
+                items: [],
+                rules,
+                attention_reason_counts: summarizeAttentionReasonCounts([]),
+                attention_evaluation: buildStandaloneAttentionEvaluation({
+                    rowWindowCap: OPPORTUNITY_ATTENTION_QUEUE_BUILDER_MAX_ROWS,
+                    rawCandidatesFetched: 0,
+                    cohort: params.attentionQueueCohort,
+                }),
+            };
         }
         oppQ = applyRecordScopeConstraintsToQuery(oppQ, c);
     }
@@ -192,5 +209,14 @@ export async function buildOpportunityAttentionQueueItems(params: {
         })
     );
 
-    return { items, rules, attention_reason_counts };
+    return {
+        items,
+        rules,
+        attention_reason_counts,
+        attention_evaluation: buildStandaloneAttentionEvaluation({
+            rowWindowCap: OPPORTUNITY_ATTENTION_QUEUE_BUILDER_MAX_ROWS,
+            rawCandidatesFetched: candidates.length,
+            cohort: params.attentionQueueCohort,
+        }),
+    };
 }

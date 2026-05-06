@@ -9,7 +9,8 @@ import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 
 /**
  * GET — Needs Attention queue for opportunity work units.
- * V1: computed reasons from effective lifecycle stage + last-touched time (updated_at/created_at).
+ * Needs attention via canonical `resolveOpportunityAttention`; response includes `attention_evaluation`
+ * (row window cap, saturation). See `docs/execution/crm-opportunity-needs-attention-count-semantics.md`.
  */
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const ctx = await getAdminContextCached();
@@ -55,12 +56,14 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
     }
 
     try {
-        const { items, rules: resolvedRules, attention_reason_counts } = await buildOpportunityAttentionQueueItems({
-            supabase,
-            orgId: ctx.orgId,
-            attentionConfigMetadata: (wu as { metadata?: unknown }).metadata ?? null,
-            accessDim: dim,
-        });
+        const { items, rules: resolvedRules, attention_reason_counts, attention_evaluation } =
+            await buildOpportunityAttentionQueueItems({
+                supabase,
+                orgId: ctx.orgId,
+                attentionConfigMetadata: (wu as { metadata?: unknown }).metadata ?? null,
+                accessDim: dim,
+                attentionQueueCohort: "work_unit_attention_config",
+            });
 
         let departmentMetadata: unknown | null = null;
         if (deptId) {
@@ -93,6 +96,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
             items: itemsOut,
             rules: resolvedRules,
             attention_reason_counts,
+            attention_evaluation,
         });
     } catch (e) {
         return NextResponse.json({ error: (e as Error).message }, { status: 500 });

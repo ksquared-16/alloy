@@ -1,4 +1,5 @@
 import type { OperationalTimezoneSource, UserDisplayTimezoneSource } from "@/lib/admin/timezoneContract";
+import type { QueueServiceOpportunityNeedsAttentionSemantics } from "@/lib/workspace/opportunityAttentionCountSemantics";
 
 /** Resolved viewer wall clock for queue preview strings (user → org → UTC). */
 export type QueueViewerTimezoneMeta = { iana: string; source: UserDisplayTimezoneSource };
@@ -25,6 +26,11 @@ export type QueueSummary = {
     counts_deferred?: boolean;
     /** Org operational day bounds used by this queue's calendar date filters (if any). */
     calendar_meta?: QueueOperationalCalendarMeta;
+    /**
+     * Present when `entity_type==="opportunity"` and `key==="needs_attention"`.
+     * Explains bounded candidate fetch vs exhaustive org totals (`docs/execution/crm-opportunity-needs-attention-count-semantics.md`).
+     */
+    opportunity_needs_attention_semantics?: QueueServiceOpportunityNeedsAttentionSemantics;
 };
 
 export type QueueItemsResult = {
@@ -41,6 +47,8 @@ export type QueueItemsResult = {
     total: number;
     limit: number;
     offset: number;
+    /** Same shape as {@link QueueSummary.opportunity_needs_attention_semantics} for list routes. */
+    opportunity_needs_attention_semantics?: QueueServiceOpportunityNeedsAttentionSemantics;
     /** When `count_mode=omit`, total was not queried; UI may fall back to tab/summary counts. */
     total_omitted?: boolean;
     /** Org operational day bounds when this queue uses calendar date filters. */

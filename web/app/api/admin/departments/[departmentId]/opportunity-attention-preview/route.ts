@@ -44,12 +44,14 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
             .maybeSingle();
         const departmentMetadata = (deptRow as { metadata?: unknown } | null)?.metadata ?? null;
 
-        const { items, rules, attention_reason_counts } = await buildOpportunityAttentionQueueItems({
-            supabase,
-            orgId: ctx.orgId,
-            attentionConfigMetadata: departmentMetadata,
-            accessDim: dim,
-        });
+        const { items, rules, attention_reason_counts, attention_evaluation } =
+            await buildOpportunityAttentionQueueItems({
+                supabase,
+                orgId: ctx.orgId,
+                attentionConfigMetadata: departmentMetadata,
+                accessDim: dim,
+                attentionQueueCohort: "department_attention_preview_config",
+            });
 
         let itemsOut = items;
         try {
@@ -72,6 +74,7 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
             rules,
             attention_reason_counts,
             source: "department_attention_preview",
+            attention_evaluation,
         });
     } catch (e) {
         return NextResponse.json({ error: (e as Error).message }, { status: 500 });
