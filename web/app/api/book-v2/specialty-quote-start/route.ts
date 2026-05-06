@@ -11,6 +11,8 @@ import {
 } from "@/lib/bookV2/fieldValueUpsert";
 import { findOrCreatePersonInOrg } from "@/lib/persons/findOrCreatePersonInOrg";
 import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
+import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
+import { updateOpportunityStatusWithEvent } from "@/lib/opportunities/updateOpportunityStatusWithEvent";
 import { LEGACY_QUOTE_STARTED_PIPELINE_STAGE_ID } from "@/lib/book-v2/bookingConstants";
 import {
   normalizePipelineResolveOrgId,
@@ -421,8 +423,28 @@ export async function POST(request: NextRequest) {
         },
         updated_at: new Date().toISOString(),
       };
-      await normalizeOpportunityWritePayload(supabase, specialtyReusePatch, "book-v2/specialty-quote-start:reuse-opp");
-      await supabase.from("opportunities").update(specialtyReusePatch).eq("id", opportunityId);
+      const specialtyReuseRest = { ...specialtyReusePatch };
+      delete (specialtyReuseRest as { status_key?: unknown }).status_key;
+      const reuseStatusErr = await updateOpportunityStatusWithEvent({
+        supabase,
+        orgId: orgIdForWrites,
+        opportunityId,
+        newStatusKey: "needs_a_quote",
+        additionalPatch: specialtyReuseRest,
+        actorUserId: null,
+        eventMetadata: {
+          source: "book-v2",
+          flow: "specialty-quote-start",
+          quote_started_at,
+          specialty_cleaning_type: cleaningType,
+          primary_person_id: personId,
+        },
+        normalizeContext: "book-v2/specialty-quote-start:reuse-opp",
+      });
+      if (reuseStatusErr.error) {
+        console.error("[SPECIALTY_QUOTE_START] reuse opportunity status failed:", reuseStatusErr.error.message);
+        return NextResponse.json({ ok: false, message: "Failed to update opportunity" }, { status: 500 });
+      }
     } else {
       const opportunityName =
         personName != null && personName.length > 0
@@ -458,6 +480,30 @@ export async function POST(request: NextRequest) {
       }
       opportunityId = (newOpp as { id: string }).id;
       created_new_opportunity = true;
+
+      try {
+        await emitStatusChangedEvent({
+          supabase,
+          orgId: orgIdForWrites,
+          entityType: "opportunities",
+          entityId: opportunityId,
+          oldStatusKey: null,
+          newStatusKey: "needs_a_quote",
+          metadata: {
+            source: "book-v2",
+            flow: "specialty-quote-start",
+            quote_started_at,
+            specialty_cleaning_type: cleaningType,
+            primary_person_id: personId,
+          },
+          actorUserId: null,
+        });
+      } catch (emitOppStatus: unknown) {
+        console.error(
+          "[SPECIALTY_QUOTE_START] opportunity_status_changed (insert)",
+          emitOppStatus instanceof Error ? emitOppStatus.message : emitOppStatus
+        );
+      }
 
       const { executeWorkflowRun } = await import("@/lib/workflowRun");
       /** Standard cleaning uses `quote_started`; specialty must not run those workflows (e.g. stage reset). */

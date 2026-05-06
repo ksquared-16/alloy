@@ -34,7 +34,9 @@ import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { loadPublicBookingFieldDefRows } from "@/lib/fields/loadPublicBookingFieldDefs";
 import { upsertConfigurableFieldValuesForEntity } from "@/lib/fields/upsertConfigurableFieldValues";
 import { initializeJobPricing } from "@/lib/pricing/initializeJobPricing";
+import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
 import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
+import { updateOpportunityStatusWithEvent } from "@/lib/opportunities/updateOpportunityStatusWithEvent";
 import { executeWorkflowRun } from "@/lib/workflowRun";
 
 type Supabase = ReturnType<typeof createServiceRoleClient>;
@@ -962,8 +964,36 @@ export async function POST(request: NextRequest) {
                 (oppUpdate as Record<string, unknown>).discount_code = discount_code;
             }
 
-            await normalizeOpportunityWritePayload(supabase, oppUpdate, "book-v2/confirm:reuse-quote-opp-update");
-            const { error: oppUpdateError } = await supabase.from("opportunities").update(oppUpdate).eq("id", opportunityId);
+            const orgIdForStatusEvent = String((oppOrgId ?? publicOrgIdForStages ?? process.env.ALLOY_PUBLIC_ORG_ID ?? "").trim());
+            if (!orgIdForStatusEvent) {
+                return NextResponse.json(
+                    {
+                        ok: false,
+                        message: "Organization context missing for opportunity status update",
+                        booking_attempt_id: booking_attempt_id ?? null,
+                    },
+                    { status: 500 }
+                );
+            }
+            const oppUpdateRest = { ...oppUpdate };
+            delete (oppUpdateRest as { status_key?: unknown }).status_key;
+            const { error: oppUpdateError } = await updateOpportunityStatusWithEvent({
+                supabase,
+                orgId: orgIdForStatusEvent,
+                opportunityId,
+                newStatusKey: BOOKING_CONFIRM_OPPORTUNITY_STATUS_KEY,
+                additionalPatch: oppUpdateRest,
+                actorUserId: null,
+                eventMetadata: {
+                    source: "book-v2",
+                    booking_attempt_id: booking_attempt_id ?? undefined,
+                    customer_id: customerId,
+                    ...(typeof personIdFromQuote === "string" && personIdFromQuote.trim()
+                        ? { primary_person_id: personIdFromQuote.trim() }
+                        : {}),
+                },
+                normalizeContext: "book-v2/confirm:reuse-quote-opp-update",
+            });
             if (oppUpdateError) {
                 return NextResponse.json(
                     { ok: false, message: "Failed to update opportunity", booking_attempt_id: booking_attempt_id ?? null },
@@ -1215,7 +1245,7 @@ export async function POST(request: NextRequest) {
 
             const { data: existingOppData } = await supabase
                 .from("opportunities")
-                .select("vertical_id, customer_id, primary_person_id, monetary_value_cents, metadata")
+                .select("vertical_id, customer_id, primary_person_id, monetary_value_cents, metadata, org_id")
                 .eq("id", opportunityId)
                 .single();
 
@@ -1270,8 +1300,38 @@ export async function POST(request: NextRequest) {
             }
             if (existingOppData && !existingOppData.vertical_id) updatePayload.vertical_id = verticalId;
 
-            await normalizeOpportunityWritePayload(supabase, updatePayload, "book-v2/confirm:existing-opp-update");
-            const { error: oppUpdateError } = await supabase.from("opportunities").update(updatePayload).eq("id", opportunityId);
+            const orgIdNonQuoteStatusEvent = String(
+                ((existingOppData as { org_id?: string | null })?.org_id ?? publicOrgIdElse ?? process.env.ALLOY_PUBLIC_ORG_ID ?? "").trim()
+            );
+            if (!orgIdNonQuoteStatusEvent) {
+                return NextResponse.json(
+                    {
+                        ok: false,
+                        message: "Organization context missing for opportunity status update",
+                        booking_attempt_id: booking_attempt_id ?? null,
+                    },
+                    { status: 500 }
+                );
+            }
+            const updatePayloadRest = { ...updatePayload };
+            delete (updatePayloadRest as { status_key?: unknown }).status_key;
+            const { error: oppUpdateError } = await updateOpportunityStatusWithEvent({
+                supabase,
+                orgId: orgIdNonQuoteStatusEvent,
+                opportunityId,
+                newStatusKey: BOOKING_CONFIRM_OPPORTUNITY_STATUS_KEY,
+                additionalPatch: updatePayloadRest,
+                actorUserId: null,
+                eventMetadata: {
+                    source: "book-v2",
+                    booking_attempt_id: booking_attempt_id ?? undefined,
+                    customer_id: customerId,
+                    ...(typeof personIdFromQuote === "string" && personIdFromQuote.trim()
+                        ? { primary_person_id: personIdFromQuote.trim() }
+                        : {}),
+                },
+                normalizeContext: "book-v2/confirm:existing-opp-update",
+            });
 
             if (oppUpdateError) {
                 console.error("[BOOK_V2_CONFIRM] Failed to update opportunity booking_attempt_id=", booking_attempt_id, oppUpdateError);
@@ -1348,6 +1408,39 @@ export async function POST(request: NextRequest) {
 
             opportunityId = newOpp.id;
             console.log(`[BOOK_V2_CONFIRM] Created new opportunity booking_attempt_id=${booking_attempt_id ?? "None"} opportunity_id=${opportunityId}`);
+
+            const insertOrgIdForEvent = String((insertPayload.org_id ?? process.env.ALLOY_PUBLIC_ORG_ID ?? "").trim());
+            if (insertOrgIdForEvent) {
+                try {
+                    await emitStatusChangedEvent({
+                        supabase,
+                        orgId: insertOrgIdForEvent,
+                        entityType: "opportunities",
+                        entityId: opportunityId,
+                        oldStatusKey: null,
+                        newStatusKey: BOOKING_CONFIRM_OPPORTUNITY_STATUS_KEY,
+                        metadata: {
+                            source: "book-v2",
+                            flow: "confirm-insert",
+                            booking_attempt_id: booking_attempt_id ?? undefined,
+                            customer_id: customerId,
+                            ...(typeof personIdFromQuote === "string" && personIdFromQuote.trim()
+                                ? { primary_person_id: personIdFromQuote.trim() }
+                                : {}),
+                        },
+                        actorUserId: null,
+                    });
+                } catch (emitIns: unknown) {
+                    console.error(
+                        "[BOOK_V2_CONFIRM] opportunity_status_changed (insert)",
+                        emitIns instanceof Error ? emitIns.message : emitIns
+                    );
+                }
+            } else {
+                console.warn(
+                    "[BOOK_V2_CONFIRM] Skipped opportunity_status_changed (insert): missing org_id on insert payload and env"
+                );
+            }
         }
         } // end else (!useQuoteIds)
 

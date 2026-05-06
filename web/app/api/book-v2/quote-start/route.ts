@@ -13,6 +13,8 @@ import {
 } from "@/lib/bookV2/fieldValueUpsert";
 import { findOrCreatePersonInOrg } from "@/lib/persons/findOrCreatePersonInOrg";
 import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
+import { emitStatusChangedEvent } from "@/lib/admin/emitStatusChangedEvent";
+import { updateOpportunityStatusWithEvent } from "@/lib/opportunities/updateOpportunityStatusWithEvent";
 import { LEGACY_QUOTE_STARTED_PIPELINE_STAGE_ID } from "@/lib/book-v2/bookingConstants";
 import { resolvePipelineStageIdByOrgKey, pipelineStageEnvFallback } from "@/lib/book-v2/resolvePipelineStage";
 import {
@@ -418,8 +420,27 @@ export async function POST(request: NextRequest) {
           monetary_value_cents: quote_output_estimated_cents(quoteOutput),
         }),
       };
-      await normalizeOpportunityWritePayload(supabase, updatePayload, "book-v2/quote-start:reuse-opp");
-      await supabase.from("opportunities").update(updatePayload).eq("id", opportunityId);
+      const reusePatch = { ...updatePayload };
+      delete (reusePatch as { status_key?: unknown }).status_key;
+      const statusErr = await updateOpportunityStatusWithEvent({
+        supabase,
+        orgId: orgIdForWrites,
+        opportunityId,
+        newStatusKey: "needs_a_quote",
+        additionalPatch: reusePatch,
+        actorUserId: null,
+        eventMetadata: {
+          source: "book-v2",
+          flow: "quote-start",
+          quote_started_at,
+          primary_person_id: personId,
+        },
+        normalizeContext: "book-v2/quote-start:reuse-opp",
+      });
+      if (statusErr.error) {
+        console.error("[QUOTE_START] reuse opportunity status update failed:", statusErr.error.message);
+        return NextResponse.json({ ok: false, message: "Failed to update opportunity" }, { status: 500 });
+      }
     } else {
       const estimatedPriceCents = quoteOutput.estimated_price != null ? Math.round(quoteOutput.estimated_price * 100) : null;
       const opportunityName =
@@ -463,6 +484,29 @@ export async function POST(request: NextRequest) {
       }
       opportunityId = newOpp.id;
       created_new_opportunity = true;
+
+      try {
+        await emitStatusChangedEvent({
+          supabase,
+          orgId: orgIdForWrites,
+          entityType: "opportunities",
+          entityId: opportunityId,
+          oldStatusKey: null,
+          newStatusKey: "needs_a_quote",
+          metadata: {
+            source: "book-v2",
+            flow: "quote-start",
+            quote_started_at,
+            primary_person_id: personId,
+          },
+          actorUserId: null,
+        });
+      } catch (emitOppStatus: unknown) {
+        console.error(
+          "[QUOTE_START] opportunity_status_changed (insert)",
+          emitOppStatus instanceof Error ? emitOppStatus.message : emitOppStatus
+        );
+      }
 
       const { executeWorkflowRun } = await import("@/lib/workflowRun");
       let wq = supabase.from("workflows").select("id").eq("enabled", true).eq("event_type", "quote_started").eq("entity_type", "opportunity");
