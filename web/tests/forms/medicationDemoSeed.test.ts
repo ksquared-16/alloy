@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { validateFormSchema } from "@/lib/forms/schema";
 import { parseFormPdfMappingJson } from "@/lib/forms/pdf/pdfMappingContract";
 import { validateFormPayload } from "@/lib/forms/validateSubmission";
+import { payloadWithMinimumRepeatingGroups } from "@/components/forms/engine/formEnginePayload";
 import {
     ALLY_BEND_STAGING_ORG_FORMS_DEMO_ID,
     MEDICATION_AUTHORIZATION_DEMO_DEFINITION_METADATA,
@@ -47,6 +48,56 @@ describe("Medication authorization demo seed", () => {
         expect(routeField?.type).toBe("multiselect");
         if (scheduleField?.type === "select") expect(scheduleField.option_set_key).toBe("med_demo_schedule");
         if (routeField?.type === "multiselect") expect(routeField.option_set_key).toBe("med_demo_route");
+    });
+
+    it("submit succeeds when payload starts from seeded repeating groups (no drawn UUID)", () => {
+        const schema = validateFormSchema(MEDICATION_AUTHORIZATION_DEMO_SCHEMA);
+        const seeded = payloadWithMinimumRepeatingGroups(schema);
+        const optionValuesByFieldId = {
+            schedule: [...MEDICATION_DEMO_SCHEDULE_ITEM_KEYS],
+            route: [...MEDICATION_DEMO_ROUTE_ITEM_KEYS],
+        };
+        const row0 = seeded.groups?.medications?.[0];
+        expect(row0).toBeTruthy();
+        const payload = {
+            ...seeded,
+            values: {
+                child_first_name: "Ada",
+                child_last_name: "Lovelace",
+                child_dob: "2020-01-15",
+                guardian_full_name: "Parent Example",
+                guardian_email: "parent@example.com",
+                needs_special_instructions: false,
+                authorization_acknowledgement: true,
+            },
+            groups: {
+                medications: [
+                    {
+                        ...row0!,
+                        values: {
+                            med_name: "Demo Med",
+                            dose_strength: "10mg",
+                            schedule: "twice_daily",
+                            route: ["oral"],
+                        },
+                    },
+                ],
+            },
+            signatures: {
+                signature_guardian: {
+                    kind: "typed" as const,
+                    typed_full_name: "Parent Example",
+                    acknowledged_at: "2026-05-06T15:00:00.000Z",
+                },
+            },
+        };
+        const r = validateFormPayload({
+            schemaJson: schema,
+            payload,
+            mode: "submit",
+            optionValuesByFieldId,
+        });
+        expect(r.ok).toBe(true);
     });
 
     it("submit succeeds with hydrated select/multiselect option lists", () => {

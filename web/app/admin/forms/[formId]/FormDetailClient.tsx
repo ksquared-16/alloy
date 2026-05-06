@@ -345,69 +345,87 @@ export default function FormDetailClient() {
                 <>
                     <SectionCard title="Operator guide">
                         <div className="space-y-5 text-sm text-[#31394d]">
-                            <section>
-                                <h3 className="text-xs font-bold uppercase tracking-wide text-[#59678b]">
+                            <div>
+                                <p className="text-xs font-bold uppercase tracking-wide text-[#59678b]">How this form flows</p>
+                                <div className="mt-3 grid gap-2 sm:grid-cols-5">
+                                    {[
+                                        { step: 1, title: "Share", hint: "Preview or create a link" },
+                                        { step: 2, title: "Open", hint: "Recipient opens the form" },
+                                        { step: 3, title: "Submit", hint: "They complete & send" },
+                                        { step: 4, title: "Review", hint: "You check Submissions" },
+                                        { step: 5, title: "Document", hint: "Generate PDF when mapped" },
+                                    ].map((s) => (
+                                        <div
+                                            key={s.step}
+                                            className="flex flex-col rounded-lg border border-[#e6e8ec] bg-white px-3 py-2.5 text-center shadow-sm"
+                                        >
+                                            <span className="mx-auto flex h-7 w-7 items-center justify-center rounded-full bg-[#00458C] text-xs font-bold text-white">
+                                                {s.step}
+                                            </span>
+                                            <span className="mt-2 text-xs font-semibold text-[#31394d]">{s.title}</span>
+                                            <span className="mt-0.5 text-[11px] leading-snug text-[#59678b]">{s.hint}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <details className="rounded-lg border border-[#e6e8ec] bg-white px-4 py-3 open:bg-[#fafbfd]">
+                                <summary className="cursor-pointer text-xs font-bold uppercase tracking-wide text-[#59678b]">
                                     What this form is for
-                                </h3>
-                                <p className="mt-1.5 leading-relaxed">
+                                </summary>
+                                <p className="mt-2 leading-relaxed">
                                     {resolvePurposeParagraph(operatorContext, detail.description, detail.name)}
                                 </p>
-                            </section>
-                            <section>
-                                <h3 className="text-xs font-bold uppercase tracking-wide text-[#59678b]">
+                            </details>
+                            <details className="rounded-lg border border-[#e6e8ec] bg-white px-4 py-3 open:bg-[#fafbfd]">
+                                <summary className="cursor-pointer text-xs font-bold uppercase tracking-wide text-[#59678b]">
                                     Who completes this?
-                                </h3>
-                                <p className="mt-1.5 leading-relaxed">
-                                    {resolveWhoCompletesParagraph(operatorContext, detail.kind)}
-                                </p>
-                            </section>
-                            <section>
-                                <h3 className="text-xs font-bold uppercase tracking-wide text-[#59678b]">
-                                    What happens after submission?
-                                </h3>
-                                <p className="mt-1.5 leading-relaxed">{resolveAfterSubmissionParagraph(operatorContext)}</p>
-                            </section>
-                            <section>
-                                <h3 className="text-xs font-bold uppercase tracking-wide text-[#59678b]">
+                                </summary>
+                                <p className="mt-2 leading-relaxed">{resolveWhoCompletesParagraph(operatorContext, detail.kind)}</p>
+                            </details>
+                            <details className="rounded-lg border border-[#e6e8ec] bg-white px-4 py-3 open:bg-[#fafbfd]">
+                                <summary className="cursor-pointer text-xs font-bold uppercase tracking-wide text-[#59678b]">
+                                    After someone submits
+                                </summary>
+                                <p className="mt-2 leading-relaxed">{resolveAfterSubmissionParagraph(operatorContext)}</p>
+                            </details>
+                            <details className="rounded-lg border border-[#e6e8ec] bg-white px-4 py-3 open:bg-[#fafbfd]">
+                                <summary className="cursor-pointer text-xs font-bold uppercase tracking-wide text-[#59678b]">
                                     Connected systems
-                                </h3>
-                                <ul className="mt-1.5 list-disc space-y-1.5 pl-5 leading-relaxed text-[#31394d]">
+                                </summary>
+                                <ul className="mt-2 list-disc space-y-1.5 pl-5 leading-relaxed">
                                     {connectedBullets.map((b) => (
                                         <li key={b.id}>{b.text}</li>
                                     ))}
                                 </ul>
-                            </section>
-                            <section>
-                                <h3 className="text-xs font-bold uppercase tracking-wide text-[#59678b]">Next steps</h3>
-                                <ol className="mt-1.5 list-decimal space-y-1.5 pl-5 leading-relaxed">
+                            </details>
+                            <details className="rounded-lg border border-[#e6e8ec] bg-white px-4 py-3 open:bg-[#fafbfd]">
+                                <summary className="cursor-pointer text-xs font-bold uppercase tracking-wide text-[#59678b]">
+                                    Detailed checklist
+                                </summary>
+                                <ol className="mt-2 list-decimal space-y-1.5 pl-5 leading-relaxed">
                                     <li>
-                                        Use{" "}
-                                        <strong className="font-medium text-[#31394d]">Preview form</strong> above to open
-                                        the live public page in a new tab (creates a short-lived preview link — full URLs are
-                                        never recovered from old links).
+                                        Use <strong className="font-medium text-[#31394d]">Preview form</strong> (above) for a
+                                        safe live tab — preview links are labeled so you can deactivate them later.
                                     </li>
                                     <li>
                                         <a href="#form-public-embed-links" className="font-medium text-[#00458C] hover:underline">
-                                            Create or copy an operational public link
+                                            Create a public link
                                         </a>{" "}
-                                        when you are ready to share with families or staff (token and URL are shown only once
-                                        at creation).
+                                        when you need a URL to share; copy it immediately.
                                     </li>
-                                    <li>Send the link to the family or staff member who should fill it out.</li>
+                                    <li>Send the link to the person who should fill it out.</li>
                                     <li>
                                         <Link href={submissionsHref} className="font-medium text-[#00458C] hover:underline">
                                             Review submissions
                                         </Link>{" "}
-                                        as they arrive; open one to see answers and linked records.
+                                        and open one for full answers.
                                     </li>
-                                    <li>
-                                        From a submission, generate or open linked documents when your form supports document
-                                        mapping.
-                                    </li>
+                                    <li>Use Generate document on a submission when PDF mapping is configured.</li>
                                 </ol>
                                 {openPublicEmbedUrl ? (
                                     <p className="mt-3 text-xs text-[#59678b]">
-                                        You have a fresh link from this session — use{" "}
+                                        Session link:{" "}
                                         <a
                                             href={openPublicEmbedUrl}
                                             target="_blank"
@@ -415,15 +433,14 @@ export default function FormDetailClient() {
                                             className="font-medium text-[#00458C] hover:underline"
                                         >
                                             Open public form
-                                        </a>{" "}
-                                        to see exactly what recipients see.
+                                        </a>
                                     </p>
                                 ) : null}
-                            </section>
-                            <p className="border-t border-[#e6e8ec] pt-3 text-xs text-[#59678b]">
-                                Optional: admins can add tailored operator text by setting{" "}
+                            </details>
+                            <p className="text-xs text-[#59678b]">
+                                Tailored copy: set{" "}
                                 <code className="rounded bg-[#F4F6F9] px-1 font-mono text-[11px]">metadata.operator_context</code>{" "}
-                                on this form (purpose, who completes, after submission, connected notes) via the forms API.
+                                via API (purpose, who completes, after submission, notes).
                             </p>
                         </div>
                     </SectionCard>
@@ -487,14 +504,13 @@ export default function FormDetailClient() {
                             <div className="mt-3 rounded-md bg-[#F4F6F9]/80 p-3 text-sm text-[#59678b]">
                                 <p className="font-medium text-[#31394d]">About links and tokens</p>
                                 <p className="mt-1 leading-relaxed">
-                                    The table below only shows a short <strong>prefix</strong> for each existing link — not
-                                    the full secret URL. Alloy stores a hash of the token, so you cannot copy an old link
-                                    from this screen alone.
+                                    For security, existing links cannot be revealed again. The table only shows a short{" "}
+                                    <strong>prefix</strong> so you can tell links apart — not the full secret URL (Alloy stores
+                                    a hash of the token).
                                 </p>
                                 <p className="mt-2 leading-relaxed">
-                                    <strong>Need a shareable URL?</strong> Click <strong>Create public link</strong>. Copy the
-                                    embed URL or token immediately; it will not be shown again. Create another link anytime
-                                    you need a fresh URL for the same form.
+                                    Create a new public link when you need a copyable URL. Copy the embed URL or token right
+                                    away; it is shown only once at creation.
                                 </p>
                             </div>
 
@@ -549,7 +565,8 @@ export default function FormDetailClient() {
                             {links.length > 0 ? (
                                 <div className="mt-4 overflow-x-auto">
                                     <p className="mb-2 text-xs text-[#59678b]">
-                                        Existing links — prefix only (no full URL without creating a new link)
+                                        Existing links — prefix only. For security, full URLs are not shown here; create a new
+                                        link for a copyable URL.
                                     </p>
                                     <table className="w-full text-sm">
                                         <thead>

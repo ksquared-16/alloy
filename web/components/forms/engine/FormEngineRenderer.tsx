@@ -3,7 +3,12 @@
 import { useCallback, useMemo } from "react";
 import clsx from "clsx";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
-import type { FormPayload, FormPayloadGroupRow, FormPayloadSignature } from "@/lib/forms/validateSubmission";
+import type {
+    FormPayload,
+    FormPayloadGroupRow,
+    FormPayloadSignature,
+    NormalizedValidationError,
+} from "@/lib/forms/validateSubmission";
 import { evaluateFieldVisibility } from "@/lib/forms/validateSubmission";
 import { emptyPayload, ensureGroupRows, setSignature, setTopLevelValue } from "./formEnginePayload";
 
@@ -18,6 +23,8 @@ export type FormEngineRendererProps = {
     /** When set, select/multiselect use value + label (from public resolve). Falls back to optionValuesByFieldId. */
     optionChoicesByFieldId?: Record<string, readonly FormEngineOptionChoice[]>;
     variant?: "default" | "embed";
+    /** When set (e.g. after submit), matching messages are shown next to groups and signatures. */
+    validationErrors?: NormalizedValidationError[];
 };
 
 function fieldById(fields: FormField[], id: string): FormField | undefined {
@@ -29,6 +36,13 @@ function randomInstanceKey(): string {
     return `i_${Date.now()}_${Math.random().toString(36).slice(2)}`;
 }
 
+function errorsUnderPrefix(errors: NormalizedValidationError[] | undefined, prefix: string[]): NormalizedValidationError[] {
+    if (!errors?.length || prefix.length === 0) return [];
+    return errors.filter(
+        (e) => prefix.length <= e.path.length && prefix.every((seg, i) => e.path[i] === seg)
+    );
+}
+
 export function FormEngineRenderer({
     schema,
     payload,
@@ -37,6 +51,7 @@ export function FormEngineRenderer({
     optionValuesByFieldId,
     optionChoicesByFieldId,
     variant = "default",
+    validationErrors,
 }: FormEngineRendererProps) {
     const readonly = mode === "readonly";
     const loose = variant === "embed";
@@ -199,8 +214,14 @@ export function FormEngineRenderer({
         (
             field: FormField & { type: "signature" },
             sig: FormPayloadSignature | undefined,
-            updateSig: (next: FormPayloadSignature) => void
+            updateSig: (next: FormPayloadSignature) => void,
+            signatureErrorPrefix: string[]
         ) => {
+            const cfg = field.signature ?? {};
+            const requireAck = cfg.require_acknowledgment === true;
+            const forceDrawn = cfg.require_drawn_asset === true;
+            const inlineErrors = errorsUnderPrefix(validationErrors, signatureErrorPrefix);
+
             const commonLabel = (
                 <label className={clsx("block text-sm font-medium text-neutral-800", loose && "text-[13px]")}>
                     {field.label}
@@ -213,7 +234,9 @@ export function FormEngineRenderer({
                     sig?.kind === "typed"
                         ? `Typed: ${sig.typed_full_name ?? ""}`
                         : sig?.kind === "drawn"
-                          ? `Drawn document: ${sig.drawn_document_id ?? ""}`
+                          ? sig.drawn_document_id
+                              ? "Drawn signature (document on file)"
+                              : "Drawn — pending document"
                           : "—";
                 return (
                     <div className="space-y-1">
@@ -223,58 +246,125 @@ export function FormEngineRenderer({
                 );
             }
 
-            const kind = sig?.kind ?? "typed";
+            const effectiveKind: "typed" | "drawn" = forceDrawn ? sig?.kind ?? "typed" : "typed";
+
+            const patchTyped = (typed: string) =>
+                updateSig({
+                    kind: "typed",
+                    typed_full_name: typed,
+                    drawn_document_id: undefined,
+                    ...(requireAck ? { acknowledged_at: sig?.acknowledged_at } : {}),
+                });
+
+            const patchDrawn = (docId: string | undefined) =>
+                updateSig({
+                    kind: "drawn",
+                    drawn_document_id: docId,
+                    typed_full_name: undefined,
+                    ...(requireAck ? { acknowledged_at: sig?.acknowledged_at } : {}),
+                });
+
+            const setAcknowledged = (checked: boolean) => {
+                if (effectiveKind === "drawn") {
+                    updateSig({
+                        kind: "drawn",
+                        drawn_document_id: sig?.drawn_document_id,
+                        typed_full_name: undefined,
+                        acknowledged_at: checked ? new Date().toISOString() : undefined,
+                    });
+                } else {
+                    updateSig({
+                        kind: "typed",
+                        typed_full_name: sig?.typed_full_name ?? "",
+                        drawn_document_id: undefined,
+                        acknowledged_at: checked ? new Date().toISOString() : undefined,
+                    });
+                }
+            };
+
             return (
                 <div className="space-y-2 rounded border border-neutral-200 p-3">
                     {commonLabel}
-                    <div className="flex gap-3 text-sm">
-                        <label className="flex items-center gap-1">
-                            <input
-                                type="radio"
-                                checked={kind === "typed"}
-                                onChange={() => updateSig({ kind: "typed", typed_full_name: sig?.typed_full_name ?? "" })}
-                            />
-                            Typed
-                        </label>
-                        <label className="flex items-center gap-1">
-                            <input
-                                type="radio"
-                                checked={kind === "drawn"}
-                                onChange={() => updateSig({ kind: "drawn", drawn_document_id: sig?.drawn_document_id })}
-                            />
-                            Drawn
-                        </label>
-                    </div>
-                    {kind === "typed" ? (
+                    {forceDrawn ? (
+                        <div className="flex flex-wrap gap-3 text-sm">
+                            <label className="flex items-center gap-1.5">
+                                <input
+                                    type="radio"
+                                    checked={effectiveKind === "typed"}
+                                    onChange={() =>
+                                        updateSig({
+                                            kind: "typed",
+                                            typed_full_name: sig?.typed_full_name ?? "",
+                                            drawn_document_id: undefined,
+                                            ...(requireAck ? { acknowledged_at: sig?.acknowledged_at } : {}),
+                                        })
+                                    }
+                                />
+                                Type full name
+                            </label>
+                            <label className="flex items-center gap-1.5">
+                                <input
+                                    type="radio"
+                                    checked={effectiveKind === "drawn"}
+                                    onChange={() =>
+                                        updateSig({
+                                            kind: "drawn",
+                                            drawn_document_id: sig?.drawn_document_id,
+                                            typed_full_name: undefined,
+                                            ...(requireAck ? { acknowledged_at: sig?.acknowledged_at } : {}),
+                                        })
+                                    }
+                                />
+                                Draw (document ID)
+                            </label>
+                        </div>
+                    ) : null}
+                    {effectiveKind === "typed" ? (
                         <input
                             className="w-full rounded border border-neutral-300 px-2 py-1.5 text-sm"
-                            placeholder="Full name"
+                            placeholder="Type your full name"
                             value={sig?.typed_full_name ?? ""}
-                            onChange={(e) =>
-                                updateSig({ kind: "typed", typed_full_name: e.target.value, drawn_document_id: undefined })
-                            }
+                            onChange={(e) => patchTyped(e.target.value)}
                         />
                     ) : (
-                        <div className="text-sm text-neutral-600">
-                            Drawn asset UUID (stub until upload API is wired):
-                            <input
-                                className="mt-1 w-full rounded border border-neutral-300 px-2 py-1.5 font-mono text-xs"
-                                placeholder="uuid"
-                                value={sig?.drawn_document_id ?? ""}
-                                onChange={(e) =>
-                                    updateSig({
-                                        kind: "drawn",
-                                        drawn_document_id: e.target.value || undefined,
-                                        typed_full_name: undefined,
-                                    })
-                                }
-                            />
+                        <div className="space-y-2 text-sm text-neutral-700">
+                            <p>Use your organization&apos;s process to capture a drawn signature, then link the stored document.</p>
+                            <details className="rounded border border-neutral-200 bg-neutral-50 p-2">
+                                <summary className="cursor-pointer text-xs font-medium text-neutral-800">
+                                    Technical: drawn document ID
+                                </summary>
+                                <input
+                                    className="mt-2 w-full rounded border border-neutral-300 px-2 py-1.5 font-mono text-xs"
+                                    placeholder="Document UUID"
+                                    value={sig?.drawn_document_id ?? ""}
+                                    onChange={(e) => patchDrawn(e.target.value || undefined)}
+                                    aria-label="Drawn document UUID"
+                                />
+                            </details>
                         </div>
                     )}
+                    {requireAck ? (
+                        <label className="flex items-start gap-2 text-sm text-neutral-800">
+                            <input
+                                type="checkbox"
+                                className="mt-0.5 shrink-0"
+                                checked={Boolean(sig?.acknowledged_at)}
+                                onChange={(e) => setAcknowledged(e.target.checked)}
+                            />
+                            <span>I acknowledge this electronic signature applies to this form.</span>
+                        </label>
+                    ) : null}
+                    {inlineErrors.length ? (
+                        <ul className="list-disc space-y-0.5 pl-5 text-sm text-red-700">
+                            {inlineErrors.map((er, i) => (
+                                <li key={i}>{er.message}</li>
+                            ))}
+                        </ul>
+                    ) : null}
                 </div>
             );
         },
-        [loose, readonly]
+        [loose, readonly, validationErrors]
     );
 
     const renderGroup = useCallback(
@@ -283,6 +373,9 @@ export function FormEngineRenderer({
             const rows = payload.groups?.[field.id] ?? [];
             const vis = evaluateFieldVisibility(field.id, schema, (id) => payload.values[id]);
             if (!vis) return null;
+
+            const groupInlineErrors = errorsUnderPrefix(validationErrors, [field.id]);
+            const minEntries = Math.max(rep.min, field.required ? 1 : 0);
 
             const updateRows = (next: FormPayloadGroupRow[]) => {
                 onChange(ensureGroupRows(payload, field.id, next));
@@ -304,9 +397,17 @@ export function FormEngineRenderer({
                     updateRows(next);
                 };
                 const nrep = child.repeat ?? { min: 0, max: undefined };
+                const nestedGroupErrors = errorsUnderPrefix(validationErrors, [field.id, String(rowIdx), child.id]);
                 return (
                     <div key={child.id} className="ml-2 border-l border-neutral-200 pl-3">
                         <div className="text-sm font-semibold text-neutral-700">{child.label}</div>
+                        {nestedGroupErrors.length ? (
+                            <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs text-red-700">
+                                {nestedGroupErrors.map((er, i) => (
+                                    <li key={i}>{er.message}</li>
+                                ))}
+                            </ul>
+                        ) : null}
                         {nestedRows.map((nr, j) => (
                             <div key={nr.instance_key} className="mt-2 space-y-2 rounded bg-neutral-50 p-2">
                                 {child.fields.map((nf) => {
@@ -315,6 +416,7 @@ export function FormEngineRenderer({
                                     if (!evaluateFieldVisibility(nf.id, schema, getVal)) return null;
                                     if (nf.type === "signature") {
                                         const sig = nr.signatures?.[nf.id];
+                                        const sigErrPrefix = [field.id, String(rowIdx), child.id, String(j), "signatures", nf.id];
                                         return (
                                             <div key={nf.id}>
                                                 {renderSignatureControl(nf, sig, (nextSig) => {
@@ -324,7 +426,7 @@ export function FormEngineRenderer({
                                                         signatures: { ...(nr.signatures ?? {}), [nf.id]: nextSig },
                                                     };
                                                     updateNested(nrNext);
-                                                })}
+                                                }, sigErrPrefix)}
                                             </div>
                                         );
                                     }
@@ -351,7 +453,7 @@ export function FormEngineRenderer({
                                         className="text-xs text-red-700 underline"
                                         onClick={() => updateNested(nestedRows.filter((_, ii) => ii !== j))}
                                     >
-                                        Remove nested row
+                                        Remove this entry
                                     </button>
                                 ) : null}
                             </div>
@@ -359,7 +461,7 @@ export function FormEngineRenderer({
                         {!readonly && (nrep.max === undefined || nestedRows.length < nrep.max) ? (
                             <button
                                 type="button"
-                                className="mt-2 text-xs text-blue-700 underline"
+                                className="mt-2 rounded border border-neutral-300 bg-white px-3 py-1.5 text-sm font-medium text-neutral-900 shadow-sm"
                                 onClick={() =>
                                     updateNested([
                                         ...nestedRows,
@@ -367,7 +469,7 @@ export function FormEngineRenderer({
                                     ])
                                 }
                             >
-                                Add {child.label}
+                                Add item
                             </button>
                         ) : null}
                     </div>
@@ -380,6 +482,23 @@ export function FormEngineRenderer({
                         {field.label}
                         {field.required ? <span className="text-red-600"> *</span> : null}
                     </div>
+                    {!readonly && minEntries > 0 ? (
+                        <p className={clsx("text-sm text-neutral-600", loose && "text-[13px]")}>
+                            Add at least {minEntries} {minEntries === 1 ? "entry" : "entries"}.
+                            {rows.length === 0
+                                ? " Use Add item below to start."
+                                : rows.length < minEntries
+                                  ? " Use Add item until the minimum is met."
+                                  : null}
+                        </p>
+                    ) : null}
+                    {groupInlineErrors.length ? (
+                        <ul className="list-disc space-y-0.5 pl-5 text-sm text-red-700">
+                            {groupInlineErrors.map((er, i) => (
+                                <li key={i}>{er.message}</li>
+                            ))}
+                        </ul>
+                    ) : null}
                     {rows.length === 0 && readonly ? (
                         <div className="text-sm text-neutral-500">No entries</div>
                     ) : null}
@@ -397,6 +516,7 @@ export function FormEngineRenderer({
                                 }
                                 if (child.type === "signature") {
                                     const sig = row.signatures?.[child.id];
+                                    const sigErrPrefix = [field.id, String(idx), "signatures", child.id];
                                     return (
                                         <div key={child.id}>
                                             {renderSignatureControl(child, sig, (nextSig) => {
@@ -406,7 +526,7 @@ export function FormEngineRenderer({
                                                     signatures: { ...(row.signatures ?? {}), [child.id]: nextSig },
                                                 };
                                                 updateRows(next);
-                                            })}
+                                            }, sigErrPrefix)}
                                         </div>
                                     );
                                 }
@@ -426,17 +546,15 @@ export function FormEngineRenderer({
                                     className="text-xs text-red-700 underline"
                                     onClick={() => updateRows(rows.filter((_, i) => i !== idx))}
                                 >
-                                    Remove
+                                    Remove this entry
                                 </button>
                             ) : null}
                         </div>
                     ))}
-                    {!readonly &&
-                    (rep.max === undefined || rows.length < rep.max) &&
-                    (rep.min === 0 || rows.length >= rep.min) ? (
+                    {!readonly && (rep.max === undefined || rows.length < rep.max) ? (
                         <button
                             type="button"
-                            className="rounded bg-neutral-900 px-3 py-1.5 text-sm text-white"
+                            className="rounded border border-neutral-800 bg-neutral-900 px-3 py-2 text-sm font-medium text-white shadow-sm"
                             onClick={() =>
                                 updateRows([
                                     ...rows,
@@ -449,13 +567,13 @@ export function FormEngineRenderer({
                                 ])
                             }
                         >
-                            Add {field.label}
+                            Add item
                         </button>
                     ) : null}
                 </div>
             );
         },
-        [onChange, payload, readonly, renderScalarControl, renderSignatureControl, schema]
+        [onChange, payload, readonly, renderScalarControl, renderSignatureControl, schema, validationErrors]
     );
 
     return (
@@ -482,7 +600,7 @@ export function FormEngineRenderer({
                                 return (
                                     <div key={field.id}>
                                         {renderSignatureControl(field, sig, (nextSig) =>
-                                            onChange(setSignature(payload, field.id, nextSig))
+                                            onChange(setSignature(payload, field.id, nextSig)), ["signatures", field.id]
                                         )}
                                     </div>
                                 );

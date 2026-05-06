@@ -5,7 +5,7 @@ import type { FormSchemaV1 } from "@/lib/forms/schema";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
 import type { NormalizedValidationError } from "@/lib/forms/validateSubmission";
 import { FormEngineRenderer, type FormEngineOptionChoice } from "@/components/forms/engine/FormEngineRenderer";
-import { emptyPayload } from "@/components/forms/engine/formEnginePayload";
+import { emptyPayload, payloadWithMinimumRepeatingGroups } from "@/components/forms/engine/formEnginePayload";
 import { formatPublicValidationErrors } from "@/lib/public/forms/formatPublicValidationErrors";
 
 type ResolveOk = {
@@ -101,10 +101,11 @@ export function FormEmbedClient({ token }: { token: string }) {
             window.sessionStorage.removeItem(storageKey(token));
         }
 
+        const initialPayload = payloadWithMinimumRepeatingGroups(rawSchema);
         const created = await fetch(`/api/public/forms/${encToken}/submissions`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ payload: emptyPayload() }),
+            body: JSON.stringify({ payload: initialPayload }),
         });
         const cr = (await created.json()) as { ok: boolean; data?: { id: string }; error?: string };
         if (!cr.ok || !cr.data?.id) {
@@ -114,7 +115,7 @@ export function FormEmbedClient({ token }: { token: string }) {
         }
         setSubmissionId(cr.data.id);
         window.sessionStorage.setItem(storageKey(token), cr.data.id);
-        setPayload(emptyPayload());
+        setPayload(initialPayload);
         setPhase("ready");
     }, [encToken, token]);
 
@@ -202,6 +203,7 @@ export function FormEmbedClient({ token }: { token: string }) {
                 optionValuesByFieldId={optionValuesByFieldId}
                 optionChoicesByFieldId={optionChoicesByFieldId}
                 variant="embed"
+                validationErrors={validationErrors ?? undefined}
             />
             <div className="fixed bottom-0 left-0 right-0 border-t border-neutral-200 bg-white p-4 shadow-lg">
                 <div className="mx-auto flex max-w-xl flex-col gap-2">
