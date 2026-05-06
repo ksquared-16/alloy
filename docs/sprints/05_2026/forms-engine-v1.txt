@@ -6,10 +6,21 @@
 
 - **Cards 0, 0.5, 1, and 1.5 are complete** (outputs appended below as **Appendices A–D**).
 - **Architecture / design lock is accepted** (see **Approved architecture decisions** and **§17 Architecture freeze rules**).
-- **Card 2 — Migrations:** **complete** — migration **`supabase/migrations/20260506100000_forms_engine_v1_foundation.sql`** implements **Appendix C** (tables, RLS, triggers).
-- **Cards 3–7 — Application layer:** **complete** (shared schema/validator, admin + public APIs, renderer/embed, person-first intake helper; see repo tests under `web/tests/forms` and `web/tests/publicForms`).
-- **Cards 8–11 — PDF boundary, signatures, demo seed, workflow events:** **complete** — bounded **`pdf_mapping_json` → stub PDF** → **`documents` + `form_submission_documents`**, **`form_submission_signatures`** persistence on submit, demo **`medication_authorization_demo`** seed (**`supabase/migrations/20260506120000_forms_medication_authorization_demo_seed.sql`** + **`web/lib/forms/seeds/medicationAuthorizationDemo.ts`**), and **`form_submitted` / `form_signed` / `form_document_generated`** emits (**`entity_type = form_submissions`**).
-- **Next step:** Extend **`v1DocumentEntities`** / admin picker for **`customer_member`** when shipping staff UX; apply pending migrations to real Supabase staging when ready.
+- **Cards 2–11 (Phase 3 build) are complete.** Implementation references: foundation migration **`supabase/migrations/20260506100000_forms_engine_v1_foundation.sql`**; demo seed **`supabase/migrations/20260506120000_forms_medication_authorization_demo_seed.sql`** + **`web/lib/forms/seeds/medicationAuthorizationDemo.ts`**; tests under **`web/tests/forms`** and **`web/tests/publicForms`**.
+
+### Forms Engine V1 — completion note (Cards 2–11)
+
+- **Forms Engine V1 is end-to-end demoable.**
+- **Foundation includes:** database (migrations + RLS/triggers), validation (**`schema_json`** / payload), admin APIs (**`/api/admin/forms/**`**), public APIs (**`/api/public/forms/**`**), renderer/embed, person-first intake helper, signatures (**`form_submission_signatures`** + payload contract), document generation boundary (**`pdf_mapping_json`** → stub artifact → **`documents`** + **`form_submission_documents`**), workflow events (**`form_submitted`**, **`form_signed`**, **`form_document_generated`** with **`entity_type = form_submissions`**), and the **demo medication authorization** seed (**`medication_authorization_demo`**).
+- **Remaining gaps are product polish / next sprint items** (no architecture change implied):
+  - Real PDF template fidelity (beyond bounded stub/mapping layer).
+  - Option-set hydration in public resolve (today callers supply **`option_values_by_field_id`** on submit where needed).
+  - Public drawn-signature upload (asset path for **`drawn_document_id`**).
+  - Form management UI polish (staff workflows, **`customer_member`** picker per **`v1DocumentEntities`** / **`entity-options`** when shipping UX).
+  - Production rate limiting (token hash + IP; abuse profile tuning).
+  - Real state form review / compliance validation (jurisdiction-specific gates).
+
+**Follow-on (unchanged from implementation notes):** extend **`v1DocumentEntities`** / admin **`customer_member`** picker when shipping staff UX; apply pending migrations to Supabase staging/production via team pipeline when ready.
 
 ### Card 2 — validation note (engineering)
 
@@ -155,15 +166,15 @@ The north star is: **structured form submissions are the durable source of truth
 ### Phase 3 — Build Loop
 
 - **Card 2:** Migrations **(complete)**  
-- **Card 3:** Shared schema + validator **← current**  
-- **Card 4:** Admin APIs  
-- **Card 5:** Public APIs + iframe resolve  
-- **Card 6:** Renderer  
-- **Card 7:** Person-first intake helper  
-- **Card 8:** Documents / PDF mapping service  
-- **Card 9:** Signatures  
-- **Card 10:** Medication Authorization seed / example  
-- **Card 11:** Events, tests, docs  
+- **Card 3:** Shared schema + validator **(complete)**  
+- **Card 4:** Admin APIs **(complete)**  
+- **Card 5:** Public APIs + iframe resolve **(complete)**  
+- **Card 6:** Renderer **(complete)**  
+- **Card 7:** Person-first intake helper **(complete)**  
+- **Card 8:** Documents / PDF mapping service **(complete)**  
+- **Card 9:** Signatures **(complete)**  
+- **Card 10:** Medication Authorization seed / example **(complete)**  
+- **Card 11:** Events, tests, docs **(complete)**  
 
 **Gate:** Phase 3 may begin only after **Cards 0, 0.5, 1, and 1.5** are **complete and reviewed**.
 
@@ -178,15 +189,15 @@ The north star is: **structured form submissions are the durable source of truth
 | 1 | Final Data Model | 2 |
 | 1.5 | API + Rendering Design | 2 |
 | 2 | Migrations (complete) | 3 |
-| 3 | Shared schema + validator | 3 |
-| 4 | Admin APIs | 3 |
-| 5 | Public APIs + iframe resolve | 3 |
-| 6 | Renderer | 3 |
-| 7 | Person-first intake helper | 3 |
-| 8 | Documents / PDF mapping service | 3 |
-| 9 | Signatures | 3 |
-| 10 | Medication Authorization seed / example | 3 |
-| 11 | Events, tests, docs | 3 |
+| 3 | Shared schema + validator (complete) | 3 |
+| 4 | Admin APIs (complete) | 3 |
+| 5 | Public APIs + iframe resolve (complete) | 3 |
+| 6 | Renderer (complete) | 3 |
+| 7 | Person-first intake helper (complete) | 3 |
+| 8 | Documents / PDF mapping service (complete) | 3 |
+| 9 | Signatures (complete) | 3 |
+| 10 | Medication Authorization seed / example (complete) | 3 |
+| 11 | Events, tests, docs (complete) | 3 |
 
 ---
 
@@ -271,20 +282,20 @@ The north star is: **structured form submissions are the durable source of truth
 
 ---
 
-## 16. Future implementation cards after design lock
+## 16. Phase 3 implementation cards after design lock
 
-*(Phase 3 — execute only after Cards 0, 0.5, 1, 1.5 are approved.)*
+*(Phase 3 — **complete**. Executed after Cards 0, 0.5, 1, 1.5 were approved.)*
 
 - **Card 2:** Migrations **[complete]** — **`supabase/migrations/20260506100000_forms_engine_v1_foundation.sql`** (**Appendix C**; tables, indexes, **RLS + triggers**, not stubs).  
-- **Card 3:** Shared schema + validator **[next]** — compile **`schema_json`** to draft/submit validators (e.g. Zod); option sets, visibility, groups, signatures.  
-- **Card 4:** Admin APIs — `/api/admin/forms/**` per **Appendix D**.  
-- **Card 5:** Public APIs + iframe resolve — `/api/public/forms/**` (bootstrap, draft, submit, assets) per **Appendix D**; token → `org_id` via **`form_public_links`**.  
-- **Card 6:** Renderer — staff + public iframe/mobile; schema-driven only (no drag/drop builder).  
-- **Card 7:** Person-first intake helper — shared CRM side effects from submit; wire public (and staff if needed).  
-- **Card 8:** Documents / PDF mapping service — **`documents`** + **`form_submission_documents`** + mapping boundary; **`customer_member`** parent where applicable.  
-- **Card 9:** Signatures — **`form_submission_signatures`**, typed + drawn + assets route; **`form_signed`** behavior per **Appendix D**.  
-- **Card 10:** Medication Authorization seed / example — state-style fidelity + PDF path smoke.  
-- **Card 11:** Events, tests, docs — **`emitEvent`**, **`workflowVocab`**, integration/unit tests, update **`docs/product/documents-and-forms.md`** (and related) as needed.
+- **Card 3:** Shared schema + validator **[complete]** — compile **`schema_json`** to draft/submit validators (Zod); option sets (caller-supplied on submit where required), visibility, groups, signatures.  
+- **Card 4:** Admin APIs **[complete]** — `/api/admin/forms/**` per **Appendix D**.  
+- **Card 5:** Public APIs + iframe resolve **[complete]** — `/api/public/forms/**` per **Appendix D**; token → org resolution via **`form_public_links`** + **`token_hash`** (server-side only).  
+- **Card 6:** Renderer **[complete]** — staff + public iframe/mobile; schema-driven only (no drag/drop builder).  
+- **Card 7:** Person-first intake helper **[complete]** — shared CRM side effects from submit; wired public (and staff paths as implemented).  
+- **Card 8:** Documents / PDF mapping service **[complete]** — **`documents`** + **`form_submission_documents`** + bounded mapping/stub PDF boundary; **`customer_member`** parent where applicable.  
+- **Card 9:** Signatures **[complete]** — **`form_submission_signatures`**, typed + drawn linkage; **`form_signed`** behavior per **Appendix D**.  
+- **Card 10:** Medication Authorization seed / example **[complete]** — demo/example seed (**not** official state compliance); PDF path smoke via mapping + admin generate-document.  
+- **Card 11:** Events, tests, docs **[complete]** — **`emitEvent`**, **`workflowVocab`**, unit/integration tests, sprint doc updates.
 
 ---
 
@@ -399,7 +410,7 @@ For **every** card execution, Cursor must produce:
 
 ### B.4 Implementation gate
 
-- **Blocked until Card 1 + 1.5** — **cleared** after appendices C–D; **Card 2** delivered; proceed **Card 3**.
+- **Blocked until Card 1 + 1.5** — **cleared** after appendices C–D; **Phase 3 (Cards 2–11)** subsequently **delivered** per **§16** and **Appendix D.11** (this document updated at sprint close).
 
 ---
 
@@ -518,15 +529,15 @@ For **every** card execution, Cursor must produce:
 ### D.11 Build handoff (Phase 3 — same order as §16)
 
 - **Card 2 — Migrations** **(complete)**  
-- **Card 3 — Shared schema + validator**  
-- **Card 4 — Admin APIs**  
-- **Card 5 — Public APIs + iframe resolve**  
-- **Card 6 — Renderer**  
-- **Card 7 — Person-first intake helper**  
-- **Card 8 — Documents / PDF mapping service**  
-- **Card 9 — Signatures**  
-- **Card 10 — Medication Authorization seed / example**  
-- **Card 11 — Events, tests, docs**  
+- **Card 3 — Shared schema + validator** **(complete)**  
+- **Card 4 — Admin APIs** **(complete)**  
+- **Card 5 — Public APIs + iframe resolve** **(complete)**  
+- **Card 6 — Renderer** **(complete)**  
+- **Card 7 — Person-first intake helper** **(complete)**  
+- **Card 8 — Documents / PDF mapping service** **(complete)**  
+- **Card 9 — Signatures** **(complete)**  
+- **Card 10 — Medication Authorization seed / example** **(complete)**  
+- **Card 11 — Events, tests, docs** **(complete)**  
 
 **Ongoing (not numbered cards):** extend **`v1DocumentEntities.ts`** + **`entity-options`** for **`customer_member`** picker when UI ships.
 
