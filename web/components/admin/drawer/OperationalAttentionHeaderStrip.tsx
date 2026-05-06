@@ -11,16 +11,27 @@ import { isEnrollmentWaitBucket } from "@/lib/opportunities/attentionPlatformCat
 
 type Props = {
     overviewData: Record<string, unknown>;
+    /**
+     * `chrome`: drawer title stack — compact text lines (no bordered panel).
+     * `panel`: standalone bordered summary (dev fixtures / rare embedded uses).
+     */
+    variant?: "chrome" | "panel";
 };
 
-export default function OperationalAttentionHeaderStrip({ overviewData }: Props) {
+export default function OperationalAttentionHeaderStrip({ overviewData, variant = "panel" }: Props) {
     const payload = overviewData._operational_attention as OpportunityAttentionResult | null | undefined;
     const err = overviewData._operational_attention_error as OperationalAttentionAttachmentError | null | undefined;
+
+    const chrome = variant === "chrome";
 
     if (err?.message) {
         return (
             <div
-                className="mt-2 rounded-lg border border-amber-200/90 bg-amber-50/50 px-2.5 py-1.5 text-[12px] text-alloy-midnight/80"
+                className={
+                    chrome
+                        ? "text-[11px] leading-snug text-alloy-midnight/75"
+                        : "mt-2 rounded-lg border border-amber-200/90 bg-amber-50/50 px-2.5 py-1.5 text-[12px] text-alloy-midnight/80"
+                }
                 data-drawer-slot="operational_attention_header"
             >
                 <span className="font-medium text-alloy-midnight/90">Operational summary unavailable · </span>
@@ -38,26 +49,42 @@ export default function OperationalAttentionHeaderStrip({ overviewData }: Props)
 
     if (!payload.needs_attention || !primary) {
         if (!payload.auxiliary?.activity_stale) return null;
+        const line = payload.auxiliary.activity_stale.label;
         return (
             <div
-                className="mt-2 rounded-lg border border-alloy-stone/22 bg-alloy-stone/[0.06] px-2.5 py-1.5 text-[12px] text-alloy-midnight/78"
+                className={
+                    chrome
+                        ? "text-[11px] leading-snug text-alloy-midnight/72"
+                        : "mt-2 rounded-lg border border-alloy-stone/22 bg-alloy-stone/[0.06] px-2.5 py-1.5 text-[12px] text-alloy-midnight/78"
+                }
                 data-drawer-slot="operational_attention_header"
             >
                 <span className="font-medium text-alloy-midnight/85">Activity signal · </span>
-                {payload.auxiliary.activity_stale.label}
+                {line}
             </div>
         );
     }
 
     const extra = Math.max(0, payload.reasons.length - 1);
-    const factors =
-        extra > 0 ? ` · +${extra} factor${extra === 1 ? "" : "s"}` : "";
+    const factors = extra > 0 ? ` · +${extra} factor${extra === 1 ? "" : "s"}` : "";
     const headline = `Needs attention: ${primary.label}${factors}`;
     const nextLine = nextStepGuidance({
         primaryCode: primary.code,
         waitingBucket: safeBucket,
         worstSlaTier: worst,
     });
+
+    if (chrome) {
+        return (
+            <div className="space-y-0.5 text-[11px] leading-snug" data-drawer-slot="operational_attention_header">
+                <div className="font-semibold text-alloy-midnight/88">{headline}</div>
+                <div className="text-alloy-midnight/72">
+                    <span className="font-medium text-alloy-midnight/78">Next: </span>
+                    {nextLine}
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div

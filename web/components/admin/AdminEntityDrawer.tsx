@@ -7925,17 +7925,25 @@ export default function AdminEntityDrawer() {
                 <div className="flex flex-wrap items-center gap-2">
                     {workflowCompactRecordNum ? <span>{workflowCompactRecordNum}</span> : null}
                     <span className="shrink-0">{opportunityInquiryWorkflowHeaderStatus}</span>
-                    {headerNextStepInline ? (
+                </div>
+                {overviewData && !(overviewData as { _create?: boolean })._create ? (
+                    <OperationalAttentionHeaderStrip variant="chrome" overviewData={overviewData as Record<string, unknown>} />
+                ) : null}
+                {headerNextStepInline ? (
+                    <div className="flex flex-wrap items-center gap-2">
                         <span className="rounded-full border border-alloy-stone/20 bg-white/70 px-2 py-0.5 text-[11px] font-medium text-alloy-midnight/65">
                             Suggested next: {headerNextStepInline}
                         </span>
-                    ) : null}
-                </div>
+                    </div>
+                ) : null}
                 {opportunityActivityHeaderLine}
             </div>
         ) : drawer.type === "opportunities" && !opportunityInquiryWorkflowDrawer ? (
             <div className="mt-0.5 space-y-1.5">
                 {headerSubtitleBase ? <div>{headerSubtitleBase}</div> : null}
+                {overviewData && !(overviewData as { _create?: boolean })._create ? (
+                    <OperationalAttentionHeaderStrip variant="chrome" overviewData={overviewData as Record<string, unknown>} />
+                ) : null}
                 {opportunityActivityHeaderLine}
             </div>
         ) : (
@@ -10468,12 +10476,6 @@ export default function AdminEntityDrawer() {
                                                                     {/* Next step is now rendered inline in the drawer header (informational). */}
                                                                 </div>
                                                             </div>
-                                                            {overviewData &&
-                                                            !(overviewData as { _create?: boolean })._create ? (
-                                                                <OperationalAttentionHeaderStrip
-                                                                    overviewData={overviewData as Record<string, unknown>}
-                                                                />
-                                                            ) : null}
                                                         </div>
                                                     );
                                                 }
@@ -10572,12 +10574,6 @@ export default function AdminEntityDrawer() {
                                                                 </div>
                                                             </div>
                                                         </div>
-                                                        {overviewData &&
-                                                        !(overviewData as { _create?: boolean })._create ? (
-                                                            <OperationalAttentionHeaderStrip
-                                                                overviewData={overviewData as Record<string, unknown>}
-                                                            />
-                                                        ) : null}
                                                     </div>
                                                 );
                                             })()}

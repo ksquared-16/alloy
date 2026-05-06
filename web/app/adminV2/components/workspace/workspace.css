@@ -157,6 +157,11 @@
   min-height: 0;
 }
 
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-paired-oper-panel__body .adminv2-ws-dept-attention-bucket-tile.adminv2-ws-wu-queue-card--compact {
+  align-items: center;
+  padding: 5px 8px;
+}
+
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-paired-oper-panel__body .adminv2-ws-wu-queue-card-compact-text {
   flex: 1 1 auto;
   min-width: 0;
@@ -5899,6 +5904,15 @@
   border-left-color: color-mix(in srgb, var(--d-brand) 20%, color-mix(in srgb, var(--d-pine) 34%, var(--d-border)));
 }
 
+/* Operational needs-attention — same queue row shell, subtle rail (all pipeline lanes + Needs attention tab). */
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card--attention-accent.adminv2-ws-wu-queue-card--tier-standard {
+  border-color: color-mix(in srgb, #bc4300 12%, var(--d-border));
+  box-shadow:
+    0 1px 2px rgba(39, 63, 82, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    inset 3px 0 0 color-mix(in srgb, var(--d-admin-amber) 22%, transparent);
+}
+
 /* Work unit — inbox-style row: exactly two text lines + value + Open */
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card--compact {
   display: flex;
@@ -6364,6 +6378,27 @@
   border: 1px solid color-mix(in srgb, var(--vc-label-accent, var(--d-pine)) 38%, var(--d-border));
   background: color-mix(in srgb, var(--vc-label-accent, var(--d-pine)) 14%, var(--d-surface));
   color: color-mix(in srgb, var(--d-text-primary) 88%, var(--vc-label-accent, var(--d-pine)));
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__status-pill--wrap {
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* Queue / pipeline pills: prefer horizontal scroll over clipped labels when the lane is narrow. */
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-pill-scroll {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.25rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+  min-width: 0;
+  padding-bottom: 2px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__status-pill--urgency-warning {

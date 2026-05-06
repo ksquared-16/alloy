@@ -591,7 +591,7 @@ export function CrmCompactQueuePreview({
             </span>
             {stageStatus ? (
               <span
-                className={`adminv2-ws-crm-queue-preview__status-pill adminv2-ws-crm-queue-preview__status-pill--urgency-${urgencyTier}`}
+                className={`adminv2-ws-crm-queue-preview__status-pill adminv2-ws-crm-queue-preview__status-pill--wrap adminv2-ws-crm-queue-preview__status-pill--urgency-${urgencyTier}`}
               >
                 {formatWorkUnitQueueStatusPill(stageStatus)}
               </span>
@@ -767,6 +767,7 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
           if (sectionKey) lastSectionKey = sectionKey;
 
           const tier = item.urgencyTier ?? "standard";
+          const attentionAccent = Boolean(item.needsOperationalAttention);
           const rowQuickActions = orderedQueueQuickActions(item.quickActions);
           const crm = item.semanticCrmCompact;
           const valueShown = (crm?.commercialValue ?? item.valueLabel)?.trim() ?? "";
@@ -792,8 +793,11 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
                 </div>
               ) : null}
               <div
-                className={`adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-${tier}`}
+                className={`adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-${tier}${
+                  attentionAccent ? " adminv2-ws-wu-queue-card--attention-accent" : ""
+                }`}
                 data-ws-wu-urgency={tier}
+                data-ws-needs-attention={attentionAccent ? "true" : undefined}
                 role="button"
                 tabIndex={0}
                 onClick={() =>

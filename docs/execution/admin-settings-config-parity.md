@@ -36,9 +36,11 @@ Job and schedule previews use a **presentation-ordered skeleton** (`entityPresen
 
 ## Opportunity “Needs attention” (source of truth)
 
-- **Needs attention bucket lenses** (`needs_attention_buckets`): editable under **Settings → Attention & SLA Rules** (department picker; merges into `departments.metadata`). Resolver/threshold **policy** remains metadata-driven code paths — this screen does **not** implement a general rules engine.
+- **Settings → Attention & SLA Rules** (department-only editor today; deep-merge **`departments.metadata`**):
+  - **Needs Attention types:** `needs_attention_buckets` — visibility, labels, order, and which **canonical reason codes** appear in each bucket (groupings only).
+  - **Trigger criteria & thresholds:** supported knobs under **`metadata.opportunity_attention_rules`** — e.g. **`version: 1`** + **`thresholdsHours`** (lifecycle idle hours for stale/missing-quote paths), **`stale_high_value_days`**, **`stale_mid_funnel_days`**, **`sla_wait_hours`** (wait-bucket SLA), **`priority_score_weights`**, **`auxiliary_signals_enabled`**, **`reason_overrides`** (per-code enable/label/severity patches). UI explains each canonical reason, shows **department vs platform default** when a field is unset on the department row, and does **not** allow arbitrary rule expressions.
 - **Evaluator:** `resolveOpportunityAttention` (canonical resolver **v2** in application code).
-- **Tuning:** `resolveOpportunityAttentionConfigFromMetadata` — typically `opportunity_attention_rules` inside **work unit** or **department** `metadata` (optional keys: `primary_reason_priority_order`, `sla_wait_hours`, `priority_score_weights`).
+- **Tuning:** Full merge described in **`resolveOpportunityAttentionConfigFromMetadata`** (`web/lib/opportunities/opportunityAttentionConfig.ts`). Work-unit **`metadata`** still overrides department at runtime for the same keys — Settings does not edit work units yet.
 - **Operational wait facet (per opportunity):** validated subtree **`metadata.enrollment_operational`** — updated via **`PATCH /api/admin/opportunities/:id`** body field **`enrollment_operational`** (`wait_bucket`, `wait_since`, `wait_reason`, `next_expected_action_owner`, `next_expected_action_at`). Not edited from Settings UI yet.
 - **PATCH validation (transition):** Non-empty **`enrollment_operational`** bodies that fail sanitization are **not** applied; the API logs a **warning** (`[ADMIN_PATCH_OPPORTUNITY] enrollment_operational ignored after validation`). Long-term: optional strict mode / 400 responses — see sprint follow-ups.
 - **Resolver outputs:** Per-reason **`sla_clock_confidence`** (`high` \| `medium` \| `low`) indicates how the SLA clock was derived (explicit `wait_since` vs fallbacks such as `updated_at`). This must eventually surface in explainability / debug tooling — do not treat as internal-only forever.
@@ -51,7 +53,7 @@ Workspace job exception summaries use **job** predicates (`getNeedsAttentionSumm
 
 ## Work unit & department `metadata` (read-only in Settings)
 
-**AdminV2 → Settings → Work units / Departments:** opening **Edit** on a row shows **Runtime metadata (read-only)** — the effective JSON from the list API, grouped by known feature areas (`web/lib/admin/runtimeEntityMetadataCatalog.ts`). Most fields remain **visibility only**; **Attention & SLA Rules** is the exception — it PATCHes **`needs_attention_buckets`** into **`departments.metadata`** (deep-merged server-side).
+**AdminV2 → Settings → Work units / Departments:** opening **Edit** on a row shows **Runtime metadata (read-only)** — the effective JSON from the list API, grouped by known feature areas (`web/lib/admin/runtimeEntityMetadataCatalog.ts`). Most fields remain **visibility only**; **Attention & SLA Rules** PATCHes the **`opportunity_attention_rules`** subtree (buckets + supported thresholds/policies) into **`departments.metadata`** (deep-merged server-side).
 
 - **Active runtime keys** (examples): `opportunity_attention_rules`, `activity_signal_rules`, **`enrollment_operational`** (on **opportunity** `metadata`) — consumed by attention resolver / queue paths and activity-signal APIs respectively.
 - **Bootstrap / routing:** `tenant_slice` on departments (tenant bootstrap validation).
@@ -64,4 +66,4 @@ Workspace job exception summaries use **job** predicates (`getNeedsAttentionSumm
 
 - Drawer editing beyond **workflow v1 opportunity section order** (e.g. non-workflow opportunity, job/schedule parity editor, toggling **`overview_hidden_sections`** with validation, new workflow virtual definitions).
 - Raw **`config_json`** or drag/drop builders without server-side validation.
-- Extend **Attention & SLA Rules** beyond bucket editing (thresholds, work-unit overrides in UI) **without** duplicating resolver logic.
+- **Attention & SLA Rules:** work-unit override editing in UI; richer **`reason_overrides`** (label/severity) editors; optional **`primary_reason_priority_order`** picker **without** duplicating resolver logic.

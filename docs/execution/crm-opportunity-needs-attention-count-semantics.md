@@ -24,6 +24,8 @@ All **membership** for opportunity “needs attention” in CRM surfaces uses th
 
 **Platform default bucket catalog** ships **one** enabled starter bucket (`follow_up_overdue`); orgs add lenses via **`needs_attention_buckets`** (department Settings UI or metadata). Additional examples belong in docs only — they are not enabled by default.
 
+**Settings alignment:** Department **Attention & SLA Rules** configures bucket membership separately from **trigger thresholds** under **`opportunity_attention_rules`** (hours/days/SLA/policy). Counting semantics here are unchanged — thresholds only affect which inquiries qualify for resolver reasons inside the same caps.
+
 **Counts still differ across surfaces** when cohorts or caps differ. No single number is universally “the org total” unless you align scope and cap.
 
 ## Surfaces

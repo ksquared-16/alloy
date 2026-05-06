@@ -3,6 +3,15 @@ import type { AttentionSlaTier } from "@/lib/opportunities/attentionSla";
 
 export type PriorityScoreDimension = "severity" | "sla" | "value" | "multi_reason" | "commitment";
 
+/** Defaults used by {@link computeAttentionPriorityScore} and surfaced in Settings. */
+export const DEFAULT_ATTENTION_PRIORITY_SCORE_WEIGHTS: Record<PriorityScoreDimension, number> = {
+    severity: 0.35,
+    sla: 0.3,
+    value: 0.15,
+    multi_reason: 0.1,
+    commitment: 0.1,
+};
+
 export type PriorityDimensionContribution = {
     dimension: PriorityScoreDimension;
     points: number;
@@ -56,11 +65,11 @@ export function computeAttentionPriorityScore(input: {
     weights?: Partial<Record<PriorityScoreDimension, number>>;
 }): { score: number; breakdown: PriorityDimensionContribution[] } {
     const w = {
-        severity: input.weights?.severity ?? 0.35,
-        sla: input.weights?.sla ?? 0.3,
-        value: input.weights?.value ?? 0.15,
-        multi_reason: input.weights?.multi_reason ?? 0.1,
-        commitment: input.weights?.commitment ?? 0.1,
+        severity: input.weights?.severity ?? DEFAULT_ATTENTION_PRIORITY_SCORE_WEIGHTS.severity,
+        sla: input.weights?.sla ?? DEFAULT_ATTENTION_PRIORITY_SCORE_WEIGHTS.sla,
+        value: input.weights?.value ?? DEFAULT_ATTENTION_PRIORITY_SCORE_WEIGHTS.value,
+        multi_reason: input.weights?.multi_reason ?? DEFAULT_ATTENTION_PRIORITY_SCORE_WEIGHTS.multi_reason,
+        commitment: input.weights?.commitment ?? DEFAULT_ATTENTION_PRIORITY_SCORE_WEIGHTS.commitment,
     };
     const sumW = w.severity + w.sla + w.value + w.multi_reason + w.commitment;
 

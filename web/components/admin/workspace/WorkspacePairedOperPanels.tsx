@@ -22,6 +22,8 @@ type WorkspacePairedOperPanelProps = {
     title: string;
     /** e.g. `adminv2-ws-queue-title--section-primary-type` for attention styling */
     titleClassName?: string;
+    /** Optional accessory aligned with the title (e.g. info tooltip trigger). */
+    titleRight?: ReactNode;
     children: ReactNode;
 };
 
@@ -35,14 +37,22 @@ const toneClass: Record<WorkspacePairedOperPanelTone, string> = {
 /**
  * Single panel in a paired operational row. Preserves existing `adminv2-ws-dept-qsec` visual tokens.
  */
-export function WorkspacePairedOperPanel({ tone, ariaLabel, title, titleClassName, children }: WorkspacePairedOperPanelProps) {
+export function WorkspacePairedOperPanel({
+    tone,
+    ariaLabel,
+    title,
+    titleClassName,
+    titleRight,
+    children,
+}: WorkspacePairedOperPanelProps) {
     return (
         <section className={`${toneClass[tone]} flex min-h-0 min-w-0 flex-col`.trim()} aria-label={ariaLabel}>
             <header className="adminv2-ws-queue-header adminv2-ws-paired-oper-panel__header shrink-0">
-                <div className="adminv2-ws-queue-title-row adminv2-ws-paired-oper-panel__title-row">
-                    <h3 className={`adminv2-ws-queue-title adminv2-ws-paired-oper-panel__title ${titleClassName ?? ""}`.trim()}>
+                <div className="adminv2-ws-queue-title-row adminv2-ws-paired-oper-panel__title-row flex min-w-0 flex-wrap items-center justify-between gap-2">
+                    <h3 className={`adminv2-ws-queue-title adminv2-ws-paired-oper-panel__title min-w-0 ${titleClassName ?? ""}`.trim()}>
                         {title}
                     </h3>
+                    {titleRight ? <div className="shrink-0">{titleRight}</div> : null}
                 </div>
             </header>
             <div className="adminv2-ws-paired-oper-panel__body adminv2-ws-wu-v2 min-h-0 flex-1">

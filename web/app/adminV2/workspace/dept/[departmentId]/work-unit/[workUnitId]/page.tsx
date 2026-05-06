@@ -1480,7 +1480,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         const summariesPending = queueSummaries === null && !queueSummariesError;
         if (summariesPending && queueTabPlaceholders?.length) {
             const pillBase =
-                "inline-flex max-w-full items-center gap-1.5 rounded-full border px-2 py-0.5 text-left text-[11px] font-semibold leading-tight transition-colors";
+                "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-left text-[11px] font-semibold leading-snug transition-colors";
             const countBadgePending = (
                 <span
                     className="inline-flex h-3.5 w-3.5 shrink-0 rounded-full border-2 border-alloy-forge/20 border-t-alloy-blue/75 animate-spin"
@@ -1492,47 +1492,49 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 <div className="flex flex-col gap-1.5 min-w-0">
                     <div className="flex flex-col gap-1">
                         {queueTabPlaceholders.map((section) => (
-                            <div key={section.key} className="flex flex-wrap items-center gap-1" role="group" aria-label={section.label}>
+                            <div key={section.key} className="flex min-w-0 flex-col gap-1">
                                 {multiSectionPh ? (
                                     <span className="w-full text-[10px] font-semibold tracking-wide text-alloy-forge/50 sm:w-auto sm:mr-1">
                                         {section.label}
                                     </span>
                                 ) : null}
-                                {section.queues.map((q) => {
-                                    const selected =
-                                        q.key === selectedQueueKey &&
-                                        (!unmappedOnly || allRecordsQueueKey == null || q.key !== allRecordsQueueKey);
-                                    const tier =
-                                        q.priority === "critical"
-                                            ? "critical"
-                                            : q.priority === "attention"
-                                              ? "attention"
-                                              : "standard";
-                                    const ring =
-                                        tier === "critical"
-                                            ? selected
-                                                ? "border-alloy-ember bg-alloy-ember/12 text-alloy-forge"
-                                                : "border-alloy-ember/35 bg-white/60 text-alloy-forge/85"
-                                            : tier === "attention"
-                                              ? selected
-                                                  ? "border-alloy-honey bg-alloy-honey/12 text-alloy-forge"
-                                                  : "border-alloy-honey/40 bg-white/60 text-alloy-forge/85"
-                                              : selected
-                                                ? "border-alloy-blue bg-alloy-blue/[0.07] text-alloy-forge shadow-[inset_0_0_0_1px_rgba(0,69,140,0.12)]"
-                                                : "border-admin-border bg-white/70 text-alloy-forge/80";
-                                    return (
-                                        <button
-                                            key={q.key}
-                                            type="button"
-                                            onClick={() => handleQueueTabChange(q.key)}
-                                            className={`${pillBase} ${ring}`}
-                                            aria-pressed={selected}
-                                        >
-                                            <span className="truncate">{q.label}</span>
-                                            {countBadgePending}
-                                        </button>
-                                    );
-                                })}
+                                <div className="adminv2-ws-queue-pill-scroll" role="group" aria-label={section.label}>
+                                    {section.queues.map((q) => {
+                                        const selected =
+                                            q.key === selectedQueueKey &&
+                                            (!unmappedOnly || allRecordsQueueKey == null || q.key !== allRecordsQueueKey);
+                                        const tier =
+                                            q.priority === "critical"
+                                                ? "critical"
+                                                : q.priority === "attention"
+                                                  ? "attention"
+                                                  : "standard";
+                                        const ring =
+                                            tier === "critical"
+                                                ? selected
+                                                    ? "border-alloy-ember bg-alloy-ember/12 text-alloy-forge"
+                                                    : "border-alloy-ember/35 bg-white/60 text-alloy-forge/85"
+                                                : tier === "attention"
+                                                  ? selected
+                                                      ? "border-alloy-honey bg-alloy-honey/12 text-alloy-forge"
+                                                      : "border-alloy-honey/40 bg-white/60 text-alloy-forge/85"
+                                                  : selected
+                                                    ? "border-alloy-blue bg-alloy-blue/[0.07] text-alloy-forge shadow-[inset_0_0_0_1px_rgba(0,69,140,0.12)]"
+                                                    : "border-admin-border bg-white/70 text-alloy-forge/80";
+                                        return (
+                                            <button
+                                                key={q.key}
+                                                type="button"
+                                                onClick={() => handleQueueTabChange(q.key)}
+                                                className={`${pillBase} ${ring}`}
+                                                aria-pressed={selected}
+                                            >
+                                                <span className="whitespace-normal text-left">{q.label}</span>
+                                                {countBadgePending}
+                                            </button>
+                                        );
+                                    })}
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -1599,7 +1601,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         }
 
         const pillBase =
-            "inline-flex max-w-full items-center gap-1.5 rounded-full border px-2 py-0.5 text-left text-[11px] font-semibold leading-tight transition-colors";
+            "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-left text-[11px] font-semibold leading-snug transition-colors";
         function queuePillBadgeCount(q: QueueSummary): number | "…" | "—" {
             if (q.counts_deferred) return "…";
             if (
@@ -1627,77 +1629,79 @@ export default function AdminV2OpportunityWorkUnitPage() {
             <div className="flex flex-col gap-1.5 min-w-0">
                 <div className="flex flex-col gap-1">
                     {sections.map((section) => (
-                        <div key={section.key} className="flex flex-wrap items-center gap-1" role="group" aria-label={section.label}>
+                        <div key={section.key} className="flex min-w-0 flex-col gap-1">
                             {multiSection ? (
                                 <span className="w-full text-[10px] font-semibold tracking-wide text-alloy-forge/50 sm:w-auto sm:mr-1">
                                     {section.label}
                                 </span>
                             ) : null}
-                            {section.queues.map((q) => {
-                                const selected =
-                                    q.key === selectedQueueKey &&
-                                    (!unmappedOnly || allRecordsQueueKey == null || q.key !== allRecordsQueueKey);
-                                const tier =
-                                    q.priority === "critical"
-                                        ? "critical"
-                                        : q.priority === "attention"
-                                          ? "attention"
-                                          : "standard";
-                                const ring =
-                                    tier === "critical"
-                                        ? selected
-                                            ? "border-alloy-ember bg-alloy-ember/12 text-alloy-forge"
-                                            : "border-alloy-ember/35 bg-white/60 text-alloy-forge/85"
-                                        : tier === "attention"
-                                          ? selected
-                                              ? "border-alloy-honey bg-alloy-honey/12 text-alloy-forge"
-                                              : "border-alloy-honey/40 bg-white/60 text-alloy-forge/85"
-                                          : selected
-                                            ? "border-alloy-blue bg-alloy-blue/[0.07] text-alloy-forge shadow-[inset_0_0_0_1px_rgba(0,69,140,0.12)]"
-                                            : "border-admin-border bg-white/70 text-alloy-forge/80";
-                                return (
+                            <div className="adminv2-ws-queue-pill-scroll" role="group" aria-label={section.label}>
+                                {section.queues.map((q) => {
+                                    const selected =
+                                        q.key === selectedQueueKey &&
+                                        (!unmappedOnly || allRecordsQueueKey == null || q.key !== allRecordsQueueKey);
+                                    const tier =
+                                        q.priority === "critical"
+                                            ? "critical"
+                                            : q.priority === "attention"
+                                              ? "attention"
+                                              : "standard";
+                                    const ring =
+                                        tier === "critical"
+                                            ? selected
+                                                ? "border-alloy-ember bg-alloy-ember/12 text-alloy-forge"
+                                                : "border-alloy-ember/35 bg-white/60 text-alloy-forge/85"
+                                            : tier === "attention"
+                                              ? selected
+                                                  ? "border-alloy-honey bg-alloy-honey/12 text-alloy-forge"
+                                                  : "border-alloy-honey/40 bg-white/60 text-alloy-forge/85"
+                                              : selected
+                                                ? "border-alloy-blue bg-alloy-blue/[0.07] text-alloy-forge shadow-[inset_0_0_0_1px_rgba(0,69,140,0.12)]"
+                                                : "border-admin-border bg-white/70 text-alloy-forge/80";
+                                    return (
+                                        <button
+                                            key={q.key}
+                                            type="button"
+                                            onClick={() => handleQueueTabChange(q.key)}
+                                            className={`${pillBase} ${ring}`}
+                                            aria-pressed={selected}
+                                        >
+                                            <span className="whitespace-normal text-left">{q.label}</span>
+                                            <span
+                                                className={`tabular-nums rounded-full px-1 py-px text-[10px] font-bold ${
+                                                    selected ? "bg-alloy-forge/10 text-alloy-forge" : "bg-alloy-stone/15 text-alloy-forge/70"
+                                                }`}
+                                            >
+                                                {queuePillBadgeCount(q)}
+                                            </span>
+                                        </button>
+                                    );
+                                })}
+                                {showOtherPill && section.key === otherPillSectionKey && allRecordsQueueKey ? (
                                     <button
-                                        key={q.key}
                                         type="button"
-                                        onClick={() => handleQueueTabChange(q.key)}
-                                        className={`${pillBase} ${ring}`}
-                                        aria-pressed={selected}
+                                        key="__derived_other__"
+                                        onClick={() => handleQueueTabChange(allRecordsQueueKey, { unmappedActive: true })}
+                                        className={`${pillBase} ${
+                                            unmappedOnly && selectedQueueKey === allRecordsQueueKey
+                                                ? "border-alloy-blue bg-alloy-blue/[0.07] text-alloy-forge shadow-[inset_0_0_0_1px_rgba(0,69,140,0.12)]"
+                                                : "border-admin-border bg-white/70 text-alloy-forge/80"
+                                        }`}
+                                        aria-pressed={unmappedOnly && selectedQueueKey === allRecordsQueueKey}
                                     >
-                                        <span className="truncate">{q.label}</span>
+                                        <span className="whitespace-normal text-left">Other</span>
                                         <span
                                             className={`tabular-nums rounded-full px-1 py-px text-[10px] font-bold ${
-                                                selected ? "bg-alloy-forge/10 text-alloy-forge" : "bg-alloy-stone/15 text-alloy-forge/70"
+                                                unmappedOnly && selectedQueueKey === allRecordsQueueKey
+                                                    ? "bg-alloy-forge/10 text-alloy-forge"
+                                                    : "bg-alloy-stone/15 text-alloy-forge/70"
                                             }`}
                                         >
-                                            {queuePillBadgeCount(q)}
+                                            {unmappedPillCount ?? "—"}
                                         </span>
                                     </button>
-                                );
-                            })}
-                            {showOtherPill && section.key === otherPillSectionKey && allRecordsQueueKey ? (
-                                <button
-                                    type="button"
-                                    key="__derived_other__"
-                                    onClick={() => handleQueueTabChange(allRecordsQueueKey, { unmappedActive: true })}
-                                    className={`${pillBase} ${
-                                        unmappedOnly && selectedQueueKey === allRecordsQueueKey
-                                            ? "border-alloy-blue bg-alloy-blue/[0.07] text-alloy-forge shadow-[inset_0_0_0_1px_rgba(0,69,140,0.12)]"
-                                            : "border-admin-border bg-white/70 text-alloy-forge/80"
-                                    }`}
-                                    aria-pressed={unmappedOnly && selectedQueueKey === allRecordsQueueKey}
-                                >
-                                    <span className="truncate">Other</span>
-                                    <span
-                                        className={`tabular-nums rounded-full px-1 py-px text-[10px] font-bold ${
-                                            unmappedOnly && selectedQueueKey === allRecordsQueueKey
-                                                ? "bg-alloy-forge/10 text-alloy-forge"
-                                                : "bg-alloy-stone/15 text-alloy-forge/70"
-                                        }`}
-                                    >
-                                        {unmappedPillCount ?? "—"}
-                                    </span>
-                                </button>
-                            ) : null}
+                                ) : null}
+                            </div>
                         </div>
                     ))}
                 </div>
@@ -1814,6 +1818,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             ? queueSummaries.find((q) => q.key === selectedQueueKey) ?? queueSummaries[0]
             : queueSummaries[0];
         const activeQueueKey = String(activeQueue?.key ?? "");
+        const workUnitKeyLower = (workUnit.key ?? "").trim().toLowerCase();
         const queueItemsKey =
             queueItems != null && typeof queueItems.queue === "object" && queueItems.queue != null
                 ? String((queueItems.queue as { key?: string }).key ?? "")
@@ -1956,12 +1961,17 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     id: rid,
                     title: familyTitle,
                     subtitle: previewCfg.variant === "basic" ? (basicSubtitleParts.filter(Boolean).join(" · ") || undefined) : undefined,
+                    needsOperationalAttention: needsAttentionRow,
                     urgencyTier:
                         activeQueue?.priority === "critical"
                             ? ("critical" as const)
-                            : needsAttentionRow || activeQueue?.priority === "attention"
-                              ? ("warning" as const)
-                              : ("standard" as const),
+                            : needsAttentionRow
+                              ? ("standard" as const)
+                              : activeQueue?.priority === "attention"
+                                ? ("warning" as const)
+                                : workUnitKeyLower === "priced_followup"
+                                  ? ("warning" as const)
+                                  : ("standard" as const),
                     quickActions,
                     semanticCrmCompact:
                         previewCfg.variant === "crm_compact"
@@ -2164,29 +2174,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const headerQueuePickerSlot = useMemo(() => {
         if (!queueModel) return null;
         const chipBase =
-            "inline-flex max-w-full items-center rounded-full border px-2.5 py-0.5 text-left text-[11px] font-semibold leading-tight transition-colors";
+            "inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5 text-left text-[11px] font-semibold leading-snug transition-colors whitespace-normal";
         return (
             <div className="min-w-0">
                 {queuePicker}
-                {selectedQueueKey?.trim().toLowerCase() === "needs_attention" && enabledAttentionBuckets.length > 0 ? (
+                {selectedQueueKey?.trim().toLowerCase() === "needs_attention" ? (
                     <div
                         className="mt-2 flex flex-wrap items-center gap-1.5"
                         role="tablist"
                         aria-label="Needs attention types"
                     >
-                        <button
-                            type="button"
-                            role="tab"
-                            aria-selected={!attentionBucketKeyLive}
-                            onClick={() => handleAttentionBucketSelect(null)}
-                            className={`${chipBase} ${
-                                !attentionBucketKeyLive
-                                    ? "border-alloy-honey bg-alloy-honey/12 text-alloy-forge"
-                                    : "border-admin-border bg-white/70 text-alloy-forge/80"
-                            }`}
-                        >
-                            All types
-                        </button>
                         {enabledAttentionBuckets.map((b) => {
                             const sel = attentionBucketKeyLive === b.key;
                             return (
@@ -2203,10 +2200,23 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                             : "border-admin-border bg-white/70 text-alloy-forge/80"
                                     }`}
                                 >
-                                    <span className="truncate">{b.label}</span>
+                                    {b.label}
                                 </button>
                             );
                         })}
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={!attentionBucketKeyLive}
+                            onClick={() => handleAttentionBucketSelect(null)}
+                            className={`${chipBase} ${
+                                !attentionBucketKeyLive
+                                    ? "border-alloy-honey bg-alloy-honey/12 text-alloy-forge"
+                                    : "border-admin-border bg-white/70 text-alloy-forge/80"
+                            }`}
+                        >
+                            All needs attention
+                        </button>
                     </div>
                 ) : null}
                 <WorkUnitLifecycleCoveragePanel

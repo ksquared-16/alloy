@@ -214,6 +214,8 @@ export type QueueItemVm = {
   metaDensity?: "stack" | "inline";
   /** Visual emphasis for SLA / risk (queue card rail + badge tone) */
   urgencyTier?: "critical" | "warning" | "standard";
+  /** Resolver: inquiry matches operational needs-attention — subtle accent ({@link QueueBlock} + `.adminv2-ws-wu-queue-card--attention-accent`). */
+  needsOperationalAttention?: boolean;
   /**
    * When set, `QueueBlock` renders the CRM-compact preview from these slots,
    * instead of inferring layout from title/subtitle/meta alone.

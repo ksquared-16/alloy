@@ -27,7 +27,8 @@ function tierFromWaitElapsed(elapsedMs: number, warningHours: number, criticalHo
     return "breached";
 }
 
-function thresholdsForBucket(
+/** Effective SLA hour thresholds for a wait bucket (department override or platform default). */
+export function effectiveWaitBucketSlaThresholds(
     bucket: Exclude<EnrollmentWaitBucket, "none">,
     cfg: OpportunityAttentionResolvedConfig
 ): { warning_hours: number; critical_hours: number } {
@@ -54,7 +55,7 @@ export function computeWaitReasonSla(params: {
     if (elapsedMs == null || !Number.isFinite(elapsedMs)) {
         return { tier: "ok", clock_confidence: clockConfidence, elapsed_ms: null };
     }
-    const { warning_hours, critical_hours } = thresholdsForBucket(bucket, config);
+    const { warning_hours, critical_hours } = effectiveWaitBucketSlaThresholds(bucket, config);
     return {
         tier: tierFromWaitElapsed(elapsedMs, warning_hours, critical_hours),
         clock_confidence: clockConfidence,

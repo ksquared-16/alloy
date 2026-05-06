@@ -93,6 +93,8 @@ function defaultOpportunityQueueItemVm(row: WorkspaceOpportunityQueueRuntime["it
     const tags =
         stale && String(stale.label ?? "").trim() ? [String(stale.label).trim()] : undefined;
 
+    const needsOperationalAttention = Boolean((row as { _needs_attention?: boolean })._needs_attention);
+    const wk = workUnitKey.trim().toLowerCase();
     const item: QueueItemVm = {
         id: row.id,
         title,
@@ -105,7 +107,8 @@ function defaultOpportunityQueueItemVm(row: WorkspaceOpportunityQueueRuntime["it
         ],
         ...(tags ? { tags } : {}),
         quickActions,
-        urgencyTier: workUnitKey.trim().toLowerCase() === "priced_followup" ? "warning" : "standard",
+        needsOperationalAttention,
+        urgencyTier: needsOperationalAttention ? "standard" : wk === "priced_followup" ? "warning" : "standard",
     };
     if (statusLabel) {
         item.groupKey = status;

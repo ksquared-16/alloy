@@ -36,7 +36,7 @@ Cover **opportunities**, pipeline status, CRM-adjacent admin behavior, and **sch
 
 ## Enrollment operational attention (Needs attention)
 
-**Model:** Platform owns canonical **reason codes**, resolver (`resolveOpportunityAttention`), default severity/SLA, and **platform-default bucket definitions** (starting catalog only — not immutable business truth). Locations/providers tune visibility via **`metadata.opportunity_attention_rules`**, especially **`needs_attention_buckets`** (`web/lib/opportunities/needsAttentionBuckets.ts`). Buckets map **only** to canonical reason codes (no arbitrary expressions).
+**Model:** Platform owns canonical **reason codes**, resolver (`resolveOpportunityAttention`), default severity/SLA, and safe **metadata schema** for tuning. **Buckets** (`needs_attention_buckets` / types) are **configurable groupings** of those codes — they do not define trigger math. **Criteria** (when a code fires) use supported knobs only — hours thresholds, stale day windows, wait SLA hours, policies, etc. — documented per code in Settings copy (`web/lib/opportunities/attentionReasonCriteriaCatalog.ts`) and merged via **`resolveOpportunityAttentionConfigFromMetadata`**. No arbitrary expressions.
 
 **Configurable buckets (`needs_attention_buckets`)**
 
@@ -46,7 +46,7 @@ Cover **opportunities**, pipeline status, CRM-adjacent admin behavior, and **sch
 
 **Precedence:** work unit `metadata` → department `metadata` → **`DEFAULT_NEEDS_ATTENTION_BUCKETS`** when neither defines `needs_attention_buckets`.
 
-**Platform default rollout:** **`DEFAULT_NEEDS_ATTENTION_BUCKETS`** ships **one** enabled lens — **Follow-up overdue** (`follow_up_date_passed`, `stale_quote_followup`). Additional buckets (e.g. staff wait, missing quote) are added via **department/work-unit metadata** or **Settings → Attention & SLA Rules** (department-level UI today).
+**Platform default rollout:** **`DEFAULT_NEEDS_ATTENTION_BUCKETS`** ships **one** enabled lens — **Follow-up overdue** — grouping **`follow_up_date_passed`** and **`stale_quote_followup`**. That default bucket is **not** a separate hardcoded rule: each reason still evaluates per resolver criteria (e.g. follow-up instant vs lifecycle idle hours for stale quote follow-up). Additional buckets are added via metadata or **Settings → Attention & SLA Rules**.
 
 **Surfaces**
 
