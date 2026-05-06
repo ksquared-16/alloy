@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { dbGetSubmission } from "@/lib/admin/forms/formsAdminDb";
+import { dbGetSubmission, dbGetVersion, dbListSubmissionLinkedDocuments } from "@/lib/admin/forms/formsAdminDb";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 
 /** GET /api/admin/forms/submissions/[submissionId] */
@@ -17,5 +17,19 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const { data, error } = await dbGetSubmission(supabase, ctx.orgId, submissionId);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
     if (!data) return jsonError("Not found", 404);
-    return jsonData(data);
+
+    const sub = data as { form_definition_version_id: string };
+    const [{ data: ver }, { data: linked, error: linkErr }] = await Promise.all([
+        dbGetVersion(supabase, ctx.orgId, sub.form_definition_version_id),
+        dbListSubmissionLinkedDocuments(supabase, ctx.orgId, submissionId),
+    ]);
+    if (linkErr) return NextResponse.json({ error: linkErr.message }, { status: 500 });
+
+    const schema_json = ver ? (ver as { schema_json: unknown }).schema_json : null;
+
+    return jsonData({
+        ...data,
+        schema_json,
+        linked_documents: linked ?? [],
+    });
 }

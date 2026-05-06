@@ -236,6 +236,73 @@ export async function dbGetSubmission(supabase: SupabaseClient, orgId: string, s
     return supabase.from("form_submissions").select("*").eq("org_id", orgId).eq("id", submissionId).maybeSingle();
 }
 
+export type FormSubmissionLinkedDocument = {
+    role: string;
+    junction_created_at: string;
+    document: {
+        id: string;
+        name: string | null;
+        original_filename: string | null;
+        document_type: string | null;
+        status: string | null;
+        created_at: string | null;
+    };
+};
+
+/** Junction rows joined to `documents` for admin submission review (org-scoped). */
+export async function dbListSubmissionLinkedDocuments(
+    supabase: SupabaseClient,
+    orgId: string,
+    submissionId: string
+): Promise<{ data: FormSubmissionLinkedDocument[] | null; error: { message: string } | null }> {
+    const { data: junctions, error: jErr } = await supabase
+        .from("form_submission_documents")
+        .select("document_id, role, created_at")
+        .eq("org_id", orgId)
+        .eq("form_submission_id", submissionId)
+        .order("created_at", { ascending: true });
+    if (jErr) return { data: null, error: jErr };
+    const ids = [...new Set((junctions ?? []).map((r: { document_id: string }) => r.document_id))];
+    if (ids.length === 0) return { data: [], error: null };
+
+    const { data: docs, error: dErr } = await supabase
+        .from("documents")
+        .select("id, name, original_filename, document_type, status, created_at")
+        .eq("org_id", orgId)
+        .in("id", ids);
+    if (dErr) return { data: null, error: dErr };
+
+    const docById = new Map((docs ?? []).map((d: { id: string }) => [d.id, d]));
+    const out: FormSubmissionLinkedDocument[] = [];
+    for (const j of junctions ?? []) {
+        const row = j as { document_id: string; role: string; created_at: string };
+        const doc = docById.get(row.document_id) as
+            | {
+                  id: string;
+                  name: string | null;
+                  original_filename: string | null;
+                  document_type: string | null;
+                  status: string | null;
+                  created_at: string | null;
+              }
+            | undefined;
+        if (!doc) continue;
+        out.push({
+            role: row.role,
+            junction_created_at: row.created_at,
+            document: {
+                id: doc.id,
+                name: doc.name,
+                original_filename: doc.original_filename,
+                document_type: doc.document_type,
+                status: doc.status,
+                created_at: doc.created_at,
+            },
+        });
+    }
+    return { data: out, error: null };
+}
+
 export async function dbInsertSubmission(
     supabase: SupabaseClient,
     row: {

@@ -11,6 +11,7 @@ import {
 import { POST as submitSubmission } from "@/app/api/admin/forms/submissions/[submissionId]/submit/route";
 import { GET as listPublicLinks, POST as createPublicLink } from "@/app/api/admin/forms/[formId]/public-links/route";
 import { PATCH as patchPublicLink } from "@/app/api/admin/forms/[formId]/public-links/[linkId]/route";
+import { GET as getSubmission } from "@/app/api/admin/forms/submissions/[submissionId]/route";
 
 const ORG = "11111111-1111-4111-8111-111111111111";
 const OTHER_ORG = "99999999-9999-4999-8999-999999999999";
@@ -103,6 +104,9 @@ function makeSupabaseMock() {
     }
 
     async function resolveThenable(q: Q) {
+        if (q.table === "form_submission_documents" && q.mode === "select") {
+            return { data: [], error: null };
+        }
         if (q.table === "form_definitions" && q.mode === "select" && q.filters.org_id && !q.filters.id) {
             const org = q.filters.org_id as string;
             let rows = Object.values(storeRef.forms).filter((r) => (r as { org_id: string }).org_id === org);
@@ -600,6 +604,45 @@ describe("Admin forms routes", () => {
         const j = (await res.json()) as { data: Array<{ id: string }> };
         expect(j.data.length).toBe(1);
         expect(j.data[0].id).toBe(sid);
+    });
+
+    it("GET submission includes schema_json and linked_documents", async () => {
+        const fid = crypto.randomUUID();
+        const vid = crypto.randomUUID();
+        const sid = crypto.randomUUID();
+        storeRef.forms[fid] = { id: fid, org_id: ORG, key: "k", name: "N", kind: "center", is_active: true, metadata: {} };
+        storeRef.versions[vid] = {
+            id: vid,
+            org_id: ORG,
+            form_definition_id: fid,
+            version_number: 1,
+            status: "published",
+            schema_json: validSchema,
+            pdf_mapping_json: null,
+            metadata: {},
+            published_at: new Date().toISOString(),
+        };
+        storeRef.submissions[sid] = {
+            id: sid,
+            org_id: ORG,
+            form_definition_id: fid,
+            form_definition_version_id: vid,
+            status: "submitted",
+            payload: { values: { name: "Ada", color: "blue" } },
+            created_at: new Date().toISOString(),
+            submitted_at: new Date().toISOString(),
+        };
+        const res = await getSubmission(new NextRequest("http://x"), {
+            params: Promise.resolve({ submissionId: sid }),
+        });
+        expect(res.status).toBe(200);
+        const j = (await res.json()) as {
+            data: { schema_json: unknown; linked_documents: unknown[]; id: string };
+        };
+        expect(j.data.id).toBe(sid);
+        expect(j.data.schema_json).toEqual(validSchema);
+        expect(Array.isArray(j.data.linked_documents)).toBe(true);
+        expect(j.data.linked_documents.length).toBe(0);
     });
 
     it("returns 403 for mutations when role is ops", async () => {

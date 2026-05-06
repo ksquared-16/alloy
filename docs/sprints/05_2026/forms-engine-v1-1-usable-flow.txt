@@ -22,7 +22,7 @@ This sprint extends the **completed V1 foundation** with **minimal admin APIs, e
 | **Admin APIs** | **Exists** — `/api/admin/forms/**` (definitions, versions, publish, submissions, submit, generate-document). |
 | **Public APIs** | **Exists** — `/api/public/forms/[token]/**` (resolve, submissions, patch, submit). |
 | **Public embed** | **Exists** — `/forms/embed/[token]` + `FormEmbedClient` + `FormEngineRenderer`. |
-| **Admin UI** | **Missing** — no `app/admin/forms` surfaces; ops rely on APIs or DB. |
+| **Admin UI** | **MVP (Cards 3+4)** — `/admin/forms` hub: list forms, create public link (token once + copy), submissions list + detail, read-only answers, generate PDF stub, open linked documents in drawer. |
 | **Public-link admin API** | **Implemented (Card 1)** — `GET/POST/PATCH` under `/api/admin/forms/[formId]/public-links` (+ `[linkId]`); plaintext token only on `POST` create. |
 | **Medication demo** | **Seed-complete (Card 2.5)** — demo org gets `med_demo_schedule` / `med_demo_route` option_sets via migration; embed works when migrations + Card 2 resolve hydration apply. |
 | **Submission review** | **API-only** — `GET .../submissions` and `GET .../submissions/[id]` work; no staff UI. |
@@ -63,16 +63,14 @@ This sprint extends the **completed V1 foundation** with **minimal admin APIs, e
 
 ### Card 3 — Minimal Admin Forms Hub
 
-- **Status:** Pending  
-- **Purpose:** Lightweight admin UI:  
-  - List forms / published status  
-  - Create or copy **public embed link** (uses Card 1 API)  
-  - Navigate to **form submissions** list/filter  
+- **Status:** **Complete**  
+- **Purpose:** **`/admin/forms`** in Operations sidebar: list definitions (active + versions), **Create public link** (POST Card 1 API), **one-time token + embed URL** with copy; existing links table (prefix only); navigate to submissions.
 
 ### Card 4 — Submission Review MVP
 
-- **Status:** Pending  
-- **Purpose:** Admin can view **submitted payload** (read-only renderer where practical), **person/customer/member/opportunity** context from submission FKs, **signature** status (payload +/or `form_submission_signatures` as available), and trigger **generate document** / open linked **`documents`** (existing documents UX patterns).
+- **Status:** **Complete (MVP)**  
+- **Purpose:** **`/admin/forms/[formId]/submissions`** and **`.../[submissionId]`**: status, timestamps, FK ids with **drawer Open** for person/customer/customer_member/opportunity; **read-only `FormEngineRenderer`** + raw JSON; **`linked_documents`** from **`form_submission_documents`** + **Open** in documents drawer; **Generate document** → existing **`generate-document`** route (stub PDF).  
+  - **Follow-up:** dedicated **`form_submission_signatures`** surfacing in UI if needed beyond payload.
 
 ### Card 5 — Embed Validation UX
 
@@ -102,9 +100,9 @@ This sprint extends the **completed V1 foundation** with **minimal admin APIs, e
 ## 5. Definition of done (sprint)
 
 - [ ] **Medication authorization demo** completable **end-to-end** via public embed (submit succeeds with selects).  
-- [ ] Admin can **create/copy a public form link without SQL** (Card 1 API; Card 3 consumes it).  
-- [ ] Admin can **view submissions without raw DB access** (Card 3 + Card 4).  
-- [ ] Admin can **generate or access** a document from a submission (existing generate-document API + documents linkage; UI entry in Card 4).  
+- [x] Admin can **create/copy a public form link without SQL** (Card 1 API; **`/admin/forms/[formId]`**).  
+- [x] Admin can **view submissions without raw DB access** (submissions list + detail pages).  
+- [x] Admin can **generate or access** a document from a submission (**Generate document** + **Open** linked doc in drawer).  
 - [ ] **Workflow events** continue to emit through existing **`workflow_events`** (no regression).  
 - [ ] **Existing tests pass** (`tsc`, forms + admin + public forms test suites as in CI / dev convention).
 
