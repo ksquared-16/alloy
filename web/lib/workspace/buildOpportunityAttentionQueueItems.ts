@@ -7,16 +7,9 @@ import {
 } from "@/lib/admin/accessScope";
 import { buildOpportunityLifecycleFields, effectiveOpportunityQuoteDollars } from "@/lib/admin/opportunityLifecyclePresentation";
 import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
-import {
-    attentionReasonLabel,
-    computeOpportunityAttentionReason,
-    type OpportunityAttentionRuleConfigV1,
-    type OpportunityAttentionInputRow,
-} from "@/lib/workspace/opportunityAttentionRules";
-import {
-    isOpportunityActiveForExecution,
-    terminalOpportunityStatusKeysFromDefs,
-} from "@/lib/workspace/opportunityExecutionEligibility";
+import { resolveOpportunityAttentionConfigFromMetadata } from "@/lib/opportunities/opportunityAttentionConfig";
+import { resolveOpportunityAttention } from "@/lib/opportunities/opportunityAttentionResolver";
+import type { OpportunityAttentionRuleConfigV1 } from "@/lib/workspace/opportunityAttentionRules";
 import { enrichOpportunityRowsWithCrmProjection } from "@/lib/workspace/enrichOpportunityQueueProjection";
 import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
 import {
@@ -28,16 +21,29 @@ const MAX_ROWS = 500;
 
 export type { AttentionReasonCountSummary } from "@/lib/workspace/attentionReasonCountsSummary";
 
-type AttentionCandidateRow = OpportunityAttentionInputRow & {
+type AttentionCandidateRow = {
+    id: string;
     name: string | null;
+    status_key: string | null;
+    quote_total: number | string | null;
+    estimated_price_cents?: number | string | null;
+    monetary_value_cents?: number | string | null;
     customer_id: string | null;
     primary_person_id?: string | null;
+    primary_contact_id?: string | null;
     location_id?: string | null;
     job_date?: string | null;
     job_time_window?: string | null;
     customer_notes?: string | null;
     metadata?: unknown;
+    created_at: string | null;
+    updated_at: string | null;
 };
+
+function rowMetadataRecord(metadata: unknown): Record<string, unknown> | null {
+    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return null;
+    return metadata as Record<string, unknown>;
+}
 
 /**
  * Shared implementation for opportunity “Needs attention” rows (same rules as the work-unit route).
@@ -46,17 +52,23 @@ type AttentionCandidateRow = OpportunityAttentionInputRow & {
 export async function buildOpportunityAttentionQueueItems(params: {
     supabase: SupabaseClient;
     orgId: string;
-    rules: OpportunityAttentionRuleConfigV1;
+    /** Work unit / department `metadata` (or any object containing `opportunity_attention_rules`). */
+    attentionConfigMetadata?: unknown | null;
     accessDim?: AdminAccessScopeDimensions | null;
 }): Promise<{
     items: WorkspaceOpportunityQueueRuntime["items"];
     rules: OpportunityAttentionRuleConfigV1;
     attention_reason_counts: AttentionReasonCountSummary[];
 }> {
-    const { supabase, orgId, rules, accessDim = null } = params;
+    const { supabase, orgId, attentionConfigMetadata = null, accessDim = null } = params;
+
+    const attentionConfig = resolveOpportunityAttentionConfigFromMetadata(attentionConfigMetadata);
+    const rules: OpportunityAttentionRuleConfigV1 = {
+        version: 1,
+        thresholdsHours: { ...attentionConfig.thresholdsHours },
+    };
 
     const oppDefs = await fetchEffectiveStatusDefinitions(supabase, orgId, "opportunities", { activeOnly: true });
-    const terminalStatusKeys = terminalOpportunityStatusKeysFromDefs(oppDefs);
     const statusLabelByKey = new Map<string, string>();
     for (const d of oppDefs) {
         const k = String(d.status_key ?? "").trim();
@@ -68,7 +80,7 @@ export async function buildOpportunityAttentionQueueItems(params: {
     let oppQ = supabase
         .from("opportunities")
         .select(
-            "id, name, status_key, quote_total, customer_id, primary_person_id, location_id, work_unit_id, job_date, job_time_window, customer_notes, metadata, created_at, updated_at"
+            "id, name, status_key, quote_total, estimated_price_cents, monetary_value_cents, customer_id, primary_person_id, primary_contact_id, location_id, work_unit_id, job_date, job_time_window, customer_notes, metadata, created_at, updated_at"
         )
         .eq("org_id", orgId)
         .order("updated_at", { ascending: true, nullsFirst: false })
@@ -91,23 +103,38 @@ export async function buildOpportunityAttentionQueueItems(params: {
     const nowMs = Date.now();
     const candidates = (rows ?? []) as AttentionCandidateRow[];
 
-    const withReason = candidates
+    const withAttention = candidates
         .map((row) => {
-            if (!isOpportunityActiveForExecution({ statusKey: row.status_key, terminalStatusKeys })) {
-                return { row, reason: null };
-            }
-            const reason = computeOpportunityAttentionReason({ row, defs: oppDefs, rules, nowMs });
-            return { row, reason };
+            const resolved = resolveOpportunityAttention({
+                opportunity: {
+                    id: row.id,
+                    status_key: row.status_key,
+                    created_at: row.created_at,
+                    updated_at: row.updated_at,
+                    metadata: rowMetadataRecord(row.metadata),
+                    customer_id: row.customer_id,
+                    primary_person_id: row.primary_person_id ?? null,
+                    primary_contact_id: row.primary_contact_id ?? null,
+                    quote_total: row.quote_total ?? null,
+                    estimated_price_cents: row.estimated_price_cents ?? null,
+                    monetary_value_cents: row.monetary_value_cents ?? null,
+                },
+                defs: oppDefs,
+                nowMs,
+                config: attentionConfig,
+                optionalSignals: null,
+            });
+            return { row, resolved };
         })
-        .filter((x): x is { row: AttentionCandidateRow; reason: NonNullable<typeof x.reason> } => x.reason != null);
+        .filter((x) => x.resolved.needs_attention && x.resolved.primary_reason != null);
 
     const enrichById = await enrichOpportunityRowsWithCrmProjection(
         supabase,
         orgId,
-        withReason.map((x) => x.row)
+        withAttention.map((x) => x.row)
     );
 
-    const customerIds = [...new Set(withReason.map((x) => x.row.customer_id).filter(Boolean))] as string[];
+    const customerIds = [...new Set(withAttention.map((x) => x.row.customer_id).filter(Boolean))] as string[];
     const customerNameById = new Map<string, string | null>();
     if (customerIds.length) {
         const { data: custs } = await supabase
@@ -121,7 +148,8 @@ export async function buildOpportunityAttentionQueueItems(params: {
         }
     }
 
-    const items: WorkspaceOpportunityQueueRuntime["items"] = withReason.map(({ row, reason }) => {
+    const items: WorkspaceOpportunityQueueRuntime["items"] = withAttention.map(({ row, resolved }) => {
+        const pr = resolved.primary_reason!;
         const quoteForLifecycle = effectiveOpportunityQuoteDollars(row);
         const lifecycle = buildOpportunityLifecycleFields({
             statusKey: row.status_key,
@@ -150,13 +178,19 @@ export async function buildOpportunityAttentionQueueItems(params: {
             ...(enrichById.get(row.id) ?? {}),
             _customer_name: row.customer_id ? (customerNameById.get(row.customer_id) ?? null) : null,
             _status_display,
-            _attention_reason: reason,
-            _attention_reason_label: attentionReasonLabel(reason),
+            _attention_reason: pr.code,
+            _attention_reason_label: pr.label,
+            _attention_severity: pr.severity,
             ...lifecycle,
         };
     });
 
-    const attention_reason_counts = summarizeAttentionReasonCounts(withReason);
+    const attention_reason_counts = summarizeAttentionReasonCounts(
+        withAttention.map(({ resolved }) => {
+            const pr = resolved.primary_reason!;
+            return { reason_key: pr.code, label: pr.label };
+        })
+    );
 
     return { items, rules, attention_reason_counts };
 }

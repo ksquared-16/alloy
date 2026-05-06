@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1 } from "@/lib/workspace/opportunityAttentionRules";
 import { buildOpportunityAttentionQueueItems } from "@/lib/workspace/buildOpportunityAttentionQueueItems";
 import { enrichOpportunityQueueRowsWithActivitySignals } from "@/lib/admin/activitySignals";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
@@ -11,7 +10,7 @@ import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 /**
  * GET — Org-wide opportunity attention preview for a department when the `needs_attention` work unit
  * row is missing from bootstrap (Enrollment dept still needs visible exceptions on /dept).
- * Same item shape as `…/work-units/:id/opportunity-attention-queue`; uses default attention thresholds.
+ * Same item shape as `…/work-units/:id/opportunity-attention-queue`; thresholds come from canonical resolver + department `metadata` (defaults when absent).
  */
 export async function GET(_request: NextRequest, context: { params: Promise<{ departmentId: string }> }) {
     const ctx = await getAdminContextCached();
@@ -37,13 +36,6 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
     }
 
     try {
-        const { items, rules, attention_reason_counts } = await buildOpportunityAttentionQueueItems({
-            supabase,
-            orgId: ctx.orgId,
-            rules: DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1,
-            accessDim: dim,
-        });
-
         const { data: deptRow } = await supabase
             .from("departments")
             .select("metadata")
@@ -51,6 +43,13 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
             .eq("org_id", ctx.orgId)
             .maybeSingle();
         const departmentMetadata = (deptRow as { metadata?: unknown } | null)?.metadata ?? null;
+
+        const { items, rules, attention_reason_counts } = await buildOpportunityAttentionQueueItems({
+            supabase,
+            orgId: ctx.orgId,
+            attentionConfigMetadata: departmentMetadata,
+            accessDim: dim,
+        });
 
         let itemsOut = items;
         try {

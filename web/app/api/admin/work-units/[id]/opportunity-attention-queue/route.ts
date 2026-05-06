@@ -2,10 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import {
-    DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1,
-    parseOpportunityAttentionRuleConfigV1FromMetadata,
-} from "@/lib/workspace/opportunityAttentionRules";
 import { buildOpportunityAttentionQueueItems } from "@/lib/workspace/buildOpportunityAttentionQueueItems";
 import { enrichOpportunityQueueRowsWithActivitySignals } from "@/lib/admin/activitySignals";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
@@ -58,15 +54,11 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         }
     }
 
-    const rules =
-        parseOpportunityAttentionRuleConfigV1FromMetadata((wu as { metadata?: unknown }).metadata) ??
-        DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1;
-
     try {
         const { items, rules: resolvedRules, attention_reason_counts } = await buildOpportunityAttentionQueueItems({
             supabase,
             orgId: ctx.orgId,
-            rules,
+            attentionConfigMetadata: (wu as { metadata?: unknown }).metadata ?? null,
             accessDim: dim,
         });
 

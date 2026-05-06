@@ -1,7 +1,6 @@
-import {
-    attentionReasonLabel,
-    type OpportunityAttentionReason,
-} from "@/lib/workspace/opportunityAttentionRules";
+import { DEFAULT_OPPORTUNITY_ATTENTION_LABELS } from "@/lib/opportunities/opportunityAttentionConfig";
+import type { OpportunityAttentionReasonCode } from "@/lib/opportunities/opportunityAttentionResolver";
+import { attentionReasonLabel, type OpportunityAttentionReason } from "@/lib/workspace/opportunityAttentionRules";
 
 /** Authoritative histogram row — produced server-side alongside attention queue items. */
 export type AttentionReasonCountSummary = {
@@ -12,28 +11,36 @@ export type AttentionReasonCountSummary = {
 
 function displayLabelForReasonKey(reason_key: string, labelRaw: string): string {
     if (labelRaw.trim()) return labelRaw.trim();
-    const known: readonly OpportunityAttentionReason[] = [
+    if (reason_key in DEFAULT_OPPORTUNITY_ATTENTION_LABELS) {
+        return DEFAULT_OPPORTUNITY_ATTENTION_LABELS[reason_key as OpportunityAttentionReasonCode];
+    }
+    const knownLegacy: readonly OpportunityAttentionReason[] = [
         "stale_new_inquiry",
         "stale_qualified",
         "stale_quote_followup",
         "missing_quote_after_execution",
     ];
-    if ((known as readonly string[]).includes(reason_key)) {
+    if ((knownLegacy as readonly string[]).includes(reason_key)) {
         return attentionReasonLabel(reason_key as OpportunityAttentionReason);
     }
     return reason_key.trim() || "Needs attention";
 }
 
+/** Histogram by primary attention reason code (resolver `primary_reason.code`). */
 export function summarizeAttentionReasonCounts(
-    pairs: ReadonlyArray<{ reason: OpportunityAttentionReason }>
+    pairs: ReadonlyArray<{ reason_key: string; label: string }>
 ): AttentionReasonCountSummary[] {
-    const m = new Map<OpportunityAttentionReason, number>();
-    for (const { reason } of pairs) {
-        m.set(reason, (m.get(reason) ?? 0) + 1);
+    const m = new Map<string, number>();
+    const labelByKey = new Map<string, string>();
+    for (const p of pairs) {
+        const k = p.reason_key.trim();
+        if (!k) continue;
+        m.set(k, (m.get(k) ?? 0) + 1);
+        if (!labelByKey.has(k)) labelByKey.set(k, p.label.trim());
     }
     const rows: AttentionReasonCountSummary[] = [...m.entries()].map(([reason_key, count]) => ({
         reason_key,
-        label: attentionReasonLabel(reason_key),
+        label: displayLabelForReasonKey(reason_key, labelByKey.get(reason_key) ?? ""),
         count,
     }));
     rows.sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));

@@ -260,6 +260,8 @@ export type WorkspaceOpportunityQueueRuntime = {
         _lifecycle_next_step?: { title: string; lines: string[] };
         _attention_reason?: string | null;
         _attention_reason_label?: string | null;
+        /** Resolver primary_reason.severity — optional extension for sorting/filtering UI. */
+        _attention_severity?: "critical" | "high" | "medium" | "low" | null;
         _primary_email?: string | null;
         _primary_phone?: string | null;
         _primary_contact_line?: string | null;
