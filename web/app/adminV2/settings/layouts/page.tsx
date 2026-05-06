@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
+import EffectiveDrawerLayoutPreviewPanel from "@/components/adminV2/settings/EffectiveDrawerLayoutPreviewPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,8 @@ export default function AdminV2SettingsLayoutsPage() {
                     </p>
                 </div>
             </header>
+
+            <EffectiveDrawerLayoutPreviewPanel />
 
             <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
                 <Card href="/adminV2/settings/fields" title="Fields">

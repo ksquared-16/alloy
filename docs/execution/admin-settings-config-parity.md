@@ -4,11 +4,21 @@ This note aligns **what Settings claims** with **what the product actually reads
 
 ## Record drawer layout (source of truth)
 
-- **Tables:** `record_drawer_layouts` → `record_layouts`.
-- **Resolution:** The admin API (`GET` record layouts) prefers an **org-scoped** row in `record_drawer_layouts` (surface `drawer`, key such as `default`) that points at a `record_layouts` row; otherwise it falls back to global templates in `record_layouts`.
-- **What drives the UI:** The selected row’s **`record_layouts.config_json`** — structure, sections, overview rows, and (for opportunities) workflow-oriented blocks such as **`inquiry_workflow_sections`** where present.
+- **Tables:** `record_drawer_layouts` (org overrides) and `record_layouts` (global templates).
+- **Resolution chain (runtime / `GET /api/admin/record-layouts`):**
+  1. If an active org row exists in **`record_drawer_layouts`** with `surface = drawer`, `key = default` (for that `entity_type`), its **`config_json`** is the effective layout — stored **inline** on that row (no join required for the admin API).
+  2. Otherwise load active rows from **`record_layouts`** for the same `entity_type`; clients choose `key === "default"` or fall back to the first row (`useRecordChromeConfig`).
+- **What drives the drawer body:** Effective **`config_json`** — `overview_section_order`, optional **`inquiry_drawer_mode`** / **`inquiry_workflow_sections`** (opportunity workflow v1), schedule **`layout_blocks`**, etc.
 
-**Settings → Layouts** in AdminV2 is a **read-only navigation hub**; there is **no** layout JSON editor there yet.
+**Settings → Layouts** includes a **read-only effective preview** (Card 8): resolved section order and provenance via **`GET /api/admin/record-layouts/effective-preview`**. There is **no** layout JSON editor in Settings yet.
+
+### Workflow-generated vs static overview sections (opportunity)
+
+- **Field-catalog sections:** Built from **`field_definitions`** grouped by **`section_key`**, with titles from **`field_section_definitions`** when present — same grouping the drawer uses for config-driven grids.
+- **Workflow virtual sections:** When **`inquiry_drawer_mode === "workflow_v1"`**, **`inquiry_workflow_sections`** defines extra sections whose **`field_keys`** pull named fields out of that catalog (after header-field stripping). **`inquiry_tuition`** is an **injected** placeholder section for tuition/pricing chrome.
+- **Injected system sections:** Examples include **`__unified_status`** (merged then removed under workflow v1 / `suppress_body_status`) and **`inquiry_children`** (appended for existing opportunities; workflow v1 may pin it first).
+
+Job and schedule previews use a **presentation-ordered skeleton** (`entityPresentation` defaults + config ordering); full job/schedule merges (pricing blocks, canonical rows) still happen only in `AdminEntityDrawer`.
 
 ## Field sections (separate layer)
 
