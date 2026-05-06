@@ -115,6 +115,9 @@ describe("QueueService — pure helpers", () => {
         expect(expr).toContain("primary_person_id.is.null");
         expect(expr).toContain("primary_contact_id.is.null");
         expect(expr).toContain("updated_at.lt.");
+        expect(expr).toContain("created_at.lt.");
+        const lifecycleCutIso = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString();
+        expect(expr).toContain(`created_at.lt.${lifecycleCutIso}`);
         expect(expr).toContain("metadata->>next_follow_up_at.lt.");
         expect(expr).toContain("and(status_key.eq.tour_scheduled,metadata->>tour_date.lt.");
     });

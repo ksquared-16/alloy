@@ -23,6 +23,9 @@ import { fetchOperationalTimezoneForOrgWithCache, UTC_FALLBACK_IANA } from "@/li
 import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
 import type { RecordScopeConstraints } from "@/lib/admin/accessScope";
 import { applyRecordScopeConstraintsToQuery } from "@/lib/admin/accessScope";
+import { resolveOpportunityAttentionConfigFromMetadata, type OpportunityAttentionResolvedConfig } from "@/lib/opportunities/opportunityAttentionConfig";
+import { resolveOpportunityAttention, type OpportunityAttentionEntityInput } from "@/lib/opportunities/opportunityAttentionResolver";
+import { DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1 } from "@/lib/workspace/opportunityAttentionRules";
 
 type JobRowPreview = {
     id: string;
@@ -43,6 +46,9 @@ type OpportunityRowPreview = {
     primary_person_id?: string | null;
     primary_contact_id: string | null;
     work_unit_id: string | null;
+    quote_total?: number | string | null;
+    estimated_price_cents?: number | string | null;
+    monetary_value_cents?: number | string | null;
     created_at: string;
     updated_at: string;
     metadata?: Record<string, unknown> | null;
@@ -325,6 +331,47 @@ function jobFilterToOps(f: QueueFilter, dayBounds: OrgLocalDayUtcBounds): JobQue
 
 function subtractDays(now: Date, days: number): Date {
     return new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+}
+
+function subtractHours(now: Date, hours: number): Date {
+    return new Date(now.getTime() - hours * 60 * 60 * 1000);
+}
+
+/** Default min lifecycle stale window (hours) for PostgREST prefilter supersets — matches v1 thresholds floor. */
+function defaultMinLifecycleStaleHours(): number {
+    const th = DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1.thresholdsHours;
+    return Math.floor(
+        Math.min(th.stale_new_inquiry, th.stale_qualified, th.stale_quote_followup, th.missing_quote_after_execution)
+    );
+}
+
+function minLifecycleStaleHoursFromResolvedConfig(thresholdsHours: OpportunityAttentionResolvedConfig["thresholdsHours"]): number {
+    return Math.floor(
+        Math.min(
+            thresholdsHours.stale_new_inquiry,
+            thresholdsHours.stale_qualified,
+            thresholdsHours.stale_quote_followup,
+            thresholdsHours.missing_quote_after_execution
+        )
+    );
+}
+
+function opportunityPreviewToResolverEntity(row: OpportunityRowPreview): OpportunityAttentionEntityInput {
+    const md = row.metadata;
+    return {
+        id: row.id,
+        status_key: row.status_key,
+        created_at: row.created_at ?? null,
+        updated_at: row.updated_at ?? null,
+        metadata:
+            md && typeof md === "object" && !Array.isArray(md) ? (md as Record<string, unknown>) : null,
+        customer_id: row.customer_id,
+        primary_person_id: row.primary_person_id ?? null,
+        primary_contact_id: row.primary_contact_id ?? null,
+        quote_total: row.quote_total ?? null,
+        estimated_price_cents: row.estimated_price_cents ?? null,
+        monetary_value_cents: row.monetary_value_cents ?? null,
+    };
 }
 
 /** Queue preview only — prepend timestamp when `metadata.notes_at` is set (instant in DB → wall clock in viewer TZ). */
@@ -731,6 +778,15 @@ async function enrichOpportunityRows(params: {
     };
     /** User → org → UTC for `_notes_preview` / `_tour_context` (Timezone Contract v1). */
     viewerDisplayTimeZoneIana?: string;
+    /**
+     * When set (opportunity `needs_attention` lane), attention fields use {@link resolveOpportunityAttention}
+     * with caller-resolved defs + config (`config` must be computed once per request/work unit).
+     */
+    opportunityAttentionResolution?: {
+        defs: StatusDefinitionRow[];
+        config: OpportunityAttentionResolvedConfig;
+        nowMs: number;
+    } | null;
 }): Promise<{ rows: Array<Record<string, unknown>>; queueListSubtimings?: QueueListEnrichmentSubtimingsMs }> {
     const {
         supabase,
@@ -740,6 +796,7 @@ async function enrichOpportunityRows(params: {
         enrichment = "full",
         relationFetchPlan,
         viewerDisplayTimeZoneIana: viewerTzRaw,
+        opportunityAttentionResolution,
     } = params;
     const displayTz = typeof viewerTzRaw === "string" && viewerTzRaw.trim() ? viewerTzRaw.trim() : UTC_FALLBACK_IANA;
     const previewLite = enrichment === "queue_preview" || enrichment === "queue_list";
@@ -1000,7 +1057,23 @@ async function enrichOpportunityRows(params: {
         const sk = (r.status_key ?? "").trim();
         const statusDisplay = sk ? labelByKey.get(sk) ?? sk : null;
 
-        const attentionReason = opportunityNeedsAttentionReasonLabel(r, nowForAttention);
+        let attentionReasonLabel: string | null;
+        let attentionReasonCode: string | null = null;
+        let attentionSeverity: "critical" | "high" | "medium" | "low" | null = null;
+        if (opportunityAttentionResolution) {
+            const attn = resolveOpportunityAttention({
+                opportunity: opportunityPreviewToResolverEntity(r),
+                defs: opportunityAttentionResolution.defs,
+                config: opportunityAttentionResolution.config,
+                nowMs: opportunityAttentionResolution.nowMs,
+                optionalSignals: null,
+            });
+            attentionReasonCode = attn.primary_reason?.code ?? null;
+            attentionReasonLabel = attn.primary_reason?.label ?? null;
+            attentionSeverity = attn.primary_reason?.severity ?? null;
+        } else {
+            attentionReasonLabel = opportunityNeedsAttentionReasonLabel(r, nowForAttention);
+        }
         const tourContext = tourDate ? `Tour: ${formatTourDateTime(tourDate, tourTime, { displayTimeZoneIana: displayTz }).display}` : null;
 
         const structuredFromInquiry = buildStructuredCrmCompactChildren([], inquiryChildren);
@@ -1028,7 +1101,13 @@ async function enrichOpportunityRows(params: {
             _notes_preview: notesPreview,
             _next_step_preview: nextStepPreview,
             _status_display: statusDisplay,
-            _attention_reason_label: attentionReason,
+            _attention_reason_label: attentionReasonLabel,
+            ...(opportunityAttentionResolution
+                ? {
+                      _attention_reason: attentionReasonCode,
+                      _attention_severity: attentionSeverity,
+                  }
+                : {}),
         };
     });
     const mapMs = Date.now() - tMap0;
@@ -1062,14 +1141,17 @@ async function enrichOpportunityRows(params: {
     return { rows: mapped, queueListSubtimings };
 }
 
-function buildOpportunityNeedsAttentionOrExpr(now: Date): string {
+function buildOpportunityNeedsAttentionOrExpr(now: Date, minLifecycleStaleHours: number = defaultMinLifecycleStaleHours()): string {
     const stale7d = toIso(subtractDays(now, 7));
     const stale2d = toIso(subtractDays(now, 2));
     const nowIso = toIso(now);
     const todayYmd = now.toISOString().slice(0, 10);
+    const lifecycleStaleCut = toIso(subtractHours(now, minLifecycleStaleHours));
     // PostgREST `or` grammar (used by tests / future SQL); enrollment `needs_attention` queue is evaluated in-memory instead.
     return [
         `updated_at.lt.${stale7d}`,
+        `updated_at.lt.${lifecycleStaleCut}`,
+        `created_at.lt.${lifecycleStaleCut}`,
         "primary_contact_id.is.null",
         "customer_id.is.null",
         buildOpportunityHighValueStaleOrBranches(stale2d),
@@ -1080,16 +1162,19 @@ function buildOpportunityNeedsAttentionOrExpr(now: Date): string {
 
 /**
  * PostgREST `.or(...)` pre-filter for the needs_attention workload: superset of rows that might pass
- * {@link opportunityNeedsAttention} (no false negatives). Extra rows are removed in-memory — reduces
- * rows scanned/sorted before the capped fetch.
+ * resolver membership (lifecycle stale uses the configured hour thresholds). Extra rows are removed in-memory —
+ * reduces rows scanned/sorted before the capped fetch.
  */
-function buildOpportunityNeedsAttentionCandidateOrExpr(now: Date): string {
+function buildOpportunityNeedsAttentionCandidateOrExpr(now: Date, minLifecycleStaleHours: number = defaultMinLifecycleStaleHours()): string {
     const stale7d = toIso(subtractDays(now, 7));
     const stale2d = toIso(subtractDays(now, 2));
     const nowIso = toIso(now);
     const todayYmd = now.toISOString().slice(0, 10);
+    const lifecycleStaleCut = toIso(subtractHours(now, minLifecycleStaleHours));
     return [
         `updated_at.lt.${stale7d}`,
+        `updated_at.lt.${lifecycleStaleCut}`,
+        `created_at.lt.${lifecycleStaleCut}`,
         "customer_id.is.null",
         "primary_person_id.is.null",
         "primary_contact_id.is.null",
@@ -1130,15 +1215,23 @@ async function loadOpportunityNeedsAttentionRows(params: {
     workUnitId: string;
     sort: OpportunitySortPlan[];
     now: Date;
+    opportunityStatusDefs: StatusDefinitionRow[];
+    /** Resolved once per work-unit request — shared by prefilter, membership filter, and enrichment. */
+    attentionConfig: OpportunityAttentionResolvedConfig;
     /** Default full cap; use {@link NEEDS_ATTENTION_COUNT_ONLY_FETCH_CAP} for count-only summaries. */
     fetchCap?: number;
     recordScopeConstraints?: RecordScopeConstraints | null;
 }): Promise<OpportunityRowPreview[]> {
     const cap = params.fetchCap ?? NEEDS_ATTENTION_OPPORTUNITY_FETCH_CAP;
-    const candidateOr = buildOpportunityNeedsAttentionCandidateOrExpr(params.now);
+    const attentionConfig = params.attentionConfig;
+    const minLifecycleH = minLifecycleStaleHoursFromResolvedConfig(attentionConfig.thresholdsHours);
+    const candidateOr = buildOpportunityNeedsAttentionCandidateOrExpr(params.now, minLifecycleH);
+    const nowMs = params.now.getTime();
     let q = params.supabase
         .from("opportunities")
-        .select("id, name, status_key, customer_id, primary_person_id, primary_contact_id, work_unit_id, metadata, created_at, updated_at")
+        .select(
+            "id, name, status_key, quote_total, estimated_price_cents, monetary_value_cents, customer_id, primary_person_id, primary_contact_id, work_unit_id, metadata, created_at, updated_at"
+        )
         .eq("org_id", params.orgId)
         .eq("work_unit_id", params.workUnitId)
         .or(candidateOr) as any;
@@ -1154,7 +1247,15 @@ async function loadOpportunityNeedsAttentionRows(params: {
         throw new QueueServiceError(error.message, 400, "DB_ERROR");
     }
     const rows = (data ?? []) as OpportunityRowPreview[];
-    const filtered = rows.filter((r) => opportunityNeedsAttention(r, params.now));
+    const filtered = rows.filter((r) =>
+        resolveOpportunityAttention({
+            opportunity: opportunityPreviewToResolverEntity(r),
+            defs: params.opportunityStatusDefs,
+            config: attentionConfig,
+            nowMs,
+            optionalSignals: null,
+        }).needs_attention
+    );
     return sortOpportunityRowsByPlan(filtered, params.sort);
 }
 
@@ -1282,20 +1383,28 @@ function applySortToJobQuery(
     return out;
 }
 
-const WU_QUEUE_DEF_CACHE = new Map<string, { at: number; def: QueueDefinitionV1; revision: string | null }>();
+type WorkUnitQueueDefinitionCacheEntry = {
+    at: number;
+    def: QueueDefinitionV1;
+    revision: string | null;
+    /** `work_units.metadata` — feeds opportunity attention resolver config (same TTL as definition). */
+    workUnitMetadata: unknown | null;
+};
+const WU_QUEUE_DEF_CACHE = new Map<string, WorkUnitQueueDefinitionCacheEntry>();
 const WU_QUEUE_DEF_TTL_MS = 90_000;
 const WU_QUEUE_DEF_CACHE_ENABLED = process.env.NODE_ENV !== "test";
 
 async function loadWorkUnitQueueDefinitionWithMeta(params: { orgId: string; workUnitId: string }): Promise<{
     def: QueueDefinitionV1;
     cacheHit: boolean;
+    workUnitMetadata: unknown | null;
 }> {
-    const cacheKey = `${params.orgId}:${params.workUnitId}`;
+    const cacheKey = `wudef:v2:${params.orgId}:${params.workUnitId}`;
     const now = Date.now();
     if (WU_QUEUE_DEF_CACHE_ENABLED) {
         const hit = WU_QUEUE_DEF_CACHE.get(cacheKey);
         if (hit && now - hit.at < WU_QUEUE_DEF_TTL_MS) {
-            return { def: hit.def, cacheHit: true };
+            return { def: hit.def, cacheHit: true, workUnitMetadata: hit.workUnitMetadata ?? null };
         }
     }
     const supabase = createAdminClient();
@@ -1305,7 +1414,7 @@ async function loadWorkUnitQueueDefinitionWithMeta(params: { orgId: string; work
         async () =>
             supabase
                 .from("work_units")
-                .select("id, org_id, queue_definition, updated_at")
+                .select("id, org_id, queue_definition, metadata, updated_at")
                 .eq("id", params.workUnitId)
                 .eq("org_id", params.orgId)
                 .maybeSingle()
@@ -1331,10 +1440,11 @@ async function loadWorkUnitQueueDefinitionWithMeta(params: { orgId: string; work
         throw new QueueServiceError("Unsupported stored queue_definition version", 400, "UNSUPPORTED_VERSION");
     }
     const def = loadQueueDefinitionOrThrow(raw);
+    const workUnitMetadata = (data as { metadata?: unknown | null }).metadata ?? null;
     if (WU_QUEUE_DEF_CACHE_ENABLED) {
-        WU_QUEUE_DEF_CACHE.set(cacheKey, { at: now, def, revision });
+        WU_QUEUE_DEF_CACHE.set(cacheKey, { at: now, def, revision, workUnitMetadata });
     }
-    return { def, cacheHit: false };
+    return { def, cacheHit: false, workUnitMetadata };
 }
 
 async function loadWorkUnitQueueDefinition(params: { orgId: string; workUnitId: string }): Promise<QueueDefinitionV1> {
@@ -1511,8 +1621,8 @@ export async function getWorkUnitQueueSummaries(params: {
     const viewerPreviewIana = viewerTimeZoneMeta?.iana?.trim() ? viewerTimeZoneMeta.iana.trim() : UTC_FALLBACK_IANA;
     const viewerTimeZonePayload = viewerTimeZoneMeta ? { viewer_timezone: viewerTimeZoneMeta } : {};
     const tParallelBoot0 = Date.now();
-    const [def, operationalDay] = await Promise.all([
-        loadWorkUnitQueueDefinition({ orgId: params.orgId, workUnitId: params.workUnitId }),
+    const [{ def, workUnitMetadata }, operationalDay] = await Promise.all([
+        loadWorkUnitQueueDefinitionWithMeta({ orgId: params.orgId, workUnitId: params.workUnitId }),
         sharedBootstrap
             ? Promise.resolve(sharedBootstrap.operationalDay)
             : resolveOperationalDayPlanContext(supabase, params.orgId, refUtc),
@@ -1707,24 +1817,23 @@ export async function getWorkUnitQueueSummaries(params: {
         }
 
         if (q.key === "needs_attention") {
+            const attentionConfigResolved = resolveOpportunityAttentionConfigFromMetadata(workUnitMetadata ?? null);
             const tN0 = Date.now();
             let matched: OpportunityRowPreview[];
             let preloadStatusDefs: StatusDefinitionRow[] | undefined;
+            preloadStatusDefs = await sharedOpportunityStatusDefs();
             if (includePreviews) {
-                const loaded = await Promise.all([
-                    loadOpportunityNeedsAttentionRows({
-                        supabase,
-                        orgId: params.orgId,
-                        workUnitId: params.workUnitId,
-                        sort,
-                        now: refUtc,
-                        fetchCap: undefined,
-                        recordScopeConstraints: scopeFilter,
-                    }),
-                    sharedOpportunityStatusDefs(),
-                ]);
-                matched = loaded[0];
-                preloadStatusDefs = loaded[1];
+                matched = await loadOpportunityNeedsAttentionRows({
+                    supabase,
+                    orgId: params.orgId,
+                    workUnitId: params.workUnitId,
+                    sort,
+                    now: refUtc,
+                    opportunityStatusDefs: preloadStatusDefs,
+                    attentionConfig: attentionConfigResolved,
+                    fetchCap: undefined,
+                    recordScopeConstraints: scopeFilter,
+                });
             } else {
                 matched = await loadOpportunityNeedsAttentionRows({
                     supabase,
@@ -1732,6 +1841,8 @@ export async function getWorkUnitQueueSummaries(params: {
                     workUnitId: params.workUnitId,
                     sort,
                     now: refUtc,
+                    opportunityStatusDefs: preloadStatusDefs,
+                    attentionConfig: attentionConfigResolved,
                     fetchCap: NEEDS_ATTENTION_COUNT_ONLY_FETCH_CAP,
                     recordScopeConstraints: scopeFilter,
                 });
@@ -1764,6 +1875,11 @@ export async function getWorkUnitQueueSummaries(params: {
                 effectiveStatusDefs: preloadStatusDefs,
                 enrichment: "queue_preview",
                 viewerDisplayTimeZoneIana: viewerPreviewIana,
+                opportunityAttentionResolution: {
+                    defs: preloadStatusDefs,
+                    config: attentionConfigResolved,
+                    nowMs: refUtc.getTime(),
+                },
             });
             enrichMs = Date.now() - tE0;
 
@@ -2065,6 +2181,7 @@ export async function getWorkUnitQueueItems(params: {
     ]);
     const queueDefCacheHit = defTimed.value.cacheHit;
     const def = defTimed.value.def;
+    const workUnitMetadata = defTimed.value.workUnitMetadata ?? null;
     const operationalDay = opsTimed.value.ctx;
     const operationalDayCacheHit = opsTimed.value.cacheHit;
     const load_def_ms = defTimed.ms;
@@ -2246,21 +2363,22 @@ export async function getWorkUnitQueueItems(params: {
     const { ops, sort, calendar_meta } = buildOpportunityPlan(q, refUtc, operationalDay);
 
     if (params.queueKey === "needs_attention") {
-        const [{ value: matched, ms: naLoadMs }, { value: statusPack, ms: statusDefsMs }] = await Promise.all([
-            timedBranch(
-                loadOpportunityNeedsAttentionRows({
-                    supabase,
-                    orgId: params.orgId,
-                    workUnitId: params.workUnitId,
-                    sort,
-                    now: refUtc,
-                    recordScopeConstraints: scopeFilter,
-                })
-            ),
-            timedBranch(oppStatusDefsPromise),
-        ]);
+        const attentionConfigResolved = resolveOpportunityAttentionConfigFromMetadata(workUnitMetadata);
+        const { value: statusPack, ms: statusDefsMs } = await timedBranch(oppStatusDefsPromise);
         const effectiveStatusDefs = statusPack.rows;
         const statusDefsCacheHit = statusPack.combinedCacheHit;
+        const { value: matched, ms: naLoadMs } = await timedBranch(
+            loadOpportunityNeedsAttentionRows({
+                supabase,
+                orgId: params.orgId,
+                workUnitId: params.workUnitId,
+                sort,
+                now: refUtc,
+                opportunityStatusDefs: effectiveStatusDefs,
+                attentionConfig: attentionConfigResolved,
+                recordScopeConstraints: scopeFilter,
+            })
+        );
         const slice = matched.slice(effectiveOffset, effectiveOffset + effectiveLimit);
         const tEn0 = Date.now();
         const { rows: enrichedRows, queueListSubtimings } = await enrichOpportunityRows({
@@ -2271,6 +2389,11 @@ export async function getWorkUnitQueueItems(params: {
             enrichment: "queue_list",
             relationFetchPlan: queueListRelationPlan,
             viewerDisplayTimeZoneIana: viewerPreviewIana,
+            opportunityAttentionResolution: {
+                defs: effectiveStatusDefs,
+                config: attentionConfigResolved,
+                nowMs: refUtc.getTime(),
+            },
         });
         const enrichment_ms = Date.now() - tEn0;
         return finalize(
