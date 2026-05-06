@@ -6,8 +6,15 @@
 
 - **Cards 0, 0.5, 1, and 1.5 are complete** (outputs appended below as **Appendices A–D**).
 - **Architecture / design lock is accepted** (see **Approved architecture decisions** and **§17 Architecture freeze rules**).
-- **Implementation is now ready to begin** with **Phase 3 — Build Loop**.
-- **First build card:** **Card 2 — Migrations** (per **§16**; implements **Appendix C — Card 1 data model**).
+- **Card 2 — Migrations:** **complete** — migration **`supabase/migrations/20260506100000_forms_engine_v1_foundation.sql`** implements **Appendix C** (tables, RLS, triggers).
+- **Next step:** **Card 3 — Shared schema + validator** (compile `schema_json` → draft/submit validation; Card 2 foundation required).
+
+### Card 2 — validation note (engineering)
+
+- Migration validated in **Docker PG15** with **schema stubs** (minimal deps: orgs/CRM FK targets/documents/roles/helpers).
+- Trigger **immutability** behavior tested (**published/archived versions** + **submission finalization**).
+- **`void`** submissions are **frozen** after migration patch (**payload** / version / linkage edits blocked).
+- **Real Supabase staging apply still required** before production deployment (**`supabase db push`** or team pipeline once linked).
 
 ---
 
@@ -145,8 +152,8 @@ The north star is: **structured form submissions are the durable source of truth
 
 ### Phase 3 — Build Loop
 
-- **Card 2:** Migrations  
-- **Card 3:** Shared schema + validator  
+- **Card 2:** Migrations **(complete)**  
+- **Card 3:** Shared schema + validator **← current**  
 - **Card 4:** Admin APIs  
 - **Card 5:** Public APIs + iframe resolve  
 - **Card 6:** Renderer  
@@ -168,7 +175,7 @@ The north star is: **structured form submissions are the durable source of truth
 | 0.5 | Architecture Risk Review | 1 |
 | 1 | Final Data Model | 2 |
 | 1.5 | API + Rendering Design | 2 |
-| 2 | Migrations | 3 |
+| 2 | Migrations (complete) | 3 |
 | 3 | Shared schema + validator | 3 |
 | 4 | Admin APIs | 3 |
 | 5 | Public APIs + iframe resolve | 3 |
@@ -266,8 +273,8 @@ The north star is: **structured form submissions are the durable source of truth
 
 *(Phase 3 — execute only after Cards 0, 0.5, 1, 1.5 are approved.)*
 
-- **Card 2:** Migrations — implement **Appendix C** (tables, constraints, indexes, RLS stubs as designed; roll-forward plan).  
-- **Card 3:** Shared schema + validator — compile **`schema_json`** to draft/submit validators (e.g. Zod); option sets, visibility, groups, signatures.  
+- **Card 2:** Migrations **[complete]** — **`supabase/migrations/20260506100000_forms_engine_v1_foundation.sql`** (**Appendix C**; tables, indexes, **RLS + triggers**, not stubs).  
+- **Card 3:** Shared schema + validator **[next]** — compile **`schema_json`** to draft/submit validators (e.g. Zod); option sets, visibility, groups, signatures.  
 - **Card 4:** Admin APIs — `/api/admin/forms/**` per **Appendix D**.  
 - **Card 5:** Public APIs + iframe resolve — `/api/public/forms/**` (bootstrap, draft, submit, assets) per **Appendix D**; token → `org_id` via **`form_public_links`**.  
 - **Card 6:** Renderer — staff + public iframe/mobile; schema-driven only (no drag/drop builder).  
@@ -390,7 +397,7 @@ For **every** card execution, Cursor must produce:
 
 ### B.4 Implementation gate
 
-- **Blocked until Card 1 + 1.5** — **cleared** after appendices C–D; **Card 2** may start.
+- **Blocked until Card 1 + 1.5** — **cleared** after appendices C–D; **Card 2** delivered; proceed **Card 3**.
 
 ---
 
@@ -508,7 +515,7 @@ For **every** card execution, Cursor must produce:
 
 ### D.11 Build handoff (Phase 3 — same order as §16)
 
-- **Card 2 — Migrations**  
+- **Card 2 — Migrations** **(complete)**  
 - **Card 3 — Shared schema + validator**  
 - **Card 4 — Admin APIs**  
 - **Card 5 — Public APIs + iframe resolve**  
