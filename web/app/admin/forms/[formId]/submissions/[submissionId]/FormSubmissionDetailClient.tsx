@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import PrimaryButton from "@/components/PrimaryButton";
@@ -14,6 +14,15 @@ import type { FormPayload } from "@/lib/forms/validateSubmission";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
+import {
+    buildEntityConnectionRows,
+    describeDocumentOutcome,
+    describeSubmissionLifecycle,
+    payloadHasCapturedSignatures,
+    recommendedNextAction,
+    WORKFLOW_SIGNALS_OPERATOR_COPY,
+    type EntityConnectionRow,
+} from "@/lib/forms/submissionOutcomeSummary";
 
 type LinkedDoc = {
     role: string;
@@ -45,25 +54,37 @@ type SubmissionDetail = {
     linked_documents: LinkedDoc[];
 };
 
-function FkRow({
-    label,
-    id,
+function ConnectionRow({
+    row,
     onOpen,
 }: {
-    label: string;
-    id: string | null;
+    row: EntityConnectionRow;
     onOpen?: () => void;
 }) {
-    if (!id) return null;
+    const linked = row.recordId != null;
     return (
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="text-[#59678b]">{label}</span>
-            <code className="rounded bg-[#F4F6F9] px-1.5 py-0.5 font-mono text-xs text-[#31394d]">{id}</code>
-            {onOpen ? (
-                <button type="button" className="text-[#00458C] hover:underline" onClick={onOpen}>
-                    Open
-                </button>
-            ) : null}
+        <div className="flex flex-col gap-1 border-b border-[#eef0f4] py-2.5 text-sm last:border-b-0 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+            <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                    <span className="font-medium text-[#31394d]">{row.label}</span>
+                    <span className={linked ? "font-medium text-[#1a6b52]" : "text-[#59678b]"}>
+                        {linked ? "Linked" : "Not linked"}
+                    </span>
+                </div>
+                <p className="mt-0.5 text-xs leading-snug text-[#59678b]">{row.hint}</p>
+            </div>
+            <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
+                {linked && row.recordId ? (
+                    <code className="max-w-[240px] truncate rounded bg-[#F4F6F9] px-1.5 py-0.5 font-mono text-[11px] text-[#31394d] sm:max-w-md">
+                        {row.recordId}
+                    </code>
+                ) : null}
+                {linked && onOpen ? (
+                    <button type="button" className="text-[#00458C] hover:underline" onClick={onOpen}>
+                        Open
+                    </button>
+                ) : null}
+            </div>
         </div>
     );
 }
@@ -135,6 +156,37 @@ export default function FormSubmissionDetailClient() {
     const schemaParsed = row?.schema_json != null ? safeParseFormSchema(row.schema_json) : null;
     const schema: FormSchemaV1 | null = schemaParsed?.success ? schemaParsed.data : null;
 
+    const lifecycle = useMemo(() => {
+        if (!row) return null;
+        return describeSubmissionLifecycle({
+            status: row.status,
+            payloadHasSignatures: payloadHasCapturedSignatures(row.payload),
+        });
+    }, [row]);
+
+    const entityRows = useMemo(() => (row ? buildEntityConnectionRows(row) : []), [row]);
+
+    const documentOutcome = useMemo(() => {
+        if (!row) return null;
+        return describeDocumentOutcome({
+            linkedDocumentsCount: row.linked_documents.length,
+            submissionStatus: row.status,
+            canMutate,
+        });
+    }, [row, canMutate]);
+
+    const nextSteps = useMemo(() => {
+        if (!row) return [];
+        const hasCrm =
+            !!(row.person_id || row.customer_id || row.customer_member_id || row.opportunity_id);
+        return recommendedNextAction({
+            status: row.status,
+            linkedDocumentsCount: row.linked_documents.length,
+            canMutate,
+            hasAnyCrmEntityLink: hasCrm,
+        });
+    }, [row, canMutate]);
+
     if (!formId || !submissionId) {
         return <p className="p-6 text-sm text-red-700">Missing route params.</p>;
     }
@@ -145,7 +197,7 @@ export default function FormSubmissionDetailClient() {
         <div className="space-y-6">
             <AdminPageHeader
                 title="Submission"
-                subtitle="Status, linked documents, and captured answers."
+                subtitle="Outcome, linked records, documents, and answers."
                 actions={
                     <div className="flex flex-wrap gap-3">
                         <Link
@@ -170,70 +222,151 @@ export default function FormSubmissionDetailClient() {
                 <p className="text-sm text-red-700">{error}</p>
             ) : mismatch ? (
                 <p className="text-sm text-red-700">This submission does not belong to the form in the URL.</p>
-            ) : row ? (
+            ) : row && lifecycle && documentOutcome ? (
                 <>
-                    <SectionCard title="Summary">
-                        <div className="flex flex-wrap gap-3">
-                            <StatusBadge label={row.status} variant={getStatusVariant(row.status)} />
-                        </div>
-                        <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
-                            <div>
-                                <dt className="text-[#59678b]">Submission id</dt>
-                                <dd className="font-mono text-xs text-[#31394d]">{row.id}</dd>
+                    <SectionCard title="Outcome summary">
+                        <section className="space-y-2 border-b border-[#e6e8ec] pb-4">
+                            <h3 className="text-xs font-bold uppercase tracking-wide text-[#59678b]">
+                                Submission status
+                            </h3>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <StatusBadge label={row.status} variant={getStatusVariant(row.status)} />
+                                <span className="text-sm font-semibold text-[#31394d]">{lifecycle.headline}</span>
                             </div>
-                            <div>
-                                <dt className="text-[#59678b]">Version id</dt>
-                                <dd className="font-mono text-xs text-[#31394d]">{row.form_definition_version_id}</dd>
-                            </div>
-                            <div>
-                                <dt className="text-[#59678b]">Created</dt>
-                                <dd className="text-[#31394d]">{formatDateTime(row.created_at)}</dd>
-                            </div>
-                            <div>
-                                <dt className="text-[#59678b]">Submitted</dt>
-                                <dd className="text-[#31394d]">{row.submitted_at ? formatDateTime(row.submitted_at) : "—"}</dd>
-                            </div>
-                        </dl>
+                            {row.submitted_at ? (
+                                <p className="text-sm text-[#31394d]">
+                                    <span className="text-[#59678b]">Submitted at: </span>
+                                    {formatDateTime(row.submitted_at)}
+                                </p>
+                            ) : (
+                                <p className="text-sm text-[#59678b]">Not submitted yet — no submitted timestamp.</p>
+                            )}
+                            <p className="text-sm text-[#59678b]">Created: {formatDateTime(row.created_at)}</p>
+                            {lifecycle.notes.length ? (
+                                <ul className="list-disc space-y-1 pl-5 text-sm text-[#31394d]">
+                                    {lifecycle.notes.map((n, i) => (
+                                        <li key={`lc-${i}`}>{n}</li>
+                                    ))}
+                                </ul>
+                            ) : null}
+                        </section>
 
-                        <div className="mt-4 space-y-2 border-t border-[#e6e8ec] pt-4">
-                            <p className="text-xs font-semibold uppercase tracking-wide text-[#59678b]">Related records</p>
-                            <FkRow
-                                label="Person"
-                                id={row.person_id}
-                                onOpen={
-                                    row.person_id ? () => openDrawer({ type: "persons", id: row.person_id! }) : undefined
-                                }
-                            />
-                            <FkRow
-                                label="Customer"
-                                id={row.customer_id}
-                                onOpen={
-                                    row.customer_id ? () => openDrawer({ type: "customers", id: row.customer_id! }) : undefined
-                                }
-                            />
-                            <FkRow
-                                label="Customer member"
-                                id={row.customer_member_id}
-                                onOpen={
-                                    row.customer_member_id
-                                        ? () => openDrawer({ type: "customer_members", id: row.customer_member_id! })
-                                        : undefined
-                                }
-                            />
-                            <FkRow
-                                label="Opportunity"
-                                id={row.opportunity_id}
-                                onOpen={
-                                    row.opportunity_id
-                                        ? () => openDrawer({ type: "opportunities", id: row.opportunity_id! })
-                                        : undefined
-                                }
-                            />
-                            <FkRow label="Public link id" id={row.created_via_public_link_id} />
-                        </div>
+                        <section className="space-y-1 border-b border-[#e6e8ec] py-4">
+                            <h3 className="text-xs font-bold uppercase tracking-wide text-[#59678b]">
+                                Records connected
+                            </h3>
+                            <p className="mb-2 text-sm text-[#59678b]">
+                                CRM links appear when intake or other flows attach them. “Not linked” is normal for early
+                                drafts.
+                            </p>
+                            <div className="rounded-lg border border-[#e6e8ec] bg-[#fafbfd] px-3 sm:px-4">
+                                {entityRows.map((er) => (
+                                    <ConnectionRow
+                                        key={er.key}
+                                        row={er}
+                                        onOpen={
+                                            er.key === "person" && er.recordId
+                                                ? () => openDrawer({ type: "persons", id: er.recordId! })
+                                                : er.key === "customer" && er.recordId
+                                                  ? () => openDrawer({ type: "customers", id: er.recordId! })
+                                                  : er.key === "customer_member" && er.recordId
+                                                    ? () =>
+                                                          openDrawer({
+                                                              type: "customer_members",
+                                                              id: er.recordId!,
+                                                          })
+                                                    : er.key === "opportunity" && er.recordId
+                                                      ? () =>
+                                                            openDrawer({
+                                                                type: "opportunities",
+                                                                id: er.recordId!,
+                                                            })
+                                                      : undefined
+                                        }
+                                    />
+                                ))}
+                            </div>
+                        </section>
+
+                        <section className="space-y-2 border-b border-[#e6e8ec] py-4">
+                            <h3 className="text-xs font-bold uppercase tracking-wide text-[#59678b]">
+                                Document outcome
+                            </h3>
+                            <p className="text-sm font-medium text-[#31394d]">{documentOutcome.headline}</p>
+                            <ul className="list-disc space-y-1 pl-5 text-sm text-[#31394d]">
+                                {documentOutcome.bullets.map((b, i) => (
+                                    <li key={`doc-${i}`}>{b}</li>
+                                ))}
+                            </ul>
+                            {row.linked_documents.length > 0 ? (
+                                <ul className="space-y-1.5 text-sm text-[#31394d]">
+                                    {row.linked_documents.map((L) => (
+                                        <li key={`${L.role}-${L.document.id}`} className="flex flex-wrap items-center gap-2">
+                                            <span className="font-medium text-[#59678b]">{L.role}</span>
+                                            <span>
+                                                {L.document.name?.trim() ||
+                                                    L.document.original_filename?.trim() ||
+                                                    "Untitled"}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                className="text-[#00458C] hover:underline"
+                                                onClick={() => openDrawer({ type: "documents", id: L.document.id })}
+                                            >
+                                                Open
+                                            </button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : null}
+                            <p className="text-xs text-[#59678b]">
+                                Full actions (generate PDF) stay under <strong>Documents &amp; PDF</strong> below.
+                            </p>
+                        </section>
+
+                        <section className="space-y-2 border-b border-[#e6e8ec] py-4">
+                            <h3 className="text-xs font-bold uppercase tracking-wide text-[#59678b]">
+                                Workflow / automations
+                            </h3>
+                            <p className="text-sm leading-relaxed text-[#31394d]">{WORKFLOW_SIGNALS_OPERATOR_COPY}</p>
+                            <p className="text-xs italic text-[#59678b]">
+                                Follow-up: show recent matching workflow events here when we add a scoped list API.
+                            </p>
+                        </section>
+
+                        <section className="space-y-2 py-4">
+                            <h3 className="text-xs font-bold uppercase tracking-wide text-[#59678b]">
+                                Recommended next steps
+                            </h3>
+                            <ul className="list-decimal space-y-1.5 pl-5 text-sm leading-relaxed text-[#31394d]">
+                                {nextSteps.map((line, i) => (
+                                    <li key={`next-${i}`}>{line}</li>
+                                ))}
+                            </ul>
+                        </section>
+
+                        <details className="rounded-md border border-dashed border-[#cfd6e6] bg-[#f8f9fc] px-3 py-2 text-sm">
+                            <summary className="cursor-pointer font-medium text-[#59678b]">
+                                Technical identifiers
+                            </summary>
+                            <dl className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                                <div>
+                                    <dt className="text-[#59678b]">Submission id</dt>
+                                    <dd className="font-mono text-[#31394d]">{row.id}</dd>
+                                </div>
+                                <div>
+                                    <dt className="text-[#59678b]">Form definition id</dt>
+                                    <dd className="font-mono text-[#31394d]">{row.form_definition_id}</dd>
+                                </div>
+                                <div>
+                                    <dt className="text-[#59678b]">Version id</dt>
+                                    <dd className="font-mono text-[#31394d]">{row.form_definition_version_id}</dd>
+                                </div>
+                            </dl>
+                        </details>
                     </SectionCard>
 
-                    <SectionCard title="Documents">
+                    <SectionCard title="Documents & PDF">
                         {row.linked_documents.length === 0 ? (
                             <p className="text-sm text-[#59678b]">No documents linked yet.</p>
                         ) : (
@@ -274,8 +407,9 @@ export default function FormSubmissionDetailClient() {
                                         {genErr ? <p className="mt-2 text-sm text-red-700">{genErr}</p> : null}
                                         {genMsg ? <p className="mt-2 text-sm text-[#31394d]">{genMsg}</p> : null}
                                         <p className="mt-2 text-xs text-[#59678b]">
-                                            Uses existing pdf_mapping_json for this version; creates or reuses a documents row
-                                            and links it here.
+                                            Creates or reuses a documents row using this version&apos;s{" "}
+                                            <code className="font-mono text-[11px]">pdf_mapping_json</code>, then links it
+                                            to this submission.
                                         </p>
                                     </>
                                 )}
@@ -285,21 +419,32 @@ export default function FormSubmissionDetailClient() {
                         )}
                     </SectionCard>
 
-                    <SectionCard title="Answers (read-only)">
-                        {!schema ? (
-                            <p className="text-sm text-[#59678b]">Schema unavailable; raw payload below.</p>
-                        ) : (
-                            <div className="rounded-lg border border-[#e6e8ec] bg-white p-4">
-                                <FormEngineRenderer
-                                    schema={schema}
-                                    payload={row.payload}
-                                    onChange={() => {}}
-                                    mode="readonly"
-                                />
-                            </div>
-                        )}
-                        <details className="mt-4">
-                            <summary className="cursor-pointer text-sm text-[#00458C]">Raw payload JSON</summary>
+                    <SectionCard title="Answers & technical details">
+                        <section className="space-y-2">
+                            <h3 className="text-sm font-semibold text-[#31394d]">Answers submitted</h3>
+                            <p className="text-xs text-[#59678b]">
+                                Same read-only view recipients filled out (fields depend on published schema).
+                            </p>
+                            {!schema ? (
+                                <p className="text-sm text-[#59678b]">Schema unavailable — see technical payload below.</p>
+                            ) : (
+                                <div className="rounded-lg border border-[#e6e8ec] bg-white p-4">
+                                    <FormEngineRenderer
+                                        schema={schema}
+                                        payload={row.payload}
+                                        onChange={() => {}}
+                                        mode="readonly"
+                                    />
+                                </div>
+                            )}
+                        </section>
+                        <details className="mt-5 rounded-md border border-[#e6e8ec] bg-[#fafbfd] p-3">
+                            <summary className="cursor-pointer text-sm font-medium text-[#00458C]">
+                                Technical payload (JSON)
+                            </summary>
+                            <p className="mt-2 text-xs text-[#59678b]">
+                                Raw submission payload for support or debugging — not needed for daily operations.
+                            </p>
                             <pre className="mt-2 max-h-64 overflow-auto rounded bg-[#F4F6F9] p-3 font-mono text-xs">
                                 {JSON.stringify(row.payload, null, 2)}
                             </pre>
