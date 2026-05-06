@@ -25,34 +25,28 @@ export type NeedsAttentionBucketConfig = {
     reason_codes: string[];
 };
 
+/** True when resolver says needs_attention and any reason matches the bucket’s canonical codes. */
+export function opportunityAttentionResultMatchesBucket(
+    resolved: OpportunityAttentionResult,
+    bucket: Pick<NeedsAttentionBucketConfig, "reason_codes">,
+): boolean {
+    if (!resolved.needs_attention) return false;
+    const codes = new Set(bucket.reason_codes.map((c) => c.trim()).filter(Boolean));
+    return resolved.reasons.some((r) => codes.has(String(r.code ?? "").trim()));
+}
+
 /**
  * Platform-default bucket catalog — safe starting labels only; orgs override via metadata.
  * Maps only to canonical resolver reason codes (no expressions).
  */
 export const DEFAULT_NEEDS_ATTENTION_BUCKETS: readonly NeedsAttentionBucketConfig[] = [
     {
-        key: "waiting_on_staff",
-        label: "Waiting on staff",
-        description: "Records where staff owns the next action.",
-        enabled: true,
-        order: 10,
-        reason_codes: ["waiting_on_staff"],
-    },
-    {
         key: "follow_up_overdue",
         label: "Follow-up overdue",
-        description: "Records where the next family follow-up is overdue or priced follow-up is stale.",
+        description: "Records where the next family follow-up is overdue.",
         enabled: true,
-        order: 20,
+        order: 10,
         reason_codes: ["follow_up_date_passed", "stale_quote_followup"],
-    },
-    {
-        key: "missing_quote",
-        label: "Missing quote",
-        description: "Records where quoting started but no offer has been sent.",
-        enabled: true,
-        order: 30,
-        reason_codes: ["missing_quote_after_execution"],
     },
 ];
 
@@ -80,10 +74,12 @@ function parseBucketsArray(raw: unknown): NeedsAttentionBucketConfig[] | null {
         const reason_codes: string[] = [];
         if (Array.isArray(rcRaw)) {
             for (const x of rcRaw) {
-                if (typeof x === "string" && x.trim()) reason_codes.push(x.trim());
+                if (typeof x !== "string" || !x.trim()) continue;
+                const t = x.trim();
+                if (isOpportunityAttentionReasonCode(t)) reason_codes.push(t);
             }
         }
-        if (!reason_codes.length) reason_codes.push(key);
+        if (!reason_codes.length) continue;
         out.push({
             key,
             label: label || key,

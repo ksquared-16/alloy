@@ -71,6 +71,7 @@ import {
     shouldStaleBackgroundRefresh,
     type QueueRowClientCacheBucket,
 } from "@/lib/workspace/queueRowClientCache";
+import { resolveNeedsAttentionBucketsWithPrecedence } from "@/lib/opportunities/needsAttentionBuckets";
 
 const WORKSPACE_BASE = "/adminV2/workspace";
 
@@ -203,9 +204,10 @@ type WorkUnitRow = {
     key: string | null;
     name: string | null;
     queue_definition?: unknown;
+    metadata?: unknown;
 };
 
-type DeptRow = { id: string; name: string | null; key: string | null };
+type DeptRow = { id: string; name: string | null; key: string | null; metadata?: unknown };
 
 type QueueSummary = {
     key: string;
@@ -486,17 +488,38 @@ export default function AdminV2OpportunityWorkUnitPage() {
         return sp.get("unmapped")?.trim() === "1";
     }, [wuLaneSearchRev, searchParams, departmentId, workUnitId]);
 
+    const attentionBucketKeyLive = useMemo(() => {
+        const sp =
+            typeof window !== "undefined"
+                ? readWorkUnitUrlSearchSnapshot()
+                : new URLSearchParams(searchParams?.toString() ?? "");
+        return (sp.get("attention_bucket") ?? "").trim();
+    }, [wuLaneSearchRev, searchParams]);
+
     selectedQueueKeyRef.current = selectedQueueKey;
     unmappedOnlyRef.current = unmappedOnly;
+    const attentionBucketKeyRef = useRef("");
+    attentionBucketKeyRef.current = attentionBucketKeyLive;
 
-    const commitLaneQueryUrl = useCallback((opts: { queueKey: string; unmappedActive: boolean }) => {
-        if (typeof window === "undefined") return;
-        const sp = readWorkUnitUrlSearchSnapshot();
-        sp.set("queue", opts.queueKey);
-        if (opts.unmappedActive) sp.set("unmapped", "1");
-        else sp.delete("unmapped");
-        replaceWorkUnitBrowserSearch(sp, () => setWuLaneSearchRev((x) => x + 1));
-    }, []);
+    const commitLaneQueryUrl = useCallback(
+        (opts: { queueKey: string; unmappedActive: boolean; attentionBucket?: string }) => {
+            if (typeof window === "undefined") return;
+            const sp = readWorkUnitUrlSearchSnapshot();
+            sp.set("queue", opts.queueKey);
+            if (opts.unmappedActive) sp.set("unmapped", "1");
+            else sp.delete("unmapped");
+            const na = opts.queueKey.trim().toLowerCase() === "needs_attention";
+            if (!na) {
+                sp.delete("attention_bucket");
+            } else if (opts.attentionBucket !== undefined) {
+                const v = opts.attentionBucket.trim();
+                if (v) sp.set("attention_bucket", v);
+                else sp.delete("attention_bucket");
+            }
+            replaceWorkUnitBrowserSearch(sp, () => setWuLaneSearchRev((x) => x + 1));
+        },
+        []
+    );
 
     const handleQueueTabChange = useCallback((nextKey: string, opts?: { unmappedActive?: boolean }) => {
         const unmappedActive = opts?.unmappedActive ?? false;
@@ -505,7 +528,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
             alloyPerfSet("queue_tab_change_start", performance.now());
         }
         setSelectedQueueKey(nextKey);
-        commitLaneQueryUrl({ queueKey: nextKey, unmappedActive });
+        const na = nextKey.trim().toLowerCase() === "needs_attention";
+        commitLaneQueryUrl({
+            queueKey: nextKey,
+            unmappedActive,
+            ...(na ? { attentionBucket: "" } : {}),
+        });
     }, [commitLaneQueryUrl]);
 
     useEffect(() => {
@@ -710,24 +738,33 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 quietStaleRefresh?: boolean;
                 /** Prefetched rows use canonical `all` cache bucket even when Current tab shows `unmapped` filter UI. */
                 logicalUnmapped?: boolean;
+                /** When set on Needs attention fetches, avoids a one-frame stale read of `attention_bucket` from URL. */
+                attentionBucketOverride?: string | null;
             }
         ) => {
             void _summaries;
-            const fetchSig = `${workUnitId}|${queueKey}|omit`;
             const logicalUm = options?.logicalUnmapped ?? unmappedOnly;
-            const logicalKey = queueRowLogicalCacheKey(accessScopeFingerprint, workUnitId, queueKey, logicalUm);
+            const abSnap =
+                queueKey.trim().toLowerCase() === "needs_attention"
+                    ? (options?.attentionBucketOverride !== undefined
+                          ? String(options.attentionBucketOverride ?? "").trim()
+                          : attentionBucketKeyRef.current.trim())
+                    : "";
+            const fetchSig = `${workUnitId}|${queueKey}|omit|${abSnap}`;
+            const logicalKey = queueRowLogicalCacheKey(accessScopeFingerprint, workUnitId, queueKey, logicalUm, abSnap);
             const qs = new URLSearchParams({
                 limit: "20",
                 offset: "0",
                 count_mode: "exact",
                 omit_total_count: "true",
             });
+            if (abSnap) qs.set("attention_bucket", abSnap);
             const route = `/api/admin/queues/${encodeURIComponent(workUnitId)}/${encodeURIComponent(queueKey)}?${qs.toString()}`;
             const cache = queueRowClientCacheRef.current;
 
             if (options?.force) {
-                cache.delete(queueRowLogicalCacheKey(accessScopeFingerprint, workUnitId, queueKey, false));
-                cache.delete(queueRowLogicalCacheKey(accessScopeFingerprint, workUnitId, queueKey, true));
+                cache.delete(queueRowLogicalCacheKey(accessScopeFingerprint, workUnitId, queueKey, false, abSnap));
+                cache.delete(queueRowLogicalCacheKey(accessScopeFingerprint, workUnitId, queueKey, true, abSnap));
             }
 
             if (!options?.force && !options?.prefetchOnly && !options?.quietStaleRefresh) {
@@ -794,21 +831,27 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     throw new Error(json.error ?? "Failed to load queue items");
                 }
                 const payload = json as unknown as QueueItemsResult;
+                const attentionBucketMatches =
+                    queueKey.trim().toLowerCase() !== "needs_attention" ||
+                    attentionBucketKeyRef.current.trim() === abSnap ||
+                    options?.attentionBucketOverride !== undefined;
                 const stillSelected =
-                    selectedQueueKeyRef.current === queueKey && unmappedOnlyRef.current === logicalUm;
+                    selectedQueueKeyRef.current === queueKey &&
+                    unmappedOnlyRef.current === logicalUm &&
+                    attentionBucketMatches;
                 if (options?.prefetchOnly) {
-                    putQueueRowCache(cache, accessScopeFingerprint, workUnitId, queueKey, payload);
+                    putQueueRowCache(cache, accessScopeFingerprint, workUnitId, queueKey, payload, abSnap);
                     return;
                 }
                 if (options?.quietStaleRefresh) {
                     if (seq === queueItemsRequestSeq.current && stillSelected) {
-                        putQueueRowCache(cache, accessScopeFingerprint, workUnitId, queueKey, payload);
+                        putQueueRowCache(cache, accessScopeFingerprint, workUnitId, queueKey, payload, abSnap);
                         setQueueItems(payload);
                     }
                     return;
                 }
                 if (seq === queueItemsRequestSeq.current) {
-                    putQueueRowCache(cache, accessScopeFingerprint, workUnitId, queueKey, payload);
+                    putQueueRowCache(cache, accessScopeFingerprint, workUnitId, queueKey, payload, abSnap);
                     setQueueItems(payload);
                     if (pendingQueueTabPerfRef.current && typeof window !== "undefined" && typeof performance !== "undefined") {
                         pendingQueueTabPerfRef.current = false;
@@ -919,6 +962,23 @@ export default function AdminV2OpportunityWorkUnitPage() {
             }
         },
         [requestWorkUnitDeferredSupplement, markFirstUsefulPaintOnce, unmappedOnly, accessScopeFingerprint]
+    );
+
+    const handleAttentionBucketSelect = useCallback(
+        (bucketKey: string | null) => {
+            if (!workUnitId || !selectedQueueKey || selectedQueueKey.trim().toLowerCase() !== "needs_attention") return;
+            const next = (bucketKey ?? "").trim();
+            commitLaneQueryUrl({
+                queueKey: "needs_attention",
+                unmappedActive: false,
+                attentionBucket: bucketKey ?? "",
+            });
+            void fetchQueueItems(workUnitId, "needs_attention", null, {
+                force: true,
+                attentionBucketOverride: next,
+            });
+        },
+        [commitLaneQueryUrl, fetchQueueItems, selectedQueueKey, workUnitId]
     );
 
     const fetchQueueSummaries = useCallback(async (wuId: string, focusQueueKey: string | null) => {
@@ -1891,6 +1951,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     if (bits.length) basicSubtitleParts.push(bits.join(" · "));
                 }
 
+                const needsAttentionRow = Boolean((r as { _needs_attention?: boolean })._needs_attention);
                 return {
                     id: rid,
                     title: familyTitle,
@@ -1898,9 +1959,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     urgencyTier:
                         activeQueue?.priority === "critical"
                             ? ("critical" as const)
-                            : activeQueue?.priority === "attention" ||
-                                (String(activeQueue?.key ?? "").trim().toLowerCase() === "needs_attention" &&
-                                    Boolean(attentionReason?.trim()))
+                            : needsAttentionRow || activeQueue?.priority === "attention"
                               ? ("warning" as const)
                               : ("standard" as const),
                     quickActions,
@@ -2095,11 +2154,61 @@ export default function AdminV2OpportunityWorkUnitPage() {
         Boolean(allRecordsQueueKey) &&
         Boolean(otherPillSectionKey);
 
+    const enabledAttentionBuckets = useMemo(() => {
+        if (!workUnit || !dept) return [];
+        return resolveNeedsAttentionBucketsWithPrecedence(workUnit.metadata ?? null, dept.metadata ?? null).filter(
+            (b) => b.enabled
+        );
+    }, [workUnit, dept]);
+
     const headerQueuePickerSlot = useMemo(() => {
         if (!queueModel) return null;
+        const chipBase =
+            "inline-flex max-w-full items-center rounded-full border px-2.5 py-0.5 text-left text-[11px] font-semibold leading-tight transition-colors";
         return (
             <div className="min-w-0">
                 {queuePicker}
+                {selectedQueueKey?.trim().toLowerCase() === "needs_attention" && enabledAttentionBuckets.length > 0 ? (
+                    <div
+                        className="mt-2 flex flex-wrap items-center gap-1.5"
+                        role="tablist"
+                        aria-label="Needs attention types"
+                    >
+                        <button
+                            type="button"
+                            role="tab"
+                            aria-selected={!attentionBucketKeyLive}
+                            onClick={() => handleAttentionBucketSelect(null)}
+                            className={`${chipBase} ${
+                                !attentionBucketKeyLive
+                                    ? "border-alloy-honey bg-alloy-honey/12 text-alloy-forge"
+                                    : "border-admin-border bg-white/70 text-alloy-forge/80"
+                            }`}
+                        >
+                            All types
+                        </button>
+                        {enabledAttentionBuckets.map((b) => {
+                            const sel = attentionBucketKeyLive === b.key;
+                            return (
+                                <button
+                                    key={b.key}
+                                    type="button"
+                                    role="tab"
+                                    aria-selected={sel}
+                                    title={b.description ?? undefined}
+                                    onClick={() => handleAttentionBucketSelect(b.key)}
+                                    className={`${chipBase} ${
+                                        sel
+                                            ? "border-alloy-honey bg-alloy-honey/12 text-alloy-forge"
+                                            : "border-admin-border bg-white/70 text-alloy-forge/80"
+                                    }`}
+                                >
+                                    <span className="truncate">{b.label}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                ) : null}
                 <WorkUnitLifecycleCoveragePanel
                     hasLifecycleThroughput={hasLifecycleThroughput}
                     showOtherPill={showOtherBucketPill}
@@ -2123,6 +2232,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
         queueItems?.items,
         queueItemsLoading,
         coveredThroughputStatusKeys,
+        enabledAttentionBuckets,
+        attentionBucketKeyLive,
+        handleAttentionBucketSelect,
     ]);
 
     const model = useMemo(() => {

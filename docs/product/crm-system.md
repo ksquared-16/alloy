@@ -46,17 +46,13 @@ Cover **opportunities**, pipeline status, CRM-adjacent admin behavior, and **sch
 
 **Precedence:** work unit `metadata` → department `metadata` → **`DEFAULT_NEEDS_ATTENTION_BUCKETS`** when neither defines `needs_attention_buckets`.
 
-**Example defaults / starter shapes** (orgs typically override labels/order):
-
-1. **Waiting on staff** — `waiting_on_staff`
-2. **Follow-up overdue** — `follow_up_date_passed`, `stale_quote_followup`
-3. **Missing quote** — `missing_quote_after_execution`
+**Platform default rollout:** **`DEFAULT_NEEDS_ATTENTION_BUCKETS`** ships **one** enabled lens — **Follow-up overdue** (`follow_up_date_passed`, `stale_quote_followup`). Additional buckets (e.g. staff wait, missing quote) are added via **department/work-unit metadata** or **Settings → Attention & SLA Rules** (department-level UI today).
 
 **Surfaces**
 
 - **Department:** Needs Attention lane renders buckets **from config**. When the department has a **`needs_attention`** work unit, `GET …/opportunity-attention-preview?work_unit_id=…` returns **`bucket_count_scope: work_unit_needs_attention_list_cap`** — counts are **unique inquiries per bucket** inside the same capped candidate window **`loadOpportunityNeedsAttentionRows`** uses for the execution queue (see execution semantics doc).
-- **Work unit:** Single-code buckets drill with **`attention_reason_code`** (+ **`queue=needs_attention`**). Multi-code buckets open the full Needs attention tab (URL filter is single-code today).
-- **Drawer:** **`OperationalAttentionDrawerPanel`** reads **`_operational_attention`** from entity GET and sits under the inquiry/status header, above overview sections.
+- **Work unit:** Needs Attention supports **`attention_bucket`** (bucket `key`) alongside **`queue=needs_attention`** for bucket-scoped lists; single-code drills may still use **`attention_reason_code`**. **All** pipeline queues apply the same subtle attention accent when resolver **`needs_attention`** is true on the row (not only inside the Needs Attention tab).
+- **Drawer:** A compact **operational attention** strip (`OperationalAttentionHeaderStrip`) reads **`_operational_attention`** from entity GET and sits in the **record header** (below inquiry/status summary, above overview tabs) — not as a large Overview card.
 
 Do **not** recompute attention membership or scores in React — consume resolver fields on rows and entity payloads only.
 

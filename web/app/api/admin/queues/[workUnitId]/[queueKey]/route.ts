@@ -115,6 +115,7 @@ export async function GET(
             orgId: ctx.orgId,
             userId: ctx.userId,
         });
+        const attentionBucketKey = (request.nextUrl.searchParams.get("attention_bucket") ?? "").trim() || null;
         const { result, rowsPerf } = await getWorkUnitQueueItems({
             orgId: ctx.orgId,
             workUnitId,
@@ -126,6 +127,7 @@ export async function GET(
             recordScopeImpossible,
             recordScopeConstraints,
             viewerDisplayTimeZone,
+            attentionBucketKey,
         });
 
         const tSer0 = Date.now();

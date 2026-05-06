@@ -27,34 +27,57 @@ function mockMatch(reasonCodes: string[]): { resolved: OpportunityAttentionResul
 }
 
 describe("needsAttentionBuckets", () => {
-    it("platform defaults include example buckets", () => {
-        expect(DEFAULT_NEEDS_ATTENTION_BUCKETS.length).toBe(3);
-        expect(DEFAULT_NEEDS_ATTENTION_BUCKETS.map((b) => b.key).sort()).toEqual(
-            ["follow_up_overdue", "missing_quote", "waiting_on_staff"].sort(),
-        );
+    it("platform defaults ship a single follow-up overdue bucket", () => {
+        expect(DEFAULT_NEEDS_ATTENTION_BUCKETS.length).toBe(1);
+        expect(DEFAULT_NEEDS_ATTENTION_BUCKETS[0]?.key).toBe("follow_up_overdue");
     });
 
     it("hydrates histogram sums (reason occurrences)", () => {
         const buckets = resolveNeedsAttentionBucketsFromMetadata(null);
         const withCounts = hydrateNeedsAttentionBucketCounts(buckets, [
-            { reason_key: "waiting_on_staff", label: "Waiting on staff", count: 3 },
-            { reason_key: "stale_quote_followup", label: "", count: 2 },
+            { reason_key: "follow_up_date_passed", label: "", count: 2 },
+            { reason_key: "stale_quote_followup", label: "", count: 1 },
         ]);
-        const wait = withCounts.find((x) => x.key === "waiting_on_staff");
         const fu = withCounts.find((x) => x.key === "follow_up_overdue");
-        expect(wait?.count).toBe(3);
-        expect(fu?.count).toBe(2);
+        expect(fu?.count).toBe(3);
     });
 
     it("counts unique inquiries per bucket from resolver matches", () => {
-        const buckets = resolveNeedsAttentionBucketsFromMetadata(null);
+        const metaMulti = {
+            opportunity_attention_rules: {
+                needs_attention_buckets: [
+                    {
+                        key: "staff",
+                        label: "Staff",
+                        enabled: true,
+                        order: 5,
+                        reason_codes: ["waiting_on_staff"],
+                    },
+                    {
+                        key: "follow_up_overdue",
+                        label: "Follow-up overdue",
+                        enabled: true,
+                        order: 10,
+                        reason_codes: ["follow_up_date_passed", "stale_quote_followup"],
+                    },
+                    {
+                        key: "missing_quote",
+                        label: "Missing quote",
+                        enabled: true,
+                        order: 20,
+                        reason_codes: ["missing_quote_after_execution"],
+                    },
+                ],
+            },
+        };
+        const buckets = resolveNeedsAttentionBucketsFromMetadata(metaMulti);
         const matches = [
             mockMatch(["waiting_on_staff", "stale_quote_followup"]),
             mockMatch(["waiting_on_staff"]),
             mockMatch(["missing_quote_after_execution"]),
         ];
         const counts = bucketCountsFromResolverMatches(buckets, matches);
-        expect(counts.find((x) => x.key === "waiting_on_staff")?.count).toBe(2);
+        expect(counts.find((x) => x.key === "staff")?.count).toBe(2);
         expect(counts.find((x) => x.key === "follow_up_overdue")?.count).toBe(1);
         expect(counts.find((x) => x.key === "missing_quote")?.count).toBe(1);
     });

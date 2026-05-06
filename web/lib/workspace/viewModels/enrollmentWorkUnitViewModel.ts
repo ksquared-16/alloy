@@ -282,10 +282,7 @@ export function buildEnrollmentOpportunityQueueItemVm(
     const quickActions = [...crmContactQuickActions(row), ...laneActions];
 
     const wk = ctx.workUnitKey.trim().toLowerCase();
-    const hasOperationalAttention = Boolean(
-        (row as { _attention_reason?: string | null })._attention_reason?.trim() ||
-            (row as { _attention_reason_label?: string | null })._attention_reason_label?.trim()
-    );
+    const needsAttention = Boolean((row as { _needs_attention?: boolean })._needs_attention);
     const item: QueueItemVm = {
         id: row.id,
         title,
@@ -297,7 +294,7 @@ export function buildEnrollmentOpportunityQueueItemVm(
         quickActions,
         semanticCrmCompact: slots,
         urgencyTier:
-            wk === "needs_attention" && hasOperationalAttention
+            needsAttention
                 ? "warning"
                 : wk === "priced_followup"
                   ? "warning"

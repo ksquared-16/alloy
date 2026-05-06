@@ -15,25 +15,32 @@ export type QueueRowClientCacheBucket<TPayload> = {
 
 export type QueueRowClientCacheEvent = "hit" | "miss" | "prefetch" | "stale_refresh";
 
-/** `${fingerprint}:${workUnitId}:${queueKey}:${unmappedOnly ? "unmapped" : "all"}` */
+/** `${fingerprint}:${workUnitId}:${queueKey}:${unmappedOnly ? "unmapped" : "all"}` (+ optional attention bucket for needs_attention) */
 export function queueRowLogicalCacheKey(
     accessScopeFingerprint: string,
     workUnitId: string,
     queueKey: string,
-    unmappedOnly: boolean
+    unmappedOnly: boolean,
+    attentionBucketKey?: string | null
 ): string {
     const fp = (accessScopeFingerprint ?? "").trim() || "scope:unknown";
-    return `${fp}:${workUnitId}:${queueKey}:${unmappedOnly ? "unmapped" : "all"}`;
+    const base = `${fp}:${workUnitId}:${queueKey}:${unmappedOnly ? "unmapped" : "all"}`;
+    if (queueKey.trim().toLowerCase() === "needs_attention") {
+        const bk = (attentionBucketKey ?? "").trim();
+        return `${base}:attn:${bk || "*"}`;
+    }
+    return base;
 }
 
 export function queueRowPrefetchLogicalKeys(
     accessScopeFingerprint: string,
     workUnitId: string,
-    queueKey: string
+    queueKey: string,
+    attentionBucketKey?: string | null
 ): [string, string] {
     return [
-        queueRowLogicalCacheKey(accessScopeFingerprint, workUnitId, queueKey, false),
-        queueRowLogicalCacheKey(accessScopeFingerprint, workUnitId, queueKey, true),
+        queueRowLogicalCacheKey(accessScopeFingerprint, workUnitId, queueKey, false, attentionBucketKey),
+        queueRowLogicalCacheKey(accessScopeFingerprint, workUnitId, queueKey, true, attentionBucketKey),
     ];
 }
 
@@ -43,13 +50,14 @@ export function putQueueRowCache<TPayload>(
     accessScopeFingerprint: string,
     workUnitId: string,
     queueKey: string,
-    payload: TPayload
+    payload: TPayload,
+    attentionBucketKey?: string | null
 ): void {
     const ent: QueueRowClientCacheBucket<TPayload> = {
         payload,
         fetchedAt: Date.now(),
     };
-    for (const k of queueRowPrefetchLogicalKeys(accessScopeFingerprint, workUnitId, queueKey)) {
+    for (const k of queueRowPrefetchLogicalKeys(accessScopeFingerprint, workUnitId, queueKey, attentionBucketKey)) {
         map.set(k, ent);
     }
 }

@@ -24,6 +24,10 @@ import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
 import type { RecordScopeConstraints } from "@/lib/admin/accessScope";
 import { applyRecordScopeConstraintsToQuery } from "@/lib/admin/accessScope";
 import { resolveOpportunityAttentionConfigFromMetadata, type OpportunityAttentionResolvedConfig } from "@/lib/opportunities/opportunityAttentionConfig";
+import {
+    opportunityAttentionResultMatchesBucket,
+    resolveNeedsAttentionBucketsWithPrecedence,
+} from "@/lib/opportunities/needsAttentionBuckets";
 import { resolveOpportunityAttention, type OpportunityAttentionEntityInput } from "@/lib/opportunities/opportunityAttentionResolver";
 import { DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1 } from "@/lib/workspace/opportunityAttentionRules";
 import { buildQueueServiceAttentionSemantics } from "@/lib/workspace/opportunityAttentionCountSemantics";
@@ -1074,6 +1078,7 @@ async function enrichOpportunityRows(params: {
             attentionReasonLabel = attn.primary_reason?.label ?? null;
             attentionSeverity = attn.primary_reason?.severity ?? null;
             attentionExtras = {
+                _needs_attention: attn.needs_attention,
                 _attention_priority_score: attn.priority_score,
                 _attention_waiting_bucket: attn.waiting.bucket,
                 _attention_reasons_detail: attn.reasons,
@@ -1426,6 +1431,7 @@ type WorkUnitQueueDefinitionCacheEntry = {
     revision: string | null;
     /** `work_units.metadata` — feeds opportunity attention resolver config (same TTL as definition). */
     workUnitMetadata: unknown | null;
+    departmentId: string | null;
 };
 const WU_QUEUE_DEF_CACHE = new Map<string, WorkUnitQueueDefinitionCacheEntry>();
 const WU_QUEUE_DEF_TTL_MS = 90_000;
@@ -1435,26 +1441,32 @@ async function loadWorkUnitQueueDefinitionWithMeta(params: { orgId: string; work
     def: QueueDefinitionV1;
     cacheHit: boolean;
     workUnitMetadata: unknown | null;
+    departmentId: string | null;
 }> {
     const cacheKey = `wudef:v2:${params.orgId}:${params.workUnitId}`;
     const now = Date.now();
     if (WU_QUEUE_DEF_CACHE_ENABLED) {
         const hit = WU_QUEUE_DEF_CACHE.get(cacheKey);
         if (hit && now - hit.at < WU_QUEUE_DEF_TTL_MS) {
-            return { def: hit.def, cacheHit: true, workUnitMetadata: hit.workUnitMetadata ?? null };
+            return {
+                def: hit.def,
+                cacheHit: true,
+                workUnitMetadata: hit.workUnitMetadata ?? null,
+                departmentId: hit.departmentId ?? null,
+            };
         }
     }
     const supabase = createAdminClient();
     const { data, error } = await withDbTiming(
         "work_units.queue_definition_row",
         { orgId: params.orgId, workUnitId: params.workUnitId },
-        async () =>
-            supabase
-                .from("work_units")
-                .select("id, org_id, queue_definition, metadata, updated_at")
-                .eq("id", params.workUnitId)
-                .eq("org_id", params.orgId)
-                .maybeSingle()
+            async () =>
+                supabase
+                    .from("work_units")
+                    .select("id, org_id, department_id, queue_definition, metadata, updated_at")
+                    .eq("id", params.workUnitId)
+                    .eq("org_id", params.orgId)
+                    .maybeSingle()
     );
 
     if (error) {
@@ -1478,10 +1490,13 @@ async function loadWorkUnitQueueDefinitionWithMeta(params: { orgId: string; work
     }
     const def = loadQueueDefinitionOrThrow(raw);
     const workUnitMetadata = (data as { metadata?: unknown | null }).metadata ?? null;
+    const departmentIdRaw = (data as { department_id?: unknown }).department_id;
+    const departmentId =
+        typeof departmentIdRaw === "string" && departmentIdRaw.trim() ? departmentIdRaw.trim() : null;
     if (WU_QUEUE_DEF_CACHE_ENABLED) {
-        WU_QUEUE_DEF_CACHE.set(cacheKey, { at: now, def, revision, workUnitMetadata });
+        WU_QUEUE_DEF_CACHE.set(cacheKey, { at: now, def, revision, workUnitMetadata, departmentId });
     }
-    return { def, cacheHit: false, workUnitMetadata };
+    return { def, cacheHit: false, workUnitMetadata, departmentId };
 }
 
 async function loadWorkUnitQueueDefinition(params: { orgId: string; workUnitId: string }): Promise<QueueDefinitionV1> {
@@ -2199,6 +2214,11 @@ export async function getWorkUnitQueueItems(params: {
     /** Site/department filters for job & opportunity queue rows. */
     recordScopeConstraints?: RecordScopeConstraints | null;
     viewerDisplayTimeZone?: QueueViewerTimezoneMeta;
+    /**
+     * When `queueKey === "needs_attention"`, filter rows to those matching the configured bucket’s
+     * `reason_codes` ({@link resolveNeedsAttentionBucketsWithPrecedence}).
+     */
+    attentionBucketKey?: string | null;
 }): Promise<WorkUnitQueueItemsWithPerf> {
     const tSvc0 = Date.now();
     const supabase = createAdminClient();
@@ -2213,6 +2233,11 @@ export async function getWorkUnitQueueItems(params: {
     const queueDefCacheHit = defTimed.value.cacheHit;
     const def = defTimed.value.def;
     const workUnitMetadata = defTimed.value.workUnitMetadata ?? null;
+    const workUnitDepartmentId = defTimed.value.departmentId;
+    const opportunityAttentionConfigResolved =
+        def.entity_type === "opportunity"
+            ? resolveOpportunityAttentionConfigFromMetadata(workUnitMetadata)
+            : null;
     const operationalDay = opsTimed.value.ctx;
     const operationalDayCacheHit = opsTimed.value.cacheHit;
     const load_def_ms = defTimed.ms;
@@ -2394,10 +2419,22 @@ export async function getWorkUnitQueueItems(params: {
     const { ops, sort, calendar_meta } = buildOpportunityPlan(q, refUtc, operationalDay);
 
     if (params.queueKey === "needs_attention") {
-        const attentionConfigResolved = resolveOpportunityAttentionConfigFromMetadata(workUnitMetadata);
+        const attentionConfigResolved = opportunityAttentionConfigResolved!;
         const { value: statusPack, ms: statusDefsMs } = await timedBranch(oppStatusDefsPromise);
         const effectiveStatusDefs = statusPack.rows;
         const statusDefsCacheHit = statusPack.combinedCacheHit;
+
+        let departmentMetadata: unknown | null = null;
+        if (workUnitDepartmentId) {
+            const { data: dRow } = await supabase
+                .from("departments")
+                .select("metadata")
+                .eq("id", workUnitDepartmentId)
+                .eq("org_id", params.orgId)
+                .maybeSingle();
+            departmentMetadata = (dRow as { metadata?: unknown } | null)?.metadata ?? null;
+        }
+
         const { value: attentionLoadPack, ms: naLoadMs } = await timedBranch(
             loadOpportunityNeedsAttentionRows({
                 supabase,
@@ -2410,7 +2447,26 @@ export async function getWorkUnitQueueItems(params: {
                 recordScopeConstraints: scopeFilter,
             })
         );
-        const matched = attentionLoadPack.filtered;
+        let matched = attentionLoadPack.filtered;
+        const bucketKeyFilter = (params.attentionBucketKey ?? "").trim();
+        if (bucketKeyFilter) {
+            const buckets = resolveNeedsAttentionBucketsWithPrecedence(workUnitMetadata, departmentMetadata);
+            const bucketCfg = buckets.find((b) => b.enabled && b.key === bucketKeyFilter);
+            if (bucketCfg) {
+                matched = matched.filter((r) =>
+                    opportunityAttentionResultMatchesBucket(
+                        resolveOpportunityAttention({
+                            opportunity: opportunityPreviewToResolverEntity(r),
+                            defs: effectiveStatusDefs,
+                            config: attentionConfigResolved,
+                            nowMs: refUtc.getTime(),
+                            optionalSignals: null,
+                        }),
+                        bucketCfg,
+                    ),
+                );
+            }
+        }
         const opportunity_needs_attention_semantics = buildQueueServiceAttentionSemantics({
             candidateFetchCap: attentionLoadPack.fetch_cap,
             rawCandidatesFetched: attentionLoadPack.raw_candidates_fetched,
@@ -2497,6 +2553,13 @@ export async function getWorkUnitQueueItems(params: {
             enrichment: "queue_list",
             relationFetchPlan: queueListRelationPlan,
             viewerDisplayTimeZoneIana: viewerPreviewIana,
+            opportunityAttentionResolution: opportunityAttentionConfigResolved
+                ? {
+                      defs: effectiveStatusDefs,
+                      config: opportunityAttentionConfigResolved,
+                      nowMs: refUtc.getTime(),
+                  }
+                : undefined,
         });
         const enrichment_ms = Date.now() - tEn0;
         return finalize(
@@ -2566,6 +2629,13 @@ export async function getWorkUnitQueueItems(params: {
         enrichment: "queue_list",
         relationFetchPlan: queueListRelationPlan,
         viewerDisplayTimeZoneIana: viewerPreviewIana,
+        opportunityAttentionResolution: opportunityAttentionConfigResolved
+            ? {
+                  defs: effectiveStatusDefs,
+                  config: opportunityAttentionConfigResolved,
+                  nowMs: refUtc.getTime(),
+              }
+            : undefined,
     });
     const enrichment_ms = Date.now() - tEn0;
 

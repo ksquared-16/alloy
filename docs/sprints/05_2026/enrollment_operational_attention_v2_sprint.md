@@ -118,8 +118,8 @@ Operational attention is a **filtered operational lens** wired into existing wor
 
 | Surface | Role |
 |---------|------|
-| **`/adminV2/workspace/dept/:departmentId`** | **Command center / prioritization** — Needs Attention lane lists **configured buckets** (platform defaults include Waiting on staff, Follow-up overdue, Missing quote — overridable). **Scoped counts** align with the **`needs_attention`** work-unit queue when that unit exists (`bucket_count_scope: work_unit_needs_attention_list_cap`). Tiles reuse **compact work-unit queue card** styling. |
-| **`…/dept/:id/work-unit/:workUnitId`** | **Execution queue** — same CRM compact rows; drill uses **`attention_reason_code`** for single-code buckets (**`queue=needs_attention`**). Multi-code buckets open the full Needs attention tab (single-code URL filter only). |
+| **`/adminV2/workspace/dept/:departmentId`** | **Command center / prioritization** — Needs Attention lane lists **configured buckets** (platform default rollout: **one** enabled type — Follow-up overdue; more via Settings/metadata). **Scoped counts** align with the **`needs_attention`** work-unit queue when that unit exists (`bucket_count_scope: work_unit_needs_attention_list_cap`). Tiles reuse **compact work-unit queue card** styling. |
+| **`…/dept/:id/work-unit/:workUnitId`** | **Execution queue** — same CRM compact rows; Needs Attention supports **`attention_bucket`** + chips for configured types (**`queue=needs_attention`**). Resolver enrichment applies to **all** opportunity queues so attention styling can appear outside the Needs Attention tab. Drawer shows a **compact header** attention strip (no large Overview card). |
 | **Opportunity drawer** | **Explainability** — Operational attention renders **below** the inquiry/status header stack and **above** overview sections. Resolver snapshot **`_operational_attention`** on entity GET. |
 
 **Configurable buckets (metadata precedence):** `metadata.opportunity_attention_rules.needs_attention_buckets` — **work unit → department → platform defaults** (`web/lib/opportunities/needsAttentionBuckets.ts`).

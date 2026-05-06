@@ -12,6 +12,9 @@ describe("queueRowClientCache", () => {
     it("logical key encodes scope fingerprint and unmapped flag", () => {
         expect(queueRowLogicalCacheKey(FP, "wu1", "q1", false)).toBe(`${FP}:wu1:q1:all`);
         expect(queueRowLogicalCacheKey(FP, "wu1", "q1", true)).toBe(`${FP}:wu1:q1:unmapped`);
+        expect(queueRowLogicalCacheKey(FP, "wu1", "needs_attention", false, "follow_up_overdue")).toBe(
+            `${FP}:wu1:needs_attention:all:attn:follow_up_overdue`,
+        );
     });
 
     it("put stores payload under both all and unmapped logical keys", () => {

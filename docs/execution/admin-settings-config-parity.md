@@ -36,7 +36,7 @@ Job and schedule previews use a **presentation-ordered skeleton** (`entityPresen
 
 ## Opportunity “Needs attention” (source of truth)
 
-- **Not** controlled by **Settings → Attention & SLA Rules** (that UI is **not active** / planned).
+- **Needs attention bucket lenses** (`needs_attention_buckets`): editable under **Settings → Attention & SLA Rules** (department picker; merges into `departments.metadata`). Resolver/threshold **policy** remains metadata-driven code paths — this screen does **not** implement a general rules engine.
 - **Evaluator:** `resolveOpportunityAttention` (canonical resolver **v2** in application code).
 - **Tuning:** `resolveOpportunityAttentionConfigFromMetadata` — typically `opportunity_attention_rules` inside **work unit** or **department** `metadata` (optional keys: `primary_reason_priority_order`, `sla_wait_hours`, `priority_score_weights`).
 - **Operational wait facet (per opportunity):** validated subtree **`metadata.enrollment_operational`** — updated via **`PATCH /api/admin/opportunities/:id`** body field **`enrollment_operational`** (`wait_bucket`, `wait_since`, `wait_reason`, `next_expected_action_owner`, `next_expected_action_at`). Not edited from Settings UI yet.
@@ -51,7 +51,7 @@ Workspace job exception summaries use **job** predicates (`getNeedsAttentionSumm
 
 ## Work unit & department `metadata` (read-only in Settings)
 
-**AdminV2 → Settings → Work units / Departments:** opening **Edit** on a row shows **Runtime metadata (read-only)** — the effective JSON from the list API, grouped by known feature areas (`web/lib/admin/runtimeEntityMetadataCatalog.ts`). This is **visibility only**; there is no metadata editor in Settings yet.
+**AdminV2 → Settings → Work units / Departments:** opening **Edit** on a row shows **Runtime metadata (read-only)** — the effective JSON from the list API, grouped by known feature areas (`web/lib/admin/runtimeEntityMetadataCatalog.ts`). Most fields remain **visibility only**; **Attention & SLA Rules** is the exception — it PATCHes **`needs_attention_buckets`** into **`departments.metadata`** (deep-merged server-side).
 
 - **Active runtime keys** (examples): `opportunity_attention_rules`, `activity_signal_rules`, **`enrollment_operational`** (on **opportunity** `metadata`) — consumed by attention resolver / queue paths and activity-signal APIs respectively.
 - **Bootstrap / routing:** `tenant_slice` on departments (tenant bootstrap validation).
@@ -64,4 +64,4 @@ Workspace job exception summaries use **job** predicates (`getNeedsAttentionSumm
 
 - Drawer editing beyond **workflow v1 opportunity section order** (e.g. non-workflow opportunity, job/schedule parity editor, toggling **`overview_hidden_sections`** with validation, new workflow virtual definitions).
 - Raw **`config_json`** or drag/drop builders without server-side validation.
-- **Attention & SLA Rules** screen wired to metadata or a dedicated config surface **without** duplicating resolver logic.
+- Extend **Attention & SLA Rules** beyond bucket editing (thresholds, work-unit overrides in UI) **without** duplicating resolver logic.

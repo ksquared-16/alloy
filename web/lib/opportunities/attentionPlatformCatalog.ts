@@ -115,3 +115,8 @@ export function isOpportunityAttentionReasonCode(raw: string): raw is Opportunit
     const set = new Set(PLATFORM_PRIMARY_REASON_PRIORITY_ORDER as readonly string[]);
     return set.has(raw);
 }
+
+/** Canonical resolver reason codes for Settings pickers (sorted, platform-owned). */
+export const CANONICAL_OPPORTUNITY_ATTENTION_REASON_CODES_SORTED: readonly OpportunityAttentionReasonCode[] = (
+    Object.keys(DEFAULT_SEVERITY_BY_REASON) as OpportunityAttentionReasonCode[]
+).slice().sort((a, b) => a.localeCompare(b));

@@ -6,6 +6,26 @@ import { departmentIdAllowed, scopeDimensionsFromAccess } from "@/lib/admin/acce
 
 const KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 
+function deepMergeJsonObjects(a: Record<string, unknown>, b: Record<string, unknown>): Record<string, unknown> {
+    const out: Record<string, unknown> = { ...a };
+    for (const [k, bv] of Object.entries(b)) {
+        const av = a[k];
+        if (
+            bv !== null &&
+            typeof bv === "object" &&
+            !Array.isArray(bv) &&
+            av !== null &&
+            typeof av === "object" &&
+            !Array.isArray(av)
+        ) {
+            out[k] = deepMergeJsonObjects(av as Record<string, unknown>, bv as Record<string, unknown>);
+        } else {
+            out[k] = bv;
+        }
+    }
+    return out;
+}
+
 function normalizeKey(raw: string): string {
     return raw
         .trim()
@@ -77,7 +97,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
     const supabase = createAdminClient();
     const { data: existing, error: fetchErr } = await supabase
         .from("departments")
-        .select("id")
+        .select("id, metadata")
         .eq("id", departmentId)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
@@ -119,6 +139,17 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ d
     }
     if (body.is_active !== undefined) {
         updates.is_active = !!body.is_active;
+    }
+    if (body.metadata !== undefined) {
+        if (body.metadata === null || typeof body.metadata !== "object" || Array.isArray(body.metadata)) {
+            return NextResponse.json({ error: "metadata must be a JSON object" }, { status: 400 });
+        }
+        const prevRaw = (existing as { metadata?: unknown }).metadata;
+        const prev =
+            prevRaw !== null && typeof prevRaw === "object" && !Array.isArray(prevRaw)
+                ? (prevRaw as Record<string, unknown>)
+                : {};
+        updates.metadata = deepMergeJsonObjects(prev, body.metadata as Record<string, unknown>);
     }
 
     if (Object.keys(updates).length <= 1) {
