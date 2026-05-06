@@ -1,0 +1,116 @@
+# Forms Engine V1.1 — Usable Flow Sprint (May 2026)
+
+---
+
+## 1. Sprint objective
+
+Make **Forms Engine V1** **operationally usable** end-to-end:
+
+**Admin selects/sends a form → recipient completes it → submission persists → document can be generated/linked → workflow event is emitted → admin can review/act.**
+
+This sprint extends the **completed V1 foundation** with **minimal admin APIs, embed fixes, and thin admin UI** — **not** an architecture redesign.
+
+**Locked references:** `docs/sprints/05_2026/forms-engine-v1.txt` (V1 foundation, appendices, freeze rules).
+
+---
+
+## 2. Current status (post–Card 0 audit)
+
+| Area | State |
+|------|--------|
+| **Backend foundation** | **Exists** — DB model, RLS, migrations, versioned schemas, signatures, junctions, stub PDF boundary. |
+| **Admin APIs** | **Exists** — `/api/admin/forms/**` (definitions, versions, publish, submissions, submit, generate-document). |
+| **Public APIs** | **Exists** — `/api/public/forms/[token]/**` (resolve, submissions, patch, submit). |
+| **Public embed** | **Exists** — `/forms/embed/[token]` + `FormEmbedClient` + `FormEngineRenderer`. |
+| **Admin UI** | **Missing** — no `app/admin/forms` surfaces; ops rely on APIs or DB. |
+| **Public-link admin API** | **Missing** — `form_public_links` rows require manual/SQL; design doc described CRUD not yet implemented. |
+| **Medication demo** | **Blocked in embed** — select/multiselect require `option_values_by_field_id` on submit; embed does not hydrate/pass options. |
+| **Submission review** | **API-only** — `GET .../submissions` and `GET .../submissions/[id]` work; no staff UI. |
+| **Workflow** | **Events emitted** (`form_submitted`, `form_signed`, `form_document_generated`) into **`workflow_events`**; operational surfacing (workflows consuming events, admin visibility) is **follow-up** unless scoped here. |
+
+---
+
+## 3. Sprint cards
+
+### Card 0 — Usability Audit
+
+- **Status:** **Complete**  
+- **Purpose:** Audit operational gaps and anti-drift risks (repo inspection; no architecture change).
+
+### Card 0.5 — Sprint Doc Creation
+
+- **Status:** **Complete**  
+- **Purpose:** Create this sprint tracker; align scope and acceptance criteria before implementation cards.
+
+### Card 1 — Public Link Admin API
+
+- **Status:** Pending  
+- **Purpose:** Minimal admin API for **`form_public_links`**:  
+  - **`GET`** / **`POST`** / **`PATCH`** under **`/api/admin/forms/[formId]/public-links`** (exact route shape to match existing Next patterns and org-scoped auth).  
+  - Return **plaintext token once on create**; persist **hash only** via existing **`hashFormLinkToken`** (`web/lib/public/forms/tokenHash.ts`).  
+  - **No UI** in this card.
+
+### Card 2 — Option Hydration + Embed Submit Fix
+
+- **Status:** Pending  
+- **Purpose:** Public **resolve** and/or embed pipeline must supply option lists so **`FormEmbedClient`** sends valid **`option_values_by_field_id`** on PATCH/submit.  
+  - **Medication authorization demo** (`medication_authorization_demo`) must be **completable end-to-end** via embed (subject to org seed + env).
+
+### Card 3 — Minimal Admin Forms Hub
+
+- **Status:** Pending  
+- **Purpose:** Lightweight admin UI:  
+  - List forms / published status  
+  - Create or copy **public embed link** (uses Card 1 API)  
+  - Navigate to **form submissions** list/filter  
+
+### Card 4 — Submission Review MVP
+
+- **Status:** Pending  
+- **Purpose:** Admin can view **submitted payload** (read-only renderer where practical), **person/customer/member/opportunity** context from submission FKs, **signature** status (payload +/or `form_submission_signatures` as available), and trigger **generate document** / open linked **`documents`** (existing documents UX patterns).
+
+### Card 5 — Embed Validation UX
+
+- **Status:** Pending  
+- **Purpose:** Surface **`validation_errors`** from public API responses in embed UI instead of generic failure text only.
+
+### Card 6 — Admin Draft Submission PATCH *(optional)*
+
+- **Status:** Pending / only if ops confirms need  
+- **Purpose:** **`PATCH /api/admin/forms/submissions/[submissionId]`** for draft payloads under same validation rules as public PATCH — **skip if** staff never edit drafts without public token.
+
+---
+
+## 4. Anti-drift rules
+
+- **Forms do not own CRM identity.** Use **person-first helpers** (`applyFormLeadCaptureIntake`, booking-native person/customer flows); submissions store FKs only.  
+- **Forms do not own documents.** Generated/signature assets are **`documents`** rows + **`form_submission_documents`**; reuse Storage, RLS, and admin document patterns.  
+- **Forms do not own workflow execution.** Emit **`workflow_events`** via **`emitEvent`** only; no parallel bus; workflow **runs** remain the existing **`workflow_runs`** / editor model.  
+- **Submissions may reference** entities, documents, and events; they **must not replace** those systems.  
+- **Public links are access tokens**, not user accounts; hash-at-rest; plaintext shown only when issued (create/rotate).  
+- **Admin UI is thin operational UI** — not a drag/drop builder, not a second schema designer.
+
+**Explicit non-goals:** duplicate CRM or documents tables; DocuSign; full PDF engine rewrite; field_values auto-sync; generic form builder.
+
+---
+
+## 5. Definition of done (sprint)
+
+- [ ] **Medication authorization demo** completable **end-to-end** via public embed (submit succeeds with selects).  
+- [ ] Admin can **create/copy a public form link without SQL** (Card 1 API; Card 3 consumes it).  
+- [ ] Admin can **view submissions without raw DB access** (Card 3 + Card 4).  
+- [ ] Admin can **generate or access** a document from a submission (existing generate-document API + documents linkage; UI entry in Card 4).  
+- [ ] **Workflow events** continue to emit through existing **`workflow_events`** (no regression).  
+- [ ] **Existing tests pass** (`tsc`, forms + admin + public forms test suites as in CI / dev convention).
+
+---
+
+## 6. Implementation notes (handoff)
+
+- **Card ordering:** 1 → 2 enables demo path; 3 → 4 delivers ops review; 5 improves recipient UX in parallel after 2 if desired.  
+- **Staging:** Apply/maintain V1 migrations + demo seed per environment policy (`forms-engine-v1.txt` validation notes).  
+- **Security:** Keep **`org_id`** off public JSON; enforce **`allowed_embed_origins`**; rate limiting remains a **follow-up** unless pulled into this sprint explicitly.
+
+---
+
+*End of V1.1 Usable Flow sprint document.*
