@@ -219,10 +219,14 @@ function computeOpportunityOverviewSectionsLikeDrawer(
         overviewSections = overviewSections.filter((s) => s.key !== "__unified_status");
     }
     if (oppInquiryWorkflowV1) {
-        const icIdx = overviewSections.findIndex((s) => s.key === "inquiry_children");
-        if (icIdx > 0) {
-            const ic = overviewSections[icIdx]!;
-            overviewSections = [ic, ...overviewSections.slice(0, icIdx), ...overviewSections.slice(icIdx + 1)];
+        const savedOrder = oppDrawerCfg?.overview_section_order;
+        /** Legacy default: pin inquiry children first when no explicit operator order is saved (Card 9). */
+        if (!savedOrder?.length) {
+            const icIdx = overviewSections.findIndex((s) => s.key === "inquiry_children");
+            if (icIdx > 0) {
+                const ic = overviewSections[icIdx]!;
+                overviewSections = [ic, ...overviewSections.slice(0, icIdx), ...overviewSections.slice(icIdx + 1)];
+            }
         }
         overviewSections = overviewSections.map((s) => (s.key === "inquiry_children" ? { ...s, defaultExpanded: true } : s));
         const stripPricingKeys = new Set(["pricing", "tuition", "tuition_pricing", "fee_schedule"]);
@@ -232,6 +236,9 @@ function computeOpportunityOverviewSectionsLikeDrawer(
         overviewSections = overviewSections.filter((s) => !isOpportunityTourFollowUpSection(s));
         overviewSections = overviewSections.filter((s) => !isOpportunityWorkflowStandaloneExternalDuplicate(overviewSections, s));
         overviewSections = overviewSections.filter((s) => !OPPORTUNITY_WORKFLOW_V1_LEGACY_OVERVIEW_SECTION_KEYS.has(s.key));
+        if (savedOrder?.length) {
+            overviewSections = applyOverviewSectionOrder(overviewSections, savedOrder);
+        }
     }
     if (recordOpportunityDrawerLayoutIncludesSection(oppDrawerCfg, "family_contacts")) {
         overviewSections = overviewSections.filter((s) => s.key !== "family_contacts");
@@ -358,4 +365,22 @@ export function buildEffectiveDrawerLayoutPreview(params: {
         return buildPresentationOrderedSkeleton(params.presentationEntityType, params.config);
     }
     return { fidelity: "presentation_ordered_skeleton", sections: [] };
+}
+
+/**
+ * Section keys the opportunity workflow v1 drawer would show with **no** saved `overview_section_order`
+ * (used to validate a full permutation when operators save explicit ordering — Card 9).
+ */
+export function listOpportunityWorkflowV1CanonicalSectionKeys(
+    cfg: RecordLayoutConfigJson,
+    fieldDefs: PreviewFieldDef[],
+    fieldSectionLabels: Record<string, string>
+): string[] {
+    if (cfg.inquiry_drawer_mode !== "workflow_v1") return [];
+    const sections = computeOpportunityOverviewSectionsLikeDrawer(
+        { ...cfg, overview_section_order: undefined },
+        fieldDefs,
+        fieldSectionLabels
+    );
+    return sections.map((s) => s.key);
 }

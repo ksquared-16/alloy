@@ -239,17 +239,17 @@ export default function FieldSectionsClient({ adminV2Chrome = false }: { adminV2
         <>
             {adminV2Chrome ? (
                 <SettingsPageHeader
-                    title="Field sections"
+                    title="Field grouping catalog"
                     subtitle={
-                        "Labels and sort order for field groups (field_definitions.section_key). This catalog is a separate grouping layer: it does not define the runtime opportunity drawer. That resolves from record_drawer_layouts → record_layouts; workflow v1 inquiry sections use record_layouts.config_json (e.g. inquiry_workflow_sections). See Settings → Layouts and docs/execution/admin-settings-config-parity.md."
+                        "Labels and sort order for field_definitions.section_key — a grouping catalog for forms and config-driven grids. This is not the runtime drawer layout editor: opportunity drawer chrome (workflow v1 sections, ordering) lives under Settings → Layouts (record_drawer_layouts.config_json). See docs/execution/admin-settings-config-parity.md."
                     }
                     actions={newSectionAction}
                 />
             ) : (
                 <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
                     <AdminPageHeader
-                        title="Field sections"
-                        subtitle="Labels and ordering for field groups (field_definitions.section_key). One catalog per entity type."
+                        title="Field grouping catalog"
+                        subtitle="Labels and ordering for field_definitions.section_key by entity. Separate from Settings → Layouts (runtime drawer)."
                     />
                     {newSectionAction}
                 </div>

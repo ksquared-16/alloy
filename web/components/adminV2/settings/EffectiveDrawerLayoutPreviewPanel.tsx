@@ -60,7 +60,7 @@ function layoutSourceLabel(source: LayoutResolution["source"]): string {
     return source === "org_drawer_override" ? "Org drawer override" : "Global template fallback";
 }
 
-export default function EffectiveDrawerLayoutPreviewPanel() {
+export default function EffectiveDrawerLayoutPreviewPanel({ refreshToken = 0 }: { refreshToken?: number }) {
     const [entityType, setEntityType] = useState("opportunity");
     const [data, setData] = useState<PreviewResponse | null>(null);
     const [loading, setLoading] = useState(true);
@@ -84,18 +84,18 @@ export default function EffectiveDrawerLayoutPreviewPanel() {
 
     useEffect(() => {
         void load(entityType);
-    }, [entityType, load]);
+    }, [entityType, load, refreshToken]);
 
     return (
         <section className="rounded-xl border border-alloy-forge/15 bg-white/75 p-4 shadow-sm">
             <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                    <h2 className="text-sm font-semibold text-alloy-midnight">Effective drawer layout (read-only)</h2>
+                    <h2 className="text-sm font-semibold text-alloy-midnight">Effective drawer layout</h2>
                     <p className="mt-1 max-w-2xl text-[11px] leading-snug text-alloy-midnight/60">
                         Same resolution chain as runtime <code className="rounded bg-alloy-stone/12 px-1 text-[10px]">record_drawer_layouts</code>{" "}
                         → <code className="rounded bg-alloy-stone/12 px-1 text-[10px]">record_layouts</code>, then section ordering aligned with{" "}
-                        <code className="rounded bg-alloy-stone/12 px-1 text-[10px]">AdminEntityDrawer</code> for opportunities. Job and schedule use a
-                        presentation-ordered skeleton until full parity is wired.
+                        <code className="rounded bg-alloy-stone/12 px-1 text-[10px]">AdminEntityDrawer</code> for opportunities. For workflow v1, use
+                        the section order editor below; job/schedule use a presentation skeleton only.
                     </p>
                 </div>
                 <label className="flex flex-col gap-0.5 text-[11px] text-alloy-midnight/70">

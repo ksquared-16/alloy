@@ -7233,10 +7233,13 @@ export default function AdminEntityDrawer() {
             overviewSections = overviewSections.filter((s) => s.key !== "__unified_status");
         }
         if (oppInquiryWorkflowV1) {
-            const icIdx = overviewSections.findIndex((s) => s.key === "inquiry_children");
-            if (icIdx > 0) {
-                const ic = overviewSections[icIdx]!;
-                overviewSections = [ic, ...overviewSections.slice(0, icIdx), ...overviewSections.slice(icIdx + 1)];
+            const savedOrder = oppDrawerCfg?.overview_section_order;
+            if (!savedOrder?.length) {
+                const icIdx = overviewSections.findIndex((s) => s.key === "inquiry_children");
+                if (icIdx > 0) {
+                    const ic = overviewSections[icIdx]!;
+                    overviewSections = [ic, ...overviewSections.slice(0, icIdx), ...overviewSections.slice(icIdx + 1)];
+                }
             }
             overviewSections = overviewSections.map((s) =>
                 s.key === "inquiry_children" ? { ...s, defaultExpanded: true } : s
@@ -7248,6 +7251,9 @@ export default function AdminEntityDrawer() {
             overviewSections = overviewSections.filter((s) => !isOpportunityTourFollowUpSection(s));
             overviewSections = overviewSections.filter((s) => !isOpportunityWorkflowStandaloneExternalDuplicate(overviewSections, s));
             overviewSections = overviewSections.filter((s) => !OPPORTUNITY_WORKFLOW_V1_LEGACY_OVERVIEW_SECTION_KEYS.has(s.key));
+            if (savedOrder?.length) {
+                overviewSections = applyOverviewSectionOrder(overviewSections, savedOrder);
+            }
         }
         if (
             drawer.type === "opportunities" &&

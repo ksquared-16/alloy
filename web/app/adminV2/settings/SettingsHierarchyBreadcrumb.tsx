@@ -63,7 +63,7 @@ function crumbsForPath(path: string): Crumb[] {
     }
 
     if (tail === "/field-sections" || tail.startsWith("/field-sections/")) {
-        base.push({ label: "Field sections", href: null });
+        base.push({ label: "Field grouping catalog", href: null });
         return base;
     }
 

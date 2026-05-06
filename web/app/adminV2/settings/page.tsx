@@ -125,8 +125,8 @@ export default function AdminV2SettingsIndexPage() {
                         <SettingsCard href="/adminV2/settings/fields" title="Fields" accent="records">
                             Field definitions by entity for forms and drawers.
                         </SettingsCard>
-                        <SettingsCard href="/adminV2/settings/field-sections" title="Field sections" accent="records">
-                            Catalog for field groups (section_key) — separate from record drawer layouts.
+                        <SettingsCard href="/adminV2/settings/field-sections" title="Field grouping catalog" accent="records">
+                            Labels/order for field_definitions.section_key — not the runtime drawer layout (see Layouts).
                         </SettingsCard>
                         <SettingsCard href="/adminV2/settings/statuses" title="Statuses" accent="records">
                             Status keys and labels per entity type.
@@ -175,7 +175,7 @@ export default function AdminV2SettingsIndexPage() {
                 <Group label="Layouts" accentClass="border-alloy-pine/25">
                     <SettingsTileGrid variant="two">
                         <SettingsCard href="/adminV2/settings/layouts" title="Layouts" accent="records">
-                            Read-only hub: runtime drawer = record_drawer_layouts → record_layouts (see page for truth).
+                            Runtime drawer layouts (record_drawer_layouts); safe workflow v1 section order for opportunities.
                         </SettingsCard>
                     </SettingsTileGrid>
                 </Group>

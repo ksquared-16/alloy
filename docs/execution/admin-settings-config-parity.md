@@ -1,4 +1,4 @@
-# Admin Settings — config parity (drawer, field sections, attention)
+# Admin Settings — config parity (drawer, field groups, attention)
 
 This note aligns **what Settings claims** with **what the product actually reads at runtime**. It complements per-feature docs (e.g. opportunity attention counts).
 
@@ -10,21 +10,29 @@ This note aligns **what Settings claims** with **what the product actually reads
   2. Otherwise load active rows from **`record_layouts`** for the same `entity_type`; clients choose `key === "default"` or fall back to the first row (`useRecordChromeConfig`).
 - **What drives the drawer body:** Effective **`config_json`** — `overview_section_order`, optional **`inquiry_drawer_mode`** / **`inquiry_workflow_sections`** (opportunity workflow v1), schedule **`layout_blocks`**, etc.
 
-**Settings → Layouts** includes a **read-only effective preview** (Card 8): resolved section order and provenance via **`GET /api/admin/record-layouts/effective-preview`**. There is **no** layout JSON editor in Settings yet.
+**Settings → Layouts** includes an **effective preview** (`GET /api/admin/record-layouts/effective-preview`) aligned with **`AdminEntityDrawer`** assembly.
+
+### Safe drawer editing (Card 9, workflow v1 opportunity only)
+
+- **Where:** Settings → Layouts → **Edit drawer section order** (shown only when effective layout has **`inquiry_drawer_mode: workflow_v1`**).
+- **What changes:** **`overview_section_order`** on effective **`config_json`**, plus **`inquiry_workflow_sections` array reorder** so workflow virtual definitions follow the same global order (no arbitrary JSON; full permutation validated server-side).
+- **Persistence:** **`record_drawer_layouts`** update when an org override exists; otherwise **INSERT** a new org row (surface `drawer`, key `default`, `entity_type = opportunity`) seeded from the effective global template + new order.
+- **API:** `PATCH /api/admin/record-drawer-layouts/opportunity-workflow-v1-order` (admin role). Body: `{ overview_section_order: string[] }` — must equal the canonical resolved section key list for that org (from `listOpportunityWorkflowV1CanonicalSectionKeys`).
+- **Runtime parity:** After workflow v1 filters in **`AdminEntityDrawer`**, if **`overview_section_order`** is non-empty, **`applyOverviewSectionOrder`** runs on the final overview list. When **no** saved order exists, legacy behavior pins **`inquiry_children`** first; saved order disables that pin so operators control full ordering. The preview builder (`effectiveDrawerLayoutPreview.ts`) matches this.
 
 ### Workflow-generated vs static overview sections (opportunity)
 
 - **Field-catalog sections:** Built from **`field_definitions`** grouped by **`section_key`**, with titles from **`field_section_definitions`** when present — same grouping the drawer uses for config-driven grids.
 - **Workflow virtual sections:** When **`inquiry_drawer_mode === "workflow_v1"`**, **`inquiry_workflow_sections`** defines extra sections whose **`field_keys`** pull named fields out of that catalog (after header-field stripping). **`inquiry_tuition`** is an **injected** placeholder section for tuition/pricing chrome.
-- **Injected system sections:** Examples include **`__unified_status`** (merged then removed under workflow v1 / `suppress_body_status`) and **`inquiry_children`** (appended for existing opportunities; workflow v1 may pin it first).
+- **Injected system sections:** Examples include **`__unified_status`** (merged then removed under workflow v1 / `suppress_body_status`) and **`inquiry_children`**. Without **`overview_section_order`**, workflow v1 pins **`inquiry_children`** first; with a saved order, placement follows **`overview_section_order`**.
 
 Job and schedule previews use a **presentation-ordered skeleton** (`entityPresentation` defaults + config ordering); full job/schedule merges (pricing blocks, canonical rows) still happen only in `AdminEntityDrawer`.
 
-## Field sections (separate layer)
+## Field grouping catalog (separate layer)
 
-- **Table / API:** Field sections are a **catalog** keyed by entity type (`field_sections` / admin field-sections API).
-- **Purpose:** Labels and sort order for **`field_definitions.section_key`** — grouping fields in forms and many list/detail surfaces.
-- **Not equivalent to:** The full **drawer shell** or **workflow v1 inquiry** section tree. Those come from **`record_layouts.config_json`** as above. Field sections **complement** layouts; they do **not** fully control workflow v1 drawer structure by themselves.
+- **UI:** Settings → **Field grouping catalog** (route `/adminV2/settings/field-sections`; table **`field_section_definitions`** via admin field-sections API).
+- **Purpose:** Labels and sort order for **`field_definitions.section_key`** — grouping fields in forms and config-driven grids.
+- **Not equivalent to:** Runtime **drawer layout** structure or **workflow virtual** sections. Those come from effective **`record_drawer_layouts` / `record_layouts` `config_json`** as above. The catalog **feeds** field grouping used inside drawer sections but **does not** define drawer section order or `inquiry_workflow_sections`.
 
 ## Opportunity “Needs attention” (source of truth)
 
@@ -50,6 +58,6 @@ Workspace job exception summaries use **job** predicates (`getNeedsAttentionSumm
 
 ## Future work (out of scope for this doc)
 
-- Layout / drawer **editor** in Settings wired to `record_drawer_layouts` / `record_layouts`.
-- **Attention & SLA Rules** screen wired to the same metadata or a dedicated config surface **without** duplicating resolver logic.
-- Optional: unify naming so “Field sections” vs “drawer sections” is obvious in the nav.
+- Drawer editing beyond **workflow v1 opportunity section order** (e.g. non-workflow opportunity, job/schedule parity editor, toggling **`overview_hidden_sections`** with validation, new workflow virtual definitions).
+- Raw **`config_json`** or drag/drop builders without server-side validation.
+- **Attention & SLA Rules** screen wired to metadata or a dedicated config surface **without** duplicating resolver logic.
