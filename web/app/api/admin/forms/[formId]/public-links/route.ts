@@ -10,6 +10,7 @@ import {
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 import { hashFormLinkToken } from "@/lib/public/forms/tokenHash";
 import { generateSecureFormLinkPlaintext, buildPublicFormEmbedPath } from "@/lib/admin/forms/formPublicLinkToken";
+import { mergePublicLinkMetadataForCreate } from "@/lib/forms/intake/defaultPublicLinkMetadata";
 
 function deriveEmbedBaseUrl(request: NextRequest): string | null {
     const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
@@ -118,10 +119,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }
     }
 
-    const metadata: Record<string, unknown> =
+    const clientMetadata: Record<string, unknown> =
         body.metadata && typeof body.metadata === "object" && !Array.isArray(body.metadata)
             ? { ...(body.metadata as Record<string, unknown>) }
             : {};
+
+    const formRow = form as { key: string };
+    const metadata = await mergePublicLinkMetadataForCreate(supabase, formRow.key, clientMetadata);
 
     const label =
         typeof body.label === "string"

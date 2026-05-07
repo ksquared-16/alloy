@@ -200,6 +200,27 @@ function makeSupabaseMock() {
     }
 
     async function resolveMaybeSingle(q: Q) {
+        if (q.table === "verticals" && q.mode === "select") {
+            if (q.filters.slug === "cleaning" && q.filters.is_active === true) {
+                return { data: { id: "77777777-7777-4777-8777-777777777777" }, error: null };
+            }
+            return { data: null, error: null };
+        }
+        if (
+            q.table === "form_public_links" &&
+            q.mode === "select" &&
+            q.filters.id &&
+            q.filters.org_id &&
+            q.filters.form_definition_id === undefined
+        ) {
+            const org = q.filters.org_id as string;
+            const id = q.filters.id as string;
+            const row = storeRef.publicLinks[id] ?? null;
+            if (!row || (row as { org_id: string }).org_id !== org) return { data: null, error: null };
+            const safe = { ...(row as Record<string, unknown>) };
+            delete safe.token_hash;
+            return { data: safe, error: null };
+        }
         if (q.table === "form_definitions" && q.mode === "select" && q.filters.id) {
             const org = q.filters.org_id as string;
             const id = q.filters.id as string;
@@ -662,6 +683,96 @@ describe("Admin forms routes", () => {
         expect(Array.isArray(j.data.linked_documents)).toBe(true);
         expect(j.data.linked_documents.length).toBe(0);
         expect((j.data as { org_id?: string }).org_id).toBeUndefined();
+        expect((j.data as { public_link_intake_debug?: unknown }).public_link_intake_debug ?? null).toBeNull();
+    });
+
+    it("GET submission includes public_link_intake_debug when created via public link", async () => {
+        const fid = crypto.randomUUID();
+        const vid = crypto.randomUUID();
+        const sid = crypto.randomUUID();
+        const lid = crypto.randomUUID();
+        const vert = "77777777-7777-4777-8777-777777777777";
+        storeRef.forms[fid] = { id: fid, org_id: ORG, key: "k", name: "N", kind: "center", is_active: true, metadata: {} };
+        storeRef.versions[vid] = {
+            id: vid,
+            org_id: ORG,
+            form_definition_id: fid,
+            version_number: 1,
+            status: "published",
+            schema_json: validSchema,
+            pdf_mapping_json: null,
+            metadata: {},
+            published_at: new Date().toISOString(),
+        };
+        storeRef.publicLinks[lid] = {
+            id: lid,
+            org_id: ORG,
+            form_definition_id: fid,
+            token_hash: "h",
+            token_prefix: "pre",
+            pinned_form_definition_version_id: null,
+            is_active: true,
+            expires_at: null,
+            allowed_embed_origins: null,
+            metadata: { lead_capture: true, default_vertical_id: vert },
+            rate_limit_profile: null,
+            created_at: new Date().toISOString(),
+            updated_at: null,
+            last_used_at: null,
+        };
+        storeRef.submissions[sid] = {
+            id: sid,
+            org_id: ORG,
+            form_definition_id: fid,
+            form_definition_version_id: vid,
+            status: "submitted",
+            payload: { values: { name: "Ada", color: "blue" } },
+            created_at: new Date().toISOString(),
+            submitted_at: new Date().toISOString(),
+            created_via_public_link_id: lid,
+        };
+        const res = await getSubmission(new NextRequest("http://x"), {
+            params: Promise.resolve({ submissionId: sid }),
+        });
+        expect(res.status).toBe(200);
+        const j = (await res.json()) as {
+            data: { public_link_intake_debug?: { public_link_id: string | null; lead_capture: boolean } };
+        };
+        expect(j.data.public_link_intake_debug?.public_link_id).toBe(lid);
+        expect(j.data.public_link_intake_debug?.lead_capture).toBe(true);
+    });
+
+    it("POST public link merges medication demo intake defaults", async () => {
+        const fid = crypto.randomUUID();
+        storeRef.forms[fid] = {
+            id: fid,
+            org_id: ORG,
+            key: "medication_authorization_demo",
+            name: "Med demo",
+            kind: "center",
+            is_active: true,
+            metadata: {},
+        };
+        const res = await createPublicLink(
+            new NextRequest("http://localhost:3000/api/x", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Host: "localhost:3000",
+                    "x-forwarded-proto": "http",
+                },
+                body: JSON.stringify({ metadata: { label: "Test link" } }),
+            }),
+            { params: Promise.resolve({ formId: fid }) }
+        );
+        expect(res.status).toBe(201);
+        const j = (await res.json()) as {
+            data: { metadata: Record<string, unknown>; id: string };
+        };
+        expect(j.data.metadata.lead_capture).toBe(true);
+        expect(j.data.metadata.default_vertical_id).toBe("77777777-7777-4777-8777-777777777777");
+        expect(j.data.metadata.auto_create_person).toBe(true);
+        expect(j.data.metadata.label).toBe("Test link");
     });
 
     it("returns 403 for mutations when role is ops", async () => {

@@ -1,5 +1,41 @@
 import type { FormPayload } from "@/lib/forms/validateSubmission";
 import { resolveFormSubmissionDocumentParent } from "@/lib/forms/pdf/createGeneratedPdfForSubmission";
+import { parseIntakeAutoCreateFlags } from "@/lib/forms/intake/parseIntakeAutoCreateFlags";
+import { linkRequiresLeadCapture } from "@/lib/public/forms/publicFormTypes";
+
+/** Safe, non-secret snapshot of public link metadata for operators (submission debug). */
+export type PublicLinkIntakeDebug = {
+    public_link_id: string | null;
+    lead_capture: boolean;
+    default_vertical_id: string | null;
+    auto_create_person: boolean;
+    auto_create_customer: boolean;
+    auto_create_customer_member: boolean;
+    auto_create_opportunity: boolean;
+    link_label: string | null;
+    alloy_admin_preview: boolean;
+};
+
+export function buildPublicLinkIntakeDebug(
+    metadata: Record<string, unknown> | null | undefined,
+    linkId: string | null
+): PublicLinkIntakeDebug {
+    const m = metadata ?? {};
+    const flags = parseIntakeAutoCreateFlags(m);
+    const vid = typeof m.default_vertical_id === "string" ? m.default_vertical_id.trim() : "";
+    const default_vertical_id = /^[0-9a-f-]{36}$/i.test(vid) ? vid : null;
+    return {
+        public_link_id: linkId,
+        lead_capture: linkRequiresLeadCapture(m),
+        default_vertical_id,
+        auto_create_person: flags.auto_create_person,
+        auto_create_customer: flags.auto_create_customer,
+        auto_create_customer_member: flags.auto_create_customer_member,
+        auto_create_opportunity: flags.auto_create_opportunity,
+        link_label: typeof m.label === "string" && m.label.trim() ? m.label.trim() : null,
+        alloy_admin_preview: m.alloy_admin_preview === true,
+    };
+}
 
 /** Rows for operator-facing “records connected” summary (truthful linked / not linked). */
 export type EntityConnectionRow = {
@@ -120,6 +156,7 @@ export function buildIntakeOperatorSummary(payloadMeta: unknown): IntakeOperator
 
     let statusLabel = "Linked";
     if (path === "skipped_missing_config") statusLabel = "Skipped";
+    else if (path === "skipped_intake_disabled") statusLabel = "Skipped";
     else if (path === "skipped_error") statusLabel = "Error";
     else if (path === "ambiguous_contact" || path === "needs_human_review") statusLabel = "Needs review";
     else if (needsReview) statusLabel = "Needs review";
@@ -143,6 +180,17 @@ export function buildIntakeOperatorSummary(payloadMeta: unknown): IntakeOperator
         if (detail) detailLines.push(`Detail: ${detail}`);
     }
 
+    if (path === "skipped_intake_disabled") {
+        detailLines.push(
+            "The public link used for this submission did not have CRM intake enabled (no lead_capture / intake flags on link metadata)."
+        );
+        const detail = typeof m.intake_skip_reason === "string" && m.intake_skip_reason.trim();
+        if (detail) detailLines.push(`Detail: ${detail}`);
+        detailLines.push(
+            "Fix: create a new link from Admin for this form — medication demo links automatically include intake when a cleaning vertical exists — or PATCH the link metadata to set lead_capture and default_vertical_id."
+        );
+    }
+
     if (path === "skipped_error") {
         detailLines.push("CRM intake hit an error on submit — the submission was still saved.");
         const err = typeof m.intake_error === "string" && m.intake_error.trim();
@@ -153,7 +201,13 @@ export function buildIntakeOperatorSummary(payloadMeta: unknown): IntakeOperator
         detailLines.push("Do not generate a document until the correct person or household is linked manually.");
     }
 
-    if (needsReview && path !== "ambiguous_contact" && path !== "skipped_missing_config" && path !== "skipped_error") {
+    if (
+        needsReview &&
+        path !== "ambiguous_contact" &&
+        path !== "skipped_missing_config" &&
+        path !== "skipped_error" &&
+        path !== "skipped_intake_disabled"
+    ) {
         detailLines.push(
             "Do not generate a document until you confirm CRM linkage is correct for this submission."
         );
@@ -178,8 +232,8 @@ export function buildSubmissionIntakeSection(payloadMeta: unknown): SubmissionIn
         strategyLabel: "No intake/linking result was recorded for this submission.",
         detailLines: [
             "There is no intake_resolution_path in payload.meta — Alloy did not persist a CRM intake outcome for this row.",
-            "Common causes: lead_capture is not enabled on the public link; required link metadata is missing (for example default_vertical_id); intake only runs on public submit with those settings; no matching person existed in this org; multiple CRM rows matched the same email or phone; or phone/email formatting did not match how contacts are stored.",
-            "Use Records connected below to link entities manually before generating a document.",
+            "Common causes: this submission predates the skipped_intake_disabled marker; the payload was edited outside the public submit path; lead_capture was never enabled on the link; or required metadata (default_vertical_id) was missing.",
+            "Check Link configuration (below) for the public link id on this submission. Use Records connected to link manually, or create a fresh intake-enabled public link and share that URL.",
         ],
         hasServerIntakeRecord: false,
     };
@@ -225,6 +279,17 @@ export function documentGenerationBlockedByIntake(
         return {
             blocked: true,
             reason: "CRM intake requires human review — do not generate a document until records are linked correctly.",
+        };
+    }
+
+    if (
+        (path === "skipped_intake_disabled" || path === "skipped_missing_config") &&
+        !submissionHasDocumentAttachTarget(row)
+    ) {
+        return {
+            blocked: true,
+            reason:
+                "Intake did not run or could not complete — link CRM records manually or fix public link metadata (lead_capture + default_vertical_id), then generate a document.",
         };
     }
 
@@ -341,6 +406,18 @@ export function recommendedNextAction(params: {
         if (!hasAttachParent || intakeBlocksDoc) {
             lines.push("Link this submission to the correct CRM record before generating a document.");
             const sec = buildSubmissionIntakeSection(params.payloadMeta);
+            const rawPath =
+                params.payloadMeta &&
+                typeof params.payloadMeta === "object" &&
+                !Array.isArray(params.payloadMeta) &&
+                typeof (params.payloadMeta as Record<string, unknown>).intake_resolution_path === "string" ?
+                    String((params.payloadMeta as Record<string, unknown>).intake_resolution_path).trim()
+                :   "";
+            if (rawPath === "skipped_intake_disabled") {
+                lines.push(
+                    "This submission used a link without intake — create a new public link from the form detail page (medication demo wires intake when a cleaning vertical exists) and retire the old URL."
+                );
+            }
             if (sec.hasServerIntakeRecord && sec.statusLabel !== "Linked") {
                 lines.push(`Intake status: ${sec.statusLabel} — see Intake & record linking above for detail.`);
             } else if (!sec.hasServerIntakeRecord) {

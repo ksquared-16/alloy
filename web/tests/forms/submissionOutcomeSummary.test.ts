@@ -223,6 +223,27 @@ describe("submissionOutcomeSummary", () => {
         expect(r.blocked).toBe(true);
     });
 
+    it("documentGenerationBlockedByIntake — skipped_intake_disabled blocks without attach parent", () => {
+        const row = { person_id: null, customer_id: null, customer_member_id: null, opportunity_id: null };
+        const r = documentGenerationBlockedByIntake({ intake_resolution_path: "skipped_intake_disabled" }, row);
+        expect(r.blocked).toBe(true);
+    });
+
+    it("documentGenerationBlockedByIntake — skipped_intake_disabled allows when CRM row present", () => {
+        const row = { person_id: "p1", customer_id: null, customer_member_id: null, opportunity_id: null };
+        const r = documentGenerationBlockedByIntake({ intake_resolution_path: "skipped_intake_disabled" }, row);
+        expect(r.blocked).toBe(false);
+    });
+
+    it("buildIntakeOperatorSummary — skipped_intake_disabled", () => {
+        const s = buildIntakeOperatorSummary({
+            intake_resolution_path: "skipped_intake_disabled",
+            intake_skip_reason: "x",
+        });
+        expect(s?.statusLabel).toBe("Skipped");
+        expect(s?.detailLines.some((l) => /lead_capture/i.test(l))).toBe(true);
+    });
+
     it("intakeFollowUpNotes — matched_email via buildIntakeOperatorSummary detailLines", () => {
         const n = intakeFollowUpNotes({
             intake_resolution_path: "matched_email",

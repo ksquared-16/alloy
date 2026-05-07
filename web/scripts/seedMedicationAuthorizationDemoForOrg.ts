@@ -39,6 +39,7 @@ import {
     MEDICATION_DEMO_SCHEDULE_ITEM_KEYS,
 } from "@/lib/forms/seeds/medicationAuthorizationDemo";
 import { hashFormLinkToken } from "@/lib/public/forms/tokenHash";
+import { intakeDefaultsForFormPublicLink } from "@/lib/forms/intake/defaultPublicLinkMetadata";
 
 loadEnv({ path: resolve(process.cwd(), ".env.local") });
 loadEnv({ path: resolve(process.cwd(), ".env") });
@@ -198,23 +199,7 @@ async function ensurePublicLink(
 ): Promise<{ plaintext: string; reusedGlobalToken: boolean }> {
     const supabase = createAdminClient();
 
-    const { data: verticalRow } = await supabase
-        .from("verticals")
-        .select("id")
-        .eq("slug", "cleaning")
-        .eq("is_active", true)
-        .maybeSingle();
-    const intakeMeta =
-        verticalRow?.id != null
-            ? {
-                  lead_capture: true as const,
-                  default_vertical_id: verticalRow.id as string,
-                  auto_create_person: true as const,
-                  auto_create_customer: true as const,
-                  auto_create_customer_member: true as const,
-                  auto_create_opportunity: true as const,
-              }
-            : {};
+    const intakeMeta = await intakeDefaultsForFormPublicLink(supabase, MEDICATION_AUTHORIZATION_DEMO_FORM_KEY);
 
     const { data: alreadyForForm, error: linkErr } = await supabase
         .from("form_public_links")

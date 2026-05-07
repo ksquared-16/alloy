@@ -24,6 +24,7 @@ import {
     recommendedNextAction,
     WORKFLOW_SIGNALS_OPERATOR_COPY,
     type EntityConnectionRow,
+    type PublicLinkIntakeDebug,
 } from "@/lib/forms/submissionOutcomeSummary";
 
 type LinkedDoc = {
@@ -54,6 +55,7 @@ type SubmissionDetail = {
     submitted_at: string | null;
     schema_json: unknown;
     linked_documents: LinkedDoc[];
+    public_link_intake_debug?: PublicLinkIntakeDebug | null;
 };
 
 function ConnectionRow({
@@ -322,6 +324,69 @@ export default function FormSubmissionDetailClient() {
                                         Needs review — check this section before using Generate document.
                                     </p>
                                 : null}
+
+                                <div className="mt-3 rounded-lg border border-[#e6e8ec] bg-white px-3 py-2.5 sm:px-4">
+                                    <h4 className="text-xs font-bold uppercase tracking-wide text-[#59678b]">
+                                        Link configuration (operator)
+                                    </h4>
+                                    {row.public_link_intake_debug ?
+                                        <dl className="mt-2 grid gap-2 text-xs text-[#31394d] sm:grid-cols-2">
+                                            <div>
+                                                <dt className="text-[#59678b]">Public link id</dt>
+                                                <dd className="break-all font-mono text-[11px]">
+                                                    {row.public_link_intake_debug.public_link_id ?? "—"}
+                                                </dd>
+                                            </div>
+                                            <div>
+                                                <dt className="text-[#59678b]">Lead capture / intake</dt>
+                                                <dd>{row.public_link_intake_debug.lead_capture ? "Yes" : "No"}</dd>
+                                            </div>
+                                            <div>
+                                                <dt className="text-[#59678b]">default_vertical_id</dt>
+                                                <dd className="break-all font-mono text-[11px]">
+                                                    {row.public_link_intake_debug.default_vertical_id ?? "Missing"}
+                                                </dd>
+                                            </div>
+                                            <div>
+                                                <dt className="text-[#59678b]">Auto-create flags</dt>
+                                                <dd className="leading-snug">
+                                                    person{" "}
+                                                    {row.public_link_intake_debug.auto_create_person ? "on" : "off"},{" "}
+                                                    customer{" "}
+                                                    {row.public_link_intake_debug.auto_create_customer ? "on" : "off"},{" "}
+                                                    member{" "}
+                                                    {row.public_link_intake_debug.auto_create_customer_member ?
+                                                        "on"
+                                                    :   "off"}
+                                                    , opp{" "}
+                                                    {row.public_link_intake_debug.auto_create_opportunity ? "on" : "off"}
+                                                </dd>
+                                            </div>
+                                            {row.public_link_intake_debug.link_label ?
+                                                <div className="sm:col-span-2">
+                                                    <dt className="text-[#59678b]">Link label</dt>
+                                                    <dd>{row.public_link_intake_debug.link_label}</dd>
+                                                </div>
+                                            : null}
+                                            {row.public_link_intake_debug.alloy_admin_preview ?
+                                                <div className="sm:col-span-2 text-[#59678b]">
+                                                    This link was minted as an Admin preview session.
+                                                </div>
+                                            : null}
+                                        </dl>
+                                    : row.created_via_public_link_id ?
+                                        <p className="mt-2 text-xs text-[#59678b]">
+                                            Public link id on submission:{" "}
+                                            <code className="break-all font-mono text-[11px] text-[#31394d]">
+                                                {row.created_via_public_link_id}
+                                            </code>{" "}
+                                            — link metadata could not be loaded.
+                                        </p>
+                                    :   <p className="mt-2 text-xs text-[#59678b]">
+                                            This submission was not created via a public link (no shareable link id).
+                                        </p>
+                                    }
+                                </div>
                             </section>
                         ) : null}
 

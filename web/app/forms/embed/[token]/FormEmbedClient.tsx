@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import type { FormSchemaV1 } from "@/lib/forms/schema";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
@@ -147,6 +147,11 @@ export function FormEmbedClient({
         void bootstrap();
     }, [bootstrap]);
 
+    useLayoutEffect(() => {
+        if (!submitted || typeof window === "undefined") return;
+        window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    }, [submitted]);
+
     const persistDraft = useCallback(
         async (next: FormPayload) => {
             if (!submissionId || submitted) return;
@@ -243,32 +248,28 @@ export function FormEmbedClient({
     const errorLines = validationErrors?.length ? formatPublicValidationErrors(validationErrors) : [];
 
     return (
-        <div className="min-h-screen bg-white pb-28">
+        <div className="min-h-screen bg-white">
             {showPreviewBanner ? <PreviewBanner /> : null}
-            <FormEngineRenderer
-                schema={schema}
-                payload={payload}
-                onChange={(next) => {
-                    setValidationErrors(null);
-                    setMessage(null);
-                    setPayload(next);
-                    void persistDraft(next);
-                }}
-                mode="edit"
-                optionValuesByFieldId={optionValuesByFieldId}
-                optionChoicesByFieldId={optionChoicesByFieldId}
-                variant="embed"
-                validationErrors={validationErrors ?? undefined}
-            />
-            <div
-                className={clsx(
-                    "fixed bottom-0 left-0 right-0 z-10 border-t border-neutral-200 bg-white p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] transition-opacity",
-                    submitting && "opacity-95"
-                )}
-            >
-                <div className="mx-auto flex max-w-xl flex-col gap-3">
+            <div className={clsx("mx-auto max-w-xl px-3 pt-4 pb-16", submitting && "opacity-[0.98]")}>
+                <FormEngineRenderer
+                    schema={schema}
+                    payload={payload}
+                    onChange={(next) => {
+                        setValidationErrors(null);
+                        setMessage(null);
+                        setPayload(next);
+                        void persistDraft(next);
+                    }}
+                    mode="edit"
+                    optionValuesByFieldId={optionValuesByFieldId}
+                    optionChoicesByFieldId={optionChoicesByFieldId}
+                    variant="embed"
+                    validationErrors={validationErrors ?? undefined}
+                />
+
+                <div className="mt-10 space-y-4 border-t border-neutral-200 pt-8">
                     {errorLines.length ?
-                        <ul className="max-h-36 list-disc overflow-y-auto rounded-md border border-red-100 bg-red-50/80 px-4 py-2 pl-7 text-left text-sm text-red-800">
+                        <ul className="list-disc space-y-1 rounded-md border border-red-100 bg-red-50/80 px-4 py-3 pl-7 text-left text-sm text-red-800">
                             {errorLines.map((line, i) => (
                                 <li key={i}>{line}</li>
                             ))}
@@ -288,6 +289,9 @@ export function FormEmbedClient({
                     >
                         {submitting ? "Submitting…" : "Submit"}
                     </button>
+                    <p className="text-center text-xs text-neutral-500">
+                        Scroll up to review your answers before submitting.
+                    </p>
                 </div>
             </div>
         </div>

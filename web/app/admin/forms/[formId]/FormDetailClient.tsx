@@ -25,6 +25,7 @@ import {
     buildPreviewEmbedUrl,
     previewEmbedSessionStorageKey,
 } from "@/lib/forms/adminFormPreview";
+import { MEDICATION_AUTHORIZATION_DEMO_FORM_KEY } from "@/lib/forms/seeds/medicationAuthorizationDemo";
 import { linkRequiresLeadCapture } from "@/lib/public/forms/publicFormTypes";
 
 type VersionRow = {
@@ -500,6 +501,13 @@ export default function FormDetailClient() {
                                 </div>
                             )}
                             {createErr ? <p className="mt-2 text-sm text-red-700">{createErr}</p> : null}
+                            {detail?.key === MEDICATION_AUTHORIZATION_DEMO_FORM_KEY ?
+                                <p className="mt-2 max-w-2xl text-xs leading-relaxed text-[#59678b]">
+                                    New links for this demo automatically enable CRM intake when your org has an active{" "}
+                                    <strong className="font-medium text-[#31394d]">cleaning</strong> vertical (lead capture,
+                                    default vertical, and demo auto-create flags). Preview links use the same defaults.
+                                </p>
+                            : null}
 
                             <div className="mt-3 rounded-md bg-[#F4F6F9]/80 p-3 text-sm text-[#59678b]">
                                 <p className="font-medium text-[#31394d]">About links and tokens</p>

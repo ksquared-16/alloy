@@ -218,6 +218,16 @@ export async function POST(
                 finalPayload = { ...finalPayload, meta: cleanedMeta };
             }
         }
+    } else {
+        finalPayload = {
+            ...finalPayload,
+            meta: {
+                ...((finalPayload.meta ?? {}) as Record<string, unknown>),
+                intake_resolution_path: "skipped_intake_disabled",
+                intake_skip_reason:
+                    "This public link does not have lead_capture / intake enabled on its metadata — CRM intake did not run.",
+            },
+        };
     }
 
     const { data: updated, error: upErr } = await supabase

@@ -444,6 +444,16 @@ export async function dbGetPublicLinkForForm(
         .maybeSingle();
 }
 
+/** Lookup by link id + org only (e.g. submission `created_via_public_link_id`). */
+export async function dbGetPublicLinkById(supabase: SupabaseClient, orgId: string, linkId: string) {
+    return supabase
+        .from("form_public_links")
+        .select(FORM_PUBLIC_LINK_SAFE_SELECT)
+        .eq("org_id", orgId)
+        .eq("id", linkId)
+        .maybeSingle();
+}
+
 export async function dbUpdateFormPublicLinkForForm(
     supabase: SupabaseClient,
     orgId: string,

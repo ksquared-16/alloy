@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
-import { dbGetSubmission, dbGetVersion, dbListSubmissionLinkedDocuments } from "@/lib/admin/forms/formsAdminDb";
+import {
+    dbGetPublicLinkById,
+    dbGetSubmission,
+    dbGetVersion,
+    dbListSubmissionLinkedDocuments,
+} from "@/lib/admin/forms/formsAdminDb";
+import { buildPublicLinkIntakeDebug } from "@/lib/forms/submissionOutcomeSummary";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 
 /** GET /api/admin/forms/submissions/[submissionId] */
@@ -31,9 +37,21 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     const { org_id: _orgStrip, ...submissionRest } = row;
     void _orgStrip;
 
+    const linkId = typeof submissionRest.created_via_public_link_id === "string" ? submissionRest.created_via_public_link_id : null;
+    let public_link_intake_debug: ReturnType<typeof buildPublicLinkIntakeDebug> | null = null;
+    if (linkId) {
+        const { data: linkRow } = await dbGetPublicLinkById(supabase, ctx.orgId, linkId);
+        const meta =
+            linkRow && typeof (linkRow as { metadata?: unknown }).metadata === "object" && (linkRow as { metadata?: unknown }).metadata
+                ? ((linkRow as { metadata: Record<string, unknown> }).metadata ?? {})
+                : {};
+        public_link_intake_debug = buildPublicLinkIntakeDebug(meta, linkId);
+    }
+
     return jsonData({
         ...submissionRest,
         schema_json,
         linked_documents: linked ?? [],
+        public_link_intake_debug,
     });
 }
