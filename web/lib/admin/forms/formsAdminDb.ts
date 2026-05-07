@@ -371,6 +371,31 @@ export async function dbSubmitSubmission(
         .single();
 }
 
+/** Partial update for submitted rows (operator intake review / manual CRM links). */
+export async function dbPatchSubmission(
+    supabase: SupabaseClient,
+    orgId: string,
+    submissionId: string,
+    patch: {
+        payload?: Record<string, unknown>;
+        person_id?: string | null;
+        customer_id?: string | null;
+        customer_member_id?: string | null;
+        opportunity_id?: string | null;
+    }
+) {
+    return supabase
+        .from("form_submissions")
+        .update({
+            ...patch,
+            updated_at: new Date().toISOString(),
+        })
+        .eq("org_id", orgId)
+        .eq("id", submissionId)
+        .select("*")
+        .single();
+}
+
 const FORM_PUBLIC_LINK_SAFE_SELECT =
     "id, form_definition_id, pinned_form_definition_version_id, is_active, expires_at, allowed_embed_origins, metadata, token_prefix, rate_limit_profile, created_at, updated_at, last_used_at";
 

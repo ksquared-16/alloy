@@ -5,7 +5,8 @@ import { useCallback, useEffect, useState } from "react";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import { StatusBadge, getStatusVariant } from "@/components/admin/StatusBadge";
-import { formatDateTime } from "@/lib/adminFormatters";
+import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
+import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
 import { parseOperatorContext } from "@/lib/forms/operatorFormGuidance";
 
@@ -67,6 +68,7 @@ DEMO_RESET_ORG_ID="<your-org-uuid>" npm run demo:seed:medication-form`}
 }
 
 export default function FormsHubClient() {
+    const viewerTz = useAdminViewerTimezone();
     const [rows, setRows] = useState<FormRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -204,7 +206,7 @@ export default function FormsHubClient() {
                                                 )}
                                             </td>
                                             <td className="py-2.5 pr-4 text-[#59678b]">
-                                                {r.updated_at ? formatDateTime(r.updated_at) : "—"}
+                                                {r.updated_at ? formatDateTimeForUserDisplay(r.updated_at, viewerTz) : "—"}
                                             </td>
                                             <td className="py-2.5">
                                                 <Link

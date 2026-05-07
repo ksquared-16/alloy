@@ -2,6 +2,7 @@ import type { FormPayload } from "@/lib/forms/validateSubmission";
 import { resolveFormSubmissionDocumentParent } from "@/lib/forms/pdf/createGeneratedPdfForSubmission";
 import { parseIntakeAutoCreateFlags } from "@/lib/forms/intake/parseIntakeAutoCreateFlags";
 import { linkRequiresLeadCapture } from "@/lib/public/forms/publicFormTypes";
+import { extractFormContextForOperatorDebug } from "@/lib/forms/formContextMode";
 
 /** Safe, non-secret snapshot of public link metadata for operators (submission debug). */
 export type PublicLinkIntakeDebug = {
@@ -14,6 +15,11 @@ export type PublicLinkIntakeDebug = {
     auto_create_opportunity: boolean;
     link_label: string | null;
     alloy_admin_preview: boolean;
+    form_context_mode: string | null;
+    source_entity_type: string | null;
+    source_entity_id: string | null;
+    prefill_enabled: boolean | null;
+    allow_auto_create: boolean | null;
 };
 
 export function buildPublicLinkIntakeDebug(
@@ -24,6 +30,7 @@ export function buildPublicLinkIntakeDebug(
     const flags = parseIntakeAutoCreateFlags(m);
     const vid = typeof m.default_vertical_id === "string" ? m.default_vertical_id.trim() : "";
     const default_vertical_id = /^[0-9a-f-]{36}$/i.test(vid) ? vid : null;
+    const ctxDbg = extractFormContextForOperatorDebug(m);
     return {
         public_link_id: linkId,
         lead_capture: linkRequiresLeadCapture(m),
@@ -34,6 +41,11 @@ export function buildPublicLinkIntakeDebug(
         auto_create_opportunity: flags.auto_create_opportunity,
         link_label: typeof m.label === "string" && m.label.trim() ? m.label.trim() : null,
         alloy_admin_preview: m.alloy_admin_preview === true,
+        form_context_mode: ctxDbg.form_context_mode,
+        source_entity_type: ctxDbg.source_entity_type,
+        source_entity_id: ctxDbg.source_entity_id,
+        prefill_enabled: ctxDbg.prefill_enabled,
+        allow_auto_create: ctxDbg.allow_auto_create,
     };
 }
 
@@ -138,6 +150,7 @@ const STRATEGY_LABELS: Record<string, string> = {
     ambiguous_email: "Multiple persons matched the email — CRM links were not applied.",
     ambiguous_phone: "Multiple persons matched the phone — CRM links were not applied.",
     no_match: "No person matched email/phone.",
+    operator_selected: "Operator chose CRM records manually on this submission.",
 };
 
 /** Structured intake summary for submission detail (Card 8 metadata). */
@@ -159,6 +172,7 @@ export function buildIntakeOperatorSummary(payloadMeta: unknown): IntakeOperator
     else if (path === "skipped_intake_disabled") statusLabel = "Skipped";
     else if (path === "skipped_error") statusLabel = "Error";
     else if (path === "ambiguous_contact" || path === "needs_human_review") statusLabel = "Needs review";
+    else if (path === "manually_linked") statusLabel = "Linked";
     else if (needsReview) statusLabel = "Needs review";
 
     const detailLines: string[] = [`Resolution path: ${path}.`, `Confidence: ${confidence}.`, strategyLabel];
@@ -211,6 +225,22 @@ export function buildIntakeOperatorSummary(payloadMeta: unknown): IntakeOperator
         detailLines.push(
             "Do not generate a document until you confirm CRM linkage is correct for this submission."
         );
+    }
+
+    const reviewResult = typeof m.intake_review_result === "string" ? m.intake_review_result.trim() : "";
+    if (reviewResult === "confirmed") {
+        detailLines.push("Operator confirmed that the CRM records linked to this submission are correct.");
+        const by = typeof m.intake_reviewed_by === "string" && m.intake_reviewed_by.trim();
+        if (by) {
+            detailLines.push(`Confirmation recorded by user id ${by}.`);
+        }
+    }
+    if (reviewResult === "corrected") {
+        detailLines.push("CRM links on this submission were corrected manually by an operator.");
+        const by = typeof m.intake_reviewed_by === "string" && m.intake_reviewed_by.trim();
+        if (by) {
+            detailLines.push(`Correction recorded by user id ${by}.`);
+        }
     }
 
     return { statusLabel, strategyLabel, detailLines };

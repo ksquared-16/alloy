@@ -223,6 +223,34 @@ describe("submissionOutcomeSummary", () => {
         expect(r.blocked).toBe(true);
     });
 
+    it("documentGenerationBlockedByIntake — operator confirmed clears intake_needs_review block", () => {
+        const row = { person_id: "p1", customer_id: null, customer_member_id: null, opportunity_id: null };
+        const r = documentGenerationBlockedByIntake(
+            {
+                intake_resolution_path: "matched_email",
+                intake_needs_review: false,
+                intake_review_result: "confirmed",
+            },
+            row
+        );
+        expect(r.blocked).toBe(false);
+    });
+
+    it("documentGenerationBlockedByIntake — manually_linked allows when attach parent exists", () => {
+        const row = { person_id: null, customer_id: null, customer_member_id: "m1", opportunity_id: null };
+        const r = documentGenerationBlockedByIntake(
+            {
+                intake_resolution_path: "manually_linked",
+                intake_match_strategy: "operator_selected",
+                intake_match_confidence: "human_reviewed",
+                intake_needs_review: false,
+                intake_review_result: "corrected",
+            },
+            row
+        );
+        expect(r.blocked).toBe(false);
+    });
+
     it("documentGenerationBlockedByIntake — skipped_intake_disabled blocks without attach parent", () => {
         const row = { person_id: null, customer_id: null, customer_member_id: null, opportunity_id: null };
         const r = documentGenerationBlockedByIntake({ intake_resolution_path: "skipped_intake_disabled" }, row);
@@ -282,5 +310,18 @@ describe("submissionOutcomeSummary", () => {
         const s = buildSubmissionIntakeSection({});
         expect(s.hasServerIntakeRecord).toBe(false);
         expect(s.statusLabel).toBe("No record");
+    });
+
+    it("buildIntakeOperatorSummary — manually_linked uses operator strategy label", () => {
+        const s = buildIntakeOperatorSummary({
+            intake_resolution_path: "manually_linked",
+            intake_match_strategy: "operator_selected",
+            intake_match_confidence: "human_reviewed",
+            intake_needs_review: false,
+            intake_review_result: "corrected",
+        });
+        expect(s?.statusLabel).toBe("Linked");
+        expect(s?.strategyLabel.toLowerCase()).toContain("operator");
+        expect(s?.detailLines.some((l) => /corrected manually/i.test(l))).toBe(true);
     });
 });

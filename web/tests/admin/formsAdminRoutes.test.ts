@@ -12,6 +12,8 @@ import { POST as submitSubmission } from "@/app/api/admin/forms/submissions/[sub
 import { GET as listPublicLinks, POST as createPublicLink } from "@/app/api/admin/forms/[formId]/public-links/route";
 import { PATCH as patchPublicLink } from "@/app/api/admin/forms/[formId]/public-links/[linkId]/route";
 import { GET as getSubmission } from "@/app/api/admin/forms/submissions/[submissionId]/route";
+import { POST as confirmLinkage } from "@/app/api/admin/forms/submissions/[submissionId]/confirm-linkage/route";
+import { POST as manualLink } from "@/app/api/admin/forms/submissions/[submissionId]/manual-link/route";
 
 const ORG = "11111111-1111-4111-8111-111111111111";
 const OTHER_ORG = "99999999-9999-4999-8999-999999999999";
@@ -23,7 +25,20 @@ const { mockGetAdminContext, storeRef } = vi.hoisted(() => {
         versions: Record<string, Record<string, unknown>>;
         submissions: Record<string, Record<string, unknown>>;
         publicLinks: Record<string, Record<string, unknown>>;
-    } = { forms: {}, versions: {}, submissions: {}, publicLinks: {} };
+        persons: Record<string, { org_id: string }>;
+        customers: Record<string, { org_id: string }>;
+        customer_members: Record<string, { org_id: string; customer_id: string }>;
+        opportunities: Record<string, { org_id: string; customer_id: string | null }>;
+    } = {
+        forms: {},
+        versions: {},
+        submissions: {},
+        publicLinks: {},
+        persons: {},
+        customers: {},
+        customer_members: {},
+        opportunities: {},
+    };
     return { mockGetAdminContext: vi.fn(), storeRef };
 });
 
@@ -263,6 +278,34 @@ function makeSupabaseMock() {
             if (row && (row as { org_id: string }).org_id !== org) return { data: null, error: null };
             return { data: row, error: null };
         }
+        if (q.table === "persons" && q.mode === "select" && q.filters.id && q.filters.org_id) {
+            const id = q.filters.id as string;
+            const org = q.filters.org_id as string;
+            const row = storeRef.persons[id];
+            if (row && row.org_id === org) return { data: { id }, error: null };
+            return { data: null, error: null };
+        }
+        if (q.table === "customers" && q.mode === "select" && q.filters.id && q.filters.org_id) {
+            const id = q.filters.id as string;
+            const org = q.filters.org_id as string;
+            const row = storeRef.customers[id];
+            if (row && row.org_id === org) return { data: { id }, error: null };
+            return { data: null, error: null };
+        }
+        if (q.table === "customer_members" && q.mode === "select" && q.filters.id && q.filters.org_id) {
+            const id = q.filters.id as string;
+            const org = q.filters.org_id as string;
+            const row = storeRef.customer_members[id];
+            if (row && row.org_id === org) return { data: { customer_id: row.customer_id }, error: null };
+            return { data: null, error: null };
+        }
+        if (q.table === "opportunities" && q.mode === "select" && q.filters.id && q.filters.org_id) {
+            const id = q.filters.id as string;
+            const org = q.filters.org_id as string;
+            const row = storeRef.opportunities[id];
+            if (row && row.org_id === org) return { data: { customer_id: row.customer_id }, error: null };
+            return { data: null, error: null };
+        }
         if (q.table === "form_public_links" && q.mode === "select" && q.filters.id) {
             const org = q.filters.org_id as string;
             const fd = q.filters.form_definition_id as string;
@@ -420,6 +463,10 @@ beforeEach(() => {
     storeRef.versions = {};
     storeRef.submissions = {};
     storeRef.publicLinks = {};
+    storeRef.persons = {};
+    storeRef.customers = {};
+    storeRef.customer_members = {};
+    storeRef.opportunities = {};
     mockGetAdminContext.mockResolvedValue({
         ok: true,
         orgId: ORG,
@@ -966,6 +1013,246 @@ describe("Admin forms routes", () => {
                 body: JSON.stringify({}),
             }),
             { params: Promise.resolve({ formId: fid }) }
+        );
+        expect(res.status).toBe(403);
+    });
+
+    it("POST confirm-linkage clears intake_needs_review and stamps reviewer", async () => {
+        const fid = crypto.randomUUID();
+        const vid = crypto.randomUUID();
+        const sid = crypto.randomUUID();
+        const pid = crypto.randomUUID();
+        storeRef.forms[fid] = { id: fid, org_id: ORG, key: "k", name: "N", kind: "center", is_active: true, metadata: {} };
+        storeRef.versions[vid] = {
+            id: vid,
+            org_id: ORG,
+            form_definition_id: fid,
+            version_number: 1,
+            status: "published",
+            schema_json: validSchema,
+            pdf_mapping_json: null,
+            metadata: {},
+        };
+        storeRef.submissions[sid] = {
+            id: sid,
+            org_id: ORG,
+            form_definition_id: fid,
+            form_definition_version_id: vid,
+            status: "submitted",
+            person_id: pid,
+            customer_id: null,
+            customer_member_id: null,
+            opportunity_id: null,
+            payload: {
+                values: { name: "Ada", color: "blue" },
+                meta: {
+                    intake_resolution_path: "matched_email",
+                    intake_needs_review: true,
+                },
+            },
+            created_at: new Date().toISOString(),
+            submitted_at: new Date().toISOString(),
+        };
+        const res = await confirmLinkage(new NextRequest("http://x"), {
+            params: Promise.resolve({ submissionId: sid }),
+        });
+        expect(res.status).toBe(200);
+        const j = (await res.json()) as { data: { payload: { meta: Record<string, unknown> } } };
+        expect(j.data.payload.meta.intake_needs_review).toBe(false);
+        expect(j.data.payload.meta.intake_review_result).toBe("confirmed");
+        expect(j.data.payload.meta.intake_reviewed_by).toBe(USER);
+        expect((storeRef.submissions[sid].payload as { meta: Record<string, unknown> }).meta.intake_review_result).toBe(
+            "confirmed"
+        );
+    });
+
+    it("POST confirm-linkage allowed for ops role", async () => {
+        mockGetAdminContext.mockResolvedValue({
+            ok: true,
+            orgId: ORG,
+            userId: USER,
+            role: "ops",
+        });
+        const fid = crypto.randomUUID();
+        const vid = crypto.randomUUID();
+        const sid = crypto.randomUUID();
+        const pid = crypto.randomUUID();
+        storeRef.forms[fid] = { id: fid, org_id: ORG, key: "k", name: "N", kind: "center", is_active: true, metadata: {} };
+        storeRef.versions[vid] = {
+            id: vid,
+            org_id: ORG,
+            form_definition_id: fid,
+            version_number: 1,
+            status: "published",
+            schema_json: validSchema,
+            pdf_mapping_json: null,
+            metadata: {},
+        };
+        storeRef.submissions[sid] = {
+            id: sid,
+            org_id: ORG,
+            form_definition_id: fid,
+            form_definition_version_id: vid,
+            status: "submitted",
+            person_id: pid,
+            customer_id: null,
+            customer_member_id: null,
+            opportunity_id: null,
+            payload: {
+                values: { name: "Ada", color: "blue" },
+                meta: { intake_resolution_path: "matched_email", intake_needs_review: true },
+            },
+            created_at: new Date().toISOString(),
+            submitted_at: new Date().toISOString(),
+        };
+        const res = await confirmLinkage(new NextRequest("http://x"), {
+            params: Promise.resolve({ submissionId: sid }),
+        });
+        expect(res.status).toBe(200);
+    });
+
+    it("POST manual-link sets FKs, derives customer from member, and stamps meta", async () => {
+        const fid = crypto.randomUUID();
+        const vid = crypto.randomUUID();
+        const sid = crypto.randomUUID();
+        const cid = crypto.randomUUID();
+        const mid = crypto.randomUUID();
+        storeRef.forms[fid] = { id: fid, org_id: ORG, key: "k", name: "N", kind: "center", is_active: true, metadata: {} };
+        storeRef.versions[vid] = {
+            id: vid,
+            org_id: ORG,
+            form_definition_id: fid,
+            version_number: 1,
+            status: "published",
+            schema_json: validSchema,
+            pdf_mapping_json: null,
+            metadata: {},
+        };
+        storeRef.customers[cid] = { org_id: ORG };
+        storeRef.customer_members[mid] = { org_id: ORG, customer_id: cid };
+        storeRef.submissions[sid] = {
+            id: sid,
+            org_id: ORG,
+            form_definition_id: fid,
+            form_definition_version_id: vid,
+            status: "submitted",
+            person_id: null,
+            customer_id: null,
+            customer_member_id: null,
+            opportunity_id: null,
+            payload: {
+                values: { name: "Ada", color: "blue" },
+                meta: { intake_resolution_path: "needs_human_review", intake_needs_review: true },
+            },
+            created_at: new Date().toISOString(),
+            submitted_at: new Date().toISOString(),
+        };
+        const res = await manualLink(
+            new NextRequest("http://x", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ customer_member_id: mid }),
+            }),
+            { params: Promise.resolve({ submissionId: sid }) }
+        );
+        expect(res.status).toBe(200);
+        const j = (await res.json()) as {
+            data: {
+                customer_member_id: string;
+                customer_id: string;
+                payload: { meta: Record<string, unknown> };
+            };
+        };
+        expect(j.data.customer_member_id).toBe(mid);
+        expect(j.data.customer_id).toBe(cid);
+        expect(j.data.payload.meta.intake_resolution_path).toBe("manually_linked");
+        expect(j.data.payload.meta.intake_review_result).toBe("corrected");
+    });
+
+    it("POST manual-link rejects customer_member from another org", async () => {
+        const fid = crypto.randomUUID();
+        const vid = crypto.randomUUID();
+        const sid = crypto.randomUUID();
+        const mid = crypto.randomUUID();
+        storeRef.forms[fid] = { id: fid, org_id: ORG, key: "k", name: "N", kind: "center", is_active: true, metadata: {} };
+        storeRef.versions[vid] = {
+            id: vid,
+            org_id: ORG,
+            form_definition_id: fid,
+            version_number: 1,
+            status: "published",
+            schema_json: validSchema,
+            pdf_mapping_json: null,
+            metadata: {},
+        };
+        storeRef.customer_members[mid] = { org_id: OTHER_ORG, customer_id: crypto.randomUUID() };
+        storeRef.submissions[sid] = {
+            id: sid,
+            org_id: ORG,
+            form_definition_id: fid,
+            form_definition_version_id: vid,
+            status: "submitted",
+            person_id: null,
+            customer_id: null,
+            customer_member_id: null,
+            opportunity_id: null,
+            payload: { values: { name: "Ada", color: "blue" }, meta: {} },
+            created_at: new Date().toISOString(),
+            submitted_at: new Date().toISOString(),
+        };
+        const res = await manualLink(
+            new NextRequest("http://x", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ customer_member_id: mid }),
+            }),
+            { params: Promise.resolve({ submissionId: sid }) }
+        );
+        expect(res.status).toBe(400);
+    });
+
+    it("POST manual-link returns 403 for ops role", async () => {
+        mockGetAdminContext.mockResolvedValue({
+            ok: true,
+            orgId: ORG,
+            userId: USER,
+            role: "ops",
+        });
+        const fid = crypto.randomUUID();
+        const vid = crypto.randomUUID();
+        const sid = crypto.randomUUID();
+        storeRef.forms[fid] = { id: fid, org_id: ORG, key: "k", name: "N", kind: "center", is_active: true, metadata: {} };
+        storeRef.versions[vid] = {
+            id: vid,
+            org_id: ORG,
+            form_definition_id: fid,
+            version_number: 1,
+            status: "published",
+            schema_json: validSchema,
+            pdf_mapping_json: null,
+            metadata: {},
+        };
+        storeRef.submissions[sid] = {
+            id: sid,
+            org_id: ORG,
+            form_definition_id: fid,
+            form_definition_version_id: vid,
+            status: "submitted",
+            person_id: null,
+            customer_id: null,
+            customer_member_id: null,
+            opportunity_id: null,
+            payload: { values: { name: "Ada", color: "blue" }, meta: {} },
+            created_at: new Date().toISOString(),
+            submitted_at: new Date().toISOString(),
+        };
+        const res = await manualLink(
+            new NextRequest("http://x", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ person_id: crypto.randomUUID() }),
+            }),
+            { params: Promise.resolve({ submissionId: sid }) }
         );
         expect(res.status).toBe(403);
     });

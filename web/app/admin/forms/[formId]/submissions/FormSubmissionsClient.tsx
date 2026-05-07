@@ -6,7 +6,8 @@ import { useCallback, useEffect, useState } from "react";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import { StatusBadge, getStatusVariant } from "@/components/admin/StatusBadge";
-import { formatDateTime } from "@/lib/adminFormatters";
+import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
+import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
 
 type SubmissionListRow = {
@@ -20,6 +21,7 @@ type SubmissionListRow = {
 };
 
 export default function FormSubmissionsClient() {
+    const viewerTz = useAdminViewerTimezone();
     const params = useParams();
     const formId = typeof params?.formId === "string" ? params.formId : "";
 
@@ -106,9 +108,9 @@ export default function FormSubmissionsClient() {
                                         <td className="py-2.5 pr-4">
                                             <StatusBadge label={r.status} variant={getStatusVariant(r.status)} />
                                         </td>
-                                        <td className="py-2.5 pr-4 text-[#59678b]">{formatDateTime(r.created_at)}</td>
+                                        <td className="py-2.5 pr-4 text-[#59678b]">{formatDateTimeForUserDisplay(r.created_at, viewerTz)}</td>
                                         <td className="py-2.5 pr-4 text-[#59678b]">
-                                            {r.submitted_at ? formatDateTime(r.submitted_at) : "—"}
+                                            {r.submitted_at ? formatDateTimeForUserDisplay(r.submitted_at, viewerTz) : "—"}
                                         </td>
                                         <td className="py-2.5">
                                             <Link

@@ -7,7 +7,8 @@ import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import PrimaryButton from "@/components/PrimaryButton";
 import { StatusBadge, getStatusVariant } from "@/components/admin/StatusBadge";
-import { formatDateTime } from "@/lib/adminFormatters";
+import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
+import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
 import {
@@ -68,6 +69,7 @@ type CreatedLinkPayload = {
 export default function FormDetailClient() {
     const params = useParams();
     const formId = typeof params?.formId === "string" ? params.formId : "";
+    const viewerTz = useAdminViewerTimezone();
     const { canMutate } = useAdminAuth();
 
     const [detail, setDetail] = useState<FormDetail | null>(null);
@@ -452,7 +454,7 @@ export default function FormDetailClient() {
                                 Latest published:{" "}
                                 <span className="font-medium">v{latestPublished.version_number}</span>
                                 {latestPublished.published_at ? (
-                                    <> · {formatDateTime(latestPublished.published_at)}</>
+                                    <> · {formatDateTimeForUserDisplay(latestPublished.published_at, viewerTz)}</>
                                 ) : null}
                             </p>
                         ) : (
@@ -475,7 +477,7 @@ export default function FormDetailClient() {
                                                 <StatusBadge label={v.status} variant={getStatusVariant(v.status)} />
                                             </td>
                                             <td className="py-2 text-[#59678b]">
-                                                {v.published_at ? formatDateTime(v.published_at) : "—"}
+                                                {v.published_at ? formatDateTimeForUserDisplay(v.published_at, viewerTz) : "—"}
                                             </td>
                                         </tr>
                                     ))}
@@ -596,9 +598,9 @@ export default function FormDetailClient() {
                                                         />
                                                     </td>
                                                     <td className="py-2 pr-4 text-[#59678b]">
-                                                        {L.expires_at ? formatDateTime(L.expires_at) : "—"}
+                                                        {L.expires_at ? formatDateTimeForUserDisplay(L.expires_at, viewerTz) : "—"}
                                                     </td>
-                                                    <td className="py-2 text-[#59678b]">{formatDateTime(L.created_at)}</td>
+                                                    <td className="py-2 text-[#59678b]">{formatDateTimeForUserDisplay(L.created_at, viewerTz)}</td>
                                                 </tr>
                                             ))}
                                         </tbody>

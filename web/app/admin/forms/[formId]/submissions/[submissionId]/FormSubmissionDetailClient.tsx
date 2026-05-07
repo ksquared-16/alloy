@@ -6,8 +6,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
 import PrimaryButton from "@/components/PrimaryButton";
+import SecondaryButton from "@/components/SecondaryButton";
 import { StatusBadge, getStatusVariant } from "@/components/admin/StatusBadge";
-import { formatDateTime } from "@/lib/adminFormatters";
+import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
+import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
+import { parseFormLaunchContextFromPayloadMeta } from "@/lib/forms/formContextMode";
 import { FormEngineRenderer } from "@/components/forms/engine/FormEngineRenderer";
 import { safeParseFormSchema, type FormSchemaV1 } from "@/lib/forms/schema";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
@@ -97,6 +100,7 @@ export default function FormSubmissionDetailClient() {
     const params = useParams();
     const formId = typeof params?.formId === "string" ? params.formId : "";
     const submissionId = typeof params?.submissionId === "string" ? params.submissionId : "";
+    const viewerTz = useAdminViewerTimezone();
     const { canMutate } = useAdminAuth();
     const { openDrawer } = useAdminDrawer();
 
@@ -106,6 +110,14 @@ export default function FormSubmissionDetailClient() {
     const [genBusy, setGenBusy] = useState(false);
     const [genMsg, setGenMsg] = useState<string | null>(null);
     const [genErr, setGenErr] = useState<string | null>(null);
+    const [confirmBusy, setConfirmBusy] = useState(false);
+    const [confirmErr, setConfirmErr] = useState<string | null>(null);
+    const [manualBusy, setManualBusy] = useState(false);
+    const [manualErr, setManualErr] = useState<string | null>(null);
+    const [manualPerson, setManualPerson] = useState("");
+    const [manualCustomer, setManualCustomer] = useState("");
+    const [manualMember, setManualMember] = useState("");
+    const [manualOpp, setManualOpp] = useState("");
 
     const load = useCallback(async () => {
         if (!submissionId) return;
@@ -127,6 +139,57 @@ export default function FormSubmissionDetailClient() {
     useEffect(() => {
         void load();
     }, [load]);
+
+    const confirmLinkage = async () => {
+        if (!submissionId) return;
+        setConfirmBusy(true);
+        setConfirmErr(null);
+        try {
+            const res = await fetch(`/api/admin/forms/submissions/${encodeURIComponent(submissionId)}/confirm-linkage`, {
+                method: "POST",
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error((json as { error?: string }).error ?? "Confirm failed");
+            void load();
+        } catch (e) {
+            setConfirmErr((e as Error).message);
+        } finally {
+            setConfirmBusy(false);
+        }
+    };
+
+    const applyManualLinks = async () => {
+        if (!submissionId || !canMutate) return;
+        setManualBusy(true);
+        setManualErr(null);
+        try {
+            const body: Record<string, unknown> = {};
+            const p = manualPerson.trim();
+            const c = manualCustomer.trim();
+            const m = manualMember.trim();
+            const o = manualOpp.trim();
+            if (p) body.person_id = p;
+            if (c) body.customer_id = c;
+            if (m) body.customer_member_id = m;
+            if (o) body.opportunity_id = o;
+            const res = await fetch(`/api/admin/forms/submissions/${encodeURIComponent(submissionId)}/manual-link`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body),
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error((json as { error?: string }).error ?? "Update failed");
+            setManualPerson("");
+            setManualCustomer("");
+            setManualMember("");
+            setManualOpp("");
+            void load();
+        } catch (e) {
+            setManualErr((e as Error).message);
+        } finally {
+            setManualBusy(false);
+        }
+    };
 
     const generateDocument = async () => {
         if (!submissionId || !canMutate) return;
@@ -176,6 +239,33 @@ export default function FormSubmissionDetailClient() {
         if (!intakeSection) return false;
         return intakeSection.statusLabel !== "Linked" || !intakeSection.hasServerIntakeRecord;
     }, [intakeSection]);
+
+    const payloadMetaObj = row?.payload?.meta;
+    const payloadMetaRecord =
+        payloadMetaObj && typeof payloadMetaObj === "object" && !Array.isArray(payloadMetaObj)
+            ? (payloadMetaObj as Record<string, unknown>)
+            : null;
+
+    const launchContext = useMemo(() => parseFormLaunchContextFromPayloadMeta(row?.payload?.meta), [row?.payload?.meta]);
+
+    const hasLaunchContextDisplay = useMemo(() => {
+        return !!(
+            launchContext.form_context_mode ||
+            launchContext.source_entity_type ||
+            launchContext.source_entity_id ||
+            launchContext.prefill_enabled !== undefined ||
+            launchContext.allow_auto_create !== undefined
+        );
+    }, [launchContext]);
+
+    const needsConfirmLinkage = useMemo(() => {
+        if (!row || row.status !== "submitted") return false;
+        const hasCrm = !!(row.person_id || row.customer_id || row.customer_member_id || row.opportunity_id);
+        return hasCrm && payloadMetaRecord?.intake_needs_review === true;
+    }, [row, payloadMetaRecord]);
+
+    const intakeReviewedAt =
+        typeof payloadMetaRecord?.intake_reviewed_at === "string" ? payloadMetaRecord.intake_reviewed_at : null;
 
     const docGenBlocked = useMemo(() => {
         if (!row || row.status !== "submitted") return { blocked: false as const };
@@ -273,12 +363,20 @@ export default function FormSubmissionDetailClient() {
                             {row.submitted_at ? (
                                 <p className="text-sm text-[#31394d]">
                                     <span className="text-[#59678b]">Submitted at: </span>
-                                    {formatDateTime(row.submitted_at)}
+                                    {formatDateTimeForUserDisplay(row.submitted_at, viewerTz)}
                                 </p>
                             ) : (
                                 <p className="text-sm text-[#59678b]">Not submitted yet — no submitted timestamp.</p>
                             )}
-                            <p className="text-sm text-[#59678b]">Created: {formatDateTime(row.created_at)}</p>
+                            <p className="text-sm text-[#59678b]">
+                                Created: {formatDateTimeForUserDisplay(row.created_at, viewerTz)}
+                            </p>
+                            {intakeReviewedAt ? (
+                                <p className="text-sm text-[#31394d]">
+                                    <span className="text-[#59678b]">Intake review recorded: </span>
+                                    {formatDateTimeForUserDisplay(intakeReviewedAt, viewerTz)}
+                                </p>
+                            ) : null}
                             {lifecycle.notes.length ? (
                                 <ul className="list-disc space-y-1 pl-5 text-sm text-[#31394d]">
                                     {lifecycle.notes.map((n, i) => (
@@ -287,6 +385,48 @@ export default function FormSubmissionDetailClient() {
                                 </ul>
                             ) : null}
                         </section>
+
+                        {hasLaunchContextDisplay ? (
+                            <section className="space-y-2 border-b border-[#e6e8ec] py-4">
+                                <h3 className="text-xs font-bold uppercase tracking-wide text-[#59678b]">
+                                    Form launch context
+                                </h3>
+                                <p className="text-sm text-[#59678b]">
+                                    How this submission was started (from link metadata stamped at draft create). Prefill and
+                                    deep launch flows are incremental — this panel is read-only today.
+                                </p>
+                                <dl className="grid gap-2 text-sm text-[#31394d] sm:grid-cols-2">
+                                    <div>
+                                        <dt className="text-xs text-[#59678b]">form_context_mode</dt>
+                                        <dd className="font-mono text-xs">{launchContext.form_context_mode ?? "—"}</dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-xs text-[#59678b]">source_entity_type</dt>
+                                        <dd className="font-mono text-xs">{launchContext.source_entity_type ?? "—"}</dd>
+                                    </div>
+                                    <div className="sm:col-span-2">
+                                        <dt className="text-xs text-[#59678b]">source_entity_id</dt>
+                                        <dd className="break-all font-mono text-[11px]">
+                                            {launchContext.source_entity_id ?? "—"}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-xs text-[#59678b]">prefill_enabled</dt>
+                                        <dd>{launchContext.prefill_enabled === undefined ? "—" : launchContext.prefill_enabled ? "Yes" : "No"}</dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-xs text-[#59678b]">allow_auto_create</dt>
+                                        <dd>
+                                            {launchContext.allow_auto_create === undefined ?
+                                                "—"
+                                            : launchContext.allow_auto_create ?
+                                                "Yes"
+                                            :   "No"}
+                                        </dd>
+                                    </div>
+                                </dl>
+                            </section>
+                        ) : null}
 
                         {intakeSection ? (
                             <section
@@ -373,6 +513,44 @@ export default function FormSubmissionDetailClient() {
                                                     This link was minted as an Admin preview session.
                                                 </div>
                                             : null}
+                                            {row.public_link_intake_debug.form_context_mode ?
+                                                <div>
+                                                    <dt className="text-[#59678b]">form_context_mode (link)</dt>
+                                                    <dd className="font-mono text-[11px]">
+                                                        {row.public_link_intake_debug.form_context_mode}
+                                                    </dd>
+                                                </div>
+                                            : null}
+                                            {row.public_link_intake_debug.source_entity_type ?
+                                                <div>
+                                                    <dt className="text-[#59678b]">source_entity_type (link)</dt>
+                                                    <dd className="font-mono text-[11px]">
+                                                        {row.public_link_intake_debug.source_entity_type}
+                                                    </dd>
+                                                </div>
+                                            : null}
+                                            {row.public_link_intake_debug.source_entity_id ?
+                                                <div className="sm:col-span-2">
+                                                    <dt className="text-[#59678b]">source_entity_id (link)</dt>
+                                                    <dd className="break-all font-mono text-[11px]">
+                                                        {row.public_link_intake_debug.source_entity_id}
+                                                    </dd>
+                                                </div>
+                                            : null}
+                                            {row.public_link_intake_debug.prefill_enabled !== null &&
+                                            row.public_link_intake_debug.prefill_enabled !== undefined ?
+                                                <div>
+                                                    <dt className="text-[#59678b]">prefill_enabled (link)</dt>
+                                                    <dd>{row.public_link_intake_debug.prefill_enabled ? "Yes" : "No"}</dd>
+                                                </div>
+                                            : null}
+                                            {row.public_link_intake_debug.allow_auto_create !== null &&
+                                            row.public_link_intake_debug.allow_auto_create !== undefined ?
+                                                <div>
+                                                    <dt className="text-[#59678b]">allow_auto_create (link)</dt>
+                                                    <dd>{row.public_link_intake_debug.allow_auto_create ? "Yes" : "No"}</dd>
+                                                </div>
+                                            : null}
                                         </dl>
                                     : row.created_via_public_link_id ?
                                         <p className="mt-2 text-xs text-[#59678b]">
@@ -426,6 +604,102 @@ export default function FormSubmissionDetailClient() {
                                 ))}
                             </div>
                         </section>
+
+                        {row.status === "submitted" && (needsConfirmLinkage || canMutate) ? (
+                            <section className="space-y-3 border-b border-[#e6e8ec] py-4">
+                                <h3 className="text-xs font-bold uppercase tracking-wide text-[#59678b]">
+                                    Record linkage actions
+                                </h3>
+                                {needsConfirmLinkage ? (
+                                    <div className="rounded-lg border border-[#e6e8ec] bg-[#fafbfd] px-3 py-3 sm:px-4">
+                                        <p className="text-sm text-[#31394d]">
+                                            Intake linked CRM rows but flagged this submission for review. If the person,
+                                            household, child, and opportunity rows above are correct, confirm so document
+                                            generation can proceed when a CRM attach parent exists.
+                                        </p>
+                                        {confirmErr ? <p className="mt-2 text-sm text-red-700">{confirmErr}</p> : null}
+                                        <div className="mt-3">
+                                            <PrimaryButton
+                                                type="button"
+                                                className="!px-3 !py-2 text-sm"
+                                                disabled={confirmBusy}
+                                                onClick={() => void confirmLinkage()}
+                                            >
+                                                {confirmBusy ? "Confirming…" : "Confirm record linkage"}
+                                            </PrimaryButton>
+                                        </div>
+                                    </div>
+                                ) : null}
+
+                                {canMutate ? (
+                                    <div className="rounded-lg border border-[#e6e8ec] bg-white px-3 py-3 sm:px-4">
+                                        <p className="text-sm font-medium text-[#31394d]">Correct / link CRM records</p>
+                                        <p className="mt-1 text-xs text-[#59678b]">
+                                            Enter UUIDs only for fields you want to change; leave blank to keep the current
+                                            link. Sends org-validated updates — clearing a link requires sending{" "}
+                                            <code className="font-mono text-[11px]">null</code> via the API (UI follow-up).
+                                        </p>
+                                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                            <label className="block text-xs text-[#59678b]">
+                                                person_id
+                                                <input
+                                                    className="mt-1 w-full rounded border border-[#cfd6e6] px-2 py-1.5 font-mono text-xs text-[#31394d]"
+                                                    value={manualPerson}
+                                                    onChange={(e) => setManualPerson(e.target.value)}
+                                                    placeholder={row.person_id ?? "optional"}
+                                                    autoComplete="off"
+                                                />
+                                            </label>
+                                            <label className="block text-xs text-[#59678b]">
+                                                customer_id
+                                                <input
+                                                    className="mt-1 w-full rounded border border-[#cfd6e6] px-2 py-1.5 font-mono text-xs text-[#31394d]"
+                                                    value={manualCustomer}
+                                                    onChange={(e) => setManualCustomer(e.target.value)}
+                                                    placeholder={row.customer_id ?? "optional"}
+                                                    autoComplete="off"
+                                                />
+                                            </label>
+                                            <label className="block text-xs text-[#59678b]">
+                                                customer_member_id
+                                                <input
+                                                    className="mt-1 w-full rounded border border-[#cfd6e6] px-2 py-1.5 font-mono text-xs text-[#31394d]"
+                                                    value={manualMember}
+                                                    onChange={(e) => setManualMember(e.target.value)}
+                                                    placeholder={row.customer_member_id ?? "optional"}
+                                                    autoComplete="off"
+                                                />
+                                            </label>
+                                            <label className="block text-xs text-[#59678b]">
+                                                opportunity_id
+                                                <input
+                                                    className="mt-1 w-full rounded border border-[#cfd6e6] px-2 py-1.5 font-mono text-xs text-[#31394d]"
+                                                    value={manualOpp}
+                                                    onChange={(e) => setManualOpp(e.target.value)}
+                                                    placeholder={row.opportunity_id ?? "optional"}
+                                                    autoComplete="off"
+                                                />
+                                            </label>
+                                        </div>
+                                        {manualErr ? <p className="mt-2 text-sm text-red-700">{manualErr}</p> : null}
+                                        <div className="mt-3 flex flex-wrap gap-2">
+                                            <SecondaryButton
+                                                type="button"
+                                                className="!px-3 !py-2 text-sm"
+                                                disabled={manualBusy}
+                                                onClick={() => void applyManualLinks()}
+                                            >
+                                                {manualBusy ? "Applying…" : "Apply CRM links"}
+                                            </SecondaryButton>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <p className="text-xs text-[#59678b]">
+                                        Admin role is required to manually correct CRM foreign keys on a submission.
+                                    </p>
+                                )}
+                            </section>
+                        ) : null}
 
                         <section className="space-y-2 border-b border-[#e6e8ec] py-4">
                             <h3 className="text-xs font-bold uppercase tracking-wide text-[#59678b]">

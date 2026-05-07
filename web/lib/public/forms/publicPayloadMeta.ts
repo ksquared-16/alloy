@@ -12,6 +12,15 @@ const SERVER_CONTROLLED_META_KEYS = new Set([
     "intake_review_reason",
     "intake_candidate_email_count",
     "intake_candidate_phone_count",
+    "intake_review_result",
+    "intake_reviewed_at",
+    "intake_reviewed_by",
+    "intake_resolution_review",
+    "form_context_mode",
+    "source_entity_type",
+    "source_entity_id",
+    "prefill_enabled",
+    "allow_auto_create",
 ]);
 
 /**
