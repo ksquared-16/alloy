@@ -65,14 +65,17 @@ export default function OperationalAttentionHeaderStrip({ overviewData, variant 
         );
     }
 
-    const extra = Math.max(0, payload.reasons.length - 1);
-    const factors = extra > 0 ? ` · +${extra} factor${extra === 1 ? "" : "s"}` : "";
-    const headline = `Needs attention: ${primary.label}${factors}`;
     const nextLine = nextStepGuidance({
         primaryCode: primary.code,
         waitingBucket: safeBucket,
         worstSlaTier: worst,
     });
+
+    const otherReasons = payload.reasons.filter((r) => r.code !== primary.code);
+    const factorsJoined = otherReasons.map((r) => r.label).join(", ");
+    const factorsPreferDetails = otherReasons.length >= 4 || factorsJoined.length > 130;
+
+    const headlinePrimaryOnly = `Needs attention: ${primary.label}`;
 
     if (chrome) {
         return (
@@ -80,7 +83,22 @@ export default function OperationalAttentionHeaderStrip({ overviewData, variant 
                 className="rounded-md border border-[color-mix(in_srgb,rgb(188,67,0)_30%,var(--d-border, rgba(39,63,82,0.14)))] border-l-[3px] border-l-[rgb(188,67,0)] bg-[color-mix(in_srgb,rgb(255,244,235)_55%,white)] px-2 py-1.5 text-[11px] leading-snug shadow-[inset_3px_0_0_color-mix(in_srgb,var(--d-admin-amber, #c95a00)_32%,transparent)]"
                 data-drawer-slot="operational_attention_header"
             >
-                <div className="font-semibold text-[rgb(72,32,0)]">{headline}</div>
+                <div className="font-semibold text-[rgb(72,32,0)]">{headlinePrimaryOnly}</div>
+                {otherReasons.length > 0 ? (
+                    factorsPreferDetails ? (
+                        <details className="mt-0.5 text-[10px] leading-snug text-alloy-midnight/75">
+                            <summary className="cursor-pointer select-none font-medium text-alloy-midnight/72 [&::-webkit-details-marker]:hidden">
+                                Show {otherReasons.length} factor{otherReasons.length === 1 ? "" : "s"}
+                            </summary>
+                            <div className="mt-1 text-[10px] leading-snug text-alloy-midnight/78">{factorsJoined}</div>
+                        </details>
+                    ) : (
+                        <div className="mt-0.5 text-[10px] leading-snug text-alloy-midnight/75">
+                            <span className="font-medium text-alloy-midnight/78">Factors: </span>
+                            {factorsJoined}
+                        </div>
+                    )
+                ) : null}
                 <div className="mt-0.5 text-alloy-midnight/70">
                     <span className="font-medium text-alloy-midnight/75">Next: </span>
                     {nextLine}
@@ -94,7 +112,7 @@ export default function OperationalAttentionHeaderStrip({ overviewData, variant 
             className="mt-2 rounded-lg border border-admin-border border-l-[3px] border-l-[rgb(188,67,0)] bg-white/90 px-2.5 py-1.5 shadow-sm"
             data-drawer-slot="operational_attention_header"
         >
-            <div className="text-[12px] font-semibold leading-snug text-alloy-midnight/92">{headline}</div>
+            <div className="text-[12px] font-semibold leading-snug text-alloy-midnight/92">{headlinePrimaryOnly}</div>
             <div className="mt-0.5 text-[11px] leading-snug text-alloy-midnight/72">
                 <span className="font-medium text-alloy-midnight/80">Next · </span>
                 {nextLine}

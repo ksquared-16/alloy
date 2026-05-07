@@ -715,49 +715,50 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             </div>
                         </li>
                     ) : null}
-                    {(deptWorkUnits ?? []).map((wu) => {
-                        const s = deptWorkUnitSummaries[wu.id];
-                        const total = s ? s.total : null;
-                        const needs = s ? s.needs_attention : null;
-                        const wuHref = `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(wu.id)}`;
-                        return (
-                            <li key={`wu:${wu.id}`} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
-                                <Link
-                                    href={wuHref}
-                                    prefetch={shouldDisableAdminV2LinkPrefetch(wuHref) ? false : undefined}
-                                    onClick={markWorkUnitNavigationStart}
-                                    className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-standard no-underline text-inherit hover:opacity-[0.98]"
-                                    data-ws-wu-urgency="standard"
-                                >
-                                    <div className="adminv2-ws-wu-queue-card-compact-text">
-                                        <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">
-                                            {wu.name?.trim() || "Work unit"}
-                                        </div>
-                                        <div
-                                            className="adminv2-ws-paired-oper-queue-meta mt-2 grid grid-cols-2 gap-x-3 gap-y-1 tabular-nums"
-                                            style={{ color: "var(--d-muted)" }}
-                                        >
-                                            <div>
-                                                <span className="font-medium text-alloy-midnight/75">Total</span>{" "}
-                                                <span className="text-alloy-midnight/85">{total ?? "—"}</span>
+                    {deptQueueSummariesLoading && (deptWorkUnits ?? []).length > 0 ? (
+                        <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
+                            <div className="rounded-lg border border-admin-border bg-white/50 px-3 py-3 text-xs text-alloy-midnight/55">
+                                Loading queue totals…
+                            </div>
+                        </li>
+                    ) : (
+                        (deptWorkUnits ?? []).map((wu) => {
+                            const s = deptWorkUnitSummaries[wu.id];
+                            const total = s ? s.total : null;
+                            const wuHref = `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(wu.id)}`;
+                            return (
+                                <li key={`wu:${wu.id}`} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
+                                    <Link
+                                        href={wuHref}
+                                        prefetch={shouldDisableAdminV2LinkPrefetch(wuHref) ? false : undefined}
+                                        onClick={markWorkUnitNavigationStart}
+                                        className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-standard no-underline text-inherit hover:opacity-[0.98]"
+                                        data-ws-wu-urgency="standard"
+                                    >
+                                        <div className="adminv2-ws-wu-queue-card-compact-text">
+                                            <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">
+                                                {wu.name?.trim() || "Work unit"}
                                             </div>
-                                            <div className="text-right">
-                                                <span className="font-medium text-alloy-midnight/75 whitespace-nowrap">
-                                                    Needs attention
-                                                </span>{" "}
-                                                <span className="text-alloy-midnight/85">{needs ?? "—"}</span>
+                                            <div
+                                                className="adminv2-ws-paired-oper-queue-meta mt-2 tabular-nums"
+                                                style={{ color: "var(--d-muted)" }}
+                                            >
+                                                <div>
+                                                    <span className="font-medium text-alloy-midnight/75">Total</span>{" "}
+                                                    <span className="text-alloy-midnight/85">{total ?? "—"}</span>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                    <div className="adminv2-ws-wu-queue-card-compact-aside">
-                                        <span className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open">
-                                            Open
-                                        </span>
-                                    </div>
-                                </Link>
-                            </li>
-                        );
-                    })}
+                                        <div className="adminv2-ws-wu-queue-card-compact-aside">
+                                            <span className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open">
+                                                Open
+                                            </span>
+                                        </div>
+                                    </Link>
+                                </li>
+                            );
+                        })
+                    )}
                 </ul>
             </WorkspacePairedOperPanel>
             <WorkspacePairedOperPanel
@@ -809,10 +810,13 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                             {b.label}
                                         </div>
                                         <div
-                                            className="mt-1 tabular-nums text-[12px] font-semibold text-alloy-midnight/85"
-                                            aria-label={`${b.count} records`}
+                                            className="adminv2-ws-paired-oper-queue-meta mt-2 tabular-nums"
+                                            style={{ color: "var(--d-muted)" }}
                                         >
-                                            {b.count} {b.count === 1 ? "record" : "records"}
+                                            <div>
+                                                <span className="font-medium text-alloy-midnight/75">Total</span>{" "}
+                                                <span className="text-alloy-midnight/85">{b.count}</span>
+                                            </div>
                                         </div>
                                         {summaryLine ? (
                                             <div

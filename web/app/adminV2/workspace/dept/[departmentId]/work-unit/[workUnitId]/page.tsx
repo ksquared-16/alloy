@@ -1562,7 +1562,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         const placeholdersForPicker = queueTabPlaceholdersExpanded ?? queueTabPlaceholders;
         if (summariesPending && placeholdersForPicker?.length) {
             const pillBase =
-                "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-left text-[11px] font-semibold leading-snug transition-colors";
+                "inline-flex shrink-0 items-start gap-1.5 rounded-full border px-2 py-0.5 text-left text-[11px] font-semibold leading-snug transition-colors";
             const countBadgePending = (
                 <span
                     className="inline-flex h-3.5 w-3.5 shrink-0 rounded-full border-2 border-alloy-forge/20 border-t-alloy-blue/75 animate-spin"
@@ -1625,7 +1625,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                                 className={`${pillBase} ${ring}`}
                                                 aria-pressed={selected}
                                             >
-                                                <span className="whitespace-normal text-left">{q.label}</span>
+                                                <span className="text-left">{q.label}</span>
                                                 {countBadgePending}
                                             </button>
                                         );
@@ -1697,8 +1697,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
         }
 
         const pillBase =
-            "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-left text-[11px] font-semibold leading-snug transition-colors";
-        function queuePillBadgeCount(q: QueueSummary): number | "…" | "—" {
+            "inline-flex shrink-0 items-start gap-1.5 rounded-full border px-2 py-0.5 text-left text-[11px] font-semibold leading-snug transition-colors";
+        function queuePillBadgeCount(q: QueueSummary): number | "—" {
             const synth = q.key.startsWith(ATTENTION_BUCKET_PILL_PREFIX);
             const pillSelected = synth
                 ? selectedQueueKey === "needs_attention" &&
@@ -1709,7 +1709,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
                   })()
                 : q.key === selectedQueueKey &&
                   (!unmappedOnly || allRecordsQueueKey == null || q.key !== allRecordsQueueKey);
-            if (q.counts_deferred) return "…";
             if (
                 pillSelected &&
                 typeof authoritativeBadgeForSelectedTab === "number" &&
@@ -1787,14 +1786,23 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                             aria-pressed={selected}
                                             title={q.description?.trim() || undefined}
                                         >
-                                            <span className="whitespace-normal text-left">{q.label}</span>
-                                            <span
-                                                className={`tabular-nums rounded-full px-1 py-px text-[10px] font-bold ${
-                                                    selected ? "bg-alloy-forge/10 text-alloy-forge" : "bg-alloy-stone/15 text-alloy-forge/70"
-                                                }`}
-                                            >
-                                                {queuePillBadgeCount(q)}
-                                            </span>
+                                            <span className="text-left">{q.label}</span>
+                                            {q.counts_deferred ? (
+                                                <span
+                                                    className="inline-flex h-3.5 w-3.5 shrink-0 rounded-full border-2 border-alloy-forge/20 border-t-alloy-blue/75 animate-spin"
+                                                    aria-label="Loading queue count"
+                                                />
+                                            ) : (
+                                                <span
+                                                    className={`tabular-nums rounded-full px-1 py-px text-[10px] font-bold ${
+                                                        selected
+                                                            ? "bg-alloy-forge/10 text-alloy-forge"
+                                                            : "bg-alloy-stone/15 text-alloy-forge/70"
+                                                    }`}
+                                                >
+                                                    {queuePillBadgeCount(q)}
+                                                </span>
+                                            )}
                                         </button>
                                     );
                                 })}
@@ -1810,7 +1818,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                         }`}
                                         aria-pressed={unmappedOnly && selectedQueueKey === allRecordsQueueKey}
                                     >
-                                        <span className="whitespace-normal text-left">Other</span>
+                                        <span className="text-left">Other</span>
                                         <span
                                             className={`tabular-nums rounded-full px-1 py-px text-[10px] font-bold ${
                                                 unmappedOnly && selectedQueueKey === allRecordsQueueKey

@@ -6443,17 +6443,36 @@
   overflow-wrap: anywhere;
 }
 
-/* Queue / pipeline pills: prefer horizontal scroll over clipped labels when the lane is narrow. */
+/* Queue / pipeline pills: wrap so labels + counts stay fully visible (no clipped “…” counts). */
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-pill-scroll {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
+  align-items: flex-start;
   gap: 0.25rem;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow-x: visible;
+  overflow-y: visible;
   min-width: 0;
   padding-bottom: 2px;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: thin;
+  row-gap: 0.35rem;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-pill-scroll > button {
+  flex-shrink: 0;
+  max-width: min(100%, 22rem);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-pill-scroll > button > span:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: visible;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  hyphens: auto;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-queue-pill-scroll > button > span.tabular-nums {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__status-pill--urgency-warning {
