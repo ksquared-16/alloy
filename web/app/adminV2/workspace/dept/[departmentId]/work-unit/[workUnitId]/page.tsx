@@ -192,15 +192,13 @@ function resolveNavTimeRowQueueKey(wu: WorkUnitRow, qFromUrl: string): string | 
     }
 }
 
-function buildWorkUnitQueuesListRoute(workUnitId: string, focusQueueKey: string | null): string {
+function buildWorkUnitQueuesListRoute(workUnitId: string): string {
     const queueQs = new URLSearchParams({
         include_previews: "false",
         count_mode: "exact",
         limit: "3",
-        summary_mode: "priority",
+        summary_mode: "all",
     });
-    const fk = (focusQueueKey ?? "").trim();
-    if (fk) queueQs.set("focus_queue", fk);
     return `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?${queueQs.toString()}`;
 }
 
@@ -1062,16 +1060,14 @@ export default function AdminV2OpportunityWorkUnitPage() {
         [commitLaneQueryUrl, fetchQueueItems, workUnitId]
     );
 
-    const fetchQueueSummaries = useCallback(async (wuId: string, focusQueueKey: string | null) => {
+    const fetchQueueSummaries = useCallback(async (wuId: string) => {
         const seq = ++queueSummariesRequestSeq.current;
         const qs = new URLSearchParams({
             include_previews: "false",
             count_mode: "exact",
             limit: "3",
-            summary_mode: "priority",
+            summary_mode: "all",
         });
-        const fk = (focusQueueKey ?? "").trim();
-        if (fk) qs.set("focus_queue", fk);
         const route = `/api/admin/work-units/${encodeURIComponent(wuId)}/queues?${qs.toString()}`;
         setQueueSummariesError(null);
         setQueueSummariesRoute(route);
@@ -1201,7 +1197,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
                 const wuUrl = `/api/admin/work-units/${encodeURIComponent(workUnitId)}`;
                 const deptUrl = `/api/admin/departments/${encodeURIComponent(departmentId)}`;
-                const queueListRoute = buildWorkUnitQueuesListRoute(workUnitId, qFromUrlEffective || null);
+                const queueListRoute = buildWorkUnitQueuesListRoute(workUnitId);
 
                 if (!cancelled) setQueueSummariesRoute(queueListRoute);
 
@@ -1475,7 +1471,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             deleteQueueRowCacheKeysForWorkUnit(queueRowClientCacheRef.current, accessScopeFingerprint, workUnitId);
             void Promise.all([
                 fetchQueueItems(workUnitId, selectedQueueKey, queueSummaries, { force: true }),
-                fetchQueueSummaries(workUnitId, selectedQueueKey),
+                fetchQueueSummaries(workUnitId),
             ]);
         },
         [fetchQueueItems, fetchQueueSummaries, queueSummaries, selectedQueueKey, workUnitId]
@@ -1491,7 +1487,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             deleteQueueRowCacheKeysForWorkUnit(queueRowClientCacheRef.current, accessScopeFingerprint, workUnitId);
             void Promise.all([
                 fetchQueueItems(workUnitId, selectedQueueKey, summaries, { force: true }),
-                fetchQueueSummaries(workUnitId, selectedQueueKey),
+                fetchQueueSummaries(workUnitId),
             ]);
         };
         /** Drawer saves dispatch `adminv2:opportunity-updated` — bust row cache + refetch summaries for this lane (not drawer-only). */
@@ -1787,22 +1783,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                             title={q.description?.trim() || undefined}
                                         >
                                             <span className="text-left">{q.label}</span>
-                                            {q.counts_deferred ? (
-                                                <span
-                                                    className="inline-flex h-3.5 w-3.5 shrink-0 rounded-full border-2 border-alloy-forge/20 border-t-alloy-blue/75 animate-spin"
-                                                    aria-label="Loading queue count"
-                                                />
-                                            ) : (
-                                                <span
-                                                    className={`tabular-nums rounded-full px-1 py-px text-[10px] font-bold ${
-                                                        selected
-                                                            ? "bg-alloy-forge/10 text-alloy-forge"
-                                                            : "bg-alloy-stone/15 text-alloy-forge/70"
-                                                    }`}
-                                                >
-                                                    {queuePillBadgeCount(q)}
-                                                </span>
-                                            )}
+                                            <span
+                                                className={`tabular-nums rounded-full px-1 py-px text-[10px] font-bold ${
+                                                    selected
+                                                        ? "bg-alloy-forge/10 text-alloy-forge"
+                                                        : "bg-alloy-stone/15 text-alloy-forge/70"
+                                                }`}
+                                                aria-label={q.counts_deferred ? "Count unavailable" : undefined}
+                                            >
+                                                {q.counts_deferred ? "—" : queuePillBadgeCount(q)}
+                                            </span>
                                         </button>
                                     );
                                 })}

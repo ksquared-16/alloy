@@ -7,7 +7,7 @@ import {
     dbGetVersion,
     dbListSubmissionLinkedDocuments,
 } from "@/lib/admin/forms/formsAdminDb";
-import { buildPublicLinkIntakeDebug } from "@/lib/forms/submissionOutcomeSummary";
+import { buildPublicLinkIntakeDebug, type PublicLinkIntakeDebug } from "@/lib/forms/submissionOutcomeSummary";
 import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdminResponses";
 
 /** GET /api/admin/forms/submissions/[submissionId] */
@@ -38,7 +38,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
     void _orgStrip;
 
     const linkId = typeof submissionRest.created_via_public_link_id === "string" ? submissionRest.created_via_public_link_id : null;
-    let public_link_intake_debug: ReturnType<typeof buildPublicLinkIntakeDebug> | null = null;
+    let public_link_intake_debug: PublicLinkIntakeDebug | null = null;
     if (linkId) {
         const { data: linkRow } = await dbGetPublicLinkById(supabase, ctx.orgId, linkId);
         const meta =
