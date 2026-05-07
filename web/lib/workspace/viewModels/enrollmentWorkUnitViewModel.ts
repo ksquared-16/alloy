@@ -194,7 +194,7 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
 
     const roomContext = (row as { _room_label?: string | null })._room_label?.trim() || null;
 
-    const attnPres = buildQueueOperationalAttentionPresentation(row as Record<string, unknown>);
+    const attnPres = buildQueueOperationalAttentionPresentation(row as Record<string, unknown>, { queueScan: true });
     const attentionReason =
         attnPres.summaryLine ??
         ((row as { _attention_reason_label?: string | null })._attention_reason_label?.trim() || null);

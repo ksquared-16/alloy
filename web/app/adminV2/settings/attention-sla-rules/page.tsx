@@ -345,12 +345,8 @@ export default function AdminV2SettingsAttentionSlaRulesPage() {
             <div>
                 <h1 className="text-lg font-semibold text-alloy-midnight">Attention &amp; SLA Rules</h1>
                 <p className="mt-1 text-sm text-alloy-midnight/70">
-                    Department metadata drives operational attention:{" "}
-                    <strong className="font-medium text-alloy-midnight/85">Needs Attention types</strong> (groupings of
-                    canonical reason codes) are separate from{" "}
-                    <strong className="font-medium text-alloy-midnight/85">trigger criteria</strong> (thresholds and policies).
-                    Work-unit <code className="rounded bg-alloy-stone/12 px-1 py-0.5 text-[11px]">metadata</code> overrides
-                    department at runtime — this screen edits <span className="font-medium">department</span> values only.
+                    Configure <span className="font-medium text-alloy-midnight/85">department</span> buckets, thresholds, and SLA.
+                    Work-unit metadata still overrides at runtime.
                 </p>
             </div>
 
@@ -398,8 +394,7 @@ export default function AdminV2SettingsAttentionSlaRulesPage() {
                     <section className="space-y-3 rounded-xl border border-admin-border bg-white/95 p-4 shadow-sm">
                         <h2 className="text-base font-semibold text-alloy-midnight">1. Needs Attention types</h2>
                         <p className="text-sm text-alloy-midnight/70">
-                            Buckets control which lenses appear (labels, order, enabled, included reason codes). They do{" "}
-                            <span className="font-medium">not</span> change resolver math — only grouping and visibility.
+                            Labels, order, and reason membership only — resolver math is unchanged.
                         </p>
                         <button
                             type="button"
@@ -501,8 +496,7 @@ export default function AdminV2SettingsAttentionSlaRulesPage() {
                                         Reason codes in this bucket
                                     </div>
                                     <p className="mt-0.5 text-[11px] text-alloy-midnight/55">
-                                        Expand a code to see what makes it fire and which thresholds apply. Canonical codes are
-                                        platform-owned; thresholds are edited in section 2.
+                                        Toggle membership; expand a code for detail. Thresholds are in section 2.
                                     </p>
                                     <div className="mt-2 max-h-56 space-y-1 overflow-auto rounded-lg border border-admin-border bg-alloy-stone/[0.04] p-2">
                                         {CANONICAL_OPPORTUNITY_ATTENTION_REASON_CODES_SORTED.map((code) => {
@@ -576,19 +570,26 @@ export default function AdminV2SettingsAttentionSlaRulesPage() {
                     <section className="space-y-4 rounded-xl border border-admin-border bg-white/95 p-4 shadow-sm">
                         <h2 className="text-base font-semibold text-alloy-midnight">2. Trigger criteria &amp; thresholds</h2>
                         <p className="text-sm text-alloy-midnight/70">
-                            These knobs feed <code className="rounded bg-alloy-stone/12 px-1 text-[11px]">resolveOpportunityAttention</code>{" "}
-                            via <code className="rounded bg-alloy-stone/12 px-1 text-[11px]">opportunity_attention_rules</code>. Values
-                            shown are <span className="font-medium">effective for this department</span> after merging platform defaults.
+                            Effective values for this department (merged with platform defaults). Persists as{" "}
+                            <code className="rounded bg-alloy-stone/12 px-1 text-[11px]">opportunity_attention_rules</code>.
                         </p>
 
                         <div className="rounded-lg border border-alloy-stone/20 bg-alloy-stone/[0.06] p-3">
                             <h3 className="text-sm font-semibold text-alloy-midnight">Lifecycle idle thresholds (hours)</h3>
                             <p className="mt-1 text-[11px] text-alloy-midnight/60">
-                                Parsed when <code className="font-mono">opportunity_attention_rules.version === 1</code>. Uses{" "}
-                                <code className="font-mono">updated_at</code> / <code className="font-mono">created_at</code> as the idle
-                                clock per lifecycle stage (see resolver +{" "}
-                                <code className="font-mono">computeOpportunityAttentionReason</code>).
+                                Idle time by lifecycle stage before time-based attention reasons apply.
                             </p>
+                            <details className="mt-2 rounded-md border border-alloy-stone/15 bg-white/45 px-2 py-1.5">
+                                <summary className="cursor-pointer select-none text-[11px] font-medium text-alloy-midnight/55 [&::-webkit-details-marker]:hidden">
+                                    Resolver detail
+                                </summary>
+                                <p className="mt-2 text-[11px] leading-relaxed text-alloy-midnight/58">
+                                    Parsed when <code className="font-mono">opportunity_attention_rules.version === 1</code>. Uses{" "}
+                                    <code className="font-mono">updated_at</code> / <code className="font-mono">created_at</code> as the idle
+                                    clock per lifecycle stage (see resolver +{" "}
+                                    <code className="font-mono">computeOpportunityAttentionReason</code>).
+                                </p>
+                            </details>
                             <div className="mt-3 grid gap-3 sm:grid-cols-2">
                                 {THRESHOLD_HOUR_KEYS.map((key) => (
                                     <label key={key} className="block text-[12px]">
@@ -617,9 +618,17 @@ export default function AdminV2SettingsAttentionSlaRulesPage() {
                         <div className="rounded-lg border border-alloy-stone/20 bg-alloy-stone/[0.06] p-3">
                             <h3 className="text-sm font-semibold text-alloy-midnight">Pipeline stale windows (calendar days)</h3>
                             <p className="mt-1 text-[11px] text-alloy-midnight/60">
-                                Compared against <code className="font-mono">updated_at</code> for fixed status groups in the resolver
-                                (high-value vs mid-funnel sets are platform-defined).
+                                How long certain pipeline statuses may age before stale attention applies.
                             </p>
+                            <details className="mt-2 rounded-md border border-alloy-stone/15 bg-white/45 px-2 py-1.5">
+                                <summary className="cursor-pointer select-none text-[11px] font-medium text-alloy-midnight/55 [&::-webkit-details-marker]:hidden">
+                                    Resolver detail
+                                </summary>
+                                <p className="mt-2 text-[11px] leading-relaxed text-alloy-midnight/58">
+                                    Compared against <code className="font-mono">updated_at</code> for fixed status groups in the resolver
+                                    (high-value vs mid-funnel sets are platform-defined).
+                                </p>
+                            </details>
                             <div className="mt-3 grid gap-3 sm:grid-cols-2">
                                 <label className="block text-[12px]">
                                     <span className="flex items-center font-medium text-alloy-midnight/85">
@@ -655,8 +664,7 @@ export default function AdminV2SettingsAttentionSlaRulesPage() {
                         <div className="rounded-lg border border-alloy-stone/20 bg-alloy-stone/[0.06] p-3">
                             <h3 className="text-sm font-semibold text-alloy-midnight">Wait-bucket SLA hours</h3>
                             <p className="mt-1 text-[11px] text-alloy-midnight/60">
-                                Applies to wait-style reason codes when enrollment operational metadata sets a wait bucket. Overrides
-                                platform defaults per bucket.
+                                SLA escalation when the record&apos;s wait bucket is set (overrides platform defaults per bucket).
                             </p>
                             <div className="mt-3 space-y-3">
                                 {SLA_BUCKET_KEYS.map((bk) => (
@@ -699,11 +707,15 @@ export default function AdminV2SettingsAttentionSlaRulesPage() {
                             </div>
                         </div>
 
+                        <details className="rounded-lg border border-alloy-stone/22 bg-alloy-stone/[0.05] p-3">
+                            <summary className="cursor-pointer select-none text-sm font-semibold text-alloy-midnight/88 [&::-webkit-details-marker]:hidden">
+                                Advanced — priority weights, auxiliary signals, policies, reference
+                            </summary>
+                            <div className="mt-4 space-y-4">
                         <div className="rounded-lg border border-alloy-stone/20 bg-alloy-stone/[0.06] p-3">
                             <h3 className="text-sm font-semibold text-alloy-midnight">Priority score weights</h3>
                             <p className="mt-1 text-[11px] text-alloy-midnight/60">
-                                Optional tuning for <code className="font-mono">priority_score</code>. Must stay positive; resolver
-                                normalizes by sum.
+                                Optional <code className="font-mono">priority_score</code> tuning (positive values; resolver normalizes).
                             </p>
                             <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px]">
                                 <span className="font-medium">Source</span>
@@ -741,11 +753,11 @@ export default function AdminV2SettingsAttentionSlaRulesPage() {
                                 className="mt-0.5"
                             />
                             <span>
-                                <span className="font-semibold text-alloy-midnight/90">Auxiliary activity signals in resolver output</span>
+                                <span className="font-semibold text-alloy-midnight/90">Auxiliary activity signals</span>
                                 <SourceBadge explicit={departmentExplicitlySetsAuxiliarySignals(deptMetadata)} />
                                 <span className="mt-1 block text-[11px] text-alloy-midnight/60">
-                                    When enabled, activity-stale payloads may surface under auxiliary fields (membership rules unchanged).
-                                    Key: <code className="font-mono">auxiliary_signals_enabled</code>
+                                    Surfaces activity-stale payloads when enabled.{" "}
+                                    <code className="font-mono">auxiliary_signals_enabled</code>
                                 </span>
                             </span>
                         </label>
@@ -753,8 +765,7 @@ export default function AdminV2SettingsAttentionSlaRulesPage() {
                         <div className="rounded-lg border border-alloy-stone/20 bg-alloy-stone/[0.06] p-3">
                             <h3 className="text-sm font-semibold text-alloy-midnight">Reason code policies (enable / disable)</h3>
                             <p className="mt-1 text-[11px] text-alloy-midnight/60">
-                                Persists under <code className="font-mono">reason_overrides.&lt;code&gt;.enabled</code>. Disabled codes are
-                                filtered out after evaluation — they do not change underlying trigger logic.
+                                Filter reasons after evaluation (<code className="font-mono">reason_overrides.&lt;code&gt;.enabled</code>).
                             </p>
                             <div className="mt-2 grid max-h-64 gap-1 overflow-auto sm:grid-cols-2">
                                 {CANONICAL_OPPORTUNITY_ATTENTION_REASON_CODES_SORTED.map((code) => (
@@ -774,9 +785,11 @@ export default function AdminV2SettingsAttentionSlaRulesPage() {
                             </div>
                         </div>
 
-                        <div className="rounded-lg border border-admin-border bg-white p-3">
-                            <h3 className="text-sm font-semibold text-alloy-midnight">Canonical reason reference (full list)</h3>
-                            <div className="mt-2 max-h-72 space-y-2 overflow-auto text-[12px]">
+                        <details className="rounded-lg border border-admin-border bg-white p-3">
+                            <summary className="cursor-pointer select-none text-sm font-semibold text-alloy-midnight [&::-webkit-details-marker]:hidden">
+                                Canonical reason reference (full list)
+                            </summary>
+                            <div className="mt-3 max-h-72 space-y-2 overflow-auto text-[12px]">
                                 {catalogSorted.map((code) => {
                                     const c = ATTENTION_REASON_CRITERIA_CATALOG[code];
                                     return (
@@ -800,7 +813,9 @@ export default function AdminV2SettingsAttentionSlaRulesPage() {
                                     );
                                 })}
                             </div>
-                        </div>
+                        </details>
+                            </div>
+                        </details>
                     </section>
                 </>
             )}

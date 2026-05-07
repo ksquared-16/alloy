@@ -536,9 +536,12 @@ function LegacyCrmCompactQueueMiddle({ slots }: { slots: CrmCompactRowSemanticSl
 export function CrmCompactQueuePreview({
   slots,
   urgencyTier = "standard",
+  scanMode = false,
 }: {
   slots: CrmCompactRowSemanticSlots;
   urgencyTier?: QueueItemVm["urgencyTier"];
+  /** Work-unit lane: minimal left column — status, operational attention, next hint; detail belongs in drawer. */
+  scanMode?: boolean;
 }) {
   const stageStatus =
     slots.stageLabel && slots.statusLabel && slots.stageLabel !== slots.statusLabel
@@ -569,14 +572,66 @@ export function CrmCompactQueuePreview({
     notePrev && (notePrev.timestamp?.trim() || notePrev.body?.trim())
   );
   const flatNote = slots.familyNote?.trim();
-  const showNoteFooter = Boolean(hasStructuredNote || flatNote);
+  const showNoteFooter = scanMode ? false : Boolean(hasStructuredNote || flatNote);
 
   const bodyClass =
     `adminv2-ws-crm-queue-preview__body${hasMiddle ? "" : " adminv2-ws-crm-queue-preview__body--identity-only"}`;
 
-  const hasFooter = Boolean(showNoteFooter || slots.lastActivity?.trim());
+  const hasFooter = scanMode
+    ? Boolean(slots.lastActivity?.trim())
+    : Boolean(showNoteFooter || slots.lastActivity?.trim());
 
   const commercial = slots.commercialValue?.trim() ?? "";
+
+  if (scanMode) {
+    return (
+      <div
+        className="adminv2-ws-crm-queue-preview adminv2-ws-enrollment-crm-preview adminv2-ws-crm-queue-preview--scan"
+        data-queue-preview="crm_compact"
+      >
+        <div className={bodyClass}>
+          <div className="adminv2-ws-crm-queue-preview__zone adminv2-ws-crm-queue-preview__zone--left">
+            {stageStatus ? (
+              <div className="adminv2-ws-crm-queue-preview__scan-status-row">
+                <span
+                  className={`adminv2-ws-crm-queue-preview__status-pill adminv2-ws-crm-queue-preview__status-pill--wrap adminv2-ws-crm-queue-preview__status-pill--urgency-${urgencyTier}`}
+                >
+                  {formatWorkUnitQueueStatusPill(stageStatus)}
+                </span>
+              </div>
+            ) : null}
+            <div className="adminv2-ws-crm-queue-preview__title-row adminv2-ws-crm-queue-preview__title-row--scan">
+              <span className="adminv2-ws-crm-queue-preview__title" title={slots.primaryIdentity}>
+                {slots.primaryIdentity}
+              </span>
+            </div>
+            {slots.attentionReason?.trim() ? (
+              <div className="adminv2-ws-crm-queue-preview__attention-headline">{slots.attentionReason.trim()}</div>
+            ) : null}
+            {nextHint ? (
+              <div className="adminv2-ws-crm-queue-preview__operational-next-scan">Next: {nextHint}</div>
+            ) : null}
+          </div>
+
+          {hasMiddle ? (
+            <div className="adminv2-ws-crm-queue-preview__zone adminv2-ws-crm-queue-preview__zone--middle">
+              {useDoctrine
+                ? slots.crmFactGroups!.map((g, i) => <CrmWorkUnitFactGroup key={i} group={g} />)
+                : <LegacyCrmCompactQueueMiddle slots={slots} />}
+            </div>
+          ) : null}
+        </div>
+
+        {hasFooter ? (
+          <div className="adminv2-ws-crm-queue-preview__footer adminv2-ws-crm-queue-preview__footer--scan-only">
+            {slots.lastActivity?.trim() ? (
+              <div className="adminv2-ws-crm-queue-preview__footer-activity">{slots.lastActivity.trim()}</div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -825,7 +880,7 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
                 {crm ? (
                   <div className="adminv2-ws-enrollment-crm-row adminv2-ws-enrollment-crm-row--split" data-enrollment-row-layout="split_actions">
                     <div className="adminv2-ws-enrollment-crm-row__content">
-                      <CrmCompactQueuePreview slots={crm} urgencyTier={tier} />
+                      <CrmCompactQueuePreview slots={crm} urgencyTier={tier} scanMode />
                     </div>
                     {rowQuickActions.length ? (
                       <div className="adminv2-ws-enrollment-crm-row__actions" role="group" aria-label="Actions">

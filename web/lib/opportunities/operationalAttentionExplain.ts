@@ -188,14 +188,25 @@ export function worstTierAmongReasons(reasons: ResolvedOpportunityAttentionReaso
     return w;
 }
 
+export type QueueOperationalAttentionPresentationOpts = {
+    /**
+     * Queue list scan mode: fixed “Needs attention” headline (no severity prefixes like “Needs review”),
+     * omits wait-bucket tokens — matching drawer operational copy.
+     */
+    queueScan?: boolean;
+};
+
 /** CRM compact row: one calm headline + optional second line */
-export function buildQueueOperationalAttentionPresentation(row: {
-    _attention_reason?: string | null;
-    _attention_reason_label?: string | null;
-    _attention_severity?: string | null;
-    _attention_waiting_bucket?: string | null;
-    _attention_reasons_detail?: unknown;
-}): { summaryLine: string | null; nextHintLine: string | null } {
+export function buildQueueOperationalAttentionPresentation(
+    row: {
+        _attention_reason?: string | null;
+        _attention_reason_label?: string | null;
+        _attention_severity?: string | null;
+        _attention_waiting_bucket?: string | null;
+        _attention_reasons_detail?: unknown;
+    },
+    opts?: QueueOperationalAttentionPresentationOpts
+): { summaryLine: string | null; nextHintLine: string | null } {
     const label = String(row._attention_reason_label ?? "").trim();
     if (!label) return { summaryLine: null, nextHintLine: null };
 
@@ -208,11 +219,17 @@ export function buildQueueOperationalAttentionPresentation(row: {
             ? details.length - 1
             : 0;
 
-    let summary = `${prefix}: ${label}`;
-    const suffixParts: string[] = [];
-    if (waitTok) suffixParts.push(waitTok);
-    if (n > 0) suffixParts.push(`+${n} factors`);
-    if (suffixParts.length) summary = `${summary} · ${suffixParts.join(" · ")}`;
+    let summary: string;
+    if (opts?.queueScan) {
+        summary = `Needs attention: ${label}`;
+        if (n > 0) summary = `${summary} · +${n} factor${n === 1 ? "" : "s"}`;
+    } else {
+        summary = `${prefix}: ${label}`;
+        const suffixParts: string[] = [];
+        if (waitTok) suffixParts.push(waitTok);
+        if (n > 0) suffixParts.push(`+${n} factors`);
+        if (suffixParts.length) summary = `${summary} · ${suffixParts.join(" · ")}`;
+    }
 
     const primaryCode =
         String(row._attention_reason ?? "").trim() ||

@@ -7900,25 +7900,6 @@ export default function AdminEntityDrawer() {
                   return m?.[1] ? `#${m[1]}` : headerSubtitleBase;
               })()
             : headerSubtitleBase;
-    const headerNextStepInline =
-        drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer && overviewData
-            ? (() => {
-                  const d = overviewData as Record<string, unknown>;
-                  const ns = (d._lifecycle_next_step as { title?: string; lines?: string[] } | undefined) ?? undefined;
-                  const byLines = (ns?.lines ?? [])
-                      .map((l) => String(l).trim())
-                      .filter(Boolean)
-                      .slice(0, 1)
-                      .join(" ");
-                  const byMeta = (() => {
-                      const md = (d.metadata ?? null) as Record<string, unknown> | null;
-                      const s = md && typeof md.next_step === "string" ? md.next_step.trim() : "";
-                      return s || null;
-                  })();
-                  return byLines || byMeta || null;
-              })()
-            : null;
-
     const headerSubtitleResolved =
         drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer ? (
             <div className="mt-0.5 space-y-1.5">
@@ -7928,13 +7909,6 @@ export default function AdminEntityDrawer() {
                 </div>
                 {overviewData && !(overviewData as { _create?: boolean })._create ? (
                     <OperationalAttentionHeaderStrip variant="chrome" overviewData={overviewData as Record<string, unknown>} />
-                ) : null}
-                {headerNextStepInline ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded-full border border-alloy-stone/20 bg-white/70 px-2 py-0.5 text-[11px] font-medium text-alloy-midnight/65">
-                            Suggested next: {headerNextStepInline}
-                        </span>
-                    </div>
                 ) : null}
                 {opportunityActivityHeaderLine}
             </div>

@@ -54,7 +54,7 @@ export default function OperationalAttentionHeaderStrip({ overviewData, variant 
             <div
                 className={
                     chrome
-                        ? "text-[11px] leading-snug text-alloy-midnight/72"
+                        ? "rounded-md border border-alloy-stone/25 border-l-[3px] border-l-alloy-honey/80 bg-alloy-honey/10 px-2 py-1.5 text-[11px] leading-snug text-alloy-midnight/75"
                         : "mt-2 rounded-lg border border-alloy-stone/22 bg-alloy-stone/[0.06] px-2.5 py-1.5 text-[12px] text-alloy-midnight/78"
                 }
                 data-drawer-slot="operational_attention_header"
@@ -76,10 +76,13 @@ export default function OperationalAttentionHeaderStrip({ overviewData, variant 
 
     if (chrome) {
         return (
-            <div className="space-y-0.5 text-[11px] leading-snug" data-drawer-slot="operational_attention_header">
-                <div className="font-semibold text-alloy-midnight/88">{headline}</div>
-                <div className="text-alloy-midnight/72">
-                    <span className="font-medium text-alloy-midnight/78">Next: </span>
+            <div
+                className="rounded-md border border-[color-mix(in_srgb,rgb(188,67,0)_30%,var(--d-border, rgba(39,63,82,0.14)))] border-l-[3px] border-l-[rgb(188,67,0)] bg-[color-mix(in_srgb,rgb(255,244,235)_55%,white)] px-2 py-1.5 text-[11px] leading-snug shadow-[inset_3px_0_0_color-mix(in_srgb,var(--d-admin-amber, #c95a00)_32%,transparent)]"
+                data-drawer-slot="operational_attention_header"
+            >
+                <div className="font-semibold text-[rgb(72,32,0)]">{headline}</div>
+                <div className="mt-0.5 text-alloy-midnight/70">
+                    <span className="font-medium text-alloy-midnight/75">Next: </span>
                     {nextLine}
                 </div>
             </div>

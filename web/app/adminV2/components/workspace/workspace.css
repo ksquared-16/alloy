@@ -6018,6 +6018,61 @@
   }
 }
 
+/* CRM compact scan mode — left column: status → identity → operational attention → muted next */
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview--scan .adminv2-ws-crm-queue-preview__body {
+  grid-template-columns: minmax(0, min(40%, 12rem)) minmax(14rem, 1fr);
+  align-items: start;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview--scan .adminv2-ws-crm-queue-preview__zone--left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__scan-status-row {
+  margin: 0;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__title-row--scan {
+  margin-top: 0;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__attention-headline {
+  margin-top: 2px;
+  padding: 5px 8px 5px 10px;
+  border-radius: 6px;
+  border: 1px solid color-mix(in srgb, rgb(188, 67, 0) 28%, var(--d-border));
+  border-left-width: 3px;
+  border-left-color: rgb(188, 67, 0);
+  background: color-mix(in srgb, rgb(255, 244, 235) 58%, white);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--d-admin-amber, #c95a00) 28%, transparent);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.38;
+  letter-spacing: 0.01em;
+  color: rgb(72, 32, 0);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__operational-next-scan {
+  font-size: 10.5px;
+  line-height: 1.38;
+  color: color-mix(in srgb, var(--d-muted) 58%, transparent);
+  padding-left: 1px;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__footer--scan-only {
+  padding-top: 2px;
+  margin-top: 2px;
+  border-top: 1px solid color-mix(in srgb, var(--d-border) 45%, transparent);
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__footer--scan-only .adminv2-ws-crm-queue-preview__footer-activity {
+  font-size: 10px;
+  line-height: 1.35;
+  color: color-mix(in srgb, var(--d-muted) 52%, transparent);
+}
+
 /*
  * Work-unit CRM compact — fact groups (label-above-value doctrine).
  * Scoped to preview root so legacy queue-row chrome is unaffected.

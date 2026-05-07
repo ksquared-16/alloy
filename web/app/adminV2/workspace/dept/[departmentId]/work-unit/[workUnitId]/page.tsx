@@ -71,9 +71,50 @@ import {
     shouldStaleBackgroundRefresh,
     type QueueRowClientCacheBucket,
 } from "@/lib/workspace/queueRowClientCache";
-import { resolveNeedsAttentionBucketsWithPrecedence } from "@/lib/opportunities/needsAttentionBuckets";
+import {
+    resolveNeedsAttentionBucketsWithPrecedence,
+    type NeedsAttentionBucketConfig,
+} from "@/lib/opportunities/needsAttentionBuckets";
 
 const WORKSPACE_BASE = "/adminV2/workspace";
+
+/** Synthetic queue keys in the pill strip — map to `queue=needs_attention` + `attention_bucket`. */
+const ATTENTION_BUCKET_PILL_PREFIX = "__attention_bucket:";
+
+function expandNeedsAttentionQueueSummariesForPills(
+    queues: QueueSummary[],
+    naSummary: QueueSummary | undefined,
+    buckets: NeedsAttentionBucketConfig[]
+): QueueSummary[] {
+    const out: QueueSummary[] = [];
+    for (const q of queues) {
+        if (q.key.trim().toLowerCase() !== "needs_attention") {
+            out.push(q);
+            continue;
+        }
+        if (!naSummary || buckets.length === 0) {
+            out.push(q);
+            continue;
+        }
+        for (const b of buckets) {
+            const desc = (b.description ?? "").trim();
+            out.push({
+                ...naSummary,
+                key: `${ATTENTION_BUCKET_PILL_PREFIX}${b.key}`,
+                label: b.label,
+                ...(desc ? { description: desc } : {}),
+            });
+        }
+        if (buckets.length > 1) {
+            out.push({
+                ...naSummary,
+                key: `${ATTENTION_BUCKET_PILL_PREFIX}__all__`,
+                label: "All needs attention",
+            });
+        }
+    }
+    return out;
+}
 
 function queueParamFromWindow(): string {
     if (typeof window === "undefined") return "";
@@ -405,6 +446,22 @@ export default function AdminV2OpportunityWorkUnitPage() {
         return reorderSectionsWithAllRecordsFirst(sectionedQueueSummaries, allRecordsQueueKey);
     }, [sectionedQueueSummaries, allRecordsQueueKey]);
 
+    const enabledAttentionBuckets = useMemo(() => {
+        if (!workUnit || !dept) return [];
+        return resolveNeedsAttentionBucketsWithPrecedence(workUnit.metadata ?? null, dept.metadata ?? null).filter(
+            (b) => b.enabled
+        );
+    }, [workUnit, dept]);
+
+    const queuePillSections = useMemo(() => {
+        if (!sectionedQueueSummariesOrdered?.length || !queueSummaries?.length) return null;
+        const naSummary = queueSummaries.find((x) => x.key.trim().toLowerCase() === "needs_attention");
+        return sectionedQueueSummariesOrdered.map((sec) => ({
+            ...sec,
+            queues: expandNeedsAttentionQueueSummariesForPills(sec.queues, naSummary, enabledAttentionBuckets),
+        }));
+    }, [sectionedQueueSummariesOrdered, queueSummaries, enabledAttentionBuckets]);
+
     /** Tab shells from definition only (no counts) while exact summaries are in flight. */
     const queueTabPlaceholders = useMemo(() => {
         if (!queueUi || !queueDef) return null;
@@ -434,6 +491,29 @@ export default function AdminV2OpportunityWorkUnitPage() {
         if (!sections.length) return null;
         return reorderSectionsWithAllRecordsFirst(sections, allRecordsQueueKey);
     }, [queueUi, queueDef, allRecordsQueueKey]);
+
+    const queueTabPlaceholdersExpanded = useMemo(() => {
+        if (!queueTabPlaceholders?.length || !enabledAttentionBuckets.length) return queueTabPlaceholders;
+        return queueTabPlaceholders.map((sec) => ({
+            ...sec,
+            queues: sec.queues.flatMap((q) => {
+                if (q.key.trim().toLowerCase() !== "needs_attention") return [q];
+                const synth = enabledAttentionBuckets.map((b) => ({
+                    key: `${ATTENTION_BUCKET_PILL_PREFIX}${b.key}`,
+                    label: b.label,
+                    priority: "attention" as const,
+                }));
+                if (enabledAttentionBuckets.length > 1) {
+                    synth.push({
+                        key: `${ATTENTION_BUCKET_PILL_PREFIX}__all__`,
+                        label: "All needs attention",
+                        priority: "attention" as const,
+                    });
+                }
+                return synth;
+            }),
+        }));
+    }, [queueTabPlaceholders, enabledAttentionBuckets]);
 
     const coveredThroughputStatusKeys = useMemo(() => {
         if (!queueDef) return new Set<string>();
@@ -966,8 +1046,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
     const handleAttentionBucketSelect = useCallback(
         (bucketKey: string | null) => {
-            if (!workUnitId || !selectedQueueKey || selectedQueueKey.trim().toLowerCase() !== "needs_attention") return;
+            if (!workUnitId) return;
             const next = (bucketKey ?? "").trim();
+            setSelectedQueueKey("needs_attention");
             commitLaneQueryUrl({
                 queueKey: "needs_attention",
                 unmappedActive: false,
@@ -978,7 +1059,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 attentionBucketOverride: next,
             });
         },
-        [commitLaneQueryUrl, fetchQueueItems, selectedQueueKey, workUnitId]
+        [commitLaneQueryUrl, fetchQueueItems, workUnitId]
     );
 
     const fetchQueueSummaries = useCallback(async (wuId: string, focusQueueKey: string | null) => {
@@ -1478,7 +1559,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
         if (!workUnitId) return null;
 
         const summariesPending = queueSummaries === null && !queueSummariesError;
-        if (summariesPending && queueTabPlaceholders?.length) {
+        const placeholdersForPicker = queueTabPlaceholdersExpanded ?? queueTabPlaceholders;
+        if (summariesPending && placeholdersForPicker?.length) {
             const pillBase =
                 "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-left text-[11px] font-semibold leading-snug transition-colors";
             const countBadgePending = (
@@ -1487,11 +1569,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     aria-label="Loading queue count"
                 />
             );
-            const multiSectionPh = queueTabPlaceholders.length > 1;
+            const multiSectionPh = placeholdersForPicker.length > 1;
             return (
                 <div className="flex flex-col gap-1.5 min-w-0">
                     <div className="flex flex-col gap-1">
-                        {queueTabPlaceholders.map((section) => (
+                        {placeholdersForPicker.map((section) => (
                             <div key={section.key} className="flex min-w-0 flex-col gap-1">
                                 {multiSectionPh ? (
                                     <span className="w-full text-[10px] font-semibold tracking-wide text-alloy-forge/50 sm:w-auto sm:mr-1">
@@ -1500,9 +1582,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 ) : null}
                                 <div className="adminv2-ws-queue-pill-scroll" role="group" aria-label={section.label}>
                                     {section.queues.map((q) => {
-                                        const selected =
-                                            q.key === selectedQueueKey &&
-                                            (!unmappedOnly || allRecordsQueueKey == null || q.key !== allRecordsQueueKey);
+                                        const synth = q.key.startsWith(ATTENTION_BUCKET_PILL_PREFIX);
+                                        const selected = synth
+                                            ? selectedQueueKey === "needs_attention" &&
+                                              (() => {
+                                                  const raw = q.key.slice(ATTENTION_BUCKET_PILL_PREFIX.length);
+                                                  if (raw === "__all__") return !attentionBucketKeyLive;
+                                                  return attentionBucketKeyLive === raw;
+                                              })()
+                                            : q.key === selectedQueueKey &&
+                                              (!unmappedOnly || allRecordsQueueKey == null || q.key !== allRecordsQueueKey);
                                         const tier =
                                             q.priority === "critical"
                                                 ? "critical"
@@ -1525,7 +1614,14 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                             <button
                                                 key={q.key}
                                                 type="button"
-                                                onClick={() => handleQueueTabChange(q.key)}
+                                                onClick={() => {
+                                                    if (synth) {
+                                                        const raw = q.key.slice(ATTENTION_BUCKET_PILL_PREFIX.length);
+                                                        handleAttentionBucketSelect(raw === "__all__" ? null : raw);
+                                                        return;
+                                                    }
+                                                    handleQueueTabChange(q.key);
+                                                }}
                                                 className={`${pillBase} ${ring}`}
                                                 aria-pressed={selected}
                                             >
@@ -1603,22 +1699,32 @@ export default function AdminV2OpportunityWorkUnitPage() {
         const pillBase =
             "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-left text-[11px] font-semibold leading-snug transition-colors";
         function queuePillBadgeCount(q: QueueSummary): number | "…" | "—" {
+            const synth = q.key.startsWith(ATTENTION_BUCKET_PILL_PREFIX);
+            const pillSelected = synth
+                ? selectedQueueKey === "needs_attention" &&
+                  (() => {
+                      const raw = q.key.slice(ATTENTION_BUCKET_PILL_PREFIX.length);
+                      if (raw === "__all__") return !attentionBucketKeyLive;
+                      return attentionBucketKeyLive === raw;
+                  })()
+                : q.key === selectedQueueKey &&
+                  (!unmappedOnly || allRecordsQueueKey == null || q.key !== allRecordsQueueKey);
             if (q.counts_deferred) return "…";
             if (
-                q.key === selectedQueueKey &&
+                pillSelected &&
                 typeof authoritativeBadgeForSelectedTab === "number" &&
-                !(unmappedOnly && allRecordsQueueKey != null && q.key === allRecordsQueueKey)
+                !(unmappedOnly && allRecordsQueueKey != null && selectedQueueKey === allRecordsQueueKey)
             ) {
                 return authoritativeBadgeForSelectedTab;
             }
-            if (q.key === selectedQueueKey && reconcilePickerCountZero) return 0;
+            if (pillSelected && reconcilePickerCountZero) return 0;
             const raw = q.count as unknown;
             const sc = typeof raw === "number" && Number.isFinite(raw) ? Math.max(0, Math.floor(raw)) : undefined;
             return sc === undefined ? "—" : sc;
         }
-        const sections = sectionedQueueSummariesOrdered ?? [
-            { key: "all", label: "Queues", tone: "standard" as const, queues: queueSummaries },
-        ];
+        const sections =
+            queuePillSections ??
+            sectionedQueueSummariesOrdered ?? [{ key: "all", label: "Queues", tone: "standard" as const, queues: queueSummaries }];
         const multiSection = sections.length > 1;
         const showOtherPill =
             typeof unmappedPillCount === "number" &&
@@ -1637,9 +1743,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
                             ) : null}
                             <div className="adminv2-ws-queue-pill-scroll" role="group" aria-label={section.label}>
                                 {section.queues.map((q) => {
-                                    const selected =
-                                        q.key === selectedQueueKey &&
-                                        (!unmappedOnly || allRecordsQueueKey == null || q.key !== allRecordsQueueKey);
+                                    const synth = q.key.startsWith(ATTENTION_BUCKET_PILL_PREFIX);
+                                    const selected = synth
+                                        ? selectedQueueKey === "needs_attention" &&
+                                          (() => {
+                                              const raw = q.key.slice(ATTENTION_BUCKET_PILL_PREFIX.length);
+                                              if (raw === "__all__") return !attentionBucketKeyLive;
+                                              return attentionBucketKeyLive === raw;
+                                          })()
+                                        : q.key === selectedQueueKey &&
+                                          (!unmappedOnly || allRecordsQueueKey == null || q.key !== allRecordsQueueKey);
                                     const tier =
                                         q.priority === "critical"
                                             ? "critical"
@@ -1662,9 +1775,17 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                         <button
                                             key={q.key}
                                             type="button"
-                                            onClick={() => handleQueueTabChange(q.key)}
+                                            onClick={() => {
+                                                if (synth) {
+                                                    const raw = q.key.slice(ATTENTION_BUCKET_PILL_PREFIX.length);
+                                                    handleAttentionBucketSelect(raw === "__all__" ? null : raw);
+                                                    return;
+                                                }
+                                                handleQueueTabChange(q.key);
+                                            }}
                                             className={`${pillBase} ${ring}`}
                                             aria-pressed={selected}
+                                            title={q.description?.trim() || undefined}
                                         >
                                             <span className="whitespace-normal text-left">{q.label}</span>
                                             <span
@@ -1712,11 +1833,14 @@ export default function AdminV2OpportunityWorkUnitPage() {
         );
     }, [
         handleQueueTabChange,
+        handleAttentionBucketSelect,
         queueSummaries,
         queueSummariesError,
         queueSummariesRoute,
         sectionedQueueSummariesOrdered,
+        queuePillSections,
         selectedQueueKey,
+        attentionBucketKeyLive,
         queueItems,
         queueItemsError,
         queueItemsLoading,
@@ -1726,6 +1850,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         unmappedPillCount,
         otherPillSectionKey,
         queueTabPlaceholders,
+        queueTabPlaceholdersExpanded,
     ]);
 
     const queueModel = useMemo<WorkUnitWorkspaceModel | null>(() => {
@@ -1880,7 +2005,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         typeof r?._notes_preview === "string" ? r._notes_preview : null,
                         viewerTz
                     ) ?? "";
-                const attnPres = buildQueueOperationalAttentionPresentation(r as Record<string, unknown>);
+                const attnPres = buildQueueOperationalAttentionPresentation(r as Record<string, unknown>, {
+                    queueScan: true,
+                });
                 const attentionReason =
                     attnPres.summaryLine ||
                     (typeof r?._attention_reason_label === "string" ? r._attention_reason_label.trim() : "");
@@ -2164,61 +2291,11 @@ export default function AdminV2OpportunityWorkUnitPage() {
         Boolean(allRecordsQueueKey) &&
         Boolean(otherPillSectionKey);
 
-    const enabledAttentionBuckets = useMemo(() => {
-        if (!workUnit || !dept) return [];
-        return resolveNeedsAttentionBucketsWithPrecedence(workUnit.metadata ?? null, dept.metadata ?? null).filter(
-            (b) => b.enabled
-        );
-    }, [workUnit, dept]);
-
     const headerQueuePickerSlot = useMemo(() => {
         if (!queueModel) return null;
-        const chipBase =
-            "inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5 text-left text-[11px] font-semibold leading-snug transition-colors whitespace-normal";
         return (
             <div className="min-w-0">
                 {queuePicker}
-                {selectedQueueKey?.trim().toLowerCase() === "needs_attention" ? (
-                    <div
-                        className="mt-2 flex flex-wrap items-center gap-1.5"
-                        role="tablist"
-                        aria-label="Needs attention types"
-                    >
-                        {enabledAttentionBuckets.map((b) => {
-                            const sel = attentionBucketKeyLive === b.key;
-                            return (
-                                <button
-                                    key={b.key}
-                                    type="button"
-                                    role="tab"
-                                    aria-selected={sel}
-                                    title={b.description ?? undefined}
-                                    onClick={() => handleAttentionBucketSelect(b.key)}
-                                    className={`${chipBase} ${
-                                        sel
-                                            ? "border-alloy-honey bg-alloy-honey/12 text-alloy-forge"
-                                            : "border-admin-border bg-white/70 text-alloy-forge/80"
-                                    }`}
-                                >
-                                    {b.label}
-                                </button>
-                            );
-                        })}
-                        <button
-                            type="button"
-                            role="tab"
-                            aria-selected={!attentionBucketKeyLive}
-                            onClick={() => handleAttentionBucketSelect(null)}
-                            className={`${chipBase} ${
-                                !attentionBucketKeyLive
-                                    ? "border-alloy-honey bg-alloy-honey/12 text-alloy-forge"
-                                    : "border-admin-border bg-white/70 text-alloy-forge/80"
-                            }`}
-                        >
-                            All needs attention
-                        </button>
-                    </div>
-                ) : null}
                 <WorkUnitLifecycleCoveragePanel
                     hasLifecycleThroughput={hasLifecycleThroughput}
                     showOtherPill={showOtherBucketPill}
@@ -2242,9 +2319,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
         queueItems?.items,
         queueItemsLoading,
         coveredThroughputStatusKeys,
-        enabledAttentionBuckets,
-        attentionBucketKeyLive,
-        handleAttentionBucketSelect,
     ]);
 
     const model = useMemo(() => {

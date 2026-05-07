@@ -678,36 +678,6 @@ export default function AdminV2WorkspaceDepartmentPage() {
 
     const needsAttentionHref = needsAttentionSummary.href;
 
-    /** Shown on the Needs Attention panel info control — technical semantics stay out of the default tile copy. */
-    const needsAttentionBucketsInfoTooltip = useMemo(() => {
-        const parts: string[] = [];
-        if (deptBucketCountScope === "work_unit_needs_attention_list_cap") {
-            parts.push("Counts match the Needs attention work-unit queue (unique inquiries per bucket).");
-            parts.push(
-                `Resolver candidate window: up to ${deptAttentionSemantics?.candidate_fetch_cap ?? "—"} rows${
-                    deptAttentionSemantics?.candidate_window_saturated ? " (window may be saturated)." : "."
-                }`
-            );
-        } else {
-            parts.push(`Org-wide preview (${deptBucketCountScope ?? "legacy"}).`);
-            parts.push(
-                "Bucket totals may sum reason occurrences across candidates — they are not guaranteed to match a single work-unit tab."
-            );
-            if (deptAttentionPreviewTotal != null) {
-                parts.push(`Preview inquiry total: ${deptAttentionPreviewTotal}.`);
-            }
-        }
-        parts.push(
-            "Buckets that include multiple reason codes open the full Needs attention queue (single-code filters use URL params only)."
-        );
-        return parts.join(" ");
-    }, [
-        deptAttentionPreviewTotal,
-        deptAttentionSemantics?.candidate_fetch_cap,
-        deptAttentionSemantics?.candidate_window_saturated,
-        deptBucketCountScope,
-    ]);
-
     const onEnrollmentDeptRailAction = useCallback(
         async (action: WorkspaceAction) => {
             if (action.type !== "actions.block") return;
@@ -795,18 +765,6 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 ariaLabel="Needs Attention"
                 title="Needs Attention"
                 titleClassName="adminv2-ws-queue-title--section-primary-type"
-                titleRight={
-                    (deptAttentionBuckets?.length ?? 0) > 0 && !deptAttentionBucketsError ? (
-                        <button
-                            type="button"
-                            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-admin-border/80 bg-white/80 text-[13px] font-semibold leading-none text-alloy-midnight/55 hover:bg-white hover:text-alloy-midnight/75"
-                            aria-label="About Needs attention counts"
-                            title={needsAttentionBucketsInfoTooltip}
-                        >
-                            i
-                        </button>
-                    ) : null
-                }
             >
                 <ul className="adminv2-ws-queue-list" role="list">
                     {deptAttentionBucketsError ? (
@@ -830,16 +788,12 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             drillWuId != null
                                 ? `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(drillWuId)}`
                                 : needsAttentionHref;
-                        const singleCode = b.reason_codes.length === 1 ? (b.reason_codes[0] ?? "").trim() : "";
                         const query =
                             drillWuId != null
-                                ? singleCode !== ""
-                                    ? `queue=needs_attention&attention_reason_code=${encodeURIComponent(singleCode)}`
-                                    : "queue=needs_attention"
+                                ? `queue=needs_attention&attention_bucket=${encodeURIComponent(b.key)}`
                                 : "";
                         const href = query !== "" ? `${drillBase}?${query}` : drillBase;
                         const summaryLine = (b.description ?? "").trim();
-                        const multiReason = b.reason_codes.length > 1;
                         return (
                             <li key={`attn:${b.key}`} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
                                 <Link
@@ -849,11 +803,6 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                     className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-warning adminv2-ws-dept-attention-bucket-tile no-underline text-inherit hover:opacity-[0.98]"
                                     data-ws-wu-urgency="attention"
                                     data-attention-bucket-key={b.key}
-                                    title={
-                                        multiReason
-                                            ? "This bucket includes multiple reason codes — opens the full Needs attention queue."
-                                            : undefined
-                                    }
                                 >
                                     <div className="adminv2-ws-wu-queue-card-compact-text min-w-0">
                                         <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">
@@ -883,18 +832,6 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             </li>
                         );
                     })}
-                    {(needsAttentionSummary.needsAttentionWorkUnitId ?? needsAttentionSummary.targetWuId) != null ? (
-                        <li className="adminv2-ws-wu-queue-item-wrap pt-1" role="listitem">
-                            <Link
-                                href={needsAttentionHref}
-                                prefetch={shouldDisableAdminV2LinkPrefetch(needsAttentionHref) ? false : undefined}
-                                onClick={markWorkUnitNavigationStart}
-                                className="text-[11px] font-medium text-alloy-blue hover:underline"
-                            >
-                                All needs attention
-                            </Link>
-                        </li>
-                    ) : null}
                 </ul>
             </WorkspacePairedOperPanel>
         </WorkspacePairedOperPanelsGrid>
