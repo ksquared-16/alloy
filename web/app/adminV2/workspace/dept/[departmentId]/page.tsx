@@ -794,15 +794,6 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                 ? `queue=needs_attention&attention_bucket=${encodeURIComponent(b.key)}`
                                 : "";
                         const href = query !== "" ? `${drillBase}?${query}` : drillBase;
-                        const summaryRaw = (b.description ?? "").trim();
-                        const summaryCompact =
-                            summaryRaw.replace(/^records\s+where\s+(the\s+)?/i, "").trim();
-                        const metaSecondary =
-                            summaryCompact.length > 0
-                                ? `${summaryCompact.charAt(0).toUpperCase()}${summaryCompact.slice(1)}`
-                                : "";
-                        const linkTitle =
-                            summaryRaw.length > 0 ? `${b.label}. Total ${b.count}. ${summaryRaw}` : `${b.label}. Total ${b.count}.`;
                         return (
                             <li key={`attn:${b.key}`} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
                                 <Link
@@ -812,25 +803,19 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                     className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-warning adminv2-ws-dept-attention-bucket-tile no-underline text-inherit hover:opacity-[0.98]"
                                     data-ws-wu-urgency="attention"
                                     data-attention-bucket-key={b.key}
-                                    title={linkTitle}
+                                    title={`${b.label}. Total ${b.count}.`}
                                 >
                                     <div className="adminv2-ws-wu-queue-card-compact-text min-w-0">
                                         <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">
                                             {b.label}
                                         </div>
                                         <div
-                                            className="adminv2-ws-paired-oper-queue-meta mt-2 text-[11px] leading-snug text-balance tabular-nums"
+                                            className="adminv2-ws-paired-oper-queue-meta mt-2 tabular-nums"
                                             style={{ color: "var(--d-muted)" }}
                                         >
                                             <div>
                                                 <span className="font-medium text-alloy-midnight/75">Total</span>{" "}
                                                 <span className="text-alloy-midnight/85">{b.count}</span>
-                                                {metaSecondary ? (
-                                                    <>
-                                                        {" "}
-                                                        <span aria-hidden="true">·</span> {metaSecondary}
-                                                    </>
-                                                ) : null}
                                             </div>
                                         </div>
                                     </div>
