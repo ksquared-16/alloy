@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, type FormEvent } from "react";
 import clsx from "clsx";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import type {
@@ -43,6 +43,16 @@ function errorsUnderPrefix(errors: NormalizedValidationError[] | undefined, pref
     );
 }
 
+function fieldUsesEmailShape(field: FormField & { type: "text" }): boolean {
+    const p = field.validate?.pattern ?? "";
+    return (typeof p === "string" && p.includes("@")) || field.id.toLowerCase().includes("email");
+}
+
+function fieldUsesPhoneShape(field: FormField & { type: "text" }): boolean {
+    const id = field.id.toLowerCase();
+    return id.includes("phone") || id.includes("mobile") || id.includes("tel");
+}
+
 export function FormEngineRenderer({
     schema,
     payload,
@@ -64,9 +74,17 @@ export function FormEngineRenderer({
     }, [schema]);
 
     const renderScalarControl = useCallback(
-        (field: FormField, cell: Record<string, unknown>, onCellChange: (fid: string, v: unknown) => void) => {
+        (
+            field: FormField,
+            cell: Record<string, unknown>,
+            onCellChange: (fid: string, v: unknown) => void,
+            errorPathPrefix?: string[]
+        ) => {
             if (field.type === "group" || field.type === "signature") return null;
             const raw = cell[field.id];
+            const fieldErrors = errorPathPrefix?.length
+                ? errorsUnderPrefix(validationErrors, errorPathPrefix)
+                : [];
             const commonLabel = (
                 <label className={clsx("block text-sm font-medium text-neutral-800", loose && "text-[13px]")}>
                     {field.label}
@@ -90,17 +108,53 @@ export function FormEngineRenderer({
             }
 
             switch (field.type) {
-                case "text":
+                case "text": {
+                    const strVal = typeof raw === "string" ? raw : raw == null ? "" : String(raw);
+                    const emailLike = fieldUsesEmailShape(field);
+                    const phoneLike = fieldUsesPhoneShape(field);
+                    const inputType = loose && emailLike ? "email" : "text";
+                    const autoComplete =
+                        loose && emailLike ? "email" : loose && phoneLike ? "tel" : undefined;
+                    const embedAutofillFix =
+                        loose ?
+                            {
+                                onInput: (e: FormEvent<HTMLInputElement>) => {
+                                    onCellChange(field.id, e.currentTarget.value);
+                                },
+                            }
+                        :   {};
                     return (
                         <div className="space-y-1">
                             {commonLabel}
                             <input
-                                className="w-full rounded border border-neutral-300 px-2 py-1.5 text-sm"
-                                value={typeof raw === "string" ? raw : raw == null ? "" : String(raw)}
+                                type={inputType}
+                                autoComplete={autoComplete}
+                                className={clsx(
+                                    "w-full rounded border px-2 py-1.5 text-sm",
+                                    fieldErrors.length ? "border-red-400 ring-1 ring-red-200" : "border-neutral-300"
+                                )}
+                                value={strVal}
                                 onChange={(e) => onCellChange(field.id, e.target.value)}
+                                {...embedAutofillFix}
+                                onBlur={
+                                    loose && emailLike ?
+                                        (e) => {
+                                            const t = e.target.value.trim();
+                                            if (t !== strVal) onCellChange(field.id, t);
+                                        }
+                                    :   undefined
+                                }
                             />
+                            {fieldErrors.length ?
+                                <ul className="list-disc space-y-0.5 pl-5 text-xs text-red-700">
+                                    {fieldErrors.map((er, i) => (
+                                        <li key={i}>{er.message}</li>
+                                    ))}
+                                </ul>
+                            : null}
                         </div>
                     );
+                }
                 case "number":
                     return (
                         <div className="space-y-1">
@@ -207,7 +261,7 @@ export function FormEngineRenderer({
                     return null;
             }
         },
-        [loose, optionChoicesByFieldId, optionValuesByFieldId, readonly]
+        [loose, optionChoicesByFieldId, optionValuesByFieldId, readonly, validationErrors]
     );
 
     const renderSignatureControl = useCallback(
@@ -439,11 +493,16 @@ export function FormEngineRenderer({
                                     }
                                     return (
                                         <div key={nf.id}>
-                                            {renderScalarControl(nf, nr.values, (fid, v) => {
-                                                const nrNext = [...nestedRows];
-                                                nrNext[j] = { ...nr, values: { ...nr.values, [fid]: v } };
-                                                updateNested(nrNext);
-                                            })}
+                                            {renderScalarControl(
+                                                nf,
+                                                nr.values,
+                                                (fid, v) => {
+                                                    const nrNext = [...nestedRows];
+                                                    nrNext[j] = { ...nr, values: { ...nr.values, [fid]: v } };
+                                                    updateNested(nrNext);
+                                                },
+                                                [field.id, String(rowIdx), child.id, String(j), "values", nf.id]
+                                            )}
                                         </div>
                                     );
                                 })}
@@ -532,11 +591,16 @@ export function FormEngineRenderer({
                                 }
                                 return (
                                     <div key={child.id}>
-                                        {renderScalarControl(child, row.values, (fid, v) => {
-                                            const next = [...rows];
-                                            next[idx] = { ...row, values: { ...row.values, [fid]: v } };
-                                            updateRows(next);
-                                        })}
+                                        {renderScalarControl(
+                                            child,
+                                            row.values,
+                                            (fid, v) => {
+                                                const next = [...rows];
+                                                next[idx] = { ...row, values: { ...row.values, [fid]: v } };
+                                                updateRows(next);
+                                            },
+                                            [field.id, String(idx), "values", child.id]
+                                        )}
                                     </div>
                                 );
                             })}
@@ -607,9 +671,14 @@ export function FormEngineRenderer({
                             }
                             return (
                                 <div key={field.id}>
-                                    {renderScalarControl(field, payload.values, (fid, v) => {
-                                        onChange(setTopLevelValue(payload, fid, v));
-                                    })}
+                                    {renderScalarControl(
+                                        field,
+                                        payload.values,
+                                        (fid, v) => {
+                                            onChange(setTopLevelValue(payload, fid, v));
+                                        },
+                                        ["values", field.id]
+                                    )}
                                 </div>
                             );
                         })}

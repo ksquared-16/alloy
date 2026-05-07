@@ -107,6 +107,26 @@ describe("FormEngineRenderer", () => {
         expect(html).not.toContain("Drawn asset UUID");
     });
 
+    it("embed guardian email control uses type email", () => {
+        const medSchema = validateFormSchema(MEDICATION_AUTHORIZATION_DEMO_SCHEMA);
+        const payload: FormPayload = payloadWithMinimumRepeatingGroups(medSchema);
+        const html = renderToStaticMarkup(
+            <FormEngineRenderer
+                schema={medSchema}
+                payload={payload}
+                onChange={() => {}}
+                mode="edit"
+                variant="embed"
+                optionValuesByFieldId={{
+                    schedule: MEDICATION_DEMO_SCHEDULE_ITEM_KEYS,
+                    route: MEDICATION_DEMO_ROUTE_ITEM_KEYS,
+                }}
+            />
+        );
+        expect(html).toContain('type="email"');
+        expect(html).toContain("autoComplete=\"email\"");
+    });
+
     it("shows inline validation under signature when acknowledgment missing", () => {
         const medSchema = validateFormSchema(MEDICATION_AUTHORIZATION_DEMO_SCHEMA);
         const payload: FormPayload = {

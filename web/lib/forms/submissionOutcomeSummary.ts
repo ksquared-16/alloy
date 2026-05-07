@@ -162,9 +162,32 @@ export function buildIntakeOperatorSummary(payloadMeta: unknown): IntakeOperator
     return { statusLabel, strategyLabel, detailLines };
 }
 
+/** Always-on intake card for submission detail (synthetic copy when no server intake meta). */
+export type SubmissionIntakeSection = IntakeOperatorSummary & {
+    /** False when payload.meta has no intake_resolution_path */
+    hasServerIntakeRecord: boolean;
+};
+
+export function buildSubmissionIntakeSection(payloadMeta: unknown): SubmissionIntakeSection {
+    const recorded = buildIntakeOperatorSummary(payloadMeta);
+    if (recorded) {
+        return { ...recorded, hasServerIntakeRecord: true };
+    }
+    return {
+        statusLabel: "No record",
+        strategyLabel: "No intake/linking result was recorded for this submission.",
+        detailLines: [
+            "There is no intake_resolution_path in payload.meta — Alloy did not persist a CRM intake outcome for this row.",
+            "Common causes: lead_capture is not enabled on the public link; required link metadata is missing (for example default_vertical_id); intake only runs on public submit with those settings; no matching person existed in this org; multiple CRM rows matched the same email or phone; or phone/email formatting did not match how contacts are stored.",
+            "Use Records connected below to link entities manually before generating a document.",
+        ],
+        hasServerIntakeRecord: false,
+    };
+}
+
 /** Operator-facing notes from submit-time CRM intake (stored on `payload.meta`). */
 export function intakeFollowUpNotes(payloadMeta: unknown): string[] {
-    return buildIntakeOperatorSummary(payloadMeta)?.detailLines ?? [];
+    return buildSubmissionIntakeSection(payloadMeta).detailLines;
 }
 
 export type SubmissionAttachRow = {
@@ -231,6 +254,8 @@ export function describeDocumentOutcome(params: {
     linkedDocumentsCount: number;
     submissionStatus: string;
     canMutate: boolean;
+    /** When true, avoid implying Generate document is ready (intake/linking blocks). */
+    documentGenerationBlocked?: boolean;
 }): DocumentOutcomeOperator {
     const submitted = params.submissionStatus.toLowerCase() === "submitted";
     if (params.linkedDocumentsCount > 0) {
@@ -248,6 +273,15 @@ export function describeDocumentOutcome(params: {
             bullets: [
                 "Documents are created after submit using Generate document (stub PDF today).",
                 "Wait until the form is submitted before generating.",
+            ],
+        };
+    }
+    if (params.documentGenerationBlocked) {
+        return {
+            headline: "No document generated yet",
+            bullets: [
+                "Document generation is blocked until CRM records are linked and intake no longer requires review.",
+                "Complete linking using Records connected and Intake & record linking above, then use Generate document in Documents & PDF.",
             ],
         };
     }
@@ -274,6 +308,9 @@ export function recommendedNextAction(params: {
     linkedDocumentsCount: number;
     canMutate: boolean;
     hasAnyCrmEntityLink: boolean;
+    /** When provided with attachRow, avoids recommending Generate document until linkage/intake allows it. */
+    payloadMeta?: unknown;
+    attachRow?: SubmissionAttachRow;
 }): string[] {
     const raw = params.status.toLowerCase();
     const lines: string[] = [];
@@ -288,10 +325,37 @@ export function recommendedNextAction(params: {
         return lines;
     }
 
+    const attachRow: SubmissionAttachRow = params.attachRow ?? {
+        person_id: null,
+        customer_id: null,
+        customer_member_id: null,
+        opportunity_id: null,
+    };
+    const hasAttachParent = submissionHasDocumentAttachTarget(attachRow);
+    const intakeBlocksDoc =
+        params.payloadMeta !== undefined && params.payloadMeta !== null ?
+            documentGenerationBlockedByIntake(params.payloadMeta, attachRow).blocked
+        :   !hasAttachParent;
+
     if (params.linkedDocumentsCount === 0) {
-        lines.push("Review the answers, then generate a document when your process requires a PDF on file.");
-        if (!params.canMutate) {
-            lines.push("You need an admin to run Generate document if this submission still has no linked document.");
+        if (!hasAttachParent || intakeBlocksDoc) {
+            lines.push("Link this submission to the correct CRM record before generating a document.");
+            const sec = buildSubmissionIntakeSection(params.payloadMeta);
+            if (sec.hasServerIntakeRecord && sec.statusLabel !== "Linked") {
+                lines.push(`Intake status: ${sec.statusLabel} — see Intake & record linking above for detail.`);
+            } else if (!sec.hasServerIntakeRecord) {
+                lines.push(
+                    "If you expected automatic linking, confirm the public link has lead_capture and default_vertical_id set, and that the contact exists once in CRM for this org."
+                );
+            }
+            if (!params.canMutate) {
+                lines.push("You need an admin to generate a PDF once records are linked.");
+            }
+        } else {
+            lines.push("Review the answers, then generate a document when your process requires a PDF on file.");
+            if (!params.canMutate) {
+                lines.push("You need an admin to run Generate document if this submission still has no linked document.");
+            }
         }
     } else {
         lines.push("Open the linked document(s) or continue your internal workflow.");

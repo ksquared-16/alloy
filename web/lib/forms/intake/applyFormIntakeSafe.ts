@@ -5,7 +5,12 @@ import { normalizeOpportunityWritePayload } from "@/lib/opportunityIdentity";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
 import type { FormIntakeMeta } from "./formLeadCaptureTypes";
 import { parseFormIntakeMeta } from "./formLeadCaptureTypes";
-import { decidePersonMatchFromIdLists, normalizeIntakeEmail, normalizeIntakePhone } from "./intakePersonMatch";
+import {
+    decidePersonMatchFromIdLists,
+    normalizeIntakeEmail,
+    normalizeIntakePhone,
+    phoneLookupVariants,
+} from "./intakePersonMatch";
 import { parseIntakeAutoCreateFlags } from "./parseIntakeAutoCreateFlags";
 
 async function listPersonIdsByEmail(
@@ -20,7 +25,8 @@ async function listPersonIdsByEmail(
 }
 
 async function listPersonIdsByPhone(supabase: SupabaseClient, orgId: string, phoneNorm: string): Promise<string[]> {
-    const { data, error } = await supabase.from("persons").select("id").eq("org_id", orgId).eq("phone", phoneNorm);
+    const variants = phoneLookupVariants(phoneNorm);
+    const { data, error } = await supabase.from("persons").select("id").eq("org_id", orgId).in("phone", variants);
     if (error) throw new Error(error.message);
     const ids = (data ?? []).map((r: { id: string }) => r.id).filter(Boolean);
     return [...new Set(ids)];
@@ -43,7 +49,7 @@ async function insertPersonForIntake(
             first_name: params.first_name ?? null,
             last_name: params.last_name ?? null,
             email: params.emailNorm ?? null,
-            phone: params.phoneNorm ?? null,
+            phone: params.phoneNorm?.length ? params.phoneNorm : null,
         })
         .select("id")
         .single();

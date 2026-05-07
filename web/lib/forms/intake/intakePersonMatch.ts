@@ -8,13 +8,34 @@ export function normalizeIntakeEmail(email: string | null | undefined): string |
     return t.length ? t : null;
 }
 
-/** Collapse common separators; trim. Does not guarantee parity with all stored phone formats. */
+/**
+ * Digits-only canonical for intake matching + inserts.
+ * US: strips leading country code 1 when the number is 11 digits.
+ */
 export function normalizeIntakePhone(phone: string | null | undefined): string | null {
     if (typeof phone !== "string") return null;
-    let t = phone.trim();
-    if (!t.length) return null;
-    t = t.replace(/[\s().-]/g, "");
-    return t.length ? t : null;
+    const digits = phone.replace(/\D/g, "");
+    if (!digits.length) return null;
+    if (digits.length === 11 && digits.startsWith("1")) return digits.slice(1);
+    return digits;
+}
+
+/**
+ * Exact-match variants for `persons.phone` lookups — CRM rows may store formatted strings.
+ */
+export function phoneLookupVariants(canonicalDigits: string): string[] {
+    const out = new Set<string>();
+    if (!canonicalDigits.length) return [];
+    out.add(canonicalDigits);
+    if (canonicalDigits.length === 10) {
+        const c = canonicalDigits;
+        out.add(`+1${c}`);
+        out.add(`1${c}`);
+        out.add(`(${c.slice(0, 3)}) ${c.slice(3, 6)}-${c.slice(6)}`);
+        out.add(`${c.slice(0, 3)}-${c.slice(3, 6)}-${c.slice(6)}`);
+        out.add(`${c.slice(0, 3)}.${c.slice(3, 6)}.${c.slice(6)}`);
+    }
+    return [...out];
 }
 
 export type PersonMatchDecision =

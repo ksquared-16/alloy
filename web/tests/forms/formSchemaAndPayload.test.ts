@@ -389,6 +389,57 @@ describe("Forms Engine V1 — payload validation", () => {
             expect(r.errors.some((e) => e.path[0] === "signatures" && e.path[1] === "sig")).toBe(true);
         }
     });
+
+    it("submit trims text values before pattern check and returns trimmed payload", () => {
+        const emailSchema = validateFormSchema(
+            baseSchema({
+                fields: [
+                    {
+                        id: "em",
+                        type: "text",
+                        label: "Email",
+                        required: true,
+                        validate: { pattern: "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$" },
+                    },
+                    { id: "sig", type: "signature", label: "S", required: true },
+                ],
+                sections: [{ id: "main", field_ids: ["em", "sig"] }],
+            })
+        );
+        const r = validateFormPayload({
+            schemaJson: emailSchema,
+            payload: {
+                values: { em: "  kelly.kurzman@gmail.com  " },
+                signatures: { sig: { kind: "typed", typed_full_name: "Kelly" } },
+            },
+            mode: "submit",
+        });
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.payload.values.em).toBe("kelly.kurzman@gmail.com");
+        }
+    });
+
+    it("submit rejects whitespace-only required text", () => {
+        const s = validateFormSchema(
+            baseSchema({
+                fields: [
+                    { id: "req", type: "text", label: "R", required: true },
+                    { id: "sig", type: "signature", label: "S", required: true },
+                ],
+                sections: [{ id: "main", field_ids: ["req", "sig"] }],
+            })
+        );
+        const r = validateFormPayload({
+            schemaJson: s,
+            payload: {
+                values: { req: "   " },
+                signatures: { sig: { kind: "typed", typed_full_name: "K" } },
+            },
+            mode: "submit",
+        });
+        expect(r.ok).toBe(false);
+    });
 });
 
 describe("evaluateFieldVisibility", () => {

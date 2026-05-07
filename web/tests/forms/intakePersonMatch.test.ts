@@ -3,6 +3,7 @@ import {
     decidePersonMatchFromIdLists,
     normalizeIntakeEmail,
     normalizeIntakePhone,
+    phoneLookupVariants,
 } from "@/lib/forms/intake/intakePersonMatch";
 
 describe("intakePersonMatch", () => {
@@ -12,9 +13,17 @@ describe("intakePersonMatch", () => {
         expect(normalizeIntakeEmail(null)).toBeNull();
     });
 
-    it("normalizeIntakePhone strips separators", () => {
+    it("normalizeIntakePhone uses digits and strips US country code", () => {
         expect(normalizeIntakePhone("(555) 123-4567")).toBe("5551234567");
+        expect(normalizeIntakePhone("+1 (555) 123-4567")).toBe("5551234567");
         expect(normalizeIntakePhone("  ")).toBeNull();
+    });
+
+    it("phoneLookupVariants includes common stored formats", () => {
+        const v = phoneLookupVariants("5551234567");
+        expect(v).toContain("5551234567");
+        expect(v).toContain("+15551234567");
+        expect(v.some((x) => x.includes("("))).toBe(true);
     });
 
     it("single email match wins before phone", () => {

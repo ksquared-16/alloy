@@ -181,6 +181,72 @@ function directChildGroupIds(group: FormField & { type: "group" }): string[] {
         .map((c: FormField & { type: "group" }) => c.id);
 }
 
+/** Trim all `text` field values in-place shape for persistence (after validation passes). */
+export function trimFormPayloadTextFields(schema: FormSchemaV1, payload: FormPayload): FormPayload {
+    const fieldMap = buildFieldMap(schema);
+    const values = { ...payload.values };
+    for (const key of Object.keys(values)) {
+        const f = fieldMap.get(key);
+        if (f?.type === "text" && typeof values[key] === "string") {
+            values[key] = values[key].trim();
+        }
+    }
+
+    let groups = payload.groups;
+    if (groups) {
+        const nextGroups: Record<string, FormPayloadGroupRow[]> = {};
+        for (const [gk, rows] of Object.entries(groups)) {
+            const gf = fieldMap.get(gk);
+            if (gf?.type !== "group") continue;
+            nextGroups[gk] = rows.map((row) => trimGroupRowTextFields(gf, row));
+        }
+        groups = nextGroups;
+    }
+
+    return { ...payload, values, groups };
+}
+
+function trimGroupRowTextFields(groupField: FormField & { type: "group" }, row: FormPayloadGroupRow): FormPayloadGroupRow {
+    const rowValues = { ...row.values };
+    for (const child of groupField.fields) {
+        if (child.type !== "text") continue;
+        const v = rowValues[child.id];
+        if (typeof v === "string") rowValues[child.id] = v.trim();
+    }
+
+    let nested = row.groups;
+    if (nested) {
+        const nextNested: Record<string, FormPayloadGroupRow[]> = {};
+        for (const [gk, rows] of Object.entries(nested)) {
+            const nestedField = groupField.fields.find((x): x is FormField & { type: "group" } => x.id === gk && x.type === "group");
+            if (!nestedField) continue;
+            nextNested[gk] = rows.map((r) => trimGroupRowTextFields(nestedField, r));
+        }
+        nested = nextNested;
+    }
+
+    return { ...row, values: rowValues, groups: nested };
+}
+
+function textRequiredPresent(raw: unknown): boolean {
+    if (raw === undefined || raw === null) return false;
+    if (typeof raw === "string") return raw.trim() !== "";
+    if (Array.isArray(raw)) return raw.length > 0;
+    return raw !== "";
+}
+
+function isRequiredValueMissing(field: FormField, raw: unknown): boolean {
+    if (field.type === "text") return !textRequiredPresent(raw);
+    return raw === undefined || raw === null || raw === "" || (Array.isArray(raw) && raw.length === 0);
+}
+
+/** Hidden fields must be empty on submit (after trim for text). */
+function violatesHiddenNonEmpty(field: FormField, raw: unknown): boolean {
+    if (raw === undefined || raw === null) return false;
+    if (field.type === "text" && typeof raw === "string") return raw.trim() !== "";
+    return raw !== "";
+}
+
 function validateScalarValue(
     field: FormField,
     raw: unknown,
@@ -203,16 +269,30 @@ function validateScalarValue(
                 errors.push(err(path, "Expected string", "invalid_type"));
                 break;
             }
-            if (rules?.min_length !== undefined && raw.length < rules.min_length) {
+            const s = raw.trim();
+            if (s === "") {
+                return errors;
+            }
+            if (rules?.min_length !== undefined && s.length < rules.min_length) {
                 errors.push(err(path, `min_length ${rules.min_length}`, "too_small"));
             }
-            if (rules?.max_length !== undefined && raw.length > rules.max_length) {
+            if (rules?.max_length !== undefined && s.length > rules.max_length) {
                 errors.push(err(path, `max_length ${rules.max_length}`, "too_big"));
             }
             if (rules?.pattern) {
                 try {
                     const re = new RegExp(rules.pattern);
-                    if (!re.test(raw)) errors.push(err(path, "pattern mismatch", "invalid_string"));
+                    if (!re.test(s)) {
+                        errors.push(
+                            err(
+                                path,
+                                rules.pattern.includes("@")
+                                    ? "Enter a valid email address."
+                                    : "pattern mismatch",
+                                "invalid_string"
+                            )
+                        );
+                    }
                 } catch {
                     errors.push(err(path, "Invalid validate.pattern on field definition", "custom"));
                 }
@@ -442,19 +522,19 @@ function validateGroupInstances(
 
             const raw = row.values[child.id];
             if (!vis) {
-                if (mode === "submit" && raw !== undefined && raw !== null && raw !== "") {
+                if (mode === "submit" && violatesHiddenNonEmpty(child, raw)) {
                     errors.push(err([...rowPath, "values", child.id], "Field is hidden and must be empty on submit", "custom"));
                 }
                 continue;
             }
 
             if (mode === "submit" && child.required) {
-                if (raw === undefined || raw === null || raw === "" || (Array.isArray(raw) && raw.length === 0)) {
+                if (isRequiredValueMissing(child, raw)) {
                     errors.push(err([...rowPath, "values", child.id], "Required field missing", "custom"));
                 }
             }
 
-            if (raw !== undefined && raw !== null && raw !== "") {
+            if (raw !== undefined && raw !== null && raw !== "" && !(child.type === "text" && typeof raw === "string" && raw.trim() === "")) {
                 errors.push(
                     ...validateScalarValue(child, raw, mode, optionValuesByFieldId, [...rowPath, "values", child.id])
                 );
@@ -563,19 +643,24 @@ export function validateFormPayload(input: {
 
         const raw = payload.values[field.id];
         if (!vis) {
-            if (mode === "submit" && raw !== undefined && raw !== null && raw !== "") {
+            if (mode === "submit" && violatesHiddenNonEmpty(field, raw)) {
                 errors.push(err(["values", field.id], "Field is hidden and must be empty on submit", "custom"));
             }
             continue;
         }
 
         if (mode === "submit" && field.required) {
-            if (raw === undefined || raw === null || raw === "" || (Array.isArray(raw) && raw.length === 0)) {
+            if (isRequiredValueMissing(field, raw)) {
                 errors.push(err(["values", field.id], "Required field missing", "custom"));
             }
         }
 
-        if (raw !== undefined && raw !== null && raw !== "") {
+        if (
+            raw !== undefined &&
+            raw !== null &&
+            raw !== "" &&
+            !(field.type === "text" && typeof raw === "string" && raw.trim() === "")
+        ) {
             errors.push(...validateScalarValue(field, raw, mode, optionValuesByFieldId, ["values", field.id]));
         }
     }
@@ -584,5 +669,5 @@ export function validateFormPayload(input: {
         return { ok: false, errors };
     }
 
-    return { ok: true, schema, payload };
+    return { ok: true, schema, payload: trimFormPayloadTextFields(schema, payload) };
 }

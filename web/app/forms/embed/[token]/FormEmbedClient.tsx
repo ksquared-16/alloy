@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import clsx from "clsx";
 import type { FormSchemaV1 } from "@/lib/forms/schema";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
 import type { NormalizedValidationError } from "@/lib/forms/validateSubmission";
@@ -51,7 +52,27 @@ function normalizeOptionChoices(
     return out;
 }
 
-export function FormEmbedClient({ token }: { token: string }) {
+function PreviewBanner() {
+    return (
+        <div
+            role="status"
+            className="border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-center text-sm text-amber-950"
+        >
+            <span className="font-semibold">Previewing public form</span>
+            {" — "}
+            Same experience recipients see when they open your embed link (opened from Alloy admin in a new tab).
+            Submissions here create real records in this environment unless you are on a sandbox.
+        </div>
+    );
+}
+
+export function FormEmbedClient({
+    token,
+    showPreviewBanner = false,
+}: {
+    token: string;
+    showPreviewBanner?: boolean;
+}) {
     const [phase, setPhase] = useState<"loading" | "ready" | "error">("loading");
     const [message, setMessage] = useState<string | null>(null);
     const [validationErrors, setValidationErrors] = useState<NormalizedValidationError[] | null>(null);
@@ -62,6 +83,8 @@ export function FormEmbedClient({ token }: { token: string }) {
     const [optionChoicesByFieldId, setOptionChoicesByFieldId] = useState<
         Record<string, readonly FormEngineOptionChoice[]>
     >({});
+    const [submitting, setSubmitting] = useState(false);
+    const [submitted, setSubmitted] = useState(false);
 
     const encToken = useMemo(() => encodeURIComponent(token), [token]);
 
@@ -69,6 +92,7 @@ export function FormEmbedClient({ token }: { token: string }) {
         setPhase("loading");
         setMessage(null);
         setValidationErrors(null);
+        setSubmitted(false);
         const res = await fetch(`/api/public/forms/${encToken}/resolve`, { method: "GET" });
         const json = (await res.json()) as ResolveOk | ApiErr;
         if (!json.ok) {
@@ -125,7 +149,7 @@ export function FormEmbedClient({ token }: { token: string }) {
 
     const persistDraft = useCallback(
         async (next: FormPayload) => {
-            if (!submissionId) return;
+            if (!submissionId || submitted) return;
             const res = await fetch(`/api/public/forms/${encToken}/submissions/${submissionId}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
@@ -143,32 +167,38 @@ export function FormEmbedClient({ token }: { token: string }) {
                 }
             }
         },
-        [encToken, optionValuesByFieldId, submissionId]
+        [encToken, optionValuesByFieldId, submissionId, submitted]
     );
 
     const handleSubmit = useCallback(async () => {
-        if (!submissionId) return;
+        if (!submissionId || submitting || submitted) return;
+        setSubmitting(true);
         setMessage(null);
         setValidationErrors(null);
-        const res = await fetch(`/api/public/forms/${encToken}/submissions/${submissionId}/submit`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                payload,
-                option_values_by_field_id: optionValuesByFieldId,
-            }),
-        });
-        const json = (await res.json()) as ApiErr | { ok: true };
-        if (!json.ok) {
-            const errBody = json as ApiErr;
-            setValidationErrors(errBody.validation_errors ?? null);
-            setMessage(errBody.error ?? "Submit failed");
-            return;
+        try {
+            const res = await fetch(`/api/public/forms/${encToken}/submissions/${submissionId}/submit`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    payload,
+                    option_values_by_field_id: optionValuesByFieldId,
+                }),
+            });
+            const json = (await res.json()) as ApiErr | { ok: true };
+            if (!json.ok) {
+                const errBody = json as ApiErr;
+                setValidationErrors(errBody.validation_errors ?? null);
+                setMessage(errBody.error ?? "Submit failed");
+                return;
+            }
+            window.sessionStorage.removeItem(storageKey(token));
+            setValidationErrors(null);
+            setSubmitted(true);
+            setMessage(null);
+        } finally {
+            setSubmitting(false);
         }
-        window.sessionStorage.removeItem(storageKey(token));
-        setValidationErrors(null);
-        setMessage("Submitted successfully.");
-    }, [encToken, optionValuesByFieldId, payload, submissionId, token]);
+    }, [encToken, optionValuesByFieldId, payload, submissionId, submitting, submitted, token]);
 
     if (phase === "loading" || !schema) {
         return (
@@ -186,10 +216,35 @@ export function FormEmbedClient({ token }: { token: string }) {
         );
     }
 
+    if (submitted) {
+        return (
+            <div className="min-h-screen bg-neutral-50">
+                {showPreviewBanner ? <PreviewBanner /> : null}
+                <div className="mx-auto max-w-lg px-4 py-16">
+                    <div className="rounded-2xl border border-emerald-200 bg-white px-8 py-12 text-center shadow-md">
+                        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-2xl text-emerald-800">
+                            ✓
+                        </div>
+                        <h1 className="text-xl font-semibold text-neutral-900">Thank you — your form was submitted.</h1>
+                        <p className="mt-4 text-sm leading-relaxed text-neutral-700">
+                            Your answers were received. Our staff will review your submission and follow up if anything
+                            else is needed.
+                        </p>
+                        <p className="mt-6 text-xs text-neutral-500">
+                            You can close this window. If you were filling this out in preview mode, you may start again
+                            from Alloy admin.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     const errorLines = validationErrors?.length ? formatPublicValidationErrors(validationErrors) : [];
 
     return (
-        <div className="min-h-screen bg-white pb-24">
+        <div className="min-h-screen bg-white pb-28">
+            {showPreviewBanner ? <PreviewBanner /> : null}
             <FormEngineRenderer
                 schema={schema}
                 payload={payload}
@@ -205,22 +260,33 @@ export function FormEmbedClient({ token }: { token: string }) {
                 variant="embed"
                 validationErrors={validationErrors ?? undefined}
             />
-            <div className="fixed bottom-0 left-0 right-0 border-t border-neutral-200 bg-white p-4 shadow-lg">
-                <div className="mx-auto flex max-w-xl flex-col gap-2">
-                    {errorLines.length ? (
-                        <ul className="max-h-36 list-disc overflow-y-auto pl-5 text-left text-sm text-red-700">
+            <div
+                className={clsx(
+                    "fixed bottom-0 left-0 right-0 z-10 border-t border-neutral-200 bg-white p-4 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] transition-opacity",
+                    submitting && "opacity-95"
+                )}
+            >
+                <div className="mx-auto flex max-w-xl flex-col gap-3">
+                    {errorLines.length ?
+                        <ul className="max-h-36 list-disc overflow-y-auto rounded-md border border-red-100 bg-red-50/80 px-4 py-2 pl-7 text-left text-sm text-red-800">
                             {errorLines.map((line, i) => (
                                 <li key={i}>{line}</li>
                             ))}
                         </ul>
-                    ) : null}
-                    {message ? <p className="text-center text-sm text-neutral-700">{message}</p> : null}
+                    : null}
+                    {message ?
+                        <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-center text-sm text-amber-950">
+                            {message}
+                        </p>
+                    : null}
                     <button
                         type="button"
-                        className="w-full rounded-lg bg-neutral-900 py-3 text-sm font-medium text-white"
+                        disabled={submitting || !submissionId}
+                        aria-busy={submitting}
+                        className="w-full rounded-lg bg-neutral-900 py-3.5 text-sm font-semibold text-white shadow-sm disabled:cursor-not-allowed disabled:bg-neutral-400"
                         onClick={() => void handleSubmit()}
                     >
-                        Submit
+                        {submitting ? "Submitting…" : "Submit"}
                     </button>
                 </div>
             </div>

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
     buildEntityConnectionRows,
     buildIntakeOperatorSummary,
+    buildSubmissionIntakeSection,
     describeDocumentOutcome,
     describeSubmissionLifecycle,
     documentGenerationBlockedByIntake,
@@ -64,6 +65,17 @@ describe("submissionOutcomeSummary", () => {
         expect(o.bullets.some((b) => /generate document/i.test(b))).toBe(true);
     });
 
+    it("describeDocumentOutcome — blocked does not promise Generate yet", () => {
+        const o = describeDocumentOutcome({
+            linkedDocumentsCount: 0,
+            submissionStatus: "submitted",
+            canMutate: true,
+            documentGenerationBlocked: true,
+        });
+        expect(o.bullets.some((b) => /blocked/i.test(b))).toBe(true);
+        expect(o.bullets.some((b) => /generate document below/i.test(b))).toBe(false);
+    });
+
     it("describeDocumentOutcome — submitted with linked doc", () => {
         const o = describeDocumentOutcome({
             linkedDocumentsCount: 2,
@@ -93,14 +105,35 @@ describe("submissionOutcomeSummary", () => {
         expect(r.join(" ").toLowerCase()).toContain("wait");
     });
 
-    it("recommendedNextAction — submitted no doc admin", () => {
+    it("recommendedNextAction — submitted no doc without CRM asks to link first", () => {
         const r = recommendedNextAction({
             status: "submitted",
             linkedDocumentsCount: 0,
             canMutate: true,
             hasAnyCrmEntityLink: false,
         });
-        expect(r.join(" ").toLowerCase()).toMatch(/review|generate/);
+        expect(r.some((l) => /link this submission to the correct crm record/i.test(l))).toBe(true);
+        expect(r.some((l) => /generate a document when your process requires/i.test(l))).toBe(false);
+    });
+
+    it("recommendedNextAction — submitted no doc with intake-clear attach suggests generate", () => {
+        const r = recommendedNextAction({
+            status: "submitted",
+            linkedDocumentsCount: 0,
+            canMutate: true,
+            hasAnyCrmEntityLink: true,
+            attachRow: {
+                person_id: "p1",
+                customer_id: null,
+                customer_member_id: null,
+                opportunity_id: null,
+            },
+            payloadMeta: {
+                intake_resolution_path: "matched_email",
+                intake_needs_review: false,
+            },
+        });
+        expect(r.some((l) => /generate a document/i.test(l))).toBe(true);
     });
 
     it("recommendedNextAction — submitted with doc", () => {
@@ -219,7 +252,14 @@ describe("submissionOutcomeSummary", () => {
         expect(n.some((l) => /Opportunity insert failed/.test(l))).toBe(true);
     });
 
-    it("intakeFollowUpNotes — empty when no path", () => {
-        expect(intakeFollowUpNotes({})).toEqual([]);
+    it("intakeFollowUpNotes — no server intake explains absence", () => {
+        const n = intakeFollowUpNotes({});
+        expect(n.some((l) => /no intake_resolution_path/i.test(l))).toBe(true);
+    });
+
+    it("buildSubmissionIntakeSection — synthetic when meta missing path", () => {
+        const s = buildSubmissionIntakeSection({});
+        expect(s.hasServerIntakeRecord).toBe(false);
+        expect(s.statusLabel).toBe("No record");
     });
 });

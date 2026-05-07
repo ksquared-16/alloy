@@ -16,7 +16,7 @@ import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
 import {
     buildEntityConnectionRows,
-    buildIntakeOperatorSummary,
+    buildSubmissionIntakeSection,
     describeDocumentOutcome,
     describeSubmissionLifecycle,
     documentGenerationBlockedByIntake,
@@ -168,7 +168,12 @@ export default function FormSubmissionDetailClient() {
 
     const entityRows = useMemo(() => (row ? buildEntityConnectionRows(row) : []), [row]);
 
-    const intakeSummary = useMemo(() => (row ? buildIntakeOperatorSummary(row.payload?.meta) : null), [row]);
+    const intakeSection = useMemo(() => (row ? buildSubmissionIntakeSection(row.payload?.meta) : null), [row]);
+
+    const intakeNeedsAttention = useMemo(() => {
+        if (!intakeSection) return false;
+        return intakeSection.statusLabel !== "Linked" || !intakeSection.hasServerIntakeRecord;
+    }, [intakeSection]);
 
     const docGenBlocked = useMemo(() => {
         if (!row || row.status !== "submitted") return { blocked: false as const };
@@ -182,10 +187,19 @@ export default function FormSubmissionDetailClient() {
 
     const documentOutcome = useMemo(() => {
         if (!row) return null;
+        const blocked =
+            row.status === "submitted" &&
+            documentGenerationBlockedByIntake(row.payload?.meta, {
+                person_id: row.person_id,
+                customer_id: row.customer_id,
+                customer_member_id: row.customer_member_id,
+                opportunity_id: row.opportunity_id,
+            }).blocked;
         return describeDocumentOutcome({
             linkedDocumentsCount: row.linked_documents.length,
             submissionStatus: row.status,
             canMutate,
+            documentGenerationBlocked: blocked,
         });
     }, [row, canMutate]);
 
@@ -198,6 +212,13 @@ export default function FormSubmissionDetailClient() {
             linkedDocumentsCount: row.linked_documents.length,
             canMutate,
             hasAnyCrmEntityLink: hasCrm,
+            payloadMeta: row.payload?.meta,
+            attachRow: {
+                person_id: row.person_id,
+                customer_id: row.customer_id,
+                customer_member_id: row.customer_member_id,
+                opportunity_id: row.opportunity_id,
+            },
         });
     }, [row, canMutate]);
 
@@ -265,6 +286,45 @@ export default function FormSubmissionDetailClient() {
                             ) : null}
                         </section>
 
+                        {intakeSection ? (
+                            <section
+                                className={`space-y-2 border-b border-[#e6e8ec] py-4 ${
+                                    intakeNeedsAttention ? "rounded-lg border border-amber-200 bg-amber-50/40 px-3 py-3 sm:px-4" : ""
+                                }`}
+                            >
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <h3 className="text-xs font-bold uppercase tracking-wide text-[#59678b]">
+                                        Intake &amp; record linking
+                                    </h3>
+                                    <StatusBadge
+                                        label={intakeSection.statusLabel}
+                                        variant={
+                                            intakeSection.statusLabel === "Linked"
+                                                ? "success"
+                                                : intakeSection.statusLabel === "Skipped"
+                                                  ? "neutral"
+                                                  : intakeSection.statusLabel === "Error"
+                                                    ? "error"
+                                                    : intakeSection.statusLabel === "No record"
+                                                      ? "neutral"
+                                                      : "warning"
+                                        }
+                                    />
+                                </div>
+                                <p className="text-sm font-medium text-[#31394d]">{intakeSection.strategyLabel}</p>
+                                <ul className="list-disc space-y-1 pl-5 text-sm leading-relaxed text-[#31394d]">
+                                    {intakeSection.detailLines.map((n, i) => (
+                                        <li key={`intake-${i}`}>{n}</li>
+                                    ))}
+                                </ul>
+                                {intakeNeedsAttention ?
+                                    <p className="text-sm font-medium text-amber-950">
+                                        Needs review — check this section before using Generate document.
+                                    </p>
+                                : null}
+                            </section>
+                        ) : null}
+
                         <section className="space-y-1 border-b border-[#e6e8ec] py-4">
                             <h3 className="text-xs font-bold uppercase tracking-wide text-[#59678b]">
                                 Records connected
@@ -300,33 +360,6 @@ export default function FormSubmissionDetailClient() {
                                     />
                                 ))}
                             </div>
-                            {intakeSummary ? (
-                                <div className="mt-3 rounded-lg border border-[#e6e8ec] bg-[#fafbfd] px-3 py-2.5 sm:px-4">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <p className="text-xs font-bold uppercase tracking-wide text-[#59678b]">
-                                            CRM / intake
-                                        </p>
-                                        <StatusBadge
-                                            label={intakeSummary.statusLabel}
-                                            variant={
-                                                intakeSummary.statusLabel === "Linked"
-                                                    ? "success"
-                                                    : intakeSummary.statusLabel === "Skipped"
-                                                      ? "neutral"
-                                                      : intakeSummary.statusLabel === "Error"
-                                                        ? "error"
-                                                        : "warning"
-                                            }
-                                        />
-                                    </div>
-                                    <p className="mt-2 text-sm text-[#31394d]">{intakeSummary.strategyLabel}</p>
-                                    <ul className="mt-1.5 list-disc space-y-1 pl-5 text-sm text-[#31394d]">
-                                        {intakeSummary.detailLines.map((n, i) => (
-                                            <li key={`intake-${i}`}>{n}</li>
-                                        ))}
-                                    </ul>
-                                </div>
-                            ) : null}
                         </section>
 
                         <section className="space-y-2 border-b border-[#e6e8ec] py-4">
