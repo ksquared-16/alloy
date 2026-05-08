@@ -100,6 +100,13 @@ export default function FormsHubClient() {
                 subtitle="Collect information from families and staff with versioned definitions, public links, and submissions — without leaving Admin."
             />
 
+            <p className="text-sm text-[#59678b]">
+                <Link href="/adminV2/forms/packets" className="font-medium text-[#2563eb] hover:underline">
+                    Packet sessions
+                </Link>
+                {" — review multi-form packets (enrollment sequences)."}
+            </p>
+
             <SectionCard title="Forms in Alloy">
                 <div className="space-y-4 text-sm leading-relaxed text-[#31394d]">
                     <p className="text-[#59678b]">

@@ -268,6 +268,8 @@ export default function AdminV2SettingsAttentionSlaRulesPage() {
                     description: b.description,
                     enabled: b.enabled,
                     order: b.order,
+                    ...(b.priority !== undefined ? { priority: b.priority } : {}),
+                    ...(b.icon ? { icon: b.icon } : {}),
                     reason_codes: [...b.reason_codes],
                 })),
                 auxiliary_signals_enabled: auxiliarySignals,
@@ -403,6 +405,15 @@ export default function AdminV2SettingsAttentionSlaRulesPage() {
                         >
                             Add bucket
                         </button>
+                        {bucketsDraft.length === 0 ? (
+                            <p className="text-sm text-alloy-midnight/60">
+                                No Needs Attention types configured. Add buckets here (saved to department metadata), or run{" "}
+                                <code className="rounded bg-alloy-stone/15 px-1 py-0.5 font-mono text-[12px]">
+                                    ensureEnrollmentPipelineWorkUnitV1
+                                </code>{" "}
+                                to seed the childcare enrollment demo buckets on the target department.
+                            </p>
+                        ) : null}
 
                         {bucketsDraft.map((b, idx) => (
                             <div key={`${b.key}-${idx}`} className="rounded-lg border border-alloy-stone/20 bg-white p-4">

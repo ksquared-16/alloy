@@ -46,11 +46,11 @@ Cover **opportunities**, pipeline status, CRM-adjacent admin behavior, and **sch
 - **`icon`** (optional) — Lucide token string (**kebab-case**, e.g. `alert-circle`), resolved in AdminV2 via **`WorkspaceOperIcon`** — no queue-key switches in UI.
 - **`reason_codes`** — Non-empty list of resolver reason codes belonging to the bucket.
 
-**Precedence:** work unit `metadata` → department `metadata` → **`DEFAULT_NEEDS_ATTENTION_BUCKETS`** when neither defines `needs_attention_buckets`.
+**Precedence:** work unit `metadata` → department `metadata`, **only when** `opportunity_attention_rules.needs_attention_buckets` is defined on that layer (including an explicit **`[]`**). If the key is **omitted**, **no** lenses are shown — there are **no** childcare/enrollment platform fallbacks in code (`DEFAULT_NEEDS_ATTENTION_BUCKETS` is empty).
 
-**Platform default rollout:** **`DEFAULT_NEEDS_ATTENTION_BUCKETS`** (`web/lib/opportunities/needsAttentionBuckets.ts`) ships a **minimal canonical enrollment operating lens** (**four** default buckets). **`waiting_on_staff`**, **`waiting_on_family`**, **`missing_quote_after_execution`**, and other codes remain **supported resolver reasons**; tenants add buckets for those lenses in metadata when they want them visible as first-class tiles. **Settings → Attention & SLA Rules** edits department-persisted JSON.
+**Childcare enrollment demo:** **`CANONICAL_CHILDCARE_ENROLLMENT_NEEDS_ATTENTION_BUCKETS_SEED`** (`web/lib/opportunities/enrollmentNeedsAttentionBucketsSeed.ts`) defines four lenses; **`web/scripts/ensureEnrollmentPipelineWorkUnitV1.ts`** writes them to **`departments.metadata.opportunity_attention_rules.needs_attention_buckets`** when that key is **not** already present (department-level, precedence-friendly). **`waiting_on_staff`**, **`waiting_on_family`**, **`missing_quote_after_execution`**, etc. remain **supported resolver reasons**; tenants add buckets in metadata or Settings when they want matching tiles.
 
-| Lens (default label) | Canonical reason code(s) |
+| Lens (childcare seed / typical labels) | Canonical reason code(s) |
 |----------------------|--------------------------|
 | Follow-up overdue | `follow_up_date_passed` |
 | High-value stale > 2 days | `high_value_stale` |
@@ -63,7 +63,7 @@ Cover **opportunities**, pipeline status, CRM-adjacent admin behavior, and **sch
 
 **Surfaces**
 
-- **Department:** Needs Attention lane renders buckets **from config**. When the department has a **`needs_attention`** work unit, `GET …/opportunity-attention-preview?work_unit_id=…` returns **`bucket_count_scope: work_unit_needs_attention_list_cap`** — counts are **unique inquiries per bucket** inside the same capped candidate window **`loadOpportunityNeedsAttentionRows`** uses for the execution queue (see execution semantics doc).
+- **Department:** Needs Attention lane renders buckets **only from configured `needs_attention_buckets`** (otherwise a calm empty state). When the department has a **`needs_attention`** work unit, `GET …/opportunity-attention-preview?work_unit_id=…` returns **`bucket_count_scope: work_unit_needs_attention_list_cap`** — counts are **unique inquiries per bucket** inside the same capped candidate window **`loadOpportunityNeedsAttentionRows`** uses for the execution queue (see execution semantics doc). Resolver membership is unchanged when buckets are empty; only lens tiles are absent.
 - **Work unit:** Needs Attention supports **`attention_bucket`** (bucket `key`) alongside **`queue=needs_attention`** for bucket-scoped lists; single-code drills may still use **`attention_reason_code`**. **All** pipeline queues apply the same subtle attention accent when resolver **`needs_attention`** is true on the row (not only inside the Needs Attention tab).
 - **Drawer:** A compact **operational attention** strip (`OperationalAttentionHeaderStrip`) reads **`_operational_attention`** from entity GET and sits in the **record header** (below inquiry/status summary, above overview tabs) — not as a large Overview card.
 

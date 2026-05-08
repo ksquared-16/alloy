@@ -2,6 +2,8 @@
 /**
  * Dev/staging helper: ensure a dedicated Enrollment pipeline work unit exists and has
  * the canonical opportunity QueueDefinition v1 (`CANONICAL_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V1`).
+ * Also seeds **department** `metadata.opportunity_attention_rules.needs_attention_buckets` from
+ * `enrollmentNeedsAttentionBucketsSeed.ts` when that key is absent (childcare demo lenses — not platform defaults).
  *
  * - Prefers an existing Enrollment-like department when present.
  * - If none found, reuses the department of an existing opportunity-like work unit (heuristic).
@@ -17,6 +19,7 @@ import {
     CANONICAL_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V1,
     CANONICAL_ENROLLMENT_PIPELINE_STATUS_KEYS,
 } from "@/lib/config/enrollmentPipelineQueueDefinitionV1";
+import { CANONICAL_CHILDCARE_ENROLLMENT_NEEDS_ATTENTION_BUCKETS_SEED } from "@/lib/opportunities/enrollmentNeedsAttentionBucketsSeed";
 
 loadEnv({ path: resolve(process.cwd(), ".env.local") });
 loadEnv({ path: resolve(process.cwd(), ".env") });
@@ -180,6 +183,52 @@ async function main() {
         pipelineKey = (updated as any).key as string;
         pipelineName = ((updated as any).name as string | null) ?? pipelineName;
         console.log("Updated work unit:", pipelineKey, pipelineId);
+    }
+
+    /** Childcare enrollment demo: visible Needs Attention buckets live in department metadata (not platform defaults). */
+    const { data: deptForMeta, error: deptMetaErr } = await supabase
+        .from("departments")
+        .select("id, metadata")
+        .eq("id", targetDeptId)
+        .eq("org_id", orgId)
+        .maybeSingle();
+    if (deptMetaErr) throw new Error(deptMetaErr.message);
+    const existingDeptMeta =
+        deptForMeta?.metadata != null && typeof deptForMeta.metadata === "object" && !Array.isArray(deptForMeta.metadata)
+            ? ({ ...(deptForMeta.metadata as Record<string, unknown>) } as Record<string, unknown>)
+            : {};
+    const prevRulesRaw = existingDeptMeta.opportunity_attention_rules;
+    const prevRules =
+        prevRulesRaw != null && typeof prevRulesRaw === "object" && !Array.isArray(prevRulesRaw)
+            ? ({ ...(prevRulesRaw as Record<string, unknown>) } as Record<string, unknown>)
+            : {};
+    if (!Object.prototype.hasOwnProperty.call(prevRules, "needs_attention_buckets")) {
+        prevRules.needs_attention_buckets = CANONICAL_CHILDCARE_ENROLLMENT_NEEDS_ATTENTION_BUCKETS_SEED.map((b) => ({
+            key: b.key,
+            label: b.label,
+            description: b.description,
+            enabled: b.enabled,
+            order: b.order,
+            priority: b.priority,
+            icon: b.icon,
+            reason_codes: [...b.reason_codes],
+        }));
+        existingDeptMeta.opportunity_attention_rules = prevRules;
+        const { error: deptUpErr } = await supabase
+            .from("departments")
+            .update({
+                metadata: existingDeptMeta,
+                updated_at: new Date().toISOString(),
+            })
+            .eq("id", targetDeptId)
+            .eq("org_id", orgId);
+        if (deptUpErr) throw new Error(deptUpErr.message);
+        console.log(
+            "Seeded department needs_attention_buckets (childcare enrollment demo) on department:",
+            targetDeptId
+        );
+    } else {
+        console.log("Skipped needs_attention_buckets seed — key already present on department metadata.");
     }
 
     const baseUrl = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "");

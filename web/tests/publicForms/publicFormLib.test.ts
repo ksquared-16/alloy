@@ -38,6 +38,7 @@ describe("public form lib", () => {
         expect(linkRequiresLeadCapture({ lead_capture: true })).toBe(true);
         expect(linkRequiresLeadCapture({ mode: "intake" })).toBe(true);
         expect(linkRequiresLeadCapture({})).toBe(false);
+        expect(linkRequiresLeadCapture({ form_context_mode: "existing_record", lead_capture: true })).toBe(false);
     });
 
     it("parseFormIntakeMeta extracts nested intake object", () => {
@@ -80,5 +81,17 @@ describe("public form lib", () => {
         expect((m as { intake_candidate_email_count?: unknown }).intake_candidate_email_count).toBeUndefined();
         expect((m as { intake_candidate_phone_count?: unknown }).intake_candidate_phone_count).toBeUndefined();
         expect((m as { intake?: unknown }).intake).toBeUndefined();
+    });
+
+    it("mergePublicSubmissionMeta strips spoofed prefill_snapshot", () => {
+        const m = mergePublicSubmissionMeta(
+            {
+                prefill_snapshot: { evil: "x" },
+                prefill_applied: true,
+            } as Record<string, unknown>,
+            "realhash"
+        );
+        expect((m as { prefill_snapshot?: unknown }).prefill_snapshot).toBeUndefined();
+        expect((m as { prefill_applied?: unknown }).prefill_applied).toBeUndefined();
     });
 });

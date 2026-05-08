@@ -20,6 +20,14 @@ export function isCrmSearchEntityType(v: string): v is CrmSearchEntityType {
     return (CRM_SEARCH_ENTITY_TYPES as readonly string[]).includes(v);
 }
 
+/** Prefer pasted UUID when non-empty; otherwise use picker selection. */
+export function effectiveManualLinkUuid(manualRaw: string, pickedId: string | undefined): string | undefined {
+    const m = manualRaw.trim();
+    if (m.length > 0) return m;
+    if (pickedId && pickedId.trim().length > 0) return pickedId.trim();
+    return undefined;
+}
+
 export function labelPersonRow(p: {
     full_name?: string | null;
     first_name?: string | null;

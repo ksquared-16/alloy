@@ -21,6 +21,10 @@ const SERVER_CONTROLLED_META_KEYS = new Set([
     "source_entity_id",
     "prefill_enabled",
     "allow_auto_create",
+    "prefill_snapshot",
+    "prefill_applied",
+    "packet_session_id",
+    "packet_definition_id",
 ]);
 
 /**

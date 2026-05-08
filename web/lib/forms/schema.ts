@@ -52,6 +52,8 @@ type FormFieldBase = {
     id: string;
     label: string;
     required: boolean;
+    /** When true, public PATCH/submit restore values from the saved draft baseline (operator/server wins). */
+    read_only?: boolean;
     visibility?: FormVisibility;
     validate?: FormValidateRules;
     entity_hint?: string;
@@ -80,6 +82,7 @@ const fieldCoreSchema = z
         entity_hint: z.string().min(1).optional(),
         /** Name of PDF mapping slot for this field (hint only; mapping lives in `pdf_mapping_json`). */
         pdf_slot: z.string().min(1).optional(),
+        read_only: z.boolean().optional().default(false),
     })
     .strict();
 

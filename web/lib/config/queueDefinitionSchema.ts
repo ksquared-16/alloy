@@ -53,7 +53,7 @@ const ExceptionFilterSchema = z
     .object({
         type: z.literal("exception"),
         operator: z.literal("exists"),
-        exception_types: z.array(z.string()).optional(),
+        exception_types: z.array(z.string()).nullish(),
     })
     .strict();
 
@@ -66,8 +66,9 @@ export const queueConfigSchema = z
         key: z.string().min(1),
         label: z.string().min(1),
         /** Optional Lucide icon token (kebab-case), resolved via workspace icon registry in AdminV2. */
-        icon: z.string().min(1).optional(),
-        description: z.string().optional(),
+        icon: z.string().min(1).nullish(),
+        /** JSONB commonly stores explicit null; treat like omitted. */
+        description: z.string().nullish(),
         filters: z.array(queueFilterSchema),
         sort: z
             .array(
@@ -80,9 +81,9 @@ export const queueConfigSchema = z
             )
             .optional(),
         limit: z.number().int().positive().optional(),
-        priority: z.enum(["standard", "attention", "critical"]).optional(),
-        display: z.enum(["list", "cards"]).optional(),
-        group_by: z.string().min(1).optional(),
+        priority: z.enum(["standard", "attention", "critical"]).nullish(),
+        display: z.enum(["list", "cards"]).nullish(),
+        group_by: z.string().min(1).nullish(),
     })
     .strict()
     .readonly();
@@ -106,7 +107,7 @@ const queueUiRowPreviewSchema = z
             )
             .default(["title", "status"]),
         actions: z.array(z.enum(["open", "call", "email"])).default(["open"]),
-        field_labels: z.record(z.string(), z.string()).optional(),
+        field_labels: z.record(z.string(), z.string()).nullish(),
     })
     .strict();
 
@@ -114,7 +115,7 @@ const queueUiSectionSchema = z
     .object({
         key: z.string().min(1),
         label: z.string().min(1),
-        tone: z.enum(["standard", "attention", "critical"]).optional(),
+        tone: z.enum(["standard", "attention", "critical"]).nullish(),
         queue_keys: z.array(z.string().min(1)).nonempty(),
     })
     .strict();
@@ -122,8 +123,8 @@ const queueUiSectionSchema = z
 const queueUiSchema = z
     .object({
         layout: z.enum(["pipeline_with_attention", "single_section"]).default("single_section"),
-        primary_total_label: z.string().min(1).optional(),
-        primary_total_queue: z.string().min(1).optional(),
+        primary_total_label: z.string().min(1).nullish(),
+        primary_total_queue: z.string().min(1).nullish(),
         sections: z.array(queueUiSectionSchema).nonempty().optional(),
         row_preview: queueUiRowPreviewSchema.optional(),
     })

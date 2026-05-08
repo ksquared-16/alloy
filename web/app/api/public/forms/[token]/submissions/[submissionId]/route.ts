@@ -4,11 +4,14 @@ import { validateFormPayload } from "@/lib/forms/validateSubmission";
 import { validateFormSchema } from "@/lib/forms/schema";
 import { normalizeValidationErrors } from "@/lib/forms/validateSubmission";
 import { ZodError } from "zod";
-import { resolvePublicFormLinkByToken } from "@/lib/public/forms/resolvePublicFormLink";
+import { resolvePublicFormEmbedContext } from "@/lib/public/forms/resolvePublicFormEmbedContext";
+import { verifySubmissionBelongsToPublicEmbed } from "@/lib/public/forms/publicEmbedSubmissionGuard";
 import { isEmbedOriginAllowed, requestEmbedOrigin } from "@/lib/public/forms/embedOrigin";
 import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
 import { hashClientIp } from "@/lib/public/forms/clientIpHash";
 import { mergePublicSubmissionMeta } from "@/lib/public/forms/publicPayloadMeta";
+import { applyReadOnlyBaselineToPayload } from "@/lib/forms/readOnlyFormPayload";
+import type { FormPayload } from "@/lib/forms/validateSubmission";
 
 const UUID_RE =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -29,7 +32,7 @@ export async function GET(
     if (!token.trim()) return publicErr("Missing token", 400);
 
     const supabase = createServiceRoleClient();
-    const resolved = await resolvePublicFormLinkByToken(supabase, token);
+    const resolved = await resolvePublicFormEmbedContext(supabase, token);
     if (!resolved.ok) {
         const codeMap = { NOT_FOUND: 404, INACTIVE: 403, EXPIRED: 403, NO_PUBLISHED_VERSION: 409 };
         return publicErr(resolved.error.message, codeMap[resolved.error.code] ?? 400, { code: resolved.error.code });
@@ -41,27 +44,17 @@ export async function GET(
         return publicErr("Origin not allowed for this form embed", 403, { code: "ORIGIN_FORBIDDEN" });
     }
 
-    const { data: existing, error: loadErr } = await supabase
-        .from("form_submissions")
-        .select("*")
-        .eq("id", submissionId)
-        .eq("org_id", ctx.orgId)
-        .maybeSingle();
+    if (ctx.packetTerminal) {
+        return publicErr("Packet already completed", 409, { code: "PACKET_COMPLETE" });
+    }
 
-    if (loadErr) return publicErr(loadErr.message, 500);
-    if (!existing) return publicErr("Not found", 404);
+    const gate = await verifySubmissionBelongsToPublicEmbed(supabase, ctx, submissionId);
+    if (!gate.ok) return publicErr(gate.message, gate.status);
 
-    const row = existing as {
-        status: string;
-        created_via_public_link_id: string | null;
-        form_definition_version_id: string;
-    };
-    if (row.created_via_public_link_id !== ctx.linkId) return publicErr("Not found", 404);
+    const existing = gate.row;
+    const row = existing as { status: string };
     if (row.status !== "draft") {
         return publicErr("Submission is not editable", 409, { code: "NOT_DRAFT" });
-    }
-    if (row.form_definition_version_id !== ctx.formDefinitionVersionId) {
-        return publicErr("Version mismatch", 409, { code: "VERSION_MISMATCH" });
     }
 
     const full = existing as Record<string, unknown>;
@@ -94,7 +87,7 @@ export async function PATCH(
     if (!token.trim()) return publicErr("Missing token", 400);
 
     const supabase = createServiceRoleClient();
-    const resolved = await resolvePublicFormLinkByToken(supabase, token);
+    const resolved = await resolvePublicFormEmbedContext(supabase, token);
     if (!resolved.ok) {
         const codeMap = { NOT_FOUND: 404, INACTIVE: 403, EXPIRED: 403, NO_PUBLISHED_VERSION: 409 };
         return publicErr(resolved.error.message, codeMap[resolved.error.code] ?? 400, { code: resolved.error.code });
@@ -104,6 +97,14 @@ export async function PATCH(
     const origin = requestEmbedOrigin(request);
     if (!isEmbedOriginAllowed(origin, ctx.allowedEmbedOrigins)) {
         return publicErr("Origin not allowed for this form embed", 403, { code: "ORIGIN_FORBIDDEN" });
+    }
+
+    if (ctx.packetTerminal) {
+        return publicErr("Packet already completed", 409, { code: "PACKET_COMPLETE" });
+    }
+
+    if (ctx.schemaJson == null) {
+        return publicErr("No form schema available", 409);
     }
 
     let body: Record<string, unknown>;
@@ -133,31 +134,13 @@ export async function PATCH(
               )
             : undefined;
 
-    const { data: existing, error: loadErr } = await supabase
-        .from("form_submissions")
-        .select("*")
-        .eq("id", submissionId)
-        .eq("org_id", ctx.orgId)
-        .maybeSingle();
+    const gate = await verifySubmissionBelongsToPublicEmbed(supabase, ctx, submissionId);
+    if (!gate.ok) return publicErr(gate.message, gate.status);
 
-    if (loadErr) return publicErr(loadErr.message, 500);
-    if (!existing) return publicErr("Not found", 404);
-
-    const row = existing as {
-        status: string;
-        created_via_public_link_id: string | null;
-        form_definition_version_id: string;
-    };
-    if (row.created_via_public_link_id !== ctx.linkId) {
-        return publicErr("Not found", 404);
-    }
+    const existing = gate.row;
+    const row = existing as { status: string };
     if (row.status !== "draft") {
         return publicErr("Only draft submissions can be updated", 409, { code: "NOT_DRAFT" });
-    }
-    if (row.form_definition_version_id !== ctx.formDefinitionVersionId) {
-        return publicErr("Submission version does not match current published link target", 409, {
-            code: "VERSION_MISMATCH",
-        });
     }
 
     const { data: ver } = await supabase
@@ -186,10 +169,13 @@ export async function PATCH(
         return publicErr("Invalid submission payload", 400, { validation_errors: validated.errors });
     }
 
+    const existingPayload = (existing as { payload: FormPayload }).payload;
+    const guardedPayload = applyReadOnlyBaselineToPayload(validated.schema, validated.payload, existingPayload);
+
     const ipHash = hashClientIp(request);
     const mergedPayload = {
-        ...validated.payload,
-        meta: mergePublicSubmissionMeta(validated.payload.meta as Record<string, unknown> | undefined, ipHash),
+        ...guardedPayload,
+        meta: mergePublicSubmissionMeta(guardedPayload.meta as Record<string, unknown> | undefined, ipHash),
     };
 
     const { data: updated, error: upErr } = await supabase

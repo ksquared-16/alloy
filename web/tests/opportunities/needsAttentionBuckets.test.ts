@@ -27,11 +27,49 @@ function mockMatch(reasonCodes: string[]): { resolved: OpportunityAttentionResul
     };
 }
 
+/** Minimal metadata used when tests need configured buckets (platform defaults are empty). */
+const DEMO_TWO_BUCKET_META = {
+    opportunity_attention_rules: {
+        needs_attention_buckets: [
+            {
+                key: "follow_up_overdue",
+                label: "Follow-up overdue",
+                enabled: true,
+                order: 10,
+                reason_codes: ["follow_up_date_passed"],
+            },
+            {
+                key: "quote_follow_up_overdue",
+                label: "Quote follow-up overdue",
+                enabled: true,
+                order: 30,
+                reason_codes: ["stale_quote_followup"],
+            },
+        ],
+    },
+};
+
 describe("needsAttentionBuckets", () => {
-    it("platform defaults ship the canonical enrollment lens set", () => {
-        expect(DEFAULT_NEEDS_ATTENTION_BUCKETS.length).toBe(4);
-        expect(DEFAULT_NEEDS_ATTENTION_BUCKETS[0]?.key).toBe("follow_up_overdue");
-        expect(DEFAULT_NEEDS_ATTENTION_BUCKETS.map((b) => b.key).sort()).not.toContain("waiting_on_staff");
+    it("platform defaults are empty (no vertical lenses inherited)", () => {
+        expect(DEFAULT_NEEDS_ATTENTION_BUCKETS.length).toBe(0);
+    });
+
+    it("resolves to no buckets when metadata omits needs_attention_buckets", () => {
+        expect(resolveNeedsAttentionBucketsFromMetadata(null)).toEqual([]);
+        expect(resolveNeedsAttentionBucketsFromMetadata({})).toEqual([]);
+        expect(
+            resolveNeedsAttentionBucketsFromMetadata({
+                opportunity_attention_rules: { version: 1, thresholdsHours: {} },
+            }),
+        ).toEqual([]);
+    });
+
+    it("respects explicit empty needs_attention_buckets array", () => {
+        expect(
+            resolveNeedsAttentionBucketsFromMetadata({
+                opportunity_attention_rules: { needs_attention_buckets: [] },
+            }),
+        ).toEqual([]);
     });
 
     it("sorts by priority (lower first) with order fallback", () => {
@@ -41,7 +79,7 @@ describe("needsAttentionBuckets", () => {
     });
 
     it("hydrates histogram sums (reason occurrences)", () => {
-        const buckets = resolveNeedsAttentionBucketsFromMetadata(null);
+        const buckets = resolveNeedsAttentionBucketsFromMetadata(DEMO_TWO_BUCKET_META);
         const withCounts = hydrateNeedsAttentionBucketCounts(buckets, [
             { reason_key: "follow_up_date_passed", label: "", count: 2 },
             { reason_key: "stale_quote_followup", label: "", count: 1 },
@@ -138,5 +176,12 @@ describe("needsAttentionBuckets", () => {
             },
         };
         expect(pickMetadataForNeedsAttentionBuckets(wu, dept)).toBe(dept);
+        expect(resolveNeedsAttentionBucketsWithPrecedence(wu, dept).map((x) => x.key)).toContain("waiting_on_staff");
+    });
+
+    it("resolveNeedsAttentionBucketsWithPrecedence returns [] when neither layer defines buckets key", () => {
+        const wu = { opportunity_attention_rules: {} };
+        const dept = { opportunity_attention_rules: { version: 1 } };
+        expect(resolveNeedsAttentionBucketsWithPrecedence(wu, dept)).toEqual([]);
     });
 });

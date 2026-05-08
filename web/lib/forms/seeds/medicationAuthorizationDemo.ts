@@ -17,10 +17,21 @@ export const MEDICATION_DEMO_ROUTE_ITEM_KEYS = ["oral", "topical", "inhaled", "i
 /** Plaintext token for the optional public link row (hash stored in DB). */
 export const MEDICATION_AUTHORIZATION_DEMO_PUBLIC_TOKEN = "alloy_demo_medication_authorization_v1" as const;
 
+/** When launching from an existing `customer_member`, maps CRM columns → demo field ids (server-side prefill). */
+export const MEDICATION_AUTHORIZATION_DEMO_PREFILL_FIELD_MAP = {
+    child_first_name: "customer_member.first_name",
+    child_last_name: "customer_member.last_name",
+    child_dob: "customer_member.dob",
+    guardian_full_name: "customer.name",
+    guardian_email: "contact.email",
+    guardian_phone: "contact.phone",
+} as const;
+
 export const MEDICATION_AUTHORIZATION_DEMO_DEFINITION_METADATA = {
     demo: true,
     compliance_status: "example_only",
     not_official_state_form: true,
+    prefill_field_map: MEDICATION_AUTHORIZATION_DEMO_PREFILL_FIELD_MAP,
 } as const;
 
 /** Shown on AdminV2 form detail via `metadata.operator_context` when seeded by `seedMedicationAuthorizationDemoForOrg.ts`. */

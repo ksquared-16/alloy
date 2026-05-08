@@ -3,6 +3,7 @@
  * (implementation delegates to `prepareQueueDefinitionPatch`).
  */
 import { describe, expect, it } from "vitest";
+import { CANONICAL_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V1 } from "@/lib/config/enrollmentPipelineQueueDefinitionV1";
 import { prepareQueueDefinitionPatch } from "@/lib/agent/v0/applyWorkUnitQueueDefinitionUpdate";
 
 const validV1 = {
@@ -26,5 +27,10 @@ describe("PATCH work-units — queue_definition", () => {
         );
         expect(r.ok).toBe(false);
         if (!r.ok) expect(r.status).toBe(409);
+    });
+
+    it("accepts workspace queue_definition with queues[] (enrollment pipeline)", () => {
+        const r = prepareQueueDefinitionPatch({}, CANONICAL_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V1, 0);
+        expect(r.ok).toBe(true);
     });
 });

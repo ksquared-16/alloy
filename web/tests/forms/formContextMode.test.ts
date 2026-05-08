@@ -40,4 +40,14 @@ describe("formContextMode", () => {
         expect(parsed.form_context_mode).toBe("document_update");
         expect(parsed.source_entity_type).toBe("opportunity");
     });
+
+    it("stampFormContextFromLinkMetadata copies packet_definition_id for packet mode", () => {
+        const pid = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+        const stamped = stampFormContextFromLinkMetadata({
+            form_context_mode: "packet",
+            packet_definition_id: pid,
+        });
+        expect(stamped.form_context_mode).toBe("packet");
+        expect(stamped.packet_definition_id).toBe(pid);
+    });
 });

@@ -877,6 +877,101 @@ describe("Admin forms routes", () => {
         expect(j.data.metadata.label).toBe("Camp");
     });
 
+    it("POST public link launch_from_entity stamps existing_record metadata", async () => {
+        const fid = crypto.randomUUID();
+        const pid = crypto.randomUUID();
+        storeRef.forms[fid] = { id: fid, org_id: ORG, key: "k", name: "N", kind: "center", is_active: true, metadata: {} };
+        storeRef.persons[pid] = { org_id: ORG };
+        const res = await createPublicLink(
+            new NextRequest("http://localhost:3000/api/x", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Host: "localhost:3000",
+                    "x-forwarded-proto": "http",
+                },
+                body: JSON.stringify({
+                    launch_from_entity: { entity_type: "person", entity_id: pid },
+                }),
+            }),
+            { params: Promise.resolve({ formId: fid }) }
+        );
+        expect(res.status).toBe(201);
+        const j = (await res.json()) as { data: { metadata: Record<string, unknown> } };
+        expect(j.data.metadata.form_context_mode).toBe("existing_record");
+        expect(j.data.metadata.source_entity_type).toBe("person");
+        expect(j.data.metadata.source_entity_id).toBe(pid);
+        expect(j.data.metadata.prefill_enabled).toBe(true);
+        expect(j.data.metadata.lead_capture).toBe(false);
+        expect(j.data.metadata.intake).toBe(false);
+    });
+
+    it("POST public link launch_from_entity rejects entity from another org", async () => {
+        const fid = crypto.randomUUID();
+        const pid = crypto.randomUUID();
+        storeRef.forms[fid] = { id: fid, org_id: ORG, key: "k", name: "N", kind: "center", is_active: true, metadata: {} };
+        storeRef.persons[pid] = { org_id: OTHER_ORG };
+        const res = await createPublicLink(
+            new NextRequest("http://localhost:3000/api/x", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Host: "localhost:3000",
+                    "x-forwarded-proto": "http",
+                },
+                body: JSON.stringify({
+                    launch_from_entity: { entity_type: "person", entity_id: pid },
+                }),
+            }),
+            { params: Promise.resolve({ formId: fid }) }
+        );
+        expect(res.status).toBe(400);
+    });
+
+    it("POST public link accepts trusted prefill_field_map body", async () => {
+        const fid = crypto.randomUUID();
+        storeRef.forms[fid] = { id: fid, org_id: ORG, key: "k", name: "N", kind: "center", is_active: true, metadata: {} };
+        const res = await createPublicLink(
+            new NextRequest("http://localhost:3000/api/x", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Host: "localhost:3000",
+                    "x-forwarded-proto": "http",
+                },
+                body: JSON.stringify({
+                    prefill_field_map: { child_first_name: "customer_member.first_name" },
+                }),
+            }),
+            { params: Promise.resolve({ formId: fid }) }
+        );
+        expect(res.status).toBe(201);
+        const j = (await res.json()) as { data: { metadata: Record<string, unknown> } };
+        expect(j.data.metadata.prefill_field_map).toEqual({
+            child_first_name: "customer_member.first_name",
+        });
+    });
+
+    it("POST public link rejects invalid prefill_field_map paths", async () => {
+        const fid = crypto.randomUUID();
+        storeRef.forms[fid] = { id: fid, org_id: ORG, key: "k", name: "N", kind: "center", is_active: true, metadata: {} };
+        const res = await createPublicLink(
+            new NextRequest("http://localhost:3000/api/x", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    Host: "localhost:3000",
+                    "x-forwarded-proto": "http",
+                },
+                body: JSON.stringify({
+                    prefill_field_map: { x: "not.valid.path" },
+                }),
+            }),
+            { params: Promise.resolve({ formId: fid }) }
+        );
+        expect(res.status).toBe(400);
+    });
+
     it("GET public links omits token_hash and plaintext", async () => {
         const fid = crypto.randomUUID();
         const lid = crypto.randomUUID();

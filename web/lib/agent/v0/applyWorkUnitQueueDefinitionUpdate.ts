@@ -4,11 +4,16 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { validateQueueDefinition } from "@/lib/config/queueDefinitionSchema";
 import {
     getQueueDefinitionStoredVersion,
     parseQueueDefinitionV1Strict,
     serializeQueueDefinitionV1,
 } from "@/lib/rrs/queue/queueDefinitionV1";
+
+function isPlainQueueDefinitionObject(v: unknown): v is Record<string, unknown> {
+    return v != null && typeof v === "object" && !Array.isArray(v);
+}
 
 export type ApplyQueueDefinitionResult =
     | {
@@ -51,6 +56,21 @@ export function prepareQueueDefinitionPatch(
 
     if (incoming === null) {
         return { ok: true, nextQueueDefinition: {} };
+    }
+
+    if (isPlainQueueDefinitionObject(incoming) && Array.isArray(incoming.queues)) {
+        try {
+            const validated = validateQueueDefinition(incoming);
+            return { ok: true, nextQueueDefinition: validated as unknown as Record<string, unknown> };
+        } catch (e) {
+            const msg = e instanceof Error && e.message ? e.message : "queue_definition is invalid";
+            return {
+                ok: false,
+                status: 400,
+                error: msg,
+                code: "VALIDATION_FAILED",
+            };
+        }
     }
 
     const parsed = parseQueueDefinitionV1Strict(incoming);

@@ -9,10 +9,21 @@ import { FormEngineRenderer, type FormEngineOptionChoice } from "@/components/fo
 import { emptyPayload, payloadWithMinimumRepeatingGroups } from "@/components/forms/engine/formEnginePayload";
 import { formatPublicValidationErrors } from "@/lib/public/forms/formatPublicValidationErrors";
 
+type ResolvePacketMeta = {
+    packet_session_id: string;
+    packet_definition_id: string;
+    packet_name: string | null;
+    current_sequence_index: number;
+    total_steps: number;
+    current_session_item_id: string;
+};
+
 type ResolveOk = {
     ok: true;
     data: {
-        schema_json: unknown;
+        schema_json: unknown | null;
+        packet_terminal?: boolean;
+        packet?: ResolvePacketMeta | null;
         option_values_by_field_id?: Record<string, string[]>;
         option_choices_by_field_id?: Record<string, FormEngineOptionChoice[]>;
     };
@@ -85,6 +96,10 @@ export function FormEmbedClient({
     >({});
     const [submitting, setSubmitting] = useState(false);
     const [submitted, setSubmitted] = useState(false);
+    const [packetProgress, setPacketProgress] = useState<ResolvePacketMeta | null>(null);
+    const [packetAlreadyDone, setPacketAlreadyDone] = useState(false);
+    const [interStepThanks, setInterStepThanks] = useState(false);
+    const [packetFinalThankYou, setPacketFinalThankYou] = useState(false);
 
     const encToken = useMemo(() => encodeURIComponent(token), [token]);
 
@@ -93,6 +108,10 @@ export function FormEmbedClient({
         setMessage(null);
         setValidationErrors(null);
         setSubmitted(false);
+        setInterStepThanks(false);
+        setPacketFinalThankYou(false);
+        setPacketAlreadyDone(false);
+        setPacketProgress(null);
         const res = await fetch(`/api/public/forms/${encToken}/resolve`, { method: "GET" });
         const json = (await res.json()) as ResolveOk | ApiErr;
         if (!json.ok) {
@@ -100,8 +119,24 @@ export function FormEmbedClient({
             setMessage(json.error ?? "Resolve failed");
             return;
         }
-        const rawSchema = json.data.schema_json as FormSchemaV1;
+
+        if (json.data.packet_terminal) {
+            setPacketProgress(json.data.packet ?? null);
+            setPacketAlreadyDone(true);
+            setSchema(null);
+            setPhase("ready");
+            return;
+        }
+
+        const rawSchema = json.data.schema_json as FormSchemaV1 | null;
+        if (!rawSchema) {
+            setPhase("error");
+            setMessage("No form schema returned");
+            return;
+        }
+
         setSchema(rawSchema);
+        setPacketProgress(json.data.packet ?? null);
         setOptionValuesByFieldId(normalizeOptionValues(json.data.option_values_by_field_id));
         setOptionChoicesByFieldId(normalizeOptionChoices(json.data.option_choices_by_field_id));
 
@@ -148,13 +183,13 @@ export function FormEmbedClient({
     }, [bootstrap]);
 
     useLayoutEffect(() => {
-        if (!submitted || typeof window === "undefined") return;
+        if ((!submitted && !packetFinalThankYou) || typeof window === "undefined") return;
         window.scrollTo({ top: 0, left: 0, behavior: "auto" });
-    }, [submitted]);
+    }, [submitted, packetFinalThankYou]);
 
     const persistDraft = useCallback(
         async (next: FormPayload) => {
-            if (!submissionId || submitted) return;
+            if (!submissionId || submitted || interStepThanks || packetAlreadyDone) return;
             const res = await fetch(`/api/public/forms/${encToken}/submissions/${submissionId}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
@@ -172,11 +207,11 @@ export function FormEmbedClient({
                 }
             }
         },
-        [encToken, optionValuesByFieldId, submissionId, submitted]
+        [encToken, optionValuesByFieldId, submissionId, submitted, interStepThanks, packetAlreadyDone]
     );
 
     const handleSubmit = useCallback(async () => {
-        if (!submissionId || submitting || submitted) return;
+        if (!submissionId || submitting || submitted || interStepThanks || packetAlreadyDone) return;
         setSubmitting(true);
         setMessage(null);
         setValidationErrors(null);
@@ -189,7 +224,15 @@ export function FormEmbedClient({
                     option_values_by_field_id: optionValuesByFieldId,
                 }),
             });
-            const json = (await res.json()) as ApiErr | { ok: true };
+            const json = (await res.json()) as
+                | ApiErr
+                | {
+                      ok: true;
+                      data?: {
+                          packet_complete?: boolean;
+                          next_form_available?: boolean;
+                      };
+                  };
             if (!json.ok) {
                 const errBody = json as ApiErr;
                 setValidationErrors(errBody.validation_errors ?? null);
@@ -198,14 +241,39 @@ export function FormEmbedClient({
             }
             window.sessionStorage.removeItem(storageKey(token));
             setValidationErrors(null);
-            setSubmitted(true);
             setMessage(null);
+
+            const data = json.ok ? json.data : undefined;
+            if (data?.next_form_available === true && data.packet_complete === false) {
+                setInterStepThanks(true);
+                setSubmissionId(null);
+                setSchema(null);
+                return;
+            }
+
+            if (packetProgress && data?.packet_complete === true) {
+                setPacketFinalThankYou(true);
+                return;
+            }
+
+            setSubmitted(true);
         } finally {
             setSubmitting(false);
         }
-    }, [encToken, optionValuesByFieldId, payload, submissionId, submitting, submitted, token]);
+    }, [
+        encToken,
+        optionValuesByFieldId,
+        payload,
+        submissionId,
+        submitting,
+        submitted,
+        interStepThanks,
+        packetAlreadyDone,
+        packetProgress,
+        token,
+    ]);
 
-    if (phase === "loading" || !schema) {
+    if (phase === "loading") {
         return (
             <div className="flex min-h-[200px] items-center justify-center p-6 text-sm text-neutral-600">
                 Loading form…
@@ -217,6 +285,74 @@ export function FormEmbedClient({
         return (
             <div className="p-6 text-center text-sm text-red-700">
                 {message ?? "Unable to load this form."}
+            </div>
+        );
+    }
+
+    if (packetAlreadyDone) {
+        return (
+            <div className="min-h-screen bg-neutral-50">
+                {showPreviewBanner ? <PreviewBanner /> : null}
+                <div className="mx-auto max-w-lg px-4 py-16">
+                    <div className="rounded-2xl border border-emerald-200 bg-white px-8 py-12 text-center shadow-md">
+                        <h1 className="text-xl font-semibold text-neutral-900">Packet already completed</h1>
+                        <p className="mt-4 text-sm leading-relaxed text-neutral-700">
+                            This enrollment packet has already been submitted. You can close this window.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (interStepThanks) {
+        return (
+            <div className="min-h-screen bg-neutral-50">
+                {showPreviewBanner ? <PreviewBanner /> : null}
+                <div className="mx-auto max-w-lg px-4 py-16">
+                    <div className="rounded-2xl border border-blue-200 bg-white px-8 py-12 text-center shadow-md">
+                        <h1 className="text-xl font-semibold text-neutral-900">Step saved</h1>
+                        <p className="mt-4 text-sm leading-relaxed text-neutral-700">
+                            Continue to the next form in this packet.
+                        </p>
+                        <button
+                            type="button"
+                            className="mt-8 w-full rounded-lg bg-neutral-900 py-3.5 text-sm font-semibold text-white shadow-sm"
+                            onClick={() => void bootstrap()}
+                        >
+                            Continue to next form
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (packetFinalThankYou) {
+        return (
+            <div className="min-h-screen bg-neutral-50">
+                {showPreviewBanner ? <PreviewBanner /> : null}
+                <div className="mx-auto max-w-lg px-4 py-16">
+                    <div className="rounded-2xl border border-emerald-200 bg-white px-8 py-12 text-center shadow-md">
+                        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-2xl text-emerald-800">
+                            ✓
+                        </div>
+                        <h1 className="text-xl font-semibold text-neutral-900">Thank you — packet complete.</h1>
+                        <p className="mt-4 text-sm leading-relaxed text-neutral-700">
+                            You&apos;ve finished every form in this packet. Our staff will review your submissions and
+                            follow up if anything else is needed.
+                        </p>
+                        <p className="mt-6 text-xs text-neutral-500">You can close this window.</p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (!schema) {
+        return (
+            <div className="flex min-h-[200px] items-center justify-center p-6 text-sm text-neutral-600">
+                Loading form…
             </div>
         );
     }
@@ -246,11 +382,21 @@ export function FormEmbedClient({
     }
 
     const errorLines = validationErrors?.length ? formatPublicValidationErrors(validationErrors) : [];
+    const stepLabel =
+        packetProgress ?
+            `Step ${packetProgress.current_sequence_index + 1} of ${packetProgress.total_steps}`
+        : null;
 
     return (
         <div className="min-h-screen bg-white">
             {showPreviewBanner ? <PreviewBanner /> : null}
             <div className={clsx("mx-auto max-w-xl px-3 pt-4 pb-16", submitting && "opacity-[0.98]")}>
+                {stepLabel ?
+                    <p className="mb-3 text-center text-xs font-medium uppercase tracking-wide text-neutral-500">
+                        {stepLabel}
+                        {packetProgress?.packet_name ? ` · ${packetProgress.packet_name}` : ""}
+                    </p>
+                : null}
                 <FormEngineRenderer
                     schema={schema}
                     payload={payload}

@@ -151,6 +151,7 @@ const STRATEGY_LABELS: Record<string, string> = {
     ambiguous_phone: "Multiple persons matched the phone — CRM links were not applied.",
     no_match: "No person matched email/phone.",
     operator_selected: "Operator chose CRM records manually on this submission.",
+    launch_context: "Submission was opened from a known CRM record (existing-record launch) — links were set from launch context, not email/phone intake.",
 };
 
 /** Structured intake summary for submission detail (Card 8 metadata). */
@@ -173,6 +174,7 @@ export function buildIntakeOperatorSummary(payloadMeta: unknown): IntakeOperator
     else if (path === "skipped_error") statusLabel = "Error";
     else if (path === "ambiguous_contact" || path === "needs_human_review") statusLabel = "Needs review";
     else if (path === "manually_linked") statusLabel = "Linked";
+    else if (path === "existing_record_launch") statusLabel = "Linked";
     else if (needsReview) statusLabel = "Needs review";
 
     const detailLines: string[] = [`Resolution path: ${path}.`, `Confidence: ${confidence}.`, strategyLabel];

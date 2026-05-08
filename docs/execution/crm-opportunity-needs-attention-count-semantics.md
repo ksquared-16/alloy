@@ -22,7 +22,7 @@ All **membership** for opportunity “needs attention” in CRM surfaces uses th
 
 **Multi-code buckets:** A bucket that lists **multiple** `reason_codes` counts an inquiry **once** if **any** listed reason appears in **`reasons[]`**. Work-unit filtering prefers **`attention_bucket`** (bucket `key`) for bucket-shaped lenses; **`attention_reason_code`** remains useful for single-code drill links.
 
-**Platform default bucket catalog** ships **four** enabled enrollment lenses (`DEFAULT_NEEDS_ATTENTION_BUCKETS` in `web/lib/opportunities/needsAttentionBuckets.ts`); orgs add or reorder buckets via **`needs_attention_buckets`** (metadata / Settings). Additional reason codes (e.g. waiting-on, missing quote) are supported by the resolver but are **not** default tiles until configured.
+**Visible buckets** come **only** from **`metadata.opportunity_attention_rules.needs_attention_buckets`** (work unit → department precedence). **Platform code does not ship enrollment lenses as defaults** (`DEFAULT_NEEDS_ATTENTION_BUCKETS` is empty). Childcare enrollment **demo** buckets are seeded via **`ensureEnrollmentPipelineWorkUnitV1.ts`** into **department metadata** (`web/lib/opportunities/enrollmentNeedsAttentionBucketsSeed.ts`). Additional reason codes (e.g. waiting-on, missing quote) are supported by the resolver but have **no tile** until a bucket lists them.
 
 **Settings alignment:** Department **Attention & SLA Rules** configures bucket membership separately from **trigger thresholds** under **`opportunity_attention_rules`** (hours/days/SLA/policy). Counting semantics here are unchanged — thresholds only affect which inquiries qualify for resolver reasons inside the same caps.
 

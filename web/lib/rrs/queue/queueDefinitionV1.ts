@@ -1,8 +1,12 @@
 /**
  * work_units.queue_definition — v1 (Track A + Growth opportunity slice).
  * Empty object {} means "no interpreted queue" for *read* helpers (`parseQueueDefinitionV1`).
- * Writes use `parseQueueDefinitionV1Strict` + `queueDefinitionV1Schema` (AI slice v0 / admin PATCH).
+ * Writes use strict validation: **workspace** definitions (`queues[]` + optional `ui`) validate via
+ * {@link validateQueueDefinition} (`web/lib/config/queueDefinitionSchema.ts`); legacy Growth/job documents
+ * still use `parseQueueDefinitionV1Strict` below.
  */
+
+import { validateQueueDefinition } from "@/lib/config/queueDefinitionSchema";
 
 // ——— Job (original v1) ———
 
@@ -324,6 +328,17 @@ export function normalizeQueueDefinitionForCreate(raw: unknown):
     if (Object.keys(o).length === 0) {
         return { ok: true, value: {} };
     }
+
+    if (Array.isArray(o.queues)) {
+        try {
+            const validated = validateQueueDefinition(raw);
+            return { ok: true, value: validated as unknown as Record<string, unknown> };
+        } catch (e) {
+            const msg = e instanceof Error && e.message ? e.message : "queue_definition is invalid";
+            return { ok: false, error: msg };
+        }
+    }
+
     const parsed = parseQueueDefinitionV1Strict(o);
     if (!parsed.ok) {
         return { ok: false, error: parsed.error };

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CANONICAL_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V1 } from "@/lib/config/enrollmentPipelineQueueDefinitionV1";
 import {
     buildJobQueueIntent,
     getQueueDefinitionStoredVersion,
@@ -107,6 +108,14 @@ describe("normalizeQueueDefinitionForCreate", () => {
             limit: 5,
         });
         expect(r.ok).toBe(true);
+    });
+
+    it("accepts workspace QueueDefinitionV1 (queues[] + ui) via Zod", () => {
+        const r = normalizeQueueDefinitionForCreate(CANONICAL_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V1);
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(Array.isArray((r.value as { queues?: unknown }).queues)).toBe(true);
+        }
     });
 });
 

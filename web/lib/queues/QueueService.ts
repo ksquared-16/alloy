@@ -93,6 +93,11 @@ function isPlainObject(v: unknown): v is Record<string, unknown> {
     return v != null && typeof v === "object" && !Array.isArray(v);
 }
 
+/** JSONB often stores explicit null for omitted optional strings; summaries use undefined-only optionals. */
+function queueSummaryOptionalString(v: string | null | undefined): string | undefined {
+    return v ?? undefined;
+}
+
 function getStoredQueueDefinitionVersion(raw: unknown): number | null {
     if (!isPlainObject(raw)) return null;
     const v = raw.version;
@@ -1602,7 +1607,7 @@ function stubDeferredQueueSummary(q: QueueConfig, def: QueueDefinitionV1): Queue
     return {
         key: q.key,
         label: q.label,
-        description: q.description,
+        description: queueSummaryOptionalString(q.description),
         entity_type: et,
         priority: q.priority ?? "standard",
         display: q.display ?? "list",
@@ -1688,7 +1693,7 @@ export async function getWorkUnitQueueSummaries(params: {
         const summaries: QueueSummary[] = def.queues.map((q) => ({
             key: q.key,
             label: q.label,
-            description: q.description,
+            description: queueSummaryOptionalString(q.description),
             entity_type: et,
             priority: q.priority ?? "standard",
             display: q.display ?? "list",
@@ -1791,7 +1796,7 @@ export async function getWorkUnitQueueSummaries(params: {
                     {
                         key: q.key,
                         label: q.label,
-                        description: q.description,
+                        description: queueSummaryOptionalString(q.description),
                         entity_type: def.entity_type,
                         priority: q.priority ?? "standard",
                         display: q.display ?? "list",
@@ -1830,7 +1835,7 @@ export async function getWorkUnitQueueSummaries(params: {
                 {
                     key: q.key,
                     label: q.label,
-                    description: q.description,
+                    description: queueSummaryOptionalString(q.description),
                     entity_type: def.entity_type,
                     priority: q.priority ?? "standard",
                     display: q.display ?? "list",
@@ -1856,7 +1861,7 @@ export async function getWorkUnitQueueSummaries(params: {
                     {
                         key: q.key,
                         label: q.label,
-                        description: q.description,
+                        description: queueSummaryOptionalString(q.description),
                         entity_type: def.entity_type,
                         priority: q.priority ?? "standard",
                         display: q.display ?? "list",
@@ -1898,7 +1903,7 @@ export async function getWorkUnitQueueSummaries(params: {
                     {
                         key: q.key,
                         label: q.label,
-                        description: q.description,
+                        description: queueSummaryOptionalString(q.description),
                         entity_type: def.entity_type,
                         priority: q.priority ?? "standard",
                         display: q.display ?? "list",
@@ -1932,7 +1937,7 @@ export async function getWorkUnitQueueSummaries(params: {
                 {
                     key: q.key,
                     label: q.label,
-                    description: q.description,
+                    description: queueSummaryOptionalString(q.description),
                     entity_type: def.entity_type,
                     priority: q.priority ?? "standard",
                     display: q.display ?? "list",
@@ -1965,7 +1970,7 @@ export async function getWorkUnitQueueSummaries(params: {
                 {
                     key: q.key,
                     label: q.label,
-                    description: q.description,
+                    description: queueSummaryOptionalString(q.description),
                     entity_type: def.entity_type,
                     priority: q.priority ?? "standard",
                     display: q.display ?? "list",
@@ -2018,7 +2023,7 @@ export async function getWorkUnitQueueSummaries(params: {
             {
                 key: q.key,
                 label: q.label,
-                description: q.description,
+                description: queueSummaryOptionalString(q.description),
                 entity_type: def.entity_type,
                 priority: q.priority ?? "standard",
                 display: q.display ?? "list",
@@ -2273,7 +2278,7 @@ export async function getWorkUnitQueueItems(params: {
                 queue: {
                     key: q.key,
                     label: q.label,
-                    description: q.description,
+                    description: queueSummaryOptionalString(q.description),
                     entity_type: def.entity_type,
                     priority: q.priority ?? "standard",
                     display: q.display ?? "list",
@@ -2329,7 +2334,7 @@ export async function getWorkUnitQueueItems(params: {
                     queue: {
                         key: q.key,
                         label: q.label,
-                        description: q.description,
+                        description: queueSummaryOptionalString(q.description),
                         entity_type: def.entity_type,
                         priority: q.priority ?? "standard",
                         display: q.display ?? "list",
@@ -2383,7 +2388,7 @@ export async function getWorkUnitQueueItems(params: {
                 queue: {
                     key: q.key,
                     label: q.label,
-                    description: q.description,
+                    description: queueSummaryOptionalString(q.description),
                     entity_type: def.entity_type,
                     priority: q.priority ?? "standard",
                     display: q.display ?? "list",
@@ -2494,7 +2499,7 @@ export async function getWorkUnitQueueItems(params: {
                 queue: {
                     key: q.key,
                     label: q.label,
-                    description: q.description,
+                    description: queueSummaryOptionalString(q.description),
                     entity_type: def.entity_type,
                     priority: q.priority ?? "standard",
                     display: q.display ?? "list",
@@ -2567,7 +2572,7 @@ export async function getWorkUnitQueueItems(params: {
                 queue: {
                     key: q.key,
                     label: q.label,
-                    description: q.description,
+                    description: queueSummaryOptionalString(q.description),
                     entity_type: def.entity_type,
                     priority: q.priority ?? "standard",
                     display: q.display ?? "list",
@@ -2644,7 +2649,7 @@ export async function getWorkUnitQueueItems(params: {
             queue: {
                 key: q.key,
                 label: q.label,
-                description: q.description,
+                description: queueSummaryOptionalString(q.description),
                 entity_type: def.entity_type,
                 priority: q.priority ?? "standard",
                 display: q.display ?? "list",

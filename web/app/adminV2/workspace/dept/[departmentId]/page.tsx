@@ -986,6 +986,13 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             </div>
                         </li>
                     ) : null}
+                    {!deptAttentionBucketsLoading && !deptAttentionBucketsError && sortedDeptAttentionBuckets.length === 0 ? (
+                        <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
+                            <div className="rounded-lg border border-admin-border bg-white/50 px-3 py-3 text-xs text-alloy-midnight/60">
+                                No Needs Attention types configured.
+                            </div>
+                        </li>
+                    ) : null}
                     {sortedDeptAttentionBuckets.map((b) => {
                         const drillWuId =
                             needsAttentionSummary.needsAttentionWorkUnitId ?? needsAttentionSummary.targetWuId;

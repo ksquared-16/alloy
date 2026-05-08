@@ -4,7 +4,9 @@ import { validateFormPayload, type FormPayload } from "@/lib/forms/validateSubmi
 import { validateFormSchema } from "@/lib/forms/schema";
 import { normalizeValidationErrors } from "@/lib/forms/validateSubmission";
 import { ZodError } from "zod";
-import { resolvePublicFormLinkByToken } from "@/lib/public/forms/resolvePublicFormLink";
+import { resolvePublicFormEmbedContext } from "@/lib/public/forms/resolvePublicFormEmbedContext";
+import { verifySubmissionBelongsToPublicEmbed } from "@/lib/public/forms/publicEmbedSubmissionGuard";
+import { advancePacketSessionAfterSubmit } from "@/lib/forms/packets/formPacketService";
 import { isEmbedOriginAllowed, requestEmbedOrigin } from "@/lib/public/forms/embedOrigin";
 import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
 import { hashClientIp } from "@/lib/public/forms/clientIpHash";
@@ -14,6 +16,7 @@ import { applyFormIntakeSafe } from "@/lib/forms/intake/applyFormIntakeSafe";
 import { buildFormIntakeMetaFromPayload } from "@/lib/forms/intake/buildFormIntakeMetaFromPayload";
 import { persistFormSubmissionSignatures } from "@/lib/forms/signatures/persistFormSubmissionSignatures";
 import { emitFormSignedSafe, emitFormSubmittedSafe } from "@/lib/forms/workflow/formSubmissionEvents";
+import { applyReadOnlyBaselineToPayload } from "@/lib/forms/readOnlyFormPayload";
 
 const UUID_RE =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -42,7 +45,7 @@ export async function POST(
     if (!token.trim()) return publicErr("Missing token", 400);
 
     const supabase = createServiceRoleClient();
-    const resolved = await resolvePublicFormLinkByToken(supabase, token);
+    const resolved = await resolvePublicFormEmbedContext(supabase, token);
     if (!resolved.ok) {
         const codeMap = { NOT_FOUND: 404, INACTIVE: 403, EXPIRED: 403, NO_PUBLISHED_VERSION: 409 };
         return publicErr(resolved.error.message, codeMap[resolved.error.code] ?? 400, { code: resolved.error.code });
@@ -52,6 +55,14 @@ export async function POST(
     const origin = requestEmbedOrigin(request);
     if (!isEmbedOriginAllowed(origin, ctx.allowedEmbedOrigins)) {
         return publicErr("Origin not allowed for this form embed", 403, { code: "ORIGIN_FORBIDDEN" });
+    }
+
+    if (ctx.packetTerminal) {
+        return publicErr("Packet already completed", 409, { code: "PACKET_COMPLETE" });
+    }
+
+    if (ctx.schemaJson == null) {
+        return publicErr("No form schema available", 409);
     }
 
     let body: Record<string, unknown> = {};
@@ -76,16 +87,10 @@ export async function POST(
               )
             : undefined;
 
-    const { data: existing, error: loadErr } = await supabase
-        .from("form_submissions")
-        .select("*")
-        .eq("id", submissionId)
-        .eq("org_id", ctx.orgId)
-        .maybeSingle();
+    const gate = await verifySubmissionBelongsToPublicEmbed(supabase, ctx, submissionId);
+    if (!gate.ok) return publicErr(gate.message, gate.status);
 
-    if (loadErr) return publicErr(loadErr.message, 500);
-    if (!existing) return publicErr("Not found", 404);
-
+    const existing = gate.row;
     const sub = existing as {
         status: string;
         created_via_public_link_id: string | null;
@@ -97,14 +102,8 @@ export async function POST(
         opportunity_id: string | null;
     };
 
-    if (sub.created_via_public_link_id !== ctx.linkId) return publicErr("Not found", 404);
     if (sub.status !== "draft") {
         return publicErr("Only draft submissions can be submitted", 409, { code: "NOT_DRAFT" });
-    }
-    if (sub.form_definition_version_id !== ctx.formDefinitionVersionId) {
-        return publicErr("Submission version does not match current published link target", 409, {
-            code: "VERSION_MISMATCH",
-        });
     }
 
     const { data: ver } = await supabase
@@ -138,10 +137,12 @@ export async function POST(
         return publicErr("Invalid submission payload", 400, { validation_errors: validated.errors });
     }
 
+    const guardedValues = applyReadOnlyBaselineToPayload(validated.schema, validated.payload, sub.payload as FormPayload);
+
     const ipHash = hashClientIp(request);
     let finalPayload: FormPayload = {
-        ...validated.payload,
-        meta: mergePublicSubmissionMeta(validated.payload.meta as Record<string, unknown> | undefined, ipHash),
+        ...guardedValues,
+        meta: mergePublicSubmissionMeta(guardedValues.meta as Record<string, unknown> | undefined, ipHash),
     };
 
     let personId = sub.person_id;
@@ -150,6 +151,13 @@ export async function POST(
     let opportunityId = sub.opportunity_id;
 
     const metaRecord = ctx.linkMetadata as Record<string, unknown> | undefined;
+    const launchMode = typeof metaRecord?.form_context_mode === "string" ? metaRecord.form_context_mode.trim() : "";
+    const isExplicitEntityLaunch =
+        launchMode === "existing_record" ||
+        (launchMode === "packet" &&
+            typeof metaRecord?.source_entity_type === "string" &&
+            typeof metaRecord?.source_entity_id === "string");
+
     if (linkRequiresLeadCapture(metaRecord)) {
         const built = buildFormIntakeMetaFromPayload({
             values: finalPayload.values as Record<string, unknown>,
@@ -218,7 +226,7 @@ export async function POST(
                 finalPayload = { ...finalPayload, meta: cleanedMeta };
             }
         }
-    } else {
+    } else if (!isExplicitEntityLaunch) {
         finalPayload = {
             ...finalPayload,
             meta: {
@@ -226,6 +234,17 @@ export async function POST(
                 intake_resolution_path: "skipped_intake_disabled",
                 intake_skip_reason:
                     "This public link does not have lead_capture / intake enabled on its metadata — CRM intake did not run.",
+            },
+        };
+    } else {
+        finalPayload = {
+            ...finalPayload,
+            meta: {
+                ...((finalPayload.meta ?? {}) as Record<string, unknown>),
+                intake_resolution_path: "existing_record_launch",
+                intake_match_strategy: "launch_context",
+                intake_match_confidence: "explicit",
+                intake_needs_review: false,
             },
         };
     }
@@ -280,7 +299,23 @@ export async function POST(
         await emitFormSignedSafe(submittedRow as Parameters<typeof emitFormSignedSafe>[0]);
     }
 
+    const adv = await advancePacketSessionAfterSubmit(
+        supabase,
+        ctx.orgId,
+        submissionId,
+        (finalPayload.values ?? {}) as Record<string, unknown>
+    );
+    if (adv.error) {
+        console.error("[public submit] packet advance failed:", adv.error.message);
+    }
+
+    const packetExtras: Record<string, unknown> = {};
+    if (adv.result) {
+        packetExtras.packet_complete = adv.result.packet_complete;
+        packetExtras.next_form_available = adv.result.next_form_available;
+    }
+
     const { org_id: _o, ...rest } = submittedRow;
     void _o;
-    return publicOk(rest);
+    return publicOk({ ...rest, ...packetExtras });
 }

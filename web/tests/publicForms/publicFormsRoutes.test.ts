@@ -13,6 +13,29 @@ const validSchema = {
 const mockResolve = vi.fn();
 const mockHydrate = vi.fn();
 
+const CUSTOMER_ID_FROM_MEMBER = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+
+const { lastInsertRef, insertSubmission } = vi.hoisted(() => {
+    const lastInsertRef = { current: null as Record<string, unknown> | null };
+    const insertSubmission = vi.fn(async () => {
+        const ins = lastInsertRef.current;
+        return {
+            data: {
+                id: "33333333-3333-4333-8333-333333333333",
+                status: "draft",
+                payload: ins?.payload ?? { values: {} },
+                form_definition_version_id: "22222222-2222-4222-8222-222222222222",
+                person_id: ins?.person_id ?? null,
+                customer_id: ins?.customer_id ?? null,
+                customer_member_id: ins?.customer_member_id ?? null,
+                opportunity_id: ins?.opportunity_id ?? null,
+            },
+            error: null,
+        };
+    });
+    return { lastInsertRef, insertSubmission };
+});
+
 vi.mock("@/lib/public/forms/resolvePublicFormLink", () => ({
     resolvePublicFormLinkByToken: (...args: unknown[]) => mockResolve(...args),
 }));
@@ -21,24 +44,45 @@ vi.mock("@/lib/public/forms/hydratePublicFormSelectOptions", () => ({
     hydrateSelectOptionsForSchema: (...args: unknown[]) => mockHydrate(...args),
 }));
 
-const insertSubmission = vi.fn(async () => ({
-    data: {
-        id: "33333333-3333-4333-8333-333333333333",
-        status: "draft",
-        payload: { values: {} },
-        form_definition_version_id: "22222222-2222-4222-8222-222222222222",
-    },
-    error: null,
-}));
-
 vi.mock("@/lib/supabase/serverServiceClient", () => ({
     createServiceRoleClient: vi.fn(() => ({
         from: vi.fn((table: string) => {
             if (table === "form_submissions") {
                 return {
-                    insert: () => ({
-                        select: () => ({
-                            single: insertSubmission,
+                    insert: (row: Record<string, unknown>) => {
+                        lastInsertRef.current = row;
+                        return {
+                            select: () => ({
+                                single: insertSubmission,
+                            }),
+                        };
+                    },
+                };
+            }
+            if (table === "customer_members") {
+                return {
+                    select: () => ({
+                        eq: () => ({
+                            eq: () => ({
+                                maybeSingle: async () => ({
+                                    data: { customer_id: CUSTOMER_ID_FROM_MEMBER },
+                                    error: null,
+                                }),
+                            }),
+                        }),
+                    }),
+                };
+            }
+            if (table === "form_definitions") {
+                return {
+                    select: () => ({
+                        eq: () => ({
+                            eq: () => ({
+                                maybeSingle: async () => ({
+                                    data: { metadata: {} },
+                                    error: null,
+                                }),
+                            }),
                         }),
                     }),
                 };
@@ -71,6 +115,7 @@ function resolvedValue(allowed: string[] | null) {
 describe("public forms routes", () => {
     beforeEach(() => {
         vi.stubEnv("SUPABASE_SERVICE_ROLE_KEY", "test-key");
+        lastInsertRef.current = null;
         mockResolve.mockResolvedValue(resolvedValue([]));
         mockHydrate.mockResolvedValue({
             option_values_by_field_id: {},
@@ -180,5 +225,37 @@ describe("public forms routes", () => {
         const j = (await res.json()) as { ok: boolean; data?: { id: string } };
         expect(j.ok).toBe(true);
         expect(j.data?.id).toBeTruthy();
+    });
+
+    it("POST submissions seeds CRM FKs from existing_record customer_member link metadata", async () => {
+        const mid = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+        mockResolve.mockResolvedValueOnce({
+            ok: true as const,
+            value: {
+                ...resolvedValue(["https://allowed.example"]).value,
+                linkMetadata: {
+                    form_context_mode: "existing_record",
+                    source_entity_type: "customer_member",
+                    source_entity_id: mid,
+                },
+            },
+        });
+        const res = await submissionsPost(
+            new NextRequest("http://localhost/x", {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Origin: "https://allowed.example" },
+                body: JSON.stringify({ payload: { values: {} } }),
+            }),
+            { params: Promise.resolve({ token: "t" }) }
+        );
+        expect(res.status).toBe(201);
+        expect(lastInsertRef.current?.customer_member_id).toBe(mid);
+        expect(lastInsertRef.current?.customer_id).toBe(CUSTOMER_ID_FROM_MEMBER);
+        const j = (await res.json()) as {
+            ok: boolean;
+            data?: { customer_member_id?: string | null; customer_id?: string | null };
+        };
+        expect(j.data?.customer_member_id).toBe(mid);
+        expect(j.data?.customer_id).toBe(CUSTOMER_ID_FROM_MEMBER);
     });
 });

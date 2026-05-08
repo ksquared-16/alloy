@@ -33,6 +33,8 @@ import {
     buildLinkageReviewCalloutReasons,
     submissionDetailLinkageCalloutVisible,
 } from "@/lib/forms/submissionLinkageReviewUx";
+import { effectiveManualLinkUuid } from "@/lib/admin/forms/crmEntitySearchShared";
+import CrmEntitySearchPicker from "@/components/forms/admin/CrmEntitySearchPicker";
 
 type LinkedDoc = {
     role: string;
@@ -122,6 +124,10 @@ export default function FormSubmissionDetailClient() {
     const [manualCustomer, setManualCustomer] = useState("");
     const [manualMember, setManualMember] = useState("");
     const [manualOpp, setManualOpp] = useState("");
+    const [pickPerson, setPickPerson] = useState<{ id: string; label: string } | null>(null);
+    const [pickCustomer, setPickCustomer] = useState<{ id: string; label: string } | null>(null);
+    const [pickMember, setPickMember] = useState<{ id: string; label: string } | null>(null);
+    const [pickOpp, setPickOpp] = useState<{ id: string; label: string } | null>(null);
 
     const load = useCallback(async () => {
         if (!submissionId) return;
@@ -143,6 +149,17 @@ export default function FormSubmissionDetailClient() {
     useEffect(() => {
         void load();
     }, [load]);
+
+    useEffect(() => {
+        setPickPerson(null);
+        setPickCustomer(null);
+        setPickMember(null);
+        setPickOpp(null);
+        setManualPerson("");
+        setManualCustomer("");
+        setManualMember("");
+        setManualOpp("");
+    }, [submissionId]);
 
     const confirmLinkage = async () => {
         if (!submissionId) return;
@@ -168,10 +185,10 @@ export default function FormSubmissionDetailClient() {
         setManualErr(null);
         try {
             const body: Record<string, unknown> = {};
-            const p = manualPerson.trim();
-            const c = manualCustomer.trim();
-            const m = manualMember.trim();
-            const o = manualOpp.trim();
+            const p = effectiveManualLinkUuid(manualPerson.trim(), pickPerson?.id);
+            const c = effectiveManualLinkUuid(manualCustomer.trim(), pickCustomer?.id);
+            const m = effectiveManualLinkUuid(manualMember.trim(), pickMember?.id);
+            const o = effectiveManualLinkUuid(manualOpp.trim(), pickOpp?.id);
             if (p) body.person_id = p;
             if (c) body.customer_id = c;
             if (m) body.customer_member_id = m;
@@ -187,6 +204,10 @@ export default function FormSubmissionDetailClient() {
             setManualCustomer("");
             setManualMember("");
             setManualOpp("");
+            setPickPerson(null);
+            setPickCustomer(null);
+            setPickMember(null);
+            setPickOpp(null);
             void load();
         } catch (e) {
             setManualErr((e as Error).message);
@@ -704,7 +725,8 @@ export default function FormSubmissionDetailClient() {
                                     <p className="text-sm font-medium text-[#31394d]">Correct linked records</p>
                                     <p className="mt-1 text-sm leading-relaxed text-[#59678b]">
                                         Use this if the submission linked to the wrong person, customer, child member, or
-                                        opportunity. Paste the correct CRM record IDs if you already know them.
+                                        opportunity. Search below (org-scoped), then apply. If you already have UUIDs, use
+                                        Advanced paste — pasted IDs override search picks for that slot.
                                     </p>
                                     <p className="mt-2 text-sm leading-relaxed text-[#59678b]">
                                         If <strong className="font-medium text-[#31394d]">no existing CRM row</strong> is
@@ -718,15 +740,49 @@ export default function FormSubmissionDetailClient() {
 
                                     {canMutate ? (
                                         <>
-                                            {/* TODO: Replace UUID paste with a searchable entity picker when a scoped admin search API exists (safe org filters). */}
-                                            <details className="mt-3 rounded-md border border-dashed border-[#cfd6e6] bg-[#fafbfd] px-3 py-2">
+                                            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                                                <CrmEntitySearchPicker
+                                                    label="Person"
+                                                    entityType="person"
+                                                    picked={pickPerson}
+                                                    onPick={(h) => setPickPerson({ id: h.id, label: h.label })}
+                                                    onClear={() => setPickPerson(null)}
+                                                    disabled={manualBusy}
+                                                />
+                                                <CrmEntitySearchPicker
+                                                    label="Customer (household)"
+                                                    entityType="customer"
+                                                    picked={pickCustomer}
+                                                    onPick={(h) => setPickCustomer({ id: h.id, label: h.label })}
+                                                    onClear={() => setPickCustomer(null)}
+                                                    disabled={manualBusy}
+                                                />
+                                                <CrmEntitySearchPicker
+                                                    label="Customer member (child)"
+                                                    entityType="customer_member"
+                                                    picked={pickMember}
+                                                    onPick={(h) => setPickMember({ id: h.id, label: h.label })}
+                                                    onClear={() => setPickMember(null)}
+                                                    disabled={manualBusy}
+                                                />
+                                                <CrmEntitySearchPicker
+                                                    label="Opportunity"
+                                                    entityType="opportunity"
+                                                    picked={pickOpp}
+                                                    onPick={(h) => setPickOpp({ id: h.id, label: h.label })}
+                                                    onClear={() => setPickOpp(null)}
+                                                    disabled={manualBusy}
+                                                />
+                                            </div>
+
+                                            <details className="mt-4 rounded-md border border-dashed border-[#cfd6e6] bg-[#fafbfd] px-3 py-2">
                                                 <summary className="cursor-pointer text-sm font-medium text-[#00458C]">
                                                     Advanced — manual CRM record IDs (UUID paste)
                                                 </summary>
                                                 <p className="mt-2 text-xs text-[#59678b]">
-                                                    For fields you want to change, paste the UUID from the CRM record URL or
-                                                    drawer. Leave blank to keep the current link. Clearing a link still
-                                                    requires sending{" "}
+                                                    Overrides search selection for the same row when this field is non-empty.
+                                                    Leave blank to keep the current link (or use search pick only). Clearing a
+                                                    link still requires sending{" "}
                                                     <code className="font-mono text-[11px]">null</code> via the API.
                                                 </p>
                                                 <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -772,19 +828,20 @@ export default function FormSubmissionDetailClient() {
                                                         />
                                                     </label>
                                                 </div>
-                                                {manualErr ? <p className="mt-2 text-sm text-red-700">{manualErr}</p> : null}
-                                                <div className="mt-3 flex flex-wrap gap-2">
-                                                    <SecondaryButton
-                                                        type="button"
-                                                        className="!px-3 !py-2 text-sm"
-                                                        disabled={manualBusy}
-                                                        onClick={() => void applyManualLinks()}
-                                                        data-testid="apply-manual-links"
-                                                    >
-                                                        {manualBusy ? "Applying…" : "Apply corrected CRM links"}
-                                                    </SecondaryButton>
-                                                </div>
                                             </details>
+
+                                            {manualErr ? <p className="mt-3 text-sm text-red-700">{manualErr}</p> : null}
+                                            <div className="mt-3 flex flex-wrap gap-2">
+                                                <SecondaryButton
+                                                    type="button"
+                                                    className="!px-3 !py-2 text-sm"
+                                                    disabled={manualBusy}
+                                                    onClick={() => void applyManualLinks()}
+                                                    data-testid="apply-manual-links"
+                                                >
+                                                    {manualBusy ? "Applying…" : "Apply corrected CRM links"}
+                                                </SecondaryButton>
+                                            </div>
                                         </>
                                     ) : (
                                         <p className="mt-3 text-xs text-[#59678b]">

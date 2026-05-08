@@ -3,7 +3,7 @@
  * Stored on `form_public_links.metadata` and stamped onto draft `payload.meta` at public submission create.
  */
 
-export const FORM_CONTEXT_MODES = ["lead_capture", "existing_record", "document_update"] as const;
+export const FORM_CONTEXT_MODES = ["lead_capture", "existing_record", "document_update", "packet"] as const;
 export type FormContextMode = (typeof FORM_CONTEXT_MODES)[number];
 
 const UUID_RE =
@@ -16,6 +16,7 @@ function isFormContextMode(s: string): s is FormContextMode {
 /** Subset of link metadata copied server-side into submission payload.meta (display + future prefill). */
 export type FormLaunchContextFields = {
     form_context_mode?: FormContextMode;
+    packet_definition_id?: string;
     source_entity_type?: string;
     source_entity_id?: string;
     prefill_enabled?: boolean;
@@ -48,6 +49,10 @@ export function stampFormContextFromLinkMetadata(
     if (typeof m.allow_auto_create === "boolean") {
         out.allow_auto_create = m.allow_auto_create;
     }
+    const pid = typeof m.packet_definition_id === "string" ? m.packet_definition_id.trim() : "";
+    if (pid && UUID_RE.test(pid)) {
+        out.packet_definition_id = pid;
+    }
     return out;
 }
 
@@ -75,6 +80,10 @@ export function parseFormLaunchContextFromPayloadMeta(meta: unknown): FormLaunch
     }
     if (typeof m.allow_auto_create === "boolean") {
         out.allow_auto_create = m.allow_auto_create;
+    }
+    const pidp = typeof m.packet_definition_id === "string" ? m.packet_definition_id.trim() : "";
+    if (pidp && UUID_RE.test(pidp)) {
+        out.packet_definition_id = pidp;
     }
     return out;
 }

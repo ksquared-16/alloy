@@ -11,6 +11,8 @@ import { jsonData, jsonError, parseUuidParam } from "@/lib/admin/forms/formsAdmi
 import { hashFormLinkToken } from "@/lib/public/forms/tokenHash";
 import { generateSecureFormLinkPlaintext, buildPublicFormEmbedPath } from "@/lib/admin/forms/formPublicLinkToken";
 import { mergePublicLinkMetadataForCreate } from "@/lib/forms/intake/defaultPublicLinkMetadata";
+import { assertEntityInOrg } from "@/lib/admin/assertEntityInOrg";
+import { parsePrefillFieldMapBody } from "@/lib/forms/prefill/prefillFieldMap";
 
 function deriveEmbedBaseUrl(request: NextRequest): string | null {
     const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
@@ -123,9 +125,44 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         body.metadata && typeof body.metadata === "object" && !Array.isArray(body.metadata)
             ? { ...(body.metadata as Record<string, unknown>) }
             : {};
+    delete clientMetadata.prefill_field_map;
 
     const formRow = form as { key: string };
     const metadata = await mergePublicLinkMetadataForCreate(supabase, formRow.key, clientMetadata);
+
+    const launchRaw = body.launch_from_entity;
+    if (launchRaw !== undefined && launchRaw !== null) {
+        if (typeof launchRaw !== "object" || Array.isArray(launchRaw)) {
+            return jsonError("launch_from_entity must be an object", 400);
+        }
+        const lf = launchRaw as Record<string, unknown>;
+        const entityType = typeof lf.entity_type === "string" ? lf.entity_type.trim() : "";
+        const entityIdRaw = typeof lf.entity_id === "string" ? lf.entity_id.trim() : "";
+        const allowed = new Set(["person", "customer", "customer_member", "opportunity"]);
+        if (!allowed.has(entityType)) {
+            return jsonError("launch_from_entity.entity_type must be person, customer, customer_member, or opportunity", 400);
+        }
+        const entityId = parseUuidParam(entityIdRaw, "launch_from_entity.entity_id");
+        if (entityId instanceof NextResponse) return entityId;
+
+        const ok = await assertEntityInOrg(supabase, ctx.orgId, entityType, entityId);
+        if (!ok) {
+            return jsonError("launch_from_entity record not found in this organization", 400);
+        }
+
+        metadata.form_context_mode = "existing_record";
+        metadata.source_entity_type = entityType;
+        metadata.source_entity_id = entityId;
+        metadata.prefill_enabled = lf.prefill_enabled !== false;
+        metadata.lead_capture = false;
+        metadata.intake = false;
+    }
+
+    if ("prefill_field_map" in body) {
+        const parsed = parsePrefillFieldMapBody(body.prefill_field_map);
+        if (!parsed.ok) return jsonError(parsed.message, 400);
+        if (parsed.map) metadata.prefill_field_map = parsed.map;
+    }
 
     const label =
         typeof body.label === "string"

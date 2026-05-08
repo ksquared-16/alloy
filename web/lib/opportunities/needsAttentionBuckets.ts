@@ -8,8 +8,9 @@ import { isOpportunityAttentionReasonCode } from "@/lib/opportunities/attentionP
  *
  * **Config path:** `metadata.opportunity_attention_rules.needs_attention_buckets` (JSON array).
  *
- * **Precedence:** work unit metadata → department metadata → {@link DEFAULT_NEEDS_ATTENTION_BUCKETS}
- * (see {@link resolveNeedsAttentionBucketsWithPrecedence}).
+ * **Precedence:** work unit metadata → department metadata when `needs_attention_buckets` is present on that layer.
+ * There are **no** vertical-specific platform defaults — only metadata-defined buckets (childcare enrollment demo:
+ * `web/lib/opportunities/enrollmentNeedsAttentionBucketsSeed.ts` + `ensureEnrollmentPipelineWorkUnitV1.ts`).
  *
  * **Counts (department lane):** Prefer {@link bucketCountsFromResolverMatches} over work-unit-scoped
  * resolver matches so totals align with the execution queue; histogram sums ({@link hydrateNeedsAttentionBucketCounts})
@@ -43,52 +44,10 @@ export function opportunityAttentionResultMatchesBucket(
 }
 
 /**
- * Platform-default “Needs attention” bucket catalog for enrollment-style operating consoles.
- * Orgs add buckets (including waiting-on / missing-quote lenses) via `metadata.opportunity_attention_rules.needs_attention_buckets`.
- * Buckets do not change resolver math — only grouping, labels, priority, and icons.
+ * Intentionally **empty**: visible Needs Attention buckets are **never** inferred from platform code.
+ * Orgs / vertical seeds define `metadata.opportunity_attention_rules.needs_attention_buckets`.
  */
-export const DEFAULT_NEEDS_ATTENTION_BUCKETS: readonly NeedsAttentionBucketConfig[] = [
-    {
-        key: "follow_up_overdue",
-        label: "Follow-up overdue",
-        description: null,
-        enabled: true,
-        order: 10,
-        priority: 10,
-        icon: "alert-circle",
-        reason_codes: ["follow_up_date_passed"],
-    },
-    {
-        key: "high_value_stale",
-        label: "High-value stale > 2 days",
-        description: null,
-        enabled: true,
-        order: 20,
-        priority: 20,
-        icon: "flame",
-        reason_codes: ["high_value_stale"],
-    },
-    {
-        key: "quote_follow_up_overdue",
-        label: "Quote follow-up overdue",
-        description: null,
-        enabled: true,
-        order: 30,
-        priority: 30,
-        icon: "receipt-text",
-        reason_codes: ["stale_quote_followup"],
-    },
-    {
-        key: "tour_date_passed",
-        label: "Tour date passed — follow up",
-        description: null,
-        enabled: true,
-        order: 40,
-        priority: 40,
-        icon: "calendar-x",
-        reason_codes: ["tour_date_passed"],
-    },
-];
+export const DEFAULT_NEEDS_ATTENTION_BUCKETS: readonly NeedsAttentionBucketConfig[] = [];
 
 export function compareNeedsAttentionBuckets(
     a: Pick<NeedsAttentionBucketConfig, "priority" | "order" | "label">,
@@ -155,13 +114,15 @@ function DEFAULT_ORDER_FALLBACK(key: string): number {
 }
 
 /**
- * Merge metadata buckets with {@link DEFAULT_NEEDS_ATTENTION_BUCKETS} by key (unknown keys append).
- * When no `needs_attention_buckets` array exists in metadata, returns platform defaults only.
+ * Parsed buckets from metadata only. Requires `opportunity_attention_rules.needs_attention_buckets` to be **present**
+ * (use `[]` for an explicit empty lens list). If the key is omitted, returns **[]** — no platform enrollment fallback.
  */
 export function resolveNeedsAttentionBucketsFromMetadata(metadata: unknown): NeedsAttentionBucketConfig[] {
     const root = attentionRulesRootFromMetadata(metadata);
-    const parsed = root ? parseBucketsArray(root.needs_attention_buckets) : null;
-    if (!parsed?.length) return [...DEFAULT_NEEDS_ATTENTION_BUCKETS];
+    if (!root) return [];
+    if (!Object.prototype.hasOwnProperty.call(root, "needs_attention_buckets")) return [];
+    const parsed = parseBucketsArray(root.needs_attention_buckets);
+    if (!parsed?.length) return [];
 
     const byKey = new Map<string, NeedsAttentionBucketConfig>();
     for (const d of DEFAULT_NEEDS_ATTENTION_BUCKETS) byKey.set(d.key, { ...d });
@@ -174,7 +135,7 @@ export function resolveNeedsAttentionBucketsFromMetadata(metadata: unknown): Nee
 
 /**
  * Pick metadata object that owns `needs_attention_buckets` — **work unit wins** when the key is present
- * (including `[]`), otherwise department, otherwise callers should treat as “no overlay” and use defaults-only path.
+ * (including `[]`), otherwise department. When neither layer defines the key, callers resolve to **no buckets** (not platform defaults).
  */
 export function pickMetadataForNeedsAttentionBuckets(workUnitMetadata: unknown, departmentMetadata: unknown): unknown {
     const wuRoot = attentionRulesRootFromMetadata(workUnitMetadata);
@@ -188,13 +149,14 @@ export function pickMetadataForNeedsAttentionBuckets(workUnitMetadata: unknown, 
     return null;
 }
 
-/** Resolve bucket definitions: WU metadata → department metadata → merged defaults. */
+/** Resolve bucket definitions: WU metadata → department metadata (only when `needs_attention_buckets` exists on that layer). */
 export function resolveNeedsAttentionBucketsWithPrecedence(
     workUnitMetadata: unknown,
     departmentMetadata: unknown,
 ): NeedsAttentionBucketConfig[] {
     const picked = pickMetadataForNeedsAttentionBuckets(workUnitMetadata, departmentMetadata);
-    return resolveNeedsAttentionBucketsFromMetadata(picked ?? {});
+    if (picked == null) return [];
+    return resolveNeedsAttentionBucketsFromMetadata(picked);
 }
 
 export type NeedsAttentionBucketWithCount = NeedsAttentionBucketConfig & { count: number };
