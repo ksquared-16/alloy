@@ -2,6 +2,96 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { LaunchFkStamp } from "@/lib/forms/formLaunchFkDerivation";
 import { loadPublishedFormEnvelope, type PublishedFormEnvelope } from "@/lib/public/forms/loadPublishedFormEnvelope";
 
+/** RFC4122 UUID — align with formLaunchFkDerivation / public routes. */
+const UUID_RE =
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function parseTrustedUuidFk(value: unknown): string | null {
+    if (typeof value !== "string") return null;
+    const t = value.trim();
+    return UUID_RE.test(t) ? t : null;
+}
+
+/**
+ * Packet CRM continuity (A1):
+ * - `form_packet_sessions.crm_snapshot` is the canonical multi-step linkage context for a packet run.
+ * - Draft FKs prefer snapshot columns when set (post-intake or explicit launch); launch metadata fills gaps.
+ * - After each submitted step, non-null submission FKs are merged into the snapshot (server-side only).
+ * Single-form public links are unaffected (no packet → no merge).
+ */
+export function launchFkStampFromCrmSnapshotRecord(crmSnapshot: Record<string, unknown>): LaunchFkStamp {
+    return {
+        person_id: parseTrustedUuidFk(crmSnapshot.person_id),
+        customer_id: parseTrustedUuidFk(crmSnapshot.customer_id),
+        customer_member_id: parseTrustedUuidFk(crmSnapshot.customer_member_id),
+        opportunity_id: parseTrustedUuidFk(crmSnapshot.opportunity_id),
+    };
+}
+
+/** Prefer session snapshot values when present; otherwise use launch-derived FKs. */
+export function mergeLaunchFksPreferringSessionCrmSnapshot(
+    launchFks: LaunchFkStamp,
+    crmSnapshot: Record<string, unknown>
+): LaunchFkStamp {
+    const s = launchFkStampFromCrmSnapshotRecord(crmSnapshot);
+    return {
+        person_id: s.person_id ?? launchFks.person_id,
+        customer_id: s.customer_id ?? launchFks.customer_id,
+        customer_member_id: s.customer_member_id ?? launchFks.customer_member_id,
+        opportunity_id: s.opportunity_id ?? launchFks.opportunity_id,
+    };
+}
+
+/** Merge only non-null FKs from a submitted step into the stored snapshot (does not clear keys). */
+export function mergeNonNullSubmissionFksIntoCrmSnapshot(
+    existing: Record<string, unknown>,
+    fks: LaunchFkStamp
+): Record<string, unknown> {
+    const out = { ...existing };
+    if (fks.person_id) out.person_id = fks.person_id;
+    if (fks.customer_id) out.customer_id = fks.customer_id;
+    if (fks.customer_member_id) out.customer_member_id = fks.customer_member_id;
+    if (fks.opportunity_id) out.opportunity_id = fks.opportunity_id;
+    return out;
+}
+
+export async function syncPacketSessionCrmSnapshotFromSubmission(
+    supabase: SupabaseClient,
+    orgId: string,
+    packetSessionId: string,
+    fks: LaunchFkStamp
+): Promise<{ error: Error | null }> {
+    const { data: sess, error: loadErr } = await supabase
+        .from("form_packet_sessions")
+        .select("crm_snapshot, status")
+        .eq("id", packetSessionId)
+        .eq("org_id", orgId)
+        .maybeSingle();
+
+    if (loadErr) return { error: new Error(loadErr.message) };
+    const row = sess as { crm_snapshot?: unknown; status?: string } | null;
+    if (!row || row.status !== "in_progress") {
+        return { error: null };
+    }
+
+    const existing = (row.crm_snapshot && typeof row.crm_snapshot === "object" && !Array.isArray(row.crm_snapshot)
+        ? row.crm_snapshot
+        : {}) as Record<string, unknown>;
+    const merged = mergeNonNullSubmissionFksIntoCrmSnapshot(existing, fks);
+
+    const { error: upErr } = await supabase
+        .from("form_packet_sessions")
+        .update({
+            crm_snapshot: merged,
+            updated_at: new Date().toISOString(),
+        })
+        .eq("id", packetSessionId)
+        .eq("org_id", orgId)
+        .eq("status", "in_progress");
+
+    return { error: upErr ? new Error(upErr.message) : null };
+}
+
 export type PacketDefinitionItemRow = {
     id: string;
     sequence_index: number;

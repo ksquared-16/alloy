@@ -49,7 +49,7 @@ export function formVersionHasDocumentMapping(pdfMappingJson: unknown): boolean 
 
 /** Events emitted into `workflow_events` for automations (product behavior; not a live query). */
 export const FORM_WORKFLOW_EVENTS_SUMMARY =
-    "Alloy emits workflow signals when forms move through their lifecycle — for example when a form is submitted, when signatures are captured (if used), and when a linked document is generated. Your automations can react to those events.";
+    "Alloy emits workflow signals when forms move through their lifecycle — for example when a form is submitted, when signatures are captured (if used), when a linked document is generated, and when a multi-step packet completes (`form_packet_completed`). Your automations can react to those events.";
 
 export function resolvePurposeParagraph(
     context: FormOperatorContextMeta | null,

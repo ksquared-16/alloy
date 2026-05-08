@@ -9,7 +9,11 @@ import {
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { fetchEffectiveStatusDefinitions } from "@/lib/admin/statusDefinitionsResolve";
 import { computeOpportunityLifecycleKpis } from "@/lib/workspace/computeOpportunityLifecycleKpis";
-import { resolveOpportunityQueueFromDefinition } from "@/lib/rrs/queue/resolveOpportunityQueue";
+import { applyGrowthOpportunityFiltersToQuery } from "@/lib/rrs/queue/growthOpportunityQueueScope";
+import {
+    isQueueDefinitionV1Opportunity,
+    parseQueueDefinitionV1Strict,
+} from "@/lib/rrs/queue/queueDefinitionV1";
 
 export const dynamic = "force-dynamic";
 
@@ -57,53 +61,34 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ de
         }
 
         if (scopeWu?.queue_definition) {
-            const resolved = await resolveOpportunityQueueFromDefinition(
-                supabase,
-                ctx.orgId,
-                (scopeWu as { queue_definition?: unknown }).queue_definition,
-                dim
-            );
-            if (!resolved.ok) {
-                const status = resolved.code === "INVALID_DEFINITION" ? 400 : 500;
-                return NextResponse.json({ error: resolved.error, code: resolved.code }, { status });
+            const qd = (scopeWu as { queue_definition?: unknown }).queue_definition;
+            const parsed = parseQueueDefinitionV1Strict(qd);
+            if (!parsed.ok) {
+                return NextResponse.json({ error: parsed.error, code: "INVALID_DEFINITION" }, { status: 400 });
             }
-
-            // IMPORTANT: queue interpreter applies a `limit` for list rendering.
-            // KPI counts must reflect the full filtered dataset, not the preview slice.
-            const def = resolved.definition;
-            let q = supabase
-                .from("opportunities")
-                .select("status_key, quote_total, estimated_price_cents, monetary_value_cents")
-                .eq("org_id", ctx.orgId);
-            const f = def.filters ?? {};
-            if (f.status_keys?.length) q = q.in("status_key", f.status_keys);
-            if (f.pipeline_stage_ids?.length) q = q.in("pipeline_stage_id", f.pipeline_stage_ids);
-            if (f.source_keys?.length) q = q.in("source", f.source_keys);
-            if (f.assigned_to?.length) q = q.in("assigned_to", f.assigned_to);
-            if (f.quote_state === "no_positive_quote") q = q.or("quote_total.is.null,quote_total.lte.0");
-            else if (f.quote_state === "has_positive_quote") q = q.gt("quote_total", 0);
-            else if (f.quote_state === "quoted_not_booked") {
-                q = q.gt("quote_total", 0);
-                q = q.not("status_key", "in", "(\"booked\",\"scheduled\")");
-                // Mirror interpreter behavior: also exclude booked pipeline stage when present.
-                const { data: bookedStages } = await supabase
-                    .from("pipeline_stages")
-                    .select("id")
-                    .eq("org_id", ctx.orgId)
-                    .eq("key", "booked");
-                const bookedIds = (bookedStages ?? []).map((r) => (r as { id: string }).id).filter(Boolean);
-                if (bookedIds.length) {
-                    q = q.or(`pipeline_stage_id.is.null,pipeline_stage_id.not.in.("${bookedIds.join('","')}")`);
-                }
+            if (!isQueueDefinitionV1Opportunity(parsed.value)) {
+                return NextResponse.json(
+                    {
+                        error: "queue_definition must be entity_type opportunity for this interpreter",
+                        code: "INVALID_DEFINITION",
+                    },
+                    { status: 400 }
+                );
             }
+            const def = parsed.value;
 
-            if (!scopeCons.impossible) {
-                q = applyRecordScopeConstraintsToQuery(q, scopeCons);
-            }
-
+            // KPI counts must reflect the full filtered dataset (not the Growth interpreter list `limit`).
+            // Filter application is shared with `resolveOpportunityQueueFromDefinition` via
+            // `applyGrowthOpportunityFiltersToQuery` (legacy org-wide scope — no `work_unit_id`).
             let allRows: KpiOppRow[] | null = null;
             let allErr: { message: string } | null = null;
             if (!scopeCons.impossible) {
+                let q = supabase
+                    .from("opportunities")
+                    .select("status_key, quote_total, estimated_price_cents, monetary_value_cents")
+                    .eq("org_id", ctx.orgId);
+                q = applyRecordScopeConstraintsToQuery(q, scopeCons);
+                q = await applyGrowthOpportunityFiltersToQuery(supabase, ctx.orgId, q, def.filters);
                 const res = await q.limit(5000);
                 allRows = res.data as KpiOppRow[] | null;
                 allErr = res.error;

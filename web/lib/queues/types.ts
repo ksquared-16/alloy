@@ -1,4 +1,5 @@
 import type { OperationalTimezoneSource, UserDisplayTimezoneSource } from "@/lib/admin/timezoneContract";
+import type { WorkUnitPlacementQueueDiagnostics } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
 import type { QueueServiceOpportunityNeedsAttentionSemantics } from "@/lib/workspace/opportunityAttentionCountSemantics";
 
 /** Resolved viewer wall clock for queue preview strings (user → org → UTC). */
@@ -55,5 +56,10 @@ export type QueueItemsResult = {
     calendar_meta?: QueueOperationalCalendarMeta;
     /** Echo of the IANA zone used for note/tour preview strings on `items` (devtools / QA). */
     viewer_timezone?: QueueViewerTimezoneMeta;
+    /**
+     * Present when `metadata.placement_priority_v1` resolved **enabled** for this lane (`QueueService` Card 6).
+     * Non-authoritative projection diagnostics — not a persisted snapshot.
+     */
+    placement_projection_diagnostics?: WorkUnitPlacementQueueDiagnostics;
 };
 

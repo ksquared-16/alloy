@@ -31,6 +31,9 @@ import {
 import { resolveOpportunityAttention, type OpportunityAttentionEntityInput } from "@/lib/opportunities/opportunityAttentionResolver";
 import { DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1 } from "@/lib/workspace/opportunityAttentionRules";
 import { buildQueueServiceAttentionSemantics } from "@/lib/workspace/opportunityAttentionCountSemantics";
+import { applyPlacementToOpportunityQueueRows } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
+import type { WorkUnitPlacementQueueDiagnostics } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
+import { resolvePlacementQueueConfig } from "@/lib/orchestration/placement/resolvePlacementQueueConfig";
 
 type JobRowPreview = {
     id: string;
@@ -119,6 +122,51 @@ function findQueueByKey(def: QueueDefinitionV1, queueKey: string): QueueConfig {
         throw new QueueServiceError(`Unknown queue key: ${queueKey}`, 404, "UNKNOWN_QUEUE_KEY");
     }
     return q;
+}
+
+/** Status keys declared on lane filters — passed to placement cohort overlap checks when present. */
+function opportunityQueueStatusKeysAllowed(queue: QueueConfig): string[] | undefined {
+    const keys = new Set<string>();
+    for (const f of queue.filters) {
+        if (f.type === "status" && f.operator === "in") {
+            for (const v of f.values ?? []) {
+                if (typeof v === "string" && v.trim()) keys.add(v.trim());
+            }
+        }
+    }
+    if (keys.size === 0) return undefined;
+    return [...keys];
+}
+
+function attachPlacementToEnrichedOpportunityItems(params: {
+    enrichedRows: Array<Record<string, unknown>>;
+    workUnitId: string;
+    queueKey: string;
+    queueConfig: QueueConfig;
+    departmentMetadata: unknown | null;
+    workUnitMetadata: unknown | null;
+    nowMs: number;
+}): { rows: Array<Record<string, unknown>>; diagnostics: WorkUnitPlacementQueueDiagnostics | null } {
+    const resolved = resolvePlacementQueueConfig({
+        departmentMetadata: params.departmentMetadata,
+        workUnitMetadata: params.workUnitMetadata,
+        queue_key: params.queueKey,
+    });
+    if (resolved.status !== "enabled") {
+        return { rows: params.enrichedRows, diagnostics: null };
+    }
+    const statusKeysAllowed = opportunityQueueStatusKeysAllowed(params.queueConfig);
+    const out = applyPlacementToOpportunityQueueRows({
+        rows: params.enrichedRows,
+        placement: resolved,
+        ctx: {
+            workUnitId: params.workUnitId,
+            queueKey: params.queueKey,
+            nowMs: params.nowMs,
+            statusKeysAllowed,
+        },
+    });
+    return { rows: out.rows, diagnostics: out.diagnostics };
 }
 
 function assertSupportedEntityType(def: QueueDefinitionV1) {
@@ -2310,6 +2358,20 @@ export async function getWorkUnitQueueItems(params: {
     const omitTotal = params.omitTotalCount === true;
     const countSel = omitTotal ? null : queueCountSelect(params.countAccuracy);
 
+    let departmentMetadata: unknown | null = null;
+    if (def.entity_type === "opportunity" && workUnitDepartmentId) {
+        const { data: dRow, error: dErr } = await supabase
+            .from("departments")
+            .select("metadata")
+            .eq("id", workUnitDepartmentId)
+            .eq("org_id", params.orgId)
+            .maybeSingle();
+        if (dErr) {
+            throw new QueueServiceError(dErr.message, 400, "DB_ERROR");
+        }
+        departmentMetadata = (dRow as { metadata?: unknown } | null)?.metadata ?? null;
+    }
+
     if (def.entity_type === "job") {
         const { ops, sort, calendar_meta } = buildJobPlan(q, operationalDay);
 
@@ -2429,17 +2491,6 @@ export async function getWorkUnitQueueItems(params: {
         const effectiveStatusDefs = statusPack.rows;
         const statusDefsCacheHit = statusPack.combinedCacheHit;
 
-        let departmentMetadata: unknown | null = null;
-        if (workUnitDepartmentId) {
-            const { data: dRow } = await supabase
-                .from("departments")
-                .select("metadata")
-                .eq("id", workUnitDepartmentId)
-                .eq("org_id", params.orgId)
-                .maybeSingle();
-            departmentMetadata = (dRow as { metadata?: unknown } | null)?.metadata ?? null;
-        }
-
         const { value: attentionLoadPack, ms: naLoadMs } = await timedBranch(
             loadOpportunityNeedsAttentionRows({
                 supabase,
@@ -2494,6 +2545,15 @@ export async function getWorkUnitQueueItems(params: {
             },
         });
         const enrichment_ms = Date.now() - tEn0;
+        const placementPack = attachPlacementToEnrichedOpportunityItems({
+            enrichedRows: enrichedRows as Array<Record<string, unknown>>,
+            workUnitId: params.workUnitId,
+            queueKey: params.queueKey,
+            queueConfig: q,
+            departmentMetadata,
+            workUnitMetadata,
+            nowMs: refUtc.getTime(),
+        });
         return finalize(
             {
                 queue: {
@@ -2504,11 +2564,12 @@ export async function getWorkUnitQueueItems(params: {
                     priority: q.priority ?? "standard",
                     display: q.display ?? "list",
                 },
-                items: enrichedRows as unknown[],
+                items: placementPack.rows as unknown[],
                 total: matched.length,
                 limit: effectiveLimit,
                 offset: effectiveOffset,
                 opportunity_needs_attention_semantics,
+                ...(placementPack.diagnostics ? { placement_projection_diagnostics: placementPack.diagnostics } : {}),
             },
             {
                 load_def_ms,
@@ -2567,6 +2628,15 @@ export async function getWorkUnitQueueItems(params: {
                 : undefined,
         });
         const enrichment_ms = Date.now() - tEn0;
+        const placementPackOmit = attachPlacementToEnrichedOpportunityItems({
+            enrichedRows: enrichedRows as Array<Record<string, unknown>>,
+            workUnitId: params.workUnitId,
+            queueKey: params.queueKey,
+            queueConfig: q,
+            departmentMetadata,
+            workUnitMetadata,
+            nowMs: refUtc.getTime(),
+        });
         return finalize(
             {
                 queue: {
@@ -2577,12 +2647,13 @@ export async function getWorkUnitQueueItems(params: {
                     priority: q.priority ?? "standard",
                     display: q.display ?? "list",
                 },
-                items: enrichedRows as unknown[],
+                items: placementPackOmit.rows as unknown[],
                 total: 0,
                 limit: effectiveLimit,
                 offset: effectiveOffset,
                 total_omitted: true,
                 ...(calendar_meta ? { calendar_meta } : {}),
+                ...(placementPackOmit.diagnostics ? { placement_projection_diagnostics: placementPackOmit.diagnostics } : {}),
             },
             {
                 load_def_ms,
@@ -2644,6 +2715,16 @@ export async function getWorkUnitQueueItems(params: {
     });
     const enrichment_ms = Date.now() - tEn0;
 
+    const placementPackFull = attachPlacementToEnrichedOpportunityItems({
+        enrichedRows: enrichedRows as Array<Record<string, unknown>>,
+        workUnitId: params.workUnitId,
+        queueKey: params.queueKey,
+        queueConfig: q,
+        departmentMetadata,
+        workUnitMetadata,
+        nowMs: refUtc.getTime(),
+    });
+
     return finalize(
         {
             queue: {
@@ -2654,11 +2735,12 @@ export async function getWorkUnitQueueItems(params: {
                 priority: q.priority ?? "standard",
                 display: q.display ?? "list",
             },
-            items: enrichedRows as unknown[],
+            items: placementPackFull.rows as unknown[],
             total: count ?? 0,
             limit: effectiveLimit,
             offset: effectiveOffset,
             ...(calendar_meta ? { calendar_meta } : {}),
+            ...(placementPackFull.diagnostics ? { placement_projection_diagnostics: placementPackFull.diagnostics } : {}),
         },
         {
             load_def_ms,
@@ -2684,6 +2766,8 @@ export const __testing = {
     opportunityNeedsAttention,
     findQueueByKey,
     assertSupportedEntityType,
+    opportunityQueueStatusKeysAllowed,
+    attachPlacementToEnrichedOpportunityItems,
     opportunityProgramLineFromMetadata,
     isActiveChildCustomerMemberRow,
     buildCrmCompactStructuredLinesFromCustomerMembers,

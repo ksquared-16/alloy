@@ -46,6 +46,22 @@ export type QueueItemQuickActionVm = {
 export type QueueItemWaitStatusVm = "safe" | "approaching" | "breached";
 
 /**
+ * Placement priority preview from QueueService `_placement_priority` (projection only — not rank, not global order).
+ */
+export type QueueRowPlacementPriorityVm = {
+  /** Human bucket label from evaluator snapshot (e.g. preset label_key resolution). */
+  cohortLabel: string;
+  /** Up to two `reasons[].label` strings from the evaluator. */
+  reasonLines: string[];
+  /** Up to two warning messages (unknown facts, etc.). */
+  warningLines: string[];
+  /** Server shadow mode — list order may not match placement ordering. */
+  shadowMode: boolean;
+  evaluateError?: boolean;
+  errorMessage?: string;
+};
+
+/**
  * Stable semantic slots for CRM-compact queue rows — config can target these keys
  * without reshaping the whole `QueueItemVm`.
  */
@@ -221,6 +237,8 @@ export type QueueItemVm = {
    * instead of inferring layout from title/subtitle/meta alone.
    */
   semanticCrmCompact?: CrmCompactRowSemanticSlots;
+  /** Optional placement cohort preview — never a global rank (Card 7). */
+  placementPriority?: QueueRowPlacementPriorityVm;
 };
 
 /**
@@ -268,6 +286,16 @@ export type QueueVm = {
   rollupExamples?: QueueRollupExampleVm[];
   /** Work-unit lane: subtle sort / priority caption shown above the item list */
   sortCaption?: string;
+  /**
+   * When placement projection is active for this lane (`placement_projection_diagnostics` on queue items response).
+   * Explains preview vs sort — not interactive.
+   */
+  placementProjectionHint?: string;
+  /** Merged `placement_priority_v1.display` when placement is enabled — gates chip / lane hint (Card 8). */
+  placementDisplay?: {
+    show_bucket_chip?: boolean;
+    show_sort_hint?: boolean;
+  } | null;
   /**
    * Work-unit lane: `groupKey` → header label (emoji optional). UI appends “ (count)”.
    */

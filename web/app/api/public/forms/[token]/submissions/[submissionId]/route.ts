@@ -1,7 +1,8 @@
 import { NextRequest } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { validateFormPayload } from "@/lib/forms/validateSubmission";
-import { validateFormSchema } from "@/lib/forms/schema";
+import { validateFormSchema, type FormSchemaV1 } from "@/lib/forms/schema";
+import { filterPayloadValuesToSchemaFields } from "@/lib/forms/filterPayloadValuesToSchema";
 import { normalizeValidationErrors } from "@/lib/forms/validateSubmission";
 import { ZodError } from "zod";
 import { resolvePublicFormEmbedContext } from "@/lib/public/forms/resolvePublicFormEmbedContext";
@@ -150,8 +151,9 @@ export async function PATCH(
         .maybeSingle();
     const schemaJson = (ver as { schema_json?: unknown } | null)?.schema_json ?? ctx.schemaJson;
 
+    let schema: FormSchemaV1;
     try {
-        validateFormSchema(schemaJson);
+        schema = validateFormSchema(schemaJson);
     } catch (e) {
         if (e instanceof ZodError) {
             return publicErr("Invalid published schema", 500, { validation_errors: normalizeValidationErrors(e) });
@@ -159,9 +161,17 @@ export async function PATCH(
         throw e;
     }
 
+    let payloadForValidate: Record<string, unknown> = payload;
+    if (ctx.packet) {
+        payloadForValidate = {
+            ...payload,
+            values: filterPayloadValuesToSchemaFields(schema, (payload.values ?? {}) as Record<string, unknown>),
+        };
+    }
+
     const validated = validateFormPayload({
         schemaJson,
-        payload,
+        payload: payloadForValidate,
         mode: "draft",
         optionValuesByFieldId,
     });

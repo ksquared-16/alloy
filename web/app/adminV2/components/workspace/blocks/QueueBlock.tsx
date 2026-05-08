@@ -17,6 +17,7 @@ import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
 import { DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS } from "@/lib/ui-v2/queueUiConfig";
 import { normalizePreviewLooseDateTokens } from "@/lib/adminFormatters";
 import { CRM_COMPACT_VALUE_DOT_SEP } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
+import { QueueRowPlacementPriorityStrip } from "@/app/adminV2/components/workspace/blocks/QueueRowPlacementPriorityStrip";
 
 type Props = {
   queue: QueueVm;
@@ -753,6 +754,8 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
   let lastSectionKey: string | undefined;
 
   const showQueueHeader = Boolean(queue.title?.trim());
+  const placementShowBucketChip = queue.placementDisplay?.show_bucket_chip !== false;
+  const placementShowSortHint = queue.placementDisplay?.show_sort_hint !== false;
   return (
     <section
       className="adminv2-ws-dept-qsec adminv2-ws-dept-qsec--primary adminv2-ws-wu-queue-shell"
@@ -775,6 +778,11 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
       {queue.sortCaption ? (
         <p className="adminv2-ws-wu-queue-sort-caption" role="note">
           {queue.sortCaption}
+        </p>
+      ) : null}
+      {placementShowSortHint && queue.placementProjectionHint?.trim() ? (
+        <p className="adminv2-ws-wu-queue-placement-hint" role="note">
+          {queue.placementProjectionHint.trim()}
         </p>
       ) : null}
       <div
@@ -881,6 +889,9 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
                   <div className="adminv2-ws-enrollment-crm-row adminv2-ws-enrollment-crm-row--split" data-enrollment-row-layout="split_actions">
                     <div className="adminv2-ws-enrollment-crm-row__content">
                       <CrmCompactQueuePreview slots={crm} urgencyTier={tier} scanMode />
+                      {item.placementPriority && placementShowBucketChip ? (
+                        <QueueRowPlacementPriorityStrip preview={item.placementPriority} />
+                      ) : null}
                     </div>
                     {rowQuickActions.length ? (
                       <div className="adminv2-ws-enrollment-crm-row__actions" role="group" aria-label="Actions">
@@ -970,6 +981,9 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
                           </li>
                         ))}
                       </ul>
+                    ) : null}
+                    {item.placementPriority && placementShowBucketChip ? (
+                      <QueueRowPlacementPriorityStrip preview={item.placementPriority} />
                     ) : null}
                   </div>
                 )}

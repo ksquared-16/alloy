@@ -10,11 +10,81 @@ type ItemRow = {
     sequence_index: number;
     status: string;
     submitted_at: string | null;
+    created_at: string | null;
+    updated_at: string | null;
+    skip_reason: string | null;
     form_submission_id: string | null;
     form_definition_id: string | null;
     form_name: string | null;
     form_key: string | null;
 };
+
+type SubmissionLite = {
+    id: string;
+    status: string;
+    submitted_at: string | null;
+    person_id: string | null;
+    customer_id: string | null;
+    customer_member_id: string | null;
+    opportunity_id: string | null;
+    payload: Record<string, unknown> | null;
+};
+
+function parseSubmissionPayloadMeta(payload: Record<string, unknown> | null): {
+    intake_needs_review: boolean;
+    intake_review_reason: string | null;
+    intake_resolution_path: string | null;
+    intake_match_strategy: string | null;
+} {
+    if (!payload) {
+        return {
+            intake_needs_review: false,
+            intake_review_reason: null,
+            intake_resolution_path: null,
+            intake_match_strategy: null,
+        };
+    }
+    const meta =
+        payload.meta && typeof payload.meta === "object" && !Array.isArray(payload.meta)
+            ? (payload.meta as Record<string, unknown>)
+            : {};
+    return {
+        intake_needs_review: meta.intake_needs_review === true,
+        intake_review_reason: typeof meta.intake_review_reason === "string" ? meta.intake_review_reason : null,
+        intake_resolution_path: typeof meta.intake_resolution_path === "string" ? meta.intake_resolution_path : null,
+        intake_match_strategy: typeof meta.intake_match_strategy === "string" ? meta.intake_match_strategy : null,
+    };
+}
+
+function hasAnySubmissionFk(sub: SubmissionLite | undefined): boolean {
+    if (!sub) return false;
+    return !!(
+        sub.person_id ||
+        sub.customer_id ||
+        sub.customer_member_id ||
+        sub.opportunity_id
+    );
+}
+
+function JsonPanel({
+    title,
+    subtitle,
+    value,
+}: {
+    title: string;
+    subtitle?: string;
+    value: unknown;
+}) {
+    return (
+        <div className="rounded-lg border border-[#e6e8ec] bg-[#fafbfd] p-3 text-xs text-[#59678b]">
+            <p className="font-medium text-[#31394d]">{title}</p>
+            {subtitle ? <p className="mt-1 text-[11px] leading-snug text-[#59678b]">{subtitle}</p> : null}
+            <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap font-mono text-[11px] text-[#31394d]">
+                {JSON.stringify(value ?? {}, null, 2)}
+            </pre>
+        </div>
+    );
+}
 
 export default async function AdminV2PacketSessionDetailPage({
     params,
@@ -61,7 +131,9 @@ export default async function AdminV2PacketSessionDetailPage({
 
     const { data: items, error: iErr } = await supabase
         .from("form_packet_session_items")
-        .select("id, sequence_index, status, submitted_at, form_submission_id, packet_item_id, skip_reason")
+        .select(
+            "id, sequence_index, status, submitted_at, created_at, updated_at, form_submission_id, packet_item_id, skip_reason"
+        )
         .eq("packet_session_id", packetSessionId)
         .eq("org_id", auth.orgId)
         .order("sequence_index", { ascending: true });
@@ -107,6 +179,9 @@ export default async function AdminV2PacketSessionDetailPage({
             sequence_index: it.sequence_index as number,
             status: it.status as string,
             submitted_at: (it.submitted_at as string | null) ?? null,
+            created_at: (it.created_at as string | null) ?? null,
+            updated_at: (it.updated_at as string | null) ?? null,
+            skip_reason: (it.skip_reason as string | null) ?? null,
             form_submission_id: (it.form_submission_id as string | null) ?? null,
             form_definition_id: fdid,
             form_name: fm?.name ?? null,
@@ -114,10 +189,41 @@ export default async function AdminV2PacketSessionDetailPage({
         };
     });
 
+    const submissionIds = [...new Set(enriched.map((e) => e.form_submission_id).filter(Boolean))] as string[];
+
+    const submissionById: Record<string, SubmissionLite> = {};
+    if (submissionIds.length > 0) {
+        const { data: subs } = await supabase
+            .from("form_submissions")
+            .select("id, status, submitted_at, person_id, customer_id, customer_member_id, opportunity_id, payload")
+            .eq("org_id", auth.orgId)
+            .in("id", submissionIds);
+
+        for (const raw of subs ?? []) {
+            const s = raw as SubmissionLite;
+            submissionById[s.id] = {
+                ...s,
+                payload:
+                    s.payload && typeof s.payload === "object" && !Array.isArray(s.payload)
+                        ? (s.payload as Record<string, unknown>)
+                        : null,
+            };
+        }
+    }
+
     const pktDef = session.form_packet_definitions as { name?: string; key?: string } | { name?: string; key?: string }[] | null;
     const pktName = Array.isArray(pktDef) ? pktDef[0]?.name : pktDef?.name;
 
     const crm = (session.crm_snapshot ?? {}) as Record<string, unknown>;
+    const launchCtx = (session.launch_context ?? {}) as Record<string, unknown>;
+    const sharedVals = (session.shared_values ?? {}) as Record<string, unknown>;
+
+    const totalSteps = enriched.length;
+    const currentSeq = session.current_sequence_index as number;
+    const anyStepNeedsReview = enriched.some((step) => {
+        const sub = step.form_submission_id ? submissionById[step.form_submission_id] : undefined;
+        return parseSubmissionPayloadMeta(sub?.payload ?? null).intake_needs_review;
+    });
 
     return (
         <div className="mx-auto max-w-4xl space-y-6 p-6 text-[#31394d]">
@@ -131,40 +237,134 @@ export default async function AdminV2PacketSessionDetailPage({
                 <h1 className="text-xl font-semibold text-[#0f172a]">{pktName ?? "Packet session"}</h1>
                 <p className="mt-2 text-sm text-[#59678b]">
                     Status: <span className="font-medium text-[#31394d]">{session.status}</span>
+                    {" · "}Current sequence index:{" "}
+                    <span className="font-medium text-[#31394d]">{currentSeq}</span>
+                    {totalSteps > 0 ?
+                        <>
+                            {" "}
+                            (step {currentSeq + 1} of {totalSteps} in UI order)
+                        </>
+                    : null}
                     {" · "}Started {new Date(session.created_at as string).toLocaleString()}
                     {session.completed_at ?
                         ` · Completed ${new Date(session.completed_at as string).toLocaleString()}`
                     : ""}
                 </p>
-                <div className="mt-3 rounded-lg border border-[#e6e8ec] bg-[#fafbfd] p-3 text-xs text-[#59678b]">
-                    <p className="font-medium text-[#31394d]">CRM snapshot</p>
-                    <pre className="mt-2 overflow-x-auto whitespace-pre-wrap font-mono text-[11px] text-[#31394d]">
-                        {JSON.stringify(crm, null, 2)}
-                    </pre>
-                </div>
+                <p className="mt-1 font-mono text-[11px] text-[#59678b]">
+                    Session <span className="text-[#31394d]">{session.id as string}</span>
+                    {" · "}Link <span className="text-[#31394d]">{session.started_via_public_link_id as string}</span>
+                </p>
+                {anyStepNeedsReview ?
+                    <div
+                        role="status"
+                        className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950"
+                    >
+                        One or more steps have{" "}
+                        <span className="font-medium">intake_needs_review</span> — open each submission to confirm or
+                        correct linkage.
+                    </div>
+                : null}
             </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+                <JsonPanel
+                    title="Launch context"
+                    subtitle="Trusted server copy stamped at session creation (prefill / intake flags, source entity, packet id)."
+                    value={launchCtx}
+                />
+                <JsonPanel
+                    title="CRM snapshot (canonical for packet)"
+                    subtitle="Merged after each submitted step; later drafts inherit FKs from here + launch metadata."
+                    value={crm}
+                />
+            </div>
+
+            <JsonPanel
+                title="Shared values"
+                subtitle="Scalar merge across steps (payload.values only); inspect carry-forward for enrollment pilots."
+                value={sharedVals}
+            />
 
             <div>
                 <h2 className="text-sm font-semibold text-[#0f172a]">Steps</h2>
                 <ul className="mt-2 divide-y divide-[#e6e8ec] rounded-lg border border-[#e6e8ec] bg-white">
-                    {enriched.map((step) => (
-                        <li key={step.id} className="flex flex-col gap-1 px-4 py-3 text-sm">
-                            <div className="flex flex-wrap items-baseline justify-between gap-2">
-                                <span className="font-medium text-[#0f172a]">
-                                    Step {step.sequence_index + 1}: {step.form_name ?? step.form_key ?? "Form"}
-                                </span>
-                                <span className="text-xs uppercase tracking-wide text-[#59678b]">{step.status}</span>
-                            </div>
-                            {step.form_submission_id && step.form_definition_id ?
-                                <Link
-                                    href={`/adminV2/forms/${step.form_definition_id}/submissions/${step.form_submission_id}`}
-                                    className="text-sm font-medium text-[#2563eb] hover:underline"
-                                >
-                                    Open submission
-                                </Link>
-                            : null}
-                        </li>
-                    ))}
+                    {enriched.map((step) => {
+                        const sub = step.form_submission_id ? submissionById[step.form_submission_id] : undefined;
+                        const meta = parseSubmissionPayloadMeta(sub?.payload ?? null);
+                        const fkOk = hasAnySubmissionFk(sub);
+                        return (
+                            <li key={step.id} className="flex flex-col gap-2 px-4 py-3 text-sm">
+                                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                                    <span className="font-medium text-[#0f172a]">
+                                        Step {step.sequence_index + 1}: {step.form_name ?? step.form_key ?? "Form"}
+                                    </span>
+                                    <span className="text-xs uppercase tracking-wide text-[#59678b]">{step.status}</span>
+                                </div>
+                                <div className="flex flex-wrap gap-2 text-[11px]">
+                                    {step.form_submission_id ?
+                                        <span className="rounded bg-[#f4f6f9] px-1.5 py-0.5 font-mono text-[#31394d]">
+                                            submission {step.form_submission_id}
+                                        </span>
+                                    : null}
+                                    {sub ?
+                                        <span className="rounded bg-[#f4f6f9] px-1.5 py-0.5 font-mono text-[#31394d]">
+                                            {sub.status}
+                                        </span>
+                                    : null}
+                                    {meta.intake_resolution_path ?
+                                        <span className="rounded border border-[#e6e8ec] px-1.5 py-0.5 text-[#59678b]">
+                                            intake: {meta.intake_resolution_path}
+                                        </span>
+                                    : null}
+                                    {meta.intake_match_strategy ?
+                                        <span className="rounded border border-[#e6e8ec] px-1.5 py-0.5 text-[#59678b]">
+                                            match: {meta.intake_match_strategy}
+                                        </span>
+                                    : null}
+                                    {meta.intake_needs_review ?
+                                        <span className="rounded border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-amber-950">
+                                            review needed
+                                        </span>
+                                    : null}
+                                    {!fkOk && sub?.status === "submitted" ?
+                                        <span className="rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-red-800">
+                                            no CRM FK on submission
+                                        </span>
+                                    : null}
+                                    {fkOk ?
+                                        <span className="rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-emerald-900">
+                                            CRM linked
+                                        </span>
+                                    : null}
+                                </div>
+                                {meta.intake_review_reason ?
+                                    <p className="text-xs leading-snug text-[#59678b]">{meta.intake_review_reason}</p>
+                                : null}
+                                <div className="text-[11px] text-[#59678b]">
+                                    {step.created_at ? <>Item created {new Date(step.created_at).toLocaleString()} · </> : null}
+                                    {step.submitted_at ?
+                                        <>Step submitted_at {new Date(step.submitted_at).toLocaleString()} · </>
+                                    : null}
+                                    {sub?.submitted_at ?
+                                        <>Submission submitted_at {new Date(sub.submitted_at).toLocaleString()}</>
+                                    : null}
+                                    {step.skip_reason ?
+                                        <>
+                                            <span className="mt-1 block text-amber-800">Skip: {step.skip_reason}</span>
+                                        </>
+                                    : null}
+                                </div>
+                                {step.form_submission_id && step.form_definition_id ?
+                                    <Link
+                                        href={`/adminV2/forms/${step.form_definition_id}/submissions/${step.form_submission_id}`}
+                                        className="text-sm font-medium text-[#2563eb] hover:underline"
+                                    >
+                                        Open submission
+                                    </Link>
+                                : null}
+                            </li>
+                        );
+                    })}
                 </ul>
             </div>
         </div>

@@ -1,12 +1,16 @@
 import { NextRequest } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/serverServiceClient";
 import { validateFormPayload, type FormPayload } from "@/lib/forms/validateSubmission";
-import { validateFormSchema } from "@/lib/forms/schema";
+import { validateFormSchema, type FormSchemaV1 } from "@/lib/forms/schema";
+import { filterPayloadValuesToSchemaFields } from "@/lib/forms/filterPayloadValuesToSchema";
 import { normalizeValidationErrors } from "@/lib/forms/validateSubmission";
 import { ZodError } from "zod";
 import { resolvePublicFormEmbedContext } from "@/lib/public/forms/resolvePublicFormEmbedContext";
 import { verifySubmissionBelongsToPublicEmbed } from "@/lib/public/forms/publicEmbedSubmissionGuard";
-import { advancePacketSessionAfterSubmit } from "@/lib/forms/packets/formPacketService";
+import {
+    advancePacketSessionAfterSubmit,
+    syncPacketSessionCrmSnapshotFromSubmission,
+} from "@/lib/forms/packets/formPacketService";
 import { isEmbedOriginAllowed, requestEmbedOrigin } from "@/lib/public/forms/embedOrigin";
 import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
 import { hashClientIp } from "@/lib/public/forms/clientIpHash";
@@ -15,7 +19,11 @@ import { linkRequiresLeadCapture } from "@/lib/public/forms/publicFormTypes";
 import { applyFormIntakeSafe } from "@/lib/forms/intake/applyFormIntakeSafe";
 import { buildFormIntakeMetaFromPayload } from "@/lib/forms/intake/buildFormIntakeMetaFromPayload";
 import { persistFormSubmissionSignatures } from "@/lib/forms/signatures/persistFormSubmissionSignatures";
-import { emitFormSignedSafe, emitFormSubmittedSafe } from "@/lib/forms/workflow/formSubmissionEvents";
+import {
+    emitFormPacketCompletedSafe,
+    emitFormSignedSafe,
+    emitFormSubmittedSafe,
+} from "@/lib/forms/workflow/formSubmissionEvents";
 import { applyReadOnlyBaselineToPayload } from "@/lib/forms/readOnlyFormPayload";
 
 const UUID_RE =
@@ -113,8 +121,9 @@ export async function POST(
         .maybeSingle();
     const schemaJson = (ver as { schema_json?: unknown } | null)?.schema_json ?? ctx.schemaJson;
 
+    let schema: FormSchemaV1;
     try {
-        validateFormSchema(schemaJson);
+        schema = validateFormSchema(schemaJson);
     } catch (e) {
         if (e instanceof ZodError) {
             return publicErr("Invalid published schema", 500, { validation_errors: normalizeValidationErrors(e) });
@@ -122,10 +131,17 @@ export async function POST(
         throw e;
     }
 
-    const payloadToValidate =
+    let payloadToValidate: Record<string, unknown> =
         body.payload !== undefined && typeof body.payload === "object" && !Array.isArray(body.payload)
             ? (body.payload as Record<string, unknown>)
-            : sub.payload;
+            : (sub.payload as Record<string, unknown>);
+
+    if (ctx.packet) {
+        payloadToValidate = {
+            ...payloadToValidate,
+            values: filterPayloadValuesToSchemaFields(schema, (payloadToValidate.values ?? {}) as Record<string, unknown>),
+        };
+    }
 
     const validated = validateFormPayload({
         schemaJson,
@@ -278,6 +294,18 @@ export async function POST(
         return publicErr(upErr.message, 400);
     }
 
+    if (ctx.packet) {
+        const snapRes = await syncPacketSessionCrmSnapshotFromSubmission(supabase, ctx.orgId, ctx.packet.packet_session_id, {
+            person_id: personId,
+            customer_id: customerId,
+            customer_member_id: customerMemberId,
+            opportunity_id: opportunityId,
+        });
+        if (snapRes.error) {
+            console.error("[public submit] packet crm_snapshot sync failed:", snapRes.error.message);
+        }
+    }
+
     const submittedRow = updated as Record<string, unknown>;
     const meta = finalPayload.meta as Record<string, unknown> | undefined;
     const signerIpHash =
@@ -307,6 +335,13 @@ export async function POST(
     );
     if (adv.error) {
         console.error("[public submit] packet advance failed:", adv.error.message);
+    }
+
+    if (adv.result?.packet_complete === true && ctx.packet) {
+        const pe = await emitFormPacketCompletedSafe(ctx.orgId, ctx.packet.packet_session_id);
+        if (pe.error) {
+            console.error("[public submit] form_packet_completed emit failed:", pe.error.message);
+        }
     }
 
     const packetExtras: Record<string, unknown> = {};

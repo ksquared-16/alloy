@@ -14,6 +14,8 @@ import { hashClientIp } from "@/lib/public/forms/clientIpHash";
 import { mergePublicSubmissionMeta } from "@/lib/public/forms/publicPayloadMeta";
 import { stampFormContextFromLinkMetadata } from "@/lib/forms/formContextMode";
 import { deriveSubmissionFksFromLaunchMetadata } from "@/lib/forms/formLaunchFkDerivation";
+import { mergeLaunchFksPreferringSessionCrmSnapshot } from "@/lib/forms/packets/formPacketService";
+import { filterPayloadValuesToSchemaFields } from "@/lib/forms/filterPayloadValuesToSchema";
 
 function plaintextToken(raw: string): string {
     try {
@@ -107,15 +109,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         return publicErr(e instanceof Error ? e.message : "Launch metadata resolve failed", 400);
     }
 
-    let clientVals = (payload.values ?? {}) as Record<string, unknown>;
+    let packetSessionRow: { shared_values: unknown; crm_snapshot: unknown } | null = null;
     if (ctx.packet) {
         const { data: psRow } = await supabase
             .from("form_packet_sessions")
-            .select("shared_values")
+            .select("shared_values, crm_snapshot")
             .eq("id", ctx.packet.packet_session_id)
             .eq("org_id", ctx.orgId)
             .maybeSingle();
-        const sv = (psRow?.shared_values ?? {}) as Record<string, unknown>;
+        packetSessionRow = psRow ?? null;
+        const snap =
+            packetSessionRow?.crm_snapshot &&
+            typeof packetSessionRow.crm_snapshot === "object" &&
+            !Array.isArray(packetSessionRow.crm_snapshot)
+                ? (packetSessionRow.crm_snapshot as Record<string, unknown>)
+                : {};
+        launchFks = mergeLaunchFksPreferringSessionCrmSnapshot(launchFks, snap);
+    }
+
+    let clientVals = (payload.values ?? {}) as Record<string, unknown>;
+    if (ctx.packet && packetSessionRow) {
+        const sv = (packetSessionRow.shared_values ?? {}) as Record<string, unknown>;
         clientVals = { ...sv, ...clientVals };
     }
 
@@ -176,7 +190,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }
     }
 
-    const mergedValues = mergePrefillIntoDraftValues(schema, clientVals, serverPrefill);
+    let mergedValues = mergePrefillIntoDraftValues(schema, clientVals, serverPrefill);
+    if (ctx.packet) {
+        mergedValues = filterPayloadValuesToSchemaFields(schema, mergedValues);
+    }
 
     const validated = validateFormPayload({
         schemaJson: ctx.schemaJson,

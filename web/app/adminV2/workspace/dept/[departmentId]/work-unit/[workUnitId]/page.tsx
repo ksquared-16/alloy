@@ -75,6 +75,11 @@ import {
     resolveNeedsAttentionBucketsWithPrecedence,
     type NeedsAttentionBucketConfig,
 } from "@/lib/opportunities/needsAttentionBuckets";
+import type { WorkUnitPlacementQueueDiagnostics } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
+import {
+    buildPlacementProjectionQueueHint,
+    parseQueueRowPlacementPriorityVm,
+} from "@/lib/ui-v2/queuePlacementPriorityPresentation";
 
 const WORKSPACE_BASE = "/adminV2/workspace";
 
@@ -274,6 +279,7 @@ type QueueItemsResult = {
     limit: number;
     offset: number;
     total_omitted?: boolean;
+    placement_projection_diagnostics?: WorkUnitPlacementQueueDiagnostics;
 };
 
 function queueItemPayloadHasId(r: unknown): boolean {
@@ -2082,6 +2088,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 }
 
                 const needsAttentionRow = Boolean((r as { _needs_attention?: boolean })._needs_attention);
+                const placementPriority = parseQueueRowPlacementPriorityVm(
+                    (r as { _placement_priority?: unknown })._placement_priority
+                );
                 return {
                     id: rid,
                     title: familyTitle,
@@ -2146,6 +2155,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                   };
                               })()
                             : undefined,
+                    ...(placementPriority ? { placementPriority } : {}),
                 };
             });
 
@@ -2219,6 +2229,14 @@ export default function AdminV2OpportunityWorkUnitPage() {
         /** Skeleton / defer “No records” only when nothing is shown yet — buffered preview stays mounted. */
         const rowsLoading = awaitingFirstRows || showEmptyPrimaryRowSlot;
 
+        const placementDiagnostics: WorkUnitPlacementQueueDiagnostics | undefined =
+            entity === "opportunity" &&
+            queueItems &&
+            !queueItemsError &&
+            String(queueItems.queue.key ?? "") === activeQueueKey
+                ? queueItems.placement_projection_diagnostics
+                : undefined;
+
         return {
             workspaceLevel: "work_unit",
             workUnitId: workUnit.id,
@@ -2253,6 +2271,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     : unmappedListView
                       ? "Unmapped / other bucket: list is filtered on the client from the current server page of the all-records lane — use full lane or fix stage filters for complete paging."
                       : undefined,
+                placementProjectionHint: buildPlacementProjectionQueueHint(placementDiagnostics),
+                placementDisplay: placementDiagnostics?.display,
                 rollupSummary: undefined,
                 rowsLoading,
                 rowsRefreshing,

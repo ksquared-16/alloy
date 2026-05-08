@@ -15,6 +15,10 @@ import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 /**
  * GET — Execute `work_units.queue_definition` for opportunity queues (Growth).
  * Server-side interpreter only; returns rows for workspace rendering.
+ *
+ * **Legacy scope:** Uses {@link resolveOpportunityQueueFromDefinition} — **org-wide** opportunity
+ * filters, **not** `work_unit_id` scoping (differs from canonical `QueueService`). Placement
+ * orchestration will attach only via QueueService (sprint Card 0.5 / 1).
  */
 export async function GET(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
     const ctx = await getAdminContextCached();
