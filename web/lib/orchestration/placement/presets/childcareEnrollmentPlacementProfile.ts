@@ -27,7 +27,7 @@ export const CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1 = {
         {
             bucket_key: "tier_general_waitlist",
             priority_order: 100,
-            label_key: "bucket_general_waitlist",
+            label_key: "bucket_standard_family",
         },
     ],
     rules: [
@@ -58,6 +58,7 @@ export const CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1 = {
         { kind: "fact", field: "wait_since", direction: "asc" },
         { kind: "fact", field: "desired_start_date", direction: "asc" },
     ],
+    primary_group_fact_key: "program_room_group",
     cohort_filter: {
         queue_keys: ["waitlisted", "ready_to_enroll"],
     },
@@ -68,12 +69,13 @@ export const CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1 = {
         bucket_staff_community: "Staff / community priority",
         bucket_sibling_enrolled: "Sibling enrolled at center",
         bucket_sister_center: "Sister center priority",
-        bucket_general_waitlist: "General waitlist",
-        reason_fallback: "General waitlist tier — no higher-priority policy rule matched.",
-        reason_rule_matched: "Placement tier matched enrollment priority rules.",
+        bucket_standard_family: "Standard family",
+        reason_fallback:
+            "No special priority rule matched — standard family ordering within this program / room group uses wait dates below.",
+        reason_rule_matched: "Priority rule matched for this program / room group.",
         warn_unknown_flag_sibling_enrolled:
             "Sibling enrollment could not be verified; sibling priority rules were skipped.",
         reason_unknown_flag_sibling_enrolled:
-            "Sibling enrollment not verified; ordering uses wait dates within this tier.",
+            "Sibling enrollment not verified; ordering uses wait dates within this program / room group.",
     },
 } satisfies PlacementProfile;

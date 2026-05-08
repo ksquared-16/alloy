@@ -27,6 +27,8 @@ export type PlacementPriorityRowPreview = {
     bucket_key: string;
     bucket_label: string;
     sort_tuple: Array<string | number | null>;
+    /** Mirrors evaluator snapshot — UI sections / grouping (loaded page only). */
+    program_room_group_label?: string | null;
     reasons: PlacementReason[];
     warnings: Array<{ code: string; message: string; fact_keys?: string[] }>;
     shadow_mode: boolean;
@@ -185,6 +187,9 @@ export function applyPlacementToOpportunityQueueRows(params: {
                 bucket_key: snap.bucket_key,
                 bucket_label: snap.bucket_label,
                 sort_tuple: snap.sort_tuple,
+                ...(snap.program_room_group_label !== undefined
+                    ? { program_room_group_label: snap.program_room_group_label }
+                    : {}),
                 reasons: result.value.reasons,
                 warnings: result.value.warnings,
                 shadow_mode: shadow,

@@ -7,6 +7,7 @@ import {
     evaluatePredicate,
     validatePlacementProfile,
 } from "@/lib/orchestration/placement/evaluatePlacementPriority";
+import { comparePlacementSortTuples } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
 import type { FactBag, PlacementEvaluateInput, PlacementProfile } from "@/lib/orchestration/placement/placementPriorityTypes";
 import { CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1 } from "@/lib/orchestration/placement/presets/childcareEnrollmentPlacementProfile";
 
@@ -103,13 +104,15 @@ describe("evaluatePlacementPriority", () => {
         if (r.ok) expect(r.value.snapshot.bucket_key).toBe("tier_sister_center");
     });
 
-    it("fallback general waitlist when no rule matches", () => {
+    it("fallback standard-family bucket when no rule matches", () => {
         const r = evalChildcare({
             wait_since: { presence: "present", value: "2024-06-01T00:00:00.000Z" },
         });
         expect(r.ok).toBe(true);
         if (r.ok) {
             expect(r.value.snapshot.bucket_key).toBe("tier_general_waitlist");
+            expect(r.value.snapshot.bucket_label).toMatch(/standard family/i);
+            expect(r.value.snapshot.program_room_group_label).toBe(null);
             expect(r.value.reasons.some((x) => x.code === "fallback_bucket")).toBe(true);
         }
     });
@@ -126,8 +129,9 @@ describe("evaluatePlacementPriority", () => {
         }
     });
 
-    it("deterministic tie-breaker trace and sort_tuple (dates + entity_id)", () => {
+    it("deterministic tie-breaker trace and sort_tuple (program group + bucket + dates + entity_id)", () => {
         const r = evalChildcare({
+            program_room_group: { presence: "present", value: "Infant" },
             wait_since: { presence: "present", value: "2024-06-01T12:00:00.000Z" },
             desired_start_date: { presence: "present", value: "2025-09-01T00:00:00.000Z" },
         });
@@ -136,15 +140,18 @@ describe("evaluatePlacementPriority", () => {
             expect(r.value.tie_breaker_trace.length).toBe(3);
             expect(r.value.tie_breaker_trace[0].field).toBe("wait_since");
             expect(r.value.tie_breaker_trace[2].field).toBe("__entity_id__");
-            expect(r.value.snapshot.sort_tuple[0]).toBe(100);
-            expect(typeof r.value.snapshot.sort_tuple[1]).toBe("number");
+            expect(r.value.snapshot.program_room_group_label).toBe("Infant");
+            expect(r.value.snapshot.sort_tuple[0]).toBe("infant");
+            expect(r.value.snapshot.sort_tuple[1]).toBe(100);
             expect(typeof r.value.snapshot.sort_tuple[2]).toBe("number");
-            expect(r.value.snapshot.sort_tuple[3]).toBe("opp_a");
+            expect(typeof r.value.snapshot.sort_tuple[3]).toBe("number");
+            expect(r.value.snapshot.sort_tuple[4]).toBe("opp_a");
         }
     });
 
     it("stable entity_id final tie-breaker: same facts different ids produce ordered sort_tuple", () => {
         const facts: FactBag = {
+            program_room_group: { presence: "present", value: "Toddler" },
             wait_since: { presence: "present", value: "2024-06-01T00:00:00.000Z" },
         };
         const a = evaluatePlacementPriority({
@@ -212,6 +219,25 @@ describe("evaluatePlacementPriority", () => {
         });
         expect(r.ok).toBe(true);
         if (r.ok) expect(r.value.snapshot.bucket_key).toBe("first");
+    });
+
+    it("primary_group_fact_key orders lexicographically before bucket priority", () => {
+        const infantGeneral = evalChildcare({
+            program_room_group: { presence: "present", value: "Infant" },
+            wait_since: { presence: "present", value: "2024-06-01T00:00:00.000Z" },
+        });
+        const toddlerStaff = evalChildcare({
+            program_room_group: { presence: "present", value: "Toddler" },
+            flag_staff_household: { presence: "present", value: true },
+            wait_since: { presence: "present", value: "2024-01-01T00:00:00.000Z" },
+        });
+        expect(infantGeneral.ok && toddlerStaff.ok).toBe(true);
+        if (!infantGeneral.ok || !toddlerStaff.ok) return;
+        const cmp = comparePlacementSortTuples(
+            infantGeneral.value.snapshot.sort_tuple,
+            toddlerStaff.value.snapshot.sort_tuple
+        );
+        expect(cmp).toBeLessThan(0);
     });
 });
 

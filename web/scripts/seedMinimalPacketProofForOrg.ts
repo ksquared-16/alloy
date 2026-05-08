@@ -11,8 +11,21 @@
  *
  * **Optional:** `FORMS_MINIMAL_PACKET_PROOF_EMBED_ORIGINS` — comma-separated origins (default includes localhost).
  *
+ * **Dev/test reset:** `--reset-sessions` deletes `form_packet_session_items` + `form_packet_sessions` only for
+ * this org’s minimal-proof packet definition rows that were started via the seeded public link(s)
+ * (`metadata.seed === minimal_packet_proof_demo`). Does not delete definitions, packet items, or the link row.
+ *
+ * **Fresh embed URL:** `--fresh-token` bumps `metadata.fresh_token_revision` and rotates `token_hash` on that
+ * seeded link (see `metadata.embed_plaintext_token`). Use with `--reset-sessions` for a clean Step 1 retest.
+ *
+ * **Browser note:** the embed client stores the draft submission id in **sessionStorage** under
+ * `alloy_public_form_submission:` + `encodeURIComponent(<token from URL>)`. After `--reset-sessions` alone, clear
+ * that key for your embed origin or use `--fresh-token` so the URL token changes and the key no longer matches.
+ *
  * Run from `web/`:
  *   DEMO_RESET_ORG_ID=<uuid> npx tsx --tsconfig tsconfig.json scripts/seedMinimalPacketProofForOrg.ts
+ *   DEMO_RESET_ORG_ID=<uuid> npx tsx --tsconfig tsconfig.json scripts/seedMinimalPacketProofForOrg.ts --reset-sessions
+ *   DEMO_RESET_ORG_ID=<uuid> npx tsx --tsconfig tsconfig.json scripts/seedMinimalPacketProofForOrg.ts --reset-sessions --fresh-token
  */
 
 import { config as loadEnv } from "dotenv";
@@ -51,6 +64,13 @@ function resolveOrgId(argv: string[]): string {
         process.env.DEMO_RESET_ORG_ID?.trim() ??
         ""
     );
+}
+
+function parseSeedFlags(argv: string[]): { resetSessions: boolean; freshToken: boolean } {
+    return {
+        resetSessions: argv.includes("--reset-sessions"),
+        freshToken: argv.includes("--fresh-token"),
+    };
 }
 
 function parseEmbedExtras(): string[] {
@@ -192,33 +212,131 @@ async function ensurePacketItems(
     if (error) throw new Error(`form_packet_items upsert: ${error.message}`);
 }
 
+function asRecord(v: unknown): Record<string, unknown> {
+    return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+}
+
+/** Deletes runtime packet sessions for minimal-proof seeded link(s) only (scoped by org + packet def + link seed). */
+async function deleteMinimalProofPacketSessions(orgId: string, packetDefinitionId: string): Promise<{
+    sessionsDeleted: number;
+    itemsDeleted: number;
+}> {
+    const supabase = createAdminClient();
+    const { data: links, error: linkErr } = await supabase
+        .from("form_public_links")
+        .select("id")
+        .eq("org_id", orgId)
+        .eq("metadata->>seed", MINIMAL_PACKET_PROOF_METADATA_SEED);
+    if (linkErr) throw new Error(`reset-sessions: list seeded links: ${linkErr.message}`);
+
+    const linkIds = (links ?? []).map((r) => r.id).filter(Boolean);
+    if (linkIds.length === 0) {
+        console.log(
+            "[seed-minimal-packet-proof] reset-sessions: no form_public_links matched metadata.seed — deleted 0 sessions, 0 session items."
+        );
+        return { sessionsDeleted: 0, itemsDeleted: 0 };
+    }
+
+    const { data: sessions, error: sessErr } = await supabase
+        .from("form_packet_sessions")
+        .select("id")
+        .eq("org_id", orgId)
+        .eq("packet_definition_id", packetDefinitionId)
+        .in("started_via_public_link_id", linkIds);
+    if (sessErr) throw new Error(`reset-sessions: list sessions: ${sessErr.message}`);
+
+    const sessionIds = (sessions ?? []).map((s) => s.id).filter(Boolean);
+    if (sessionIds.length === 0) {
+        console.log("[seed-minimal-packet-proof] reset-sessions: deleted 0 packet sessions, 0 session items.");
+        return { sessionsDeleted: 0, itemsDeleted: 0 };
+    }
+
+    const { count: itemCount, error: cntErr } = await supabase
+        .from("form_packet_session_items")
+        .select("id", { count: "exact", head: true })
+        .in("packet_session_id", sessionIds);
+    if (cntErr) throw new Error(`reset-sessions: count session items: ${cntErr.message}`);
+
+    const { error: delErr } = await supabase.from("form_packet_sessions").delete().in("id", sessionIds);
+    if (delErr) throw new Error(`reset-sessions: delete sessions: ${delErr.message}`);
+
+    const itemsDeleted = itemCount ?? 0;
+    const sessionsDeleted = sessionIds.length;
+    console.log(
+        `[seed-minimal-packet-proof] reset-sessions: deleted ${sessionsDeleted} packet session(s), ${itemsDeleted} session item row(s).`
+    );
+    return { sessionsDeleted, itemsDeleted };
+}
+
 async function ensurePacketPublicLink(
     orgId: string,
     packetDefinitionId: string,
     childFormId: string,
-    childVersionId: string
+    childVersionId: string,
+    opts?: { freshToken?: boolean }
 ): Promise<{ plaintext: string; embedPath: string }> {
     const supabase = createAdminClient();
     const defaultOrigins = ["http://localhost:3000", "http://127.0.0.1:3000"];
     const allowed_embed_origins = [...new Set([...defaultOrigins, ...parseEmbedExtras()])];
 
-    let plaintext: string = MINIMAL_PACKET_PROOF_PUBLIC_TOKEN;
-    let token_hash = hashFormLinkToken(plaintext);
-
-    const { data: hashOwner, error: hoErr } = await supabase
+    const { data: seedLinks, error: slErr } = await supabase
         .from("form_public_links")
-        .select("id, org_id, metadata")
-        .eq("token_hash", token_hash)
-        .maybeSingle();
-    if (hoErr) throw new Error(`token_hash probe: ${hoErr.message}`);
+        .select("id, metadata, token_hash, created_at")
+        .eq("org_id", orgId)
+        .eq("metadata->>seed", MINIMAL_PACKET_PROOF_METADATA_SEED)
+        .order("created_at", { ascending: true });
+    if (slErr) throw new Error(`public link seed lookup: ${slErr.message}`);
+    if ((seedLinks?.length ?? 0) > 1) {
+        console.warn(
+            `[seed-minimal-packet-proof] multiple form_public_links share metadata.seed for this org (${seedLinks!.length}); using oldest row id=${seedLinks![0].id}.`
+        );
+    }
+    const existingSeedLink = seedLinks?.[0] ?? null;
+    const meta = asRecord(existingSeedLink?.metadata);
 
-    if (hashOwner && hashOwner.org_id !== orgId) {
-        plaintext = `${MINIMAL_PACKET_PROOF_PUBLIC_TOKEN}__org_${orgId}`;
-        token_hash = hashFormLinkToken(plaintext);
-        console.log("[seed-minimal-packet-proof] canonical token owned by another org — using org-suffixed plaintext.");
+    const compactOrg = orgId.replace(/-/g, "");
+    let freshRevision = Number(meta.fresh_token_revision);
+    if (!Number.isFinite(freshRevision)) freshRevision = 0;
+
+    let plaintext: string;
+    if (opts?.freshToken) {
+        freshRevision += 1;
+        plaintext = `${MINIMAL_PACKET_PROOF_PUBLIC_TOKEN}__fresh_r${freshRevision}_${compactOrg}`;
+        console.log(`[seed-minimal-packet-proof] --fresh-token: revision=${freshRevision}`);
+    } else if (typeof meta.embed_plaintext_token === "string" && meta.embed_plaintext_token.length > 0) {
+        plaintext = meta.embed_plaintext_token;
+    } else {
+        plaintext = MINIMAL_PACKET_PROOF_PUBLIC_TOKEN;
+        const probeHash = hashFormLinkToken(plaintext);
+        const { data: hashOwner, error: hoErr } = await supabase
+            .from("form_public_links")
+            .select("org_id")
+            .eq("token_hash", probeHash)
+            .maybeSingle();
+        if (hoErr) throw new Error(`token_hash probe: ${hoErr.message}`);
+        if (hashOwner && hashOwner.org_id !== orgId) {
+            plaintext = `${MINIMAL_PACKET_PROOF_PUBLIC_TOKEN}__org_${orgId}`;
+            console.log("[seed-minimal-packet-proof] canonical token owned by another org — using org-suffixed plaintext.");
+        }
     }
 
-    const metadata: Record<string, unknown> = {
+    let token_hash = hashFormLinkToken(plaintext);
+    const { data: hashOwnerGlobal, error: hogErr } = await supabase
+        .from("form_public_links")
+        .select("id, org_id")
+        .eq("token_hash", token_hash)
+        .maybeSingle();
+    if (hogErr) throw new Error(`token_hash global probe: ${hogErr.message}`);
+    const hashTakenByOtherRow =
+        hashOwnerGlobal != null &&
+        (!existingSeedLink?.id || hashOwnerGlobal.id !== existingSeedLink.id);
+    if (hashTakenByOtherRow) {
+        plaintext = `${plaintext}__collide_${orgId}`;
+        token_hash = hashFormLinkToken(plaintext);
+        console.warn("[seed-minimal-packet-proof] token_hash already used by another link row — appended collide suffix.");
+    }
+
+    const nextMeta: Record<string, unknown> = {
         demo: true,
         seed: MINIMAL_PACKET_PROOF_METADATA_SEED,
         seeded_by: "seedMinimalPacketProofForOrg.ts",
@@ -227,33 +345,30 @@ async function ensurePacketPublicLink(
         packet_definition_id: packetDefinitionId,
         lead_capture: false,
         intake: false,
+        embed_plaintext_token: plaintext,
+        ...(opts?.freshToken ? { fresh_token_revision: freshRevision } : {}),
     };
 
-    const { data: existingByHash, error: exHashErr } = await supabase
-        .from("form_public_links")
-        .select("id, metadata")
-        .eq("token_hash", token_hash)
-        .eq("org_id", orgId)
-        .maybeSingle();
-    if (exHashErr) throw new Error(`public link by hash: ${exHashErr.message}`);
+    const token_prefix = plaintext.length > 12 ? plaintext.slice(0, 12) : plaintext;
 
-    if (existingByHash?.id) {
+    if (existingSeedLink?.id) {
+        const mergedMeta = { ...meta, ...nextMeta };
         const { error: upErr } = await supabase
             .from("form_public_links")
             .update({
+                token_hash,
+                token_prefix,
                 form_definition_id: childFormId,
                 pinned_form_definition_version_id: childVersionId,
                 is_active: true,
                 allowed_embed_origins,
-                metadata: { ...(typeof existingByHash.metadata === "object" && existingByHash.metadata ? existingByHash.metadata : {}), ...metadata },
+                metadata: mergedMeta,
             })
-            .eq("id", existingByHash.id)
+            .eq("id", existingSeedLink.id)
             .eq("org_id", orgId);
         if (upErr) throw new Error(`public link update: ${upErr.message}`);
         return { plaintext, embedPath: buildPublicFormEmbedPath(plaintext) };
     }
-
-    const token_prefix = plaintext.length > 12 ? plaintext.slice(0, 12) : plaintext;
 
     const { error: insErr } = await supabase.from("form_public_links").insert({
         org_id: orgId,
@@ -263,7 +378,7 @@ async function ensurePacketPublicLink(
         pinned_form_definition_version_id: childVersionId,
         is_active: true,
         allowed_embed_origins,
-        metadata,
+        metadata: nextMeta,
     });
     if (insErr) throw new Error(`public link insert: ${insErr.message}`);
 
@@ -272,6 +387,7 @@ async function ensurePacketPublicLink(
 
 async function main() {
     const argv = process.argv.slice(2);
+    const { resetSessions, freshToken } = parseSeedFlags(argv);
     const orgId = resolveOrgId(argv);
     if (!orgId || !UUID_RE.test(orgId)) {
         console.error(
@@ -280,7 +396,7 @@ async function main() {
         process.exit(1);
     }
 
-    console.log("[seed-minimal-packet-proof] org_id=", orgId);
+    console.log("[seed-minimal-packet-proof] org_id=", orgId, { resetSessions, freshToken });
     await ensureOrgExists(orgId);
 
     const childFormId = await upsertFormDefinition(orgId, MINIMAL_PACKET_PROOF_CHILD_FORM_KEY, "Test Child Basics");
@@ -301,13 +417,21 @@ async function main() {
     const packetDefId = await ensurePacketDefinition(orgId);
     await ensurePacketItems(orgId, packetDefId, childFormId, childVersionId, guardianFormId, guardianVersionId);
 
-    const { plaintext, embedPath } = await ensurePacketPublicLink(orgId, packetDefId, childFormId, childVersionId);
+    if (resetSessions) {
+        await deleteMinimalProofPacketSessions(orgId, packetDefId);
+    }
+
+    const { plaintext, embedPath } = await ensurePacketPublicLink(orgId, packetDefId, childFormId, childVersionId, {
+        freshToken,
+    });
 
     const appBase =
         process.env.NEXT_PUBLIC_APP_URL?.trim().replace(/\/$/, "") ||
         process.env.VERCEL_URL?.trim().replace(/\/$/, "") ||
         "http://localhost:3000";
     const absoluteUrl = `${appBase.startsWith("http") ? appBase : `https://${appBase}`}${embedPath}`;
+
+    console.log("[seed-minimal-packet-proof] embed URL (open in browser):", absoluteUrl);
 
     console.log("[seed-minimal-packet-proof] done.", {
         packet_definition_id: packetDefId,

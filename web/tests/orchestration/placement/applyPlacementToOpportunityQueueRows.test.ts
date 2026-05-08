@@ -47,6 +47,7 @@ describe("applyPlacementToOpportunityQueueRows", () => {
                 created_at: "2026-01-01T12:00:00.000Z",
                 metadata: {
                     enrollment_operational: { wait_since: "2026-01-01T00:00:00.000Z" },
+                    placement_fact_inputs_v1: { program_room_group: "Toddler" },
                 },
             },
             {
@@ -54,6 +55,7 @@ describe("applyPlacementToOpportunityQueueRows", () => {
                 created_at: "2026-01-02T12:00:00.000Z",
                 metadata: {
                     enrollment_operational: { wait_since: "2026-02-01T00:00:00.000Z" },
+                    placement_fact_inputs_v1: { program_room_group: "Infant" },
                     flag_staff_household: true,
                 },
             },
@@ -71,13 +73,15 @@ describe("applyPlacementToOpportunityQueueRows", () => {
         expect(diagnostics.shadow_mode).toBe(true);
         expect(diagnostics.reorder_applied).toBe(false);
         expect(out.map((r) => r.id)).toEqual(["general_first", "staff_second"]);
-        const p0 = out[0]._placement_priority as { bucket_key: string };
-        const p1 = out[1]._placement_priority as { bucket_key: string };
+        const p0 = out[0]._placement_priority as { bucket_key: string; program_room_group_label?: string | null };
+        const p1 = out[1]._placement_priority as { bucket_key: string; program_room_group_label?: string | null };
         expect(p0.bucket_key).toBe("tier_general_waitlist");
         expect(p1.bucket_key).toBe("tier_staff_community");
+        expect(p0.program_room_group_label).toBe("Toddler");
+        expect(p1.program_room_group_label).toBe("Infant");
     });
 
-    it("non-shadow mode reorders by sort_tuple (higher placement tier first)", () => {
+    it("non-shadow mode reorders by sort_tuple (program group before bucket priority)", () => {
         const placement = resolveChildcarePlacement(WAITLISTED_QUEUE_KEY, { shadow_mode: false });
         const rows: Array<Record<string, unknown>> = [
             {
@@ -85,6 +89,7 @@ describe("applyPlacementToOpportunityQueueRows", () => {
                 created_at: "2026-01-01T12:00:00.000Z",
                 metadata: {
                     enrollment_operational: { wait_since: "2026-01-01T00:00:00.000Z" },
+                    placement_fact_inputs_v1: { program_room_group: "Toddler" },
                 },
             },
             {
@@ -92,6 +97,7 @@ describe("applyPlacementToOpportunityQueueRows", () => {
                 created_at: "2026-01-02T12:00:00.000Z",
                 metadata: {
                     enrollment_operational: { wait_since: "2026-06-01T00:00:00.000Z" },
+                    placement_fact_inputs_v1: { program_room_group: "Infant" },
                     flag_staff_household: true,
                 },
             },
@@ -108,6 +114,7 @@ describe("applyPlacementToOpportunityQueueRows", () => {
         });
         expect(diagnostics.shadow_mode).toBe(false);
         expect(diagnostics.reorder_applied).toBe(true);
+        /** Infant group sorts before Toddler; within Infant, staff tier beats general in SQL order reversal. */
         expect(out.map((r) => r.id)).toEqual(["staff_second_in_sql", "general_first_in_sql"]);
     });
 

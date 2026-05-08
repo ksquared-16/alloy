@@ -18,6 +18,8 @@ Alloy already treats **queues as projection surfaces** (`docs/system/workspace-s
 
 **Evaluator contract (Card 2):** Pure, generalized **placement priority evaluator** specification lives in **§ Card 2 — Evaluator RFC detail** below. **QueueService** remains the sole projection integration point; **legacy Growth interpreter excluded.**
 
+**Product model (childcare waitlist preview — V1 cleanup):** Operators expect **program / room / age grouping first**, then **priority rules inside each group**. The **`program_room_group`** fact is the **primary sort/group dimension** (via preset **`primary_group_fact_key`** — not React hardcoding). **Standard family** replaces “general waitlist” copy: it means **no special priority rule matched**, not a parallel top-level cohort lane. **Admin V2** renders **section subheaders** from `program_room_group` for rows on the **loaded page** only. Demo seed sets **Infant** vs **Toddler** on demo opportunities. **`shadow_mode: true`** remains the default for the placement demo so **list order stays the queue’s usual SQL sort** while previews explain **would-be** ordering; turning **`shadow_mode` off** is only safe when operators accept **page-local** reordering (still not global fairness across pagination).
+
 ---
 
 ## Card 0.5 — RFC lock + queue interpreter decision
@@ -912,12 +914,14 @@ npm run dev:seed:placement-priority-demo
 1. Run seed (above).  
 2. Open **Admin V2** → **Workspace** → pick department with **Enrollment** → open **Enrollment pipeline** work unit.  
 3. Select the **Waitlisted** queue tab.  
-4. Confirm **lane hint** (*placement preview — list order unchanged…*) and **row strips** (cohort pill + reasons; unknown sibling shows warning copy).  
-5. Switch to another queue lane (e.g. **All / pipeline total**) → **no** placement UI (**`queue_keys_enabled`** gate).
+4. Confirm **lane hint** (waitlist priority preview — **loaded page**, program grouping, **not** full waitlist) and **row strips** (**Waitlist priority** kicker + **priority rule** chip + reasons; unknown sibling shows warning copy).  
+5. Confirm **section headers** group rows by **Infant** vs **Toddler** (demo seed).  
+6. Switch to another queue lane (e.g. **All / pipeline total**) → **no** placement UI (**`queue_keys_enabled`** gate).
 
 ### 3. Expected UI behavior
 
-- **Shadow:** Row order matches **usual SQL sort**; placement is **preview only** (footnote + lane hint).  
+- **Shadow (demo default):** Row order matches **usual SQL sort**; grouping + rule chips are **preview only** (footnote + lane hint).  
+- **Program-first:** Evaluator **`sort_tuple`** is **`program_room_group` → bucket → tie-breakers → entity id**; `_placement_priority.program_room_group_label` feeds section titles.  
 - **No** rank numbers, **no** “top of waitlist” / guaranteed ordering / AI language (automated tests enforce conservative copy).  
 - **`show_bucket_chip` / `show_sort_hint`** from merged config respected when returned on **`placement_projection_diagnostics.display`**.
 
@@ -945,9 +949,13 @@ cd web && npm run typecheck
 
 ### 6. Known limitations (unchanged + demo)
 
-- **Pagination / cap:** Ordering is **not** globally authoritative (**§ Card 6**).  
+- **Pagination / cap:** Ordering is **not** globally authoritative (**§ Card 6**). Section headers and previews reflect **`evaluation_cap`** — loaded slice only.  
+- **Lexicographic `program_room_group`:** Sort/group order follows **string sort** on the fact value — not a curated room-age ladder unless metadata uses comparable tokens.  
+- **Per-program rule precedence** (e.g. toddler vs infant different tier orders) is **not** modeled — single rule list for all groups until **V1.1** config work.  
 - **Demo rows** use **`placement_priority_demo_v1`** package marker — separate from **`enrollment_pipeline_demo_v2`** families.  
 - **Department-level** placement not patched by default (work-unit-only opt-in minimizes blast radius).
+
+**Cleanup completed:** Copy (**Waitlist priority**, **Standard family**, program-first hints), childcare preset **`primary_group_fact_key`**, evaluator **`sort_tuple`**, **`program_room_group_label`** on preview payload, UI section headers via **`groupLabel`**, demo **Infant/Toddler** facts — **implemented** in sprint doc refresh (May 2026).
 
 ### 7. V1.1 backlog (recommended)
 

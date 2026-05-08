@@ -78,6 +78,10 @@ export function validatePlacementProfile(profile: PlacementProfile): PlacementEv
             return { ok: false, code: "INVALID_PROFILE", message: "tie_breaker field required" };
         }
     }
+    const pgk = profile.primary_group_fact_key?.trim();
+    if (profile.primary_group_fact_key != null && profile.primary_group_fact_key !== "" && !pgk) {
+        return { ok: false, code: "INVALID_PROFILE", message: "primary_group_fact_key must be non-empty when set" };
+    }
     return null;
 }
 
@@ -304,7 +308,19 @@ export function evaluatePlacementPriority(input: PlacementEvaluateInput): Placem
     }
 
     const tie_breaker_trace: TieBreakerTraceStep[] = [];
-    const sortTuple: Array<string | number | null> = [bucket.priority_order];
+    const primaryGroupKey = input.profile.primary_group_fact_key?.trim();
+    let programRoomGroupLabel: string | null = null;
+    const sortTuple: Array<string | number | null> = [];
+    if (primaryGroupKey) {
+        const gc = factSortComponent(input.facts, primaryGroupKey, "asc");
+        sortTuple.push(gc);
+        const gfv = input.facts[primaryGroupKey];
+        if (gfv?.presence === "present" && gfv.value != null) {
+            const raw = String(gfv.value).trim();
+            programRoomGroupLabel = raw.length ? raw : null;
+        }
+    }
+    sortTuple.push(bucket.priority_order);
 
     let tbIndex = 0;
     for (const tb of input.profile.tie_breakers) {
@@ -347,6 +363,7 @@ export function evaluatePlacementPriority(input: PlacementEvaluateInput): Placem
         bucket_label: resolveBucketLabel(input.profile, bucket.bucket_key),
         sort_tuple: sortTuple,
         fact_digest: buildFactDigest(input.facts),
+        ...(primaryGroupKey ? { program_room_group_label: programRoomGroupLabel } : {}),
     };
 
     return ok({

@@ -38,6 +38,8 @@ export type PlacementPrioritySnapshot = {
     bucket_label: string;
     sort_tuple: Array<string | number | null>;
     fact_digest?: string;
+    /** Present when profile {@link PlacementProfile.primary_group_fact_key} is set — raw display label from facts. */
+    program_room_group_label?: string | null;
 };
 
 export type PlacementReason = {
@@ -95,4 +97,9 @@ export type PlacementProfile = {
     required_fact_keys?: string[];
     /** Emit warnings when these keys are `unknown` (config-driven; presets may list sibling flags). */
     warn_if_unknown_fact_keys?: string[];
+    /**
+     * When set, projection sort prepends this fact (ascending, missing-values sort last) before bucket priority.
+     * Config-driven — evaluator does not interpret domain semantics.
+     */
+    primary_group_fact_key?: string;
 };

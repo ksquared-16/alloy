@@ -37,6 +37,16 @@ describe("placementPriorityDemoPatch", () => {
         expect(buildPlacementDemoOpportunityMetadataFragment("sister_center").sister_center_transfer).toBe(true);
         expect(buildPlacementDemoOpportunityMetadataFragment("general")).not.toHaveProperty("flag_staff_household");
         expect(buildPlacementDemoOpportunityMetadataFragment("sibling_unknown").flag_sibling_enrolled).toBe("unknown");
+        const inputsStaff = buildPlacementDemoOpportunityMetadataFragment("staff").placement_fact_inputs_v1 as {
+            program_room_group: string;
+        };
+        expect(inputsStaff.program_room_group).toBe("Toddler");
+        const inputsSibling = buildPlacementDemoOpportunityMetadataFragment("sibling").placement_fact_inputs_v1 as {
+            program_room_group: string;
+        };
+        expect(inputsSibling.program_room_group).toBe("Infant");
+        expect(String(buildPlacementDemoOpportunityMetadataFragment("staff").program_label)).toContain("Toddler");
+        expect(String(buildPlacementDemoOpportunityMetadataFragment("sibling").program_label)).toContain("Infant");
     });
 
     it("mergePlacementDemoIntoOpportunityMetadata preserves unrelated keys", () => {

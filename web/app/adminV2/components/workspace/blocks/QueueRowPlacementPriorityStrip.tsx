@@ -11,7 +11,7 @@ export function QueueRowPlacementPriorityStrip({ preview }: { preview: QueueRowP
                 className="adminv2-ws-queue-placement-strip adminv2-ws-queue-placement-strip--error"
                 data-queue-placement="error"
             >
-                <span className="adminv2-ws-queue-placement-strip__label">Placement priority</span>
+                <span className="adminv2-ws-queue-placement-strip__label">Waitlist priority</span>
                 <span className="adminv2-ws-queue-placement-strip__muted">
                     {preview.errorMessage ?? "Preview unavailable."}
                 </span>
@@ -22,23 +22,23 @@ export function QueueRowPlacementPriorityStrip({ preview }: { preview: QueueRowP
     return (
         <div className="adminv2-ws-queue-placement-strip" data-queue-placement="preview">
             <div className="adminv2-ws-queue-placement-strip__head">
-                <span className="adminv2-ws-queue-placement-strip__kicker">Placement priority</span>
+                <span className="adminv2-ws-queue-placement-strip__kicker">Waitlist priority</span>
                 <span
-                    className="adminv2-ws-queue-placement-cohort-chip"
-                    title="Priority cohort for this record (preview projection only — not list position)"
+                    className="adminv2-ws-queue-placement-rule-chip"
+                    title="Priority rule / factor for this record (preview only — not row position or full-waitlist order)"
                 >
-                    {preview.cohortLabel}
+                    {preview.priorityRuleLabel}
                 </span>
             </div>
             {preview.reasonLines.length > 0 ? (
-                <ul className="adminv2-ws-queue-placement-strip__reasons" aria-label="Placement notes">
+                <ul className="adminv2-ws-queue-placement-strip__reasons" aria-label="Waitlist priority notes">
                     {preview.reasonLines.map((line, i) => (
                         <li key={i}>{line}</li>
                     ))}
                 </ul>
             ) : null}
             {preview.warningLines.length > 0 ? (
-                <ul className="adminv2-ws-queue-placement-strip__warnings" aria-label="Placement warnings">
+                <ul className="adminv2-ws-queue-placement-strip__warnings" aria-label="Waitlist priority warnings">
                     {preview.warningLines.map((line, i) => (
                         <li key={`w-${i}`}>{line}</li>
                     ))}
@@ -46,7 +46,8 @@ export function QueueRowPlacementPriorityStrip({ preview }: { preview: QueueRowP
             ) : null}
             {preview.shadowMode ? (
                 <p className="adminv2-ws-queue-placement-strip__shadow-note">
-                    Preview only — row order matches this queue&apos;s usual sort.
+                    Preview only — row order matches this queue&apos;s usual sort; the rule above reflects placement priority
+                    inside this program / room group when ordering is applied (not row position here).
                 </p>
             ) : null}
         </div>

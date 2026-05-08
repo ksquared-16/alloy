@@ -2155,7 +2155,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                   };
                               })()
                             : undefined,
-                    ...(placementPriority ? { placementPriority } : {}),
+                    ...(placementPriority
+                        ? {
+                              placementPriority,
+                              /** Program / room section headers (loaded page) — {@link QueueBlock} grouping. */
+                              groupLabel: placementPriority.programGroupSectionTitle,
+                          }
+                        : {}),
                 };
             });
 

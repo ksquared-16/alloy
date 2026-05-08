@@ -6,6 +6,8 @@
 import type { QueueRowPlacementPriorityVm } from "@/lib/ui-v2/workspace-types";
 import type { WorkUnitPlacementQueueDiagnostics } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
 
+const UNSPECIFIED_PROGRAM_SECTION = "Program / room not specified";
+
 export function parseQueueRowPlacementPriorityVm(raw: unknown): QueueRowPlacementPriorityVm | undefined {
     if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return undefined;
     const o = raw as Record<string, unknown>;
@@ -15,7 +17,8 @@ export function parseQueueRowPlacementPriorityVm(raw: unknown): QueueRowPlacemen
     if (o.evaluate_error === true) {
         const msg = typeof o.message === "string" ? o.message.trim() : "";
         return {
-            cohortLabel: "",
+            priorityRuleLabel: "",
+            programGroupSectionTitle: UNSPECIFIED_PROGRAM_SECTION,
             reasonLines: [],
             warningLines: [],
             shadowMode,
@@ -24,8 +27,14 @@ export function parseQueueRowPlacementPriorityVm(raw: unknown): QueueRowPlacemen
         };
     }
 
-    const cohortLabel = typeof o.bucket_label === "string" ? o.bucket_label.trim() : "";
-    if (!cohortLabel) return undefined;
+    const priorityRuleLabel = typeof o.bucket_label === "string" ? o.bucket_label.trim() : "";
+    if (!priorityRuleLabel) return undefined;
+
+    const rawPg = o.program_room_group_label;
+    const programGroupSectionTitle =
+        rawPg != null && typeof rawPg === "string" && rawPg.trim()
+            ? rawPg.trim()
+            : UNSPECIFIED_PROGRAM_SECTION;
 
     const reasonLines: string[] = [];
     const reasons = o.reasons;
@@ -52,7 +61,8 @@ export function parseQueueRowPlacementPriorityVm(raw: unknown): QueueRowPlacemen
     }
 
     return {
-        cohortLabel,
+        priorityRuleLabel,
+        programGroupSectionTitle,
         reasonLines,
         warningLines,
         shadowMode,
@@ -65,7 +75,7 @@ export function buildPlacementProjectionQueueHint(
 ): string | undefined {
     if (!diagnostics) return undefined;
     if (diagnostics.shadow_mode) {
-        return "Placement priority preview — list order is unchanged; not a full-waitlist sort.";
+        return "Waitlist priority preview — rows group by program / room on this loaded page; list order still follows this queue’s usual sort (not placement ordering). Not the full waitlist.";
     }
-    return "Sorted by placement priority for the records loaded on this page — not the full waitlist.";
+    return "Sorted by waitlist priority for records on this page — program / room group first, then priority rules within each group. Not the full waitlist beyond this page.";
 }

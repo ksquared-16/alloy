@@ -49,8 +49,10 @@ export type QueueItemWaitStatusVm = "safe" | "approaching" | "breached";
  * Placement priority preview from QueueService `_placement_priority` (projection only — not rank, not global order).
  */
 export type QueueRowPlacementPriorityVm = {
-  /** Human bucket label from evaluator snapshot (e.g. preset label_key resolution). */
-  cohortLabel: string;
+  /** Human-readable priority rule / bucket label from evaluator (not program grouping). */
+  priorityRuleLabel: string;
+  /** Section title for program / room / age grouping — loaded page only; use with queue row `groupLabel`. */
+  programGroupSectionTitle: string;
   /** Up to two `reasons[].label` strings from the evaluator. */
   reasonLines: string[];
   /** Up to two warning messages (unknown facts, etc.). */
@@ -237,7 +239,7 @@ export type QueueItemVm = {
    * instead of inferring layout from title/subtitle/meta alone.
    */
   semanticCrmCompact?: CrmCompactRowSemanticSlots;
-  /** Optional placement cohort preview — never a global rank (Card 7). */
+  /** Optional placement preview — never a global rank (Card 7). */
   placementPriority?: QueueRowPlacementPriorityVm;
 };
 

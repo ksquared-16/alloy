@@ -37,6 +37,16 @@ export const PLACEMENT_DEMO_SCENARIO_SEED_KEYS: Record<PlacementDemoScenarioId, 
 
 const DEMO_PACKAGE = "placement_priority_demo_v1";
 
+/** Demo program / room groups — visible in queue section headers and facts (`program_room_group`). */
+const DEMO_ROOM_BY_SCENARIO: Record<PlacementDemoScenarioId, string> = {
+    staff: "Toddler",
+    community: "Toddler",
+    sibling: "Infant",
+    sister_center: "Infant",
+    general: "Toddler",
+    sibling_unknown: "Toddler",
+};
+
 function staggerWaitSinceIso(scenarioIndex: number): string {
     const d = new Date("2024-06-01T12:00:00.000Z");
     d.setUTCDate(d.getUTCDate() + scenarioIndex);
@@ -62,6 +72,7 @@ function scenarioIndex(id: PlacementDemoScenarioId): number {
  */
 export function buildPlacementDemoOpportunityMetadataFragment(scenario: PlacementDemoScenarioId): Record<string, unknown> {
     const idx = scenarioIndex(scenario);
+    const room = DEMO_ROOM_BY_SCENARIO[scenario];
     const base: Record<string, unknown> = {
         demo_seed_package: DEMO_PACKAGE,
         seed_key: PLACEMENT_DEMO_SCENARIO_SEED_KEYS[scenario],
@@ -69,7 +80,8 @@ export function buildPlacementDemoOpportunityMetadataFragment(scenario: Placemen
             wait_since: staggerWaitSinceIso(idx >= 0 ? idx : 0),
         },
         desired_start_date: "2025-09-01",
-        program_label: "Demo — placement cohort",
+        placement_fact_inputs_v1: { program_room_group: room },
+        program_label: `${room} — Demo waitlist`,
     };
 
     switch (scenario) {
