@@ -8,7 +8,8 @@ Orient engineers and AI agents to how Alloy is structured today: org-scoped mult
 
 - Primary app surface is **Next.js** under `web/` with **Supabase** (Postgres + RLS) as the backing store.
 - Every tenant operation is scoped by **`org_id`** (directly on rows or verified through FKs in admin APIs). **CRM admin** routes additionally enforce **department** and **site** visibility via **`getAdminAccessContextCached`** (`user_access_profiles`, `user_department_access`, `user_site_access`) — see **`docs/system/roles-and-permissions.md`**, **`docs/system/configuration-system.md`**, and **`web/lib/admin/accessScope.ts`**.
-- **Communications V1** (canonical threads/messages, entity-scoped UI, provider webhooks, backend dispatcher) is summarized under **`docs/product/crm-system.md`** — not a separate topic file.
+- **Communications V1** (canonical threads/messages, entity-scoped UI, provider webhooks, backend dispatcher): **`docs/product/communications.md`**.
+- **Forms engine foundation** (definitions, versions, public links, submissions, admin + public APIs): **`docs/product/documents-and-forms.md`** — **partially implemented**; enrollment/intake completion still in flight.
 - **Human identity:** **`persons`** + **`customer_persons`** are the canonical model in code for CRM/booking writes; **`contacts`** remain for compatibility (messaging, documents, workflows, aged rows). Opportunity identity normalization is centralized in **`web/lib/opportunityIdentity.ts`**.
 - Side effects that matter for business state are **intended** to run through **events**, **workflows**, and **admin actions**; high-risk gaps and exceptions are tracked in **`docs/audits/event-integrity-audit.md`** (not assumed fully closed until that audit says so).
 
@@ -48,6 +49,10 @@ Aligned with platform intent; if code disagrees, fix code **or** update docs in 
 - Do not persist important business changes only in React state or “local-only” PATCHes that skip events/workflows when the domain already uses them.
 - Do not trust **queue rows** as the full record; open entity drawer / resolver payload or query the entity table.
 - Do not move authorization or financial invariants into “just config” without platform review.
+
+## Product maturity (as of weekly doc pass)
+
+Alloy has **substantial** CRM, workspace, communications, access-control, and forms **foundation** in code — enough for **focused pilots and internal ops**, not yet a declaration of **general customer readiness**. Before broader rollout, expect completion work on **enrollment/forms**, **waitlist flows**, **tour scheduling UX**, **settings/config surfaces**, **editable record UX**, **action button consistency**, **messaging integration hardening**, and **reporting** — see **`docs/execution/roadmap-and-gaps.md`**.
 
 ## Known gaps / risks
 

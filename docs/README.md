@@ -26,7 +26,7 @@ For any merge that changes behavior, include `docs/execution/operating-doctrine.
 
 - `product/crm-system.md` — Opportunities, CRM, scheduling (CRM/tour focus).
 - `product/communications.md` — Threads, canonical enqueue, worker delivery, webhooks, provider bindings (lead loop + workflows).
-- `product/documents-and-forms.md`
+- `product/documents-and-forms.md` — Document upload + **forms engine** (definitions, submissions, packets); enrollment completion **partially implemented**.
 - `product/billing-and-financials.md`
 - `product/ai-system.md`
 

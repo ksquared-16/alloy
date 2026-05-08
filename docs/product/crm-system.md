@@ -69,6 +69,22 @@ Cover **opportunities**, pipeline status, CRM-adjacent admin behavior, and **sch
 
 Do **not** recompute attention membership or scores in React — consume resolver fields on rows and entity payloads only.
 
+## Waitlist (enrollment CRM)
+
+### Current state — partially implemented
+
+- **Pipeline semantics:** **`waitlisted`** is a first-class **`opportunities.status_key`** in enrollment migrations (alongside **`ready_to_enroll`**, etc.) and appears in **queue definitions** (e.g. **`waitlisted`** lane, **`ready_waitlist`** grouped buckets — see enrollment pipeline seeds/migrations under **`supabase/migrations/`** and **`web/scripts/seedEnrollmentOpportunityQueuesV1.ts`**).
+- **Workspace / KPI presentation:** Department view models and KPI blocks reference **ready / waitlist** counts (`web/lib/workspace/viewModels/enrollmentDepartmentViewModel.ts`, `KpiBlock.tsx`).
+- **Placement preview:** Queue rows may surface **`scoped_waitlist_position`** / labels as **preview-only** ordering hints (`web/lib/ui-v2/queuePlacementPriorityPresentation.ts`, placement presets e.g. **`childcare_enrollment_waitlist_v1`** in `web/lib/orchestration/placement/presets/`). **Not** a guarantee of global waitlist ordering across pages — see UI copy in helpers.
+
+### Not implemented / placeholder
+
+- **`add_to_waitlist_placeholder`** — seeded as an **admin action** with **`ui_intent`** (“Coming next: Add to waitlist.”) in **`supabase/migrations/20260430224000_enrollment_mvp_action_set.sql`**. Treat **one-click waitlist promotion UX** as **not implemented** until replaced by a real mutator.
+
+### Risks
+
+- **Needs verification:** End-to-end operator workflows (status transitions, notifications, placement rules) per org/vertical beyond what migrations and QueueService previews enforce.
+
 ## Known gaps / risks
 
 - **Needs verification:** KPI definitions vs what operators see in lanes (queue summaries vs department KPI routes).
@@ -117,6 +133,8 @@ Canonical documentation: **`docs/product/communications.md`** (threads, enqueue,
 
 ### Known gaps / risks
 
+- **Partially implemented:** **`schedules`** CRUD, action-link reschedule, workspace “today” hooks — exist for CRM/tour/booking-adjacent flows.
+- **Not implemented / roadmap:** Dedicated **tour scheduling** product (operator-first tour booking UX, constraints, reporting) beyond current **`schedules`** primitives — **needs verification** against vertical pilots.
 - **Needs verification:** Complete cross-vertical scheduling UX (field services vs childcare).
 - **Needs verification:** Labor compliance / attendance feature depth.
 
