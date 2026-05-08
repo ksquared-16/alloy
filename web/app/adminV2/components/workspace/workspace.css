@@ -57,6 +57,14 @@
   --ws-dept-workbench-board-fr: 66;
   --ws-dept-workbench-rail-fr: 34;
   --ws-dept-queue-row-min-height: 50px;
+  /* Paired Pipeline | Needs Attention — ~6 rows visible, then scroll inside panel (page height stable). */
+  --ws-dept-paired-oper-visible-rows: 6;
+  --ws-dept-paired-oper-row-gap: 10px;
+  --ws-dept-paired-oper-row-stack-estimate: clamp(3rem, calc(var(--ws-dept-queue-row-min-height) + 0.875rem), 4.125rem);
+  --ws-dept-paired-oper-list-max-height: calc(
+    var(--ws-dept-paired-oper-visible-rows) * var(--ws-dept-paired-oper-row-stack-estimate) +
+      (var(--ws-dept-paired-oper-visible-rows) - 1) * var(--ws-dept-paired-oper-row-gap)
+  );
   /* Primary throughput list scroll cap — taller when operational row is taller */
   --ws-dept-primary-queue-list-max-height: none;
   --ws-dept-secondary-queue-list-max-height: none;
@@ -113,6 +121,19 @@
 
 .adminv2-ws-paired-oper-panel--attention>.adminv2-ws-queue-header.adminv2-ws-paired-oper-panel__header {
   border-bottom-color: color-mix(in srgb, #bc4300 22%, var(--d-border));
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-paired-oper-panel__body {
+  overflow: hidden;
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-paired-oper-panel__body > .adminv2-ws-queue-list {
+  max-height: var(--ws-dept-paired-oper-list-max-height);
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
 }
 
 /*
