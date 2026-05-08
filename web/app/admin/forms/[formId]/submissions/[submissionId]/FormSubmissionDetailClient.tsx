@@ -29,6 +29,10 @@ import {
     type EntityConnectionRow,
     type PublicLinkIntakeDebug,
 } from "@/lib/forms/submissionOutcomeSummary";
+import {
+    buildLinkageReviewCalloutReasons,
+    submissionDetailLinkageCalloutVisible,
+} from "@/lib/forms/submissionLinkageReviewUx";
 
 type LinkedDoc = {
     role: string;
@@ -267,6 +271,35 @@ export default function FormSubmissionDetailClient() {
     const intakeReviewedAt =
         typeof payloadMetaRecord?.intake_reviewed_at === "string" ? payloadMetaRecord.intake_reviewed_at : null;
 
+    const linkageCalloutVisible = useMemo(() => {
+        if (!row || row.status !== "submitted") return false;
+        return submissionDetailLinkageCalloutVisible({
+            status: row.status,
+            payloadMeta: row.payload?.meta,
+            attachRow: {
+                person_id: row.person_id,
+                customer_id: row.customer_id,
+                customer_member_id: row.customer_member_id,
+                opportunity_id: row.opportunity_id,
+            },
+        });
+    }, [row]);
+
+    const linkageCalloutReasons = useMemo(() => {
+        if (!row) return [];
+        return buildLinkageReviewCalloutReasons(row.payload?.meta, {
+            person_id: row.person_id,
+            customer_id: row.customer_id,
+            customer_member_id: row.customer_member_id,
+            opportunity_id: row.opportunity_id,
+        });
+    }, [row]);
+
+    const showLinkageWorkflowSection = useMemo(() => {
+        if (!row || row.status !== "submitted") return false;
+        return linkageCalloutVisible || needsConfirmLinkage || canMutate;
+    }, [row, linkageCalloutVisible, needsConfirmLinkage, canMutate]);
+
     const docGenBlocked = useMemo(() => {
         if (!row || row.status !== "submitted") return { blocked: false as const };
         return documentGenerationBlockedByIntake(row.payload?.meta, {
@@ -351,6 +384,30 @@ export default function FormSubmissionDetailClient() {
                 <p className="text-sm text-red-700">This submission does not belong to the form in the URL.</p>
             ) : row && lifecycle && documentOutcome ? (
                 <>
+                    {linkageCalloutVisible ? (
+                        <div
+                            className="rounded-lg border-2 border-amber-400 bg-amber-50 px-4 py-4 shadow-sm"
+                            role="status"
+                            aria-live="polite"
+                            data-testid="linkage-review-callout"
+                        >
+                            <p className="text-base font-semibold text-amber-950">
+                                Record linkage needs review before document generation.
+                            </p>
+                            <p className="mt-2 text-sm leading-relaxed text-amber-950/90">
+                                Resolve the items below (confirm, correct CRM links, or ask an admin). Document generation
+                                stays blocked until Alloy can attach to the right CRM parent safely.
+                            </p>
+                            {linkageCalloutReasons.length ? (
+                                <ul className="mt-3 list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-[#31394d]">
+                                    {linkageCalloutReasons.map((line, i) => (
+                                        <li key={`lr-${i}`}>{line}</li>
+                                    ))}
+                                </ul>
+                            ) : null}
+                        </div>
+                    ) : null}
+
                     <SectionCard title="Outcome summary">
                         <section className="space-y-2 border-b border-[#e6e8ec] pb-4">
                             <h3 className="text-xs font-bold uppercase tracking-wide text-[#59678b]">
@@ -605,17 +662,28 @@ export default function FormSubmissionDetailClient() {
                             </div>
                         </section>
 
-                        {row.status === "submitted" && (needsConfirmLinkage || canMutate) ? (
-                            <section className="space-y-3 border-b border-[#e6e8ec] py-4">
+                        {showLinkageWorkflowSection ? (
+                            <section
+                                className="space-y-4 border-b border-[#e6e8ec] py-4"
+                                data-testid="linkage-workflow-section"
+                            >
                                 <h3 className="text-xs font-bold uppercase tracking-wide text-[#59678b]">
-                                    Record linkage actions
+                                    Record linkage review
                                 </h3>
+                                <p className="text-sm text-[#59678b]">
+                                    Use <strong className="font-medium text-[#31394d]">Confirm</strong> when the CRM rows
+                                    in &quot;Records connected&quot; are already correct. Use{" "}
+                                    <strong className="font-medium text-[#31394d]">Correct linked records</strong> when
+                                    intake attached the wrong person, household, child, or opportunity.
+                                </p>
+
                                 {needsConfirmLinkage ? (
                                     <div className="rounded-lg border border-[#e6e8ec] bg-[#fafbfd] px-3 py-3 sm:px-4">
-                                        <p className="text-sm text-[#31394d]">
-                                            Intake linked CRM rows but flagged this submission for review. If the person,
-                                            household, child, and opportunity rows above are correct, confirm so document
-                                            generation can proceed when a CRM attach parent exists.
+                                        <p className="text-sm font-medium text-[#31394d]">Confirm current linked records</p>
+                                        <p className="mt-1 text-sm text-[#59678b]">
+                                            Intake linked CRM rows but asked for a human check (for example after
+                                            auto-creating a child member). If everything above matches the family you expect,
+                                            confirm so document generation can continue when a CRM attach parent exists.
                                         </p>
                                         {confirmErr ? <p className="mt-2 text-sm text-red-700">{confirmErr}</p> : null}
                                         <div className="mt-3">
@@ -624,6 +692,7 @@ export default function FormSubmissionDetailClient() {
                                                 className="!px-3 !py-2 text-sm"
                                                 disabled={confirmBusy}
                                                 onClick={() => void confirmLinkage()}
+                                                data-testid="confirm-linkage-primary"
                                             >
                                                 {confirmBusy ? "Confirming…" : "Confirm record linkage"}
                                             </PrimaryButton>
@@ -631,73 +700,99 @@ export default function FormSubmissionDetailClient() {
                                     </div>
                                 ) : null}
 
-                                {canMutate ? (
-                                    <div className="rounded-lg border border-[#e6e8ec] bg-white px-3 py-3 sm:px-4">
-                                        <p className="text-sm font-medium text-[#31394d]">Correct / link CRM records</p>
-                                        <p className="mt-1 text-xs text-[#59678b]">
-                                            Enter UUIDs only for fields you want to change; leave blank to keep the current
-                                            link. Sends org-validated updates — clearing a link requires sending{" "}
-                                            <code className="font-mono text-[11px]">null</code> via the API (UI follow-up).
-                                        </p>
-                                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                                            <label className="block text-xs text-[#59678b]">
-                                                person_id
-                                                <input
-                                                    className="mt-1 w-full rounded border border-[#cfd6e6] px-2 py-1.5 font-mono text-xs text-[#31394d]"
-                                                    value={manualPerson}
-                                                    onChange={(e) => setManualPerson(e.target.value)}
-                                                    placeholder={row.person_id ?? "optional"}
-                                                    autoComplete="off"
-                                                />
-                                            </label>
-                                            <label className="block text-xs text-[#59678b]">
-                                                customer_id
-                                                <input
-                                                    className="mt-1 w-full rounded border border-[#cfd6e6] px-2 py-1.5 font-mono text-xs text-[#31394d]"
-                                                    value={manualCustomer}
-                                                    onChange={(e) => setManualCustomer(e.target.value)}
-                                                    placeholder={row.customer_id ?? "optional"}
-                                                    autoComplete="off"
-                                                />
-                                            </label>
-                                            <label className="block text-xs text-[#59678b]">
-                                                customer_member_id
-                                                <input
-                                                    className="mt-1 w-full rounded border border-[#cfd6e6] px-2 py-1.5 font-mono text-xs text-[#31394d]"
-                                                    value={manualMember}
-                                                    onChange={(e) => setManualMember(e.target.value)}
-                                                    placeholder={row.customer_member_id ?? "optional"}
-                                                    autoComplete="off"
-                                                />
-                                            </label>
-                                            <label className="block text-xs text-[#59678b]">
-                                                opportunity_id
-                                                <input
-                                                    className="mt-1 w-full rounded border border-[#cfd6e6] px-2 py-1.5 font-mono text-xs text-[#31394d]"
-                                                    value={manualOpp}
-                                                    onChange={(e) => setManualOpp(e.target.value)}
-                                                    placeholder={row.opportunity_id ?? "optional"}
-                                                    autoComplete="off"
-                                                />
-                                            </label>
-                                        </div>
-                                        {manualErr ? <p className="mt-2 text-sm text-red-700">{manualErr}</p> : null}
-                                        <div className="mt-3 flex flex-wrap gap-2">
-                                            <SecondaryButton
-                                                type="button"
-                                                className="!px-3 !py-2 text-sm"
-                                                disabled={manualBusy}
-                                                onClick={() => void applyManualLinks()}
-                                            >
-                                                {manualBusy ? "Applying…" : "Apply CRM links"}
-                                            </SecondaryButton>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <p className="text-xs text-[#59678b]">
-                                        Admin role is required to manually correct CRM foreign keys on a submission.
+                                <div className="rounded-lg border border-[#e6e8ec] bg-white px-3 py-3 sm:px-4">
+                                    <p className="text-sm font-medium text-[#31394d]">Correct linked records</p>
+                                    <p className="mt-1 text-sm leading-relaxed text-[#59678b]">
+                                        Use this if the submission linked to the wrong person, customer, child member, or
+                                        opportunity. Paste the correct CRM record IDs if you already know them.
                                     </p>
-                                )}
+                                    <p className="mt-2 text-sm leading-relaxed text-[#59678b]">
+                                        If <strong className="font-medium text-[#31394d]">no existing CRM row</strong> is
+                                        correct, create the family, child, or opportunity in CRM first, then return here and
+                                        link this submission. Alloy does not create new CRM records from this screen yet — see{" "}
+                                        <code className="rounded bg-[#F4F6F9] px-1 font-mono text-[11px]">
+                                            docs/forms/linkage-review-operator-flow.md
+                                        </code>
+                                        .
+                                    </p>
+
+                                    {canMutate ? (
+                                        <>
+                                            {/* TODO: Replace UUID paste with a searchable entity picker when a scoped admin search API exists (safe org filters). */}
+                                            <details className="mt-3 rounded-md border border-dashed border-[#cfd6e6] bg-[#fafbfd] px-3 py-2">
+                                                <summary className="cursor-pointer text-sm font-medium text-[#00458C]">
+                                                    Advanced — manual CRM record IDs (UUID paste)
+                                                </summary>
+                                                <p className="mt-2 text-xs text-[#59678b]">
+                                                    For fields you want to change, paste the UUID from the CRM record URL or
+                                                    drawer. Leave blank to keep the current link. Clearing a link still
+                                                    requires sending{" "}
+                                                    <code className="font-mono text-[11px]">null</code> via the API.
+                                                </p>
+                                                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                                                    <label className="block text-xs text-[#59678b]">
+                                                        Person id
+                                                        <input
+                                                            className="mt-1 w-full rounded border border-[#cfd6e6] px-2 py-1.5 font-mono text-xs text-[#31394d]"
+                                                            value={manualPerson}
+                                                            onChange={(e) => setManualPerson(e.target.value)}
+                                                            placeholder={row.person_id ?? "leave blank to keep"}
+                                                            autoComplete="off"
+                                                            data-testid="manual-link-person"
+                                                        />
+                                                    </label>
+                                                    <label className="block text-xs text-[#59678b]">
+                                                        Customer id
+                                                        <input
+                                                            className="mt-1 w-full rounded border border-[#cfd6e6] px-2 py-1.5 font-mono text-xs text-[#31394d]"
+                                                            value={manualCustomer}
+                                                            onChange={(e) => setManualCustomer(e.target.value)}
+                                                            placeholder={row.customer_id ?? "leave blank to keep"}
+                                                            autoComplete="off"
+                                                        />
+                                                    </label>
+                                                    <label className="block text-xs text-[#59678b]">
+                                                        Customer member (child) id
+                                                        <input
+                                                            className="mt-1 w-full rounded border border-[#cfd6e6] px-2 py-1.5 font-mono text-xs text-[#31394d]"
+                                                            value={manualMember}
+                                                            onChange={(e) => setManualMember(e.target.value)}
+                                                            placeholder={row.customer_member_id ?? "leave blank to keep"}
+                                                            autoComplete="off"
+                                                        />
+                                                    </label>
+                                                    <label className="block text-xs text-[#59678b]">
+                                                        Opportunity id
+                                                        <input
+                                                            className="mt-1 w-full rounded border border-[#cfd6e6] px-2 py-1.5 font-mono text-xs text-[#31394d]"
+                                                            value={manualOpp}
+                                                            onChange={(e) => setManualOpp(e.target.value)}
+                                                            placeholder={row.opportunity_id ?? "leave blank to keep"}
+                                                            autoComplete="off"
+                                                        />
+                                                    </label>
+                                                </div>
+                                                {manualErr ? <p className="mt-2 text-sm text-red-700">{manualErr}</p> : null}
+                                                <div className="mt-3 flex flex-wrap gap-2">
+                                                    <SecondaryButton
+                                                        type="button"
+                                                        className="!px-3 !py-2 text-sm"
+                                                        disabled={manualBusy}
+                                                        onClick={() => void applyManualLinks()}
+                                                        data-testid="apply-manual-links"
+                                                    >
+                                                        {manualBusy ? "Applying…" : "Apply corrected CRM links"}
+                                                    </SecondaryButton>
+                                                </div>
+                                            </details>
+                                        </>
+                                    ) : (
+                                        <p className="mt-3 text-xs text-[#59678b]">
+                                            Admin role is required to paste CRM IDs and correct foreign keys. Ask an admin if
+                                            linkage needs to change.
+                                        </p>
+                                    )}
+                                </div>
                             </section>
                         ) : null}
 
@@ -828,6 +923,12 @@ export default function FormSubmissionDetailClient() {
                                             Creates or reuses a documents row using this version&apos;s{" "}
                                             <code className="font-mono text-[11px]">pdf_mapping_json</code>, then links it
                                             to this submission.
+                                        </p>
+                                        <p className="mt-3 text-xs leading-relaxed text-[#59678b]">
+                                            Generated documents live in the Documents system and attach to the selected CRM
+                                            parent (person, customer, child member, or opportunity). Future document type /
+                                            category controls will decide how they surface across those records — today,
+                                            open linked files from this submission or from the Documents drawer.
                                         </p>
                                     </>
                                 )}
