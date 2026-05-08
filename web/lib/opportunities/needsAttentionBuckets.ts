@@ -36,17 +36,77 @@ export function opportunityAttentionResultMatchesBucket(
 }
 
 /**
- * Platform-default bucket catalog — safe starting labels only; orgs override via metadata.
- * Maps only to canonical resolver reason codes (no expressions).
+ * Platform-default “Needs attention” bucket catalog (operator labels + canonical reason code groupings).
+ * Orgs override via `metadata.opportunity_attention_rules.needs_attention_buckets`.
+ * Buckets do not change resolver math — only grouping and labels.
+ *
+ * **Enrollment lens model:** multiple buckets may intentionally share a reason code so operators get more than
+ * one entry point to the same resolver signal (for example follow-up vs tour-framed copy).
  */
 export const DEFAULT_NEEDS_ATTENTION_BUCKETS: readonly NeedsAttentionBucketConfig[] = [
     {
         key: "follow_up_overdue",
         label: "Follow-up overdue",
-        description: "Records where the next family follow-up is overdue.",
+        description: null,
         enabled: true,
         order: 10,
-        reason_codes: ["follow_up_date_passed", "stale_quote_followup"],
+        reason_codes: ["follow_up_date_passed"],
+    },
+    {
+        key: "high_value_stale",
+        label: "High-value stale",
+        description: null,
+        enabled: true,
+        order: 20,
+        reason_codes: ["high_value_stale"],
+    },
+    {
+        key: "quote_follow_up_overdue",
+        label: "Quote follow-up overdue",
+        description: null,
+        enabled: true,
+        order: 30,
+        reason_codes: ["stale_quote_followup"],
+    },
+    {
+        key: "tour_follow_up_overdue",
+        label: "Tour follow-up overdue",
+        description: null,
+        enabled: true,
+        order: 40,
+        reason_codes: ["follow_up_date_passed"],
+    },
+    {
+        key: "tour_date_passed",
+        label: "Tour date passed",
+        description: null,
+        enabled: true,
+        order: 50,
+        reason_codes: ["tour_date_passed"],
+    },
+    {
+        key: "missing_quote",
+        label: "Missing quote",
+        description: null,
+        enabled: true,
+        order: 60,
+        reason_codes: ["missing_quote_after_execution"],
+    },
+    {
+        key: "waiting_on_staff",
+        label: "Waiting on staff",
+        description: null,
+        enabled: true,
+        order: 70,
+        reason_codes: ["waiting_on_staff"],
+    },
+    {
+        key: "waiting_on_family",
+        label: "Waiting on family",
+        description: null,
+        enabled: true,
+        order: 80,
+        reason_codes: ["waiting_on_family"],
     },
 ];
 

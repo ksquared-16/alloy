@@ -1,7 +1,7 @@
 #!/usr/bin/env npx tsx
 /**
  * Dev/staging helper: ensure a dedicated Enrollment pipeline work unit exists and has
- * an opportunity QueueDefinition v1 applied.
+ * the canonical opportunity QueueDefinition v1 (`CANONICAL_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V1`).
  *
  * - Prefers an existing Enrollment-like department when present.
  * - If none found, reuses the department of an existing opportunity-like work unit (heuristic).
@@ -13,7 +13,10 @@
 import { config as loadEnv } from "dotenv";
 import { resolve } from "path";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { validateQueueDefinition } from "@/lib/config/queueDefinitionSchema";
+import {
+    CANONICAL_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V1,
+    CANONICAL_ENROLLMENT_PIPELINE_STATUS_KEYS,
+} from "@/lib/config/enrollmentPipelineQueueDefinitionV1";
 
 loadEnv({ path: resolve(process.cwd(), ".env.local") });
 loadEnv({ path: resolve(process.cwd(), ".env") });
@@ -26,150 +29,6 @@ type StatusDefRow = {
     entity_type: string | null;
     is_active: boolean | null;
 };
-
-const CHILDCARE_ENROLLMENT_STATUS_KEYS = [
-    "new_inquiry",
-    "contacted",
-    "tour_scheduled",
-    "tour_completed",
-    "application_in_progress",
-    "ready_to_enroll",
-    "enrolled",
-] as const;
-
-function buildEnrollmentQueueDefinitionV1() {
-    // Note: schema priority is limited to standard|attention|critical. We map the requested "high" to "attention".
-    const queues: any[] = [
-        {
-            key: "all",
-            label: "All families",
-            description: "All enrollment records.",
-            filters: [],
-            sort: [{ field: "updated_at", direction: "desc" }],
-            limit: 5,
-            priority: "standard",
-            display: "list",
-        },
-        {
-            key: "new_inquiries",
-            label: "New inquiries",
-            description: "New families not yet contacted.",
-            filters: [{ type: "status", operator: "in", values: ["new_inquiry"] }],
-            sort: [{ field: "updated_at", direction: "desc" }],
-            limit: 5,
-            priority: "standard",
-            display: "list",
-        },
-        {
-            key: "contacted_touring",
-            label: "Active conversations",
-            description: "Families in conversation or with tours scheduled.",
-            filters: [{ type: "status", operator: "in", values: ["contacted", "tour_scheduled"] }],
-            sort: [{ field: "updated_at", direction: "desc" }],
-            limit: 5,
-            priority: "standard",
-            display: "list",
-        },
-        {
-            key: "post_tour_followup",
-            label: "Tour follow-up",
-            description: "Tours completed; awaiting decision or follow-up.",
-            filters: [{ type: "status", operator: "in", values: ["tour_completed"] }],
-            sort: [{ field: "updated_at", direction: "asc" }],
-            limit: 5,
-            priority: "attention",
-            display: "list",
-        },
-        {
-            key: "paperwork",
-            label: "Paperwork",
-            description: "Enrollment paperwork or application in progress.",
-            filters: [{ type: "status", operator: "in", values: ["application_in_progress"] }],
-            sort: [{ field: "updated_at", direction: "asc" }],
-            limit: 5,
-            priority: "attention",
-            display: "list",
-        },
-        {
-            key: "ready_to_enroll",
-            label: "Ready to enroll",
-            description: "Families ready for final enrollment decision.",
-            filters: [{ type: "status", operator: "in", values: ["ready_to_enroll"] }],
-            sort: [{ field: "updated_at", direction: "asc" }],
-            limit: 5,
-            priority: "attention",
-            display: "list",
-        },
-        {
-            key: "enrolled_starting",
-            label: "Starting soon",
-            description: "Confirmed enrollments preparing to start.",
-            filters: [{ type: "status", operator: "in", values: ["enrolled"] }],
-            sort: [{ field: "updated_at", direction: "desc" }],
-            limit: 5,
-            priority: "standard",
-            display: "list",
-        },
-        {
-            key: "needs_attention",
-            label: "Needs attention",
-            description:
-                "Records requiring intervention (time, missing info, or readiness issues). Intended exception categories: time_related, information_clarity, value_readiness.",
-            filters: [{ type: "exception", operator: "exists" }],
-            sort: [{ field: "updated_at", direction: "asc" }],
-            limit: 5,
-            priority: "critical",
-            display: "list",
-        },
-    ];
-
-    return {
-        version: 1,
-        entity_type: "opportunity",
-        ui: {
-            layout: "pipeline_with_attention",
-            primary_total_label: "Pipeline families",
-            primary_total_queue: "all",
-            sections: [
-                {
-                    key: "pipeline",
-                    label: "Pipeline",
-                    queue_keys: [
-                        "all",
-                        "new_inquiries",
-                        "contacted_touring",
-                        "post_tour_followup",
-                        "paperwork",
-                        "ready_to_enroll",
-                        "enrolled_starting",
-                    ],
-                },
-                {
-                    key: "attention",
-                    label: "Needs Attention",
-                    tone: "critical",
-                    queue_keys: ["needs_attention"],
-                },
-            ],
-            row_preview: {
-                variant: "crm_compact",
-                fields: [
-                    "title",
-                    "status",
-                    "primary_contact",
-                    "phone",
-                    "email",
-                    "child_name",
-                    "program",
-                    "desired_start_date",
-                    "tour_date",
-                ],
-                actions: ["open", "call", "email"],
-            },
-        },
-        queues,
-    } as const;
-}
 
 function normalizeKey(raw: string): string {
     return raw
@@ -215,10 +74,10 @@ async function main() {
         .map((r) => (r as StatusDefRow).status_key)
         .filter((k): k is string => typeof k === "string" && k.trim() !== "");
 
-    const required = [...CHILDCARE_ENROLLMENT_STATUS_KEYS];
+    const required = [...CANONICAL_ENROLLMENT_PIPELINE_STATUS_KEYS];
     const missing = required.filter((k) => !oppStatusKeys.includes(k));
     if (missing.length > 0) {
-        console.error("Missing required opportunity status keys for childcare enrollment config:");
+        console.error("Missing required opportunity status keys for canonical enrollment pipeline:");
         for (const k of missing) console.error(`- ${k}`);
         console.error("Active opportunity status keys found:");
         console.error(oppStatusKeys.join(", ") || "—");
@@ -226,8 +85,7 @@ async function main() {
         process.exit(1);
     }
 
-    const enrollmentQueueDefinition = buildEnrollmentQueueDefinitionV1();
-    const validated = validateQueueDefinition(enrollmentQueueDefinition);
+    const validated = CANONICAL_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V1;
 
     const [{ data: depts, error: deptErr }, { data: wus, error: wuErr }] = await Promise.all([
         supabase.from("departments").select("id, key, name").eq("org_id", orgId).order("sort_order", { ascending: true }),
@@ -248,29 +106,17 @@ async function main() {
 
     const existingPipeline = wuRows.find((w) => w.key === ENROLLMENT_PIPELINE_KEY);
 
-    // 1) Prefer explicit enrollment-like department
     let targetDeptId: string | null = deptRows.find(looksEnrollmentishDepartment)?.id ?? null;
 
-    // 2) Else, find department containing an opportunity-like work unit (heuristic based on key or queue_definition entity_type)
     if (!targetDeptId) {
         for (const w of wuRows) {
             if (looksOpportunityWorkUnitKey(w.key)) {
                 targetDeptId = w.department_id;
                 break;
             }
-            try {
-                const parsed = validateQueueDefinition(w.queue_definition);
-                if (parsed.entity_type === "opportunity") {
-                    targetDeptId = w.department_id;
-                    break;
-                }
-            } catch {
-                // ignore invalid/unset
-            }
         }
     }
 
-    // 3) Final fallback: use department of any existing work unit (keeps script usable in sparse orgs)
     if (!targetDeptId) {
         targetDeptId = wuRows[0]?.department_id ?? null;
     }
@@ -307,7 +153,8 @@ async function main() {
                 department_id: targetDeptId,
                 key: normalizeKey(ENROLLMENT_PIPELINE_KEY),
                 name: "Enrollment pipeline",
-                description: "Full opportunity pipeline for enrollment staff (config-driven queues).",
+                description:
+                    "Canonical enrollment execution surface — lifecycle/status slices are queue pills here; Needs Attention is an operational overlay (same work unit).",
                 sort_order: 0,
                 is_active: true,
                 queue_definition: validated,
@@ -345,13 +192,7 @@ async function main() {
     console.log("queue_definition_applied:", JSON.stringify(validated, null, 2));
     console.log("\nManual smoke test:");
     console.log(`  ${baseUrl}/api/admin/work-units/${pipelineId}/queues`);
-    console.log(`  ${baseUrl}/api/admin/queues/${pipelineId}/all`);
-    console.log(`  ${baseUrl}/api/admin/queues/${pipelineId}/new_inquiries`);
-    console.log(`  ${baseUrl}/api/admin/queues/${pipelineId}/contacted_touring`);
-    console.log(`  ${baseUrl}/api/admin/queues/${pipelineId}/post_tour_followup`);
-    console.log(`  ${baseUrl}/api/admin/queues/${pipelineId}/paperwork`);
-    console.log(`  ${baseUrl}/api/admin/queues/${pipelineId}/ready_to_enroll`);
-    console.log(`  ${baseUrl}/api/admin/queues/${pipelineId}/enrolled_starting`);
+    console.log(`  ${baseUrl}/api/admin/queues/${pipelineId}/new_inquiry`);
     console.log(`  ${baseUrl}/api/admin/queues/${pipelineId}/needs_attention`);
 }
 
@@ -359,4 +200,3 @@ main().catch((e) => {
     console.error(String((e as any)?.stack ?? e));
     process.exit(1);
 });
-

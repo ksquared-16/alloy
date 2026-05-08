@@ -18,6 +18,7 @@ Ship an **operational prioritization layer for enrollment**, not a “warning ba
 - Count / cohort / histogram semantics: `docs/execution/crm-opportunity-needs-attention-count-semantics.md`.
 - Settings vs runtime parity: `docs/execution/admin-settings-config-parity.md`.
 - AI agent boundaries: `docs/product/ai-system.md`.
+- **Canonical enrollment execution vs overlay (pipeline pills + default lenses):** [`canonical_enrollment_operating_model_seed.md`](./canonical_enrollment_operating_model_seed.md).
 
 ---
 

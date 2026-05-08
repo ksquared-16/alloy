@@ -27,9 +27,10 @@ function mockMatch(reasonCodes: string[]): { resolved: OpportunityAttentionResul
 }
 
 describe("needsAttentionBuckets", () => {
-    it("platform defaults ship a single follow-up overdue bucket", () => {
-        expect(DEFAULT_NEEDS_ATTENTION_BUCKETS.length).toBe(1);
+    it("platform defaults ship the canonical enrollment lens set", () => {
+        expect(DEFAULT_NEEDS_ATTENTION_BUCKETS.length).toBe(8);
         expect(DEFAULT_NEEDS_ATTENTION_BUCKETS[0]?.key).toBe("follow_up_overdue");
+        expect(DEFAULT_NEEDS_ATTENTION_BUCKETS.map((b) => b.key).sort()).toContain("waiting_on_staff");
     });
 
     it("hydrates histogram sums (reason occurrences)", () => {
@@ -38,8 +39,9 @@ describe("needsAttentionBuckets", () => {
             { reason_key: "follow_up_date_passed", label: "", count: 2 },
             { reason_key: "stale_quote_followup", label: "", count: 1 },
         ]);
-        const fu = withCounts.find((x) => x.key === "follow_up_overdue");
-        expect(fu?.count).toBe(3);
+        expect(withCounts.find((x) => x.key === "follow_up_overdue")?.count).toBe(2);
+        expect(withCounts.find((x) => x.key === "tour_follow_up_overdue")?.count).toBe(2);
+        expect(withCounts.find((x) => x.key === "quote_follow_up_overdue")?.count).toBe(1);
     });
 
     it("counts unique inquiries per bucket from resolver matches", () => {

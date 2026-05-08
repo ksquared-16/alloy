@@ -35,6 +35,12 @@ All authoritative reads must come from:
 
 **Never:** Queue → execute logic directly.
 
+## Enrollment execution vs Needs Attention overlay
+
+- **Enrollment Pipeline (`work_unit.key === enrollment_pipeline`):** The canonical **execution** surface for childcare enrollment CRM. **Status progression** is expressed as **pipeline queue pills** driven solely by `work_units.queue_definition` (validated v1 JSON). Source of truth for the default pill set and ordering: **`web/lib/config/enrollmentPipelineQueueDefinitionV1.ts`** (mirrors enrollment department migrations). Legacy/demo workspaces may still expose older work unit keys (`pipeline_overview`, etc.) until migrated — **do not** treat those as the canonical model for new product docs.
+
+- **Needs Attention:** A **resolver-backed operational overlay** (`needs_attention` queue + `metadata.opportunity_attention_rules.needs_attention_buckets`). It **does not** replace pipeline stages; lenses may overlap **any** lifecycle stage. See **`docs/product/crm-system.md`** (Enrollment operational attention) and **`web/lib/opportunities/needsAttentionBuckets.ts`** for default lens catalog vs canonical reason codes.
+
 ## Operational attention (Needs attention) — filtered lens
 
 **Operational attention** is not a separate workspace subsystem: it is a **resolver-backed filter and explainability overlay** on the same opportunity queues and entity payloads.

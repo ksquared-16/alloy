@@ -46,7 +46,20 @@ Cover **opportunities**, pipeline status, CRM-adjacent admin behavior, and **sch
 
 **Precedence:** work unit `metadata` → department `metadata` → **`DEFAULT_NEEDS_ATTENTION_BUCKETS`** when neither defines `needs_attention_buckets`.
 
-**Platform default rollout:** **`DEFAULT_NEEDS_ATTENTION_BUCKETS`** ships **one** enabled lens — **Follow-up overdue** — grouping **`follow_up_date_passed`** and **`stale_quote_followup`**. That default bucket is **not** a separate hardcoded rule: each reason still evaluates per resolver criteria (e.g. follow-up instant vs lifecycle idle hours for stale quote follow-up). Additional buckets are added via metadata or **Settings → Attention & SLA Rules**.
+**Platform default rollout:** **`DEFAULT_NEEDS_ATTENTION_BUCKETS`** (`web/lib/opportunities/needsAttentionBuckets.ts`) ships a **canonical enrollment lens set** (eight buckets) mapping **operator-facing labels** to **platform reason codes** only — triggers remain entirely in `resolveOpportunityAttention`. Orgs may replace or extend the array via metadata; **Settings → Attention & SLA Rules** edits department-persisted JSON.
+
+| Lens (default label) | Canonical reason code(s) |
+|----------------------|--------------------------|
+| Follow-up overdue | `follow_up_date_passed` |
+| High-value stale | `high_value_stale` |
+| Quote follow-up overdue | `stale_quote_followup` |
+| Tour follow-up overdue | `follow_up_date_passed` (same code, separate entry point — see bucket comments) |
+| Tour date passed | `tour_date_passed` |
+| Missing quote | `missing_quote_after_execution` |
+| Waiting on staff | `waiting_on_staff` |
+| Waiting on family | `waiting_on_family` |
+
+**Execution vs overlay:** The **Enrollment Pipeline** work unit holds **lifecycle queue pills** (`work_units.queue_definition` — canonical shape in `web/lib/config/enrollmentPipelineQueueDefinitionV1.ts` and DB seeds). **Needs Attention** is the **`needs_attention` queue** and resolver overlay on the **same** opportunities — not a separate lifecycle pipeline or alternate work-unit engine.
 
 **Surfaces**
 
