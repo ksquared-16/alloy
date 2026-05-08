@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Single place for **phase timeline**, **completion vs in-progress tracking**, **shipped-feature rows**, **active fix/cleanup items**, **confirmed gaps**, and **verification debt** — not a replacement for the issue tracker.
+Single place for **phase timeline**, **completion vs in-progress tracking**, **shipped-feature rows**, **velocity highlights** (observed delivery windows), **active fix/cleanup items**, **confirmed gaps**, and **verification debt** — not a replacement for the issue tracker.
 
 **Product maturity framing:** See **`docs/core/system-overview.md`** (“Product maturity”) — Alloy is **operationally usable for focused pilots**, not yet positioned as **generally customer-ready** without the checklist below.
 
@@ -56,7 +56,7 @@ Capabilities below exist in **`web/` / `supabase/`**; “complete” means **fou
 | Area | State | Notes |
 |------|--------|--------|
 | **Enrollment / forms** | **Partially implemented** | Engine + routes + UI hub exist; packet-led enrollment **completion** and operator hardening ongoing |
-| **Waitlist** | **Partially implemented** | Status + lanes + preview fields; **`add_to_waitlist_placeholder`** action **not** a real mutator |
+| **Waitlist** | **Partially implemented** | Lanes + preview from **2026-04-30** migrations; **prioritization foundations started 2026-05-08**; **`add_to_waitlist_placeholder`** still not a real mutator |
 
 ---
 
@@ -91,7 +91,45 @@ Order is **default sequencing** — swap when dependencies demand.
 
 ---
 
-## Feature tracking
+## Feature list — dates at a glance
+
+Use this block for **velocity / stakeholder summaries**. Dates are **repo anchors** (migration filenames, documented sprint starts) unless you replace them with **release tags** from git.
+
+| Feature | Start | Shipped / current status |
+|---------|--------|---------------------------|
+| **Communications V1** (core messaging) | 2026-04-30 | **Shipped** 2026-05-05 |
+| **Roles & permissions V1** (access + API enforcement) | 2026-05-04 | **Shipped** 2026-05-05 *(approx.; access-scope migration `20260504103000`; settings gate `20260505120100`)* |
+| **Enrollment pipeline + waitlist lanes** (status keys, queue defs, KPI hooks) | 2026-04-30 | **Foundation in repo** from **2026-04-30** migrations; **product completion** → TBD |
+| **Needs Attention** (resolver + configurable buckets; enrollment UX) | 2026-04-30 | **Partially shipped** — landed with Apr–May 2026 enrollment workspace migrations + follow-up cards; polish → TBD |
+| **Forms engine V1** (schema + admin/public APIs + hub) | 2026-05-06 | **Partially shipped** — foundation **2026-05-06**; follow-ons through **2026-05-10** (e.g. packets `20260510120000`); **enrollment/forms done** → TBD |
+| **Waitlist** (lanes → prioritization product) | **Lanes/preview:** 2026-04-30 migrations; **prioritization foundations work started:** **2026-05-08** | **In progress** — placeholder action remains; **Shipped** → TBD |
+| **Forms Platform** (strategy program) | 2026-05-05 | **Not a ship milestone** — see `docs/strategy/forms-platform.md` |
+| **Communications phase 2** | TBD | **Not started** (planned) |
+| **Roles phase 2** | TBD | **Not started** (planned) |
+
+**Convention:** **Shipped** = capability usable as documented in topic files. **TBD** = still open or needs release tagging. Update this table when merges land.
+
+---
+
+## Velocity / Delivery Highlights
+
+**What this is:** Approximate **elapsed engineering windows** tied to **real artifacts** (migrations, route families, doc anchors above) — **not** forward-looking SLAs, headcount models, or marketing claims.
+
+**What this is for:** A **traceable narrative** you can pair with git/release history: external diligence, customer proof points, hiring loops, and documenting **observed** throughput (including AI-assisted execution). Replace durations with **measured cycle time** from your tracker when you want investor-grade precision.
+
+| Capability | Timeline *(observed / approximate)* |
+|------------|-------------------------------------|
+| **Roles + scoped department / site access** | **~1 day** — tight migration-led window (`20260504103000` + immediate enforcement wiring; refine with merge timestamps). |
+| **Waitlist prioritization foundations** | **Started 2026-05-08** — **~2–4 days** estimated span for foundations *(placement preview, presets, lane semantics — full product still open; see Waitlist feature row)*. |
+| **Forms engine V1 foundations** | **~4 days** — migration span **2026-05-06 → 2026-05-10** (foundation + follow-ons incl. packets `20260510120000`; wall-clock team time **not** identical). |
+| **Communications V1 core** | **~1 sprint** — calendar anchors **2026-04-30 → 2026-05-05** (enqueue, worker, webhooks, drawer/modal, bindings). |
+| **Needs Attention operational overlays** | **Incremental Apr–May 2026** — resolver + bucket metadata + workspace UX; multiple merges (e.g. enrollment pipeline + right-rail migrations **2026-04-30** onward). |
+
+**Guardrail:** If a row above disagrees with **git history**, **git wins** — update this table in the same pass as release notes.
+
+---
+
+## Feature tracking (detail)
 
 Shipped features list **capabilities that exist in repo** at a high level. **Notes** capture explicit limitations.
 
@@ -130,8 +168,8 @@ Shipped features list **capabilities that exist in repo** at a high level. **Not
 
 ### Feature: Roles & permissions V1 — access + enforcement (shipped)
 
-- **Start:** TBD
-- **Shipped:** TBD
+- **Start:** 2026-05-04 *(first-class scope tables — `supabase/migrations/20260504103000_user_access_scope_tables_v1.sql`)*
+- **Shipped:** 2026-05-05 *(settings/users_roles permission gate — `20260505120100_settings_users_roles_permission.sql`; bundle with ongoing route wiring — refine from git tag if needed)*
 
 #### Capabilities
 
@@ -144,7 +182,7 @@ Shipped features list **capabilities that exist in repo** at a high level. **Not
 
 - **`PORTAL_ROLES`** (**`admin`** / **`ops`**) gates shell access only.
 - **Not every** legacy admin read may be scoped — grep **`getAdminAccessContextCached`** when touching routes.
-- Pin **Start/Shipped** from git/release when historical precision matters.
+- **Dates:** migration anchors above; replace with **release/changelog** dates when publishing externally.
 
 ### Feature: Roles & permissions — phase 2 (planned)
 
@@ -153,7 +191,8 @@ Shipped features list **capabilities that exist in repo** at a high level. **Not
 ### Feature: Forms engine V1 — foundation (partially implemented)
 
 - **Start:** 2026-05-06 (schema landing — migration **`20260506100000_forms_engine_v1_foundation.sql`**)
-- **Shipped:** TBD (product “done” tied to enrollment completion)
+- **Incremental milestones:** 2026-05-07 — 2026-05-10 *(follow-on migrations, e.g. submissions/metadata **`20260509134500`**, packets **`20260510120000_forms_packet_foundation.sql`** — not exhaustive)*
+- **Shipped (product-complete):** TBD *(enrollment/intake operator flows still in flight)*
 
 #### Capabilities
 
@@ -169,8 +208,9 @@ Shipped features list **capabilities that exist in repo** at a high level. **Not
 
 ### Feature: Waitlist (enrollment CRM) — partially implemented
 
-- **Start:** TBD
-- **Shipped:** TBD
+- **Start (lanes / status in repo):** 2026-04-30 *(enrollment pipeline migrations such as **`20260430232500_enrollment_pipeline_statuses_and_queue_buckets_v1.sql`**)*  
+- **Prioritization foundations (active engineering):** **started 2026-05-08** *(calendar anchor for waitlist prioritization / foundations work — align with merge history when publishing)*  
+- **Shipped (complete UX):** TBD *( **`add_to_waitlist_placeholder`** still a stub)*
 
 #### Capabilities
 
@@ -180,6 +220,20 @@ Shipped features list **capabilities that exist in repo** at a high level. **Not
 
 - **`add_to_waitlist_placeholder`** admin action — **not implemented** (placeholder copy in migration)
 - **Needs verification:** org-specific promotion workflows and notifications
+
+### Feature: Enrollment workspace — pipeline + Needs Attention (partially shipped)
+
+- **Start:** 2026-04-30 *(pipeline statuses/queues — **`20260430232500`**, **`20260430234000`**, related seeds)*  
+- **Shipped (foundation):** **2026-04-30 — 2026-05** *(incremental; attention/right-rail cards — e.g. **`20260430241000_right_rail_workspace_v1.sql`**; resolver/bucket UX evolved in follow-up PRs)*  
+- **Shipped (complete):** TBD *(operator parity, KPI alignment — see **Needs verification** table)*
+
+#### Capabilities
+
+- Enrollment **`work_units.queue_definition`** alignment with **`enrollmentPipelineQueueDefinitionV1`**; **`needs_attention`** overlay + optional **`needs_attention_buckets`** metadata; department pipeline rows — see **`docs/product/crm-system.md`**, **`docs/system/workspace-system.md`**.
+
+#### Notes
+
+- Overlaps **waitlist lanes**; keep **Waitlist** row separate for product tracking until placeholder actions retire.
 
 ### Feature: Forms Platform — program vision (strategy)
 
@@ -298,4 +352,4 @@ When verified in code or DB, fold conclusions into **`docs/system/entity-model.m
 
 ## When this doc must be updated
 
-When shipped vs partial status changes, checklist items close, sequencing shifts, or verification completes.
+When shipped vs partial status changes, checklist items close, sequencing shifts, verification completes, **Feature list — dates at a glance** needs new anchors, or **Velocity / Delivery Highlights** durations should reflect measured merge/release windows (especially waitlist **2026-05-08** onward).
