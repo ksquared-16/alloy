@@ -76,6 +76,7 @@ const RAW_CANONICAL_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V1 = {
         {
             key: "new_inquiry",
             label: "New Inquiry",
+            icon: "user-plus",
             description: "New families — first touch not yet completed.",
             filters: [{ type: "status", operator: "in", values: ["new_inquiry"] }],
             sort: [{ field: "updated_at", direction: "desc" }],
@@ -86,6 +87,7 @@ const RAW_CANONICAL_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V1 = {
         {
             key: "contact_attempted",
             label: "Contact Attempted",
+            icon: "phone",
             description: "Staff has attempted contact; conversation may be in progress.",
             filters: [{ type: "status", operator: "in", values: ["contact_attempted"] }],
             sort: [{ field: "updated_at", direction: "desc" }],
@@ -96,6 +98,7 @@ const RAW_CANONICAL_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V1 = {
         {
             key: "tour_scheduled",
             label: "Tour Scheduled",
+            icon: "calendar",
             description: "A tour is on the calendar.",
             filters: [{ type: "status", operator: "in", values: ["tour_scheduled"] }],
             sort: [{ field: "updated_at", direction: "asc" }],
@@ -106,6 +109,7 @@ const RAW_CANONICAL_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V1 = {
         {
             key: "tour_completed_follow_up",
             label: "Tour Completed / Follow-up",
+            icon: "clipboard-check",
             description:
                 "Post-tour decision window — completed tour, follow-up attempts, or tour no-show (execution states grouped for ops).",
             filters: [
@@ -123,6 +127,7 @@ const RAW_CANONICAL_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V1 = {
         {
             key: "enrolling",
             label: "Enrolling",
+            icon: "file-text",
             description: "Paperwork or decision in motion toward a start date.",
             filters: [{ type: "status", operator: "in", values: ["enrolling"] }],
             sort: [{ field: "updated_at", direction: "desc" }],
@@ -133,6 +138,7 @@ const RAW_CANONICAL_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V1 = {
         {
             key: "waitlisted",
             label: "Waitlisted",
+            icon: "clock-3",
             description: "Family is waiting for capacity or a future start.",
             filters: [{ type: "status", operator: "in", values: ["waitlisted"] }],
             sort: [{ field: "updated_at", direction: "desc" }],
@@ -143,6 +149,7 @@ const RAW_CANONICAL_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V1 = {
         {
             key: "enrolled",
             label: "Enrolled",
+            icon: "check-circle-2",
             description: "Confirmed enrollment.",
             filters: [{ type: "status", operator: "in", values: ["enrolled"] }],
             sort: [{ field: "updated_at", direction: "desc" }],
@@ -153,6 +160,7 @@ const RAW_CANONICAL_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V1 = {
         {
             key: "lost",
             label: "Lost",
+            icon: "x-circle",
             description: "Closed — not enrolling.",
             filters: [{ type: "status", operator: "in", values: ["lost"] }],
             sort: [{ field: "updated_at", direction: "desc" }],

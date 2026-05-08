@@ -172,6 +172,37 @@
   text-align: left;
 }
 
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-paired-oper-panel__body .adminv2-ws-dept-oper-row-title {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-paired-oper-panel__body .adminv2-ws-dept-oper-icon-well {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--d-pine) 9%, var(--d-surface));
+  color: color-mix(in srgb, var(--d-pine) 58%, var(--d-muted));
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-paired-oper-panel__body .adminv2-ws-dept-oper-icon-well--attention {
+  background: color-mix(in srgb, #bc4300 10%, var(--d-surface));
+  color: color-mix(in srgb, #bc4300 52%, var(--d-muted));
+}
+
+[data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-paired-oper-panel__body .adminv2-ws-dept-oper-icon-svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 2;
+}
+
 [data-ws-surface="department"].adminv2-ws-dept-v2 .adminv2-ws-paired-oper-panel__body .adminv2-ws-wu-queue-card-title--compact {
   font-size: 11px;
   font-weight: 800;

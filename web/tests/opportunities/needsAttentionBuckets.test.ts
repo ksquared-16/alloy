@@ -3,6 +3,7 @@ import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunity
 import {
     DEFAULT_NEEDS_ATTENTION_BUCKETS,
     bucketCountsFromResolverMatches,
+    compareNeedsAttentionBuckets,
     hydrateNeedsAttentionBucketCounts,
     pickMetadataForNeedsAttentionBuckets,
     resolveNeedsAttentionBucketsFromMetadata,
@@ -28,9 +29,15 @@ function mockMatch(reasonCodes: string[]): { resolved: OpportunityAttentionResul
 
 describe("needsAttentionBuckets", () => {
     it("platform defaults ship the canonical enrollment lens set", () => {
-        expect(DEFAULT_NEEDS_ATTENTION_BUCKETS.length).toBe(8);
+        expect(DEFAULT_NEEDS_ATTENTION_BUCKETS.length).toBe(4);
         expect(DEFAULT_NEEDS_ATTENTION_BUCKETS[0]?.key).toBe("follow_up_overdue");
-        expect(DEFAULT_NEEDS_ATTENTION_BUCKETS.map((b) => b.key).sort()).toContain("waiting_on_staff");
+        expect(DEFAULT_NEEDS_ATTENTION_BUCKETS.map((b) => b.key).sort()).not.toContain("waiting_on_staff");
+    });
+
+    it("sorts by priority (lower first) with order fallback", () => {
+        const a = { priority: 30, order: 10, label: "a" };
+        const b = { priority: 10, order: 20, label: "b" };
+        expect(compareNeedsAttentionBuckets(a, b)).toBeGreaterThan(0);
     });
 
     it("hydrates histogram sums (reason occurrences)", () => {
@@ -40,7 +47,6 @@ describe("needsAttentionBuckets", () => {
             { reason_key: "stale_quote_followup", label: "", count: 1 },
         ]);
         expect(withCounts.find((x) => x.key === "follow_up_overdue")?.count).toBe(2);
-        expect(withCounts.find((x) => x.key === "tour_follow_up_overdue")?.count).toBe(2);
         expect(withCounts.find((x) => x.key === "quote_follow_up_overdue")?.count).toBe(1);
     });
 

@@ -198,6 +198,12 @@ Attention stays **derived operational intelligence**. Tasks/reminders may **infl
 
 Delivered in codebase: resolver v2, `enrollment_operational` metadata, SLA tiers + confidence, priority score + breakdown, multi-reason histogram default, diff/event stub, docs updates, PATCH validation warnings for ignored operational payloads.
 
+### Department operating console (config-driven lanes)
+
+- **`/adminV2/workspace/dept/:id` — left:** Pipeline **execution** rows mirror **`queue_definition.ui.sections.pipeline.queue_keys`** (labels/icons from **`queues[]`**, optional **`icon`** token). Still one queue-definition engine; **`summary_mode=all`** drives per-lane totals.
+- **Right:** **Needs attention** buckets sort by **`priority`** (fallback **`order`**); platform defaults are **four** enrollment lenses (`needsAttentionBuckets.ts`). **`waiting_on_*`**, **missing quote**, etc. stay valid **reason codes**; tenants opt in via **`needs_attention_buckets`** when they want matching tiles.
+- **Icons:** Registry-only Lucide mapping (`WorkspaceOperIcon`) — no React switches on queue/bucket keys.
+
 ---
 
 ## Success metrics (sprint-level)

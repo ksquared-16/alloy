@@ -21,6 +21,13 @@ export type NeedsAttentionBucketConfig = {
     description: string | null;
     enabled: boolean;
     order: number;
+    /**
+     * Operational severity rank for UI (department lane, settings): **lower runs first**.
+     * When omitted, {@link order} is used for tie-breaking and sort fallback.
+     */
+    priority?: number;
+    /** Optional Lucide icon token (kebab-case), resolved via workspace icon registry. */
+    icon?: string | null;
     /** Canonical reason codes belonging to this bucket (stable filters). */
     reason_codes: string[];
 };
@@ -36,12 +43,9 @@ export function opportunityAttentionResultMatchesBucket(
 }
 
 /**
- * Platform-default “Needs attention” bucket catalog (operator labels + canonical reason code groupings).
- * Orgs override via `metadata.opportunity_attention_rules.needs_attention_buckets`.
- * Buckets do not change resolver math — only grouping and labels.
- *
- * **Enrollment lens model:** multiple buckets may intentionally share a reason code so operators get more than
- * one entry point to the same resolver signal (for example follow-up vs tour-framed copy).
+ * Platform-default “Needs attention” bucket catalog for enrollment-style operating consoles.
+ * Orgs add buckets (including waiting-on / missing-quote lenses) via `metadata.opportunity_attention_rules.needs_attention_buckets`.
+ * Buckets do not change resolver math — only grouping, labels, priority, and icons.
  */
 export const DEFAULT_NEEDS_ATTENTION_BUCKETS: readonly NeedsAttentionBucketConfig[] = [
     {
@@ -50,14 +54,18 @@ export const DEFAULT_NEEDS_ATTENTION_BUCKETS: readonly NeedsAttentionBucketConfi
         description: null,
         enabled: true,
         order: 10,
+        priority: 10,
+        icon: "alert-circle",
         reason_codes: ["follow_up_date_passed"],
     },
     {
         key: "high_value_stale",
-        label: "High-value stale",
+        label: "High-value stale > 2 days",
         description: null,
         enabled: true,
         order: 20,
+        priority: 20,
+        icon: "flame",
         reason_codes: ["high_value_stale"],
     },
     {
@@ -66,49 +74,31 @@ export const DEFAULT_NEEDS_ATTENTION_BUCKETS: readonly NeedsAttentionBucketConfi
         description: null,
         enabled: true,
         order: 30,
+        priority: 30,
+        icon: "receipt-text",
         reason_codes: ["stale_quote_followup"],
     },
     {
-        key: "tour_follow_up_overdue",
-        label: "Tour follow-up overdue",
+        key: "tour_date_passed",
+        label: "Tour date passed — follow up",
         description: null,
         enabled: true,
         order: 40,
-        reason_codes: ["follow_up_date_passed"],
-    },
-    {
-        key: "tour_date_passed",
-        label: "Tour date passed",
-        description: null,
-        enabled: true,
-        order: 50,
+        priority: 40,
+        icon: "calendar-x",
         reason_codes: ["tour_date_passed"],
     },
-    {
-        key: "missing_quote",
-        label: "Missing quote",
-        description: null,
-        enabled: true,
-        order: 60,
-        reason_codes: ["missing_quote_after_execution"],
-    },
-    {
-        key: "waiting_on_staff",
-        label: "Waiting on staff",
-        description: null,
-        enabled: true,
-        order: 70,
-        reason_codes: ["waiting_on_staff"],
-    },
-    {
-        key: "waiting_on_family",
-        label: "Waiting on family",
-        description: null,
-        enabled: true,
-        order: 80,
-        reason_codes: ["waiting_on_family"],
-    },
 ];
+
+export function compareNeedsAttentionBuckets(
+    a: Pick<NeedsAttentionBucketConfig, "priority" | "order" | "label">,
+    b: Pick<NeedsAttentionBucketConfig, "priority" | "order" | "label">,
+): number {
+    const pa = a.priority ?? a.order;
+    const pb = b.priority ?? b.order;
+    if (pa !== pb) return pa - pb;
+    return a.order - b.order || a.label.localeCompare(b.label);
+}
 
 export function attentionRulesRootFromMetadata(metadata: unknown): Record<string, unknown> | null {
     if (metadata == null || typeof metadata !== "object" || Array.isArray(metadata)) return null;
@@ -130,6 +120,10 @@ function parseBucketsArray(raw: unknown): NeedsAttentionBucketConfig[] | null {
         const enabled = o.enabled !== false;
         const order =
             typeof o.order === "number" && Number.isFinite(o.order) ? Math.floor(o.order) : DEFAULT_ORDER_FALLBACK(key);
+        const priority =
+            typeof o.priority === "number" && Number.isFinite(o.priority) ? Math.floor(o.priority) : undefined;
+        const iconRaw = o.icon;
+        const icon = typeof iconRaw === "string" && iconRaw.trim() ? iconRaw.trim() : null;
         const rcRaw = o.reason_codes;
         const reason_codes: string[] = [];
         if (Array.isArray(rcRaw)) {
@@ -140,21 +134,24 @@ function parseBucketsArray(raw: unknown): NeedsAttentionBucketConfig[] | null {
             }
         }
         if (!reason_codes.length) continue;
-        out.push({
+        const bucketConfig: NeedsAttentionBucketConfig = {
             key,
             label: label || key,
             description,
             enabled,
             order,
             reason_codes,
-        });
+        };
+        if (priority !== undefined) bucketConfig.priority = priority;
+        if (icon !== null) bucketConfig.icon = icon;
+        out.push(bucketConfig);
     }
     return out.length ? out : null;
 }
 
 function DEFAULT_ORDER_FALLBACK(key: string): number {
     const hit = DEFAULT_NEEDS_ATTENTION_BUCKETS.find((b) => b.key === key);
-    return hit?.order ?? 100;
+    return hit?.order ?? hit?.priority ?? 100;
 }
 
 /**
@@ -168,8 +165,11 @@ export function resolveNeedsAttentionBucketsFromMetadata(metadata: unknown): Nee
 
     const byKey = new Map<string, NeedsAttentionBucketConfig>();
     for (const d of DEFAULT_NEEDS_ATTENTION_BUCKETS) byKey.set(d.key, { ...d });
-    for (const b of parsed) byKey.set(b.key, b);
-    return [...byKey.values()].sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
+    for (const b of parsed) {
+        const prior = byKey.get(b.key);
+        byKey.set(b.key, prior ? { ...prior, ...b } : b);
+    }
+    return [...byKey.values()].sort(compareNeedsAttentionBuckets);
 }
 
 /**
@@ -219,7 +219,7 @@ export function bucketCountsFromResolverMatches(
             }
             return { ...b, count };
         })
-        .sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
+        .sort(compareNeedsAttentionBuckets);
 }
 
 /**
@@ -245,7 +245,7 @@ export function hydrateNeedsAttentionBucketCounts(
             }
             return { ...b, count };
         })
-        .sort((a, b) => a.order - b.order || a.label.localeCompare(b.label));
+        .sort(compareNeedsAttentionBuckets);
 }
 
 /** Apply org label overrides from resolver config (`reason_overrides.label`) when a bucket maps a single code. */
@@ -253,7 +253,7 @@ export function applyAttentionConfigLabelsToBuckets(
     buckets: readonly NeedsAttentionBucketWithCount[],
     config: OpportunityAttentionResolvedConfig,
 ): NeedsAttentionBucketWithCount[] {
-    return buckets.map((b) => {
+    const mapped = buckets.map((b) => {
         let label = b.label;
         if (b.reason_codes.length === 1) {
             const code = b.reason_codes[0]!;
@@ -263,4 +263,5 @@ export function applyAttentionConfigLabelsToBuckets(
         }
         return label === b.label ? b : { ...b, label };
     });
+    return [...mapped].sort(compareNeedsAttentionBuckets);
 }

@@ -42,24 +42,24 @@ Cover **opportunities**, pipeline status, CRM-adjacent admin behavior, and **sch
 
 - **`key`** — Stable bucket id for URLs/copy.
 - **`label`**, **`description`**, **`order`**, **`enabled`**
+- **`priority`** (optional) — Lower runs first in department/workspace bucket lists; when omitted, **`order`** is used for sorting (see `compareNeedsAttentionBuckets` in `web/lib/opportunities/needsAttentionBuckets.ts`).
+- **`icon`** (optional) — Lucide token string (**kebab-case**, e.g. `alert-circle`), resolved in AdminV2 via **`WorkspaceOperIcon`** — no queue-key switches in UI.
 - **`reason_codes`** — Non-empty list of resolver reason codes belonging to the bucket.
 
 **Precedence:** work unit `metadata` → department `metadata` → **`DEFAULT_NEEDS_ATTENTION_BUCKETS`** when neither defines `needs_attention_buckets`.
 
-**Platform default rollout:** **`DEFAULT_NEEDS_ATTENTION_BUCKETS`** (`web/lib/opportunities/needsAttentionBuckets.ts`) ships a **canonical enrollment lens set** (eight buckets) mapping **operator-facing labels** to **platform reason codes** only — triggers remain entirely in `resolveOpportunityAttention`. Orgs may replace or extend the array via metadata; **Settings → Attention & SLA Rules** edits department-persisted JSON.
+**Platform default rollout:** **`DEFAULT_NEEDS_ATTENTION_BUCKETS`** (`web/lib/opportunities/needsAttentionBuckets.ts`) ships a **minimal canonical enrollment operating lens** (**four** default buckets). **`waiting_on_staff`**, **`waiting_on_family`**, **`missing_quote_after_execution`**, and other codes remain **supported resolver reasons**; tenants add buckets for those lenses in metadata when they want them visible as first-class tiles. **Settings → Attention & SLA Rules** edits department-persisted JSON.
 
 | Lens (default label) | Canonical reason code(s) |
 |----------------------|--------------------------|
 | Follow-up overdue | `follow_up_date_passed` |
-| High-value stale | `high_value_stale` |
+| High-value stale > 2 days | `high_value_stale` |
 | Quote follow-up overdue | `stale_quote_followup` |
-| Tour follow-up overdue | `follow_up_date_passed` (same code, separate entry point — see bucket comments) |
-| Tour date passed | `tour_date_passed` |
-| Missing quote | `missing_quote_after_execution` |
-| Waiting on staff | `waiting_on_staff` |
-| Waiting on family | `waiting_on_family` |
+| Tour date passed — follow up | `tour_date_passed` |
 
 **Execution vs overlay:** The **Enrollment Pipeline** work unit holds **lifecycle queue pills** (`work_units.queue_definition` — canonical shape in `web/lib/config/enrollmentPipelineQueueDefinitionV1.ts` and DB seeds). **Needs Attention** is the **`needs_attention` queue** and resolver overlay on the **same** opportunities — not a separate lifecycle pipeline or alternate work-unit engine.
+
+**Department execution lane (pipeline rows):** On **`/adminV2/workspace/dept/:id`**, when a work unit exposes **`ui.layout === pipeline_with_attention`** and a **`ui.sections`** entry with **`key === pipeline`**, the left paired panel lists **one compact row per `queue_keys` entry** (labels/icons from matching **`queues[]`** entries, including optional **`icon`**). Counts use **`GET /api/admin/work-units/:id/queues?summary_mode=all`**. This is still the **same** queue-definition engine — not a second pipeline.
 
 **Surfaces**
 

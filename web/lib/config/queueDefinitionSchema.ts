@@ -65,6 +65,8 @@ export const queueConfigSchema = z
     .object({
         key: z.string().min(1),
         label: z.string().min(1),
+        /** Optional Lucide icon token (kebab-case), resolved via workspace icon registry in AdminV2. */
+        icon: z.string().min(1).optional(),
         description: z.string().optional(),
         filters: z.array(queueFilterSchema),
         sort: z

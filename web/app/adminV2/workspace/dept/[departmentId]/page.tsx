@@ -40,6 +40,10 @@ import { resolveKpisForDepartment } from "@/lib/kpi/resolver";
 import type { WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
 import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 import { isEnrollmentLikeDepartmentKey } from "@/lib/workspace/enrollmentDepartmentKey";
+import { validateQueueDefinition } from "@/lib/config/queueDefinitionSchema";
+import { extractPipelineExecutionLanes } from "@/lib/workspace/extractPipelineExecutionLanes";
+import { WorkspaceOperIcon } from "@/components/admin/workspace/WorkspaceOperIcon";
+import { compareNeedsAttentionBuckets } from "@/lib/opportunities/needsAttentionBuckets";
 
 const WORKSPACE_BASE = "/adminV2/workspace";
 
@@ -92,7 +96,76 @@ type DeptAttentionBucket = {
     description: string | null;
     count: number;
     reason_codes: string[];
+    order?: number;
+    priority?: number;
+    icon?: string | null;
 };
+
+type DeptPipelineExecSurface = {
+    workUnitId: string;
+    panelTitle: string;
+    lanes: Array<{
+        key: string;
+        label: string;
+        icon: string | null;
+        count: number | null;
+        countsDeferred: boolean;
+    }>;
+};
+
+function DeptOperConsoleQueueRow(props: {
+    href: string;
+    title: string;
+    label: string;
+    iconKey?: string | null;
+    total: number | null;
+    countsDeferred?: boolean;
+    variant: "throughput" | "attention";
+    attentionBucketKey?: string;
+}) {
+    const { href, title, label, iconKey, total, countsDeferred, variant, attentionBucketKey } = props;
+    const tier =
+        variant === "attention"
+            ? "adminv2-ws-wu-queue-card--tier-warning adminv2-ws-dept-attention-bucket-tile"
+            : "adminv2-ws-wu-queue-card--tier-standard adminv2-ws-dept-pipeline-lane-tile";
+    const urgency = variant === "attention" ? "attention" : "standard";
+    const iconWellClass =
+        variant === "attention"
+            ? "adminv2-ws-dept-oper-icon-well adminv2-ws-dept-oper-icon-well--attention"
+            : "adminv2-ws-dept-oper-icon-well";
+    const totalShown = countsDeferred ? null : total;
+    return (
+        <Link
+            href={href}
+            prefetch={shouldDisableAdminV2LinkPrefetch(href) ? false : undefined}
+            onClick={markWorkUnitNavigationStart}
+            className={`adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact ${tier} no-underline text-inherit hover:opacity-[0.98]`}
+            data-ws-wu-urgency={urgency}
+            data-attention-bucket-key={attentionBucketKey}
+            title={title}
+        >
+            <div className="adminv2-ws-wu-queue-card-compact-text min-w-0">
+                <div className="adminv2-ws-dept-oper-row-title">
+                    {iconKey ? (
+                        <span className={iconWellClass} aria-hidden>
+                            <WorkspaceOperIcon name={iconKey} className="adminv2-ws-dept-oper-icon-svg" />
+                        </span>
+                    ) : null}
+                    <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact min-w-0">{label}</div>
+                </div>
+                <div className="adminv2-ws-paired-oper-queue-meta mt-2 tabular-nums" style={{ color: "var(--d-muted)" }}>
+                    <div>
+                        <span className="font-medium text-alloy-midnight/75">Total</span>{" "}
+                        <span className="text-alloy-midnight/85">{totalShown ?? "—"}</span>
+                    </div>
+                </div>
+            </div>
+            <div className="adminv2-ws-wu-queue-card-compact-aside shrink-0 self-center">
+                <span className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open">Open</span>
+            </div>
+        </Link>
+    );
+}
 
 type DeptAttentionSemantics = {
     candidate_fetch_cap: number;
@@ -148,9 +221,18 @@ export default function AdminV2WorkspaceDepartmentPage() {
     const [deptAttentionSemantics, setDeptAttentionSemantics] = useState<DeptAttentionSemantics | null>(null);
     const [deptBucketCountScope, setDeptBucketCountScope] = useState<string | null>(null);
 
+    const [deptPipelineExecSurface, setDeptPipelineExecSurface] = useState<DeptPipelineExecSurface | null>(null);
+    const [deptPipelineExecLoading, setDeptPipelineExecLoading] = useState(false);
+
     const primaryWorkUnit = useMemo(() => {
-        const fromDeptList = deptWorkUnits?.[0] ?? null;
-        return fromDeptList ? ({ id: fromDeptList.id } as { id: string }) : null;
+        const list = deptWorkUnits ?? [];
+        const pipeline =
+            list.find((w) => (w.key ?? "").trim().toLowerCase() === "enrollment_pipeline") ?? null;
+        if (pipeline) return { id: pipeline.id };
+        const na = list.find((w) => (w.key ?? "").trim().toLowerCase() === "needs_attention") ?? null;
+        if (na) return { id: na.id };
+        const first = list[0] ?? null;
+        return first ? { id: first.id } : null;
     }, [deptWorkUnits]);
 
     /** Session cache → shell before paint (revisit dept/workspace round-trips feel instant). */
@@ -579,6 +661,106 @@ export default function AdminV2WorkspaceDepartmentPage() {
         };
     }, [departmentId, dept?.id, deptLoading, deptWorkUnits]);
 
+    useEffect(() => {
+        if (!departmentId || deptLoading || deptWorkUnits === null) {
+            setDeptPipelineExecSurface(null);
+            setDeptPipelineExecLoading(false);
+            return;
+        }
+        const candidates = [...deptWorkUnits].filter(
+            (w) => (w.key ?? "").trim().toLowerCase() !== "needs_attention",
+        );
+        candidates.sort((a, b) => {
+            const ak = (a.key ?? "").trim().toLowerCase();
+            const bk = (b.key ?? "").trim().toLowerCase();
+            if (ak === "enrollment_pipeline") return -1;
+            if (bk === "enrollment_pipeline") return 1;
+            return 0;
+        });
+        if (!candidates.length) {
+            setDeptPipelineExecSurface(null);
+            setDeptPipelineExecLoading(false);
+            return;
+        }
+
+        let cancelled = false;
+        setDeptPipelineExecLoading(true);
+
+        void (async () => {
+            try {
+                const init = workspaceDataFetchInit();
+                for (const wu of candidates) {
+                    if (cancelled) return;
+                    const wuRes = await dedupeAdminFetch(`/api/admin/work-units/${encodeURIComponent(wu.id)}`, init ?? {});
+                    if (!wuRes.ok) continue;
+                    const row = (await wuRes.json().catch(() => ({}))) as {
+                        queue_definition?: unknown;
+                        department_id?: string | null;
+                    };
+                    const rowDept = String(row.department_id ?? "").trim();
+                    if (rowDept !== departmentId) continue;
+                    let def;
+                    try {
+                        def = validateQueueDefinition(row.queue_definition);
+                    } catch {
+                        continue;
+                    }
+                    if (def.ui?.layout !== "pipeline_with_attention") continue;
+                    const lanes = extractPipelineExecutionLanes(def);
+                    if (!lanes.length) continue;
+
+                    const pipeSection = def.ui?.sections?.find((s) => s.key === "pipeline");
+                    const panelTitle = pipeSection?.label?.trim() || "Pipeline";
+
+                    const sumRes = await dedupeAdminFetch(
+                        `/api/admin/work-units/${encodeURIComponent(wu.id)}/queues?include_previews=false&count_mode=exact&summary_mode=all&limit=3`,
+                        init ?? {},
+                    );
+                    if (!sumRes.ok) continue;
+                    const sj = (await sumRes.json().catch(() => ({}))) as {
+                        queues?: Array<{ key: string; count: number; counts_deferred?: boolean }>;
+                    };
+                    const queues = Array.isArray(sj.queues) ? sj.queues : [];
+                    const byKey = new Map(queues.map((q) => [q.key, q]));
+                    const merged = lanes.map((lane) => {
+                        const q = byKey.get(lane.key);
+                        const deferred = q?.counts_deferred === true;
+                        const count =
+                            !deferred && q && typeof q.count === "number" ? Math.max(0, Math.floor(q.count)) : null;
+                        return {
+                            ...lane,
+                            count,
+                            countsDeferred: deferred,
+                        };
+                    });
+
+                    if (!cancelled) {
+                        setDeptPipelineExecSurface({
+                            workUnitId: wu.id,
+                            panelTitle,
+                            lanes: merged,
+                        });
+                        setDeptPipelineExecLoading(false);
+                    }
+                    return;
+                }
+                if (!cancelled) {
+                    setDeptPipelineExecSurface(null);
+                    setDeptPipelineExecLoading(false);
+                }
+            } catch {
+                if (!cancelled) {
+                    setDeptPipelineExecSurface(null);
+                    setDeptPipelineExecLoading(false);
+                }
+            }
+        })();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [departmentId, deptLoading, deptWorkUnits]);
+
     const departmentPageBlockingLoad = useMemo(() => {
         if (!departmentId) return false;
         return deptLoading;
@@ -678,6 +860,16 @@ export default function AdminV2WorkspaceDepartmentPage() {
 
     const needsAttentionHref = needsAttentionSummary.href;
 
+    const sortedDeptAttentionBuckets = useMemo(() => {
+        const list = deptAttentionBuckets ?? [];
+        return [...list].sort((a, b) =>
+            compareNeedsAttentionBuckets(
+                { priority: a.priority, order: a.order ?? 0, label: a.label },
+                { priority: b.priority, order: b.order ?? 0, label: b.label },
+            ),
+        );
+    }, [deptAttentionBuckets]);
+
     const onEnrollmentDeptRailAction = useCallback(
         async (action: WorkspaceAction) => {
             if (action.type !== "actions.block") return;
@@ -704,9 +896,11 @@ export default function AdminV2WorkspaceDepartmentPage() {
         [departmentId, enrollmentRightRailByKey, needsAttentionHref, openDrawer, primaryWorkUnit?.id, router]
     );
 
+    const execPanelTitle = deptPipelineExecSurface?.panelTitle ?? "Work Unit Queue";
+
     const throughputPairedPanels = (
         <WorkspacePairedOperPanelsGrid>
-            <WorkspacePairedOperPanel tone="throughput" ariaLabel="Work Unit Queue" title="Work Unit Queue">
+            <WorkspacePairedOperPanel tone="throughput" ariaLabel={execPanelTitle} title={execPanelTitle}>
                 <ul className="adminv2-ws-queue-list" role="list">
                     {deptWorkUnitsError ? (
                         <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
@@ -715,49 +909,59 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             </div>
                         </li>
                     ) : null}
-                    {deptQueueSummariesLoading && (deptWorkUnits ?? []).length > 0 ? (
+                    {deptPipelineExecSurface && deptPipelineExecSurface.lanes.length > 0 ? (
+                        <>
+                            {deptPipelineExecSurface.lanes.map((lane) => {
+                                const wuHref = `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(deptPipelineExecSurface.workUnitId)}`;
+                                const href = `${wuHref}?queue=${encodeURIComponent(lane.key)}`;
+                                return (
+                                    <li key={`pipe:${lane.key}`} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
+                                        <DeptOperConsoleQueueRow
+                                            href={href}
+                                            title={`${lane.label}. Total ${lane.countsDeferred ? "deferred" : lane.count ?? "—"}.`}
+                                            label={lane.label}
+                                            iconKey={lane.icon}
+                                            total={lane.count}
+                                            countsDeferred={lane.countsDeferred}
+                                            variant="throughput"
+                                        />
+                                    </li>
+                                );
+                            })}
+                        </>
+                    ) : deptPipelineExecLoading && (deptWorkUnits ?? []).length > 0 ? (
                         <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
                             <div className="rounded-lg border border-admin-border bg-white/50 px-3 py-3 text-xs text-alloy-midnight/55">
-                                Loading queue totals…
+                                Loading pipeline lanes…
                             </div>
                         </li>
                     ) : (
-                        (deptWorkUnits ?? []).map((wu) => {
-                            const s = deptWorkUnitSummaries[wu.id];
-                            const total = s ? s.total : null;
-                            const wuHref = `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(wu.id)}`;
-                            return (
-                                <li key={`wu:${wu.id}`} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
-                                    <Link
-                                        href={wuHref}
-                                        prefetch={shouldDisableAdminV2LinkPrefetch(wuHref) ? false : undefined}
-                                        onClick={markWorkUnitNavigationStart}
-                                        className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-standard no-underline text-inherit hover:opacity-[0.98]"
-                                        data-ws-wu-urgency="standard"
-                                    >
-                                        <div className="adminv2-ws-wu-queue-card-compact-text">
-                                            <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">
-                                                {wu.name?.trim() || "Work unit"}
-                                            </div>
-                                            <div
-                                                className="adminv2-ws-paired-oper-queue-meta mt-2 tabular-nums"
-                                                style={{ color: "var(--d-muted)" }}
-                                            >
-                                                <div>
-                                                    <span className="font-medium text-alloy-midnight/75">Total</span>{" "}
-                                                    <span className="text-alloy-midnight/85">{total ?? "—"}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div className="adminv2-ws-wu-queue-card-compact-aside">
-                                            <span className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open">
-                                                Open
-                                            </span>
-                                        </div>
-                                    </Link>
+                        <>
+                            {deptQueueSummariesLoading && (deptWorkUnits ?? []).length > 0 ? (
+                                <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
+                                    <div className="rounded-lg border border-admin-border bg-white/50 px-3 py-3 text-xs text-alloy-midnight/55">
+                                        Loading queue totals…
+                                    </div>
                                 </li>
-                            );
-                        })
+                            ) : null}
+                            {(deptWorkUnits ?? []).map((wu) => {
+                                const s = deptWorkUnitSummaries[wu.id];
+                                const total = s ? s.total : null;
+                                const wuHref = `${WORKSPACE_BASE}/dept/${encodeURIComponent(departmentId)}/work-unit/${encodeURIComponent(wu.id)}`;
+                                return (
+                                    <li key={`wu:${wu.id}`} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
+                                        <DeptOperConsoleQueueRow
+                                            href={wuHref}
+                                            title={`${wu.name?.trim() || "Work unit"}. Total ${total ?? "—"}.`}
+                                            label={wu.name?.trim() || "Work unit"}
+                                            iconKey={null}
+                                            total={total}
+                                            variant="throughput"
+                                        />
+                                    </li>
+                                );
+                            })}
+                        </>
                     )}
                 </ul>
             </WorkspacePairedOperPanel>
@@ -775,14 +979,14 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             </div>
                         </li>
                     ) : null}
-                    {deptAttentionBucketsLoading && !deptAttentionBuckets?.length ? (
+                    {deptAttentionBucketsLoading && !sortedDeptAttentionBuckets.length ? (
                         <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
                             <div className="rounded-lg border border-admin-border bg-white/50 px-3 py-3 text-xs text-alloy-midnight/55">
                                 Loading operational buckets…
                             </div>
                         </li>
                     ) : null}
-                    {(deptAttentionBuckets ?? []).map((b) => {
+                    {sortedDeptAttentionBuckets.map((b) => {
                         const drillWuId =
                             needsAttentionSummary.needsAttentionWorkUnitId ?? needsAttentionSummary.targetWuId;
                         const drillBase =
@@ -796,35 +1000,15 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         const href = query !== "" ? `${drillBase}?${query}` : drillBase;
                         return (
                             <li key={`attn:${b.key}`} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
-                                <Link
+                                <DeptOperConsoleQueueRow
                                     href={href}
-                                    prefetch={shouldDisableAdminV2LinkPrefetch(href) ? false : undefined}
-                                    onClick={markWorkUnitNavigationStart}
-                                    className="adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-warning adminv2-ws-dept-attention-bucket-tile no-underline text-inherit hover:opacity-[0.98]"
-                                    data-ws-wu-urgency="attention"
-                                    data-attention-bucket-key={b.key}
                                     title={`${b.label}. Total ${b.count}.`}
-                                >
-                                    <div className="adminv2-ws-wu-queue-card-compact-text min-w-0">
-                                        <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact">
-                                            {b.label}
-                                        </div>
-                                        <div
-                                            className="adminv2-ws-paired-oper-queue-meta mt-2 tabular-nums"
-                                            style={{ color: "var(--d-muted)" }}
-                                        >
-                                            <div>
-                                                <span className="font-medium text-alloy-midnight/75">Total</span>{" "}
-                                                <span className="text-alloy-midnight/85">{b.count}</span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="adminv2-ws-wu-queue-card-compact-aside shrink-0 self-center">
-                                        <span className="adminv2-ws-wu-queue-action-chip adminv2-ws-wu-queue-action-chip--open">
-                                            Open
-                                        </span>
-                                    </div>
-                                </Link>
+                                    label={b.label}
+                                    iconKey={b.icon}
+                                    total={b.count}
+                                    variant="attention"
+                                    attentionBucketKey={b.key}
+                                />
                             </li>
                         );
                     })}
