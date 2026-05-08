@@ -18,7 +18,7 @@ Alloy already treats **queues as projection surfaces** (`docs/system/workspace-s
 
 **Evaluator contract (Card 2):** Pure, generalized **placement priority evaluator** specification lives in **§ Card 2 — Evaluator RFC detail** below. **QueueService** remains the sole projection integration point; **legacy Growth interpreter excluded.**
 
-**Product model (childcare waitlist preview — V1 cleanup):** Operators expect **program / room / age grouping first**, then **priority rules inside each group**. The **`program_room_group`** fact is the **primary sort/group dimension** (via preset **`primary_group_fact_key`** — not React hardcoding). **Standard family** replaces “general waitlist” copy: it means **no special priority rule matched**, not a parallel top-level cohort lane. **Admin V2** renders **section subheaders** from `program_room_group` for rows on the **loaded page** only. Demo seed sets **Infant** vs **Toddler** on demo opportunities. **`shadow_mode: true`** remains the default for the placement demo so **list order stays the queue’s usual SQL sort** while previews explain **would-be** ordering; turning **`shadow_mode` off** is only safe when operators accept **page-local** reordering (still not global fairness across pagination).
+**Product model (childcare waitlist preview — V1 cleanup):** Operators expect **program / room / age grouping first**, then **priority rules inside each group**, with **scoped waitlist position numbers (#1, #2, …) restarting per group** when **`shadow_mode: false`**. The **`program_room_group`** fact is the **primary sort/group dimension** (via preset **`primary_group_fact_key`** — not React hardcoding). **Standard family** means **no special priority rule matched**. **Admin V2** renders **section subheaders** plus **`Position in {group} waitlist`** captions (page-local; lane hint discloses pagination/cap). **`npm run dev:seed:placement-priority-demo`** sets **`shadow_mode: false`** so **demo ordering and positions match placement projection**; production lanes may keep **`shadow_mode: true`** to preserve SQL order without showing authoritative positions.
 
 ---
 
@@ -792,7 +792,7 @@ Non-authoritative projection on each evaluated opportunity row:
 
 **Success**
 
-- `bucket_key`, `bucket_label`, `sort_tuple`, `reasons`, `warnings`, `shadow_mode`, `evaluated_at_ms`
+- `bucket_key`, `bucket_label`, `sort_tuple`, `program_room_group_label` (when preset uses **`primary_group_fact_key`**), **`scoped_waitlist_position`** + **`scoped_waitlist_position_label`** (non-shadow only — **page-local**), `reasons`, `warnings`, `shadow_mode`, `evaluated_at_ms`
 
 **Evaluator error (row-level)**
 
@@ -812,7 +812,7 @@ Raw **`PlacementProfile`** JSON is **not** attached to rows.
 
 Present only when placement resolved **enabled** for the lane:
 
-- `evaluated_count`, `skipped_due_to_cap_count`, `reorder_applied`, `shadow_mode`, `row_evaluation_errors`, `profile_revision_mismatch`
+- `evaluated_count`, `skipped_due_to_cap_count`, `reorder_applied`, `shadow_mode`, `row_evaluation_errors`, `profile_revision_mismatch`, optional **`placement_positions_page_local`**, **`placement_positions_partial_evaluation`**
 
 ### 5. Tests run
 
@@ -841,14 +841,14 @@ Present only when placement resolved **enabled** for the lane:
 
 | Area | Behavior |
 |------|----------|
-| **Row** | When **`_placement_priority`** parses successfully: **“Placement priority”** kicker + **pill** with evaluator **`bucket_label`** + up to **2** **`reasons[].label`** lines + up to **2** **`warnings[].message`** lines (muted / amber). **Shadow mode:** extra footnote that row order matches the queue’s usual sort. |
-| **Evaluator error rows** | Subdued **“Placement priority”** + server **message** — no fake cohort chip. |
-| **Lane hint** | If API returns **`placement_projection_diagnostics`**: shadow → *“Placement priority preview — list order is unchanged; not a full-waitlist sort.”* Non-shadow → *“Sorted by placement priority for the records loaded on this page — not the full waitlist.”* |
+| **Row** | When **`_placement_priority`** parses successfully: **“Waitlist priority”** kicker + **`#n`** badge + **`Position in {group} waitlist`** caption (non-shadow only) + rule chip + reasons/warnings. **Shadow mode:** positions hidden; footnote that SQL sort is unchanged. |
+| **Evaluator error rows** | Subdued **“Waitlist priority”** + server **message** — no rule chip. |
+| **Lane hint** | Shadow → preview grouping copy + **position numbers hidden**. Non-shadow → **page-local** sort + **scoped position numbers** disclosure + **`evaluation_cap`** note when partial. |
 | **Drawer / entity GET** | **Not** implemented — queue projection remains non-authoritative; full placement section waits for **resolver / entity GET** (same boundary as attention drawer). |
 
 ### 2. Copy / doctrine decisions
 
-- **No** global rank, **no** “#1”, **no** “top of waitlist”, **no** guaranteed ordering language.
+- **Scoped `#1`, `#2`, …** allowed **only** per program/room **group** when non-shadow — **never** framed as global cross-page waitlist rank; lane hint carries **loaded-page / cap** disclosure. **No** “guaranteed spot” / AI placement language.
 - Labels come **only** from API **`bucket_label`** / **`reasons`** / **`warnings`** — **no** childcare tier strings hardcoded in React.
 - **`display`** (`show_bucket_chip`, `show_sort_hint`) — echoed on **`placement_projection_diagnostics.display`** (Cards 8–9); **`QueueVm.placementDisplay`** gates row strip + lane hint (`false` hides that surface).
 
@@ -882,7 +882,7 @@ See **§ Cards 8–9** (V1 closeout) and **V1.1 backlog** there.
 
 ## Cards 8–9 — Demo enablement, E2E verification, sprint closeout (completion notes)
 
-**Status:** Completed. **Scope:** Idempotent **demo metadata patch** (shadow placement on **`waitlisted`** only), **`display`** echo on queue diagnostics, expanded tests, **`typecheck`** script, sprint documentation for manual QA. **Not in scope:** workflow events, persistence, drawer/entity GET, **`resolveOpportunityQueueFromDefinition`** edits (**explicit freeze** maintained).
+**Status:** Completed. **Scope:** Idempotent **demo metadata patch** (placement on **`waitlisted`** only; demo sets **`shadow_mode: false`** for visible sort + scoped positions), **`display`** echo on queue diagnostics, expanded tests, **`typecheck`** script, sprint documentation for manual QA. **Not in scope:** workflow events, persistence, drawer/entity GET, **`resolveOpportunityQueueFromDefinition`** edits (**explicit freeze** maintained).
 
 ### 1. Seed command
 
@@ -904,7 +904,7 @@ npm run dev:seed:placement-priority-demo
 
 **What it does (idempotent):**
 
-1. Merges **`placement_priority_v1`** into **`work_units.metadata`** for that work unit (`enabled`, **`childcare_enrollment_waitlist_v1`**, revision **`2026-05-08`**, **`queue_keys_enabled: ["waitlisted"]`**, **`shadow_mode: true`**, **`evaluation_cap: 200`**, **`display`** flags on).
+1. Merges **`placement_priority_v1`** into **`work_units.metadata`** for that work unit (`enabled`, **`childcare_enrollment_waitlist_v1`**, revision **`2026-05-08`**, **`queue_keys_enabled: ["waitlisted"]`**, **`shadow_mode: false`** (demo shows placement sort + **scoped waitlist positions**), **`evaluation_cap: 200`**, **`display`** flags on).
 2. Creates or updates **six** **`waitlisted`** opportunities (`metadata.seed_key` = `placement_demo_waitlisted_*`) with distinct flags (staff, community, sibling, sister center, general, unknown sibling).
 
 **Implementation:** `web/scripts/seedPlacementPriorityDemoPatch.ts` · pure helpers `web/lib/orchestration/placement/placementPriorityDemoPatch.ts`.
@@ -920,9 +920,10 @@ npm run dev:seed:placement-priority-demo
 
 ### 3. Expected UI behavior
 
-- **Shadow (demo default):** Row order matches **usual SQL sort**; grouping + rule chips are **preview only** (footnote + lane hint).  
-- **Program-first:** Evaluator **`sort_tuple`** is **`program_room_group` → bucket → tie-breakers → entity id**; `_placement_priority.program_room_group_label` feeds section titles.  
-- **No** rank numbers, **no** “top of waitlist” / guaranteed ordering / AI language (automated tests enforce conservative copy).  
+- **Demo (`shadow_mode: false`):** Rows on the loaded page **reorder** by placement **`sort_tuple`**; **`#1`, `#2`, …** restart **per Infant / Toddler** (or unspecified) section with **`Position in … waitlist`** caption; lane hint states **page-local / pagination** scope.  
+- **Shadow (`shadow_mode: true`):** SQL row order preserved; **no** scoped position badges (lane hint says position numbers hidden).  
+- **Program-first:** Evaluator **`sort_tuple`** is **`program_room_group` → bucket → tie-breakers → entity id**.  
+- **No** implied **global** waitlist ordering beyond the loaded slice; **no** guaranteed-spot / AI language (tests enforce).  
 - **`show_bucket_chip` / `show_sort_hint`** from merged config respected when returned on **`placement_projection_diagnostics.display`**.
 
 ### 4. Automated verification / tests run
@@ -955,7 +956,7 @@ cd web && npm run typecheck
 - **Demo rows** use **`placement_priority_demo_v1`** package marker — separate from **`enrollment_pipeline_demo_v2`** families.  
 - **Department-level** placement not patched by default (work-unit-only opt-in minimizes blast radius).
 
-**Cleanup completed:** Copy (**Waitlist priority**, **Standard family**, program-first hints), childcare preset **`primary_group_fact_key`**, evaluator **`sort_tuple`**, **`program_room_group_label`** on preview payload, UI section headers via **`groupLabel`**, demo **Infant/Toddler** facts — **implemented** in sprint doc refresh (May 2026).
+**Cleanup completed:** Copy (**Waitlist priority**, **Standard family**, program-first hints), childcare preset **`primary_group_fact_key`**, evaluator **`sort_tuple`**, **`program_room_group_label`** + **scoped waitlist position** fields on preview payload (non-shadow), UI section headers via **`groupLabel`**, demo **Infant/Toddler** facts and **`shadow_mode: false`** for demo ordering — **implemented** in sprint doc refresh (May 2026).
 
 ### 7. V1.1 backlog (recommended)
 

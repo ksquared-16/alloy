@@ -5,14 +5,15 @@
 
 import type { PlacementPriorityLayer } from "@/lib/orchestration/placement/placementConfigSchema";
 
-/** Merged into `work_units.metadata.placement_priority_v1` for enrollment demo (shadow, waitlisted lane only). */
+/** Merged into `work_units.metadata.placement_priority_v1` for enrollment demo (waitlisted lane only). */
 export const PLACEMENT_PRIORITY_DEMO_LAYER_V1 = {
     version: 1 as const,
     enabled: true,
     profile_id: "childcare_enrollment_waitlist_v1",
     profile_revision: "2026-05-08",
     queue_keys_enabled: ["waitlisted"],
-    shadow_mode: true,
+    /** False so demo shows placement sort + scoped waitlist position numbers (still page-local — see lane hint). */
+    shadow_mode: false,
     evaluation_cap: 200,
     display: { show_bucket_chip: true, show_sort_hint: true },
 } satisfies PlacementPriorityLayer;

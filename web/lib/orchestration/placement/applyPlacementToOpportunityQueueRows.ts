@@ -29,6 +29,13 @@ export type PlacementPriorityRowPreview = {
     sort_tuple: Array<string | number | null>;
     /** Mirrors evaluator snapshot — UI sections / grouping (loaded page only). */
     program_room_group_label?: string | null;
+    /**
+     * 1-based waitlist position within the same `program_room_group` sort bucket — **non-shadow only**.
+     * Scoped to rows loaded/evaluated on this response (see diagnostics).
+     */
+    scoped_waitlist_position?: number;
+    /** e.g. `Position in Toddler waitlist` — paired with {@link scoped_waitlist_position}. */
+    scoped_waitlist_position_label?: string;
     reasons: PlacementReason[];
     warnings: Array<{ code: string; message: string; fact_keys?: string[] }>;
     shadow_mode: boolean;
@@ -50,6 +57,13 @@ export type WorkUnitPlacementQueueDiagnostics = {
     shadow_mode: boolean;
     row_evaluation_errors: number;
     profile_revision_mismatch: boolean;
+    /**
+     * When true, `scoped_waitlist_position` values are present (non-shadow placement sort applied).
+     * Positions are **not** global across pagination — see lane hint copy.
+     */
+    placement_positions_page_local?: boolean;
+    /** True when `evaluation_cap` left tail rows unevaluated — positions omit those families entirely. */
+    placement_positions_partial_evaluation?: boolean;
     /** Echo of merged config `display` for UI (optional). */
     display?: {
         show_bucket_chip?: boolean;
@@ -95,6 +109,35 @@ function stripInternalSortTuple(row: Record<string, unknown>): Record<string, un
     return rest;
 }
 
+/** Stable key for counting positions — first `sort_tuple` component is `program_room_group` when preset uses `primary_group_fact_key`. */
+function placementGroupCountKey(tuple: Array<string | number | null> | undefined): string {
+    if (!tuple?.length) return "__missing_tuple__";
+    return JSON.stringify(tuple[0]);
+}
+
+type AccRow = Record<string, unknown> & { __placement_sort_tuple?: Array<string | number | null> };
+
+function assignScopedWaitlistPositions(rows: AccRow[]): void {
+    const counts = new Map<string, number>();
+    for (const row of rows) {
+        const raw = row._placement_priority;
+        if (!raw || typeof raw !== "object" || !("bucket_key" in raw)) continue;
+        const tuple = row.__placement_sort_tuple;
+        if (!Array.isArray(tuple)) continue;
+        const gk = placementGroupCountKey(tuple as Array<string | number | null>);
+        const next = (counts.get(gk) ?? 0) + 1;
+        counts.set(gk, next);
+        const p = raw as PlacementPriorityRowPreview;
+        const displayGroup = p.program_room_group_label?.trim() || "Program / room not specified";
+        const label = `Position in ${displayGroup} waitlist`;
+        row._placement_priority = {
+            ...p,
+            scoped_waitlist_position: next,
+            scoped_waitlist_position_label: label,
+        };
+    }
+}
+
 export function applyPlacementToOpportunityQueueRows(params: {
     rows: Array<Record<string, unknown>>;
     placement: EnabledPlacement;
@@ -128,7 +171,6 @@ export function applyPlacementToOpportunityQueueRows(params: {
     const tail = params.rows.slice(cap);
     diagnostics.skipped_due_to_cap_count = tail.length;
 
-    type AccRow = Record<string, unknown> & { __placement_sort_tuple?: Array<string | number | null> };
     const enriched: AccRow[] = [];
 
     for (const row of head) {
@@ -233,6 +275,11 @@ export function applyPlacementToOpportunityQueueRows(params: {
         const afterIds = orderedHead.map((r) => String(r.id ?? ""));
         diagnostics.reorder_applied =
             head.length > 1 && beforeIds.some((id, i) => id !== afterIds[i]);
+        assignScopedWaitlistPositions(orderedHead);
+        if (diagnostics.evaluated_count > 0) {
+            diagnostics.placement_positions_page_local = true;
+            diagnostics.placement_positions_partial_evaluation = diagnostics.skipped_due_to_cap_count > 0;
+        }
     }
 
     const stripped = orderedHead.map(stripInternalSortTuple);

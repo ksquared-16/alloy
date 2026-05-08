@@ -4,33 +4,49 @@ import { QueueRowPlacementPriorityStrip } from "@/app/adminV2/components/workspa
 import type { QueueRowPlacementPriorityVm } from "@/lib/ui-v2/workspace-types";
 
 describe("QueueRowPlacementPriorityStrip", () => {
-    it("renders priority rule chip and reason lines when preview is valid", () => {
+    it("shadow mode does not render scoped waitlist position badge", () => {
         const preview: QueueRowPlacementPriorityVm = {
             priorityRuleLabel: "Sibling enrolled at center",
             programGroupSectionTitle: "Infant",
-            reasonLines: ["Priority rule matched for this program / room group."],
-            warningLines: [],
-            shadowMode: true,
-        };
-        const html = renderToStaticMarkup(<QueueRowPlacementPriorityStrip preview={preview} />);
-        expect(html).toContain("Waitlist priority");
-        expect(html).toContain("Sibling enrolled at center");
-        expect(html).toContain("data-queue-placement=\"preview\"");
-        expect(html).toContain("adminv2-ws-queue-placement-rule-chip");
-        expect(html.toLowerCase()).not.toMatch(/\brank\b|\#\d|top of waitlist/i);
-    });
-
-    it("renders nothing like global rank for shadow preview copy", () => {
-        const preview: QueueRowPlacementPriorityVm = {
-            priorityRuleLabel: "Standard family",
-            programGroupSectionTitle: "Toddler",
             reasonLines: [],
             warningLines: [],
             shadowMode: true,
         };
         const html = renderToStaticMarkup(<QueueRowPlacementPriorityStrip preview={preview} />);
-        expect(html).toContain("Preview only");
-        expect(html.toLowerCase()).not.toMatch(/\bglobal\b.*\bsort\b|full waitlist order/i);
+        expect(html).toContain("Waitlist priority");
+        expect(html).not.toContain("adminv2-ws-queue-placement-position");
+        expect(html.toLowerCase()).toMatch(/position numbers stay off/i);
+    });
+
+    it("non-shadow mode shows #n and Position in … waitlist caption", () => {
+        const preview: QueueRowPlacementPriorityVm = {
+            priorityRuleLabel: "Staff / community priority",
+            programGroupSectionTitle: "Toddler",
+            scopedWaitlistPosition: 1,
+            scopedWaitlistPositionLabel: "Position in Toddler waitlist",
+            reasonLines: [],
+            warningLines: [],
+            shadowMode: false,
+        };
+        const html = renderToStaticMarkup(<QueueRowPlacementPriorityStrip preview={preview} />);
+        expect(html).toContain("adminv2-ws-queue-placement-position");
+        expect(html).toContain("#1");
+        expect(html).toContain("Position in Toddler waitlist");
+        expect(html).toContain("adminv2-ws-queue-placement-strip__position-caption");
+    });
+
+    it("non-shadow hint copy avoids implying global full-waitlist accuracy", () => {
+        const preview: QueueRowPlacementPriorityVm = {
+            priorityRuleLabel: "Standard family",
+            programGroupSectionTitle: "Infant",
+            scopedWaitlistPosition: 2,
+            scopedWaitlistPositionLabel: "Position in Infant waitlist",
+            reasonLines: [],
+            warningLines: [],
+            shadowMode: false,
+        };
+        const html = renderToStaticMarkup(<QueueRowPlacementPriorityStrip preview={preview} />);
+        expect(html.toLowerCase()).not.toMatch(/\bglobal\b.*\bfull\b.*\bwaitlist\b|guaranteed.*spot/i);
     });
 
     it("shows warning lines when present", () => {

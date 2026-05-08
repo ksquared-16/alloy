@@ -33,6 +33,35 @@ describe("queuePlacementPriorityPresentation", () => {
         ]);
         expect(vm?.warningLines).toEqual(["Sibling enrollment could not be verified."]);
         expect(vm?.shadowMode).toBe(true);
+        expect(vm?.scopedWaitlistPosition).toBeUndefined();
+    });
+
+    it("non-shadow parses scoped waitlist position fields", () => {
+        const vm = parseQueueRowPlacementPriorityVm({
+            bucket_label: "Standard family",
+            program_room_group_label: "Toddler",
+            scoped_waitlist_position: 3,
+            scoped_waitlist_position_label: "Position in Toddler waitlist",
+            reasons: [],
+            warnings: [],
+            shadow_mode: false,
+            evaluated_at_ms: 1,
+        });
+        expect(vm?.scopedWaitlistPosition).toBe(3);
+        expect(vm?.scopedWaitlistPositionLabel).toBe("Position in Toddler waitlist");
+    });
+
+    it("shadow mode ignores scoped position fields on payload", () => {
+        const vm = parseQueueRowPlacementPriorityVm({
+            bucket_label: "Standard family",
+            scoped_waitlist_position: 1,
+            scoped_waitlist_position_label: "Position in Toddler waitlist",
+            reasons: [],
+            warnings: [],
+            shadow_mode: true,
+            evaluated_at_ms: 1,
+        });
+        expect(vm?.scopedWaitlistPosition).toBeUndefined();
     });
 
     it("missing program_room_group_label maps to unspecified section title", () => {
@@ -68,7 +97,7 @@ describe("queuePlacementPriorityPresentation", () => {
                 row_evaluation_errors: 0,
                 profile_revision_mismatch: false,
             })
-        ).toMatch(/waitlist priority preview/i);
+        ).toMatch(/position numbers are hidden/i);
         expect(
             buildPlacementProjectionQueueHint({
                 evaluated_count: 2,
@@ -77,11 +106,37 @@ describe("queuePlacementPriorityPresentation", () => {
                 shadow_mode: false,
                 row_evaluation_errors: 0,
                 profile_revision_mismatch: false,
+                placement_positions_partial_evaluation: false,
             })
-        ).toMatch(/this page/i);
+        ).toMatch(/position numbers/i);
+        expect(
+            buildPlacementProjectionQueueHint({
+                evaluated_count: 2,
+                skipped_due_to_cap_count: 0,
+                reorder_applied: true,
+                shadow_mode: false,
+                row_evaluation_errors: 0,
+                profile_revision_mismatch: false,
+                placement_positions_partial_evaluation: false,
+            })
+        ).toMatch(/pagination/i);
     });
 
-    it("hint strings never advertise rank position", () => {
+    it("hint discloses evaluation_cap when placement_positions_partial_evaluation", () => {
+        const hint = buildPlacementProjectionQueueHint({
+            evaluated_count: 1,
+            skipped_due_to_cap_count: 3,
+            reorder_applied: true,
+            shadow_mode: false,
+            row_evaluation_errors: 0,
+            profile_revision_mismatch: false,
+            placement_positions_page_local: true,
+            placement_positions_partial_evaluation: true,
+        });
+        expect(hint?.toLowerCase()).toMatch(/evaluation_cap/);
+    });
+
+    it("hint strings do not imply guaranteed global waitlist placement", () => {
         const shadow = buildPlacementProjectionQueueHint({
             evaluated_count: 1,
             skipped_due_to_cap_count: 0,
@@ -97,9 +152,10 @@ describe("queuePlacementPriorityPresentation", () => {
             shadow_mode: false,
             row_evaluation_errors: 0,
             profile_revision_mismatch: false,
+            placement_positions_partial_evaluation: false,
         });
         for (const s of [shadow ?? "", sorted ?? ""]) {
-            expect(s.toLowerCase()).not.toMatch(/\brank\b|\#\d|top of|guaranteed|ai recommended/i);
+            expect(s.toLowerCase()).not.toMatch(/\bguaranteed\b|\bai recommended\b/i);
         }
     });
 });

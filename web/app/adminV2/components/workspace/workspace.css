@@ -5894,6 +5894,23 @@
   border-top: 1px solid color-mix(in srgb, var(--d-border) 88%, transparent);
 }
 
+[data-ws-surface="work_unit"] .adminv2-ws-queue-placement-position {
+  flex-shrink: 0;
+  min-width: 1.75rem;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  color: color-mix(in srgb, var(--d-text-primary, #273f52) 92%, var(--d-muted));
+}
+
+[data-ws-surface="work_unit"] .adminv2-ws-queue-placement-strip__position-caption {
+  margin: 4px 0 0;
+  font-size: 10px;
+  line-height: 1.35;
+  color: color-mix(in srgb, var(--d-muted) 55%, var(--d-text-primary, #273f52));
+}
+
 [data-ws-surface="work_unit"] .adminv2-ws-queue-placement-strip__head {
   display: flex;
   flex-wrap: wrap;

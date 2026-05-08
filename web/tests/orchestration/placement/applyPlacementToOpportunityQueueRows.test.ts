@@ -79,6 +79,8 @@ describe("applyPlacementToOpportunityQueueRows", () => {
         expect(p1.bucket_key).toBe("tier_staff_community");
         expect(p0.program_room_group_label).toBe("Toddler");
         expect(p1.program_room_group_label).toBe("Infant");
+        expect((p0 as { scoped_waitlist_position?: number }).scoped_waitlist_position).toBeUndefined();
+        expect((p1 as { scoped_waitlist_position?: number }).scoped_waitlist_position).toBeUndefined();
     });
 
     it("non-shadow mode reorders by sort_tuple (program group before bucket priority)", () => {
@@ -116,6 +118,87 @@ describe("applyPlacementToOpportunityQueueRows", () => {
         expect(diagnostics.reorder_applied).toBe(true);
         /** Infant group sorts before Toddler; within Infant, staff tier beats general in SQL order reversal. */
         expect(out.map((r) => r.id)).toEqual(["staff_second_in_sql", "general_first_in_sql"]);
+        const pi = out[0]._placement_priority as {
+            scoped_waitlist_position?: number;
+            scoped_waitlist_position_label?: string;
+            program_room_group_label?: string | null;
+        };
+        const pt = out[1]._placement_priority as typeof pi;
+        expect(pi.scoped_waitlist_position).toBe(1);
+        expect(pi.scoped_waitlist_position_label).toBe("Position in Infant waitlist");
+        expect(pt.scoped_waitlist_position).toBe(1);
+        expect(pt.scoped_waitlist_position_label).toBe("Position in Toddler waitlist");
+        expect(diagnostics.placement_positions_page_local).toBe(true);
+        expect(diagnostics.placement_positions_partial_evaluation).toBe(false);
+    });
+
+    it("non-shadow assigns scoped positions per program_room_group (staff before sibling before standard)", () => {
+        const placement = resolveChildcarePlacement(WAITLISTED_QUEUE_KEY, { shadow_mode: false });
+        const wait = "2026-06-01T12:00:00.000Z";
+        const rows: Array<Record<string, unknown>> = [
+            {
+                id: "t_std",
+                created_at: "2026-01-01T12:00:00.000Z",
+                metadata: {
+                    placement_fact_inputs_v1: { program_room_group: "Toddler" },
+                    enrollment_operational: { wait_since: wait },
+                },
+            },
+            {
+                id: "t_staff",
+                created_at: "2026-01-02T12:00:00.000Z",
+                metadata: {
+                    placement_fact_inputs_v1: { program_room_group: "Toddler" },
+                    flag_staff_household: true,
+                    enrollment_operational: { wait_since: wait },
+                },
+            },
+            {
+                id: "t_sib",
+                created_at: "2026-01-03T12:00:00.000Z",
+                metadata: {
+                    placement_fact_inputs_v1: { program_room_group: "Toddler" },
+                    flag_sibling_enrolled: true,
+                    enrollment_operational: { wait_since: wait },
+                },
+            },
+            {
+                id: "i_std",
+                created_at: "2026-01-04T12:00:00.000Z",
+                metadata: {
+                    placement_fact_inputs_v1: { program_room_group: "Infant" },
+                    enrollment_operational: { wait_since: wait },
+                },
+            },
+            {
+                id: "i_sib",
+                created_at: "2026-01-05T12:00:00.000Z",
+                metadata: {
+                    placement_fact_inputs_v1: { program_room_group: "Infant" },
+                    flag_sibling_enrolled: true,
+                    enrollment_operational: { wait_since: wait },
+                },
+            },
+        ];
+        const { rows: out, diagnostics } = applyPlacementToOpportunityQueueRows({
+            rows,
+            placement,
+            ctx: {
+                workUnitId: "wu_1",
+                queueKey: WAITLISTED_QUEUE_KEY,
+                nowMs: 1_700_000_000_000,
+                statusKeysAllowed: ["waitlisted"],
+            },
+        });
+        expect(out.map((r) => r.id)).toEqual(["i_sib", "i_std", "t_staff", "t_sib", "t_std"]);
+        type P = { scoped_waitlist_position?: number; scoped_waitlist_position_label?: string };
+        expect((out[0]._placement_priority as P).scoped_waitlist_position).toBe(1);
+        expect((out[0]._placement_priority as P).scoped_waitlist_position_label).toMatch(/Infant/i);
+        expect((out[1]._placement_priority as P).scoped_waitlist_position).toBe(2);
+        expect((out[2]._placement_priority as P).scoped_waitlist_position).toBe(1);
+        expect((out[3]._placement_priority as P).scoped_waitlist_position).toBe(2);
+        expect((out[4]._placement_priority as P).scoped_waitlist_position).toBe(3);
+        expect(diagnostics.placement_positions_page_local).toBe(true);
     });
 
     it("respects evaluation_cap: only head rows evaluated; tail rows omit _placement_priority", () => {
@@ -151,6 +234,9 @@ describe("applyPlacementToOpportunityQueueRows", () => {
         expect(out[1]._placement_priority).toBeUndefined();
         /** Tail keeps priority ordering relative to evaluated head only — staff row stays second. */
         expect(out.map((r) => r.id)).toEqual(["head", "tail"]);
+        expect(diagnostics.placement_positions_partial_evaluation).toBe(true);
+        const hp = out[0]._placement_priority as { scoped_waitlist_position?: number };
+        expect(hp.scoped_waitlist_position).toBe(1);
     });
 
     it("row-level evaluator failure attaches error preview without throwing", () => {

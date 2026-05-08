@@ -46,13 +46,19 @@ export type QueueItemQuickActionVm = {
 export type QueueItemWaitStatusVm = "safe" | "approaching" | "breached";
 
 /**
- * Placement priority preview from QueueService `_placement_priority` (projection only — not rank, not global order).
+ * Placement priority preview from QueueService `_placement_priority` (projection only — not global waitlist order).
  */
 export type QueueRowPlacementPriorityVm = {
   /** Human-readable priority rule / bucket label from evaluator (not program grouping). */
   priorityRuleLabel: string;
   /** Section title for program / room / age grouping — loaded page only; use with queue row `groupLabel`. */
   programGroupSectionTitle: string;
+  /**
+   * 1-based position within this row's program/room group — **non-shadow** placement only; page-local scope (lane hint).
+   */
+  scopedWaitlistPosition?: number;
+  /** e.g. `Position in Toddler waitlist` — paired with {@link scopedWaitlistPosition}. */
+  scopedWaitlistPositionLabel?: string;
   /** Up to two `reasons[].label` strings from the evaluator. */
   reasonLines: string[];
   /** Up to two warning messages (unknown facts, etc.). */

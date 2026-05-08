@@ -60,9 +60,23 @@ export function parseQueueRowPlacementPriorityVm(raw: unknown): QueueRowPlacemen
         }
     }
 
+    let scopedWaitlistPosition: number | undefined;
+    let scopedWaitlistPositionLabel: string | undefined;
+    if (!shadowMode) {
+        const pos = o.scoped_waitlist_position;
+        if (typeof pos === "number" && Number.isFinite(pos) && Number.isInteger(pos) && pos >= 1) {
+            scopedWaitlistPosition = pos;
+            const sl =
+                typeof o.scoped_waitlist_position_label === "string" ? o.scoped_waitlist_position_label.trim() : "";
+            if (sl) scopedWaitlistPositionLabel = sl;
+        }
+    }
+
     return {
         priorityRuleLabel,
         programGroupSectionTitle,
+        ...(scopedWaitlistPosition != null ? { scopedWaitlistPosition } : {}),
+        ...(scopedWaitlistPositionLabel ? { scopedWaitlistPositionLabel } : {}),
         reasonLines,
         warningLines,
         shadowMode,
@@ -75,7 +89,13 @@ export function buildPlacementProjectionQueueHint(
 ): string | undefined {
     if (!diagnostics) return undefined;
     if (diagnostics.shadow_mode) {
-        return "Waitlist priority preview — rows group by program / room on this loaded page; list order still follows this queue’s usual sort (not placement ordering). Not the full waitlist.";
+        return "Waitlist priority preview — rows group by program / room on this loaded page; list order still follows this queue’s usual sort (not placement ordering). Position numbers are hidden in preview mode. Not the full waitlist.";
     }
-    return "Sorted by waitlist priority for records on this page — program / room group first, then priority rules within each group. Not the full waitlist beyond this page.";
+    let line =
+        "Sorted by waitlist priority for records on this page — program / room group first, then priority rules within each group. Position numbers (#1, #2, …) restart per program/room group and apply only to records loaded and evaluated here — not the full waitlist beyond pagination.";
+    if (diagnostics.placement_positions_partial_evaluation) {
+        line +=
+            " Some rows were not evaluated due to evaluation_cap, so positions can omit families beyond that cap.";
+    }
+    return line;
 }
