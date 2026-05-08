@@ -167,6 +167,74 @@ function DeptOperConsoleQueueRow(props: {
     );
 }
 
+/** Dual-panel placeholder until pipeline lanes + attention preview both settle — avoids one column filling early. */
+function DeptPairedOperQueuesSkeleton(props: { throughputTitle: string }) {
+    const { throughputTitle } = props;
+    const Row = ({ variant }: { variant: "throughput" | "attention" }) => (
+        <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
+            <div
+                className={`adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact ${
+                    variant === "attention"
+                        ? "adminv2-ws-wu-queue-card--tier-warning adminv2-ws-dept-attention-bucket-tile"
+                        : "adminv2-ws-wu-queue-card--tier-standard adminv2-ws-dept-pipeline-lane-tile"
+                } pointer-events-none select-none`}
+                aria-busy="true"
+            >
+                <div className="adminv2-ws-wu-queue-card-compact-text min-w-0">
+                    <div className="adminv2-ws-dept-oper-row-title">
+                        <span
+                            className={
+                                variant === "attention"
+                                    ? "adminv2-ws-dept-oper-icon-well adminv2-ws-dept-oper-icon-well--attention"
+                                    : "adminv2-ws-dept-oper-icon-well"
+                            }
+                            aria-hidden
+                        >
+                            <span className="block h-6 w-6 rounded-md skeleton-pulse bg-alloy-stone/18" />
+                        </span>
+                        <div className="adminv2-ws-wu-queue-card-title adminv2-ws-wu-queue-card-title--compact min-w-0 pt-0.5">
+                            <span className="block h-3.5 w-[min(72%,14rem)] rounded skeleton-pulse bg-alloy-stone/16" />
+                        </div>
+                    </div>
+                    <div className="adminv2-ws-paired-oper-queue-meta mt-2 tabular-nums" style={{ color: "var(--d-muted)" }}>
+                        <div>
+                            <span className="font-medium text-alloy-midnight/75">Total</span>{" "}
+                            <span className="inline-block h-3.5 w-6 rounded skeleton-pulse bg-alloy-stone/14 align-middle" />
+                        </div>
+                    </div>
+                </div>
+                <div className="adminv2-ws-wu-queue-card-compact-aside shrink-0 self-center">
+                    <span className="inline-block h-6 w-[3.25rem] rounded-md skeleton-pulse bg-alloy-stone/12" />
+                </div>
+            </div>
+        </li>
+    );
+    return (
+        <WorkspacePairedOperPanelsGrid>
+            <WorkspacePairedOperPanel tone="throughput" ariaLabel={throughputTitle} title={throughputTitle}>
+                <ul className="adminv2-ws-queue-list" role="list">
+                    <Row variant="throughput" />
+                    <Row variant="throughput" />
+                    <Row variant="throughput" />
+                    <Row variant="throughput" />
+                </ul>
+            </WorkspacePairedOperPanel>
+            <WorkspacePairedOperPanel
+                tone="attention"
+                ariaLabel="Needs Attention"
+                title="Needs Attention"
+                titleClassName="adminv2-ws-queue-title--section-primary-type"
+            >
+                <ul className="adminv2-ws-queue-list" role="list">
+                    <Row variant="attention" />
+                    <Row variant="attention" />
+                    <Row variant="attention" />
+                </ul>
+            </WorkspacePairedOperPanel>
+        </WorkspacePairedOperPanelsGrid>
+    );
+}
+
 type DeptAttentionSemantics = {
     candidate_fetch_cap: number;
     raw_candidates_fetched: number;
@@ -766,6 +834,15 @@ export default function AdminV2WorkspaceDepartmentPage() {
         return deptLoading;
     }, [departmentId, deptLoading]);
 
+    /** Both paired lanes finished their independent fetches — reveal real cards together (no early Needs Attention fill). */
+    const deptPairedOperSurfacesReady = useMemo(() => {
+        if (!departmentId || deptLoading || deptWorkUnits === null) return false;
+        return !deptPipelineExecLoading && !deptAttentionBucketsLoading;
+    }, [departmentId, deptLoading, deptWorkUnits, deptPipelineExecLoading, deptAttentionBucketsLoading]);
+
+    const showDeptPairedOperSkeleton =
+        !!dept && !departmentPageBlockingLoad && !deptWorkUnitsError && !deptPairedOperSurfacesReady;
+
     useEffect(() => {
         if (!isEnrollmentLikeDepartmentKey(deptKey) || !departmentId || !primaryWorkUnit?.id) {
             setEnrollmentDeptRightRail(null);
@@ -1075,7 +1152,13 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             </div>
                         ) : null
                     }
-                    throughputSlot={throughputPairedPanels}
+                    throughputSlot={
+                        showDeptPairedOperSkeleton ? (
+                            <DeptPairedOperQueuesSkeleton throughputTitle={execPanelTitle} />
+                        ) : (
+                            throughputPairedPanels
+                        )
+                    }
                     attentionSlot={null}
                     contextSlot={
                         <div

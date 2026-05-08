@@ -5773,20 +5773,32 @@ export default function AdminEntityDrawer() {
         };
     }, [isJobRecordModalTarget, drawer.type, tabLabels]);
 
+    /** Existing opportunity: until entity row + record chrome both resolve, keep inquiry strip (no generic Related tab flash). */
+    const opportunityDrawerShellSettled =
+        drawer.type === "opportunities" &&
+        !!drawer.id &&
+        drawer.id !== "new" &&
+        drawerReady &&
+        recordChromeOpportunity.configResolved &&
+        !!overviewData &&
+        !(overviewData as { _create?: boolean })._create;
+
     /** Inquiry workflow (or record-chrome loading for an existing opportunity): fixed top tabs; no Related. */
     const drawerTabStripKeys = useMemo((): DrawerTabKey[] => {
-        if (
-            drawer.type === "opportunities" &&
-            drawer.id &&
-            drawer.id !== "new" &&
-            overviewData &&
-            !(overviewData as { _create?: boolean })._create &&
-            opportunityRecordGateWorkflowLayout
-        ) {
+        if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
+            return tabList;
+        }
+        if (overviewData && (overviewData as { _create?: boolean })._create) {
+            return tabList;
+        }
+        if (!opportunityDrawerShellSettled) {
+            return OPPORTUNITY_INQUIRY_WORKFLOW_TAB_STRIP;
+        }
+        if (opportunityRecordGateWorkflowLayout) {
             return OPPORTUNITY_INQUIRY_WORKFLOW_TAB_STRIP;
         }
         return tabList;
-    }, [drawer.type, drawer.id, overviewData, opportunityRecordGateWorkflowLayout, tabList]);
+    }, [drawer.type, drawer.id, overviewData, opportunityDrawerShellSettled, opportunityRecordGateWorkflowLayout, tabList]);
 
     useEffect(() => {
         if (!isJobDrawerV2 || drawer.type !== "jobs" || !drawer.id || drawer.id === "new") return;
@@ -7861,37 +7873,46 @@ export default function AdminEntityDrawer() {
                   .join(" · ") || undefined
             : undefined;
     const drawerTitleResolved =
-        drawerGateLoading
-            ? `Loading ${drawer.type ? getEntityLabel(labels, drawer.type, "singular").toLowerCase() : "record"}…`
-            : drawer.type === "opportunities" &&
-                overviewData &&
-                !(overviewData as { _create?: boolean })._create &&
-                opportunityInquiryWorkflowDrawer
-              ? (() => {
-                    const d = overviewData as Record<string, unknown>;
-                    const ident = (d._identity as Record<string, unknown> | null) ?? null;
-                    const household = ident && typeof ident.household === "object" ? (ident.household as Record<string, unknown>) : null;
-                    const householdLabel = household && typeof household.label === "string" ? household.label.trim() : "";
-                    const customerName = typeof (d as { _customer_name?: unknown })._customer_name === "string" ? String((d as { _customer_name: string })._customer_name).trim() : "";
-                    const inquiryTitle = opportunityInquiryIdentityInquiryTitle(d);
-                    const nm = String((d.name as string | undefined) ?? "").trim();
-                    const base = householdLabel || customerName || inquiryTitle || nm || opportunitySingular;
-                    const raw = base.startsWith("Enrollment") ? base : `Enrollment — ${base}`;
-                    return (
-                        raw
-                            .replace(/\bInquiry\b/gi, "")
-                            .replace(/\s{2,}/g, " ")
-                            .replace(/^\s*[-:]\s*/g, "")
-                            .trim() || raw
-                    );
-                })()
-              : isJobDrawerV2 && overviewData && !(overviewData as { _create?: boolean })?._create
-                ? String((overviewData as { title?: string }).title ?? "").trim() || "Job"
-                : typeof title === "string"
-                  ? title
-                  : title != null
-                    ? String(title)
-                    : "—";
+        isOpportunityRecordModalTarget &&
+        drawer.type === "opportunities" &&
+        drawer.id !== "new" &&
+        !opportunityDrawerShellSettled &&
+        !error
+            ? "Inquiry"
+            : drawerGateLoading
+              ? `Loading ${drawer.type ? getEntityLabel(labels, drawer.type, "singular").toLowerCase() : "record"}…`
+              : drawer.type === "opportunities" &&
+                  overviewData &&
+                  !(overviewData as { _create?: boolean })._create &&
+                  opportunityInquiryWorkflowDrawer
+                ? (() => {
+                      const d = overviewData as Record<string, unknown>;
+                      const ident = (d._identity as Record<string, unknown> | null) ?? null;
+                      const household = ident && typeof ident.household === "object" ? (ident.household as Record<string, unknown>) : null;
+                      const householdLabel = household && typeof household.label === "string" ? household.label.trim() : "";
+                      const customerName =
+                          typeof (d as { _customer_name?: unknown })._customer_name === "string"
+                              ? String((d as { _customer_name: string })._customer_name).trim()
+                              : "";
+                      const inquiryTitle = opportunityInquiryIdentityInquiryTitle(d);
+                      const nm = String((d.name as string | undefined) ?? "").trim();
+                      const base = householdLabel || customerName || inquiryTitle || nm || opportunitySingular;
+                      const raw = base.startsWith("Enrollment") ? base : `Enrollment — ${base}`;
+                      return (
+                          raw
+                              .replace(/\bInquiry\b/gi, "")
+                              .replace(/\s{2,}/g, " ")
+                              .replace(/^\s*[-:]\s*/g, "")
+                              .trim() || raw
+                      );
+                  })()
+                : isJobDrawerV2 && overviewData && !(overviewData as { _create?: boolean })?._create
+                  ? String((overviewData as { title?: string }).title ?? "").trim() || "Job"
+                  : typeof title === "string"
+                    ? title
+                    : title != null
+                      ? String(title)
+                      : "—";
     const headerSubtitleBase = jobV2MetaSubtitle ?? drawerHeaderRecordSubtitle ?? undefined;
     const workflowCompactRecordNum =
         drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer && typeof headerSubtitleBase === "string"
