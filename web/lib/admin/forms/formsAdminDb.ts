@@ -312,6 +312,82 @@ export async function dbListSubmissionLinkedDocuments(
     return { data: out, error: null };
 }
 
+/**
+ * Batch-load linked documents for many submissions (org-scoped). Avoids per-submission round trips.
+ */
+export async function dbListSubmissionLinkedDocumentsForSubmissionIds(
+    supabase: SupabaseClient,
+    orgId: string,
+    submissionIds: string[]
+): Promise<{ data: Record<string, FormSubmissionLinkedDocument[]> | null; error: { message: string } | null }> {
+    if (submissionIds.length === 0) return { data: {}, error: null };
+
+    const { data: junctions, error: jErr } = await supabase
+        .from("form_submission_documents")
+        .select("form_submission_id, document_id, role, created_at")
+        .eq("org_id", orgId)
+        .in("form_submission_id", submissionIds);
+    if (jErr) return { data: null, error: jErr };
+
+    const rows = junctions ?? [];
+    if (rows.length === 0) {
+        const empty: Record<string, FormSubmissionLinkedDocument[]> = {};
+        for (const sid of submissionIds) empty[sid] = [];
+        return { data: empty, error: null };
+    }
+
+    const ids = [...new Set(rows.map((r: { document_id: string }) => r.document_id))];
+    const { data: docs, error: dErr } = await supabase
+        .from("documents")
+        .select("id, name, original_filename, document_type, status, created_at")
+        .eq("org_id", orgId)
+        .in("id", ids);
+    if (dErr) return { data: null, error: dErr };
+
+    const docById = new Map((docs ?? []).map((d: { id: string }) => [d.id, d]));
+    const bySubmission: Record<string, FormSubmissionLinkedDocument[]> = {};
+    for (const sid of submissionIds) {
+        bySubmission[sid] = [];
+    }
+
+    const sorted = [...rows] as { form_submission_id: string; document_id: string; role: string; created_at: string }[];
+    sorted.sort((a, b) => {
+        const ca = Date.parse(a.created_at);
+        const cb = Date.parse(b.created_at);
+        return (Number.isFinite(ca) ? ca : 0) - (Number.isFinite(cb) ? cb : 0);
+    });
+
+    for (const j of sorted) {
+        const doc = docById.get(j.document_id) as
+            | {
+                  id: string;
+                  name: string | null;
+                  original_filename: string | null;
+                  document_type: string | null;
+                  status: string | null;
+                  created_at: string | null;
+              }
+            | undefined;
+        if (!doc) continue;
+        const entry: FormSubmissionLinkedDocument = {
+            role: j.role,
+            junction_created_at: j.created_at,
+            document: {
+                id: doc.id,
+                name: doc.name,
+                original_filename: doc.original_filename,
+                document_type: doc.document_type,
+                status: doc.status,
+                created_at: doc.created_at,
+            },
+        };
+        const bucket = bySubmission[j.form_submission_id];
+        if (bucket) bucket.push(entry);
+    }
+
+    return { data: bySubmission, error: null };
+}
+
 export async function dbInsertSubmission(
     supabase: SupabaseClient,
     row: {

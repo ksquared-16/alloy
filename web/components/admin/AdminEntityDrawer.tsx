@@ -141,6 +141,7 @@ import OpportunityQuoteIntakeSection from "@/components/admin/quoteIntake/Opport
 import OpportunityLaunchPacketSection, {
     type OpportunityPacketLaunchSummary,
 } from "@/components/admin/opportunity/OpportunityLaunchPacketSection";
+import OpportunityEnrollmentPacketStatusSection from "@/components/admin/opportunity/OpportunityEnrollmentPacketStatusSection";
 
 function dispatchAfterPaymentRun(jobId: string, scheduleId: string | null) {
     window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "jobs", id: jobId } }));
@@ -1253,6 +1254,7 @@ export default function AdminEntityDrawer() {
     const [opportunityEnrollmentPacketLaunches, setOpportunityEnrollmentPacketLaunches] = useState<
         OpportunityPacketLaunchSummary[]
     >([]);
+    const [enrollmentPacketStatusNonce, setEnrollmentPacketStatusNonce] = useState(0);
     const [oppDiscountOptions, setOppDiscountOptions] = useState<{ value: string; label: string }[] | null>(null);
     const [oppDiscountLoading, setOppDiscountLoading] = useState(false);
     const [oppDiscountSelection, setOppDiscountSelection] = useState<string>("");
@@ -5387,6 +5389,7 @@ export default function AdminEntityDrawer() {
             onClose={() => setOppLaunchPacketOpen(false)}
             onLaunched={(row) => {
                 setOpportunityEnrollmentPacketLaunches((prev) => [row, ...prev].slice(0, 8));
+                setEnrollmentPacketStatusNonce((n) => n + 1);
             }}
         />
     ) : null;
@@ -10201,6 +10204,10 @@ export default function AdminEntityDrawer() {
                         !(data as { _create?: boolean })?._create && (
                             <>
                                 {opportunityLaunchPacketNode}
+                                <OpportunityEnrollmentPacketStatusSection
+                                    opportunityId={String(drawer.id)}
+                                    refreshNonce={enrollmentPacketStatusNonce}
+                                />
                                 {opportunityEnrollmentPacketLaunches.length > 0 ? (
                                     <section className="mb-4 rounded-lg border border-alloy-stone/40 bg-white/90 px-3 py-2.5 shadow-sm">
                                         <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">

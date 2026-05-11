@@ -24,6 +24,11 @@ import {
     emitFormSignedSafe,
     emitFormSubmittedSafe,
 } from "@/lib/forms/workflow/formSubmissionEvents";
+import {
+    emitOpportunityEnrollmentPacketCompletedProjectionSafe,
+    emitOpportunityEnrollmentPacketOpenedSafe,
+    emitOpportunityEnrollmentPacketStepCompletedSafe,
+} from "@/lib/forms/workflow/opportunityEnrollmentPacketProjections";
 import { applyReadOnlyBaselineToPayload } from "@/lib/forms/readOnlyFormPayload";
 
 const UUID_RE =
@@ -306,6 +311,16 @@ export async function POST(
         }
     }
 
+    if (ctx.packet) {
+        const oOpen = await emitOpportunityEnrollmentPacketOpenedSafe({
+            orgId: ctx.orgId,
+            packetSessionId: ctx.packet.packet_session_id,
+        });
+        if (oOpen.error) {
+            console.error("[public submit] enrollment opened projection failed:", oOpen.error.message);
+        }
+    }
+
     const submittedRow = updated as Record<string, unknown>;
     const meta = finalPayload.meta as Record<string, unknown> | undefined;
     const signerIpHash =
@@ -327,6 +342,19 @@ export async function POST(
         await emitFormSignedSafe(submittedRow as Parameters<typeof emitFormSignedSafe>[0]);
     }
 
+    let packetStepSequenceIndex = 0;
+    if (ctx.packet) {
+        const { data: piRow } = await supabase
+            .from("form_packet_session_items")
+            .select("sequence_index")
+            .eq("form_submission_id", submissionId)
+            .eq("org_id", ctx.orgId)
+            .maybeSingle();
+        if (typeof (piRow as { sequence_index?: number } | null)?.sequence_index === "number") {
+            packetStepSequenceIndex = (piRow as { sequence_index: number }).sequence_index;
+        }
+    }
+
     const adv = await advancePacketSessionAfterSubmit(
         supabase,
         ctx.orgId,
@@ -337,10 +365,29 @@ export async function POST(
         console.error("[public submit] packet advance failed:", adv.error.message);
     }
 
+    if (ctx.packet && adv.result) {
+        const st = await emitOpportunityEnrollmentPacketStepCompletedSafe({
+            orgId: ctx.orgId,
+            packetSessionId: ctx.packet.packet_session_id,
+            formSubmissionId: submissionId,
+            sequenceIndex: packetStepSequenceIndex,
+        });
+        if (st.error) {
+            console.error("[public submit] enrollment step_completed projection failed:", st.error.message);
+        }
+    }
+
     if (adv.result?.packet_complete === true && ctx.packet) {
         const pe = await emitFormPacketCompletedSafe(ctx.orgId, ctx.packet.packet_session_id);
         if (pe.error) {
             console.error("[public submit] form_packet_completed emit failed:", pe.error.message);
+        }
+        const oDone = await emitOpportunityEnrollmentPacketCompletedProjectionSafe({
+            orgId: ctx.orgId,
+            packetSessionId: ctx.packet.packet_session_id,
+        });
+        if (oDone.error) {
+            console.error("[public submit] enrollment completed projection failed:", oDone.error.message);
         }
     }
 

@@ -21,6 +21,17 @@ describe("opportunityActivityTimelineFormat", () => {
         expect(getWorkflowActivityEventTitle("opportunity_status_changed")).toBe("Status changed");
         expect(getWorkflowActivityEventTitle("action_executed")).toBe("Action completed");
         expect(getWorkflowActivityEventTitle("message_received")).toBe("SMS received");
+        expect(getWorkflowActivityEventTitle("opportunity_enrollment_packet_created")).toBe("Enrollment packet created");
+        expect(getWorkflowActivityEventTitle("opportunity_enrollment_packet_step_completed")).toBe(
+            "Enrollment packet step completed"
+        );
+    });
+
+    it("enrollment projection detail uses payload.summary", () => {
+        const d = getWorkflowActivityEventDetail("opportunity_enrollment_packet_completed", {
+            summary: "Enrollment packet completed: Fall intake",
+        });
+        expect(d).toBe("Enrollment Packet completed: Fall Intake");
     });
 
     it("detail prefers summary with humanized keys", () => {

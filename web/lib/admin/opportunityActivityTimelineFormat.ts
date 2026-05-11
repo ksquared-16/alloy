@@ -28,6 +28,10 @@ const OPPORTUNITY_EVENT_TYPE_LABELS: Record<string, string> = {
     message_sent: "SMS sent",
     note_added: "Note added",
     action_executed: "Action completed",
+    opportunity_enrollment_packet_created: "Enrollment packet created",
+    opportunity_enrollment_packet_opened: "Enrollment packet opened",
+    opportunity_enrollment_packet_step_completed: "Enrollment packet step completed",
+    opportunity_enrollment_packet_completed: "Enrollment packet completed",
 };
 
 /** Default options for opportunity workflow_events and related UI. */

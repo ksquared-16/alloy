@@ -11,6 +11,7 @@ import { assertEntityInOrg } from "@/lib/admin/assertEntityInOrg";
 import { defaultOpportunityLaunchPrefillFieldMap } from "@/lib/forms/prefill/defaultOpportunityLaunchPrefillFieldMap";
 import { parsePrefillFieldMapBody } from "@/lib/forms/prefill/prefillFieldMap";
 import { resolveOpportunityEnrollmentSelection } from "@/lib/forms/packets/opportunityPacketLaunchValidation";
+import { emitOpportunityEnrollmentPacketCreatedSafe } from "@/lib/forms/workflow/opportunityEnrollmentPacketProjections";
 
 async function assertPacketStepsPublishable(
     supabase: SupabaseClient,
@@ -277,6 +278,19 @@ export async function POST(request: NextRequest) {
         });
 
         if (!error && row) {
+            const linkRow = row as { id: string };
+            if (metadata.source_entity_type === "opportunity" && typeof metadata.source_entity_id === "string") {
+                const pe = await emitOpportunityEnrollmentPacketCreatedSafe({
+                    orgId: ctx.orgId,
+                    opportunityId: metadata.source_entity_id,
+                    publicLinkId: linkRow.id,
+                    packetDefinitionId,
+                    linkMetadata: metadata as Record<string, unknown>,
+                });
+                if (pe.error) {
+                    console.error("[packet-links] opportunity_enrollment_packet_created projection failed:", pe.error.message);
+                }
+            }
             const embed_path = buildPublicFormEmbedPath(plaintextToken);
             const base = deriveEmbedBaseUrl(request);
             return jsonData(

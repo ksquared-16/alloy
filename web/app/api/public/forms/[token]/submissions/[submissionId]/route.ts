@@ -12,6 +12,7 @@ import { publicErr, publicOk } from "@/lib/public/forms/publicFormResponses";
 import { hashClientIp } from "@/lib/public/forms/clientIpHash";
 import { mergePublicSubmissionMeta } from "@/lib/public/forms/publicPayloadMeta";
 import { applyReadOnlyBaselineToPayload } from "@/lib/forms/readOnlyFormPayload";
+import { emitOpportunityEnrollmentPacketOpenedSafe } from "@/lib/forms/workflow/opportunityEnrollmentPacketProjections";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
 
 const UUID_RE =
@@ -202,5 +203,14 @@ export async function PATCH(
     const out = updated as Record<string, unknown>;
     const { org_id: _o, ...rest } = out;
     void _o;
+    if (ctx.packet) {
+        const oe = await emitOpportunityEnrollmentPacketOpenedSafe({
+            orgId: ctx.orgId,
+            packetSessionId: ctx.packet.packet_session_id,
+        });
+        if (oe.error) {
+            console.error("[public PATCH submission] enrollment opened projection failed:", oe.error.message);
+        }
+    }
     return publicOk(rest);
 }

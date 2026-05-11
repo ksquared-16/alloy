@@ -116,6 +116,15 @@ export function summarizeWorkflowEventForSignal(ev: WorkflowEventLike): string {
         const k = p.action_key != null ? String(p.action_key) : "";
         return k ? `Action: ${k}` : "Action executed";
     }
+    if (
+        t === "opportunity_enrollment_packet_created" ||
+        t === "opportunity_enrollment_packet_opened" ||
+        t === "opportunity_enrollment_packet_step_completed" ||
+        t === "opportunity_enrollment_packet_completed"
+    ) {
+        const s = p.summary != null && String(p.summary).trim() ? String(p.summary).trim() : "";
+        if (s) return s;
+    }
     return t || "Activity";
 }
 
