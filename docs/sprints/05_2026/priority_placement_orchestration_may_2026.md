@@ -18,9 +18,9 @@ Alloy already treats **queues as projection surfaces** (`docs/system/workspace-s
 
 **Evaluator contract (Card 2):** Pure, generalized **placement priority evaluator** specification lives in **§ Card 2 — Evaluator RFC detail** below. **QueueService** remains the sole projection integration point; **legacy Growth interpreter excluded.**
 
-**Product model (childcare waitlist preview — V1 cleanup):** Operators expect **program / room / age grouping first**, then **priority rules inside each group**, with **scoped waitlist position numbers (#1, #2, …) restarting per group** when **`shadow_mode: false`**. The **`program_room_group`** fact is the **primary sort/group dimension** (via preset **`primary_group_fact_key`** — not React hardcoding). **Standard family** means **no special priority rule matched**. **Admin V2** renders **section subheaders** plus **`Position in {group} waitlist`** captions (page-local; lane hint discloses pagination/cap). **`npm run dev:seed:placement-priority-demo`** sets **`shadow_mode: false`** so **demo ordering and positions match placement projection**; production lanes may keep **`shadow_mode: true`** to preserve SQL order without showing authoritative positions.
+**Product model (childcare waitlist preview — V1 cleanup):** Operators expect **program / room / age grouping first**, then **priority rules inside each group**, with **scoped waitlist position numbers (#1, #2, …) restarting per group** when **`shadow_mode: false`**. The **`program_room_group`** fact is the **primary sort/group dimension** (via preset **`primary_group_fact_key`** — not React hardcoding). **Standard family** means **no special priority rule matched**. **Admin V2** uses **`{Program} Waitlist (n)`** section headers and a **compact row strip**: **`#n`**, short **`{program} waitlist`** label, **rule chip**, optional **one** supporting line, **compact warning dot** — caveats live **only** in the **lane hint** (no per-row paragraphs, no engine jargon). **`npm run dev:seed:placement-priority-demo`** sets **`shadow_mode: false`** for demo visibility; production may use **`shadow_mode: true`**.
 
----
+**Settings (foundation — May 2026):** **`/adminV2/settings/placement-priority`** — controls **this work unit’s** Admin V2 waitlist priority behavior via **`work_units.metadata.placement_priority_v1`** (enabled, preset **`profile_id`**, waitlisted-only vs waitlisted+ready cohort, preview vs active ordering, cap, display flags). Saves via **`PATCH /api/admin/work-units/[id]`** with **`metadata`** deep-merge (admin only; merged metadata validated: **strict Zod** + **`profile_id`** must exist in **`placementPresetRegistry`**; **`profile_revision`**, if supplied, must match the preset or the save returns **400** — omitted revision is allowed). **Department-level** placement settings UI remains **future** (department metadata unchanged; no dedicated tab). **Room-specific rule ordering** and a **rule-order editor** remain **future**. **Global / cross-page authoritative waitlist ranking** remains **V1.1** (V1 stays loaded-slice + cap scoped).
 
 ## Card 0.5 — RFC lock + queue interpreter decision
 
@@ -650,7 +650,7 @@ Applied in **`mergePlacementPriorityLayers`** → **`resolvePlacementQueueConfig
 | **`version`** | Literal **1** — breaking changes bump schema module. |
 | **`enabled`** | Master flag; default **false** when omitted after merge. |
 | **`profile_id`** | Registry key — **not** inlined rules. |
-| **`profile_revision`** | Optional pin; mismatch ≠ hard fail (**flag** only). |
+| **`profile_revision`** | Optional pin. **Runtime projection:** mismatch sets informational **`profile_revision_mismatch`** (does not disable). **Admin save (`PATCH …/work-units/[id]` metadata):** if revision is supplied (non-empty string) and does not match the registry preset, return **400** (no partial write). |
 | **`queue_keys_enabled`** | Lane opt-in; **recommended** when `enabled` to avoid accidental global ordering on every lane. |
 | **`shadow_mode`** | Reserved for QueueService compare-only mode (**Card 6**). |
 | **`evaluation_cap`** | Bounded (**≤ 5000**); default **800** when omitted. |
@@ -841,10 +841,11 @@ Present only when placement resolved **enabled** for the lane:
 
 | Area | Behavior |
 |------|----------|
-| **Row** | When **`_placement_priority`** parses successfully: **“Waitlist priority”** kicker + **`#n`** badge + **`Position in {group} waitlist`** caption (non-shadow only) + rule chip + reasons/warnings. **Shadow mode:** positions hidden; footnote that SQL sort is unchanged. |
-| **Evaluator error rows** | Subdued **“Waitlist priority”** + server **message** — no rule chip. |
-| **Lane hint** | Shadow → preview grouping copy + **position numbers hidden**. Non-shadow → **page-local** sort + **scoped position numbers** disclosure + **`evaluation_cap`** note when partial. |
-| **Drawer / entity GET** | **Not** implemented — queue projection remains non-authoritative; full placement section waits for **resolver / entity GET** (same boundary as attention drawer). |
+| **Row** | Compact strip: **`#n`** (non-shadow) + short **`{program} waitlist`** + **rule chip** + at most **one** supporting line + **warning dot** (title = full text). **Shadow:** chip only — **no** `#`, **no** per-row footnotes. |
+| **Evaluator error rows** | Subdued **“Waitlist”** + server **message** — no chip. |
+| **Lane hint** | One–two short sentences: **loaded records** scope; shadow adds **queue sort unchanged**; partial load adds **outside this loaded page** (no engine jargon). |
+| **Sections** | **`{Program} Waitlist (count)`** with **`--waitlist`** styling when placement rows present. |
+| **Drawer / entity GET** | **Not** implemented — queue projection remains non-authoritative (**V1.1**). |
 
 ### 2. Copy / doctrine decisions
 
@@ -914,17 +915,27 @@ npm run dev:seed:placement-priority-demo
 1. Run seed (above).  
 2. Open **Admin V2** → **Workspace** → pick department with **Enrollment** → open **Enrollment pipeline** work unit.  
 3. Select the **Waitlisted** queue tab.  
-4. Confirm **lane hint** (waitlist priority preview — **loaded page**, program grouping, **not** full waitlist) and **row strips** (**Waitlist priority** kicker + **priority rule** chip + reasons; unknown sibling shows warning copy).  
-5. Confirm **section headers** group rows by **Infant** vs **Toddler** (demo seed).  
-6. Switch to another queue lane (e.g. **All / pipeline total**) → **no** placement UI (**`queue_keys_enabled`** gate).
+4. Confirm **lane hint** (one–two short sentences — **grouped by program**, **loaded records**; shadow = queue sort unchanged; partial = **outside this loaded page**).  
+5. Confirm **section headers** **`Toddler Waitlist (n)`** / **`Infant Waitlist (n)`** and compact **row** line (**`#`**, short program label, rule chip).  
+6. **Settings:** open **`/adminV2/settings/placement-priority`** (admin) — pick work unit, toggle fields, **Save**, reload workspace waitlisted lane and confirm behavior.  
+7. Switch to another queue lane (e.g. **All / pipeline total**) → **no** placement UI (**`queue_keys_enabled`** gate).
+
+### 2b. Settings — waitlist priority
+
+| Item | Detail |
+|------|--------|
+| **Route** | **`/adminV2/settings/placement-priority`** |
+| **Save API** | **`PATCH /api/admin/work-units/:id`** with **`{ "metadata": { "placement_priority_v1": { … } } }`** (deep-merge with existing **`work_units.metadata`**; unrelated metadata keys preserved). |
+| **Auth** | **Admin** role required to save (read-only form state for non-admin). |
+| **Validation** | Merged metadata: **`parsePlacementPriorityLayerStrict`** + **`profile_id`** must be in **`placementPresetRegistry`**; non-empty **`profile_revision`** must match the preset revision (mismatch → **400**, no write). |
 
 ### 3. Expected UI behavior
 
-- **Demo (`shadow_mode: false`):** Rows on the loaded page **reorder** by placement **`sort_tuple`**; **`#1`, `#2`, …** restart **per Infant / Toddler** (or unspecified) section with **`Position in … waitlist`** caption; lane hint states **page-local / pagination** scope.  
-- **Shadow (`shadow_mode: true`):** SQL row order preserved; **no** scoped position badges (lane hint says position numbers hidden).  
-- **Program-first:** Evaluator **`sort_tuple`** is **`program_room_group` → bucket → tie-breakers → entity id**.  
-- **No** implied **global** waitlist ordering beyond the loaded slice; **no** guaranteed-spot / AI language (tests enforce).  
-- **`show_bucket_chip` / `show_sort_hint`** from merged config respected when returned on **`placement_projection_diagnostics.display`**.
+- **Demo (`shadow_mode: false`):** Rows **reorder** by placement **`sort_tuple`**; **`#1`, `#2`, …** per **`{Program} Waitlist`** section; row strip stays **compact**; lane hint = **loaded records** (+ partial sentence if capped).  
+- **Shadow (`shadow_mode: true`):** SQL order; **no** `#` badges; lane hint explains **preview / sort**.  
+- **Program-first:** Evaluator **`sort_tuple`** = **`program_room_group` → bucket → tie-breakers → entity id**.  
+- **No** implied **global** ordering beyond the loaded slice.  
+- **`display`** flags respected via **`placement_projection_diagnostics.display`**.
 
 ### 4. Automated verification / tests run
 
@@ -950,13 +961,16 @@ cd web && npm run typecheck
 
 ### 6. Known limitations (unchanged + demo)
 
-- **Pagination / cap:** Ordering is **not** globally authoritative (**§ Card 6**). Section headers and previews reflect **`evaluation_cap`** — loaded slice only.  
+- **Pagination / cap:** Ordering is **not** globally authoritative (**§ Card 6**). Section headers and previews reflect **loaded / evaluated** rows only.  
 - **Lexicographic `program_room_group`:** Sort/group order follows **string sort** on the fact value — not a curated room-age ladder unless metadata uses comparable tokens.  
 - **Per-program rule precedence** (e.g. toddler vs infant different tier orders) is **not** modeled — single rule list for all groups until **V1.1** config work.  
 - **Demo rows** use **`placement_priority_demo_v1`** package marker — separate from **`enrollment_pipeline_demo_v2`** families.  
-- **Department-level** placement not patched by default (work-unit-only opt-in minimizes blast radius).
+- **Department-level** placement: no dedicated Settings tab yet (still **`PATCH /api/admin/departments/[id]`** **`metadata`**).  
+- **Settings gaps:** no custom rule-order editor, no room-specific policy matrix, no config change audit trail.
 
-**Cleanup completed:** Copy (**Waitlist priority**, **Standard family**, program-first hints), childcare preset **`primary_group_fact_key`**, evaluator **`sort_tuple`**, **`program_room_group_label`** + **scoped waitlist position** fields on preview payload (non-shadow), UI section headers via **`groupLabel`**, demo **Infant/Toddler** facts and **`shadow_mode: false`** for demo ordering — **implemented** in sprint doc refresh (May 2026).
+**Cleanup completed:** Compact **waitlist row** UX + **lane hint** (operator language only), **`{Program} Waitlist`** sections, **scoped positions** + short **`{program} waitlist`** labels, **Settings** (`/adminV2/settings/placement-priority`) + **`PATCH …/work-units/[id]`** **`metadata`** merge with **`placement_priority_v1`** validation — **May 2026**.
+
+**Final hardening (same month, pre–UI review):** Registry-backed **`profile_id`** + revision checks on admin save; shared **`deepMergeJsonObjects`**; settings copy clarifies **work-unit waitlist** scope, **loaded records**, and **preview vs active ordering** (operator-facing wording). Still **not** in scope: department settings tab, rule-order editor, schema/persistence for snapshots, workflow events, **`resolveOpportunityQueueFromDefinition`** changes.
 
 ### 7. V1.1 backlog (recommended)
 

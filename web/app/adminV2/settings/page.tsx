@@ -111,6 +111,9 @@ export default function AdminV2SettingsIndexPage() {
                         <SettingsCard href="/adminV2/settings/work-units" title="Work units" accent="organization">
                             Queues and work-unit definitions.
                         </SettingsCard>
+                        <SettingsCard href="/adminV2/settings/placement-priority" title="Waitlist priority" accent="organization">
+                            Placement priority for waitlisted queues (work-unit metadata).
+                        </SettingsCard>
                         <SettingsCard href="/adminV2/settings/kpis" title="Workspace KPIs" accent="organization">
                             Visibility and order for registry metrics on AdminV2 workspace surfaces.
                         </SettingsCard>

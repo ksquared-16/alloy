@@ -5,6 +5,8 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { departmentIdAllowed, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
 import { validateQueueDefinition } from "@/lib/config/queueDefinitionSchema";
+import { deepMergeJsonObjects } from "@/lib/json/deepMergeJsonObjects";
+import { validateMergedWorkUnitMetadataForPlacementSave } from "@/lib/orchestration/placement/placementPriorityMetadataSaveValidation";
 
 const KEY_REGEX = /^[a-z0-9_]{2,64}$/;
 
@@ -102,7 +104,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
     const supabase = createAdminClient();
     const { data: existing, error: fetchErr } = await supabase
         .from("work_units")
-        .select("id, department_id, queue_definition")
+        .select("id, department_id, queue_definition, metadata")
         .eq("id", id)
         .eq("org_id", ctx.orgId)
         .maybeSingle();
@@ -115,6 +117,7 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
         id: string;
         department_id: string;
         queue_definition?: unknown;
+        metadata?: unknown;
     };
 
     if (!departmentIdAllowed(patchDim, existingRow.department_id)) {
@@ -212,6 +215,23 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
             const msg = e instanceof Error && e.message ? e.message : "queue_definition is invalid";
             return NextResponse.json({ error: msg }, { status: 400 });
         }
+    }
+
+    if (body.metadata !== undefined) {
+        if (body.metadata === null || typeof body.metadata !== "object" || Array.isArray(body.metadata)) {
+            return NextResponse.json({ error: "metadata must be a JSON object" }, { status: 400 });
+        }
+        const prevRaw = existingRow.metadata;
+        const prev =
+            prevRaw !== null && typeof prevRaw === "object" && !Array.isArray(prevRaw)
+                ? (prevRaw as Record<string, unknown>)
+                : {};
+        const merged = deepMergeJsonObjects(prev, body.metadata as Record<string, unknown>);
+        const placementSave = validateMergedWorkUnitMetadataForPlacementSave(merged);
+        if (!placementSave.ok) {
+            return NextResponse.json({ error: placementSave.error }, { status: 400 });
+        }
+        updates.metadata = merged;
     }
 
     if (Object.keys(updates).length <= 1) {

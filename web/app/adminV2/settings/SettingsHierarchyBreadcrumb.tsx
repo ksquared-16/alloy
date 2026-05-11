@@ -82,6 +82,11 @@ function crumbsForPath(path: string): Crumb[] {
         return base;
     }
 
+    if (tail === "/placement-priority" || tail.startsWith("/placement-priority")) {
+        base.push({ label: "Waitlist priority", href: null });
+        return base;
+    }
+
     if (tail === "/users-roles" || tail.startsWith("/users-roles/")) {
         base.push({ label: "Users & Roles", href: null });
         return base;
