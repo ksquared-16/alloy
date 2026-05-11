@@ -58,6 +58,14 @@ const RECIPIENT_DEFAULT = "__default__";
 
 type Phase = "form" | "done";
 
+function pillClass(active: boolean, disabled?: boolean): string {
+    return [
+        "rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors",
+        disabled ? "cursor-not-allowed opacity-45" : "cursor-pointer",
+        active ? "border-alloy-blue bg-alloy-blue/10 text-alloy-midnight" : "border-alloy-stone/45 bg-white text-alloy-midnight/80 hover:bg-alloy-stone/15",
+    ].join(" ");
+}
+
 export default function OpportunityEnrollmentPacketModal({
     open,
     onDismiss,
@@ -89,6 +97,8 @@ export default function OpportunityEnrollmentPacketModal({
     const primaryContactEmail =
         typeof rec._primary_contact_email === "string" && rec._primary_contact_email.trim() ? rec._primary_contact_email.trim() : null;
 
+    const hasFiledEmail = Boolean(primaryPersonEmail || primaryContactEmail);
+
     const [members, setMembers] = useState<HouseholdMemberRow[]>([]);
     const [membersLoading, setMembersLoading] = useState(false);
     const [membersErr, setMembersErr] = useState<string | null>(null);
@@ -105,10 +115,11 @@ export default function OpportunityEnrollmentPacketModal({
     const [detailErr, setDetailErr] = useState<string | null>(null);
 
     const [recipientChoice, setRecipientChoice] = useState<string>(RECIPIENT_DEFAULT);
-    const [deliveryMode, setDeliveryMode] = useState<"copy_only" | "send_email">("copy_only");
+    const [deliveryMode, setDeliveryMode] = useState<"copy_only" | "send_email">("send_email");
 
     const [internalNote, setInternalNote] = useState("");
     const [expiresLocal, setExpiresLocal] = useState("");
+    const [moreOptionsOpen, setMoreOptionsOpen] = useState(false);
 
     const [busy, setBusy] = useState(false);
     const [launchErr, setLaunchErr] = useState<string | null>(null);
@@ -120,6 +131,7 @@ export default function OpportunityEnrollmentPacketModal({
         communication_message_id?: string | null;
     } | null>(null);
     const [copyIdx, setCopyIdx] = useState<number | null>(null);
+    const [copyAllOk, setCopyAllOk] = useState(false);
 
     const createdThisSessionRef = useRef(0);
 
@@ -130,14 +142,22 @@ export default function OpportunityEnrollmentPacketModal({
         setCreatedResults([]);
         setEmailOutcome(null);
         setCopyIdx(null);
+        setCopyAllOk(false);
         createdThisSessionRef.current = 0;
         setBusy(false);
         setSelectedPacketId("");
         setRecipientChoice(RECIPIENT_DEFAULT);
-        setDeliveryMode("copy_only");
         setInternalNote("");
         setExpiresLocal("");
-    }, [open]);
+        setMoreOptionsOpen(false);
+        setDeliveryMode(hasFiledEmail ? "send_email" : "copy_only");
+    }, [open, hasFiledEmail]);
+
+    useEffect(() => {
+        if (!hasFiledEmail && deliveryMode === "send_email") {
+            setDeliveryMode("copy_only");
+        }
+    }, [hasFiledEmail, deliveryMode]);
 
     useEffect(() => {
         if (!open || !customerId) {
@@ -233,9 +253,18 @@ export default function OpportunityEnrollmentPacketModal({
         [members, selectedMemberIds]
     );
 
+    const householdLinkOnly = selectedMemberIds.length === 0;
+
+    const setHouseholdOnly = () => setSelectedMemberIds([]);
+
     const toggleMember = (id: string) => {
         setSelectedMemberIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
     };
+
+    const unpublishedCount = useMemo(
+        () => detailItems.filter((it) => it.step_has_published_version === false).length,
+        [detailItems]
+    );
 
     const allStepsPublishable = useMemo(
         () => detailItems.length > 0 && detailItems.every((it) => it.step_has_published_version !== false),
@@ -249,14 +278,12 @@ export default function OpportunityEnrollmentPacketModal({
     }, [recipientChoice]);
 
     const recipientOptions = useMemo(() => {
-        const opts: { value: string; label: string }[] = [
-            { value: RECIPIENT_DEFAULT, label: "Primary on opportunity (recommended)" },
-        ];
+        const opts: { value: string; label: string }[] = [{ value: RECIPIENT_DEFAULT, label: "Primary (recommended)" }];
         const seen = new Set<string>(opts.map((o) => o.value));
         if (primaryPersonId) {
             opts.push({
                 value: `person:${primaryPersonId}`,
-                label: `Primary person — ${primaryPersonName ?? primaryPersonId.slice(0, 8) + "…"}`,
+                label: primaryPersonName ? `Primary: ${primaryPersonName}` : "Primary person",
             });
             seen.add(`person:${primaryPersonId}`);
         }
@@ -266,7 +293,7 @@ export default function OpportunityEnrollmentPacketModal({
             if (seen.has(v)) continue;
             opts.push({
                 value: v,
-                label: `Enrollee linked person — ${memberLabel(m)}`,
+                label: `Enrollee: ${memberLabel(m)}`,
             });
             seen.add(v);
         }
@@ -281,46 +308,31 @@ export default function OpportunityEnrollmentPacketModal({
 
     const recipientPreviewLabel = useMemo(() => {
         if (recipientChoice === RECIPIENT_DEFAULT) {
-            return primaryPersonName || primaryContactName || "Opportunity primary (person or household contact)";
+            return primaryPersonName || primaryContactName || "Primary on opportunity";
         }
         if (recipientChoice.startsWith("person:")) {
             const id = recipientChoice.slice("person:".length);
             const sm = selectedMembers.find((m) => m.person_id === id);
-            if (sm) return `${memberLabel(sm)} (linked person)`;
-            if (primaryPersonId === id) return `${primaryPersonName ?? "Primary person"} · ${primaryPersonEmail ?? "no email on file"}`;
-            return `Selected person · ${id.slice(0, 8)}…`;
+            if (sm) return memberLabel(sm);
+            if (primaryPersonId === id) return primaryPersonName ?? "Primary person";
+            return `Person ${id.slice(0, 8)}…`;
         }
         return "—";
-    }, [recipientChoice, primaryPersonName, primaryContactName, primaryPersonEmail, primaryPersonId, selectedMembers]);
-
-    const prefillPreviewLines = useMemo(() => {
-        const lines: string[] = [];
-        lines.push("Guardian / household fields from person + customer when schema uses registry ids.");
-        if (selectedMembers.length === 1) {
-            lines.push("Child / enrollee fields from customer_member.first_name, .last_name, .dob when those field ids exist.");
-        } else if (selectedMembers.length > 1) {
-            lines.push(
-                "Multiple enrollees selected — one packet link per child; each link carries its own customer_member_id for trusted prefill."
-            );
-        } else {
-            lines.push("No enrollee selected — child registry fields will not auto-prefill from a member row.");
-        }
-        return lines;
-    }, [selectedMembers.length]);
+    }, [recipientChoice, primaryPersonName, primaryContactName, primaryPersonId, selectedMembers]);
 
     const launchBlockedReason = useMemo(() => {
         if (!selectedPacketId) return "Select a packet.";
         if (detailItems.length === 0 && !detailLoading) return "This packet has no steps.";
-        if (!allStepsPublishable) return "Every step must have a published form version (or a published pinned version).";
+        if (!allStepsPublishable) return "Publish every form (or pin a published version) before sending.";
         return null;
     }, [selectedPacketId, detailItems.length, detailLoading, allStepsPublishable]);
 
     const enrolleeSummaryLabel =
         selectedMembers.length === 0
-            ? "Household-level (no member selected)"
+            ? "Household"
             : selectedMembers.length === 1
               ? memberLabel(selectedMembers[0]!)
-              : `${selectedMembers.length} enrollees`;
+              : `${selectedMembers.length} children`;
 
     const finishDismiss = () => {
         onDismiss({ createdPacketCount: createdThisSessionRef.current });
@@ -339,11 +351,13 @@ export default function OpportunityEnrollmentPacketModal({
                 expires_at = new Date(ms).toISOString();
             }
 
+            const effectiveDelivery = hasFiledEmail ? deliveryMode : "copy_only";
+
             const body: Record<string, unknown> = {
                 packet_definition_id: selectedPacketId,
                 recipient_person_id: recipientPersonIdForApi,
                 customer_member_ids: [...selectedMemberIds].sort(),
-                delivery: deliveryMode,
+                delivery: effectiveDelivery,
                 ...(internalNote.trim() ? { internal_note: internalNote.trim() } : {}),
                 ...(expires_at ? { expires_at } : {}),
             };
@@ -379,7 +393,7 @@ export default function OpportunityEnrollmentPacketModal({
                             url: u,
                             enrolleeLabel: row.enrollee_label ?? "—",
                             recipientLabel: recipientPreviewLabel,
-                            deliveryIntent: deliveryMode,
+                            deliveryIntent: effectiveDelivery,
                             emailSent: json.email?.ok,
                             emailSkippedReason: json.email?.skipped_reason,
                         });
@@ -391,7 +405,9 @@ export default function OpportunityEnrollmentPacketModal({
             }
 
             setCreatedResults(full);
-            setEmailOutcome(json.email ?? { ok: false, skipped_reason: deliveryMode === "copy_only" ? "copy_only" : undefined });
+            setEmailOutcome(
+                json.email ?? { ok: false, skipped_reason: effectiveDelivery === "copy_only" ? "copy_only" : undefined }
+            );
             setPhase("done");
             createdThisSessionRef.current = full.length;
 
@@ -404,7 +420,7 @@ export default function OpportunityEnrollmentPacketModal({
                     url: u,
                     enrolleeLabel: row.enrollee_label ?? "—",
                     recipientLabel: recipientPreviewLabel,
-                    deliveryIntent: deliveryMode,
+                    deliveryIntent: effectiveDelivery,
                     emailSent: json.email?.ok,
                     emailSkippedReason: json.email?.skipped_reason,
                 });
@@ -420,337 +436,337 @@ export default function OpportunityEnrollmentPacketModal({
         try {
             await navigator.clipboard.writeText(url);
             setCopyIdx(idx);
+            setCopyAllOk(false);
         } catch {
             setCopyIdx(null);
         }
     };
 
+    const copyAllUrls = async () => {
+        const lines = createdResults.map((r) => r.embed_url).filter((u): u is string => typeof u === "string" && u.length > 0);
+        if (!lines.length) return;
+        try {
+            await navigator.clipboard.writeText(lines.join("\n"));
+            setCopyAllOk(true);
+            setCopyIdx(null);
+        } catch {
+            setCopyAllOk(false);
+        }
+    };
+
     if (!open) return null;
+
+    const primaryCtaForm =
+        deliveryMode === "send_email" && hasFiledEmail ? (busy ? "Sending…" : "Send") : busy ? "Creating…" : "Create links";
 
     return (
         <div
-            className="fixed inset-0 z-[90] flex items-center justify-center bg-black/50 p-4"
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4 sm:p-6"
+            style={{ paddingTop: "max(1rem, env(safe-area-inset-top, 0px))", paddingBottom: "max(1rem, env(safe-area-inset-bottom, 0px))" }}
             role="dialog"
             aria-modal="true"
             aria-labelledby="enrollment-packet-modal-title"
             data-opportunity-enrollment-packet-launch="true"
             onClick={() => finishDismiss()}
         >
-            <section
-                className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-emerald-200/80 bg-gradient-to-br from-emerald-50/50 via-white to-white px-4 py-4 shadow-xl ring-1 ring-alloy-stone/15"
+            <div
+                className="flex max-h-[80vh] w-full max-w-[42rem] flex-col overflow-hidden rounded-xl border border-alloy-stone/35 bg-white shadow-xl"
                 onClick={(e) => e.stopPropagation()}
             >
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div>
-                        <h2 id="enrollment-packet-modal-title" className="text-base font-semibold text-alloy-midnight/95">
+                <header className="flex shrink-0 items-start justify-between gap-3 border-b border-alloy-stone/25 px-4 py-3">
+                    <div className="min-w-0">
+                        <h2 id="enrollment-packet-modal-title" className="text-base font-semibold text-alloy-midnight">
                             Send enrollment packet
                         </h2>
-                        <p className="mt-1 text-xs leading-snug text-alloy-midnight/65">
-                            Choose packet, recipients, and enrollees. CRM linkage is resolved on the server from your selections — not
-                            from hidden client fields. Optional email uses Communications on this opportunity.
+                        <p className="mt-0.5 text-xs text-alloy-midnight/60">
+                            Create packet links and optionally email them to the selected recipient.
                         </p>
                     </div>
                     <button
                         type="button"
                         onClick={() => finishDismiss()}
-                        className="shrink-0 rounded-md border border-alloy-stone/50 px-2.5 py-1 text-xs font-medium text-alloy-midnight/80 hover:bg-alloy-stone/20"
+                        className="shrink-0 rounded-md border border-alloy-stone/45 px-2.5 py-1 text-xs font-medium text-alloy-midnight/80 hover:bg-alloy-stone/15"
                     >
                         Close
                     </button>
-                </div>
+                </header>
 
                 {phase === "form" ? (
-                    <div className="mt-4 space-y-5">
-                        <div>
-                            <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">1 · Enrollees</p>
-                            {!customerId ? (
-                                <p className="mt-1 text-xs text-amber-900">
-                                    This opportunity has no linked household customer yet. You can still create a household-level packet
-                                    link; member-based prefill will be limited.
-                                </p>
-                            ) : membersLoading ? (
-                                <p className="mt-1 text-xs text-alloy-midnight/55">Loading household members…</p>
-                            ) : membersErr ? (
-                                <p className="mt-1 text-xs text-red-700">{membersErr}</p>
-                            ) : members.length === 0 ? (
-                                <p className="mt-1 text-xs text-alloy-midnight/65">
-                                    No members on this household yet. Leave none selected for a household-level link, or add members in
-                                    CRM first.
-                                </p>
-                            ) : (
-                                <div className="mt-2 space-y-2">
-                                    <p className="text-xs text-alloy-midnight/70">
-                                        Select one or more children for separate links, or none for a single household-level link.
-                                    </p>
-                                    <div className="max-h-40 space-y-1.5 overflow-y-auto rounded-md border border-alloy-stone/35 bg-white/90 px-2 py-2">
-                                        {members.map((m) => (
-                                            <label key={m.id} className="flex cursor-pointer items-start gap-2 text-sm text-alloy-midnight/90">
-                                                <input
-                                                    type="checkbox"
-                                                    className="mt-0.5"
-                                                    checked={selectedMemberIds.includes(m.id)}
-                                                    disabled={!canMutate}
-                                                    onChange={() => toggleMember(m.id)}
-                                                />
-                                                <span>
-                                                    {memberLabel(m)}
-                                                    {m._relationship_label ? (
-                                                        <span className="text-alloy-midnight/55"> · {m._relationship_label}</span>
-                                                    ) : null}
-                                                </span>
-                                            </label>
-                                        ))}
-                                    </div>
-                                    {selectedMemberIds.length > 0 ? (
-                                        <button
-                                            type="button"
-                                            disabled={!canMutate}
-                                            className="text-xs font-medium text-alloy-blue hover:underline disabled:opacity-50"
-                                            onClick={() => setSelectedMemberIds([])}
-                                        >
-                                            Clear selection (household-level link)
-                                        </button>
+                    <>
+                        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="text-xs font-medium text-alloy-midnight/70">Packet</label>
+                                    {defsLoading ? <p className="mt-1 text-xs text-alloy-midnight/50">Loading…</p> : null}
+                                    {defsErr ? <p className="mt-1 text-xs text-red-600">{defsErr}</p> : null}
+                                    {!defsLoading && !defsErr && defs.length === 0 ? (
+                                        <p className="mt-1 text-xs text-alloy-midnight/55">No packets available.</p>
                                     ) : null}
-                                </div>
-                            )}
-                        </div>
-
-                        <div>
-                            <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">2 · Packet</p>
-                            {defsLoading ? <p className="mt-1 text-xs text-alloy-midnight/55">Loading packet definitions…</p> : null}
-                            {defsErr ? <p className="mt-1 text-xs text-red-700">{defsErr}</p> : null}
-                            {!defsLoading && !defsErr && defs.length === 0 ? (
-                                <p className="mt-1 text-xs text-alloy-midnight/65">No packet definitions in this organization.</p>
-                            ) : null}
-                            {defs.length > 0 ? (
-                                <select
-                                    className="mt-1 block w-full max-w-lg rounded-md border border-alloy-stone/50 bg-white px-2 py-1.5 text-sm text-alloy-midnight/90"
-                                    value={selectedPacketId}
-                                    disabled={!canMutate}
-                                    onChange={(e) => setSelectedPacketId(e.target.value)}
-                                >
-                                    <option value="">Choose a packet…</option>
-                                    {defs.map((d) => (
-                                        <option key={d.id} value={d.id}>
-                                            {d.name?.trim() || d.key}
-                                            {d.is_active === false ? " (inactive)" : ""}
-                                        </option>
-                                    ))}
-                                </select>
-                            ) : null}
-                            {selectedPacketId ? (
-                                <>
-                                    {detailLoading ? <p className="mt-2 text-xs text-alloy-midnight/55">Loading steps…</p> : null}
-                                    {detailErr ? <p className="mt-2 text-xs text-red-700">{detailErr}</p> : null}
-                                    {!detailLoading && !detailErr && detailItems.length > 0 ? (
-                                        <div className="mt-2 rounded-md border border-alloy-stone/35 bg-white/90 px-2.5 py-2">
-                                            <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/50">
-                                                Forms in this packet
-                                            </p>
-                                            <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-xs text-alloy-midnight/85">
-                                                {detailItems.map((it) => (
-                                                    <li key={`${it.sequence_index}-${formNameFromItem(it)}`}>
-                                                        {formNameFromItem(it)}
-                                                        {it.step_has_published_version === false ? (
-                                                            <span className="ml-2 text-amber-800"> — not published</span>
-                                                        ) : null}
-                                                    </li>
-                                                ))}
-                                            </ol>
-                                            {!allStepsPublishable ? (
-                                                <p className="mt-2 text-xs font-medium text-amber-900">
-                                                    Publish every form (or pin a published version) before launching.
-                                                </p>
+                                    {defs.length > 0 ? (
+                                        <select
+                                            className="mt-1 block w-full rounded-md border border-alloy-stone/45 bg-white px-2 py-1.5 text-sm text-alloy-midnight"
+                                            value={selectedPacketId}
+                                            disabled={!canMutate}
+                                            onChange={(e) => setSelectedPacketId(e.target.value)}
+                                        >
+                                            <option value="">Select packet…</option>
+                                            {defs.map((d) => (
+                                                <option key={d.id} value={d.id}>
+                                                    {d.name?.trim() || d.key}
+                                                    {d.is_active === false ? " (inactive)" : ""}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    ) : null}
+                                    {selectedPacketId ? (
+                                        <div className="mt-1.5 text-xs text-alloy-midnight/65">
+                                            {detailLoading ? "Loading steps…" : null}
+                                            {detailErr ? <span className="text-red-600">{detailErr}</span> : null}
+                                            {!detailLoading && !detailErr && detailItems.length > 0 ? (
+                                                <>
+                                                    <span>
+                                                        {detailItems.length} form{detailItems.length === 1 ? "" : "s"}
+                                                        {unpublishedCount > 0 ? ` · ${unpublishedCount} not published` : ""}
+                                                    </span>
+                                                    {!allStepsPublishable ? (
+                                                        <span className="ml-1 font-medium text-amber-800">— fix before send</span>
+                                                    ) : null}
+                                                </>
                                             ) : null}
                                         </div>
                                     ) : null}
-                                </>
-                            ) : null}
-                        </div>
+                                </div>
 
-                        <div>
-                            <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">3 · Recipient</p>
-                            <select
-                                className="mt-1 block w-full max-w-lg rounded-md border border-alloy-stone/50 bg-white px-2 py-1.5 text-sm text-alloy-midnight/90"
-                                value={recipientChoice}
-                                disabled={!canMutate}
-                                onChange={(e) => setRecipientChoice(e.target.value)}
-                            >
-                                {recipientOptions.map((o) => (
-                                    <option key={o.value} value={o.value}>
-                                        {o.label}
-                                    </option>
-                                ))}
-                            </select>
-                            <p className="mt-1 text-[11px] text-alloy-midnight/55">
-                                {primaryPersonEmail || primaryContactEmail ? (
-                                    <>
-                                        On file: {[primaryPersonEmail, primaryContactEmail].filter(Boolean).join(" · ") || "—"}
-                                    </>
-                                ) : (
-                                    "No guardian email on file — you can still copy links."
-                                )}
-                            </p>
-                        </div>
-
-                        <div>
-                            <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">4 · Prefill preview</p>
-                            <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs text-alloy-midnight/80">
-                                <li>
-                                    <span className="font-medium">Opportunity:</span> {opportunityLabel}
-                                </li>
-                                <li>
-                                    <span className="font-medium">Household:</span> {(householdName ?? customerId) || "—"}
-                                </li>
-                                <li>
-                                    <span className="font-medium">Enrollee(s):</span> {enrolleeSummaryLabel}
-                                </li>
-                                <li>
-                                    <span className="font-medium">Recipient:</span> {recipientPreviewLabel}
-                                </li>
-                                <li>
-                                    <span className="font-medium">Packet:</span> {detailName || "—"}
-                                </li>
-                                {prefillPreviewLines.map((line, i) => (
-                                    <li key={i}>{line}</li>
-                                ))}
-                            </ul>
-                        </div>
-
-                        <div>
-                            <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">5 · Delivery</p>
-                            <div className="mt-1 flex flex-col gap-2 text-xs text-alloy-midnight/80">
-                                <label className="inline-flex items-center gap-1.5">
-                                    <input
-                                        type="radio"
-                                        name="delivery-mode"
-                                        checked={deliveryMode === "copy_only"}
+                                <div>
+                                    <label className="text-xs font-medium text-alloy-midnight/70">Recipient</label>
+                                    <select
+                                        className="mt-1 block w-full rounded-md border border-alloy-stone/45 bg-white px-2 py-1.5 text-sm text-alloy-midnight"
+                                        value={recipientChoice}
                                         disabled={!canMutate}
-                                        onChange={() => setDeliveryMode("copy_only")}
-                                    />
-                                    Copy links only (create links; open or copy yourself)
-                                </label>
-                                <label className="inline-flex items-center gap-1.5">
-                                    <input
-                                        type="radio"
-                                        name="delivery-mode"
-                                        checked={deliveryMode === "send_email"}
-                                        disabled={!canMutate}
-                                        onChange={() => setDeliveryMode("send_email")}
-                                    />
-                                    Send email now (Communications — opportunity-anchored)
-                                </label>
-                                {deliveryMode === "send_email" ? (
-                                    <p className="rounded-md border border-amber-200/80 bg-amber-50/80 px-2 py-1.5 text-[11px] text-amber-950/90">
-                                        Links are always created first. If outbound email is not available for this org or the
-                                        recipient is ineligible, the message is skipped and you can still copy each link below.
+                                        onChange={(e) => setRecipientChoice(e.target.value)}
+                                    >
+                                        {recipientOptions.map((o) => (
+                                            <option key={o.value} value={o.value}>
+                                                {o.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <p
+                                        className="mt-1 truncate text-[11px] text-alloy-midnight/50"
+                                        title={[primaryPersonEmail, primaryContactEmail].filter(Boolean).join(" · ") || undefined}
+                                    >
+                                        {hasFiledEmail ? (
+                                            <>On file: {[primaryPersonEmail, primaryContactEmail].filter(Boolean).join(" · ")}</>
+                                        ) : (
+                                            "No email on file"
+                                        )}
                                     </p>
-                                ) : null}
+                                </div>
+
+                                <div>
+                                    <label className="text-xs font-medium text-alloy-midnight/70">Children / household</label>
+                                    {!customerId ? (
+                                        <p className="mt-1 text-xs text-amber-800">No household linked — household-level link only.</p>
+                                    ) : membersLoading ? (
+                                        <p className="mt-1 text-xs text-alloy-midnight/50">Loading…</p>
+                                    ) : membersErr ? (
+                                        <p className="mt-1 text-xs text-red-600">{membersErr}</p>
+                                    ) : members.length === 0 ? (
+                                        <p className="mt-1 text-xs text-alloy-midnight/55">No children on file — use household link.</p>
+                                    ) : (
+                                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                                            <button
+                                                type="button"
+                                                disabled={!canMutate}
+                                                className={pillClass(householdLinkOnly)}
+                                                onClick={() => setHouseholdOnly()}
+                                            >
+                                                Household
+                                            </button>
+                                            {members.map((m) => {
+                                                const on = selectedMemberIds.includes(m.id);
+                                                return (
+                                                    <button
+                                                        key={m.id}
+                                                        type="button"
+                                                        disabled={!canMutate}
+                                                        className={pillClass(on)}
+                                                        onClick={() => toggleMember(m.id)}
+                                                    >
+                                                        {memberLabel(m)}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <span className="text-xs font-medium text-alloy-midnight/70">Delivery</span>
+                                    <div className="mt-2 space-y-2">
+                                        {!hasFiledEmail ? (
+                                            <p className="text-xs text-amber-800">Email unavailable — links will still be created.</p>
+                                        ) : null}
+                                        <label className="flex cursor-pointer items-center gap-2 text-sm text-alloy-midnight">
+                                            <input
+                                                type="radio"
+                                                name="delivery-mode"
+                                                className="shrink-0"
+                                                checked={deliveryMode === "send_email"}
+                                                disabled={!canMutate || !hasFiledEmail}
+                                                onChange={() => setDeliveryMode("send_email")}
+                                            />
+                                            Send email now
+                                        </label>
+                                        <label className="flex cursor-pointer items-center gap-2 text-sm text-alloy-midnight/85">
+                                            <input
+                                                type="radio"
+                                                name="delivery-mode"
+                                                className="shrink-0"
+                                                checked={deliveryMode === "copy_only"}
+                                                disabled={!canMutate}
+                                                onChange={() => setDeliveryMode("copy_only")}
+                                            />
+                                            Copy links only
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <button
+                                        type="button"
+                                        className="text-xs font-medium text-alloy-blue hover:underline"
+                                        onClick={() => setMoreOptionsOpen((o) => !o)}
+                                        aria-expanded={moreOptionsOpen}
+                                    >
+                                        {moreOptionsOpen ? "Hide" : "More"} options
+                                    </button>
+                                    {moreOptionsOpen ? (
+                                        <div className="mt-2 space-y-2 rounded-md border border-alloy-stone/25 bg-white px-2 py-2">
+                                            <label className="block text-xs font-medium text-alloy-midnight/70">
+                                                Internal note
+                                                <textarea
+                                                    className="mt-1 block w-full rounded border border-alloy-stone/40 px-2 py-1 text-sm"
+                                                    rows={2}
+                                                    value={internalNote}
+                                                    disabled={!canMutate}
+                                                    onChange={(e) => setInternalNote(e.target.value)}
+                                                />
+                                            </label>
+                                            <label className="block text-xs font-medium text-alloy-midnight/70">
+                                                Link expires
+                                                <input
+                                                    type="datetime-local"
+                                                    className="mt-1 block w-full rounded border border-alloy-stone/40 px-2 py-1 text-sm"
+                                                    value={expiresLocal}
+                                                    disabled={!canMutate}
+                                                    onChange={(e) => setExpiresLocal(e.target.value)}
+                                                />
+                                            </label>
+                                        </div>
+                                    ) : null}
+                                </div>
+
+                                <details className="rounded-md border border-alloy-stone/30 bg-alloy-stone/[0.04] px-2 py-1.5 text-xs">
+                                    <summary className="cursor-pointer font-medium text-alloy-midnight/75">Preview</summary>
+                                    <ul className="mt-2 space-y-0.5 pl-3 text-alloy-midnight/70">
+                                        <li>Opp: {opportunityLabel}</li>
+                                        <li>Household: {(householdName ?? customerId) || "—"}</li>
+                                        <li>Links for: {enrolleeSummaryLabel}</li>
+                                        <li>Recipient: {recipientPreviewLabel}</li>
+                                        <li>Packet: {detailName || "—"}</li>
+                                    </ul>
+                                </details>
+
+                                {launchErr ? <p className="text-xs text-red-600">{launchErr}</p> : null}
                             </div>
                         </div>
 
-                        <div className="rounded-md border border-alloy-stone/30 bg-alloy-stone/5 px-2.5 py-2">
-                            <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Options</p>
-                            <label className="mt-2 block text-xs font-medium text-alloy-midnight/75">
-                                Internal note (optional)
-                                <textarea
-                                    className="mt-1 block w-full max-w-lg rounded-md border border-alloy-stone/50 bg-white px-2 py-1.5 text-sm text-alloy-midnight/90"
-                                    rows={2}
-                                    value={internalNote}
-                                    disabled={!canMutate}
-                                    onChange={(e) => setInternalNote(e.target.value)}
-                                />
-                            </label>
-                            <label className="mt-2 block text-xs font-medium text-alloy-midnight/75">
-                                Link expiration (optional)
-                                <input
-                                    type="datetime-local"
-                                    className="mt-1 block w-full max-w-lg rounded-md border border-alloy-stone/50 bg-white px-2 py-1.5 text-sm text-alloy-midnight/90"
-                                    value={expiresLocal}
-                                    disabled={!canMutate}
-                                    onChange={(e) => setExpiresLocal(e.target.value)}
-                                />
-                            </label>
-                        </div>
-
-                        {launchBlockedReason && selectedPacketId ? (
-                            <p className="text-xs font-medium text-amber-900">{launchBlockedReason}</p>
-                        ) : null}
-                        {launchErr ? <p className="text-xs text-red-700">{launchErr}</p> : null}
-
-                        <div className="flex flex-wrap gap-2 pt-1">
-                            <button
-                                type="button"
-                                disabled={!canMutate || busy || Boolean(launchBlockedReason)}
-                                onClick={() => void launch()}
-                                className="rounded-md bg-alloy-blue px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                                {busy ? "Working…" : "Create links"}
-                            </button>
-                        </div>
-                    </div>
-                ) : (
-                    <div className="mt-4 space-y-4">
-                        <p className="text-sm font-medium text-alloy-midnight/90">
-                            {createdResults.length > 0 ? "Packet link(s) ready" : "No links created"}
-                        </p>
-                        {emailOutcome && deliveryMode === "send_email" && !emailOutcome.ok ? (
-                            <p className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-950">
-                                <span className="font-semibold">Email not sent:</span>{" "}
-                                {emailOutcome.skipped_reason ?? "Communications unavailable or misconfigured for this org."} Copy or open
-                                each link below.
-                            </p>
-                        ) : null}
-                        {emailOutcome?.ok ? (
-                            <p className="rounded-md border border-emerald-200 bg-emerald-50/80 px-2.5 py-2 text-xs text-emerald-950">
-                                Email queued via Communications
-                                {emailOutcome.communication_message_id ? ` (message ${emailOutcome.communication_message_id.slice(0, 8)}…)` : ""}.
-                            </p>
-                        ) : null}
-
-                        <ul className="space-y-3">
-                            {createdResults.map((row, idx) => (
-                                <li
-                                    key={row.public_link_id}
-                                    className="rounded-lg border border-alloy-stone/30 bg-white/90 px-3 py-2.5 text-xs text-alloy-midnight/85"
+                        <footer className="flex shrink-0 flex-col gap-2 border-t border-alloy-stone/25 bg-alloy-stone/[0.06] px-4 py-3 sm:flex-row sm:items-center sm:justify-end sm:gap-3">
+                            {launchBlockedReason && selectedPacketId ? (
+                                <p className="text-xs font-medium text-amber-800 sm:me-auto sm:max-w-[58%]">{launchBlockedReason}</p>
+                            ) : null}
+                            <div className="flex flex-wrap justify-end gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => finishDismiss()}
+                                    className="rounded-md border border-alloy-stone/45 px-3 py-1.5 text-sm font-medium text-alloy-midnight/85 hover:bg-alloy-stone/15"
                                 >
-                                    <div className="font-medium text-alloy-midnight/90">{row.enrollee_label ?? "Link"}</div>
-                                    {row.embed_url ? (
-                                        <>
-                                            <p className="mt-1 break-all font-mono text-[11px] text-alloy-midnight/65">{row.embed_url}</p>
-                                            <div className="mt-2 flex flex-wrap gap-2">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => void copyOne(row.embed_url!, idx)}
-                                                    className="rounded-md border border-alloy-stone/55 px-2.5 py-1 text-xs font-medium text-alloy-midnight/85 hover:bg-alloy-stone/25"
-                                                >
-                                                    {copyIdx === idx ? "Copied" : "Copy link"}
-                                                </button>
-                                                <a
-                                                    href={row.embed_url!}
-                                                    target="_blank"
-                                                    rel="noreferrer"
-                                                    className="inline-flex items-center rounded-md border border-alloy-stone/55 px-2.5 py-1 text-xs font-medium text-alloy-midnight/85 hover:bg-alloy-stone/25"
-                                                >
-                                                    Open link
-                                                </a>
-                                            </div>
-                                        </>
-                                    ) : (
-                                        <p className="mt-1 text-amber-800">URL unavailable — check server logs.</p>
-                                    )}
-                                </li>
-                            ))}
-                        </ul>
+                                    Cancel
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={!canMutate || busy || Boolean(launchBlockedReason)}
+                                    onClick={() => void launch()}
+                                    className="rounded-md bg-alloy-blue px-4 py-1.5 text-sm font-semibold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-45"
+                                >
+                                    {primaryCtaForm}
+                                </button>
+                            </div>
+                        </footer>
+                    </>
+                ) : (
+                    <>
+                        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+                            <div className="space-y-3">
+                                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                                    <p className="text-sm font-semibold text-alloy-midnight">
+                                        {createdResults.length} link{createdResults.length === 1 ? "" : "s"} created
+                                    </p>
+                                    {createdResults.some((r) => r.embed_url) ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => void copyAllUrls()}
+                                            className="text-xs font-semibold text-alloy-blue hover:underline"
+                                        >
+                                            {copyAllOk ? "Copied all" : "Copy all links"}
+                                        </button>
+                                    ) : null}
+                                </div>
 
-                        <div className="flex flex-wrap gap-2 pt-1">
-                            <button
-                                type="button"
-                                onClick={() => finishDismiss()}
-                                className="rounded-md bg-alloy-blue px-3 py-1.5 text-sm font-semibold text-white hover:opacity-90"
-                            >
-                                Done
-                            </button>
+                                {emailOutcome?.ok ? (
+                                    <p className="text-xs font-medium text-emerald-800">Email queued.</p>
+                                ) : emailOutcome &&
+                                  !emailOutcome.ok &&
+                                  emailOutcome.skipped_reason &&
+                                  emailOutcome.skipped_reason !== "copy_only" ? (
+                                    <p className="text-xs text-amber-800">Email unavailable — links will still be created.</p>
+                                ) : null}
+
+                                <ul className="divide-y divide-alloy-stone/20 rounded-md border border-alloy-stone/25">
+                                    {createdResults.map((row, idx) => (
+                                        <li key={row.public_link_id} className="flex flex-wrap items-center justify-between gap-2 px-2 py-2 text-xs">
+                                            <span className="min-w-0 flex-1 font-medium text-alloy-midnight">{row.enrollee_label ?? "Link"}</span>
+                                            <div className="flex shrink-0 gap-1.5">
+                                                {row.embed_url ? (
+                                                    <>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => void copyOne(row.embed_url!, idx)}
+                                                            className="rounded border border-alloy-stone/40 px-2 py-0.5 text-[11px] font-medium hover:bg-alloy-stone/10"
+                                                        >
+                                                            {copyIdx === idx ? "Copied" : "Copy"}
+                                                        </button>
+                                                        <a
+                                                            href={row.embed_url!}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="rounded border border-alloy-stone/40 px-2 py-0.5 text-[11px] font-medium hover:bg-alloy-stone/10"
+                                                        >
+                                                            Open
+                                                        </a>
+                                                    </>
+                                                ) : (
+                                                    <span className="text-amber-800">No URL</span>
+                                                )}
+                                            </div>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </div>
+                        </div>
+
+                        <footer className="flex shrink-0 justify-end gap-2 border-t border-alloy-stone/25 bg-alloy-stone/[0.06] px-4 py-3">
                             <button
                                 type="button"
                                 onClick={() => {
@@ -758,15 +774,24 @@ export default function OpportunityEnrollmentPacketModal({
                                     setLaunchErr(null);
                                     setCreatedResults([]);
                                     setEmailOutcome(null);
+                                    setCopyAllOk(false);
+                                    setDeliveryMode(hasFiledEmail ? "send_email" : "copy_only");
                                 }}
-                                className="rounded-md border border-alloy-stone/55 px-3 py-1.5 text-sm font-medium text-alloy-midnight/85 hover:bg-alloy-stone/25"
+                                className="rounded-md border border-alloy-stone/45 px-3 py-1.5 text-sm font-medium text-alloy-midnight/85 hover:bg-alloy-stone/15"
                             >
                                 Create more
                             </button>
-                        </div>
-                    </div>
+                            <button
+                                type="button"
+                                onClick={() => finishDismiss()}
+                                className="rounded-md bg-alloy-blue px-4 py-1.5 text-sm font-semibold text-white hover:opacity-90"
+                            >
+                                Done
+                            </button>
+                        </footer>
+                    </>
                 )}
-            </section>
+            </div>
         </div>
     );
 }
