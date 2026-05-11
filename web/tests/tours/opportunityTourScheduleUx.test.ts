@@ -25,4 +25,13 @@ describe("Opportunity tour schedule UX alignment", () => {
         expect(src).toContain("/api/admin/tours/bookings/");
         expect(src).toContain("OpportunityTourSlotSchedulePanel");
     });
+
+    it("slot panel is calendar-style (day tabs + time chips), not a long flat ul list", () => {
+        const src = readFileSync(comp("OpportunityTourSlotSchedulePanel.tsx"), "utf8");
+        expect(src).toContain('role="tablist"');
+        expect(src).toContain('role="tab"');
+        expect(src).toContain("slotsForSelectedDay");
+        expect(src).toContain("selectedSlot.startAt");
+        expect(src).not.toMatch(/<ul className=\"max-h-56 space-y-1/);
+    });
 });

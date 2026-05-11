@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { TourBookingRow } from "@/lib/tours/bookings/types";
 import type { AvailableTourSlot } from "@/lib/tours/availability/types";
-
-/**
- * V1.1+ UX (not implemented here): replace the flat slot list with a calendar-style picker grouped by date,
- * keyboard navigation, and week/month zoom. Current list remains the supported V1 surface.
- */
+import {
+    formatTourDayTabLabel,
+    formatTourSlotTimeRangeLabel,
+    groupTourSlotsByLocalDate,
+    localDateKeyForSlot,
+} from "@/lib/tours/availability/groupTourSlotsByLocalDate";
 
 /** Default slot query window (days). Kept modest for faster `computeAvailableTourSlots` + rule scans. */
 const DEFAULT_SLOT_RANGE_DAYS = 14;
@@ -31,6 +32,7 @@ export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSched
     const [slotsLoading, setSlotsLoading] = useState(true);
     const [slotsErr, setSlotsErr] = useState<string | null>(null);
     const [selectedSlot, setSelectedSlot] = useState<AvailableTourSlot | null>(null);
+    const [selectedDayKey, setSelectedDayKey] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
     const loadGeneration = useRef(0);
 
@@ -89,6 +91,29 @@ export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSched
         void loadSlots();
     }, [loadSlots]);
 
+    const grouped = useMemo(() => groupTourSlotsByLocalDate(slots), [slots]);
+
+    useEffect(() => {
+        if (slotsLoading) return;
+        if (slots.length === 0) {
+            setSelectedDayKey(null);
+            return;
+        }
+        const { orderedDayKeys, byDay } = groupTourSlotsByLocalDate(slots);
+        const first = orderedDayKeys[0] ?? null;
+        setSelectedDayKey((prev) => {
+            if (prev && byDay.has(prev)) return prev;
+            return first;
+        });
+    }, [slotsLoading, slots]);
+
+    const slotsForSelectedDay = useMemo(() => {
+        if (!selectedDayKey) return [];
+        return grouped.byDay.get(selectedDayKey) ?? [];
+    }, [grouped, selectedDayKey]);
+
+    const dayTimezoneHint = slotsForSelectedDay[0]?.timezone?.trim() ?? null;
+
     const createFromSlot = async () => {
         if (!selectedSlot) return;
         if (mode === "reschedule" && (!primaryBooking || ["canceled", "completed", "no_show"].includes(primaryBooking.status_key))) {
@@ -139,59 +164,148 @@ export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSched
 
     const title = useMemo(() => (mode === "reschedule" ? "Reschedule tour" : "Pick a time slot"), [mode]);
 
+    const slotMatchesSelection = (s: AvailableTourSlot) =>
+        selectedSlot != null && selectedSlot.startAt === s.startAt && selectedSlot.ruleId === s.ruleId;
+
     return (
         <div className="text-sm text-alloy-midnight" onClick={(e) => e.stopPropagation()}>
             <div className="border-b border-alloy-stone/15 px-5 py-4">
                 <div className="text-base font-semibold">{title}</div>
                 <div className="mt-0.5 text-xs text-alloy-midnight/60">
-                    Uses live availability rules and <code className="rounded bg-alloy-stone/10 px-1">tour_bookings</code>. Showing the
-                    next {DEFAULT_SLOT_RANGE_DAYS} days.
+                    Uses live availability rules and <code className="rounded bg-alloy-stone/10 px-1">tour_bookings</code>. Next{" "}
+                    {DEFAULT_SLOT_RANGE_DAYS} days — pick a day, then a time.
                 </div>
             </div>
-            <div className="max-h-[60vh] space-y-3 overflow-auto px-5 py-4">
+            <div className="max-h-[70vh] space-y-3 overflow-auto px-5 py-4">
                 {slotsLoading ? (
-                    <div className="space-y-2" aria-busy="true" aria-label="Loading slots">
-                        <div className="h-4 w-2/3 skeleton-pulse rounded bg-alloy-stone/15" />
-                        <div className="h-10 w-full skeleton-pulse rounded bg-alloy-stone/12" />
-                        <div className="h-10 w-full skeleton-pulse rounded bg-alloy-stone/12" />
-                        <div className="h-10 w-full skeleton-pulse rounded bg-alloy-stone/12" />
+                    <div className="space-y-3" aria-busy="true" aria-label="Loading availability">
+                        <div className="h-4 w-1/2 skeleton-pulse rounded bg-alloy-stone/15" />
+                        <div className="flex gap-2 overflow-hidden">
+                            {[1, 2, 3, 4, 5].map((i) => (
+                                <div key={i} className="h-14 w-16 shrink-0 skeleton-pulse rounded-lg bg-alloy-stone/12" />
+                            ))}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {[1, 2, 3, 4, 5, 6].map((i) => (
+                                <div key={i} className="h-9 w-24 skeleton-pulse rounded-md bg-alloy-stone/10" />
+                            ))}
+                        </div>
                     </div>
                 ) : null}
-                {!slotsLoading && slotsErr ? <p className="text-xs text-red-700">{slotsErr}</p> : null}
-                {!slotsLoading && !slotsErr && slots.length === 0 ? <p className="text-xs text-alloy-midnight/60">No slots in range.</p> : null}
-                {!slotsLoading && !slotsErr ? (
-                    <ul className="max-h-56 space-y-1 overflow-auto text-xs">
-                        {slots.map((s) => (
-                            <li key={`${s.startAt}-${s.ruleId}`}>
-                                <button
-                                    type="button"
-                                    className={`w-full rounded border px-2 py-1.5 text-left ${
-                                        selectedSlot?.startAt === s.startAt && selectedSlot?.ruleId === s.ruleId
-                                            ? "border-alloy-midnight bg-alloy-midnight/5"
-                                            : "border-alloy-stone/15 hover:bg-alloy-stone/5"
-                                    }`}
-                                    onClick={() => setSelectedSlot(s)}
-                                >
-                                    {new Date(s.startAt).toLocaleString(undefined, { timeZone: s.timezone })} —{" "}
-                                    {new Date(s.endAt).toLocaleString(undefined, { timeZone: s.timezone })}{" "}
-                                    <span className="text-alloy-midnight/50">({s.timezone})</span>
-                                    {rulesById[s.ruleId]?.approval_required ? (
-                                        <span className="ml-1 text-amber-700"> · needs approval</span>
-                                    ) : null}
-                                </button>
-                            </li>
-                        ))}
-                    </ul>
+
+                {!slotsLoading && slotsErr ? (
+                    <p className="text-xs text-red-700" role="alert">
+                        {slotsErr}
+                    </p>
                 ) : null}
+
+                {!slotsLoading && !slotsErr && slots.length === 0 ? (
+                    <p className="text-sm text-alloy-midnight/60">No availability in this window. Try another site or extend rules.</p>
+                ) : null}
+
+                {!slotsLoading && !slotsErr && slots.length > 0 ? (
+                    <div className="space-y-3">
+                        <div>
+                            <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Day</div>
+                            <div
+                                className="flex gap-2 overflow-x-auto pb-1"
+                                role="tablist"
+                                aria-label="Available days"
+                            >
+                                {grouped.orderedDayKeys.map((dayKey) => {
+                                    const daySlots = grouped.byDay.get(dayKey) ?? [];
+                                    const sample = daySlots[0];
+                                    const selected = dayKey === selectedDayKey;
+                                    return (
+                                        <button
+                                            key={dayKey}
+                                            type="button"
+                                            role="tab"
+                                            aria-selected={selected}
+                                            className={`shrink-0 rounded-lg border px-2.5 py-2 text-left text-xs font-semibold transition-colors focus-visible:outline focus-visible:ring-2 focus-visible:ring-alloy-midnight/25 ${
+                                                selected
+                                                    ? "border-alloy-midnight bg-alloy-midnight text-white"
+                                                    : "border-alloy-stone/20 bg-white text-alloy-midnight hover:bg-alloy-stone/5"
+                                            }`}
+                                            onClick={() => {
+                                                setSelectedDayKey(dayKey);
+                                                setSelectedSlot(null);
+                                            }}
+                                        >
+                                            <div className="leading-tight">{formatTourDayTabLabel(dayKey, sample)}</div>
+                                            <div
+                                                className={`mt-0.5 text-[10px] font-medium ${selected ? "text-white/80" : "text-alloy-midnight/45"}`}
+                                            >
+                                                {daySlots.length} slot{daySlots.length === 1 ? "" : "s"}
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+
+                        {selectedDayKey ? (
+                            <div role="tabpanel" aria-label={`Times for ${selectedDayKey}`}>
+                                <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2">
+                                    <div className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Time</div>
+                                    {dayTimezoneHint ? (
+                                        <span className="text-[10px] text-alloy-midnight/45" title={dayTimezoneHint}>
+                                            {dayTimezoneHint}
+                                        </span>
+                                    ) : null}
+                                </div>
+                                {slotsForSelectedDay.length === 0 ? (
+                                    <p className="text-xs text-alloy-midnight/55">No times for this day.</p>
+                                ) : (
+                                    <div className="flex max-h-48 flex-wrap gap-2 overflow-y-auto">
+                                        {slotsForSelectedDay.map((s) => {
+                                            const sel = slotMatchesSelection(s);
+                                            return (
+                                                <button
+                                                    key={`${s.startAt}-${s.ruleId}`}
+                                                    type="button"
+                                                    aria-pressed={sel}
+                                                    className={`rounded-md border px-2.5 py-1.5 text-left text-[12px] font-medium leading-snug transition-colors focus-visible:outline focus-visible:ring-2 focus-visible:ring-alloy-midnight/25 ${
+                                                        sel
+                                                            ? "border-alloy-midnight bg-alloy-midnight/10 text-alloy-midnight"
+                                                            : "border-alloy-stone/20 bg-white text-alloy-midnight hover:bg-alloy-stone/5"
+                                                    }`}
+                                                    onClick={() => setSelectedSlot(s)}
+                                                >
+                                                    {formatTourSlotTimeRangeLabel(s)}
+                                                    {rulesById[s.ruleId]?.approval_required ? (
+                                                        <span className="mt-0.5 block text-[10px] font-normal text-amber-800">
+                                                            Needs approval
+                                                        </span>
+                                                    ) : null}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        ) : null}
+
+                        {selectedSlot ? (
+                            <div className="rounded-lg border border-alloy-pine/25 bg-alloy-pine/5 px-3 py-2 text-[11px] text-alloy-midnight">
+                                <span className="font-semibold">Selected:</span>{" "}
+                                {formatTourSlotTimeRangeLabel(selectedSlot)} ({localDateKeyForSlot(selectedSlot)})
+                            </div>
+                        ) : null}
+                    </div>
+                ) : null}
+
                 {footerSlot ? <div className="border-t border-alloy-stone/10 pt-3">{footerSlot}</div> : null}
+
                 <div className="flex justify-end gap-2 border-t border-alloy-stone/10 pt-3">
                     <button type="button" className="rounded-lg border px-3 py-1.5 text-xs" onClick={onCancel}>
                         Cancel
                     </button>
                     <button
                         type="button"
-                        className="rounded-lg bg-alloy-midnight px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                        className="rounded-lg bg-alloy-midnight px-3 py-1.5 text-xs font-semibold text-white disabled:pointer-events-none disabled:opacity-45"
                         disabled={!selectedSlot || saving || slotsLoading}
+                        aria-disabled={!selectedSlot || saving || slotsLoading}
                         onClick={() => void createFromSlot()}
                     >
                         {saving ? "Saving…" : mode === "reschedule" ? "Save reschedule" : "Book tour"}
