@@ -94,7 +94,9 @@ async function assertTransition(
     toStatusKey: string,
     mergedMetadata: Record<string, unknown>,
     workUnitId: string | null,
-    bookingId: string
+    bookingId: string,
+    /** Enrollment rules (e.g. `tour_scheduled`) may require `tour_date` / `tour_time` on `required_payload_fields`. */
+    payloadExtras?: Record<string, unknown>
 ): Promise<void> {
     const departmentId = await resolveDepartmentIdForWorkUnit(supabase, orgId, workUnitId);
     const t = await validateStatusTransition({
@@ -108,7 +110,7 @@ async function assertTransition(
         fromStatusKey,
         toStatusKey,
         currentMetadata: mergedMetadata,
-        payload: { source: "tour_booking", booking_id: bookingId },
+        payload: { source: "tour_booking", booking_id: bookingId, ...(payloadExtras ?? {}) },
     });
     if (!t.ok) {
         throw new Error(`tour_booking: opportunity transition blocked — ${t.message}`);
@@ -137,7 +139,10 @@ async function patchOpportunityTourMirrorAndScheduledStatus(input: {
     const mirror = deriveTourMetadataMirrorFromBooking(booking.start_at, booking.timezone);
     const nextMd: Record<string, unknown> = { ...md, ...mirror };
 
-    await assertTransition(supabase, orgId, opportunityId, opp.status_key ?? null, target, nextMd, opp.work_unit_id, booking.id);
+    await assertTransition(supabase, orgId, opportunityId, opp.status_key ?? null, target, nextMd, opp.work_unit_id, booking.id, {
+        tour_date: mirror.tour_date,
+        tour_time: mirror.tour_time,
+    });
 
     const { error } = await updateOpportunityStatusWithEvent({
         supabase,

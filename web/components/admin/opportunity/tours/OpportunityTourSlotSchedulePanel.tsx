@@ -1,8 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { TourBookingRow } from "@/lib/tours/bookings/types";
 import type { AvailableTourSlot } from "@/lib/tours/availability/types";
+
+/**
+ * V1.1+ UX (not implemented here): replace the flat slot list with a calendar-style picker grouped by date,
+ * keyboard navigation, and week/month zoom. Current list remains the supported V1 surface.
+ */
+
+/** Default slot query window (days). Kept modest for faster `computeAvailableTourSlots` + rule scans. */
+const DEFAULT_SLOT_RANGE_DAYS = 14;
 
 export type OpportunityTourSlotSchedulePanelProps = {
     opportunityId: string;
@@ -24,46 +32,58 @@ export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSched
     const [slotsErr, setSlotsErr] = useState<string | null>(null);
     const [selectedSlot, setSelectedSlot] = useState<AvailableTourSlot | null>(null);
     const [saving, setSaving] = useState(false);
-
-    const loadRules = useCallback(async () => {
-        const res = await fetch(`/api/admin/tours/availability-rules?location_id=${encodeURIComponent(locationId)}`, {
-            credentials: "include",
-        });
-        const j = (await res.json()) as { rules?: { id: string; approval_required: boolean }[] };
-        const map: Record<string, { approval_required: boolean }> = {};
-        for (const r of j.rules ?? []) {
-            map[r.id] = { approval_required: Boolean(r.approval_required) };
-        }
-        setRulesById(map);
-    }, [locationId]);
+    const loadGeneration = useRef(0);
 
     const loadSlots = useCallback(async () => {
+        const gen = ++loadGeneration.current;
         setSlotsErr(null);
         setSlotsLoading(true);
         setSelectedSlot(null);
-        if (mode === "schedule") {
-            await loadRules();
-        }
         const from = new Date();
         from.setUTCHours(0, 0, 0, 0);
         const to = new Date(from);
-        to.setUTCDate(to.getUTCDate() + 21);
+        to.setUTCDate(to.getUTCDate() + DEFAULT_SLOT_RANGE_DAYS);
+        const qs = new URLSearchParams({
+            location_id: locationId,
+            from: from.toISOString(),
+            to: to.toISOString(),
+        });
+        const slotsUrl = `/api/admin/tours/slots?${qs.toString()}`;
         try {
-            const qs = new URLSearchParams({
-                location_id: locationId,
-                from: from.toISOString(),
-                to: to.toISOString(),
-            });
-            const res = await fetch(`/api/admin/tours/slots?${qs.toString()}`, { credentials: "include" });
-            const j = (await res.json()) as { slots?: AvailableTourSlot[]; error?: string };
-            if (!res.ok) throw new Error(j.error ?? res.statusText);
-            setSlots(j.slots ?? []);
+            if (mode === "schedule") {
+                const [rulesRes, slotsRes] = await Promise.all([
+                    fetch(`/api/admin/tours/availability-rules?location_id=${encodeURIComponent(locationId)}`, {
+                        credentials: "include",
+                    }),
+                    fetch(slotsUrl, { credentials: "include" }),
+                ]);
+                if (gen !== loadGeneration.current) return;
+                const rulesJ = (await rulesRes.json()) as { rules?: { id: string; approval_required: boolean }[] };
+                const map: Record<string, { approval_required: boolean }> = {};
+                for (const r of rulesJ.rules ?? []) {
+                    map[r.id] = { approval_required: Boolean(r.approval_required) };
+                }
+                setRulesById(map);
+                const slotsJ = (await slotsRes.json()) as { slots?: AvailableTourSlot[]; error?: string };
+                if (!slotsRes.ok) throw new Error(slotsJ.error ?? slotsRes.statusText);
+                setSlots(slotsJ.slots ?? []);
+            } else {
+                const slotsRes = await fetch(slotsUrl, { credentials: "include" });
+                if (gen !== loadGeneration.current) return;
+                setRulesById({});
+                const slotsJ = (await slotsRes.json()) as { slots?: AvailableTourSlot[]; error?: string };
+                if (!slotsRes.ok) throw new Error(slotsJ.error ?? slotsRes.statusText);
+                setSlots(slotsJ.slots ?? []);
+            }
         } catch (e) {
+            if (gen !== loadGeneration.current) return;
             setSlotsErr(e instanceof Error ? e.message : String(e));
         } finally {
-            setSlotsLoading(false);
+            if (gen === loadGeneration.current) {
+                setSlotsLoading(false);
+            }
         }
-    }, [locationId, mode, loadRules]);
+    }, [locationId, mode]);
 
     useEffect(() => {
         void loadSlots();
@@ -124,35 +144,45 @@ export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSched
             <div className="border-b border-alloy-stone/15 px-5 py-4">
                 <div className="text-base font-semibold">{title}</div>
                 <div className="mt-0.5 text-xs text-alloy-midnight/60">
-                    Uses live availability rules and <code className="rounded bg-alloy-stone/10 px-1">tour_bookings</code>.
+                    Uses live availability rules and <code className="rounded bg-alloy-stone/10 px-1">tour_bookings</code>. Showing the
+                    next {DEFAULT_SLOT_RANGE_DAYS} days.
                 </div>
             </div>
             <div className="max-h-[60vh] space-y-3 overflow-auto px-5 py-4">
-                {slotsLoading ? <p className="text-xs text-alloy-midnight/55">Loading slots…</p> : null}
-                {slotsErr ? <p className="text-xs text-red-700">{slotsErr}</p> : null}
-                {!slotsLoading && slots.length === 0 ? <p className="text-xs text-alloy-midnight/60">No slots in range.</p> : null}
-                <ul className="max-h-56 space-y-1 overflow-auto text-xs">
-                    {slots.map((s) => (
-                        <li key={`${s.startAt}-${s.ruleId}`}>
-                            <button
-                                type="button"
-                                className={`w-full rounded border px-2 py-1.5 text-left ${
-                                    selectedSlot?.startAt === s.startAt && selectedSlot?.ruleId === s.ruleId
-                                        ? "border-alloy-midnight bg-alloy-midnight/5"
-                                        : "border-alloy-stone/15 hover:bg-alloy-stone/5"
-                                }`}
-                                onClick={() => setSelectedSlot(s)}
-                            >
-                                {new Date(s.startAt).toLocaleString(undefined, { timeZone: s.timezone })} —{" "}
-                                {new Date(s.endAt).toLocaleString(undefined, { timeZone: s.timezone })}{" "}
-                                <span className="text-alloy-midnight/50">({s.timezone})</span>
-                                {rulesById[s.ruleId]?.approval_required ? (
-                                    <span className="ml-1 text-amber-700"> · needs approval</span>
-                                ) : null}
-                            </button>
-                        </li>
-                    ))}
-                </ul>
+                {slotsLoading ? (
+                    <div className="space-y-2" aria-busy="true" aria-label="Loading slots">
+                        <div className="h-4 w-2/3 skeleton-pulse rounded bg-alloy-stone/15" />
+                        <div className="h-10 w-full skeleton-pulse rounded bg-alloy-stone/12" />
+                        <div className="h-10 w-full skeleton-pulse rounded bg-alloy-stone/12" />
+                        <div className="h-10 w-full skeleton-pulse rounded bg-alloy-stone/12" />
+                    </div>
+                ) : null}
+                {!slotsLoading && slotsErr ? <p className="text-xs text-red-700">{slotsErr}</p> : null}
+                {!slotsLoading && !slotsErr && slots.length === 0 ? <p className="text-xs text-alloy-midnight/60">No slots in range.</p> : null}
+                {!slotsLoading && !slotsErr ? (
+                    <ul className="max-h-56 space-y-1 overflow-auto text-xs">
+                        {slots.map((s) => (
+                            <li key={`${s.startAt}-${s.ruleId}`}>
+                                <button
+                                    type="button"
+                                    className={`w-full rounded border px-2 py-1.5 text-left ${
+                                        selectedSlot?.startAt === s.startAt && selectedSlot?.ruleId === s.ruleId
+                                            ? "border-alloy-midnight bg-alloy-midnight/5"
+                                            : "border-alloy-stone/15 hover:bg-alloy-stone/5"
+                                    }`}
+                                    onClick={() => setSelectedSlot(s)}
+                                >
+                                    {new Date(s.startAt).toLocaleString(undefined, { timeZone: s.timezone })} —{" "}
+                                    {new Date(s.endAt).toLocaleString(undefined, { timeZone: s.timezone })}{" "}
+                                    <span className="text-alloy-midnight/50">({s.timezone})</span>
+                                    {rulesById[s.ruleId]?.approval_required ? (
+                                        <span className="ml-1 text-amber-700"> · needs approval</span>
+                                    ) : null}
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                ) : null}
                 {footerSlot ? <div className="border-t border-alloy-stone/10 pt-3">{footerSlot}</div> : null}
                 <div className="flex justify-end gap-2 border-t border-alloy-stone/10 pt-3">
                     <button type="button" className="rounded-lg border px-3 py-1.5 text-xs" onClick={onCancel}>
@@ -161,7 +191,7 @@ export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSched
                     <button
                         type="button"
                         className="rounded-lg bg-alloy-midnight px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-                        disabled={!selectedSlot || saving}
+                        disabled={!selectedSlot || saving || slotsLoading}
                         onClick={() => void createFromSlot()}
                     >
                         {saving ? "Saving…" : mode === "reschedule" ? "Save reschedule" : "Book tour"}

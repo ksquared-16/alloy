@@ -100,6 +100,34 @@ describe("applyTourBookingOpportunityIntegration", () => {
         vi.mocked(validateStatusTransition).mockClear();
     });
 
+    it("confirmed_mirror passes tour_date and tour_time in validateStatusTransition payload (enrollment required_payload_fields)", async () => {
+        const booking = baseBooking({ status_key: "confirmed" });
+        const supabase = makeSupabase({
+            id: "opp-1",
+            org_id: "org-1",
+            status_key: "inquiry_received",
+            metadata: { notes: "x" },
+            work_unit_id: null,
+        });
+        await applyTourBookingOpportunityIntegration(supabase, { booking, kind: "confirmed_mirror" });
+        expect(validateStatusTransition).toHaveBeenCalledWith(
+            expect.objectContaining({
+                toStatusKey: TOUR_BOOKING_OPPORTUNITY_STATUS.scheduled,
+                payload: expect.objectContaining({
+                    source: "tour_booking",
+                    booking_id: "b-1",
+                    tour_date: "2026-05-11",
+                    tour_time: "08:00",
+                }),
+                currentMetadata: expect.objectContaining({
+                    tour_date: "2026-05-11",
+                    tour_time: "08:00",
+                    notes: "x",
+                }),
+            })
+        );
+    });
+
     it("confirmed_mirror writes tour_date/tour_time and tour_scheduled", async () => {
         const booking = baseBooking({ status_key: "confirmed" });
         const supabase = makeSupabase({
