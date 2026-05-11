@@ -396,6 +396,26 @@ export async function dbPatchSubmission(
         .single();
 }
 
+export async function dbListFormDefinitionKeys(supabase: SupabaseClient, orgId: string): Promise<Set<string>> {
+    const { data, error } = await supabase.from("form_definitions").select("key").eq("org_id", orgId);
+    if (error) throw new Error(error.message);
+    return new Set(
+        (data ?? [])
+            .map((r: { key: string | null }) => (typeof r.key === "string" ? r.key.trim() : ""))
+            .filter(Boolean)
+    );
+}
+
+export async function dbListPacketDefinitionKeys(supabase: SupabaseClient, orgId: string): Promise<Set<string>> {
+    const { data, error } = await supabase.from("form_packet_definitions").select("key").eq("org_id", orgId);
+    if (error) throw new Error(error.message);
+    return new Set(
+        (data ?? [])
+            .map((r: { key: string | null }) => (typeof r.key === "string" ? r.key.trim() : ""))
+            .filter(Boolean)
+    );
+}
+
 export const FORM_PUBLIC_LINK_SAFE_SELECT =
     "id, form_definition_id, pinned_form_definition_version_id, is_active, expires_at, allowed_embed_origins, metadata, token_prefix, rate_limit_profile, created_at, updated_at, last_used_at";
 

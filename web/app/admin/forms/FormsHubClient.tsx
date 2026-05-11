@@ -86,7 +86,6 @@ export default function FormsHubClient() {
     const [showCreate, setShowCreate] = useState(false);
     const [createBusy, setCreateBusy] = useState(false);
     const [createErr, setCreateErr] = useState<string | null>(null);
-    const [nfKey, setNfKey] = useState("");
     const [nfName, setNfName] = useState("");
     const [nfDesc, setNfDesc] = useState("");
     const [nfKind, setNfKind] = useState<"center" | "state">("center");
@@ -121,7 +120,6 @@ export default function FormsHubClient() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    key: nfKey.trim(),
                     name: nfName.trim(),
                     description: nfDesc.trim() || null,
                     kind: nfKind,
@@ -133,7 +131,6 @@ export default function FormsHubClient() {
             const id = (json as { data?: { id: string } }).data?.id;
             if (!id) throw new Error("Missing id");
             setShowCreate(false);
-            setNfKey("");
             setNfName("");
             setNfDesc("");
             setNfCategory("");
@@ -212,26 +209,17 @@ export default function FormsHubClient() {
                 {showCreate && canMutate ? (
                     <div className="mb-5 space-y-3 rounded-lg border border-[#e6e8ec] bg-[#fafbfd] p-4 text-sm">
                         <p className="text-xs text-[#59678b]">
-                            Keys must stay stable — they are used in integrations. Use lowercase with underscores (e.g.{" "}
-                            <span className="font-mono">waitlist_intake_v1</span>).
+                            Alloy generates a stable internal key from the name (for integrations). Scripts may still pass an
+                            explicit <span className="font-mono">key</span> in the API if needed.
                         </p>
                         <div className="grid gap-3 sm:grid-cols-2">
-                            <label className="space-y-1">
-                                <span className="text-xs font-semibold uppercase text-[#59678b]">Key</span>
-                                <input
-                                    className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 font-mono text-sm"
-                                    value={nfKey}
-                                    onChange={(e) => setNfKey(e.target.value)}
-                                    placeholder="waitlist_intake_v1"
-                                />
-                            </label>
-                            <label className="space-y-1">
-                                <span className="text-xs font-semibold uppercase text-[#59678b]">Name</span>
+                            <label className="space-y-1 sm:col-span-2">
+                                <span className="text-xs font-semibold uppercase text-[#59678b]">Form name</span>
                                 <input
                                     className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
                                     value={nfName}
                                     onChange={(e) => setNfName(e.target.value)}
-                                    placeholder="Waitlist intake"
+                                    placeholder="Waitlist Intake"
                                 />
                             </label>
                             <label className="space-y-1 sm:col-span-2">
@@ -294,7 +282,6 @@ export default function FormsHubClient() {
                                 <tr className="border-b border-[#e6e8ec]">
                                     <th className="pb-2 pr-4 text-left font-semibold text-[#59678b]">Form</th>
                                     <th className="pb-2 pr-4 text-left font-semibold text-[#59678b]">Purpose / description</th>
-                                    <th className="pb-2 pr-4 text-left font-semibold text-[#59678b]">Key</th>
                                     <th className="pb-2 pr-4 text-left font-semibold text-[#59678b]">Category</th>
                                     <th className="pb-2 pr-4 text-left font-semibold text-[#59678b]">Kind</th>
                                     <th className="pb-2 pr-4 text-left font-semibold text-[#59678b]">Definition</th>
@@ -321,7 +308,6 @@ export default function FormsHubClient() {
                                                     <span className="italic text-[#59678b]">No description yet</span>
                                                 )}
                                             </td>
-                                            <td className="py-2.5 pr-4 font-mono text-xs text-[#31394d]">{r.key}</td>
                                             <td className="py-2.5 pr-4 text-[#59678b]">{cat ?? "—"}</td>
                                             <td className="py-2.5 pr-4 text-[#59678b]">{r.kind}</td>
                                             <td className="py-2.5 pr-4">

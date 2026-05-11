@@ -20,7 +20,6 @@ export default function PacketDefinitionsHubClient() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [creating, setCreating] = useState(false);
-    const [key, setKey] = useState("");
     const [name, setName] = useState("");
     const [description, setDescription] = useState("");
 
@@ -52,7 +51,6 @@ export default function PacketDefinitionsHubClient() {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
-                    key: key.trim().toLowerCase(),
                     name: name.trim(),
                     description: description.trim() || null,
                 }),
@@ -60,7 +58,6 @@ export default function PacketDefinitionsHubClient() {
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error((json as { error?: string }).error ?? "Create failed");
             const id = (json as { data?: { id: string } }).data?.id;
-            setKey("");
             setName("");
             setDescription("");
             await load();
@@ -95,22 +92,13 @@ export default function PacketDefinitionsHubClient() {
 
             <SectionCard title="Create packet">
                 <div className="grid gap-3 sm:grid-cols-2">
-                    <label className="space-y-1 text-sm">
-                        <span className="text-xs font-semibold uppercase text-[#59678b]">Key</span>
-                        <input
-                            className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 font-mono text-sm"
-                            value={key}
-                            onChange={(e) => setKey(e.target.value)}
-                            placeholder="e.g. onboarding_packet_v1"
-                        />
-                    </label>
-                    <label className="space-y-1 text-sm">
-                        <span className="text-xs font-semibold uppercase text-[#59678b]">Name</span>
+                    <label className="space-y-1 text-sm sm:col-span-2">
+                        <span className="text-xs font-semibold uppercase text-[#59678b]">Packet name</span>
                         <input
                             className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
                             value={name}
                             onChange={(e) => setName(e.target.value)}
-                            placeholder="Display name"
+                            placeholder="e.g. New family onboarding"
                         />
                     </label>
                     <label className="space-y-1 text-sm sm:col-span-2">
@@ -126,6 +114,7 @@ export default function PacketDefinitionsHubClient() {
                     <PrimaryButton type="button" className="!px-3 !py-2 text-sm" disabled={creating} onClick={() => void createPacket()}>
                         {creating ? "Creating…" : "Create packet"}
                     </PrimaryButton>
+                    <p className="mt-2 text-xs text-[#59678b]">A stable internal key is generated from the packet name.</p>
                 </div>
                 {error ? <p className="mt-2 text-sm text-red-700">{error}</p> : null}
             </SectionCard>
@@ -144,7 +133,6 @@ export default function PacketDefinitionsHubClient() {
                                     className="flex flex-col gap-0.5 px-4 py-3 text-sm hover:bg-[#fafbfd]"
                                 >
                                     <span className="font-medium text-[#0f172a]">{r.name}</span>
-                                    <span className="font-mono text-xs text-[#59678b]">{r.key}</span>
                                     <span className="text-xs text-[#59678b]">{r.is_active ? "active" : "inactive"}</span>
                                 </Link>
                             </li>

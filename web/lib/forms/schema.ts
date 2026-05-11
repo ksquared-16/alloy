@@ -48,6 +48,17 @@ type FormValidateRules = z.infer<typeof formValidateRulesSchema>;
 type FormRepeatRules = z.infer<typeof formRepeatRulesSchema>;
 type FormSignatureConfig = z.infer<typeof formSignatureConfigSchema>;
 
+export const formFieldSourceSchema = z
+    .object({
+        entity_type: z.string().min(1),
+        field_key: z.string().min(1),
+        shared_value_key: z.string().optional(),
+        crm_mapping_key: z.string().optional(),
+    })
+    .strict();
+
+export type FormFieldSource = z.infer<typeof formFieldSourceSchema>;
+
 type FormFieldBase = {
     id: string;
     label: string;
@@ -56,6 +67,8 @@ type FormFieldBase = {
     description?: string;
     /** Input placeholder where applicable (text-like controls). */
     placeholder?: string;
+    /** Provenance for operational mapping (CRM, shared_values, etc.); optional for legacy/demo schemas. */
+    field_source?: FormFieldSource;
     /** When true, public PATCH/submit restore values from the saved draft baseline (operator/server wins). */
     read_only?: boolean;
     visibility?: FormVisibility;
@@ -106,6 +119,7 @@ const fieldCoreSchema = z
         /** Name of PDF mapping slot for this field (hint only; mapping lives in `pdf_mapping_json`). */
         pdf_slot: z.string().min(1).optional(),
         read_only: z.boolean().optional().default(false),
+        field_source: formFieldSourceSchema.optional(),
     })
     .strict();
 

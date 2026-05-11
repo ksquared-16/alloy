@@ -480,6 +480,42 @@ afterEach(() => {
 });
 
 describe("Admin forms routes", () => {
+    it("creates a form without key by slugifying name", async () => {
+        const res = await createForm(
+            new NextRequest("http://x/api/admin/forms", {
+                method: "POST",
+                body: JSON.stringify({ name: "Waitlist Intake", kind: "center" }),
+                headers: { "Content-Type": "application/json" },
+            })
+        );
+        expect(res.status).toBe(201);
+        const j = (await res.json()) as { data: { key: string; id: string } };
+        expect(j.data.key).toBe("waitlist_intake");
+    });
+
+    it("allocates unique key when slug collides with existing form", async () => {
+        const fid = crypto.randomUUID();
+        storeRef.forms[fid] = {
+            id: fid,
+            org_id: ORG,
+            key: "waitlist_intake",
+            name: "Existing",
+            kind: "center",
+            is_active: true,
+            metadata: {},
+        };
+        const res = await createForm(
+            new NextRequest("http://x/api/admin/forms", {
+                method: "POST",
+                body: JSON.stringify({ name: "Waitlist Intake", kind: "center" }),
+                headers: { "Content-Type": "application/json" },
+            })
+        );
+        expect(res.status).toBe(201);
+        const j = (await res.json()) as { data: { key: string } };
+        expect(j.data.key).toBe("waitlist_intake_2");
+    });
+
     it("creates a form", async () => {
         const res = await createForm(
             new NextRequest("http://x/api/admin/forms", {

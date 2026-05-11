@@ -168,7 +168,7 @@ export default function FormSchemaWorkspace({
     };
 
     return (
-        <SectionCard title="Form fields & draft version">
+                    <SectionCard title="Form fields & draft">
             {!canMutate ? <p className="text-sm text-[#59678b]">Admin role required to edit schema.</p> : null}
             {loadErr ? <p className="text-sm text-red-700">{loadErr}</p> : null}
             {saveErr ? <p className="text-sm text-red-700">{saveErr}</p> : null}
@@ -176,8 +176,8 @@ export default function FormSchemaWorkspace({
             {!draftMeta && canMutate ? (
                 <div className="space-y-3 text-sm text-[#31394d]">
                     <p className="text-[#59678b]">
-                        No draft version yet. Create a draft to edit fields, then publish when ready. Published versions stay
-                        immutable; editing again creates a new draft from a published snapshot.
+                        Start a draft to add questions from the system field list, then publish. Published versions cannot be
+                        edited in place — use “new draft from published” to iterate.
                     </p>
                     <div className="flex flex-wrap gap-2">
                         <PrimaryButton type="button" className="!px-3 !py-2 text-sm" disabled={busy} onClick={() => void startBlankDraft()}>
@@ -190,7 +190,7 @@ export default function FormSchemaWorkspace({
                                 disabled={busy}
                                 onClick={() => void startFromPublished()}
                             >
-                                New draft from published v{latestPublished.version_number}
+                                New draft from published (v{latestPublished.version_number})
                             </PrimaryButton>
                         ) : (
                             <span className="self-center text-xs text-[#59678b]">Publish a first version before you can clone.</span>
@@ -201,9 +201,6 @@ export default function FormSchemaWorkspace({
 
             {schema && draftVersionId ? (
                 <div className="mt-4 space-y-3">
-                    <p className="text-xs text-[#59678b]">
-                        Editing draft <span className="font-mono">{draftVersionId.slice(0, 8)}…</span>
-                    </p>
                     <StructuredFormSchemaEditor schema={schema} onChange={setSchema} disabled={!canMutate || busy} />
                     <div className="flex flex-wrap gap-2">
                         <PrimaryButton type="button" className="!px-3 !py-2 text-sm" disabled={!canMutate || busy} onClick={() => void saveDraft()}>

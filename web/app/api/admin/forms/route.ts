@@ -3,9 +3,11 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import {
     dbInsertFormDefinition,
+    dbListFormDefinitionKeys,
     dbListFormDefinitions,
     dbListFormIdsWithPublishedVersion,
 } from "@/lib/admin/forms/formsAdminDb";
+import { allocateUniqueKey, slugKeyFromDisplayName } from "@/lib/forms/adminGeneratedKeys";
 import { jsonData, jsonError } from "@/lib/admin/forms/formsAdminResponses";
 
 /** GET /api/admin/forms — list form definitions for org. */
@@ -50,10 +52,10 @@ export async function POST(request: NextRequest) {
         return jsonError("Invalid JSON", 400);
     }
 
-    const key = typeof body.key === "string" ? body.key.trim() : "";
+    const explicitKey = typeof body.key === "string" ? body.key.trim() : "";
     const name = typeof body.name === "string" ? body.name.trim() : "";
     const kind = typeof body.kind === "string" ? body.kind.trim() : "";
-    if (!key || !name) return jsonError("key and name are required", 400);
+    if (!name) return jsonError("name is required", 400);
     if (kind !== "state" && kind !== "center") return jsonError("kind must be state or center", 400);
 
     const description = typeof body.description === "string" ? body.description.trim() || null : null;
@@ -72,6 +74,18 @@ export async function POST(request: NextRequest) {
     };
 
     const supabase = createAdminClient();
+
+    let key = explicitKey;
+    if (!key) {
+        try {
+            const taken = await dbListFormDefinitionKeys(supabase, ctx.orgId);
+            const base = slugKeyFromDisplayName(name);
+            key = allocateUniqueKey(base, taken);
+        } catch (e) {
+            return NextResponse.json({ error: e instanceof Error ? e.message : "Key allocation failed" }, { status: 500 });
+        }
+    }
+
     const { data, error } = await dbInsertFormDefinition(supabase, {
         org_id: ctx.orgId,
         key,

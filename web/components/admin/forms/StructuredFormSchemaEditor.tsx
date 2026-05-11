@@ -3,6 +3,13 @@
 import { useCallback, useMemo } from "react";
 import type { FormField, FormSchemaV1 } from "@/lib/forms/schema";
 import PrimaryButton from "@/components/PrimaryButton";
+import {
+    OPERATIONAL_FORM_SYSTEM_FIELDS,
+    SYSTEM_FIELD_BY_ID,
+    linesToStaticOptions,
+    type SystemFieldRegistryEntry,
+} from "@/lib/forms/systemFieldRegistry";
+import { customUnmappedTextField, formFieldFromRegistryEntry } from "@/lib/forms/systemFieldToFormField";
 
 type UiScalarKind =
     | "text"
@@ -17,6 +24,11 @@ type UiScalarKind =
 
 const EMAIL_PATTERN = "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$";
 const PHONE_PATTERN = "^[+0-9()\\-\\s]{7,}$";
+
+function staticOptionsToLines(opts: ReadonlyArray<{ value: string; label: string }> | undefined): string {
+    if (!opts?.length) return "a|Option A\nb|Option B";
+    return opts.map((o) => `${o.value}|${o.label}`).join("\n");
+}
 
 function uiKindForField(f: FormField): UiScalarKind {
     if (f.type === "signature") return "signature";
@@ -33,7 +45,49 @@ function uiKindForField(f: FormField): UiScalarKind {
     return "text";
 }
 
-function buildFieldFromUi(kind: UiScalarKind, id: string, label: string): FormField {
+function registryEntryForField(f: FormField): SystemFieldRegistryEntry | null {
+    if (f.field_source?.entity_type === "custom") return null;
+    return OPERATIONAL_FORM_SYSTEM_FIELDS.find((e) => e.field_key === f.id) ?? null;
+}
+
+function pickerValueForField(f: FormField): string {
+    if (f.field_source?.entity_type === "custom" && f.field_source.field_key === "unmapped") return "__custom";
+    const hit = OPERATIONAL_FORM_SYSTEM_FIELDS.find((e) => e.field_key === f.id);
+    return hit ? `sys:${hit.id}` : "__custom";
+}
+
+function isCustomUnmappedField(f: FormField): boolean {
+    return f.field_source?.entity_type === "custom" && f.field_source.field_key === "unmapped";
+}
+
+function isTypeLocked(entry: SystemFieldRegistryEntry | null, custom: boolean): boolean {
+    if (custom || !entry) return false;
+    const k = entry.suggested_kind;
+    return k === "date" || k === "number" || k === "checkbox" || k === "signature" || k === "select";
+}
+
+function applyTextLikeKind(field: FormField, kind: UiScalarKind, preserveId: string): FormField {
+    const label = field.label;
+    const required = field.required;
+    const description = field.description;
+    const placeholder = field.placeholder;
+    const src = field.field_source;
+    const base = { id: preserveId, label, required, description, placeholder, field_source: src };
+    switch (kind) {
+        case "text":
+            return { ...base, type: "text" };
+        case "textarea":
+            return { ...base, type: "text", multiline: true };
+        case "email":
+            return { ...base, type: "text", validate: { pattern: EMAIL_PATTERN } };
+        case "phone":
+            return { ...base, type: "text", validate: { pattern: PHONE_PATTERN } };
+        default:
+            return { ...base, type: "text" };
+    }
+}
+
+function buildFieldFromUiCustom(kind: UiScalarKind, id: string, label: string): FormField {
     const base = { id, label, required: false };
     switch (kind) {
         case "text":
@@ -60,36 +114,10 @@ function buildFieldFromUi(kind: UiScalarKind, id: string, label: string): FormFi
                 ],
             };
         case "signature":
-            return { ...base, type: "signature", required: true };
+            return { ...base, type: "signature", signature: {} };
         default:
             return { ...base, type: "text" };
     }
-}
-
-function staticOptionsToLines(opts: ReadonlyArray<{ value: string; label: string }> | undefined): string {
-    if (!opts?.length) return "a|Option A\nb|Option B";
-    return opts.map((o) => `${o.value}|${o.label}`).join("\n");
-}
-
-function linesToStaticOptions(raw: string): { value: string; label: string }[] {
-    const lines = raw
-        .split("\n")
-        .map((l) => l.trim())
-        .filter(Boolean);
-    const out: { value: string; label: string }[] = [];
-    for (const line of lines) {
-        const pipe = line.indexOf("|");
-        if (pipe === -1) {
-            const v = line;
-            out.push({ value: v, label: v });
-        } else {
-            out.push({
-                value: line.slice(0, pipe).trim(),
-                label: line.slice(pipe + 1).trim() || line.slice(0, pipe).trim(),
-            });
-        }
-    }
-    return out.length ? out : [{ value: "a", label: "Option A" }];
 }
 
 export type StructuredFormSchemaEditorProps = {
@@ -138,15 +166,15 @@ export default function StructuredFormSchemaEditor({ schema, onChange, disabled 
     );
 
     const addField = useCallback(() => {
-        const n = schema.fields.length + 1;
-        const id = `field_${n}`;
-        const f = buildFieldFromUi("text", id, `Question ${n}`);
-        const sec0 = schema.sections[0] ?? { id: "main", title: "Main", field_ids: [] as string[] };
+        const used = new Set(topFields.map((f) => f.id));
+        const nextSys = OPERATIONAL_FORM_SYSTEM_FIELDS.find((e) => !used.has(e.field_key));
+        const f = nextSys ? formFieldFromRegistryEntry(nextSys, {}) : customUnmappedTextField();
+        const sec0 = schema.sections[0] ?? { id: "main", title: "Questions", field_ids: [] as string[] };
         patchSchema({
             fields: [...schema.fields, f],
-            sections: [{ ...sec0, field_ids: [...sec0.field_ids, id] }, ...schema.sections.slice(1)],
+            sections: [{ ...sec0, field_ids: [...sec0.field_ids, f.id] }, ...schema.sections.slice(1)],
         });
-    }, [patchSchema, schema.fields, schema.sections]);
+    }, [patchSchema, schema.fields, schema.sections, topFields]);
 
     const removeFieldAt = useCallback(
         (index: number) => {
@@ -171,17 +199,32 @@ export default function StructuredFormSchemaEditor({ schema, onChange, disabled 
             const tmp = ids[index];
             ids[index] = ids[j]!;
             ids[j] = tmp!;
-            const nextSecs = [{ ...schema.sections[0]!, field_ids: ids }, ...schema.sections.slice(1)];
+            const s0 = schema.sections[0];
+            if (!s0) return;
+            const nextSecs = [{ ...s0, field_ids: ids }, ...schema.sections.slice(1)];
             onChange({ ...schema, sections: nextSecs });
         },
         [mainSection?.field_ids, onChange, schema]
     );
 
+    const entityLabel = (t: string) => {
+        const map: Record<string, string> = {
+            child: "Child",
+            guardian: "Guardian",
+            opportunity: "Opportunity",
+            customer: "Customer / household",
+            associate: "Associate",
+            enrollment: "Enrollment",
+            custom: "Custom",
+        };
+        return map[t] ?? t;
+    };
+
     return (
         <div className="space-y-4 text-sm text-[#31394d]">
             <div className="grid gap-2 sm:grid-cols-2">
                 <label className="space-y-1">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-[#59678b]">Form title</span>
+                    <span className="text-xs font-semibold uppercase tracking-wide text-[#59678b]">Form name</span>
                     <input
                         className="w-full rounded border border-[#e6e8ec] px-2 py-1.5"
                         value={schema.title}
@@ -206,14 +249,14 @@ export default function StructuredFormSchemaEditor({ schema, onChange, disabled 
             </div>
 
             <div className="overflow-x-auto rounded-lg border border-[#e6e8ec]">
-                <table className="w-full min-w-[720px] text-left text-sm">
+                <table className="w-full min-w-[800px] text-left text-sm">
                     <thead className="bg-[#fafbfd] text-xs font-semibold uppercase text-[#59678b]">
                         <tr>
-                            <th className="px-2 py-2">Type</th>
-                            <th className="px-2 py-2">Field id</th>
+                            <th className="px-2 py-2">Data field</th>
                             <th className="px-2 py-2">Label</th>
                             <th className="px-2 py-2">Help</th>
                             <th className="px-2 py-2">Req</th>
+                            <th className="px-2 py-2">Input type</th>
                             <th className="px-2 py-2">Placeholder / options</th>
                             <th className="px-2 py-2">Order</th>
                             <th className="px-2 py-2" />
@@ -221,49 +264,52 @@ export default function StructuredFormSchemaEditor({ schema, onChange, disabled 
                     </thead>
                     <tbody className="divide-y divide-[#e6e8ec]">
                         {topFields.map((field, idx) => {
+                            const entry = registryEntryForField(field);
+                            const custom = isCustomUnmappedField(field);
+                            const locked = isTypeLocked(entry, custom);
                             const kind = uiKindForField(field);
+                            const intakeNote =
+                                entry && !entry.public_intake_safe ? (
+                                    <p className="mt-1 text-[11px] text-amber-900">Internal / staff-only suggested use.</p>
+                                ) : null;
+                            const customWarn = custom ? (
+                                <p className="mt-1 text-[11px] text-amber-900">Custom / unmapped — not auto-linked to CRM.</p>
+                            ) : null;
+
                             return (
                                 <tr key={field.id} className="align-top">
                                     <td className="px-2 py-2">
                                         <select
-                                            className="max-w-[140px] rounded border border-[#e6e8ec] px-1 py-1 text-xs"
+                                            className="max-w-[220px] rounded border border-[#e6e8ec] px-1 py-1 text-xs"
                                             disabled={disabled}
-                                            value={kind}
+                                            value={pickerValueForField(field)}
                                             onChange={(e) => {
-                                                const nextKind = e.target.value as UiScalarKind;
-                                                const nf = buildFieldFromUi(nextKind, field.id, field.label);
-                                                const merged: FormField = {
-                                                    ...nf,
-                                                    required: field.required,
-                                                    description: "description" in field ? field.description : undefined,
-                                                    placeholder: "placeholder" in field ? field.placeholder : undefined,
-                                                } as FormField;
-                                                setFieldAt(idx, merged);
+                                                const v = e.target.value;
+                                                if (v === "__custom") {
+                                                    setFieldAt(idx, customUnmappedTextField());
+                                                    return;
+                                                }
+                                                if (v.startsWith("sys:")) {
+                                                    const rid = v.slice(4);
+                                                    const ent = SYSTEM_FIELD_BY_ID.get(rid);
+                                                    if (ent) setFieldAt(idx, formFieldFromRegistryEntry(ent, {}));
+                                                }
                                             }}
                                         >
-                                            <option value="text">Text</option>
-                                            <option value="textarea">Text area</option>
-                                            <option value="email">Email</option>
-                                            <option value="phone">Phone</option>
-                                            <option value="number">Number</option>
-                                            <option value="date">Date</option>
-                                            <option value="checkbox">Checkbox</option>
-                                            <option value="select">Select</option>
-                                            <option value="signature">Signature</option>
+                                            <optgroup label="System fields">
+                                                {OPERATIONAL_FORM_SYSTEM_FIELDS.map((e) => {
+                                                    const takenElsewhere = topFields.some((f, i) => i !== idx && f.id === e.field_key);
+                                                    return (
+                                                        <option key={e.id} value={`sys:${e.id}`} disabled={takenElsewhere}>
+                                                            {entityLabel(e.entity_type)} — {e.default_label}
+                                                        </option>
+                                                    );
+                                                })}
+                                            </optgroup>
+                                            <option value="__custom">Custom / unmapped (text)</option>
                                         </select>
-                                    </td>
-                                    <td className="px-2 py-2">
-                                        <input
-                                            className="w-full max-w-[140px] rounded border border-[#e6e8ec] px-1 py-1 font-mono text-xs"
-                                            disabled={disabled}
-                                            value={field.id}
-                                            onChange={(e) => {
-                                                const nid = e.target.value.trim();
-                                                if (!nid) return;
-                                                if (field.type === "group") return;
-                                                setFieldAt(idx, { ...field, id: nid } as FormField);
-                                            }}
-                                        />
+                                        {intakeNote}
+                                        {customWarn}
                                     </td>
                                     <td className="px-2 py-2">
                                         <input
@@ -304,6 +350,43 @@ export default function StructuredFormSchemaEditor({ schema, onChange, disabled 
                                         />
                                     </td>
                                     <td className="px-2 py-2">
+                                        <select
+                                            className="max-w-[130px] rounded border border-[#e6e8ec] px-1 py-1 text-xs"
+                                            disabled={disabled || locked}
+                                            value={kind}
+                                            title={locked ? "Type is fixed for this system field." : undefined}
+                                            onChange={(e) => {
+                                                const nextKind = e.target.value as UiScalarKind;
+                                                if (locked) return;
+                                                const textKinds: UiScalarKind[] = ["text", "textarea", "email", "phone"];
+                                                if (custom) {
+                                                    const nf = buildFieldFromUiCustom(nextKind, field.id, field.label);
+                                                    setFieldAt(idx, {
+                                                        ...nf,
+                                                        required: field.required,
+                                                        description: field.description,
+                                                        placeholder: field.placeholder,
+                                                        field_source: { entity_type: "custom", field_key: "unmapped" },
+                                                    } as FormField);
+                                                    return;
+                                                }
+                                                if (entry && textKinds.includes(entry.suggested_kind) && textKinds.includes(nextKind)) {
+                                                    setFieldAt(idx, applyTextLikeKind(field, nextKind, field.id));
+                                                }
+                                            }}
+                                        >
+                                            <option value="text">Text</option>
+                                            <option value="textarea">Text area</option>
+                                            <option value="email">Email</option>
+                                            <option value="phone">Phone</option>
+                                            <option value="number">Number</option>
+                                            <option value="date">Date</option>
+                                            <option value="checkbox">Checkbox</option>
+                                            <option value="select">Select</option>
+                                            <option value="signature">Signature</option>
+                                        </select>
+                                    </td>
+                                    <td className="px-2 py-2">
                                         {field.type === "select" ? (
                                             <textarea
                                                 className="h-20 w-full min-w-[160px] rounded border border-[#e6e8ec] px-1 py-1 font-mono text-xs"
@@ -311,12 +394,19 @@ export default function StructuredFormSchemaEditor({ schema, onChange, disabled 
                                                 value={staticOptionsToLines(field.static_options)}
                                                 placeholder={"value|Label per line"}
                                                 onChange={(e) => {
-                                                    const opts = linesToStaticOptions(e.target.value);
-                                                    setFieldAt(idx, {
-                                                        ...field,
-                                                        type: "select",
-                                                        static_options: opts,
-                                                    });
+                                                    const raw = e.target.value;
+                                                    if (entry) {
+                                                        setFieldAt(
+                                                            idx,
+                                                            formFieldFromRegistryEntry(entry, { static_options_lines: raw })
+                                                        );
+                                                    } else {
+                                                        setFieldAt(idx, {
+                                                            ...field,
+                                                            type: "select",
+                                                            static_options: linesToStaticOptions(raw),
+                                                        } as FormField);
+                                                    }
                                                 }}
                                             />
                                         ) : field.type === "text" ? (
@@ -374,10 +464,22 @@ export default function StructuredFormSchemaEditor({ schema, onChange, disabled 
             <PrimaryButton type="button" className="!px-3 !py-2 text-sm" disabled={disabled} onClick={addField}>
                 Add field
             </PrimaryButton>
-            <p className="text-xs text-[#59678b]">
-                This editor updates the same <code className="rounded bg-[#f4f6f9] px-1">schema_version: 1</code> JSON the
-                public embed and validators use. Select lists use inline options (no separate option set required).
-            </p>
+
+            <details className="rounded border border-[#e6e8ec] bg-[#fafbfd] px-3 py-2 text-xs text-[#59678b]">
+                <summary className="cursor-pointer font-medium text-[#31394d]">Technical details (IDs)</summary>
+                <p className="mt-2 leading-relaxed">
+                    Internal keys are assigned from the system field you pick (or from a custom row). You normally do not need
+                    these values — they keep submissions, shared values, and future CRM mapping aligned.
+                </p>
+                <ul className="mt-2 list-disc pl-5 font-mono text-[11px]">
+                    {topFields.map((f) => (
+                        <li key={f.id}>
+                            {f.id}
+                            {f.field_source ? ` · ${f.field_source.entity_type}.${f.field_source.field_key}` : ""}
+                        </li>
+                    ))}
+                </ul>
+            </details>
         </div>
     );
 }

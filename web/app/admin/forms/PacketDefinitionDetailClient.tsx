@@ -32,7 +32,6 @@ export default function PacketDefinitionDetailClient() {
     const packetDefId = typeof params?.packetDefId === "string" ? params.packetDefId : "";
 
     const [defName, setDefName] = useState("");
-    const [defKey, setDefKey] = useState("");
     const [defDesc, setDefDesc] = useState("");
     const [defActive, setDefActive] = useState(true);
     const [items, setItems] = useState<PacketItem[]>([]);
@@ -61,7 +60,6 @@ export default function PacketDefinitionDetailClient() {
             const def = (pj as { data?: { definition?: { name: string; key: string; description: string | null; is_active: boolean }; items?: PacketItem[] } }).data;
             if (!def?.definition) throw new Error("Invalid response");
             setDefName(def.definition.name);
-            setDefKey(def.definition.key);
             setDefDesc(def.definition.description ?? "");
             setDefActive(def.definition.is_active);
             const it = def.items ?? [];
@@ -229,7 +227,6 @@ export default function PacketDefinitionDetailClient() {
             {!loading ? (
                 <>
                     <SectionCard title="Packet settings">
-                        <p className="mb-3 font-mono text-xs text-[#59678b]">Key: {defKey}</p>
                         <div className="grid gap-3 sm:grid-cols-2">
                             <label className="space-y-1 text-sm">
                                 <span className="text-xs font-semibold uppercase text-[#59678b]">Name</span>

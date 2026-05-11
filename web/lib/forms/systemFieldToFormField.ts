@@ -1,0 +1,81 @@
+import type { FormField, FormFieldSource } from "@/lib/forms/schema";
+import {
+    EMAIL_PATTERN,
+    PHONE_PATTERN,
+    linesToStaticOptions,
+    type SystemFieldRegistryEntry,
+} from "@/lib/forms/systemFieldRegistry";
+
+function sourceFromEntry(entry: SystemFieldRegistryEntry): FormFieldSource {
+    return {
+        entity_type: entry.entity_type,
+        field_key: entry.field_key,
+        ...(entry.shared_value_key ? { shared_value_key: entry.shared_value_key } : {}),
+        ...(entry.crm_mapping_key ? { crm_mapping_key: entry.crm_mapping_key } : {}),
+    };
+}
+
+type Overrides = {
+    label?: string;
+    description?: string;
+    required?: boolean;
+    placeholder?: string;
+    static_options_lines?: string;
+};
+
+/** Build a `FormSchemaV1` field from a registry row (IDs are stable system keys — not user-typed). */
+export function formFieldFromRegistryEntry(entry: SystemFieldRegistryEntry, o: Overrides = {}): FormField {
+    const label = o.label?.trim() || entry.default_label;
+    const description = o.description !== undefined ? o.description.trim() || undefined : entry.default_description;
+    const required = o.required !== undefined ? o.required : entry.default_required;
+    const placeholder = o.placeholder?.trim() || undefined;
+    const src = sourceFromEntry(entry);
+    const id = entry.field_key;
+
+    const baseCommon = { id, label, required, description, placeholder, field_source: src };
+
+    switch (entry.suggested_kind) {
+        case "text":
+            return { ...baseCommon, type: "text" };
+        case "textarea":
+            return { ...baseCommon, type: "text", multiline: true };
+        case "email":
+            return { ...baseCommon, type: "text", validate: { pattern: EMAIL_PATTERN } };
+        case "phone":
+            return { ...baseCommon, type: "text", validate: { pattern: PHONE_PATTERN } };
+        case "number":
+            return { ...baseCommon, type: "number" };
+        case "date":
+            return { ...baseCommon, type: "date" };
+        case "checkbox":
+            return { ...baseCommon, type: "boolean" };
+        case "select": {
+            const lines = o.static_options_lines ?? entry.select_options_lines ?? "a|Option A\nb|Option B";
+            return {
+                ...baseCommon,
+                type: "select",
+                static_options: linesToStaticOptions(lines),
+            };
+        }
+        case "signature":
+            return { ...baseCommon, type: "signature", signature: {} };
+        default:
+            return { ...baseCommon, type: "text" };
+    }
+}
+
+/** Freeform text not tied to registry / CRM hints (explicitly labeled in UI). */
+export function customUnmappedTextField(): FormField {
+    const suffix =
+        typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID().replace(/-/g, "").slice(0, 10) : `${Date.now()}`;
+    const id = `custom_${suffix}`;
+    return {
+        id,
+        type: "text",
+        label: "Custom question",
+        required: false,
+        description:
+            "Custom / unmapped — values are stored on the submission only; they are not automatically linked to CRM or enrollment entities.",
+        field_source: { entity_type: "custom", field_key: "unmapped" },
+    };
+}

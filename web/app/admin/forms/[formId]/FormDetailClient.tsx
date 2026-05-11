@@ -272,7 +272,7 @@ export default function FormDetailClient() {
         <div className="space-y-6">
             <AdminPageHeader
                 title={detail?.name ?? "Form"}
-                subtitle={detail ? `Key ${detail.key}` : "Loading…"}
+                subtitle={detail ? "Configure fields, publish a version, then share a link." : "Loading…"}
                 actions={
                     <div className="flex flex-wrap items-center gap-3">
                         {openPublicEmbedUrl ? (
@@ -440,6 +440,21 @@ export default function FormDetailClient() {
                                         </a>
                                     </p>
                                 ) : null}
+                            </details>
+                            <details className="rounded-lg border border-[#e6e8ec] bg-white px-4 py-3 open:bg-[#fafbfd]">
+                                <summary className="cursor-pointer text-xs font-bold uppercase tracking-wide text-[#59678b]">
+                                    Technical IDs (integrations / API)
+                                </summary>
+                                <dl className="mt-2 space-y-1.5 font-mono text-[11px] text-[#31394d]">
+                                    <div>
+                                        <dt className="text-[#59678b]">Form definition id</dt>
+                                        <dd className="break-all">{detail.id}</dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-[#59678b]">Internal key</dt>
+                                        <dd>{detail.key}</dd>
+                                    </div>
+                                </dl>
                             </details>
                             <p className="text-xs text-[#59678b]">
                                 Tailored copy: set{" "}

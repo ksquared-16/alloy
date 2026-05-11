@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import { dbListPacketDefinitionKeys } from "@/lib/admin/forms/formsAdminDb";
 import { jsonData, jsonError } from "@/lib/admin/forms/formsAdminResponses";
+import { allocateUniqueKey, slugKeyFromDisplayName } from "@/lib/forms/adminGeneratedKeys";
 
 const KEY_RE = /^[a-z][a-z0-9_]{1,62}$/;
 
@@ -33,12 +35,9 @@ export async function POST(request: NextRequest) {
         return jsonError("Invalid JSON", 400);
     }
 
-    const key = typeof body.key === "string" ? body.key.trim().toLowerCase() : "";
+    const explicitKey = typeof body.key === "string" ? body.key.trim().toLowerCase() : "";
     const name = typeof body.name === "string" ? body.name.trim() : "";
-    if (!key || !name) return jsonError("key and name are required", 400);
-    if (!KEY_RE.test(key)) {
-        return jsonError("key must be lowercase letters, digits, underscore; start with a letter (2–63 chars)", 400);
-    }
+    if (!name) return jsonError("name is required", 400);
 
     const description = typeof body.description === "string" ? body.description.trim() || null : null;
     const is_active = typeof body.is_active === "boolean" ? body.is_active : true;
@@ -48,6 +47,21 @@ export async function POST(request: NextRequest) {
             : {};
 
     const supabase = createAdminClient();
+
+    let key = explicitKey;
+    if (!key) {
+        try {
+            const taken = await dbListPacketDefinitionKeys(supabase, ctx.orgId);
+            const base = slugKeyFromDisplayName(name);
+            key = allocateUniqueKey(base, taken);
+        } catch (e) {
+            return NextResponse.json({ error: e instanceof Error ? e.message : "Key allocation failed" }, { status: 500 });
+        }
+    }
+    if (!KEY_RE.test(key)) {
+        return jsonError("key must be lowercase letters, digits, underscore; start with a letter (2–63 chars)", 400);
+    }
+
     const { data, error } = await supabase
         .from("form_packet_definitions")
         .insert({
