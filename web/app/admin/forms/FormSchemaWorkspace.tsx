@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import PrimaryButton from "@/components/PrimaryButton";
 import SectionCard from "@/components/admin/SectionCard";
@@ -7,6 +8,7 @@ import StructuredFormSchemaEditor from "@/components/admin/forms/StructuredFormS
 import { emptyFormSchema } from "@/lib/forms/adminFormSchemaBuilder";
 import type { FormSchemaV1 } from "@/lib/forms/schema";
 import { useAdminAuth } from "@/contexts/AdminAuthContext";
+import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
 
 type VersionRow = {
     id: string;
@@ -32,6 +34,7 @@ export default function FormSchemaWorkspace({
     const [loadErr, setLoadErr] = useState<string | null>(null);
     const [saveErr, setSaveErr] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
+    const [publishSuccess, setPublishSuccess] = useState(false);
 
     const draftMeta = useMemo(() => {
         const drafts = versions.filter((v) => v.status === "draft");
@@ -79,6 +82,7 @@ export default function FormSchemaWorkspace({
     const startBlankDraft = async () => {
         if (!canMutate) return;
         setSaveErr(null);
+        setPublishSuccess(false);
         setBusy(true);
         try {
             const body = { schema_json: emptyFormSchema(formName) };
@@ -103,6 +107,7 @@ export default function FormSchemaWorkspace({
     const startFromPublished = async () => {
         if (!canMutate || !latestPublished) return;
         setSaveErr(null);
+        setPublishSuccess(false);
         setBusy(true);
         try {
             const res = await fetch(`/api/admin/forms/${encodeURIComponent(formId)}/versions`, {
@@ -160,6 +165,7 @@ export default function FormSchemaWorkspace({
             onVersionsUpdated();
             setDraftVersionId(null);
             setSchema(null);
+            setPublishSuccess(true);
         } catch (e) {
             setSaveErr((e as Error).message);
         } finally {
@@ -172,6 +178,30 @@ export default function FormSchemaWorkspace({
             {!canMutate ? <p className="text-sm text-[#59678b]">Admin role required to edit schema.</p> : null}
             {loadErr ? <p className="text-sm text-red-700">{loadErr}</p> : null}
             {saveErr ? <p className="text-sm text-red-700">{saveErr}</p> : null}
+
+            {publishSuccess ? (
+                <div
+                    className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950"
+                    role="status"
+                >
+                    <p className="font-medium">Published — this form can go into a packet.</p>
+                    <p className="mt-2 text-emerald-900">
+                        <Link
+                            href={`${ADMIN_FORMS_UI_BASE}/packet-definitions?addForm=${encodeURIComponent(formId)}`}
+                            className="font-semibold text-[#00458C] underline"
+                        >
+                            Create a new packet with this form
+                        </Link>
+                        {" · "}
+                        <Link href={`${ADMIN_FORMS_UI_BASE}/packet-definitions`} className="font-semibold text-[#00458C] underline">
+                            Browse packets to add a step
+                        </Link>
+                    </p>
+                    <button type="button" className="mt-2 text-xs font-semibold text-emerald-800 underline" onClick={() => setPublishSuccess(false)}>
+                        Dismiss
+                    </button>
+                </div>
+            ) : null}
 
             {!draftMeta && canMutate ? (
                 <div className="space-y-3 text-sm text-[#31394d]">

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import PrimaryButton from "@/components/PrimaryButton";
 import SectionCard from "@/components/admin/SectionCard";
@@ -16,6 +17,9 @@ type PacketDef = {
 };
 
 export default function PacketDefinitionsHubClient() {
+    const searchParams = useSearchParams();
+    const addFormId = searchParams.get("addForm")?.trim() ?? "";
+
     const [rows, setRows] = useState<PacketDef[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -62,7 +66,8 @@ export default function PacketDefinitionsHubClient() {
             setDescription("");
             await load();
             if (id) {
-                window.location.href = `${ADMIN_FORMS_UI_BASE}/packet-definitions/${id}`;
+                const q = addFormId ? `?addForm=${encodeURIComponent(addFormId)}` : "";
+                window.location.href = `${ADMIN_FORMS_UI_BASE}/packet-definitions/${id}${q}`;
             }
         } catch (e) {
             setError((e as Error).message);
@@ -91,6 +96,12 @@ export default function PacketDefinitionsHubClient() {
             </div>
 
             <SectionCard title="Create packet">
+                {addFormId ? (
+                    <p className="mb-3 rounded-md border border-[#c7d2fe] bg-[#eef2ff] px-3 py-2 text-sm text-[#1e3a8a]">
+                        After you create this packet, the first step can start from the form you were working on — save steps once
+                        you&apos;re happy with the order.
+                    </p>
+                ) : null}
                 <div className="grid gap-3 sm:grid-cols-2">
                     <label className="space-y-1 text-sm sm:col-span-2">
                         <span className="text-xs font-semibold uppercase text-[#59678b]">Packet name</span>

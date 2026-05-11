@@ -1,20 +1,20 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useParams, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
 import PrimaryButton from "@/components/PrimaryButton";
 import SectionCard from "@/components/admin/SectionCard";
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
+import { mergeFormListWithPacketItems, type PacketStepFormOption } from "@/lib/admin/forms/packetDefinitionStepForms";
 
-type FormListRow = { id: string; name: string; key: string; has_published_version?: boolean };
 type PacketItem = {
     id: string;
     sequence_index: number;
     form_definition_id: string;
     pinned_form_definition_version_id: string | null;
     metadata?: Record<string, unknown>;
-    form_definitions?: { id: string; name: string; key: string } | { id: string; name: string; key: string }[] | null;
+    form_definitions?: PacketStepFormOption | PacketStepFormOption[] | null;
 };
 type PublicLinkRow = {
     id: string;
@@ -25,27 +25,45 @@ type PublicLinkRow = {
     created_at: string;
 };
 
-type StepDraft = { form_definition_id: string; step_label: string };
+type StepDraft = { packet_item_id?: string; form_definition_id: string; step_label: string };
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export default function PacketDefinitionDetailClient() {
     const params = useParams();
+    const searchParams = useSearchParams();
     const packetDefId = typeof params?.packetDefId === "string" ? params.packetDefId : "";
 
     const [defName, setDefName] = useState("");
     const [defDesc, setDefDesc] = useState("");
     const [defActive, setDefActive] = useState(true);
     const [items, setItems] = useState<PacketItem[]>([]);
-    const [forms, setForms] = useState<FormListRow[]>([]);
+    const [forms, setForms] = useState<PacketStepFormOption[]>([]);
     const [steps, setSteps] = useState<StepDraft[]>([{ form_definition_id: "", step_label: "" }]);
     const [links, setLinks] = useState<PublicLinkRow[]>([]);
     const [loading, setLoading] = useState(true);
+    const [refreshing, setRefreshing] = useState(false);
     const [err, setErr] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
+    const [okBanner, setOkBanner] = useState<string | null>(null);
     const [createdLink, setCreatedLink] = useState<{ embed_url: string | null; embed_path: string } | null>(null);
+
+    const hasCompletedInitialLoad = useRef(false);
+    const appliedAddFormPrefill = useRef(false);
+
+    useEffect(() => {
+        hasCompletedInitialLoad.current = false;
+        appliedAddFormPrefill.current = false;
+    }, [packetDefId]);
 
     const loadAll = useCallback(async () => {
         if (!packetDefId) return;
-        setLoading(true);
+        const initialPass = !hasCompletedInitialLoad.current;
+        if (initialPass) {
+            setLoading(true);
+        } else {
+            setRefreshing(true);
+        }
         setErr(null);
         try {
             const [pRes, fRes, lRes] = await Promise.all([
@@ -64,23 +82,40 @@ export default function PacketDefinitionDetailClient() {
             setDefActive(def.definition.is_active);
             const it = def.items ?? [];
             setItems(it);
+
+            const rawForms = fRes.ok ? ((fj as { data?: PacketStepFormOption[] }).data ?? []) : [];
+            const mergedForms = mergeFormListWithPacketItems(rawForms, it);
+            setForms(mergedForms);
+
+            if (!fRes.ok) {
+                setErr((fj as { error?: string }).error ?? "Could not load the form list for step pickers — steps still saved; retry or refresh.");
+            }
+
             if (it.length) {
                 setSteps(
                     it.map((row) => {
                         const meta = row.metadata && typeof row.metadata === "object" ? row.metadata : {};
                         const step_label = typeof meta.step_label === "string" ? meta.step_label : "";
-                        return { form_definition_id: row.form_definition_id, step_label };
+                        return {
+                            packet_item_id: row.id,
+                            form_definition_id: row.form_definition_id,
+                            step_label,
+                        };
                     })
                 );
             } else {
                 setSteps([{ form_definition_id: "", step_label: "" }]);
             }
-            if (fRes.ok) setForms((fj as { data?: FormListRow[] }).data ?? []);
             if (lRes.ok) setLinks((lj as { data?: PublicLinkRow[] }).data ?? []);
         } catch (e) {
             setErr((e as Error).message);
         } finally {
-            setLoading(false);
+            if (initialPass) {
+                setLoading(false);
+                hasCompletedInitialLoad.current = true;
+            } else {
+                setRefreshing(false);
+            }
         }
     }, [packetDefId]);
 
@@ -88,9 +123,25 @@ export default function PacketDefinitionDetailClient() {
         void loadAll();
     }, [loadAll]);
 
+    const addFormFromQuery = searchParams.get("addForm")?.trim() ?? "";
+
+    useEffect(() => {
+        if (loading || appliedAddFormPrefill.current || !addFormFromQuery || !UUID_RE.test(addFormFromQuery)) return;
+        const hit = forms.find((f) => f.id === addFormFromQuery && f.has_published_version);
+        if (!hit) return;
+        setSteps((prev) => {
+            if (prev.length === 1 && !prev[0].form_definition_id && !prev[0].step_label) {
+                appliedAddFormPrefill.current = true;
+                return [{ form_definition_id: addFormFromQuery, step_label: "" }];
+            }
+            return prev;
+        });
+    }, [loading, forms, addFormFromQuery]);
+
     const saveMeta = async () => {
         setBusy(true);
         setErr(null);
+        setOkBanner(null);
         try {
             const res = await fetch(`/api/admin/forms/packet-definitions/${encodeURIComponent(packetDefId)}`, {
                 method: "PATCH",
@@ -103,6 +154,7 @@ export default function PacketDefinitionDetailClient() {
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error((json as { error?: string }).error ?? "Save failed");
+            setOkBanner("Packet settings saved.");
             await loadAll();
         } catch (e) {
             setErr((e as Error).message);
@@ -114,6 +166,7 @@ export default function PacketDefinitionDetailClient() {
     const saveSteps = async () => {
         setBusy(true);
         setErr(null);
+        setOkBanner(null);
         const clean = steps
             .filter((s) => s.form_definition_id)
             .map((s) => ({
@@ -133,6 +186,7 @@ export default function PacketDefinitionDetailClient() {
             });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error((json as { error?: string }).error ?? "Could not save steps");
+            setOkBanner("Packet steps saved. You can create a public link below when ready.");
             await loadAll();
         } catch (e) {
             setErr((e as Error).message);
@@ -158,6 +212,7 @@ export default function PacketDefinitionDetailClient() {
     const mintLink = async () => {
         setBusy(true);
         setErr(null);
+        setOkBanner(null);
         setCreatedLink(null);
         try {
             const res = await fetch("/api/admin/forms/packet-links", {
@@ -182,6 +237,7 @@ export default function PacketDefinitionDetailClient() {
                           ? `${window.location.origin}${embed_path}`
                           : null,
             });
+            setOkBanner("Public packet link created. Copy the URL below, or use Open link to verify it loads.");
             await loadAll();
         } catch (e) {
             setErr((e as Error).message);
@@ -193,6 +249,7 @@ export default function PacketDefinitionDetailClient() {
     const toggleLink = async (link: PublicLinkRow, nextActive: boolean) => {
         setBusy(true);
         setErr(null);
+        setOkBanner(null);
         try {
             const res = await fetch(
                 `/api/admin/forms/${encodeURIComponent(link.form_definition_id)}/public-links/${encodeURIComponent(link.id)}`,
@@ -204,6 +261,7 @@ export default function PacketDefinitionDetailClient() {
             );
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error((json as { error?: string }).error ?? "Update failed");
+            setOkBanner(nextActive ? "Link activated." : "Link deactivated.");
             await loadAll();
         } catch (e) {
             setErr((e as Error).message);
@@ -211,6 +269,8 @@ export default function PacketDefinitionDetailClient() {
             setBusy(false);
         }
     };
+
+    const recentPublishedForms = forms.filter((f) => f.has_published_version).slice(0, 8);
 
     if (!packetDefId) return <p className="p-6 text-sm text-red-700">Missing packet id.</p>;
 
@@ -220,9 +280,34 @@ export default function PacketDefinitionDetailClient() {
                 <Link href={`${ADMIN_FORMS_UI_BASE}/packet-definitions`} className="font-medium text-[#00458C] hover:underline">
                     ← All packets
                 </Link>
+                {" · "}
+                <Link href={`${ADMIN_FORMS_UI_BASE}/packets`} className="font-medium text-[#00458C] hover:underline">
+                    Packet sessions
+                </Link>
+                {" · "}
+                <Link href={ADMIN_FORMS_UI_BASE} className="font-medium text-[#00458C] hover:underline">
+                    All forms
+                </Link>
             </p>
             {loading ? <p className="text-sm text-[#59678b]">Loading…</p> : null}
+            {refreshing ? (
+                <p className="text-xs text-[#59678b]" aria-live="polite">
+                    Updating…
+                </p>
+            ) : null}
             {err ? <p className="text-sm text-red-700">{err}</p> : null}
+            {okBanner ? (
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-950" role="status">
+                    {okBanner}
+                    <button
+                        type="button"
+                        className="ml-3 text-xs font-semibold text-emerald-800 underline"
+                        onClick={() => setOkBanner(null)}
+                    >
+                        Dismiss
+                    </button>
+                </div>
+            ) : null}
 
             {!loading ? (
                 <>
@@ -256,13 +341,41 @@ export default function PacketDefinitionDetailClient() {
                         </div>
                     </SectionCard>
 
+                    {recentPublishedForms.length > 0 ? (
+                        <SectionCard title="Recently published forms (quick add)">
+                            <p className="mb-2 text-xs text-[#59678b]">
+                                Published forms in your org. Pick one to append a step — you can still reorder or remove before
+                                saving.
+                            </p>
+                            <ul className="flex flex-wrap gap-2">
+                                {recentPublishedForms.map((f) => (
+                                    <li key={f.id}>
+                                        <button
+                                            type="button"
+                                            className="rounded-full border border-[#e6e8ec] bg-white px-3 py-1.5 text-xs font-medium text-[#00458C] hover:bg-[#fafbfd]"
+                                            disabled={busy}
+                                            onClick={() =>
+                                                setSteps((rows) => [...rows, { form_definition_id: f.id, step_label: "" }])
+                                            }
+                                        >
+                                            + {f.name}
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </SectionCard>
+                    ) : null}
+
                     <SectionCard title="Steps (ordered)">
-                        <p className="mb-3 text-xs text-[#59678b]">
-                            Each step uses a form&apos;s latest published version unless you pin a version in the API. Forms must
-                            have a published version before they can be added here.
+                        <p className="mb-3 text-sm text-[#59678b]">
+                            Add each form as a step, then <strong className="font-medium text-[#31394d]">Save steps</strong>.
+                            Only forms with a published version can run in a packet.
                         </p>
                         {steps.map((s, idx) => (
-                            <div key={idx} className="mb-3 flex flex-wrap items-end gap-2 rounded border border-[#e6e8ec] p-3">
+                            <div
+                                key={s.packet_item_id ?? `draft-${idx}-${s.form_definition_id || "empty"}`}
+                                className="mb-3 flex flex-wrap items-end gap-2 rounded border border-[#e6e8ec] p-3"
+                            >
                                 <label className="min-w-[200px] flex-1 space-y-1 text-sm">
                                     <span className="text-xs font-semibold uppercase text-[#59678b]">Form</span>
                                     <select
@@ -270,7 +383,11 @@ export default function PacketDefinitionDetailClient() {
                                         value={s.form_definition_id}
                                         onChange={(e) => {
                                             const v = e.target.value;
-                                            setSteps((rows) => rows.map((r, j) => (j === idx ? { ...r, form_definition_id: v } : r)));
+                                            setSteps((rows) =>
+                                                rows.map((r, j) =>
+                                                    j === idx ? { ...r, form_definition_id: v, packet_item_id: undefined } : r
+                                                )
+                                            );
                                         }}
                                     >
                                         <option value="">Select form…</option>
@@ -323,16 +440,46 @@ export default function PacketDefinitionDetailClient() {
                                 If this packet already has sessions, step changes are blocked — create a new packet definition instead.
                             </p>
                         ) : null}
+                        <details className="mt-4 rounded border border-[#e6e8ec] bg-[#fafbfd] px-3 py-2 text-xs text-[#59678b]">
+                            <summary className="cursor-pointer font-medium text-[#31394d]">Technical / debug</summary>
+                            <p className="mt-2">
+                                {items.length} saved step row(s) on server. Packet id:{" "}
+                                <span className="font-mono break-all">{packetDefId}</span>
+                            </p>
+                        </details>
                     </SectionCard>
 
                     <SectionCard title="Public packet links">
+                        <p className="mb-2 text-sm text-[#59678b]">
+                            Creates a shareable URL for this packet. Recipients complete each step in order.
+                        </p>
                         <PrimaryButton type="button" className="!px-3 !py-2 text-sm" disabled={busy} onClick={() => void mintLink()}>
                             Create packet link
                         </PrimaryButton>
                         {createdLink ? (
                             <div className="mt-3 rounded-lg border border-[#DBC078]/50 bg-[#e6d3a0]/15 p-3 text-sm">
-                                <p className="font-semibold">Copy embed URL now</p>
+                                <p className="font-semibold text-[#31394d]">Copy this URL once</p>
                                 <code className="mt-1 block break-all text-xs">{createdLink.embed_url ?? createdLink.embed_path}</code>
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                    <PrimaryButton
+                                        type="button"
+                                        className="!px-3 !py-2 text-sm"
+                                        onClick={() => {
+                                            const u = createdLink.embed_url ?? `${typeof window !== "undefined" ? window.location.origin : ""}${createdLink.embed_path}`;
+                                            void navigator.clipboard.writeText(u).catch(() => {});
+                                        }}
+                                    >
+                                        Copy URL
+                                    </PrimaryButton>
+                                    <a
+                                        className="inline-flex items-center rounded border border-[#00458C] px-3 py-2 text-sm font-semibold text-[#00458C] hover:bg-[#00458C]/5"
+                                        href={createdLink.embed_url ?? createdLink.embed_path}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                    >
+                                        Open link (new tab)
+                                    </a>
+                                </div>
                             </div>
                         ) : null}
                         {links.length > 0 ? (

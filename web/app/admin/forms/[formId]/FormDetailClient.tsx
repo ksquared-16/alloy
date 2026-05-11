@@ -476,6 +476,21 @@ export default function FormDetailClient() {
                         ) : (
                             <p className="text-sm text-[#59678b]">No published version yet.</p>
                         )}
+                        {latestPublished ? (
+                            <p className="mt-3 text-sm text-[#31394d]">
+                                <span className="font-medium">Packets:</span>{" "}
+                                <Link
+                                    href={`${ADMIN_FORMS_UI_BASE}/packet-definitions?addForm=${encodeURIComponent(detail.id)}`}
+                                    className="font-semibold text-[#00458C] hover:underline"
+                                >
+                                    Start a new packet with this form
+                                </Link>
+                                {" · "}
+                                <Link href={`${ADMIN_FORMS_UI_BASE}/packet-definitions`} className="font-semibold text-[#00458C] hover:underline">
+                                    Open packet list
+                                </Link>
+                            </p>
+                        ) : null}
                         <div className="mt-3 overflow-x-auto">
                             <table className="w-full text-sm">
                                 <thead>
