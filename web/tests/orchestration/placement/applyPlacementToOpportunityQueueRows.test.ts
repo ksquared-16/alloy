@@ -125,9 +125,9 @@ describe("applyPlacementToOpportunityQueueRows", () => {
         };
         const pt = out[1]._placement_priority as typeof pi;
         expect(pi.scoped_waitlist_position).toBe(1);
-        expect(pi.scoped_waitlist_position_label).toBe("Position in Infant waitlist");
+        expect(pi.scoped_waitlist_position_label).toBe("Infant waitlist");
         expect(pt.scoped_waitlist_position).toBe(1);
-        expect(pt.scoped_waitlist_position_label).toBe("Position in Toddler waitlist");
+        expect(pt.scoped_waitlist_position_label).toBe("Toddler waitlist");
         expect(diagnostics.placement_positions_page_local).toBe(true);
         expect(diagnostics.placement_positions_partial_evaluation).toBe(false);
     });

@@ -1,12 +1,15 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import AdminPageHeader from "@/components/admin/AdminPageHeader";
 import SectionCard from "@/components/admin/SectionCard";
+import PrimaryButton from "@/components/PrimaryButton";
 import { StatusBadge, getStatusVariant } from "@/components/admin/StatusBadge";
 import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
+import { useAdminAuth } from "@/contexts/AdminAuthContext";
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
 import { parseOperatorContext } from "@/lib/forms/operatorFormGuidance";
 
@@ -22,6 +25,11 @@ type FormRow = {
     created_at: string;
     has_published_version?: boolean;
 };
+
+function categoryFromMetadata(metadata: Record<string, unknown> | undefined): string | null {
+    const c = metadata?.admin_category;
+    return typeof c === "string" && c.trim() ? c.trim() : null;
+}
 
 function purposeSummary(metadata: Record<string, unknown> | undefined, description: string | null): string | null {
     const oc = parseOperatorContext(metadata);
@@ -43,8 +51,9 @@ function FormsSeedEnvironmentHint() {
         <div className="mt-4 rounded-lg border border-[#e6e8ec] bg-[#fafbfd] p-4 text-sm text-[#31394d]">
             <p className="font-medium text-[#31394d]">Optional: medication demo (non-production tooling)</p>
             <p className="mt-2 leading-relaxed text-[#59678b]">
-                There is <strong className="font-medium text-[#31394d]">no drag-and-drop form builder</strong> yet — forms
-                are installed through migrations and scripts for your organization.
+                There is <strong className="font-medium text-[#31394d]">no drag-and-drop canvas</strong> — operators configure
+                fields using the structured editor on each form&apos;s page. Optional demo forms can still be installed via
+                migrations/scripts.
             </p>
             {showExactCommand ? (
                 <>
@@ -68,10 +77,20 @@ DEMO_RESET_ORG_ID="<your-org-uuid>" npm run demo:seed:medication-form`}
 }
 
 export default function FormsHubClient() {
+    const router = useRouter();
     const viewerTz = useAdminViewerTimezone();
+    const { canMutate } = useAdminAuth();
     const [rows, setRows] = useState<FormRow[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [showCreate, setShowCreate] = useState(false);
+    const [createBusy, setCreateBusy] = useState(false);
+    const [createErr, setCreateErr] = useState<string | null>(null);
+    const [nfKey, setNfKey] = useState("");
+    const [nfName, setNfName] = useState("");
+    const [nfDesc, setNfDesc] = useState("");
+    const [nfKind, setNfKind] = useState<"center" | "state">("center");
+    const [nfCategory, setNfCategory] = useState("");
 
     const load = useCallback(async () => {
         setLoading(true);
@@ -93,6 +112,39 @@ export default function FormsHubClient() {
         void load();
     }, [load]);
 
+    const submitCreate = async () => {
+        if (!canMutate) return;
+        setCreateBusy(true);
+        setCreateErr(null);
+        try {
+            const res = await fetch("/api/admin/forms", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    key: nfKey.trim(),
+                    name: nfName.trim(),
+                    description: nfDesc.trim() || null,
+                    kind: nfKind,
+                    admin_category: nfCategory.trim() || undefined,
+                }),
+            });
+            const json = await res.json().catch(() => ({}));
+            if (!res.ok) throw new Error((json as { error?: string }).error ?? "Could not create form");
+            const id = (json as { data?: { id: string } }).data?.id;
+            if (!id) throw new Error("Missing id");
+            setShowCreate(false);
+            setNfKey("");
+            setNfName("");
+            setNfDesc("");
+            setNfCategory("");
+            router.push(`${ADMIN_FORMS_UI_BASE}/${id}`);
+        } catch (e) {
+            setCreateErr((e as Error).message);
+        } finally {
+            setCreateBusy(false);
+        }
+    };
+
     return (
         <div className="space-y-6">
             <AdminPageHeader
@@ -104,7 +156,11 @@ export default function FormsHubClient() {
                 <Link href="/adminV2/forms/packets" className="font-medium text-[#2563eb] hover:underline">
                     Packet sessions
                 </Link>
-                {" — review multi-form packets (enrollment sequences)."}
+                {" — review runs. "}
+                <Link href="/adminV2/forms/packet-definitions" className="font-medium text-[#2563eb] hover:underline">
+                    Packet definitions
+                </Link>
+                {" — configure multi-form packets."}
             </p>
 
             <SectionCard title="Forms in Alloy">
@@ -137,16 +193,82 @@ export default function FormsHubClient() {
                         </ol>
                     </div>
                     <p className="border-t border-[#e6e8ec] pt-3 text-xs text-[#59678b]">
-                        Forms are defined by{" "}
-                        <strong className="font-medium text-[#31394d]">schema and configuration</strong>, not an in-app builder.
-                        Tailored operator notes can be stored on each definition (
-                        <code className="rounded bg-[#F4F6F9] px-1 font-mono text-[11px]">metadata.operator_context</code>
-                        ).
+                        Definitions use the shared{" "}
+                        <strong className="font-medium text-[#31394d]">schema_version: 1</strong> contract (validated + rendered by
+                        the same engine as public embeds). Tailored operator notes can live in{" "}
+                        <code className="rounded bg-[#F4F6F9] px-1 font-mono text-[11px]">metadata.operator_context</code>.
                     </p>
                 </div>
             </SectionCard>
 
             <SectionCard title="Your forms">
+                {canMutate ? (
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                        <PrimaryButton type="button" className="!px-3 !py-2 text-sm" onClick={() => setShowCreate((v) => !v)}>
+                            {showCreate ? "Close create form" : "Create new form"}
+                        </PrimaryButton>
+                    </div>
+                ) : null}
+                {showCreate && canMutate ? (
+                    <div className="mb-5 space-y-3 rounded-lg border border-[#e6e8ec] bg-[#fafbfd] p-4 text-sm">
+                        <p className="text-xs text-[#59678b]">
+                            Keys must stay stable — they are used in integrations. Use lowercase with underscores (e.g.{" "}
+                            <span className="font-mono">waitlist_intake_v1</span>).
+                        </p>
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            <label className="space-y-1">
+                                <span className="text-xs font-semibold uppercase text-[#59678b]">Key</span>
+                                <input
+                                    className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 font-mono text-sm"
+                                    value={nfKey}
+                                    onChange={(e) => setNfKey(e.target.value)}
+                                    placeholder="waitlist_intake_v1"
+                                />
+                            </label>
+                            <label className="space-y-1">
+                                <span className="text-xs font-semibold uppercase text-[#59678b]">Name</span>
+                                <input
+                                    className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
+                                    value={nfName}
+                                    onChange={(e) => setNfName(e.target.value)}
+                                    placeholder="Waitlist intake"
+                                />
+                            </label>
+                            <label className="space-y-1 sm:col-span-2">
+                                <span className="text-xs font-semibold uppercase text-[#59678b]">Description (optional)</span>
+                                <input
+                                    className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
+                                    value={nfDesc}
+                                    onChange={(e) => setNfDesc(e.target.value)}
+                                />
+                            </label>
+                            <label className="space-y-1">
+                                <span className="text-xs font-semibold uppercase text-[#59678b]">Kind</span>
+                                <select
+                                    className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
+                                    value={nfKind}
+                                    onChange={(e) => setNfKind(e.target.value as "center" | "state")}
+                                >
+                                    <option value="center">center</option>
+                                    <option value="state">state</option>
+                                </select>
+                            </label>
+                            <label className="space-y-1">
+                                <span className="text-xs font-semibold uppercase text-[#59678b]">Category (metadata)</span>
+                                <input
+                                    className="w-full rounded border border-[#e6e8ec] px-2 py-1.5 text-sm"
+                                    value={nfCategory}
+                                    onChange={(e) => setNfCategory(e.target.value)}
+                                    placeholder="e.g. Intake"
+                                />
+                            </label>
+                        </div>
+                        {createErr ? <p className="text-sm text-red-700">{createErr}</p> : null}
+                        <PrimaryButton type="button" className="!px-3 !py-2 text-sm" disabled={createBusy} onClick={() => void submitCreate()}>
+                            {createBusy ? "Creating…" : "Create and open workspace"}
+                        </PrimaryButton>
+                    </div>
+                ) : null}
                 {loading ? (
                     <p className="text-sm text-[#59678b]">Loading…</p>
                 ) : error ? (
@@ -160,8 +282,8 @@ export default function FormsHubClient() {
                             fresh tenant until your team loads the Forms package you need.
                         </p>
                         <p className="leading-relaxed text-[#59678b]">
-                            Alloy does <strong className="font-medium text-[#31394d]">not</strong> ship a self-service form builder in this
-                            release — definitions come from engineering-approved migrations and scripts.
+                            Create a form below, add fields on the form workspace, publish a version, then use it in a packet or
+                            standalone public link.
                         </p>
                         <FormsSeedEnvironmentHint />
                     </div>
@@ -173,6 +295,7 @@ export default function FormsHubClient() {
                                     <th className="pb-2 pr-4 text-left font-semibold text-[#59678b]">Form</th>
                                     <th className="pb-2 pr-4 text-left font-semibold text-[#59678b]">Purpose / description</th>
                                     <th className="pb-2 pr-4 text-left font-semibold text-[#59678b]">Key</th>
+                                    <th className="pb-2 pr-4 text-left font-semibold text-[#59678b]">Category</th>
                                     <th className="pb-2 pr-4 text-left font-semibold text-[#59678b]">Kind</th>
                                     <th className="pb-2 pr-4 text-left font-semibold text-[#59678b]">Definition</th>
                                     <th className="pb-2 pr-4 text-left font-semibold text-[#59678b]">Published</th>
@@ -185,6 +308,7 @@ export default function FormsHubClient() {
                                     const purpose = purposeSummary(r.metadata, r.description);
                                     const workspaceHref = `${ADMIN_FORMS_UI_BASE}/${r.id}`;
                                     const published = r.has_published_version === true;
+                                    const cat = categoryFromMetadata(r.metadata);
                                     return (
                                         <tr key={r.id} className="hover:bg-[#F4F6F9]/50">
                                             <td className="max-w-[200px] py-2.5 pr-4">
@@ -198,6 +322,7 @@ export default function FormsHubClient() {
                                                 )}
                                             </td>
                                             <td className="py-2.5 pr-4 font-mono text-xs text-[#31394d]">{r.key}</td>
+                                            <td className="py-2.5 pr-4 text-[#59678b]">{cat ?? "—"}</td>
                                             <td className="py-2.5 pr-4 text-[#59678b]">{r.kind}</td>
                                             <td className="py-2.5 pr-4">
                                                 <StatusBadge

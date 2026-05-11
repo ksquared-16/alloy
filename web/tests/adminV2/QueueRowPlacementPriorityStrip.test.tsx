@@ -3,69 +3,75 @@ import { describe, expect, it } from "vitest";
 import { QueueRowPlacementPriorityStrip } from "@/app/adminV2/components/workspace/blocks/QueueRowPlacementPriorityStrip";
 import type { QueueRowPlacementPriorityVm } from "@/lib/ui-v2/workspace-types";
 
+const baseVm = (over: Partial<QueueRowPlacementPriorityVm>): QueueRowPlacementPriorityVm => ({
+    priorityRuleLabel: "Standard family",
+    programGroupSectionTitle: "Toddler",
+    waitlistProgramShortLabel: "Toddler waitlist",
+    reasonLines: [],
+    warningLines: [],
+    shadowMode: false,
+    ...over,
+});
+
 describe("QueueRowPlacementPriorityStrip", () => {
-    it("shadow mode does not render scoped waitlist position badge", () => {
-        const preview: QueueRowPlacementPriorityVm = {
+    it("shadow mode shows only rule chip — no # badge or row footnote", () => {
+        const preview = baseVm({
             priorityRuleLabel: "Sibling enrolled at center",
             programGroupSectionTitle: "Infant",
-            reasonLines: [],
-            warningLines: [],
+            waitlistProgramShortLabel: "Infant waitlist",
             shadowMode: true,
-        };
+        });
         const html = renderToStaticMarkup(<QueueRowPlacementPriorityStrip preview={preview} />);
-        expect(html).toContain("Waitlist priority");
+        expect(html).toContain("Sibling enrolled at center");
         expect(html).not.toContain("adminv2-ws-queue-placement-position");
-        expect(html.toLowerCase()).toMatch(/position numbers stay off/i);
+        expect(html).not.toContain("adminv2-ws-queue-placement-strip__shadow-note");
+        expect(html.toLowerCase()).not.toMatch(/pagination|evaluation|projection|sort_tuple/);
     });
 
-    it("non-shadow mode shows #n and Position in … waitlist caption", () => {
-        const preview: QueueRowPlacementPriorityVm = {
+    it("non-shadow shows #n, short program label, and rule chip", () => {
+        const preview = baseVm({
             priorityRuleLabel: "Staff / community priority",
             programGroupSectionTitle: "Toddler",
+            waitlistProgramShortLabel: "Toddler waitlist",
             scopedWaitlistPosition: 1,
-            scopedWaitlistPositionLabel: "Position in Toddler waitlist",
-            reasonLines: [],
-            warningLines: [],
+            scopedWaitlistPositionLabel: "Toddler waitlist",
             shadowMode: false,
-        };
+        });
         const html = renderToStaticMarkup(<QueueRowPlacementPriorityStrip preview={preview} />);
         expect(html).toContain("adminv2-ws-queue-placement-position");
         expect(html).toContain("#1");
-        expect(html).toContain("Position in Toddler waitlist");
-        expect(html).toContain("adminv2-ws-queue-placement-strip__position-caption");
+        expect(html).toContain("Toddler waitlist");
+        expect(html).toContain("Staff / community priority");
+        expect(html).not.toContain("adminv2-ws-queue-placement-strip__shadow-note");
     });
 
-    it("non-shadow hint copy avoids implying global full-waitlist accuracy", () => {
-        const preview: QueueRowPlacementPriorityVm = {
-            priorityRuleLabel: "Standard family",
-            programGroupSectionTitle: "Infant",
-            scopedWaitlistPosition: 2,
-            scopedWaitlistPositionLabel: "Position in Infant waitlist",
-            reasonLines: [],
-            warningLines: [],
+    it("shows at most one supporting reason line", () => {
+        const preview = baseVm({
+            priorityReasonShort: "Priority rule matched.",
+            reasonLines: ["Priority rule matched."],
             shadowMode: false,
-        };
+        });
         const html = renderToStaticMarkup(<QueueRowPlacementPriorityStrip preview={preview} />);
-        expect(html.toLowerCase()).not.toMatch(/\bglobal\b.*\bfull\b.*\bwaitlist\b|guaranteed.*spot/i);
+        expect(html).toContain("adminv2-ws-queue-placement-strip__reason-one");
+        expect(html).toContain("Priority rule matched.");
     });
 
-    it("shows warning lines when present", () => {
-        const preview: QueueRowPlacementPriorityVm = {
-            priorityRuleLabel: "Standard family",
-            programGroupSectionTitle: "Toddler",
-            reasonLines: [],
-            warningLines: ["Fact could not be verified."],
+    it("compact warning uses dot with title, not paragraph list", () => {
+        const preview = baseVm({
+            warningLines: ["Sibling enrollment could not be verified."],
             shadowMode: false,
-        };
+        });
         const html = renderToStaticMarkup(<QueueRowPlacementPriorityStrip preview={preview} />);
-        expect(html).toContain("Waitlist priority warnings");
-        expect(html).toContain("Fact could not be verified.");
+        expect(html).toContain("adminv2-ws-queue-placement-strip__warn-dot");
+        expect(html).not.toContain("<ul");
+        expect(html).toContain("Sibling enrollment could not be verified.");
     });
 
-    it("error path shows subdued label without rule chip text", () => {
+    it("error path stays compact", () => {
         const preview: QueueRowPlacementPriorityVm = {
             priorityRuleLabel: "",
             programGroupSectionTitle: "Program / room not specified",
+            waitlistProgramShortLabel: "Program waitlist",
             reasonLines: [],
             warningLines: [],
             shadowMode: false,

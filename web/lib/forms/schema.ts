@@ -52,6 +52,10 @@ type FormFieldBase = {
     id: string;
     label: string;
     required: boolean;
+    /** Shown under the label in renderers that support it (help / description). */
+    description?: string;
+    /** Input placeholder where applicable (text-like controls). */
+    placeholder?: string;
     /** When true, public PATCH/submit restore values from the saved draft baseline (operator/server wins). */
     read_only?: boolean;
     visibility?: FormVisibility;
@@ -62,21 +66,40 @@ type FormFieldBase = {
 
 /** Parsed `schema_json` field node (recursive for groups). */
 export type FormField =
-    | (FormFieldBase & { type: "text" })
+    | (FormFieldBase & { type: "text"; multiline?: boolean })
     | (FormFieldBase & { type: "number" })
     | (FormFieldBase & { type: "date" })
     | (FormFieldBase & { type: "boolean" })
-    | (FormFieldBase & { type: "select"; option_set_key: string })
-    | (FormFieldBase & { type: "multiselect"; option_set_key: string })
+    | (FormFieldBase & {
+          type: "select";
+          /** DB-backed option set (org `option_sets`); omit when `static_options` is set. */
+          option_set_key?: string;
+          /** Inline choices for admin-configured forms (no `option_sets` row required). */
+          static_options?: ReadonlyArray<{ value: string; label: string }>;
+      })
+    | (FormFieldBase & {
+          type: "multiselect";
+          option_set_key?: string;
+          static_options?: ReadonlyArray<{ value: string; label: string }>;
+      })
     | (FormFieldBase & { type: "file_ref" })
     | (FormFieldBase & { type: "signature"; signature?: FormSignatureConfig })
     | (FormFieldBase & { type: "group"; fields: FormField[]; repeat?: FormRepeatRules });
+
+const staticOptionRowSchema = z
+    .object({
+        value: z.string().min(1),
+        label: z.string().min(1),
+    })
+    .strict();
 
 const fieldCoreSchema = z
     .object({
         id: z.string().min(1),
         label: z.string().min(1),
         required: z.boolean().optional().default(false),
+        description: z.string().optional(),
+        placeholder: z.string().optional(),
         visibility: formVisibilitySchema.optional(),
         validate: formValidateRulesSchema.optional(),
         entity_hint: z.string().min(1).optional(),
@@ -91,6 +114,7 @@ export const formFieldSchema: z.ZodType<FormField> = z.lazy(() =>
         fieldCoreSchema
             .extend({
                 type: z.literal("text"),
+                multiline: z.boolean().optional(),
             })
             .strict(),
         fieldCoreSchema
@@ -111,13 +135,15 @@ export const formFieldSchema: z.ZodType<FormField> = z.lazy(() =>
         fieldCoreSchema
             .extend({
                 type: z.literal("select"),
-                option_set_key: z.string().min(1),
+                option_set_key: z.string().min(1).optional(),
+                static_options: z.array(staticOptionRowSchema).optional(),
             })
             .strict(),
         fieldCoreSchema
             .extend({
                 type: z.literal("multiselect"),
-                option_set_key: z.string().min(1),
+                option_set_key: z.string().min(1).optional(),
+                static_options: z.array(staticOptionRowSchema).optional(),
             })
             .strict(),
         fieldCoreSchema
@@ -252,6 +278,39 @@ export const formSchemaV1Schema = z
             }
         };
         walkVisibilityRefs(data.fields);
+
+        const walkSelectFieldSources = (fields: FormField[], basePath: (string | number)[]) => {
+            for (let fi = 0; fi < fields.length; fi++) {
+                const f = fields[fi];
+                const here = [...basePath, fi];
+                if (f.type === "select" || f.type === "multiselect") {
+                    const key = f.option_set_key?.trim();
+                    const stat = f.static_options;
+                    const hasStatic = Array.isArray(stat) && stat.length > 0;
+                    if (!key && !hasStatic) {
+                        ctx.addIssue({
+                            code: "custom",
+                            message: `${f.type} must set option_set_key or static_options`,
+                            path: here,
+                        });
+                    }
+                    if (hasStatic && stat) {
+                        const vals = stat.map((r) => r.value);
+                        if (new Set(vals).size !== vals.length) {
+                            ctx.addIssue({
+                                code: "custom",
+                                message: "static_options values must be unique",
+                                path: here,
+                            });
+                        }
+                    }
+                }
+                if (f.type === "group") {
+                    walkSelectFieldSources(f.fields, [...here, "fields"]);
+                }
+            }
+        };
+        walkSelectFieldSources(data.fields, ["fields"]);
     });
 
 export type FormSchemaV1 = z.infer<typeof formSchemaV1Schema>;

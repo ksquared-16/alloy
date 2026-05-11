@@ -78,6 +78,7 @@ import {
 import type { WorkUnitPlacementQueueDiagnostics } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
 import {
     buildPlacementProjectionQueueHint,
+    formatPlacementWaitlistSectionLabel,
     parseQueueRowPlacementPriorityVm,
 } from "@/lib/ui-v2/queuePlacementPriorityPresentation";
 
@@ -2159,7 +2160,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         ? {
                               placementPriority,
                               /** Program / room section headers (loaded page) — {@link QueueBlock} grouping. */
-                              groupLabel: placementPriority.programGroupSectionTitle,
+                              groupLabel: formatPlacementWaitlistSectionLabel(placementPriority.programGroupSectionTitle),
                           }
                         : {}),
                 };

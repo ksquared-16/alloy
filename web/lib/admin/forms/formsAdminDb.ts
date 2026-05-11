@@ -396,7 +396,7 @@ export async function dbPatchSubmission(
         .single();
 }
 
-const FORM_PUBLIC_LINK_SAFE_SELECT =
+export const FORM_PUBLIC_LINK_SAFE_SELECT =
     "id, form_definition_id, pinned_form_definition_version_id, is_active, expires_at, allowed_embed_origins, metadata, token_prefix, rate_limit_profile, created_at, updated_at, last_used_at";
 
 export type FormPublicLinkSafeRow = {

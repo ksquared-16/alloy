@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     buildPlacementProjectionQueueHint,
+    formatPlacementWaitlistSectionLabel,
     parseQueueRowPlacementPriorityVm,
 } from "@/lib/ui-v2/queuePlacementPriorityPresentation";
 
@@ -11,15 +12,14 @@ describe("queuePlacementPriorityPresentation", () => {
         expect(parseQueueRowPlacementPriorityVm({})).toBeUndefined();
     });
 
-    it("parses bucket_label, program room group, reasons, warnings, shadow_mode", () => {
+    it("parses bucket_label, program room, single reason, waitlistProgramShortLabel", () => {
         const vm = parseQueueRowPlacementPriorityVm({
             bucket_key: "tier_staff_community",
             bucket_label: "Staff / community priority",
             program_room_group_label: "Infant",
             reasons: [
                 { code: "rule_matched", label: "Priority rule matched for this program / room group." },
-                { code: "extra", label: "Second reason line." },
-                { code: "ignored", label: "Third should not appear." },
+                { code: "extra", label: "Second reason line — should be ignored." },
             ],
             warnings: [{ code: "unknown_fact", message: "Sibling enrollment could not be verified." }],
             shadow_mode: true,
@@ -27,10 +27,9 @@ describe("queuePlacementPriorityPresentation", () => {
         });
         expect(vm?.priorityRuleLabel).toBe("Staff / community priority");
         expect(vm?.programGroupSectionTitle).toBe("Infant");
-        expect(vm?.reasonLines).toEqual([
-            "Priority rule matched for this program / room group.",
-            "Second reason line.",
-        ]);
+        expect(vm?.waitlistProgramShortLabel).toBe("Infant waitlist");
+        expect(vm?.priorityReasonShort).toBe("Priority rule matched for this program / room group.");
+        expect(vm?.reasonLines).toEqual(["Priority rule matched for this program / room group."]);
         expect(vm?.warningLines).toEqual(["Sibling enrollment could not be verified."]);
         expect(vm?.shadowMode).toBe(true);
         expect(vm?.scopedWaitlistPosition).toBeUndefined();
@@ -41,21 +40,21 @@ describe("queuePlacementPriorityPresentation", () => {
             bucket_label: "Standard family",
             program_room_group_label: "Toddler",
             scoped_waitlist_position: 3,
-            scoped_waitlist_position_label: "Position in Toddler waitlist",
+            scoped_waitlist_position_label: "Toddler waitlist",
             reasons: [],
             warnings: [],
             shadow_mode: false,
             evaluated_at_ms: 1,
         });
         expect(vm?.scopedWaitlistPosition).toBe(3);
-        expect(vm?.scopedWaitlistPositionLabel).toBe("Position in Toddler waitlist");
+        expect(vm?.scopedWaitlistPositionLabel).toBe("Toddler waitlist");
     });
 
     it("shadow mode ignores scoped position fields on payload", () => {
         const vm = parseQueueRowPlacementPriorityVm({
             bucket_label: "Standard family",
             scoped_waitlist_position: 1,
-            scoped_waitlist_position_label: "Position in Toddler waitlist",
+            scoped_waitlist_position_label: "Toddler waitlist",
             reasons: [],
             warnings: [],
             shadow_mode: true,
@@ -73,9 +72,10 @@ describe("queuePlacementPriorityPresentation", () => {
             evaluated_at_ms: 1,
         });
         expect(vm?.programGroupSectionTitle).toBe("Program / room not specified");
+        expect(vm?.waitlistProgramShortLabel).toBe("Program waitlist");
     });
 
-    it("parses evaluate_error without implying priority rule chip text", () => {
+    it("parses evaluate_error", () => {
         const vm = parseQueueRowPlacementPriorityVm({
             evaluate_error: true,
             code: "UNSUPPORTED_COHORT",
@@ -87,7 +87,11 @@ describe("queuePlacementPriorityPresentation", () => {
         expect(vm?.errorMessage).toContain("pipeline_total");
     });
 
-    it("buildPlacementProjectionQueueHint: shadow vs active sort copy avoids global waitlist claims", () => {
+    it("formatPlacementWaitlistSectionLabel adds Waitlist suffix", () => {
+        expect(formatPlacementWaitlistSectionLabel("Toddler")).toBe("Toddler Waitlist");
+    });
+
+    it("buildPlacementProjectionQueueHint: short loaded-records copy", () => {
         expect(
             buildPlacementProjectionQueueHint({
                 evaluated_count: 2,
@@ -97,7 +101,7 @@ describe("queuePlacementPriorityPresentation", () => {
                 row_evaluation_errors: 0,
                 profile_revision_mismatch: false,
             })
-        ).toMatch(/position numbers are hidden/i);
+        ).toMatch(/grouped by program/i);
         expect(
             buildPlacementProjectionQueueHint({
                 evaluated_count: 2,
@@ -108,21 +112,10 @@ describe("queuePlacementPriorityPresentation", () => {
                 profile_revision_mismatch: false,
                 placement_positions_partial_evaluation: false,
             })
-        ).toMatch(/position numbers/i);
-        expect(
-            buildPlacementProjectionQueueHint({
-                evaluated_count: 2,
-                skipped_due_to_cap_count: 0,
-                reorder_applied: true,
-                shadow_mode: false,
-                row_evaluation_errors: 0,
-                profile_revision_mismatch: false,
-                placement_positions_partial_evaluation: false,
-            })
-        ).toMatch(/pagination/i);
+        ).toMatch(/grouped by program.*loaded records/i);
     });
 
-    it("hint discloses evaluation_cap when placement_positions_partial_evaluation", () => {
+    it("hint adds partial line without engine jargon", () => {
         const hint = buildPlacementProjectionQueueHint({
             evaluated_count: 1,
             skipped_due_to_cap_count: 3,
@@ -133,7 +126,8 @@ describe("queuePlacementPriorityPresentation", () => {
             placement_positions_page_local: true,
             placement_positions_partial_evaluation: true,
         });
-        expect(hint?.toLowerCase()).toMatch(/evaluation_cap/);
+        expect(hint?.toLowerCase()).toMatch(/outside this loaded page/);
+        expect(hint?.toLowerCase()).not.toMatch(/evaluation_cap|sort_tuple|projection/);
     });
 
     it("hint strings do not imply guaranteed global waitlist placement", () => {

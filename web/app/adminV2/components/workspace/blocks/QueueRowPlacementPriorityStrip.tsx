@@ -1,16 +1,16 @@
 import type { QueueRowPlacementPriorityVm } from "@/lib/ui-v2/workspace-types";
 
 /**
- * Waitlist placement preview for work-unit queue rows — scoped position numbers only when server uses non-shadow placement sort.
+ * Compact waitlist placement row — position, short program label, rule chip; caveats live in the lane hint only.
  */
 export function QueueRowPlacementPriorityStrip({ preview }: { preview: QueueRowPlacementPriorityVm }) {
     if (preview.evaluateError) {
         return (
             <div
-                className="adminv2-ws-queue-placement-strip adminv2-ws-queue-placement-strip--error"
+                className="adminv2-ws-queue-placement-strip adminv2-ws-queue-placement-strip--error adminv2-ws-queue-placement-strip--compact"
                 data-queue-placement="error"
             >
-                <span className="adminv2-ws-queue-placement-strip__label">Waitlist priority</span>
+                <span className="adminv2-ws-queue-placement-strip__label">Waitlist</span>
                 <span className="adminv2-ws-queue-placement-strip__muted">
                     {preview.errorMessage ?? "Preview unavailable."}
                 </span>
@@ -24,52 +24,41 @@ export function QueueRowPlacementPriorityStrip({ preview }: { preview: QueueRowP
         preview.scopedWaitlistPosition >= 1 &&
         (preview.scopedWaitlistPositionLabel?.trim() ?? "");
 
-    const chipTitle = hasScopedPosition
-        ? `${preview.scopedWaitlistPositionLabel} — priority rule / factor for this record (page-local scope; see lane note)`
-        : preview.shadowMode
-          ? "Priority rule / factor (preview — list order not placement-sorted)"
-          : "Priority rule / factor for this record (page-local scope; see lane note)";
+    const firstWarning = preview.warningLines[0]?.trim();
+    const chipTitle = preview.priorityRuleLabel;
 
     return (
-        <div className="adminv2-ws-queue-placement-strip" data-queue-placement="preview">
-            <div className="adminv2-ws-queue-placement-strip__head">
+        <div
+            className="adminv2-ws-queue-placement-strip adminv2-ws-queue-placement-strip--compact"
+            data-queue-placement="preview"
+        >
+            <div className="adminv2-ws-queue-placement-strip__row">
                 {hasScopedPosition ? (
-                    <span
-                        className="adminv2-ws-queue-placement-position"
-                        aria-label={preview.scopedWaitlistPositionLabel}
-                        title={preview.scopedWaitlistPositionLabel}
-                    >
+                    <span className="adminv2-ws-queue-placement-position" aria-hidden>
                         #{preview.scopedWaitlistPosition}
                     </span>
                 ) : null}
-                <span className="adminv2-ws-queue-placement-strip__kicker">Waitlist priority</span>
+                {hasScopedPosition ? (
+                    <span className="adminv2-ws-queue-placement-strip__program" title={preview.scopedWaitlistPositionLabel}>
+                        {preview.waitlistProgramShortLabel}
+                    </span>
+                ) : null}
                 <span className="adminv2-ws-queue-placement-rule-chip" title={chipTitle}>
                     {preview.priorityRuleLabel}
                 </span>
+                {firstWarning ? (
+                    <span
+                        className="adminv2-ws-queue-placement-strip__warn-dot"
+                        title={firstWarning}
+                        aria-label={firstWarning}
+                        role="img"
+                    >
+                        !
+                    </span>
+                ) : null}
             </div>
-            {hasScopedPosition ? (
-                <p className="adminv2-ws-queue-placement-strip__position-caption">{preview.scopedWaitlistPositionLabel}</p>
-            ) : null}
-            {preview.reasonLines.length > 0 ? (
-                <ul className="adminv2-ws-queue-placement-strip__reasons" aria-label="Waitlist priority notes">
-                    {preview.reasonLines.map((line, i) => (
-                        <li key={i}>{line}</li>
-                    ))}
-                </ul>
-            ) : null}
-            {preview.warningLines.length > 0 ? (
-                <ul className="adminv2-ws-queue-placement-strip__warnings" aria-label="Waitlist priority warnings">
-                    {preview.warningLines.map((line, i) => (
-                        <li key={`w-${i}`}>{line}</li>
-                    ))}
-                </ul>
-            ) : null}
-            {preview.shadowMode ? (
-                <p className="adminv2-ws-queue-placement-strip__shadow-note">
-                    Preview only — row order matches this queue&apos;s usual sort; the rule above reflects placement priority
-                    inside this program / room group when ordering is applied. Position numbers stay off until placement sort is
-                    enabled for this lane.
-                </p>
+            {preview.priorityReasonShort?.trim() ? (
+                <p className="adminv2-ws-queue-placement-strip__reason-one">{preview.priorityReasonShort.trim()}</p>
             ) : null}
         </div>
     );

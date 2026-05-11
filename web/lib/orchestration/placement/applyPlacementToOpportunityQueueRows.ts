@@ -129,7 +129,8 @@ function assignScopedWaitlistPositions(rows: AccRow[]): void {
         counts.set(gk, next);
         const p = raw as PlacementPriorityRowPreview;
         const displayGroup = p.program_room_group_label?.trim() || "Program / room not specified";
-        const label = `Position in ${displayGroup} waitlist`;
+        /** Short label for row UI (lane-level hint carries scope). */
+        const label = displayGroup === "Program / room not specified" ? "Program waitlist" : `${displayGroup} waitlist`;
         row._placement_priority = {
             ...p,
             scoped_waitlist_position: next,

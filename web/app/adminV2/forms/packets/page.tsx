@@ -59,8 +59,11 @@ export default async function AdminV2PacketSessionsPage() {
 
             {rows.length === 0 ? (
                 <p className="rounded-lg border border-[#e6e8ec] bg-[#fafbfd] p-4 text-sm text-[#59678b]">
-                    No packet sessions yet. Mint a packet link via{" "}
-                    <code className="rounded bg-[#f4f6f9] px-1">POST /api/admin/forms/packet-links</code>.
+                    No packet sessions yet. Configure packets under{" "}
+                    <Link href="/adminV2/forms/packet-definitions" className="font-medium text-[#00458C] hover:underline">
+                        Packet definitions
+                    </Link>
+                    , then create a packet public link from that screen.
                 </p>
             ) : (
                 <ul className="divide-y divide-[#e6e8ec] rounded-lg border border-[#e6e8ec] bg-white">

@@ -28,6 +28,7 @@ import {
 } from "@/lib/forms/adminFormPreview";
 import { MEDICATION_AUTHORIZATION_DEMO_FORM_KEY } from "@/lib/forms/seeds/medicationAuthorizationDemo";
 import { linkRequiresLeadCapture } from "@/lib/public/forms/publicFormTypes";
+import FormSchemaWorkspace from "@/app/admin/forms/FormSchemaWorkspace";
 
 type VersionRow = {
     id: string;
@@ -485,6 +486,13 @@ export default function FormDetailClient() {
                             </table>
                         </div>
                     </SectionCard>
+
+                    <FormSchemaWorkspace
+                        formId={formId}
+                        formName={detail.name}
+                        versions={detail.versions}
+                        onVersionsUpdated={() => void load()}
+                    />
 
                     <div id="form-public-embed-links">
                         <SectionCard title="Public embed links">

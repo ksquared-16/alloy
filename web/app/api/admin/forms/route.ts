@@ -58,9 +58,18 @@ export async function POST(request: NextRequest) {
 
     const description = typeof body.description === "string" ? body.description.trim() || null : null;
     const is_active = typeof body.is_active === "boolean" ? body.is_active : true;
-    const metadata = body.metadata && typeof body.metadata === "object" && !Array.isArray(body.metadata)
-        ? (body.metadata as Record<string, unknown>)
-        : {};
+    const admin_category =
+        typeof body.admin_category === "string" ? body.admin_category.trim() : typeof body.category === "string"
+          ? body.category.trim()
+          : "";
+    const metadataBase =
+        body.metadata && typeof body.metadata === "object" && !Array.isArray(body.metadata)
+            ? (body.metadata as Record<string, unknown>)
+            : {};
+    const metadata = {
+        ...metadataBase,
+        ...(admin_category ? { admin_category } : {}),
+    };
 
     const supabase = createAdminClient();
     const { data, error } = await dbInsertFormDefinition(supabase, {

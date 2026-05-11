@@ -57,8 +57,12 @@ export type QueueRowPlacementPriorityVm = {
    * 1-based position within this row's program/room group — **non-shadow** placement only; page-local scope (lane hint).
    */
   scopedWaitlistPosition?: number;
-  /** e.g. `Position in Toddler waitlist` — paired with {@link scopedWaitlistPosition}. */
+  /** e.g. `Toddler waitlist` — paired with {@link scopedWaitlistPosition}. */
   scopedWaitlistPositionLabel?: string;
+  /** One short supporting line from evaluator reasons (optional). */
+  priorityReasonShort?: string;
+  /** e.g. `Toddler waitlist` — compact row subtitle next to position. */
+  waitlistProgramShortLabel: string;
   /** Up to two `reasons[].label` strings from the evaluator. */
   reasonLines: string[];
   /** Up to two warning messages (unknown facts, etc.). */

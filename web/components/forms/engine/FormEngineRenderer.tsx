@@ -91,6 +91,13 @@ export function FormEngineRenderer({
                     {field.required ? <span className="text-red-600"> *</span> : null}
                 </label>
             );
+            const desc =
+                "description" in field && typeof (field as { description?: unknown }).description === "string"
+                    ? (field as { description?: string }).description!.trim()
+                    : "";
+            const helpText = desc ? (
+                <p className={clsx("text-xs text-neutral-600", loose && "text-[12px]")}>{desc}</p>
+            ) : null;
 
             if (readonly) {
                 const display =
@@ -99,10 +106,19 @@ export function FormEngineRenderer({
                         : raw === undefined || raw === null || raw === ""
                           ? "—"
                           : String(raw);
+                const preWrap = field.type === "text" && (field as { multiline?: boolean }).multiline;
                 return (
                     <div className="space-y-1">
                         {commonLabel}
-                        <div className="rounded border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-sm">{display}</div>
+                        {helpText}
+                        <div
+                            className={clsx(
+                                "rounded border border-neutral-200 bg-neutral-50 px-2 py-1.5 text-sm",
+                                preWrap && "whitespace-pre-wrap"
+                            )}
+                        >
+                            {display}
+                        </div>
                     </div>
                 );
             }
@@ -118,33 +134,49 @@ export function FormEngineRenderer({
                     const embedAutofillFix =
                         loose ?
                             {
-                                onInput: (e: FormEvent<HTMLInputElement>) => {
+                                onInput: (e: FormEvent<HTMLInputElement | HTMLTextAreaElement>) => {
                                     onCellChange(field.id, e.currentTarget.value);
                                 },
                             }
                         :   {};
+                    const ph = field.placeholder?.trim() || undefined;
                     return (
                         <div className="space-y-1">
                             {commonLabel}
-                            <input
-                                type={inputType}
-                                autoComplete={autoComplete}
-                                className={clsx(
-                                    "w-full rounded border px-2 py-1.5 text-sm",
-                                    fieldErrors.length ? "border-red-400 ring-1 ring-red-200" : "border-neutral-300"
-                                )}
-                                value={strVal}
-                                onChange={(e) => onCellChange(field.id, e.target.value)}
-                                {...embedAutofillFix}
-                                onBlur={
-                                    loose && emailLike ?
-                                        (e) => {
-                                            const t = e.target.value.trim();
-                                            if (t !== strVal) onCellChange(field.id, t);
-                                        }
-                                    :   undefined
-                                }
-                            />
+                            {helpText}
+                            {field.multiline && !emailLike ?
+                                <textarea
+                                    rows={5}
+                                    className={clsx(
+                                        "w-full rounded border px-2 py-1.5 text-sm",
+                                        fieldErrors.length ? "border-red-400 ring-1 ring-red-200" : "border-neutral-300"
+                                    )}
+                                    value={strVal}
+                                    placeholder={ph}
+                                    onChange={(e) => onCellChange(field.id, e.target.value)}
+                                    {...(embedAutofillFix as object)}
+                                />
+                            :   <input
+                                    type={inputType}
+                                    autoComplete={autoComplete}
+                                    className={clsx(
+                                        "w-full rounded border px-2 py-1.5 text-sm",
+                                        fieldErrors.length ? "border-red-400 ring-1 ring-red-200" : "border-neutral-300"
+                                    )}
+                                    value={strVal}
+                                    placeholder={ph}
+                                    onChange={(e) => onCellChange(field.id, e.target.value)}
+                                    {...embedAutofillFix}
+                                    onBlur={
+                                        loose && emailLike ?
+                                            (e) => {
+                                                const t = e.target.value.trim();
+                                                if (t !== strVal) onCellChange(field.id, t);
+                                            }
+                                        :   undefined
+                                    }
+                                />
+                            }
                             {fieldErrors.length ?
                                 <ul className="list-disc space-y-0.5 pl-5 text-xs text-red-700">
                                     {fieldErrors.map((er, i) => (
@@ -159,6 +191,7 @@ export function FormEngineRenderer({
                     return (
                         <div className="space-y-1">
                             {commonLabel}
+                            {helpText}
                             <input
                                 type="number"
                                 className="w-full rounded border border-neutral-300 px-2 py-1.5 text-sm"
@@ -174,6 +207,7 @@ export function FormEngineRenderer({
                     return (
                         <div className="space-y-1">
                             {commonLabel}
+                            {helpText}
                             <input
                                 type="date"
                                 className="w-full rounded border border-neutral-300 px-2 py-1.5 text-sm"
@@ -184,16 +218,23 @@ export function FormEngineRenderer({
                     );
                 case "boolean":
                     return (
-                        <div className="flex items-center gap-2 pt-5">
-                            <input
-                                type="checkbox"
-                                checked={Boolean(raw)}
-                                onChange={(e) => onCellChange(field.id, e.target.checked)}
-                                id={`cb_${field.id}`}
-                            />
-                            <label htmlFor={`cb_${field.id}`} className="text-sm font-medium text-neutral-800">
-                                {field.label}
-                                {field.required ? <span className="text-red-600"> *</span> : null}
+                        <div className="space-y-1">
+                            {helpText}
+                            <label
+                                htmlFor={`cb_${field.id}`}
+                                className="flex cursor-pointer items-start gap-2 pt-1 text-sm font-medium text-neutral-800"
+                            >
+                                <input
+                                    type="checkbox"
+                                    className="mt-1"
+                                    checked={Boolean(raw)}
+                                    onChange={(e) => onCellChange(field.id, e.target.checked)}
+                                    id={`cb_${field.id}`}
+                                />
+                                <span>
+                                    {field.label}
+                                    {field.required ? <span className="text-red-600"> *</span> : null}
+                                </span>
                             </label>
                         </div>
                     );
@@ -204,6 +245,7 @@ export function FormEngineRenderer({
                     return (
                         <div className="space-y-1">
                             {commonLabel}
+                            {helpText}
                             <select
                                 className="w-full rounded border border-neutral-300 px-2 py-1.5 text-sm"
                                 value={typeof raw === "string" ? raw : ""}
@@ -227,6 +269,7 @@ export function FormEngineRenderer({
                     return (
                         <div className="space-y-1">
                             {commonLabel}
+                            {helpText}
                             <div className="flex flex-col gap-1 rounded border border-neutral-200 p-2">
                                 {choices.map((o) => (
                                     <label key={o.value} className="flex items-center gap-2 text-sm">
@@ -251,6 +294,7 @@ export function FormEngineRenderer({
                     return (
                         <div className="space-y-1">
                             {commonLabel}
+                            {helpText}
                             <div className="rounded border border-dashed border-neutral-300 bg-neutral-50 px-2 py-3 text-sm text-neutral-600">
                                 File upload ships with documents integration. UUID:{" "}
                                 {typeof raw === "string" ? raw || "—" : "—"}

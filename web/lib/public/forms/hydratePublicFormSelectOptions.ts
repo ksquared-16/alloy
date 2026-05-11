@@ -13,7 +13,11 @@ function collectSelectFieldBindings(fields: FormField[]): { fieldId: string; opt
     const out: { fieldId: string; optionSetKey: string }[] = [];
     for (const f of fields) {
         if (f.type === "select" || f.type === "multiselect") {
-            out.push({ fieldId: f.id, optionSetKey: f.option_set_key });
+            const hasStatic = Array.isArray(f.static_options) && f.static_options.length > 0;
+            const key = f.option_set_key?.trim();
+            if (!hasStatic && key) {
+                out.push({ fieldId: f.id, optionSetKey: key });
+            }
         } else if (f.type === "group") {
             out.push(...collectSelectFieldBindings(f.fields));
         }
@@ -30,14 +34,30 @@ export async function hydrateSelectOptionsForSchema(
     orgId: string,
     schema: FormSchemaV1
 ): Promise<HydratedPublicFormSelectOptions> {
+    const option_values_by_field_id: Record<string, string[]> = {};
+    const option_choices_by_field_id: Record<string, PublicFormOptionChoice[]> = {};
+
+    function applyStaticFromTree(fields: FormField[]) {
+        for (const f of fields) {
+            if ((f.type === "select" || f.type === "multiselect") && f.static_options?.length) {
+                const choices = f.static_options.map((o) => ({
+                    value: String(o.value).trim(),
+                    label: (o.label && String(o.label).trim()) || String(o.value).trim(),
+                }));
+                option_choices_by_field_id[f.id] = choices;
+                option_values_by_field_id[f.id] = choices.map((c) => c.value);
+            }
+            if (f.type === "group") applyStaticFromTree(f.fields);
+        }
+    }
+    applyStaticFromTree(schema.fields);
+
     const bindings = collectSelectFieldBindings(schema.fields);
     const setKeys = [...new Set(bindings.map((b) => b.optionSetKey.trim()).filter(Boolean))];
     const bySetKey = await resolveOptionSetsForOrg(supabase, orgId, setKeys);
 
-    const option_values_by_field_id: Record<string, string[]> = {};
-    const option_choices_by_field_id: Record<string, PublicFormOptionChoice[]> = {};
-
     for (const { fieldId, optionSetKey } of bindings) {
+        if (option_choices_by_field_id[fieldId]?.length) continue;
         const choices = bySetKey[optionSetKey] ?? [];
         option_choices_by_field_id[fieldId] = choices;
         option_values_by_field_id[fieldId] = choices.map((c) => c.value);

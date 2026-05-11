@@ -6,7 +6,29 @@
 import type { QueueRowPlacementPriorityVm } from "@/lib/ui-v2/workspace-types";
 import type { WorkUnitPlacementQueueDiagnostics } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
 
-const UNSPECIFIED_PROGRAM_SECTION = "Program / room not specified";
+export const UNSPECIFIED_PROGRAM_SECTION = "Program / room not specified";
+
+const MAX_REASON_LEN = 120;
+
+/** Section header text, e.g. `Toddler Waitlist`. */
+export function formatPlacementWaitlistSectionLabel(programGroupSectionTitle: string): string {
+    const t = programGroupSectionTitle.trim();
+    if (!t || t === UNSPECIFIED_PROGRAM_SECTION) return "Program waitlist";
+    return `${t} Waitlist`;
+}
+
+/** Compact subtitle next to `#n`, e.g. `Toddler waitlist`. */
+export function formatPlacementWaitlistProgramShortLabel(programGroupSectionTitle: string): string {
+    const t = programGroupSectionTitle.trim();
+    if (!t || t === UNSPECIFIED_PROGRAM_SECTION) return "Program waitlist";
+    return `${t} waitlist`;
+}
+
+function truncateReason(s: string): string {
+    const t = s.trim();
+    if (t.length <= MAX_REASON_LEN) return t;
+    return `${t.slice(0, MAX_REASON_LEN - 1)}…`;
+}
 
 export function parseQueueRowPlacementPriorityVm(raw: unknown): QueueRowPlacementPriorityVm | undefined {
     if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return undefined;
@@ -19,6 +41,7 @@ export function parseQueueRowPlacementPriorityVm(raw: unknown): QueueRowPlacemen
         return {
             priorityRuleLabel: "",
             programGroupSectionTitle: UNSPECIFIED_PROGRAM_SECTION,
+            waitlistProgramShortLabel: "Program waitlist",
             reasonLines: [],
             warningLines: [],
             shadowMode,
@@ -36,14 +59,18 @@ export function parseQueueRowPlacementPriorityVm(raw: unknown): QueueRowPlacemen
             ? rawPg.trim()
             : UNSPECIFIED_PROGRAM_SECTION;
 
-    const reasonLines: string[] = [];
+    const waitlistProgramShortLabel = formatPlacementWaitlistProgramShortLabel(programGroupSectionTitle);
+
+    let priorityReasonShort: string | undefined;
     const reasons = o.reasons;
     if (Array.isArray(reasons)) {
         for (const r of reasons) {
-            if (reasonLines.length >= 2) break;
             if (r != null && typeof r === "object" && !Array.isArray(r)) {
                 const lab = typeof (r as { label?: unknown }).label === "string" ? (r as { label: string }).label.trim() : "";
-                if (lab) reasonLines.push(lab);
+                if (lab) {
+                    priorityReasonShort = truncateReason(lab);
+                    break;
+                }
             }
         }
     }
@@ -52,7 +79,7 @@ export function parseQueueRowPlacementPriorityVm(raw: unknown): QueueRowPlacemen
     const warnings = o.warnings;
     if (Array.isArray(warnings)) {
         for (const w of warnings) {
-            if (warningLines.length >= 2) break;
+            if (warningLines.length >= 1) break;
             if (w != null && typeof w === "object" && !Array.isArray(w)) {
                 const msg = typeof (w as { message?: unknown }).message === "string" ? (w as { message: string }).message.trim() : "";
                 if (msg) warningLines.push(msg);
@@ -75,11 +102,13 @@ export function parseQueueRowPlacementPriorityVm(raw: unknown): QueueRowPlacemen
     return {
         priorityRuleLabel,
         programGroupSectionTitle,
-        ...(scopedWaitlistPosition != null ? { scopedWaitlistPosition } : {}),
-        ...(scopedWaitlistPositionLabel ? { scopedWaitlistPositionLabel } : {}),
-        reasonLines,
+        waitlistProgramShortLabel,
+        ...(priorityReasonShort ? { priorityReasonShort } : {}),
+        reasonLines: priorityReasonShort ? [priorityReasonShort] : [],
         warningLines,
         shadowMode,
+        ...(scopedWaitlistPosition != null ? { scopedWaitlistPosition } : {}),
+        ...(scopedWaitlistPositionLabel ? { scopedWaitlistPositionLabel } : {}),
     };
 }
 
@@ -88,14 +117,17 @@ export function buildPlacementProjectionQueueHint(
     diagnostics: WorkUnitPlacementQueueDiagnostics | undefined
 ): string | undefined {
     if (!diagnostics) return undefined;
+
+    const partial = diagnostics.placement_positions_partial_evaluation === true;
+
     if (diagnostics.shadow_mode) {
-        return "Waitlist priority preview — rows group by program / room on this loaded page; list order still follows this queue’s usual sort (not placement ordering). Position numbers are hidden in preview mode. Not the full waitlist.";
+        let s =
+            "Waitlist priority is grouped by program for these loaded records. Row order follows the queue sort until placement sort is enabled.";
+        if (partial) s += " Some records may be outside this loaded page.";
+        return s;
     }
-    let line =
-        "Sorted by waitlist priority for records on this page — program / room group first, then priority rules within each group. Position numbers (#1, #2, …) restart per program/room group and apply only to records loaded and evaluated here — not the full waitlist beyond pagination.";
-    if (diagnostics.placement_positions_partial_evaluation) {
-        line +=
-            " Some rows were not evaluated due to evaluation_cap, so positions can omit families beyond that cap.";
-    }
-    return line;
+
+    let s = "Waitlist positions are grouped by program and shown for loaded records.";
+    if (partial) s += " Some records may be outside this loaded page.";
+    return s;
 }

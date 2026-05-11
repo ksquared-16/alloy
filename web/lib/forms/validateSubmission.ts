@@ -330,7 +330,9 @@ function validateScalarValue(
                 break;
             }
             if (mode === "submit" || raw !== "") {
-                const opts = optionValuesByFieldId?.[field.id];
+                const opts =
+                    optionValuesByFieldId?.[field.id] ??
+                    (field.static_options?.length ? field.static_options.map((o) => o.value) : undefined);
                 if (!opts) {
                     errors.push(err(path, "optionValuesByFieldId missing for select field", "custom"));
                 } else if (!opts.includes(raw)) {
@@ -348,7 +350,9 @@ function validateScalarValue(
                 errors.push(err(path, "Expected string[]", "invalid_type"));
                 break;
             }
-            const opts = optionValuesByFieldId?.[field.id];
+            const opts =
+                optionValuesByFieldId?.[field.id] ??
+                (field.static_options?.length ? field.static_options.map((o) => o.value) : undefined);
             if (mode === "submit" || raw.length > 0) {
                 if (!opts) {
                     errors.push(err(path, "optionValuesByFieldId missing for multiselect field", "custom"));

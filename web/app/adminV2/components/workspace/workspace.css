@@ -5894,6 +5894,54 @@
   border-top: 1px solid color-mix(in srgb, var(--d-border) 88%, transparent);
 }
 
+[data-ws-surface="work_unit"] .adminv2-ws-queue-placement-strip--compact {
+  margin-top: 4px;
+  padding-top: 4px;
+}
+
+[data-ws-surface="work_unit"] .adminv2-ws-queue-placement-strip__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+
+[data-ws-surface="work_unit"] .adminv2-ws-queue-placement-strip__program {
+  font-size: 10px;
+  font-weight: 700;
+  color: color-mix(in srgb, var(--d-text-primary, #273f52) 85%, var(--d-muted));
+  white-space: nowrap;
+}
+
+[data-ws-surface="work_unit"] .adminv2-ws-queue-placement-strip__warn-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  color: #92400e;
+  background: color-mix(in srgb, #f59e0b 22%, var(--d-surface));
+  border: 1px solid color-mix(in srgb, #f59e0b 35%, var(--d-border));
+  flex-shrink: 0;
+}
+
+[data-ws-surface="work_unit"] .adminv2-ws-queue-placement-strip__reason-one {
+  margin: 3px 0 0;
+  padding: 0;
+  font-size: 9px;
+  line-height: 1.25;
+  font-weight: 500;
+  color: color-mix(in srgb, var(--d-muted) 62%, var(--d-text-primary, #273f52));
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 [data-ws-surface="work_unit"] .adminv2-ws-queue-placement-position {
   flex-shrink: 0;
   min-width: 1.75rem;
@@ -6026,6 +6074,16 @@
   letter-spacing: 0.04em;
   text-transform: none;
   color: color-mix(in srgb, var(--d-muted) 58%, var(--d-text-primary, #273f52));
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-section-label--waitlist {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--d-border) 90%, transparent);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: color-mix(in srgb, var(--d-text-primary, #273f52) 88%, var(--d-muted));
 }
 
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card {

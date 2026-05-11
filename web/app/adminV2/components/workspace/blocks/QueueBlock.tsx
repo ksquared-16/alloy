@@ -756,6 +756,10 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
   const showQueueHeader = Boolean(queue.title?.trim());
   const placementShowBucketChip = queue.placementDisplay?.show_bucket_chip !== false;
   const placementShowSortHint = queue.placementDisplay?.show_sort_hint !== false;
+  const waitlistPlacementSections = useMemo(
+    () => queue.items.some((i) => i.placementPriority != null && !i.placementPriority.evaluateError),
+    [queue.items]
+  );
   return (
     <section
       className="adminv2-ws-dept-qsec adminv2-ws-dept-qsec--primary adminv2-ws-wu-queue-shell"
@@ -849,7 +853,13 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
             <li key={item.id} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
               {sectionTitle ? (
                 <div
-                  className={`adminv2-ws-wu-queue-section-label${headerCfg ? " adminv2-ws-wu-queue-section-label--rich" : ""}`}
+                  className={[
+                    "adminv2-ws-wu-queue-section-label",
+                    headerCfg ? "adminv2-ws-wu-queue-section-label--rich" : "",
+                    waitlistPlacementSections && showGroup ? "adminv2-ws-wu-queue-section-label--waitlist" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
                   role="presentation"
                 >
                   {sectionTitle}
