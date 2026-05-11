@@ -120,7 +120,7 @@ All tour events: **`emitEvent`** with **`entity_type` = `tour_bookings`**, **`en
 
 | Surface | Description |
 |---------|-------------|
-| **Opportunity drawer — Tour** | Section keyed in **`record_drawer_layouts` / `record_layouts`** (e.g. `tour`); renders booking summary, actions, slot picker (admin); post-mutation refresh via entity GET. |
+| **Opportunity drawer — Tour** | Section keyed in **`record_drawer_layouts` / `record_layouts`** as **`tour_scheduling`** (add to layout JSON where the Tour booking surface should appear). Renders booking summary, actions, slot picker (admin); post-mutation refresh via entity GET. The legacy **`schedule_tour`** drawer action / **`ScheduleTourActionFormModal`** path remains available as a transitional capture surface but is not the V1 `tour_bookings` source of truth. |
 | **Admin — availability settings** | CRUD **`tour_availability_rules`** under Admin V2 settings (exact route TBD in implementation; align with `configuration-system.md`). |
 | **Public booking** | Token-scoped page or embed; availability fetch + create booking; ties to **`form_public_links`** / submissions where practical. |
 | **Queues** | Preview-only display of tour date/time from mirrored metadata or resolver-enriched preview (no new queue-as-truth behavior). |
@@ -324,6 +324,52 @@ Exact paths under `web/app/api/admin/...` and `web/app/api/public/...` to be cho
 
 **Doctrine risks to avoid:** Tests that assert on queue row JSON as source of truth; skipping entity GET parity assertions.
 
+#### Card 8 — Completion record (2026-05-11)
+
+**Objective met:** Automated validation, targeted hardening of public tour-booking routes, admin-route doctrine notes, sprint documentation, and additional Vitest coverage for public windows, rate limits, inactive links, and resolve label safety.
+
+**Sources of truth (V1 recap):** **`tour_bookings`** rows are authoritative for scheduled times and booking lifecycle. **`opportunities.metadata.tour_date` / `tour_time`** are a **compatibility mirror** (written on confirm per Card 4 integration) for queues, Needs Attention, and legacy CRM displays — not a substitute for `tour_bookings` when editing or validating slots.
+
+**Layout config:** Operators must include **`tour_scheduling`** in **`record_drawer_layouts` / `record_layouts`** (e.g. `overview_section_order`) for the new Tour drawer section to render; gating is enforced in code via `recordOpportunityDrawerLayoutIncludesSection(..., "tour_scheduling")`.
+
+**Known V1 exclusions (unchanged):** External calendar sync; SMS/email reminders; AI scheduling; CAPTCHA and email confirmation on public booking (not implemented — public flow relies on secret link token + rate limits); multi-instance / distributed rate limiting (current guard is **in-memory, per server process**).
+
+**Migrations**
+
+- Present: `supabase/migrations/20260511143000_tour_scheduling_v1_foundation.sql`, `supabase/migrations/20260512140000_tour_public_booking_links.sql`.
+- **`supabase db reset --local`:** Still fails on **`20260328120000_firstfree4x120_discount_program.sql`** — `UPDATE public.discount_programs` where **`public.discount_programs` does not exist** in a clean reset order (unrelated to tour SQL). Apply tour migrations on a database that has already passed that migration, or fix the discount migration order separately.
+- **`npm run export:supabase-schema`:** Not run in Card 8 — **`DATABASE_URL` / `SUPABASE_DB_URL` unset** in this environment; CSV reference files were not modified (no hand-edited CSVs).
+
+**Security / scope hardening (Card 8)**
+
+- **Public:** Per-IP + hashed-token **in-process rate limits** on `resolve`, `slots`, and `book` (`web/lib/tours/public/tourPublicRateLimit.ts`); **`Retry-After`** on HTTP 429 via `tourPublicRateLimited`. **`assertTourPublicSlotsQueryWindow`** caps public slot query span (45 days). **`loadTourPublicResolveLabels`** loads opportunity/location labels only with **`.eq("org_id", link.org_id")`** on both queries. Resolve/slots/book return **generic** errors for bad/expired/inactive tokens; book failures map to a **generic client message** with server-side logging. **Rule** on book is constrained to **`link.org_id`** and **location** match.
+- **Admin:** `POST /api/admin/tours/bookings` documents that **queue row data is not trusted**; handlers continue to use **`getAdminContextCached`** org scope and **`fetchOpportunityForTourAdmin`** / **`assertBookingLocationMatchesOpportunity`** (existing pattern).
+
+**Validations run (Card 8)**
+
+- `cd web && npx tsc --noEmit` — **pass**
+- `npx vitest run tests/tours/` — **pass** (includes new `tourCard8.hardening.test.ts`)
+- `npx vitest run tests/queues/QueueService.test.ts tests/publicForms/publicFormsRoutes.test.ts tests/publicForms/publicFormLib.test.ts tests/opportunities/ tests/agent/recordOverviewLayoutRoutes.test.ts tests/forms/crmEntitySearchRoute.test.ts` — **pass** (queue Needs Attention `metadata->>tour_date` paths, public forms routes, opportunities, record overview layout, CRM entity search)
+
+**Tests added/updated**
+
+- `web/tests/tours/tourCard8.hardening.test.ts` — public slot window validation; **`takeTourPublicRateLimit`** over **`book`** ceiling; inactive public link; **`loadTourPublicResolveLabels`** empty-opportunity path; existing `tourBatchB` tests continue to cover expired link, admin location mismatch, **`tour_scheduling`** layout gate.
+
+**Files touched in Card 8 (implementation + tests + docs)**
+
+- `web/lib/tours/public/tourPublicHttp.ts` — `tourPublicRateLimited` helper
+- `web/lib/tours/public/tourPublicSlotsWindow.ts`, `tourPublicRateLimit.ts`, `loadTourPublicResolveLabels.ts` (as integrated)
+- `web/app/api/public/tour-booking/[token]/resolve/route.ts`, `slots/route.ts`, `book/route.ts` — rate limits, window guard, org-scoped labels, safer book path
+- `web/app/api/admin/tours/bookings/route.ts` — doctrine comment
+- `web/tests/tours/tourCard8.hardening.test.ts`
+- `docs/sprints/05_2026/tour_scheduling_v1.md` — this record + §9 drawer table clarification
+
+**Remaining gaps (product / infra, not blocking V1 code merge)**
+
+- Local **`db reset`** blocked until **`discount_programs`** migration order/content is repaired.
+- Schema reference CSVs still need **`export:supabase-schema`** when a DB URL is available.
+- Public abuse guard is **best-effort per instance** (not Redis/global).
+
 ---
 
-Ready for Card 1 after human review (Card 0 validation complete — see §11 Card 0 validation record).
+Tour Scheduling V1 sprint complete.

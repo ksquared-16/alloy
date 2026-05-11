@@ -17,7 +17,7 @@ export type RecordLayoutRow = {
  */
 export type RecordLayoutConfigJson = {
     version?: number;
-    /** Order of `EntityDrawerSectionConfig.key` values for the record overview. */
+    /** Order of `EntityDrawerSectionConfig.key` for the record overview. Include `tour_scheduling` for Tour booking (Card 6). */
     overview_section_order?: string[];
     /**
      * Opportunity drawer (org override): when `inquiry_drawer_mode` is set, the UI may apply

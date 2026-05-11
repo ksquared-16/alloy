@@ -60,6 +60,7 @@ import {
 import EntityDrawerOverview from "@/components/admin/entity/EntityDrawerOverview";
 import OpportunityRecordSectionRegistryActions from "@/components/admin/opportunity/OpportunityRecordSectionRegistryActions";
 import { OpportunityHouseholdPeoplePanel } from "@/components/admin/opportunity/OpportunityHouseholdPeoplePanel";
+import { OpportunityTourDrawerSection } from "@/components/admin/opportunity/tours/OpportunityTourDrawerSection";
 import { FamilyContactsPanel, OppInquiryContactChannelsRow } from "@/components/admin/opportunity/FamilyContactsPanel";
 import EntityDrawerSection from "@/components/admin/entity/EntityDrawerSection";
 import JobPricingBreakdown from "@/components/admin/JobPricingBreakdown";
@@ -6689,6 +6690,18 @@ export default function AdminEntityDrawer() {
                     />
                 );
             }
+            if (recordOpportunityDrawerLayoutIncludesSection(oppCfg, "tour_scheduling") && drawer.id && drawer.id !== "new") {
+                const locId = String((d.location_id as string | null | undefined) ?? "").trim();
+                out.tour_scheduling = (
+                    <OpportunityTourDrawerSection
+                        opportunityId={drawer.id}
+                        locationId={locId}
+                        canMutate={!!canMutate}
+                        onRefresh={refetch}
+                        viewerTimezone={viewerTz}
+                    />
+                );
+            }
             return out;
         }
         return {};
@@ -6719,6 +6732,7 @@ export default function AdminEntityDrawer() {
         opportunityFullHydrateApplied,
         opportunityFullHydrateFailed,
         getStatusLabel,
+        viewerTz,
     ]);
 
     const overviewSectionHeaderRight = useMemo(() => {
@@ -7106,6 +7120,24 @@ export default function AdminEntityDrawer() {
                         locked: true,
                     },
                 ];
+            }
+            const oppLayoutForTour = (recordChromeOpportunity.layout?.config_json ?? null) as RecordLayoutConfigJson | null;
+            if (recordOpportunityDrawerLayoutIncludesSection(oppLayoutForTour, "tour_scheduling")) {
+                const keysTour = new Set(result.map((s) => s.key));
+                if (!keysTour.has("tour_scheduling")) {
+                    result = [
+                        ...result,
+                        {
+                            key: "tour_scheduling",
+                            title: "Tour",
+                            defaultExpanded: true,
+                            collapsible: true,
+                            gridCols: 1,
+                            fields: [],
+                            locked: true,
+                        },
+                    ];
+                }
             }
         }
         if (drawer.type === "opportunities" && overviewData && !(overviewData as { _create?: boolean })._create) {

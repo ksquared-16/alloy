@@ -143,8 +143,8 @@ export default function AdminV2SettingsIndexPage() {
                         <SettingsCard href="/adminV2/settings/entity-labels" title="Entity labels" accent="records">
                             Display names (Family, Inquiry, etc.).
                         </SettingsCard>
-                        <SettingsCard href="/adminV2/settings/relationships" title="Relationships" accent="records">
-                            Customer ↔ person roles and person ↔ person relationship types.
+                        <SettingsCard href="/adminV2/settings/tours/availability" title="Tour availability" accent="records">
+                            Recurring tour windows (slots) per location — powers admin drawer and public booking links.
                         </SettingsCard>
                     </SettingsTileGrid>
                 </Group>
