@@ -884,7 +884,6 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
           const labelSectionClasses = [
             "adminv2-ws-wu-queue-section-label",
             headerCfg ? "adminv2-ws-wu-queue-section-label--rich" : "",
-            waitlistPlacementSections && showGroup ? "adminv2-ws-wu-queue-section-label--waitlist" : "",
             waitlistPlacementSections && showGroup ? "adminv2-ws-wu-queue-section-label--waitlist-placement" : "",
           ]
             .filter(Boolean)

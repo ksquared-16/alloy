@@ -1,6 +1,7 @@
 # Sprint — Configurable priority-based placement orchestration (audit & architecture)
 
-**Status:** **V1 sprint closed** — Cards **0.5–9** (implementation through demo enablement + verification). Placement remains **off by default**; **opt-in** via `metadata.placement_priority_v1` or **`npm run dev:seed:placement-priority-demo`**. **V1.1** = workflow events, entity GET/drawer, persistence / global ordering strategy.  
+**Status:** **V1 sprint closed** — Cards **0.5–9** (implementation through demo enablement + verification). Placement remains **off by default**; **opt-in** via `metadata.placement_priority_v1` or **`npm run dev:seed:placement-priority-demo`**. **V1.1** (incremental): workflow events, entity GET/drawer, persistence / global ordering strategy, per-program rule lists, and related operational hardening — see **§ Phase 2 — Flexible policy engine evolution** for the broader **policy-framework** track (candidate features + sequencing).
+
 **Theme:** Generalized **priority / placement orchestration** with **childcare waitlists as V1 operational slice**, integrated into existing **work units, queues, resolvers, and config** — not a parallel subsystem.  
 **Date:** May 2026  
 
@@ -10,7 +11,7 @@
 
 Alloy already treats **queues as projection surfaces** (`docs/system/workspace-system.md`, `docs/system/record-system.md`). Ordering today is overwhelmingly **SQL sort on a small allowlist of opportunity/job columns**, with **one major exception**: the **`needs_attention`** lane uses **resolver-driven membership** and **in-memory reordering** after filtering (`QueueService`). The **opportunity attention resolver** already demonstrates **explainable, deterministic outputs** (`priority_breakdown`, reason codes) aligned with resolver-first doctrine.
 
-**Gaps:** There is **no generalized placement-priority engine**, **`group_by` in queue config is schema-only (unused)**, and **two opportunity queue interpreters** coexist (**`QueueService`** vs **`resolveOpportunityQueueFromDefinition`**), which creates **real drift risk**. Childcare “waitlist” behavior is still **status + `updated_at` (and similar) ordering**, with **`metadata.enrollment_operational`** carrying **waiting facets** but **not** full placement priority semantics.
+**Gaps (updated post–V1 close):** **V1 shipped** a **generalized pure evaluator** + **`QueueService`** projection path for **opt-in** lanes (metadata-driven; **no** placement tables). **Remaining cross-cutting gaps:** **`group_by` in queue config is schema-only (unused)**; **two opportunity queue interpreters** still coexist (**`QueueService`** vs **`resolveOpportunityQueueFromDefinition`**), which creates **drift risk** for any consumer still on the Growth path (**Card 0.5** lock: **no** new placement logic in the legacy interpreter). Lanes **without** placement metadata still rely primarily on **SQL sort** on allowlisted columns; childcare **waitlist priority semantics** beyond V1 scope remain **future** (see **§ Phase 2**).
 
 **Direction:** Introduce a **small, shared orchestration layer** (evaluation + explainability contract) that **feeds queue projection** (sort keys, bucket labels, optional grouping) while keeping **business truth** on **entities + resolvers + workflows**, **not** on queue rows as authorities.
 
@@ -23,6 +24,86 @@ Alloy already treats **queues as projection surfaces** (`docs/system/workspace-s
 **Settings (foundation — May 2026):** **`/adminV2/settings/placement-priority`** — controls **this work unit’s** Admin V2 waitlist priority via **`work_units.metadata.placement_priority_v1`**: enabled, preset **`profile_id`**, lanes, preview vs active ordering, cap, display, and (for **childcare enrollment waitlist** preset) **`priority_rule_order`** — a **full permutation** of preset bucket keys with **standard / fallback locked last** — plus **`priority_rule_enabled_keys`**: which tier rules **participate in matching** (disabled tiers are **omitted** from the effective profile; **move up/down** reorders **enabled** tiers only; **standard / fallback** always enabled and last). Drives **effective profile** at evaluation time (registry preset is **not** mutated). Saves via **`PATCH /api/admin/work-units/[id]`** **`metadata`** deep-merge (admin only; **Zod** + registry **`profile_id`** + optional **`profile_revision`** pin + **`priority_rule_order`** / **`priority_rule_enabled_keys`** validation). **Department-level** placement UI remains **future**. **Per-program distinct rule lists** (different tier orders per program/room) remain **V1.1**. **Global / cross-page authoritative waitlist ranking** remains **V1.1** (V1 stays loaded-slice + cap scoped).
 
 **Work-unit queue UI (May 2026):** Placement **program/room** group headers use a **stronger title + count** (e.g. **`Infant Waitlist (2)`**); **collapse/expand** per group is **session-local** (not persisted). **V1.1:** grouping multiple inquiries under one **family** when several children share a household remains future.
+
+---
+
+## Phase 2 — Flexible policy engine evolution
+
+**Purpose:** Record **what V1 actually is** (so we do not accidentally re-introduce “waitlist engine” as a parallel system), state **architectural doctrine** for future work, and list **Phase 2 candidates** without committing to dates. **Phase 2** is the **policy / productization** track (richer authoring, persistence, org-wide semantics). **V1.1** in this doc’s header is the **near-term incremental** slice (events, drawers, global ordering *strategy*, per-program lists, etc.); some V1.1 items overlap Phase 2 — sequencing below resolves priority.
+
+### A. Current V1 architecture
+
+| Layer | V1 reality |
+|-------|------------|
+| **Policy source** | **Preset-driven:** registered **`PlacementProfile`** JSON (e.g. childcare enrollment waitlist) + **`work_units.metadata.placement_priority_v1`** (enable, lanes, caps, shadow, **`priority_rule_order`**, **`priority_rule_enabled_keys`**, display flags, revision pin). **No** new placement tables or migrations for V1. |
+| **Evaluator** | **Generic pure function** over **`PlacementProfile` + facts + cohort** — domain language lives in **preset + labels**, not in evaluator branches for “childcare”. |
+| **Projection** | **`QueueService` only** for Admin V2 queue rows / ordering / row preview hints on opted-in lanes (**Card 0.5** / **Card 6**). **`resolveOpportunityQueueFromDefinition`** remains **out of scope** for placement (**freeze**). |
+| **Dedicated waitlist subsystem** | **None.** Waitlist UX is **pipeline queue + placement enrichment** on existing opportunity rows — not a second record type or ranking service. |
+| **Childcare specificity** | Isolated to **preset module** (`CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1`), **fact adapter** (`buildOpportunityPlacementFacts` and friends), **registry**, and **settings UI** that is **currently** tailored to the childcare preset’s rule keys — *not* to generic sort SQL or evaluator control flow. |
+
+### B. Current V1 capabilities (shipped operational foundation)
+
+- **Enable / disable** placement for a work unit (`placement_priority_v1.enabled` + resolver gating).
+- **Queue / lane scoping** (`queue_keys_enabled`, cohort status allowlist via lane definition).
+- **Shadow vs active ordering** (`shadow_mode` — compare / explain vs commit sort for display).
+- **Program / room (group) ordering** driven by preset **`primary_group_fact_key`** and facts — **not** ad hoc React grouping keys for childcare.
+- **Page-local, cap-scoped waitlist positions** (`#1`, `#2`, … per loaded slice / evaluation cap — **not** org-wide truth).
+- **Configurable rule order** (`priority_rule_order` — full permutation with standard/fallback last).
+- **Configurable rule enable/disable** (`priority_rule_enabled_keys` — disabled tiers omitted from effective profile).
+- **Compact operational queue UX** (CRM scan, placement strip, bucket/rule chips, bounded warnings).
+- **Collapse / expand** placement section headers (**session-local** — no server persistence).
+
+### C. Current V1 limitations (explicit non-goals for V1)
+
+- **No arbitrary rule creation** in product UI — rules are those declared in the **registry preset**.
+- **No visual / JSON predicate builder** for operators.
+- **No per-program rule lists** (same tier order for all programs in a work unit for V1).
+- **No global, org-wide authoritative waitlist ranking** (positions are meaningful only within loaded + capped context).
+- **No family / multi-child household grouping** in the queue list.
+- **No drag-and-drop** reorder of families for operators.
+- **No persistence** of placement section **collapse** state (refresh resets).
+- **No cross-page fairness guarantees** (no shared snapshot clock across sessions).
+- **No admin UI for dynamic fact registry** (facts are code-backed adapter + metadata shapes).
+- **Settings UX** is **childcare preset-shaped** (rule order editor assumes known bucket keys from that preset) — **not** a generic “any profile” editor yet.
+
+### D. Explicit architectural doctrine (anti-drift)
+
+1. **North star (unchanged):** Queues remain **projection surfaces**; **entities + resolvers + workflows** hold authority; placement output is **explainable, deterministic** input to sorting and UI — not a second source of truth.
+2. **Hardcoding is acceptable at the preset / vertical layer, not in generic orchestration:** Childcare-specific **bucket keys, rule predicates, labels, and warn lists** belong in **`PlacementProfile`** (and TS preset modules), **registry**, and **vertical fact adapters**. They **must not** migrate into **`QueueService`** as `if (childcare)` sort branches or into **`evaluatePlacementPriority`** as non-generic special cases.
+3. **Future presets must plug into the same evaluator contract:** New verticals ship as **`PlacementProfile` + facts + (optional) metadata extensions** validated by shared schema — same **`QueueService`** enrichment hook, same reason / bucket model.
+4. **Avoid embedding childcare semantics in generic layers:** Generic code should refer to **`profile_id`**, **`bucket_key`**, **`assign_bucket_key`**, **`fact` keys**, and **presentation VMs** — not to “Infant room” or “sibling tier” literals in **`QueueService`** core paths.
+5. **Future UI should become profile-driven:** Admin settings and queue presentation should key off **registry metadata** (which metadata keys exist, which rule keys are reorderable, label copy) so additional presets do **not** require parallel hardcoded pages.
+
+---
+
+### Phase 2 candidate features (backlog — not committed)
+
+These are **candidates** for later phases; scope and dependencies vary (some are **V1.1**, some **V2+**).
+
+- **Dynamic predicate / rule builder** (operator-authored conditions on top of a safe expression model).
+- **Configurable fact registry** (admin-visible fact keys, types, sourcing — with strong validation and versioning).
+- **Custom rule conditions** (e.g. tour date, deposit paid, registration complete) as **data-driven** rules once facts exist.
+- **Per-program rule ordering** (distinct `priority_rule_order` per program / room group).
+- **Program-specific profiles** (different `profile_id` or profile variants per program or department).
+- **Family / household grouping** in workspace queue projection (multi-inquiry rollup).
+- **Persistent waitlist snapshots** (materialized rank / explanation at a point in time — likely **schema-backed** when/if product accepts it).
+- **Global ranking** (org-wide or center-wide consistent position — needs snapshot + scope model).
+- **Cross-page consistency** (same ordinal when navigating work units / pages — ties to global ranking + caps).
+- **Admin-created presets** (save profile JSON through admin — governance, validation, migration story).
+- **Generic preset editor** driven by **registry metadata** (replace childcare-only editors).
+- **AI-assisted rule / policy generation** (draft profiles from natural language — human review + validation required).
+- **Audit / version history** for profile + metadata changes (who changed rule order, when, diff).
+
+---
+
+### Recommended sequencing
+
+1. **Finish V1 operational UX polish** (dense operator surfaces, clarity of partial evaluation, settings discoverability) — avoid piling framework features onto rough UX.
+2. **Validate with real operator workflows** on production-shaped data (shadow mode → active, cap behavior, edge cases).
+3. **Stabilize placement semantics** (document edge cases, tighten tests, resolve evaluator + metadata validation sharp edges) before expanding surface area.
+4. **Then generalize** toward a reusable **policy framework** (registry-driven UI, optional persistence, org-wide strategy) — **Phase 2 / V1.1+** — without breaking the **preset / evaluator / QueueService** separation above.
+
+---
 
 ## Card 0.5 — RFC lock + queue interpreter decision
 
