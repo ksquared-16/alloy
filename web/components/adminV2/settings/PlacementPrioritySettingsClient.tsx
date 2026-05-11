@@ -15,6 +15,7 @@ import {
 import {
     CHILDCARE_ENROLLMENT_WAITLIST_PRIORITY_RULE_ORDER_V1,
     defaultPriorityRuleOrderForProfileId,
+    sortPriorityRuleEnabledKeysForSave,
 } from "@/lib/orchestration/placement/placementPriorityRuleOrder";
 import { PriorityRuleOrderEditor } from "@/components/adminV2/settings/PriorityRuleOrderEditor";
 
@@ -66,6 +67,9 @@ export default function PlacementPrioritySettingsClient() {
     const [showBucketChip, setShowBucketChip] = useState(true);
     const [showSortHint, setShowSortHint] = useState(true);
     const [ruleOrder, setRuleOrder] = useState<string[]>(() => [...CHILDCARE_ENROLLMENT_WAITLIST_PRIORITY_RULE_ORDER_V1]);
+    const [ruleEnabledKeys, setRuleEnabledKeys] = useState<Set<string>>(
+        () => new Set(CHILDCARE_ENROLLMENT_WAITLIST_PRIORITY_RULE_ORDER_V1)
+    );
 
     const presetIds = useMemo(() => listRegisteredPlacementProfileIds(), []);
 
@@ -108,6 +112,18 @@ export default function PlacementPrioritySettingsClient() {
         setRuleOrder(
             Array.isArray(fromMeta) && fromMeta.length > 0 ? [...fromMeta] : defRo.length ? [...defRo] : []
         );
+        const fb = getPlacementProfileFromRegistry(pid)?.fallback_bucket_key ?? CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1.fallback_bucket_key;
+        const fromEn = L.priority_rule_enabled_keys;
+        if (Array.isArray(fromEn) && fromEn.length > 0 && defRo.length) {
+            const next = new Set<string>();
+            for (const k of fromEn) {
+                if (typeof k === "string" && k.trim()) next.add(k.trim());
+            }
+            next.add(fb);
+            setRuleEnabledKeys(new Set(defRo.filter((k) => next.has(k))));
+        } else {
+            setRuleEnabledKeys(new Set(defRo));
+        }
     }, [selected]);
 
     const buildLayer = (): PlacementPriorityLayer => {
@@ -127,7 +143,12 @@ export default function PlacementPrioritySettingsClient() {
                 show_bucket_chip: showBucketChip,
                 show_sort_hint: showSortHint,
             },
-            ...(roDef ? { priority_rule_order: ruleOrder } : {}),
+            ...(roDef
+                ? {
+                      priority_rule_order: ruleOrder,
+                      priority_rule_enabled_keys: sortPriorityRuleEnabledKeysForSave(ruleEnabledKeys, ruleOrder),
+                  }
+                : {}),
         };
     };
 
@@ -219,6 +240,7 @@ export default function PlacementPrioritySettingsClient() {
                                 setProfileId(id);
                                 const d = defaultPriorityRuleOrderForProfileId(id);
                                 setRuleOrder(d ? [...d] : []);
+                                setRuleEnabledKeys(new Set(d ?? []));
                             }}
                         >
                             {presetIds.map((id) => (
@@ -273,12 +295,14 @@ export default function PlacementPrioritySettingsClient() {
                     {defaultPriorityRuleOrderForProfileId(profileId) ? (
                         <PriorityRuleOrderEditor
                             order={ruleOrder}
+                            enabledKeys={ruleEnabledKeys}
                             fallbackBucketKey={
                                 getPlacementProfileFromRegistry(profileId.trim())?.fallback_bucket_key ??
                                 CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1.fallback_bucket_key
                             }
                             disabled={!canSave}
-                            onChange={setRuleOrder}
+                            onOrderChange={setRuleOrder}
+                            onEnabledKeysChange={setRuleEnabledKeys}
                         />
                     ) : null}
 

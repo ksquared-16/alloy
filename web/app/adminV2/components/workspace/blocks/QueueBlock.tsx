@@ -6,6 +6,7 @@ import type {
   CrmCompactRowSemanticSlots,
   QueueItemQuickActionVm,
   QueueItemVm,
+  QueueRowPlacementPriorityVm,
   QueueVm,
   WorkUnitQueueCrmFactColumnGridVm,
   WorkUnitQueueCrmFactGroupKind,
@@ -542,11 +543,15 @@ export function CrmCompactQueuePreview({
   slots,
   urgencyTier = "standard",
   scanMode = false,
+  waitlistPlacementPreview,
+  waitlistStatusLabel,
 }: {
   slots: CrmCompactRowSemanticSlots;
   urgencyTier?: QueueItemVm["urgencyTier"];
   /** Work-unit lane: minimal left column — status, operational attention, next hint; detail belongs in drawer. */
   scanMode?: boolean;
+  waitlistPlacementPreview?: QueueRowPlacementPriorityVm;
+  waitlistStatusLabel?: string;
 }) {
   const stageStatus =
     slots.stageLabel && slots.statusLabel && slots.stageLabel !== slots.statusLabel
@@ -604,6 +609,13 @@ export function CrmCompactQueuePreview({
                   {formatWorkUnitQueueStatusPill(stageStatus)}
                 </span>
               </div>
+            ) : null}
+            {waitlistPlacementPreview ? (
+              <QueueRowPlacementPriorityStrip
+                preview={waitlistPlacementPreview}
+                layout="statusColumn"
+                statusLabel={waitlistStatusLabel}
+              />
             ) : null}
             <div className="adminv2-ws-crm-queue-preview__title-row adminv2-ws-crm-queue-preview__title-row--scan">
               <span className="adminv2-ws-crm-queue-preview__title" title={slots.primaryIdentity}>
@@ -942,10 +954,15 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
                 {crm ? (
                   <div className="adminv2-ws-enrollment-crm-row adminv2-ws-enrollment-crm-row--split" data-enrollment-row-layout="split_actions">
                     <div className="adminv2-ws-enrollment-crm-row__content">
-                      <CrmCompactQueuePreview slots={crm} urgencyTier={tier} scanMode />
-                      {item.placementPriority && placementShowBucketChip ? (
-                        <QueueRowPlacementPriorityStrip preview={item.placementPriority} />
-                      ) : null}
+                      <CrmCompactQueuePreview
+                        slots={crm}
+                        urgencyTier={tier}
+                        scanMode
+                        waitlistPlacementPreview={
+                          item.placementPriority && placementShowBucketChip ? item.placementPriority : undefined
+                        }
+                        waitlistStatusLabel={crm.statusLabel?.trim() || undefined}
+                      />
                     </div>
                     {rowQuickActions.length ? (
                       <div className="adminv2-ws-enrollment-crm-row__actions" role="group" aria-label="Actions">

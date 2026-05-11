@@ -112,24 +112,13 @@ export function parseQueueRowPlacementPriorityVm(raw: unknown): QueueRowPlacemen
     };
 }
 
-/** Queue-level helper line when `placement_projection_diagnostics` is present (placement enabled for lane). */
+/** Queue-level helper when placement partial evaluation applies (lane hint). */
 export function buildPlacementProjectionQueueHint(
     diagnostics: WorkUnitPlacementQueueDiagnostics | undefined
 ): string | undefined {
     if (!diagnostics) return undefined;
-
-    const partial = diagnostics.placement_positions_partial_evaluation === true;
-
-    if (diagnostics.shadow_mode) {
-        let s =
-            "Waitlist priority is grouped by program for these loaded records. Row order follows the queue sort until placement sort is enabled.";
-        if (partial) s += " Some records may be outside this loaded page.";
-        return s;
-    }
-
-    let s = "Waitlist positions are grouped by program and shown for loaded records.";
-    if (partial) s += " Some records may be outside this loaded page.";
-    return s;
+    if (diagnostics.placement_positions_partial_evaluation !== true) return undefined;
+    return "Some records may be outside this loaded page.";
 }
 
 /** Section heading for work-unit waitlist groups, e.g. `Infant Waitlist (2)` (emoji optional). */

@@ -9,7 +9,9 @@ import {
 } from "@/lib/orchestration/placement/placementConfigSchema";
 import { getPlacementProfileFromRegistry } from "@/lib/orchestration/placement/placementPresetRegistry";
 import {
-    applyPriorityRuleOrderToProfile,
+    applyPlacementPriorityEffectiveProfile,
+    effectivePriorityRuleEnabledSet,
+    validatePriorityRuleEnabledKeysForProfile,
     validatePriorityRuleOrderForProfile,
 } from "@/lib/orchestration/placement/placementPriorityRuleOrder";
 import type { PlacementProfile } from "@/lib/orchestration/placement/placementPriorityTypes";
@@ -98,7 +100,20 @@ export function resolvePlacementQueueConfig(params: ResolvePlacementQueueConfigP
         if (!ro.ok) {
             return { status: "disabled", queue_key: qk, reason: ro.error };
         }
-        profileForEval = applyPriorityRuleOrderToProfile(profileForEval, ord);
+        const en = validatePriorityRuleEnabledKeysForProfile(
+            profileForEval,
+            ord,
+            effectivePriorityRuleEnabledSet(ord, merged.priority_rule_enabled_keys, profileForEval.fallback_bucket_key)
+        );
+        if (!en.ok) {
+            return { status: "disabled", queue_key: qk, reason: en.error };
+        }
+        try {
+            profileForEval = applyPlacementPriorityEffectiveProfile(profileForEval, ord, merged.priority_rule_enabled_keys);
+        } catch (e) {
+            const msg = e instanceof Error && e.message ? e.message : "placement priority rule config invalid";
+            return { status: "disabled", queue_key: qk, reason: msg };
+        }
         profileForEval = { ...profileForEval, strict_required_facts: strictFromBehavior };
     }
 

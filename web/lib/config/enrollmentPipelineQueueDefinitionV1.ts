@@ -139,7 +139,6 @@ const RAW_CANONICAL_ENROLLMENT_PIPELINE_QUEUE_DEFINITION_V1 = {
             key: "waitlisted",
             label: "Waitlisted",
             icon: "clock-3",
-            description: "Family is waiting for capacity or a future start.",
             filters: [{ type: "status", operator: "in", values: ["waitlisted"] }],
             sort: [{ field: "updated_at", direction: "desc" }],
             limit: 50,

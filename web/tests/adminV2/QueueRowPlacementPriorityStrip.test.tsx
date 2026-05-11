@@ -83,4 +83,22 @@ describe("QueueRowPlacementPriorityStrip", () => {
         expect(html).toContain("UNSUPPORTED_COHORT");
         expect(html).not.toContain("adminv2-ws-queue-placement-rule-chip");
     });
+
+    it("statusColumn layout shows Status line and stacked placement classes", () => {
+        const preview = baseVm({
+            priorityRuleLabel: "Sibling enrolled at center",
+            waitlistProgramShortLabel: "Infant waitlist",
+            scopedWaitlistPosition: 1,
+            scopedWaitlistPositionLabel: "Infant waitlist",
+            shadowMode: false,
+        });
+        const html = renderToStaticMarkup(
+            <QueueRowPlacementPriorityStrip preview={preview} layout="statusColumn" statusLabel="Waitlisted" />
+        );
+        expect(html).toContain("adminv2-ws-queue-placement-strip--status-column");
+        expect(html).toContain("Status:");
+        expect(html).toContain("Waitlisted");
+        expect(html).toContain("#1");
+        expect(html).toContain("Infant waitlist");
+    });
 });

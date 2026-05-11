@@ -208,6 +208,33 @@ describe("resolvePlacementQueueConfig", () => {
         });
         expect(r.status).toBe("disabled");
     });
+
+    it("omits disabled tier rules from effective profile", () => {
+        const order = [
+            "tier_staff_community",
+            "tier_sibling_enrolled",
+            "tier_sister_center",
+            "tier_general_waitlist",
+        ];
+        const r = resolvePlacementQueueConfig({
+            departmentMetadata: {},
+            workUnitMetadata: {
+                placement_priority_v1: {
+                    version: 1,
+                    enabled: true,
+                    profile_id: childcareId,
+                    queue_keys_enabled: ["waitlisted"],
+                    priority_rule_order: order,
+                    priority_rule_enabled_keys: ["tier_staff_community", "tier_sister_center", "tier_general_waitlist"],
+                },
+            },
+            queue_key: "waitlisted",
+        });
+        expect(r.status).toBe("enabled");
+        if (r.status === "enabled") {
+            expect(r.profile.rules.some((x) => x.assign_bucket_key === "tier_sibling_enrolled")).toBe(false);
+        }
+    });
 });
 
 describe("validatePlacementMetadataLayers", () => {

@@ -24,6 +24,11 @@ export function defaultPriorityRuleOrderForProfileId(profileId: string): string[
     return null;
 }
 
+/** Stable array for metadata: keys in `order` that appear in `enabled`. */
+export function sortPriorityRuleEnabledKeysForSave(enabled: ReadonlySet<string>, order: readonly string[]): string[] {
+    return order.filter((k) => enabled.has(k));
+}
+
 export type ValidatePriorityRuleOrderResult = { ok: true } | { ok: false; error: string };
 
 /**
@@ -91,24 +96,116 @@ export function applyPriorityRuleOrderToProfile(profile: PlacementProfile, order
     };
 }
 
-/** Swap with previous tier — `null` when move is not allowed (standard stays last). */
-export function reorderPriorityRuleMoveUp(order: readonly string[], index: number, fallbackLast: string): string[] | null {
-    if (index <= 0 || index >= order.length) return null;
-    if (order[order.length - 1] !== fallbackLast) return null;
-    if (index === order.length - 1) return null;
-    const next = [...order];
-    [next[index - 1], next[index]] = [next[index]!, next[index - 1]!];
-    if (next[next.length - 1] !== fallbackLast) return null;
-    return next;
+/** When `enabledKeys` omitted or empty, all tiers in `order` are active. Fallback is always forced on. */
+export function effectivePriorityRuleEnabledSet(
+    order: readonly string[],
+    enabledKeys: readonly string[] | null | undefined,
+    fallbackKey: string
+): Set<string> {
+    const fb = fallbackKey.trim();
+    if (!enabledKeys?.length) {
+        return new Set(order.map((k) => k.trim()).filter(Boolean));
+    }
+    const s = new Set<string>();
+    for (const k of enabledKeys) {
+        const t = typeof k === "string" ? k.trim() : "";
+        if (t) s.add(t);
+    }
+    s.add(fb);
+    const orderSet = new Set(order.map((k) => k.trim()));
+    return new Set([...s].filter((k) => orderSet.has(k)));
 }
 
-/** Swap with next tier — `null` when move would displace the standard fallback from the end. */
-export function reorderPriorityRuleMoveDown(order: readonly string[], index: number, fallbackLast: string): string[] | null {
+export type ValidatePriorityRuleEnabledKeysResult = { ok: true } | { ok: false; error: string };
+
+export function validatePriorityRuleEnabledKeysForProfile(
+    profile: PlacementProfile,
+    order: readonly string[],
+    enabled: ReadonlySet<string>
+): ValidatePriorityRuleEnabledKeysResult {
+    const expected = new Set(profile.buckets.map((b) => b.bucket_key));
+    const orderSet = new Set(order.map((k) => k.trim()));
+    if (!enabled.has(profile.fallback_bucket_key)) {
+        return { ok: false, error: "priority_rule_enabled_keys must include the standard fallback bucket." };
+    }
+    const seen = new Set<string>();
+    for (const k of enabled) {
+        if (!expected.has(k)) {
+            return { ok: false, error: `Unknown bucket in priority_rule_enabled_keys: "${k}".` };
+        }
+        if (!orderSet.has(k)) {
+            return { ok: false, error: `priority_rule_enabled_keys entry "${k}" is not listed in priority_rule_order.` };
+        }
+        if (seen.has(k)) {
+            return { ok: false, error: `Duplicate bucket in priority_rule_enabled_keys: "${k}".` };
+        }
+        seen.add(k);
+    }
+    return { ok: true };
+}
+
+/**
+ * Applies `priority_rule_order` and **filters rules** to `priority_rule_enabled_keys` (inactive tiers never match).
+ * Registry preset is not mutated.
+ */
+export function applyPlacementPriorityEffectiveProfile(
+    profile: PlacementProfile,
+    order: string[],
+    enabledKeys: readonly string[] | null | undefined
+): PlacementProfile {
+    const ordered = applyPriorityRuleOrderToProfile(profile, order);
+    const enabled = effectivePriorityRuleEnabledSet(order, enabledKeys, profile.fallback_bucket_key);
+    const ve = validatePriorityRuleEnabledKeysForProfile(profile, order, enabled);
+    if (!ve.ok) throw new Error(ve.error);
+
+    const filteredRules = ordered.rules.filter((r) => enabled.has(r.assign_bucket_key));
+    const renumbered = filteredRules.map((r, i) => ({ ...r, rule_order: (i + 1) * 10 }));
+    return {
+        ...ordered,
+        rules: renumbered,
+    };
+}
+
+/** Swap with previous **enabled** (non-fallback) tier in `order`. */
+export function reorderPriorityRuleMoveUpEnabled(
+    order: readonly string[],
+    enabled: ReadonlySet<string>,
+    fallbackLast: string,
+    index: number
+): string[] | null {
+    if (index <= 0 || index >= order.length) return null;
+    if (order[order.length - 1] !== fallbackLast) return null;
+    const key = order[index]!;
+    if (key === fallbackLast || !enabled.has(key)) return null;
+    for (let j = index - 1; j >= 0; j--) {
+        const k = order[j]!;
+        if (k === fallbackLast || !enabled.has(k)) continue;
+        const next = [...order];
+        [next[j], next[index]] = [next[index]!, next[j]!];
+        if (next[next.length - 1] !== fallbackLast) return null;
+        return next;
+    }
+    return null;
+}
+
+/** Swap with next **enabled** (non-fallback) tier in `order`. */
+export function reorderPriorityRuleMoveDownEnabled(
+    order: readonly string[],
+    enabled: ReadonlySet<string>,
+    fallbackLast: string,
+    index: number
+): string[] | null {
     if (index < 0 || index >= order.length - 1) return null;
     if (order[order.length - 1] !== fallbackLast) return null;
-    if (index === order.length - 2) return null;
-    const next = [...order];
-    [next[index], next[index + 1]] = [next[index + 1]!, next[index]!];
-    if (next[next.length - 1] !== fallbackLast) return null;
-    return next;
+    const key = order[index]!;
+    if (key === fallbackLast || !enabled.has(key)) return null;
+    for (let j = index + 1; j < order.length; j++) {
+        const k = order[j]!;
+        if (k === fallbackLast || !enabled.has(k)) continue;
+        const next = [...order];
+        [next[j], next[index]] = [next[index]!, next[j]!];
+        if (next[next.length - 1] !== fallbackLast) return null;
+        return next;
+    }
+    return null;
 }

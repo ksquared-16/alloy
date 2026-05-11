@@ -87,6 +87,19 @@ describe("validateMergedWorkUnitMetadataForPlacementSave", () => {
         if (!r.ok) expect(r.error).toMatch(/exactly once/i);
     });
 
+    it("rejects priority_rule_enabled_keys without priority_rule_order", () => {
+        const r = validateMergedWorkUnitMetadataForPlacementSave({
+            placement_priority_v1: {
+                version: 1,
+                enabled: false,
+                profile_id: CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1.profile_id,
+                priority_rule_enabled_keys: ["tier_general_waitlist"],
+            },
+        });
+        expect(r.ok).toBe(false);
+        if (!r.ok) expect(r.error).toMatch(/priority_rule_enabled_keys requires priority_rule_order/i);
+    });
+
     it("rejects priority_rule_order without profile_id", () => {
         const r = validateMergedWorkUnitMetadataForPlacementSave({
             placement_priority_v1: {

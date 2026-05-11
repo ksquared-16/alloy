@@ -44,6 +44,11 @@ export const placementPriorityLayerSchema = z
          * When omitted, registry preset order applies.
          */
         priority_rule_order: z.array(z.string().min(1)).min(2).max(24).optional(),
+        /**
+         * Bucket keys whose matcher rules are **active**; omitted = all tiers in `priority_rule_order` active.
+         * Must include `fallback_bucket_key`; unknown keys rejected. Disabled tiers never match.
+         */
+        priority_rule_enabled_keys: z.array(z.string().min(1)).max(24).optional(),
     })
     .strict();
 
@@ -103,6 +108,8 @@ export type MergedPlacementPriorityConfig = {
     display: z.infer<typeof placementPriorityDisplayConfigSchema> | null;
     /** When set, overrides rule evaluation + bucket sort weights for this work unit (see placementPriorityRuleOrder). */
     priority_rule_order: string[] | null;
+    /** Subset of `priority_rule_order` keys with active matcher rules; always includes fallback when set. */
+    priority_rule_enabled_keys: string[] | null;
 };
 
 const DEFAULT_MERGED: MergedPlacementPriorityConfig = {
@@ -115,6 +122,7 @@ const DEFAULT_MERGED: MergedPlacementPriorityConfig = {
     missing_fact_behavior: "inherit",
     display: null,
     priority_rule_order: null,
+    priority_rule_enabled_keys: null,
 };
 
 function mergeLayer(base: MergedPlacementPriorityConfig, layer: PlacementPriorityLayer | null): MergedPlacementPriorityConfig {
@@ -136,6 +144,12 @@ function mergeLayer(base: MergedPlacementPriorityConfig, layer: PlacementPriorit
                     ? [...layer.priority_rule_order]
                     : null
                 : base.priority_rule_order,
+        priority_rule_enabled_keys:
+            layer.priority_rule_enabled_keys !== undefined
+                ? layer.priority_rule_enabled_keys
+                    ? [...layer.priority_rule_enabled_keys]
+                    : null
+                : base.priority_rule_enabled_keys,
     };
 }
 

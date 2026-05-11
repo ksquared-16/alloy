@@ -1,6 +1,10 @@
 import { parsePlacementPriorityLayerStrict } from "@/lib/orchestration/placement/placementConfigSchema";
 import { getPlacementProfileFromRegistry } from "@/lib/orchestration/placement/placementPresetRegistry";
-import { validatePriorityRuleOrderForProfile } from "@/lib/orchestration/placement/placementPriorityRuleOrder";
+import {
+    effectivePriorityRuleEnabledSet,
+    validatePriorityRuleEnabledKeysForProfile,
+    validatePriorityRuleOrderForProfile,
+} from "@/lib/orchestration/placement/placementPriorityRuleOrder";
 
 /**
  * Validates merged work-unit **metadata** after PATCH deep-merge, before persisting.
@@ -44,10 +48,19 @@ export function validateMergedWorkUnitMetadataForPlacementSave(
             };
         }
         const pro = layer.priority_rule_order;
+        const pEn = layer.priority_rule_enabled_keys;
+        if (pEn != null && pEn.length > 0 && (!pro || pro.length === 0)) {
+            return { ok: false, error: "placement_priority_v1.priority_rule_enabled_keys requires priority_rule_order." };
+        }
         if (pro != null && pro.length > 0) {
             const ro = validatePriorityRuleOrderForProfile(preset, pro);
             if (!ro.ok) {
                 return { ok: false, error: ro.error };
+            }
+            const eff = effectivePriorityRuleEnabledSet(pro, pEn, preset.fallback_bucket_key);
+            const ve = validatePriorityRuleEnabledKeysForProfile(preset, pro, eff);
+            if (!ve.ok) {
+                return { ok: false, error: ve.error };
             }
         }
     }

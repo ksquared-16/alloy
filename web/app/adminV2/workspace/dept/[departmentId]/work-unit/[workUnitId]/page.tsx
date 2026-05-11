@@ -77,7 +77,6 @@ import {
 } from "@/lib/opportunities/needsAttentionBuckets";
 import type { WorkUnitPlacementQueueDiagnostics } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
 import {
-    buildPlacementProjectionQueueHint,
     formatPlacementWaitlistSectionLabel,
     parseQueueRowPlacementPriorityVm,
 } from "@/lib/ui-v2/queuePlacementPriorityPresentation";
@@ -2278,7 +2277,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     : unmappedListView
                       ? "Unmapped / other bucket: list is filtered on the client from the current server page of the all-records lane — use full lane or fix stage filters for complete paging."
                       : undefined,
-                placementProjectionHint: buildPlacementProjectionQueueHint(placementDiagnostics),
+                placementProjectionHint: undefined,
                 placementDisplay: placementDiagnostics?.display,
                 rollupSummary: undefined,
                 rowsLoading,

@@ -113,7 +113,7 @@ describe("queuePlacementPriorityPresentation", () => {
         );
     });
 
-    it("buildPlacementProjectionQueueHint: short loaded-records copy", () => {
+    it("buildPlacementProjectionQueueHint: undefined when not partial", () => {
         expect(
             buildPlacementProjectionQueueHint({
                 evaluated_count: 2,
@@ -123,7 +123,7 @@ describe("queuePlacementPriorityPresentation", () => {
                 row_evaluation_errors: 0,
                 profile_revision_mismatch: false,
             })
-        ).toMatch(/grouped by program/i);
+        ).toBeUndefined();
         expect(
             buildPlacementProjectionQueueHint({
                 evaluated_count: 2,
@@ -134,7 +134,7 @@ describe("queuePlacementPriorityPresentation", () => {
                 profile_revision_mismatch: false,
                 placement_positions_partial_evaluation: false,
             })
-        ).toMatch(/grouped by program.*loaded records/i);
+        ).toBeUndefined();
     });
 
     it("hint adds partial line without engine jargon", () => {
@@ -153,25 +153,15 @@ describe("queuePlacementPriorityPresentation", () => {
     });
 
     it("hint strings do not imply guaranteed global waitlist placement", () => {
-        const shadow = buildPlacementProjectionQueueHint({
+        const hint = buildPlacementProjectionQueueHint({
             evaluated_count: 1,
-            skipped_due_to_cap_count: 0,
-            reorder_applied: false,
-            shadow_mode: true,
-            row_evaluation_errors: 0,
-            profile_revision_mismatch: false,
-        });
-        const sorted = buildPlacementProjectionQueueHint({
-            evaluated_count: 1,
-            skipped_due_to_cap_count: 0,
+            skipped_due_to_cap_count: 3,
             reorder_applied: true,
             shadow_mode: false,
             row_evaluation_errors: 0,
             profile_revision_mismatch: false,
-            placement_positions_partial_evaluation: false,
+            placement_positions_partial_evaluation: true,
         });
-        for (const s of [shadow ?? "", sorted ?? ""]) {
-            expect(s.toLowerCase()).not.toMatch(/\bguaranteed\b|\bai recommended\b/i);
-        }
+        expect(hint?.toLowerCase()).not.toMatch(/\bguaranteed\b|\bai recommended\b/i);
     });
 });
