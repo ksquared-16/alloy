@@ -12,6 +12,11 @@ import {
     getPlacementProfileFromRegistry,
     listRegisteredPlacementProfileIds,
 } from "@/lib/orchestration/placement/placementPresetRegistry";
+import {
+    CHILDCARE_ENROLLMENT_WAITLIST_PRIORITY_RULE_ORDER_V1,
+    defaultPriorityRuleOrderForProfileId,
+} from "@/lib/orchestration/placement/placementPriorityRuleOrder";
+import { PriorityRuleOrderEditor } from "@/components/adminV2/settings/PriorityRuleOrderEditor";
 
 type WorkUnitRow = {
     id: string;
@@ -60,6 +65,7 @@ export default function PlacementPrioritySettingsClient() {
     const [evaluationCap, setEvaluationCap] = useState(200);
     const [showBucketChip, setShowBucketChip] = useState(true);
     const [showSortHint, setShowSortHint] = useState(true);
+    const [ruleOrder, setRuleOrder] = useState<string[]>(() => [...CHILDCARE_ENROLLMENT_WAITLIST_PRIORITY_RULE_ORDER_V1]);
 
     const presetIds = useMemo(() => listRegisteredPlacementProfileIds(), []);
 
@@ -96,12 +102,19 @@ export default function PlacementPrioritySettingsClient() {
         setEvaluationCap(typeof L.evaluation_cap === "number" ? L.evaluation_cap : 200);
         setShowBucketChip(L.display?.show_bucket_chip !== false);
         setShowSortHint(L.display?.show_sort_hint !== false);
+        const pid = L.profile_id ?? DEFAULT_LAYER.profile_id!;
+        const defRo = defaultPriorityRuleOrderForProfileId(pid) ?? [];
+        const fromMeta = L.priority_rule_order;
+        setRuleOrder(
+            Array.isArray(fromMeta) && fromMeta.length > 0 ? [...fromMeta] : defRo.length ? [...defRo] : []
+        );
     }, [selected]);
 
     const buildLayer = (): PlacementPriorityLayer => {
         const id = profileId.trim() || DEFAULT_LAYER.profile_id!;
         const preset = getPlacementProfileFromRegistry(id);
         const revision = preset?.revision ?? CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1.revision;
+        const roDef = defaultPriorityRuleOrderForProfileId(id);
         return {
             version: 1,
             enabled,
@@ -114,6 +127,7 @@ export default function PlacementPrioritySettingsClient() {
                 show_bucket_chip: showBucketChip,
                 show_sort_hint: showSortHint,
             },
+            ...(roDef ? { priority_rule_order: ruleOrder } : {}),
         };
     };
 
@@ -200,7 +214,12 @@ export default function PlacementPrioritySettingsClient() {
                         <select
                             className="w-full max-w-md rounded border border-alloy-forge/15 bg-white px-2 py-1.5 text-sm"
                             value={profileId}
-                            onChange={(e) => setProfileId(e.target.value)}
+                            onChange={(e) => {
+                                const id = e.target.value;
+                                setProfileId(id);
+                                const d = defaultPriorityRuleOrderForProfileId(id);
+                                setRuleOrder(d ? [...d] : []);
+                            }}
                         >
                             {presetIds.map((id) => (
                                 <option key={id} value={id}>
@@ -250,6 +269,18 @@ export default function PlacementPrioritySettingsClient() {
                             onChange={(e) => setEvaluationCap(Number(e.target.value))}
                         />
                     </div>
+
+                    {defaultPriorityRuleOrderForProfileId(profileId) ? (
+                        <PriorityRuleOrderEditor
+                            order={ruleOrder}
+                            fallbackBucketKey={
+                                getPlacementProfileFromRegistry(profileId.trim())?.fallback_bucket_key ??
+                                CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1.fallback_bucket_key
+                            }
+                            disabled={!canSave}
+                            onChange={setRuleOrder}
+                        />
+                    ) : null}
 
                     <div className="space-y-2">
                         <span className="text-xs font-semibold text-alloy-midnight/70">Display</span>

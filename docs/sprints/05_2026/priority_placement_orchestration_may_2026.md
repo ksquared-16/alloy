@@ -20,7 +20,9 @@ Alloy already treats **queues as projection surfaces** (`docs/system/workspace-s
 
 **Product model (childcare waitlist preview — V1 cleanup):** Operators expect **program / room / age grouping first**, then **priority rules inside each group**, with **scoped waitlist position numbers (#1, #2, …) restarting per group** when **`shadow_mode: false`**. The **`program_room_group`** fact is the **primary sort/group dimension** (via preset **`primary_group_fact_key`** — not React hardcoding). **Standard family** means **no special priority rule matched**. **Admin V2** uses **`{Program} Waitlist (n)`** section headers and a **compact row strip**: **`#n`**, short **`{program} waitlist`** label, **rule chip**, optional **one** supporting line, **compact warning dot** — caveats live **only** in the **lane hint** (no per-row paragraphs, no engine jargon). **`npm run dev:seed:placement-priority-demo`** sets **`shadow_mode: false`** for demo visibility; production may use **`shadow_mode: true`**.
 
-**Settings (foundation — May 2026):** **`/adminV2/settings/placement-priority`** — controls **this work unit’s** Admin V2 waitlist priority behavior via **`work_units.metadata.placement_priority_v1`** (enabled, preset **`profile_id`**, waitlisted-only vs waitlisted+ready cohort, preview vs active ordering, cap, display flags). Saves via **`PATCH /api/admin/work-units/[id]`** with **`metadata`** deep-merge (admin only; merged metadata validated: **strict Zod** + **`profile_id`** must exist in **`placementPresetRegistry`**; **`profile_revision`**, if supplied, must match the preset or the save returns **400** — omitted revision is allowed). **Department-level** placement settings UI remains **future** (department metadata unchanged; no dedicated tab). **Room-specific rule ordering** and a **rule-order editor** remain **future**. **Global / cross-page authoritative waitlist ranking** remains **V1.1** (V1 stays loaded-slice + cap scoped).
+**Settings (foundation — May 2026):** **`/adminV2/settings/placement-priority`** — controls **this work unit’s** Admin V2 waitlist priority via **`work_units.metadata.placement_priority_v1`**: enabled, preset **`profile_id`**, lanes, preview vs active ordering, cap, display, and (for **childcare enrollment waitlist** preset) **`priority_rule_order`** — a **full permutation** of preset bucket keys with **standard / fallback locked last**; drives **effective profile** at evaluation time (registry preset is **not** mutated). Saves via **`PATCH /api/admin/work-units/[id]`** **`metadata`** deep-merge (admin only; **Zod** + registry **`profile_id`** + optional **`profile_revision`** pin + **`priority_rule_order`** validation). **Department-level** placement UI remains **future**. **Per-program distinct rule lists** (different tier orders per program/room) remain **V1.1**. **Global / cross-page authoritative waitlist ranking** remains **V1.1** (V1 stays loaded-slice + cap scoped).
+
+**Work-unit queue UI (May 2026):** Placement **program/room** group headers use a **stronger title + count** (e.g. **`Infant Waitlist (2)`**); **collapse/expand** per group is **session-local** (not persisted). **V1.1:** grouping multiple inquiries under one **family** when several children share a household remains future.
 
 ## Card 0.5 — RFC lock + queue interpreter decision
 
@@ -927,7 +929,7 @@ npm run dev:seed:placement-priority-demo
 | **Route** | **`/adminV2/settings/placement-priority`** |
 | **Save API** | **`PATCH /api/admin/work-units/:id`** with **`{ "metadata": { "placement_priority_v1": { … } } }`** (deep-merge with existing **`work_units.metadata`**; unrelated metadata keys preserved). |
 | **Auth** | **Admin** role required to save (read-only form state for non-admin). |
-| **Validation** | Merged metadata: **`parsePlacementPriorityLayerStrict`** + **`profile_id`** must be in **`placementPresetRegistry`**; non-empty **`profile_revision`** must match the preset revision (mismatch → **400**, no write). |
+| **Validation** | Merged metadata: **`parsePlacementPriorityLayerStrict`** + **`profile_id`** in registry; non-empty **`profile_revision`** must match preset; **`priority_rule_order`** (when present) must be a valid full permutation with fallback bucket last (**childcare** and other presets with the same bucket model). |
 
 ### 3. Expected UI behavior
 
@@ -962,15 +964,16 @@ cd web && npm run typecheck
 ### 6. Known limitations (unchanged + demo)
 
 - **Pagination / cap:** Ordering is **not** globally authoritative (**§ Card 6**). Section headers and previews reflect **loaded / evaluated** rows only.  
+- **Family / multi-child grouping:** Multiple inquiries for the same household (siblings) are **not** coalesced into a single ranked family row — **V1.1** product/adapter work.  
 - **Lexicographic `program_room_group`:** Sort/group order follows **string sort** on the fact value — not a curated room-age ladder unless metadata uses comparable tokens.  
-- **Per-program rule precedence** (e.g. toddler vs infant different tier orders) is **not** modeled — single rule list for all groups until **V1.1** config work.  
+- **Per-program `priority_rule_order`:** One ordered tier list applies **within every** program/room group; different lists per program remain **V1.1**.  
 - **Demo rows** use **`placement_priority_demo_v1`** package marker — separate from **`enrollment_pipeline_demo_v2`** families.  
 - **Department-level** placement: no dedicated Settings tab yet (still **`PATCH /api/admin/departments/[id]`** **`metadata`**).  
-- **Settings gaps:** no custom rule-order editor, no room-specific policy matrix, no config change audit trail.
+- **Settings gaps:** no drag-and-drop rule reorder, no room-specific policy matrix, no config change audit trail.
 
 **Cleanup completed:** Compact **waitlist row** UX + **lane hint** (operator language only), **`{Program} Waitlist`** sections, **scoped positions** + short **`{program} waitlist`** labels, **Settings** (`/adminV2/settings/placement-priority`) + **`PATCH …/work-units/[id]`** **`metadata`** merge with **`placement_priority_v1`** validation — **May 2026**.
 
-**Final hardening (same month, pre–UI review):** Registry-backed **`profile_id`** + revision checks on admin save; shared **`deepMergeJsonObjects`**; settings copy clarifies **work-unit waitlist** scope, **loaded records**, and **preview vs active ordering** (operator-facing wording). Still **not** in scope: department settings tab, rule-order editor, schema/persistence for snapshots, workflow events, **`resolveOpportunityQueueFromDefinition`** changes.
+**Final hardening + policy editor (May 2026, pre–UI review):** Registry-backed **`profile_id`** + revision checks on admin save; shared **`deepMergeJsonObjects`**; settings copy; **`priority_rule_order`** with Move up / Move down (standard tier locked last); **`resolvePlacementQueueConfig`** builds an **ephemeral** profile via **`applyPriorityRuleOrderToProfile`**. Work-unit queue **placement headers** (clearer typography + count) and **client-only section collapse**. Still **not** in scope: department settings tab, drag-and-drop rule reorder, schema/persistence for snapshots, workflow events, **`resolveOpportunityQueueFromDefinition`** changes.
 
 ### 7. V1.1 backlog (recommended)
 

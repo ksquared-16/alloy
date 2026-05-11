@@ -1,5 +1,6 @@
 import { parsePlacementPriorityLayerStrict } from "@/lib/orchestration/placement/placementConfigSchema";
 import { getPlacementProfileFromRegistry } from "@/lib/orchestration/placement/placementPresetRegistry";
+import { validatePriorityRuleOrderForProfile } from "@/lib/orchestration/placement/placementPriorityRuleOrder";
 
 /**
  * Validates merged work-unit **metadata** after PATCH deep-merge, before persisting.
@@ -20,6 +21,9 @@ export function validateMergedWorkUnitMetadataForPlacementSave(
     }
 
     const pid = typeof layer.profile_id === "string" ? layer.profile_id.trim() : "";
+    if (layer.priority_rule_order?.length && !pid) {
+        return { ok: false, error: "placement_priority_v1.priority_rule_order requires profile_id." };
+    }
     if (layer.enabled === true && !pid) {
         return { ok: false, error: "When placement_priority_v1.enabled is true, profile_id must be set to a registered preset id." };
     }
@@ -38,6 +42,13 @@ export function validateMergedWorkUnitMetadataForPlacementSave(
                 ok: false,
                 error: `placement_priority_v1.profile_revision "${rev}" does not match preset "${pid}" (expected "${preset.revision}").`,
             };
+        }
+        const pro = layer.priority_rule_order;
+        if (pro != null && pro.length > 0) {
+            const ro = validatePriorityRuleOrderForProfile(preset, pro);
+            if (!ro.ok) {
+                return { ok: false, error: ro.error };
+            }
         }
     }
 

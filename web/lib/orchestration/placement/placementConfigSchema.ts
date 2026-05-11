@@ -39,6 +39,11 @@ export const placementPriorityLayerSchema = z
         evaluation_cap: z.number().int().positive().max(PLACEMENT_EVALUATION_CAP_MAX).optional(),
         missing_fact_behavior: missingFactBehaviorSchema.optional(),
         display: placementPriorityDisplayConfigSchema.optional(),
+        /**
+         * Ordered bucket keys for this profile — full permutation; last must match preset `fallback_bucket_key`.
+         * When omitted, registry preset order applies.
+         */
+        priority_rule_order: z.array(z.string().min(1)).min(2).max(24).optional(),
     })
     .strict();
 
@@ -96,6 +101,8 @@ export type MergedPlacementPriorityConfig = {
     evaluation_cap: number;
     missing_fact_behavior: z.infer<typeof missingFactBehaviorSchema>;
     display: z.infer<typeof placementPriorityDisplayConfigSchema> | null;
+    /** When set, overrides rule evaluation + bucket sort weights for this work unit (see placementPriorityRuleOrder). */
+    priority_rule_order: string[] | null;
 };
 
 const DEFAULT_MERGED: MergedPlacementPriorityConfig = {
@@ -107,6 +114,7 @@ const DEFAULT_MERGED: MergedPlacementPriorityConfig = {
     evaluation_cap: PLACEMENT_EVALUATION_CAP_DEFAULT,
     missing_fact_behavior: "inherit",
     display: null,
+    priority_rule_order: null,
 };
 
 function mergeLayer(base: MergedPlacementPriorityConfig, layer: PlacementPriorityLayer | null): MergedPlacementPriorityConfig {
@@ -122,6 +130,12 @@ function mergeLayer(base: MergedPlacementPriorityConfig, layer: PlacementPriorit
         missing_fact_behavior:
             layer.missing_fact_behavior !== undefined ? layer.missing_fact_behavior : base.missing_fact_behavior,
         display: layer.display !== undefined ? layer.display ?? null : base.display,
+        priority_rule_order:
+            layer.priority_rule_order !== undefined
+                ? layer.priority_rule_order
+                    ? [...layer.priority_rule_order]
+                    : null
+                : base.priority_rule_order,
     };
 }
 

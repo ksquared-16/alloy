@@ -131,3 +131,27 @@ export function buildPlacementProjectionQueueHint(
     if (partial) s += " Some records may be outside this loaded page.";
     return s;
 }
+
+/** Section heading for work-unit waitlist groups, e.g. `Infant Waitlist (2)` (emoji optional). */
+export function formatPlacementGroupHeaderTitle(params: { emoji?: string; label: string; count: number }): string {
+    const e = params.emoji?.trim();
+    const prefix = e ? `${e} ` : "";
+    return `${prefix}${params.label.trim()} (${params.count})`;
+}
+
+export type PlacementWaitlistGroupRowMode = "normal" | "header_only" | "skip_row";
+
+/**
+ * When waitlist placement sections are active and a group is collapsed: first row shows header only;
+ * following rows in that group are skipped (hidden list items).
+ */
+export function placementWaitlistGroupRowMode(
+    waitlistPlacementSections: boolean,
+    sectionKey: string | undefined,
+    collapsedKeys: ReadonlySet<string>,
+    showGroup: boolean
+): PlacementWaitlistGroupRowMode {
+    if (!waitlistPlacementSections || !sectionKey?.trim()) return "normal";
+    if (!collapsedKeys.has(sectionKey)) return "normal";
+    return showGroup ? "header_only" : "skip_row";
+}

@@ -18,6 +18,10 @@ import { DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS } from "@/lib/ui-v2/queueUiConfi
 import { normalizePreviewLooseDateTokens } from "@/lib/adminFormatters";
 import { CRM_COMPACT_VALUE_DOT_SEP } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
 import { QueueRowPlacementPriorityStrip } from "@/app/adminV2/components/workspace/blocks/QueueRowPlacementPriorityStrip";
+import {
+    formatPlacementGroupHeaderTitle,
+    placementWaitlistGroupRowMode,
+} from "@/lib/ui-v2/queuePlacementPriorityPresentation";
 
 type Props = {
   queue: QueueVm;
@@ -729,6 +733,8 @@ export function CrmCompactQueuePreview({
 function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: WorkspaceActionHandler }) {
   const listShellRef = useRef<HTMLDivElement>(null);
   const [refreshMinHeightPx, setRefreshMinHeightPx] = useState<number>();
+  /** Client-only collapsed waitlist program/room groups (placement sections). */
+  const [collapsedPlacementGroups, setCollapsedPlacementGroups] = useState<Set<string>>(() => new Set());
 
   useLayoutEffect(() => {
     if (!queue.rowsRefreshing) {
@@ -842,29 +848,67 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
 
           const headerCfg = sectionKey ? queue.workUnitGroupHeaders?.[sectionKey] : undefined;
           const count = sectionKey ? (groupCounts.get(sectionKey) ?? 0) : 0;
+          const rowMode = placementWaitlistGroupRowMode(
+            waitlistPlacementSections,
+            sectionKey,
+            collapsedPlacementGroups,
+            Boolean(showGroup)
+          );
+          if (rowMode === "skip_row") {
+            return <li key={item.id} hidden aria-hidden="true" />;
+          }
+
           const sectionTitle =
             showGroup && sectionKey
-              ? headerCfg
-                ? `${headerCfg.emoji ? `${headerCfg.emoji} ` : ""}${headerCfg.label} (${count})`
-                : `${sectionKey} (${count})`
+              ? formatPlacementGroupHeaderTitle({
+                  emoji: headerCfg?.emoji,
+                  label: headerCfg?.label ?? sectionKey,
+                  count,
+                })
               : null;
+
+          const collapsibleWaitlistHeader = Boolean(waitlistPlacementSections && sectionTitle);
+          const placementSectionExpanded = sectionKey ? !collapsedPlacementGroups.has(sectionKey) : true;
+          const labelSectionClasses = [
+            "adminv2-ws-wu-queue-section-label",
+            headerCfg ? "adminv2-ws-wu-queue-section-label--rich" : "",
+            waitlistPlacementSections && showGroup ? "adminv2-ws-wu-queue-section-label--waitlist" : "",
+            waitlistPlacementSections && showGroup ? "adminv2-ws-wu-queue-section-label--waitlist-placement" : "",
+          ]
+            .filter(Boolean)
+            .join(" ");
 
           return (
             <li key={item.id} className="adminv2-ws-wu-queue-item-wrap" role="listitem">
               {sectionTitle ? (
-                <div
-                  className={[
-                    "adminv2-ws-wu-queue-section-label",
-                    headerCfg ? "adminv2-ws-wu-queue-section-label--rich" : "",
-                    waitlistPlacementSections && showGroup ? "adminv2-ws-wu-queue-section-label--waitlist" : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                  role="presentation"
-                >
-                  {sectionTitle}
-                </div>
+                collapsibleWaitlistHeader ? (
+                  <button
+                    type="button"
+                    className={`${labelSectionClasses} adminv2-ws-wu-queue-section-label--waitlist-toggle`}
+                    aria-expanded={placementSectionExpanded}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (!sectionKey) return;
+                      setCollapsedPlacementGroups((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(sectionKey)) next.delete(sectionKey);
+                        else next.add(sectionKey);
+                        return next;
+                      });
+                    }}
+                  >
+                    <span className="adminv2-ws-wu-queue-section-label__text">{sectionTitle}</span>
+                    <span className="adminv2-ws-wu-queue-section-label__chevron" aria-hidden>
+                      {placementSectionExpanded ? "▾" : "▸"}
+                    </span>
+                  </button>
+                ) : (
+                  <div className={labelSectionClasses} role="presentation">
+                    {sectionTitle}
+                  </div>
+                )
               ) : null}
+              {rowMode !== "header_only" ? (
               <div
                 className={`adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-${tier}${
                   attentionAccent ? " adminv2-ws-wu-queue-card--attention-accent" : ""
@@ -1058,6 +1102,7 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
                   </div>
                 ) : null}
               </div>
+              ) : null}
             </li>
           );
         })}

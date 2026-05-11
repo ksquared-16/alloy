@@ -171,6 +171,43 @@ describe("resolvePlacementQueueConfig", () => {
         expect(r.status).toBe("enabled");
         if (r.status === "enabled") expect(r.options.profile_revision_mismatch).toBe(true);
     });
+
+    it("applies priority_rule_order so sibling rule is evaluated before staff", () => {
+        const order = ["tier_sibling_enrolled", "tier_staff_community", "tier_sister_center", "tier_general_waitlist"];
+        const r = resolvePlacementQueueConfig({
+            departmentMetadata: {},
+            workUnitMetadata: {
+                placement_priority_v1: {
+                    version: 1,
+                    enabled: true,
+                    profile_id: childcareId,
+                    queue_keys_enabled: ["waitlisted"],
+                    priority_rule_order: order,
+                },
+            },
+            queue_key: "waitlisted",
+        });
+        expect(r.status).toBe("enabled");
+        if (r.status === "enabled") {
+            expect(r.profile.rules[0]?.assign_bucket_key).toBe("tier_sibling_enrolled");
+        }
+    });
+
+    it("disabled when priority_rule_order length wrong", () => {
+        const r = resolvePlacementQueueConfig({
+            departmentMetadata: {},
+            workUnitMetadata: {
+                placement_priority_v1: {
+                    version: 1,
+                    enabled: true,
+                    profile_id: childcareId,
+                    priority_rule_order: ["tier_staff_community", "tier_general_waitlist"],
+                },
+            },
+            queue_key: "waitlisted",
+        });
+        expect(r.status).toBe("disabled");
+    });
 });
 
 describe("validatePlacementMetadataLayers", () => {

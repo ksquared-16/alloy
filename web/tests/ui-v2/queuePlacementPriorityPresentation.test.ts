@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
     buildPlacementProjectionQueueHint,
+    formatPlacementGroupHeaderTitle,
     formatPlacementWaitlistSectionLabel,
+    placementWaitlistGroupRowMode,
     parseQueueRowPlacementPriorityVm,
 } from "@/lib/ui-v2/queuePlacementPriorityPresentation";
 
@@ -87,8 +89,28 @@ describe("queuePlacementPriorityPresentation", () => {
         expect(vm?.errorMessage).toContain("pipeline_total");
     });
 
-    it("formatPlacementWaitlistSectionLabel adds Waitlist suffix", () => {
-        expect(formatPlacementWaitlistSectionLabel("Toddler")).toBe("Toddler Waitlist");
+    it("formatPlacementGroupHeaderTitle includes count", () => {
+        expect(formatPlacementGroupHeaderTitle({ label: "Infant Waitlist", count: 2 })).toBe("Infant Waitlist (2)");
+        expect(formatPlacementGroupHeaderTitle({ emoji: "🍼", label: "Infant Waitlist", count: 2 })).toBe(
+            "🍼 Infant Waitlist (2)"
+        );
+    });
+
+    it("placementWaitlistGroupRowMode: expanded by default", () => {
+        const collapsed = new Set<string>();
+        expect(placementWaitlistGroupRowMode(true, "Infant Waitlist", collapsed, true)).toBe("normal");
+    });
+
+    it("placementWaitlistGroupRowMode: collapsed first row is header_only", () => {
+        const collapsed = new Set(["Infant Waitlist"]);
+        expect(placementWaitlistGroupRowMode(true, "Infant Waitlist", collapsed, true)).toBe("header_only");
+        expect(placementWaitlistGroupRowMode(true, "Infant Waitlist", collapsed, false)).toBe("skip_row");
+    });
+
+    it("placementWaitlistGroupRowMode: no placement sections leaves normal", () => {
+        expect(placementWaitlistGroupRowMode(false, "Infant Waitlist", new Set(["Infant Waitlist"]), true)).toBe(
+            "normal"
+        );
     });
 
     it("buildPlacementProjectionQueueHint: short loaded-records copy", () => {

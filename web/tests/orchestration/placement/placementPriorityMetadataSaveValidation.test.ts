@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { deepMergeJsonObjects } from "@/lib/json/deepMergeJsonObjects";
 import { validateMergedWorkUnitMetadataForPlacementSave } from "@/lib/orchestration/placement/placementPriorityMetadataSaveValidation";
 import { CHILDCARE_ENROLLMENT_WAITLIST_PROFILE_V1 } from "@/lib/orchestration/placement/presets/childcareEnrollmentPlacementProfile";
+import { CHILDCARE_ENROLLMENT_WAITLIST_PRIORITY_RULE_ORDER_V1 } from "@/lib/orchestration/placement/placementPriorityRuleOrder";
 
 const validLayer = {
     version: 1 as const,
@@ -73,6 +74,29 @@ describe("validateMergedWorkUnitMetadataForPlacementSave", () => {
 
     it("accepts metadata with no placement key", () => {
         expect(validateMergedWorkUnitMetadataForPlacementSave({ other: 1 }).ok).toBe(true);
+    });
+
+    it("rejects invalid priority_rule_order for childcare preset", () => {
+        const r = validateMergedWorkUnitMetadataForPlacementSave({
+            placement_priority_v1: {
+                ...validLayer,
+                priority_rule_order: ["tier_staff_community", "tier_general_waitlist"],
+            },
+        });
+        expect(r.ok).toBe(false);
+        if (!r.ok) expect(r.error).toMatch(/exactly once/i);
+    });
+
+    it("rejects priority_rule_order without profile_id", () => {
+        const r = validateMergedWorkUnitMetadataForPlacementSave({
+            placement_priority_v1: {
+                version: 1,
+                enabled: false,
+                priority_rule_order: [...CHILDCARE_ENROLLMENT_WAITLIST_PRIORITY_RULE_ORDER_V1],
+            },
+        });
+        expect(r.ok).toBe(false);
+        if (!r.ok) expect(r.error).toMatch(/requires profile_id/i);
     });
 });
 

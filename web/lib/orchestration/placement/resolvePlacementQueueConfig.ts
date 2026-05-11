@@ -8,6 +8,10 @@ import {
     parsePlacementPriorityLayerStrict,
 } from "@/lib/orchestration/placement/placementConfigSchema";
 import { getPlacementProfileFromRegistry } from "@/lib/orchestration/placement/placementPresetRegistry";
+import {
+    applyPriorityRuleOrderToProfile,
+    validatePriorityRuleOrderForProfile,
+} from "@/lib/orchestration/placement/placementPriorityRuleOrder";
 import type { PlacementProfile } from "@/lib/orchestration/placement/placementPriorityTypes";
 
 export type PlacementQueueEvaluationOptions = {
@@ -83,10 +87,20 @@ export function resolvePlacementQueueConfig(params: ResolvePlacementQueueConfigP
               ? false
               : profile.strict_required_facts === true;
 
-    const profileForEval: PlacementProfile = {
+    let profileForEval: PlacementProfile = {
         ...profile,
         strict_required_facts: strictFromBehavior,
     };
+
+    const ord = merged.priority_rule_order;
+    if (ord?.length) {
+        const ro = validatePriorityRuleOrderForProfile(profileForEval, ord);
+        if (!ro.ok) {
+            return { status: "disabled", queue_key: qk, reason: ro.error };
+        }
+        profileForEval = applyPriorityRuleOrderToProfile(profileForEval, ord);
+        profileForEval = { ...profileForEval, strict_required_facts: strictFromBehavior };
+    }
 
     const inv = validatePlacementProfile(profileForEval);
     if (inv) {
