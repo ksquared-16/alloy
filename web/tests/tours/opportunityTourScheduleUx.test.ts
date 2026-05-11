@@ -6,12 +6,19 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const comp = (name: string) => join(here, "..", "..", "components", "admin", "opportunity", "tours", name);
 
+const drawerPath = join(here, "..", "..", "components", "admin", "AdminEntityDrawer.tsx");
+
 describe("Opportunity tour schedule UX alignment", () => {
-    it("drawer tour_scheduling section is summary-only (no duplicate slot schedule controls)", () => {
-        const src = readFileSync(comp("OpportunityTourDrawerSection.tsx"), "utf8");
-        expect(src).not.toContain("openSchedule");
-        expect(src).not.toContain("postBookingAction");
-        expect(src).toContain("Source of truth");
+    it("suppresses standalone tour_scheduling overview section (tour lives in inquiry summary)", () => {
+        const drawer = readFileSync(drawerPath, "utf8");
+        expect(drawer).toContain('s.key !== "tour_scheduling"');
+        expect(drawer).not.toContain("out.tour_scheduling");
+        expect(drawer).not.toContain("OpportunityTourDrawerSection");
+    });
+
+    it("inquiry summary uses OpportunityInquiryTourDateBlock for booking-backed Tour date", () => {
+        const drawer = readFileSync(drawerPath, "utf8");
+        expect(drawer).toContain("OpportunityInquiryTourDateBlock");
     });
 
     it("header schedule action uses slot panel, duplicate guard, and legacy escape hatch", () => {

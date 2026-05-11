@@ -244,6 +244,8 @@ function computeOpportunityOverviewSectionsLikeDrawer(
         overviewSections = overviewSections.filter((s) => s.key !== "family_contacts");
     }
 
+    overviewSections = overviewSections.filter((s) => s.key !== "tour_scheduling");
+
     return overviewSections;
 }
 

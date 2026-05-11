@@ -38,7 +38,6 @@ import {
 } from "@/lib/adminFormatters";
 import { AssignmentStatusBadge, StatusBadge, getStatusVariant } from "@/components/admin/StatusBadge";
 import { OpportunityTourScheduleActionModal } from "@/components/admin/opportunity/tours/OpportunityTourScheduleActionModal";
-import { OpportunityTourBookingLifecycleBar } from "@/components/admin/opportunity/tours/OpportunityTourBookingLifecycleBar";
 import { ContactAttemptedModal } from "@/components/admin/opportunity/actions/ContactAttemptedModal";
 import { UpdateStatusAddNoteModal } from "@/components/admin/opportunity/actions/UpdateStatusAddNoteModal";
 import { AddRelatedPersonModal } from "@/components/admin/opportunity/actions/AddRelatedPersonModal";
@@ -61,7 +60,7 @@ import {
 import EntityDrawerOverview from "@/components/admin/entity/EntityDrawerOverview";
 import OpportunityRecordSectionRegistryActions from "@/components/admin/opportunity/OpportunityRecordSectionRegistryActions";
 import { OpportunityHouseholdPeoplePanel } from "@/components/admin/opportunity/OpportunityHouseholdPeoplePanel";
-import { OpportunityTourDrawerSection } from "@/components/admin/opportunity/tours/OpportunityTourDrawerSection";
+import { OpportunityInquiryTourDateBlock } from "@/components/admin/opportunity/tours/OpportunityInquiryTourDateBlock";
 import { FamilyContactsPanel, OppInquiryContactChannelsRow } from "@/components/admin/opportunity/FamilyContactsPanel";
 import EntityDrawerSection from "@/components/admin/entity/EntityDrawerSection";
 import JobPricingBreakdown from "@/components/admin/JobPricingBreakdown";
@@ -6712,12 +6711,6 @@ export default function AdminEntityDrawer() {
                     />
                 );
             }
-            if (recordOpportunityDrawerLayoutIncludesSection(oppCfg, "tour_scheduling") && drawer.id && drawer.id !== "new") {
-                const locId = String((d.location_id as string | null | undefined) ?? "").trim();
-                out.tour_scheduling = (
-                    <OpportunityTourDrawerSection opportunityId={drawer.id} locationId={locId} viewerTimezone={viewerTz} />
-                );
-            }
             return out;
         }
         return {};
@@ -7137,24 +7130,6 @@ export default function AdminEntityDrawer() {
                     },
                 ];
             }
-            const oppLayoutForTour = (recordChromeOpportunity.layout?.config_json ?? null) as RecordLayoutConfigJson | null;
-            if (recordOpportunityDrawerLayoutIncludesSection(oppLayoutForTour, "tour_scheduling")) {
-                const keysTour = new Set(result.map((s) => s.key));
-                if (!keysTour.has("tour_scheduling")) {
-                    result = [
-                        ...result,
-                        {
-                            key: "tour_scheduling",
-                            title: "Tour",
-                            defaultExpanded: true,
-                            collapsible: true,
-                            gridCols: 1,
-                            fields: [],
-                            locked: true,
-                        },
-                    ];
-                }
-            }
         }
         if (drawer.type === "opportunities" && overviewData && !(overviewData as { _create?: boolean })._create) {
             const oppLayoutJson = (recordChromeOpportunity.layout?.config_json ?? null) as RecordLayoutConfigJson | null;
@@ -7328,6 +7303,7 @@ export default function AdminEntityDrawer() {
         }
         if (drawer.type === "opportunities") {
             overviewSections = overviewSections.filter((s) => s.key !== "operational_attention");
+            overviewSections = overviewSections.filter((s) => s.key !== "tour_scheduling");
         }
         return overviewSections;
     }, [drawer.type, overviewData, presentationType, recordChromeSchedule.layout, recordChromeOpportunity.layout]);
@@ -10562,22 +10538,34 @@ export default function AdminEntityDrawer() {
                                                                             />
                                                                         </div>
                                                                         <div>
-                                                                            <div className={tinyLabel}>Tour date</div>
-                                                                            <div className={`${oppInqReadonlyField}`} aria-label="Tour date (managed by actions)">
-                                                                                {(() => {
-                                                                                    const md = (d.metadata ?? null) as Record<string, unknown> | null;
-                                                                                    const fmt = formatTourDateTime(md?.tour_date, md?.tour_time, { displayTimeZoneIana: viewerTz });
-                                                                                    return fmt.display;
-                                                                                })()}
-                                                                            </div>
                                                                             {drawer.id && drawer.id !== "new" ? (
-                                                                                <OpportunityTourBookingLifecycleBar
+                                                                                <OpportunityInquiryTourDateBlock
                                                                                     opportunityId={drawer.id}
                                                                                     locationId={String((d.location_id as string | null | undefined) ?? "").trim()}
+                                                                                    metadata={d.metadata}
+                                                                                    viewerTimezone={viewerTz}
                                                                                     canMutate={!!canMutate}
                                                                                     onRefresh={refetch}
+                                                                                    labelClassName={tinyLabel}
+                                                                                    readonlyFieldClassName={oppInqReadonlyField}
                                                                                 />
-                                                                            ) : null}
+                                                                            ) : (
+                                                                                <>
+                                                                                    <div className={tinyLabel}>Tour date</div>
+                                                                                    <div
+                                                                                        className={`${oppInqReadonlyField}`}
+                                                                                        aria-label="Tour date (managed by actions)"
+                                                                                    >
+                                                                                        {(() => {
+                                                                                            const md = (d.metadata ?? null) as Record<string, unknown> | null;
+                                                                                            const fmt = formatTourDateTime(md?.tour_date, md?.tour_time, {
+                                                                                                displayTimeZoneIana: viewerTz,
+                                                                                            });
+                                                                                            return fmt.display;
+                                                                                        })()}
+                                                                                    </div>
+                                                                                </>
+                                                                            )}
                                                                         </div>
                                                                     </div>
                                                                     {/* Next step is now rendered inline in the drawer header (informational). */}

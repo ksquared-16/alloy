@@ -78,6 +78,9 @@ export function OpportunityTourBookingLifecycleBar(props: Props) {
             if (!res.ok) throw new Error(j.error ?? res.statusText);
             await load();
             await onRefresh();
+            window.dispatchEvent(
+                new CustomEvent("adminv2:opportunity-updated", { detail: { id: opportunityId, action_key: "tour_booking" } })
+            );
         } catch (e) {
             setErr(e instanceof Error ? e.message : String(e));
         } finally {
@@ -107,7 +110,7 @@ export function OpportunityTourBookingLifecycleBar(props: Props) {
             <div className="text-[11px] text-alloy-midnight/75">
                 {statusLabel(primary.status_key)}
                 {ACTIVE.has(primary.status_key) ? (
-                    <span className="text-alloy-midnight/45"> · mirrored to Tour date when confirmed.</span>
+                    <span className="text-alloy-midnight/45"> · Tour date above follows this booking.</span>
                 ) : null}
             </div>
             {canMutate ? (
@@ -176,6 +179,11 @@ export function OpportunityTourBookingLifecycleBar(props: Props) {
                                 setRescheduleOpen(false);
                                 await load();
                                 await onRefresh();
+                                window.dispatchEvent(
+                                    new CustomEvent("adminv2:opportunity-updated", {
+                                        detail: { id: opportunityId, action_key: "tour_booking" },
+                                    })
+                                );
                             }}
                         />
                     </div>
