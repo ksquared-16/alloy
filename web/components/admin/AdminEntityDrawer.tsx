@@ -37,7 +37,8 @@ import {
     formatScheduleDrawerHeaderTitle,
 } from "@/lib/adminFormatters";
 import { AssignmentStatusBadge, StatusBadge, getStatusVariant } from "@/components/admin/StatusBadge";
-import { ScheduleTourActionFormModal } from "@/components/admin/opportunity/actions/ScheduleTourActionFormModal";
+import { OpportunityTourScheduleActionModal } from "@/components/admin/opportunity/tours/OpportunityTourScheduleActionModal";
+import { OpportunityTourBookingLifecycleBar } from "@/components/admin/opportunity/tours/OpportunityTourBookingLifecycleBar";
 import { ContactAttemptedModal } from "@/components/admin/opportunity/actions/ContactAttemptedModal";
 import { UpdateStatusAddNoteModal } from "@/components/admin/opportunity/actions/UpdateStatusAddNoteModal";
 import { AddRelatedPersonModal } from "@/components/admin/opportunity/actions/AddRelatedPersonModal";
@@ -6718,13 +6719,7 @@ export default function AdminEntityDrawer() {
             if (recordOpportunityDrawerLayoutIncludesSection(oppCfg, "tour_scheduling") && drawer.id && drawer.id !== "new") {
                 const locId = String((d.location_id as string | null | undefined) ?? "").trim();
                 out.tour_scheduling = (
-                    <OpportunityTourDrawerSection
-                        opportunityId={drawer.id}
-                        locationId={locId}
-                        canMutate={!!canMutate}
-                        onRefresh={refetch}
-                        viewerTimezone={viewerTz}
-                    />
+                    <OpportunityTourDrawerSection opportunityId={drawer.id} locationId={locId} viewerTimezone={viewerTz} />
                 );
             }
             return out;
@@ -10523,6 +10518,14 @@ export default function AdminEntityDrawer() {
                                                                                     return fmt.display;
                                                                                 })()}
                                                                             </div>
+                                                                            {drawer.id && drawer.id !== "new" ? (
+                                                                                <OpportunityTourBookingLifecycleBar
+                                                                                    opportunityId={drawer.id}
+                                                                                    locationId={String((d.location_id as string | null | undefined) ?? "").trim()}
+                                                                                    canMutate={!!canMutate}
+                                                                                    onRefresh={refetch}
+                                                                                />
+                                                                            ) : null}
                                                                         </div>
                                                                     </div>
                                                                     {/* Next step is now rendered inline in the drawer header (informational). */}
@@ -12596,11 +12599,17 @@ export default function AdminEntityDrawer() {
                 }}
                 onPaymentOutcome={(o) => setPaymentToast(o)}
             />
-            <ScheduleTourActionFormModal
-                open={actionFormState?.form_key === "schedule_tour"}
+            <OpportunityTourScheduleActionModal
+                open={actionFormState?.form_key === "schedule_tour" && drawer.type === "opportunities"}
                 onClose={() => setActionFormState(null)}
                 title={actionFormState?.action?.label ?? "Schedule tour"}
                 submitLabel={actionFormState?.action?.label ?? "Save"}
+                opportunityId={drawer.type === "opportunities" && drawer.id !== "new" ? drawer.id : ""}
+                locationId={
+                    data && typeof data === "object" && (data as { location_id?: unknown }).location_id != null
+                        ? String((data as { location_id: unknown }).location_id).trim()
+                        : null
+                }
                 initialTourDate={(() => {
                     const md = data && typeof data === "object" ? ((data as any).metadata ?? null) : null;
                     const d = md && typeof md.tour_date === "string" ? md.tour_date.trim() : "";
@@ -12611,7 +12620,14 @@ export default function AdminEntityDrawer() {
                     const t = md && typeof md.tour_time === "string" ? md.tour_time.trim() : "";
                     return t || null;
                 })()}
-                onSubmit={async (payload) => {
+                onSlotBooked={async () => {
+                    if (!drawer.id || drawer.id === "new" || drawer.type !== "opportunities") return;
+                    refetch();
+                    window.dispatchEvent(
+                        new CustomEvent("adminv2:opportunity-updated", { detail: { id: drawer.id, action_key: "schedule_tour" } })
+                    );
+                }}
+                onLegacySubmit={async (payload) => {
                     if (!drawer.id || drawer.id === "new" || drawer.type !== "opportunities") return;
                     const actionKey = actionFormState?.action?.key ? String(actionFormState.action.key) : "schedule_tour";
                     setOpportunityActionLoading(actionKey);
@@ -12658,7 +12674,6 @@ export default function AdminEntityDrawer() {
                         if (row && typeof row === "object") {
                             setData((prev) => (prev && typeof prev === "object" ? { ...prev, ...row } : prev));
                         }
-                        setActionFormState(null);
                         refetch();
                         window.dispatchEvent(
                             new CustomEvent("adminv2:opportunity-updated", { detail: { id: drawer.id, action_key: actionKey } })

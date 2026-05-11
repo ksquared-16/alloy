@@ -8,19 +8,25 @@ export type ScheduleTourActionFormModalProps = {
     initialTourDate?: string | null;
     initialTourTime?: string | null;
     onClose: () => void;
+    /** Cancel button; defaults to `onClose`. */
+    onCancel?: () => void;
     onSubmit: (payload: { tour_date: string; tour_time: string }) => Promise<void> | void;
+    /** When set, renders only the inner card (no full-screen overlay) for nesting inside another modal. */
+    variant?: "modal" | "embedded";
 };
 
 export function ScheduleTourActionFormModal(props: ScheduleTourActionFormModalProps) {
     const {
         open,
         onClose,
+        onCancel,
         onSubmit,
         title = "Schedule tour",
         subtitle = "Enter the tour date and time to start the follow-up workflow.",
         submitLabel = "Schedule tour",
         initialTourDate = null,
         initialTourTime = null,
+        variant = "modal",
     } = props;
     const [tourDate, setTourDate] = useState(initialTourDate ?? "");
     const [tourTime, setTourTime] = useState(initialTourTime ?? "");
@@ -40,12 +46,11 @@ export function ScheduleTourActionFormModal(props: ScheduleTourActionFormModalPr
 
     if (!open) return null;
 
-    return (
-        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
-            <div
-                className="w-full max-w-md overflow-hidden rounded-2xl border border-alloy-stone/25 bg-white shadow-2xl"
-                onClick={(e) => e.stopPropagation()}
-            >
+    const inner = (
+        <div
+            className={`w-full overflow-hidden rounded-2xl border border-alloy-stone/25 bg-white shadow-2xl ${variant === "modal" ? "max-w-md" : "max-w-lg"}`}
+            onClick={(e) => e.stopPropagation()}
+        >
                 <div className="border-b border-alloy-stone/15 px-5 py-4">
                     <div className="text-base font-semibold text-alloy-midnight">{title}</div>
                     <div className="mt-0.5 text-sm text-alloy-midnight/65">{subtitle}</div>
@@ -81,7 +86,7 @@ export function ScheduleTourActionFormModal(props: ScheduleTourActionFormModalPr
                         <button
                             type="button"
                             className="rounded-lg border border-alloy-stone/25 bg-white px-3 py-2 text-sm text-alloy-midnight shadow-sm hover:bg-alloy-stone/5"
-                            onClick={onClose}
+                            onClick={onCancel ?? onClose}
                             disabled={submitting}
                         >
                             Cancel
@@ -108,7 +113,16 @@ export function ScheduleTourActionFormModal(props: ScheduleTourActionFormModalPr
                         </button>
                     </div>
                 </div>
-            </div>
+        </div>
+    );
+
+    if (variant === "embedded") {
+        return inner;
+    }
+
+    return (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/30 p-4" onClick={onClose}>
+            {inner}
         </div>
     );
 }
