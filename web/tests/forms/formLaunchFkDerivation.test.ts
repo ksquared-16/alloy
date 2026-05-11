@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { deriveSubmissionFksFromLaunchMetadata } from "@/lib/forms/formLaunchFkDerivation";
+import { deriveSubmissionFksFromLaunchMetadata, applyOpportunityPacketLinkFkExtras } from "@/lib/forms/formLaunchFkDerivation";
 
 const ORG = "11111111-1111-4111-8111-111111111111";
 const MID = "33333333-3333-4333-8333-333333333333";
@@ -137,5 +137,53 @@ describe("deriveSubmissionFksFromLaunchMetadata", () => {
         expect(r.opportunity_id).toBe(OID);
         expect(r.customer_id).toBe(CID);
         expect(r.person_id).toBe(PID);
+    });
+});
+
+describe("applyOpportunityPacketLinkFkExtras", () => {
+    it("stamps member and recipient person when metadata matches org rows", async () => {
+        const supabase = {
+            from: vi.fn((table: string) => {
+                if (table === "customer_members") {
+                    return {
+                        select: () => ({
+                            eq: () => ({
+                                eq: () => ({
+                                    maybeSingle: async () => ({
+                                        data: { id: MID, customer_id: CID },
+                                        error: null,
+                                    }),
+                                }),
+                            }),
+                        }),
+                    };
+                }
+                if (table === "persons") {
+                    return {
+                        select: () => ({
+                            eq: () => ({
+                                eq: () => ({
+                                    maybeSingle: async () => ({ data: { id: PID }, error: null }),
+                                }),
+                            }),
+                        }),
+                    };
+                }
+                throw new Error(table);
+            }),
+        } as unknown as import("@supabase/supabase-js").SupabaseClient;
+
+        const base = {
+            person_id: "aaaaaaa-a-aaaa-aaaa-aaaaaaaaaaaa" as string | null,
+            customer_id: CID,
+            customer_member_id: null as string | null,
+            opportunity_id: OID,
+        };
+        const out = await applyOpportunityPacketLinkFkExtras(supabase, ORG, base, {
+            selected_customer_member_id: MID,
+            recipient_person_id: PID,
+        });
+        expect(out.customer_member_id).toBe(MID);
+        expect(out.person_id).toBe(PID);
     });
 });

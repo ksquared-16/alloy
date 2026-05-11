@@ -139,6 +139,9 @@ export function pickLaunchContextForPacketSession(metadata: Record<string, unkno
         "intake",
         "label",
         "launch_surface",
+        "selected_customer_member_id",
+        "recipient_person_id",
+        "delivery_intent",
     ] as const;
     const out: Record<string, unknown> = {};
     for (const k of keys) {

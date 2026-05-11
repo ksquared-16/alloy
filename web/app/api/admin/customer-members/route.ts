@@ -20,7 +20,9 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
         .from("customer_members")
-        .select("id, customer_id, display_name, relationship, first_name, last_name, dob, is_active, status_key, created_at, updated_at")
+        .select(
+            "id, customer_id, person_id, display_name, relationship, first_name, last_name, dob, is_active, status_key, created_at, updated_at"
+        )
         .eq("org_id", ctx.orgId)
         .order("created_at", { ascending: false });
 
@@ -84,6 +86,7 @@ export async function GET(request: NextRequest) {
         return {
             id,
             customer_id: (r as { customer_id: string }).customer_id,
+            person_id: (r as { person_id?: string | null }).person_id ?? null,
             display_name: (r as { display_name: string | null }).display_name ?? null,
             relationship: relationshipKey,
             first_name: (r as { first_name: string | null }).first_name ?? null,

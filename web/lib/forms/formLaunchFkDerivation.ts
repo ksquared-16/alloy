@@ -17,6 +17,44 @@ const EMPTY: LaunchFkStamp = {
     opportunity_id: null,
 };
 
+/** Apply trusted packet-link metadata for opportunity launches (validated at link mint; re-checked here). */
+export async function applyOpportunityPacketLinkFkExtras(
+    supabase: SupabaseClient,
+    orgId: string,
+    base: LaunchFkStamp,
+    linkMetadata: Record<string, unknown>
+): Promise<LaunchFkStamp> {
+    const midRaw = typeof linkMetadata.selected_customer_member_id === "string" ? linkMetadata.selected_customer_member_id.trim() : "";
+    const rpRaw = typeof linkMetadata.recipient_person_id === "string" ? linkMetadata.recipient_person_id.trim() : "";
+    let out: LaunchFkStamp = { ...base };
+    if (midRaw && UUID_RE.test(midRaw) && base.customer_id) {
+        const { data: mem, error } = await supabase
+            .from("customer_members")
+            .select("id, customer_id")
+            .eq("org_id", orgId)
+            .eq("id", midRaw)
+            .maybeSingle();
+        if (error) throw new Error(error.message);
+        const mc = (mem as { customer_id?: string } | null)?.customer_id;
+        if (mem && mc === base.customer_id) {
+            out = { ...out, customer_member_id: midRaw };
+        }
+    }
+    if (rpRaw && UUID_RE.test(rpRaw)) {
+        const { data: person, error: pErr } = await supabase
+            .from("persons")
+            .select("id")
+            .eq("org_id", orgId)
+            .eq("id", rpRaw)
+            .maybeSingle();
+        if (pErr) throw new Error(pErr.message);
+        if (person && typeof (person as { id?: string }).id === "string") {
+            out = { ...out, person_id: rpRaw };
+        }
+    }
+    return out;
+}
+
 /** Draft insert: seed CRM FKs when link metadata targets an existing_record or packet launch with source entity. */
 export async function deriveSubmissionFksFromLaunchMetadata(
     supabase: SupabaseClient,
@@ -79,7 +117,8 @@ export async function deriveSubmissionFksFromLaunchMetadata(
                 const pid = (con as { person_id?: string | null } | null)?.person_id ?? null;
                 if (typeof pid === "string" && UUID_RE.test(pid)) personId = pid;
             }
-            return { ...EMPTY, opportunity_id: id, customer_id: cid, person_id: personId };
+            const base = { ...EMPTY, opportunity_id: id, customer_id: cid, person_id: personId };
+            return await applyOpportunityPacketLinkFkExtras(supabase, orgId, base, linkMetadata);
         }
         default:
             return { ...EMPTY };

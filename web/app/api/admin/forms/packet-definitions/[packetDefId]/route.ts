@@ -32,7 +32,32 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
         .order("sequence_index", { ascending: true });
     if (iErr) return NextResponse.json({ error: iErr.message }, { status: 500 });
 
-    return jsonData({ definition: def, items: items ?? [] });
+    const rawItems = items ?? [];
+    const formIds = [...new Set(rawItems.map((r: { form_definition_id: string }) => r.form_definition_id))];
+    let versionRows: { id: string; form_definition_id: string; status: string }[] = [];
+    if (formIds.length > 0) {
+        const { data: vr, error: vErr } = await supabase
+            .from("form_definition_versions")
+            .select("id, form_definition_id, status")
+            .eq("org_id", ctx.orgId)
+            .in("form_definition_id", formIds);
+        if (vErr) return NextResponse.json({ error: vErr.message }, { status: 500 });
+        versionRows = (vr ?? []) as { id: string; form_definition_id: string; status: string }[];
+    }
+
+    const enrichedItems = rawItems.map((row: Record<string, unknown>) => {
+        const fid = row.form_definition_id as string;
+        const pin = row.pinned_form_definition_version_id as string | null | undefined;
+        let step_has_published = false;
+        if (pin && typeof pin === "string") {
+            step_has_published = versionRows.some((v) => v.id === pin && v.status === "published");
+        } else {
+            step_has_published = versionRows.some((v) => v.form_definition_id === fid && v.status === "published");
+        }
+        return { ...row, step_has_published_version: step_has_published };
+    });
+
+    return jsonData({ definition: def, items: enrichedItems });
 }
 
 /** PATCH /api/admin/forms/packet-definitions/[packetDefId] — name, description, is_active, metadata merge. */

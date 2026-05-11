@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
@@ -9,6 +10,43 @@ import { mergePublicLinkMetadataForCreate } from "@/lib/forms/intake/defaultPubl
 import { assertEntityInOrg } from "@/lib/admin/assertEntityInOrg";
 import { defaultOpportunityLaunchPrefillFieldMap } from "@/lib/forms/prefill/defaultOpportunityLaunchPrefillFieldMap";
 import { parsePrefillFieldMapBody } from "@/lib/forms/prefill/prefillFieldMap";
+import { resolveOpportunityEnrollmentSelection } from "@/lib/forms/packets/opportunityPacketLaunchValidation";
+
+async function assertPacketStepsPublishable(
+    supabase: SupabaseClient,
+    orgId: string,
+    steps: { form_definition_id: string; pinned_form_definition_version_id: string | null; sequence_index: number }[]
+): Promise<NextResponse | null> {
+    const formIds = [...new Set(steps.map((s) => s.form_definition_id))];
+    const { data: verRows, error } = await supabase
+        .from("form_definition_versions")
+        .select("id, form_definition_id, status")
+        .eq("org_id", orgId)
+        .in("form_definition_id", formIds);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const rows = (verRows ?? []) as { id: string; form_definition_id: string; status: string }[];
+    for (const step of steps) {
+        const pin = step.pinned_form_definition_version_id;
+        if (pin) {
+            const v = rows.find((r) => r.id === pin);
+            if (!v || v.status !== "published") {
+                return jsonError(
+                    `Packet step ${step.sequence_index + 1} pinned form version is missing or not published`,
+                    400
+                );
+            }
+        } else {
+            const hasPub = rows.some((r) => r.form_definition_id === step.form_definition_id && r.status === "published");
+            if (!hasPub) {
+                return jsonError(
+                    `Packet step ${step.sequence_index + 1} has no published form version — publish each step's form or pin a published version`,
+                    400
+                );
+            }
+        }
+    }
+    return null;
+}
 
 function deriveEmbedBaseUrl(request: NextRequest): string | null {
     const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host");
@@ -56,6 +94,9 @@ export async function POST(request: NextRequest) {
         .order("sequence_index", { ascending: true });
     if (stErr) return NextResponse.json({ error: stErr.message }, { status: 500 });
     if (!steps?.length) return jsonError("Packet definition has no steps", 400);
+
+    const stepErr = await assertPacketStepsPublishable(supabase, ctx.orgId, steps as never);
+    if (stepErr) return stepErr;
 
     const first = steps[0] as {
         form_definition_id: string;
@@ -156,13 +197,51 @@ export async function POST(request: NextRequest) {
         }
     }
 
+    let enrollmentResolved: {
+        selected_customer_member_id: string | null;
+        recipient_person_id: string | null;
+        delivery_intent: "copy_link" | "email_later";
+    } | null = null;
+
+    if (metadata.source_entity_type === "opportunity" && typeof metadata.source_entity_id === "string") {
+        const selRaw = body.enrollment_selection;
+        const sel =
+            selRaw && typeof selRaw === "object" && !Array.isArray(selRaw) ? (selRaw as Record<string, unknown>) : {};
+        const optionalUuidField = (v: unknown): string | null | undefined => {
+            if (v === "" || v === undefined || v === null) return null;
+            return typeof v === "string" ? v : undefined;
+        };
+        const resolved = await resolveOpportunityEnrollmentSelection(supabase, ctx.orgId, metadata.source_entity_id, {
+            customer_member_id: optionalUuidField(sel.customer_member_id),
+            recipient_person_id: optionalUuidField(sel.recipient_person_id),
+            delivery_intent: typeof sel.delivery_intent === "string" ? sel.delivery_intent : null,
+        });
+        if (!resolved.ok) return jsonError(resolved.message, 400);
+        enrollmentResolved = resolved.value;
+        if (resolved.value.selected_customer_member_id) {
+            metadata.selected_customer_member_id = resolved.value.selected_customer_member_id;
+        }
+        if (resolved.value.recipient_person_id) {
+            metadata.recipient_person_id = resolved.value.recipient_person_id;
+        }
+        metadata.delivery_intent = resolved.value.delivery_intent;
+    }
+
     const prefillParsed = parsePrefillFieldMapBody(
         "prefill_field_map" in body ? body.prefill_field_map : undefined
     );
     if (!prefillParsed.ok) return jsonError(prefillParsed.message, 400);
     const oppDefaults =
         metadata.source_entity_type === "opportunity" ? defaultOpportunityLaunchPrefillFieldMap() : {};
-    const mergedPrefill = { ...oppDefaults, ...(prefillParsed.map ?? {}) };
+    const childPrefill =
+        enrollmentResolved?.selected_customer_member_id ?
+            {
+                child_first_name: "customer_member.first_name",
+                child_last_name: "customer_member.last_name",
+                child_date_of_birth: "customer_member.dob",
+            }
+        :   {};
+    const mergedPrefill = { ...oppDefaults, ...childPrefill, ...(prefillParsed.map ?? {}) };
     if (Object.keys(mergedPrefill).length > 0) {
         metadata.prefill_field_map = mergedPrefill;
     }

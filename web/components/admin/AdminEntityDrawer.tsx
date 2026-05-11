@@ -138,7 +138,9 @@ import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegi
 import { formatActivityRelativeShort, type ActivitySignalResult } from "@/lib/admin/activitySignals";
 import { formatOpportunityActivityTimelineEvent } from "@/lib/admin/opportunityActivityTimelineFormat";
 import OpportunityQuoteIntakeSection from "@/components/admin/quoteIntake/OpportunityQuoteIntakeSection";
-import OpportunityLaunchPacketSection from "@/components/admin/opportunity/OpportunityLaunchPacketSection";
+import OpportunityLaunchPacketSection, {
+    type OpportunityPacketLaunchSummary,
+} from "@/components/admin/opportunity/OpportunityLaunchPacketSection";
 
 function dispatchAfterPaymentRun(jobId: string, scheduleId: string | null) {
     window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "jobs", id: jobId } }));
@@ -1248,6 +1250,9 @@ export default function AdminEntityDrawer() {
 
     const [oppQuoteIntakeOpen, setOppQuoteIntakeOpen] = useState(false);
     const [oppLaunchPacketOpen, setOppLaunchPacketOpen] = useState(false);
+    const [opportunityEnrollmentPacketLaunches, setOpportunityEnrollmentPacketLaunches] = useState<
+        OpportunityPacketLaunchSummary[]
+    >([]);
     const [oppDiscountOptions, setOppDiscountOptions] = useState<{ value: string; label: string }[] | null>(null);
     const [oppDiscountLoading, setOppDiscountLoading] = useState(false);
     const [oppDiscountSelection, setOppDiscountSelection] = useState<string>("");
@@ -5335,7 +5340,11 @@ export default function AdminEntityDrawer() {
                                           type="button"
                                           disabled={!!opportunityActionLoading}
                                           onClick={() => {
-                                              setOppLaunchPacketOpen((o) => !o);
+                                              setOppLaunchPacketOpen((o) => {
+                                                  const next = !o;
+                                                  if (next) setDrawerTab("overview");
+                                                  return next;
+                                              });
                                           }}
                                           className={overflowCls}
                                       >
@@ -5369,15 +5378,18 @@ export default function AdminEntityDrawer() {
             />
         ) : null;
 
-    const opportunityLaunchPacketNode =
-        drawer.type === "opportunities" && drawer.id && drawer.id !== "new" && oppLaunchPacketOpen ? (
-            <OpportunityLaunchPacketSection
-                opportunityId={drawer.id}
-                opportunityLabel={String((data as { name?: string } | null)?.name ?? "").trim() || "Opportunity"}
-                canMutate={!!canMutate}
-                onClose={() => setOppLaunchPacketOpen(false)}
-            />
-        ) : null;
+    const opportunityLaunchPacketNode = oppLaunchPacketOpen ? (
+        <OpportunityLaunchPacketSection
+            opportunityId={drawer.id as string}
+            opportunityLabel={String((data as { name?: string } | null)?.name ?? "").trim() || "Opportunity"}
+            opportunityRecord={data && !(data as { _create?: boolean })._create ? (data as Record<string, unknown>) : null}
+            canMutate={!!canMutate}
+            onClose={() => setOppLaunchPacketOpen(false)}
+            onLaunched={(row) => {
+                setOpportunityEnrollmentPacketLaunches((prev) => [row, ...prev].slice(0, 8));
+            }}
+        />
+    ) : null;
 
     const opportunityQuoteSummaryNode =
         drawer.type !== "opportunities" || !overviewData || (overviewData as { _create?: boolean })._create
@@ -10182,6 +10194,53 @@ export default function AdminEntityDrawer() {
                                 <JobRrsOverviewTab jobId={drawer.id} variant="legacy" />
                             </div>
                         )}
+                    {drawerTab === "overview" &&
+                        drawer.type === "opportunities" &&
+                        drawer.id &&
+                        drawer.id !== "new" &&
+                        !(data as { _create?: boolean })?._create && (
+                            <>
+                                {opportunityLaunchPacketNode}
+                                {opportunityEnrollmentPacketLaunches.length > 0 ? (
+                                    <section className="mb-4 rounded-lg border border-alloy-stone/40 bg-white/90 px-3 py-2.5 shadow-sm">
+                                        <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
+                                            Recent packet launches (this session)
+                                        </p>
+                                        <ul className="mt-2 space-y-2">
+                                            {opportunityEnrollmentPacketLaunches.map((L) => (
+                                                <li
+                                                    key={L.key}
+                                                    className="rounded-md border border-alloy-stone/25 bg-alloy-stone/5 px-2 py-1.5 text-xs text-alloy-midnight/85"
+                                                >
+                                                    <div className="font-medium text-alloy-midnight/90">{L.packetName}</div>
+                                                    <div className="mt-0.5 text-[11px] text-alloy-midnight/65">
+                                                        {L.enrolleeLabel} · {L.recipientLabel} ·{" "}
+                                                        {L.deliveryIntent === "email_later" ? "Email later" : "Copy link"}
+                                                    </div>
+                                                    <div className="mt-1 flex flex-wrap gap-2">
+                                                        <a
+                                                            href={L.url}
+                                                            target="_blank"
+                                                            rel="noreferrer"
+                                                            className="font-medium text-alloy-blue hover:underline"
+                                                        >
+                                                            Open
+                                                        </a>
+                                                        <button
+                                                            type="button"
+                                                            className="font-medium text-alloy-blue hover:underline"
+                                                            onClick={() => void navigator.clipboard.writeText(L.url)}
+                                                        >
+                                                            Copy
+                                                        </button>
+                                                    </div>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </section>
+                                ) : null}
+                            </>
+                        )}
                     {drawerTab === "overview" && useConfigDrivenOverview && presentationType && (
                         isJobDrawerV2 && drawer.type === "jobs" ? (
                             showJobRecordModalV2 ? (
@@ -10638,7 +10697,6 @@ export default function AdminEntityDrawer() {
                                 ) : null}
                                 {drawer.type === "opportunities" && !opportunityInquiryWorkflowDrawer ? opportunityQuoteSummaryNode : null}
                                 {drawer.type === "opportunities" && !opportunityInquiryWorkflowDrawer ? opportunityQuoteIntakeNode : null}
-                                {drawer.type === "opportunities" && !opportunityInquiryWorkflowDrawer ? opportunityLaunchPacketNode : null}
                                 <EntityDrawerOverview
                                     entityType={presentationType}
                                     data={entityDrawerOverviewData}
