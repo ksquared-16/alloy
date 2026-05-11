@@ -32,6 +32,7 @@ const OPPORTUNITY_EVENT_TYPE_LABELS: Record<string, string> = {
     opportunity_enrollment_packet_opened: "Enrollment packet opened",
     opportunity_enrollment_packet_step_completed: "Enrollment packet step completed",
     opportunity_enrollment_packet_completed: "Enrollment packet completed",
+    opportunity_enrollment_packet_sent: "Enrollment packet sent",
 };
 
 /** Default options for opportunity workflow_events and related UI. */

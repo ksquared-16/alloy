@@ -22,6 +22,7 @@ describe("opportunityActivityTimelineFormat", () => {
         expect(getWorkflowActivityEventTitle("action_executed")).toBe("Action completed");
         expect(getWorkflowActivityEventTitle("message_received")).toBe("SMS received");
         expect(getWorkflowActivityEventTitle("opportunity_enrollment_packet_created")).toBe("Enrollment packet created");
+        expect(getWorkflowActivityEventTitle("opportunity_enrollment_packet_sent")).toBe("Enrollment packet sent");
         expect(getWorkflowActivityEventTitle("opportunity_enrollment_packet_step_completed")).toBe(
             "Enrollment packet step completed"
         );

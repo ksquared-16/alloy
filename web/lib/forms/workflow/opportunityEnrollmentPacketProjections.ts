@@ -14,6 +14,7 @@ export const OPPORTUNITY_ENROLLMENT_PACKET_CREATED = "opportunity_enrollment_pac
 export const OPPORTUNITY_ENROLLMENT_PACKET_OPENED = "opportunity_enrollment_packet_opened";
 export const OPPORTUNITY_ENROLLMENT_PACKET_STEP_COMPLETED = "opportunity_enrollment_packet_step_completed";
 export const OPPORTUNITY_ENROLLMENT_PACKET_COMPLETED = "opportunity_enrollment_packet_completed";
+export const OPPORTUNITY_ENROLLMENT_PACKET_SENT = "opportunity_enrollment_packet_sent";
 
 async function projectionExists(
     supabase: SupabaseClient,
@@ -412,6 +413,63 @@ export async function emitOpportunityEnrollmentPacketCompletedProjectionSafe(par
                 child_display,
                 completed_at: row.completed_at ?? null,
                 summary: packet_name ? `Enrollment packet completed: ${packet_name}` : "Enrollment packet completed",
+            },
+        });
+        return { error: null };
+    } catch (e) {
+        return { error: e instanceof Error ? e : new Error(String(e)) };
+    }
+}
+
+export async function emitOpportunityEnrollmentPacketSentSafe(params: {
+    orgId: string;
+    opportunityId: string;
+    packetDefinitionId: string;
+    formPublicLinkIds: string[];
+    recipientPersonId: string | null;
+    selectedCustomerMemberIds: string[];
+    communicationMessageId: string | null;
+}): Promise<{ error: Error | null }> {
+    try {
+        const supabase = createAdminClient();
+        const {
+            orgId,
+            opportunityId,
+            packetDefinitionId,
+            formPublicLinkIds,
+            recipientPersonId,
+            selectedCustomerMemberIds,
+            communicationMessageId,
+        } = params;
+        const batchKey = [...formPublicLinkIds].sort().join(",");
+        if (
+            await projectionExists(supabase, orgId, OPPORTUNITY_ENROLLMENT_PACKET_SENT, opportunityId, {
+                form_public_link_batch_key: batchKey,
+            })
+        ) {
+            return { error: null };
+        }
+
+        const packet_name = await loadPacketDefinitionName(supabase, orgId, packetDefinitionId);
+        const recipient_display = await loadPersonDisplay(supabase, orgId, recipientPersonId);
+
+        await emitEvent({
+            org_id: orgId,
+            event_type: OPPORTUNITY_ENROLLMENT_PACKET_SENT,
+            entity_type: "opportunities",
+            entity_id: opportunityId,
+            payload: {
+                org_id: orgId,
+                opportunity_id: opportunityId,
+                packet_definition_id: packetDefinitionId,
+                form_public_link_ids: formPublicLinkIds,
+                form_public_link_batch_key: batchKey,
+                recipient_person_id: recipientPersonId,
+                recipient_display,
+                selected_customer_member_ids: selectedCustomerMemberIds,
+                communication_message_id: communicationMessageId,
+                packet_name,
+                summary: packet_name ? `Enrollment packet emailed: ${packet_name}` : "Enrollment packet emailed",
             },
         });
         return { error: null };
