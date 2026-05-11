@@ -1,4 +1,6 @@
 -- Card 7: token-scoped public tour booking (server resolves hash; no anon table access).
+-- RLS: same org-role helper as tour_bookings / tour_availability_rules (Card 1):
+--   public.has_org_role(org_id, text[]) — NOT the non-existent single-uuid overload.
 CREATE TABLE IF NOT EXISTS public.tour_public_booking_links (
     id uuid DEFAULT gen_random_uuid() NOT NULL PRIMARY KEY,
     org_id uuid NOT NULL REFERENCES public.orgs (id) ON DELETE CASCADE,
@@ -65,20 +67,20 @@ ALTER TABLE public.tour_public_booking_links ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS tour_public_booking_links_select_by_org_role ON public.tour_public_booking_links;
 CREATE POLICY tour_public_booking_links_select_by_org_role ON public.tour_public_booking_links FOR SELECT TO authenticated
-    USING (public.has_org_role(org_id));
+    USING (public.has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text, 'manager'::text]));
 
 DROP POLICY IF EXISTS tour_public_booking_links_insert_by_org_role ON public.tour_public_booking_links;
 CREATE POLICY tour_public_booking_links_insert_by_org_role ON public.tour_public_booking_links FOR INSERT TO authenticated
-    WITH CHECK (public.has_org_role(org_id));
+    WITH CHECK (public.has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text]));
 
 DROP POLICY IF EXISTS tour_public_booking_links_update_by_org_role ON public.tour_public_booking_links;
 CREATE POLICY tour_public_booking_links_update_by_org_role ON public.tour_public_booking_links FOR UPDATE TO authenticated
-    USING (public.has_org_role(org_id))
-    WITH CHECK (public.has_org_role(org_id));
+    USING (public.has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text]))
+    WITH CHECK (public.has_org_role(org_id, ARRAY['owner'::text, 'admin'::text, 'ops'::text]));
 
 DROP POLICY IF EXISTS tour_public_booking_links_delete_by_org_role ON public.tour_public_booking_links;
 CREATE POLICY tour_public_booking_links_delete_by_org_role ON public.tour_public_booking_links FOR DELETE TO authenticated
-    USING (public.has_org_role(org_id));
+    USING (public.has_org_role(org_id, ARRAY['owner'::text, 'admin'::text]));
 
 DROP POLICY IF EXISTS tour_public_booking_links_all_service_role ON public.tour_public_booking_links;
 CREATE POLICY tour_public_booking_links_all_service_role ON public.tour_public_booking_links FOR ALL TO service_role

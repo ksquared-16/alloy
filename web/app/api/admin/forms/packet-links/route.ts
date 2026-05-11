@@ -121,6 +121,9 @@ export async function POST(request: NextRequest) {
     const metadata = await mergePublicLinkMetadataForCreate(supabase, formKey, clientMetadata);
     metadata.form_context_mode = "packet";
     metadata.packet_definition_id = packetDefinitionId;
+    if (metadata.packet_step_version_policy === undefined) {
+        metadata.packet_step_version_policy = "follow_latest";
+    }
 
     const launchRaw = body.launch_from_entity;
     if (launchRaw !== undefined && launchRaw !== null) {

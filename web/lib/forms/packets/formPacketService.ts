@@ -292,15 +292,46 @@ export async function loadPacketDefinitionName(
     return typeof name === "string" && name.trim() ? name.trim() : null;
 }
 
+export type PacketStepSummary = { sequence_index: number; form_name: string };
+
+/** Ordered step labels for public packet progress UI. */
+export async function loadPacketDefinitionStepSummaries(
+    supabase: SupabaseClient,
+    orgId: string,
+    packetDefinitionId: string
+): Promise<{ data: PacketStepSummary[] | null; error: Error | null }> {
+    const { data, error } = await supabase
+        .from("form_packet_items")
+        .select("sequence_index, form_definitions ( name )")
+        .eq("org_id", orgId)
+        .eq("packet_definition_id", packetDefinitionId)
+        .order("sequence_index", { ascending: true });
+    if (error) return { data: null, error: new Error(error.message) };
+    type Row = {
+        sequence_index: number;
+        form_definitions: { name: string } | { name: string }[] | null;
+    };
+    const out: PacketStepSummary[] = [];
+    for (const r of (data ?? []) as Row[]) {
+        const fd = Array.isArray(r.form_definitions) ? r.form_definitions[0] : r.form_definitions;
+        const name = typeof fd?.name === "string" && fd.name.trim() ? fd.name.trim() : "Form";
+        out.push({ sequence_index: r.sequence_index, form_name: name });
+    }
+    return { data: out, error: null };
+}
+
 export async function resolveActiveStepEnvelope(
     supabase: SupabaseClient,
     orgId: string,
     activeItem: PacketSessionItemRow,
-    definitionItems: PacketDefinitionItemRow[]
+    definitionItems: PacketDefinitionItemRow[],
+    opts?: { followLatestPublished?: boolean }
 ): Promise<{ envelope: PublishedFormEnvelope | null; error: Error | null }> {
     const defRow = definitionItems.find((d) => d.id === activeItem.packet_item_id);
     if (!defRow) return { envelope: null, error: new Error("Packet step definition missing") };
-    const env = await loadPublishedFormEnvelope(supabase, orgId, defRow.form_definition_id, defRow.pinned_form_definition_version_id);
+    const pin =
+        opts?.followLatestPublished ? null : (defRow.pinned_form_definition_version_id as string | null);
+    const env = await loadPublishedFormEnvelope(supabase, orgId, defRow.form_definition_id, pin);
     if (!env) return { envelope: null, error: new Error("No published version for packet step form") };
     return { envelope: env, error: null };
 }

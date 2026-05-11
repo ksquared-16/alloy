@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import type { FormSchemaV1 } from "@/lib/forms/schema";
+import { validateFormSchema } from "@/lib/forms/schema";
+import { filterPayloadValuesToSchemaFields } from "@/lib/forms/filterPayloadValuesToSchema";
 import type { FormPayload } from "@/lib/forms/validateSubmission";
 import type { NormalizedValidationError } from "@/lib/forms/validateSubmission";
 import { FormEngineRenderer, type FormEngineOptionChoice } from "@/components/forms/engine/FormEngineRenderer";
@@ -16,6 +18,7 @@ type ResolvePacketMeta = {
     current_sequence_index: number;
     total_steps: number;
     current_session_item_id: string;
+    step_summaries?: { sequence_index: number; form_name: string }[];
 };
 
 type ResolveOk = {
@@ -98,84 +101,105 @@ export function FormEmbedClient({
     const [submitted, setSubmitted] = useState(false);
     const [packetProgress, setPacketProgress] = useState<ResolvePacketMeta | null>(null);
     const [packetAlreadyDone, setPacketAlreadyDone] = useState(false);
-    const [interStepThanks, setInterStepThanks] = useState(false);
     const [packetFinalThankYou, setPacketFinalThankYou] = useState(false);
+    const [advancingToNextPacketStep, setAdvancingToNextPacketStep] = useState(false);
 
     const encToken = useMemo(() => encodeURIComponent(token), [token]);
 
     const bootstrap = useCallback(async () => {
-        setPhase("loading");
-        setMessage(null);
-        setValidationErrors(null);
-        setSubmitted(false);
-        setInterStepThanks(false);
-        setPacketFinalThankYou(false);
-        setPacketAlreadyDone(false);
-        setPacketProgress(null);
-        const res = await fetch(`/api/public/forms/${encToken}/resolve`, { method: "GET" });
-        const json = (await res.json()) as ResolveOk | ApiErr;
-        if (!json.ok) {
-            setPhase("error");
-            setMessage(json.error ?? "Resolve failed");
-            return;
-        }
+        try {
+            setPhase("loading");
+            setMessage(null);
+            setValidationErrors(null);
+            setSubmitted(false);
+            setPacketFinalThankYou(false);
+            setPacketAlreadyDone(false);
+            setPacketProgress(null);
+            const res = await fetch(`/api/public/forms/${encToken}/resolve`, { method: "GET" });
+            const json = (await res.json()) as ResolveOk | ApiErr;
+            if (!json.ok) {
+                setPhase("error");
+                setMessage(json.error ?? "Resolve failed");
+                return;
+            }
 
-        if (json.data.packet_terminal) {
-            setPacketProgress(json.data.packet ?? null);
-            setPacketAlreadyDone(true);
-            setSchema(null);
-            setPhase("ready");
-            return;
-        }
-
-        const rawSchema = json.data.schema_json as FormSchemaV1 | null;
-        if (!rawSchema) {
-            setPhase("error");
-            setMessage("No form schema returned");
-            return;
-        }
-
-        setSchema(rawSchema);
-        setPacketProgress(json.data.packet ?? null);
-        setOptionValuesByFieldId(normalizeOptionValues(json.data.option_values_by_field_id));
-        setOptionChoicesByFieldId(normalizeOptionChoices(json.data.option_choices_by_field_id));
-
-        const stored =
-            typeof window !== "undefined" ? window.sessionStorage.getItem(storageKey(token)) : null;
-        if (stored && /^[0-9a-f-]{36}$/i.test(stored)) {
-            const loaded = await fetch(`/api/public/forms/${encToken}/submissions/${stored}`, {
-                method: "GET",
-            });
-            const body = (await loaded.json()) as {
-                ok: boolean;
-                data?: { id: string; payload: FormPayload };
-                error?: string;
-            };
-            if (loaded.ok && body.ok && body.data?.payload) {
-                setSubmissionId(body.data.id);
-                setPayload(body.data.payload);
+            if (json.data.packet_terminal) {
+                setPacketProgress(json.data.packet ?? null);
+                setPacketAlreadyDone(true);
+                setSchema(null);
                 setPhase("ready");
                 return;
             }
-            window.sessionStorage.removeItem(storageKey(token));
-        }
 
-        const initialPayload = payloadWithMinimumRepeatingGroups(rawSchema);
-        const created = await fetch(`/api/public/forms/${encToken}/submissions`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ payload: initialPayload }),
-        });
-        const cr = (await created.json()) as { ok: boolean; data?: { id: string }; error?: string };
-        if (!cr.ok || !cr.data?.id) {
-            setPhase("error");
-            setMessage(cr.error ?? "Could not start form session");
-            return;
+            const rawSchema = json.data.schema_json as FormSchemaV1 | null;
+            if (!rawSchema) {
+                setPhase("error");
+                setMessage("No form schema returned");
+                return;
+            }
+
+            let parsedSchema: FormSchemaV1;
+            try {
+                parsedSchema = validateFormSchema(rawSchema);
+            } catch {
+                setPhase("error");
+                setMessage("Invalid form schema");
+                return;
+            }
+            setSchema(parsedSchema);
+            setPacketProgress(json.data.packet ?? null);
+            setOptionValuesByFieldId(normalizeOptionValues(json.data.option_values_by_field_id));
+            setOptionChoicesByFieldId(normalizeOptionChoices(json.data.option_choices_by_field_id));
+
+            const stored =
+                typeof window !== "undefined" ? window.sessionStorage.getItem(storageKey(token)) : null;
+            if (stored && /^[0-9a-f-]{36}$/i.test(stored)) {
+                const loaded = await fetch(`/api/public/forms/${encToken}/submissions/${stored}`, {
+                    method: "GET",
+                });
+                const body = (await loaded.json()) as {
+                    ok: boolean;
+                    data?: { id: string; payload: FormPayload };
+                    error?: string;
+                };
+                if (loaded.ok && body.ok && body.data?.payload) {
+                    setSubmissionId(body.data.id);
+                    let nextPayload = body.data.payload;
+                    if (json.data.packet) {
+                        nextPayload = {
+                            ...nextPayload,
+                            values: filterPayloadValuesToSchemaFields(
+                                parsedSchema,
+                                (nextPayload.values ?? {}) as Record<string, unknown>
+                            ),
+                        };
+                    }
+                    setPayload(nextPayload);
+                    setPhase("ready");
+                    return;
+                }
+                window.sessionStorage.removeItem(storageKey(token));
+            }
+
+            const initialPayload = payloadWithMinimumRepeatingGroups(parsedSchema);
+            const created = await fetch(`/api/public/forms/${encToken}/submissions`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ payload: initialPayload }),
+            });
+            const cr = (await created.json()) as { ok: boolean; data?: { id: string }; error?: string };
+            if (!cr.ok || !cr.data?.id) {
+                setPhase("error");
+                setMessage(cr.error ?? "Could not start form session");
+                return;
+            }
+            setSubmissionId(cr.data.id);
+            window.sessionStorage.setItem(storageKey(token), cr.data.id);
+            setPayload(initialPayload);
+            setPhase("ready");
+        } finally {
+            setAdvancingToNextPacketStep(false);
         }
-        setSubmissionId(cr.data.id);
-        window.sessionStorage.setItem(storageKey(token), cr.data.id);
-        setPayload(initialPayload);
-        setPhase("ready");
     }, [encToken, token]);
 
     useEffect(() => {
@@ -189,7 +213,7 @@ export function FormEmbedClient({
 
     const persistDraft = useCallback(
         async (next: FormPayload) => {
-            if (!submissionId || submitted || interStepThanks || packetAlreadyDone) return;
+            if (!submissionId || submitted || packetAlreadyDone) return;
             const res = await fetch(`/api/public/forms/${encToken}/submissions/${submissionId}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
@@ -207,11 +231,11 @@ export function FormEmbedClient({
                 }
             }
         },
-        [encToken, optionValuesByFieldId, submissionId, submitted, interStepThanks, packetAlreadyDone]
+        [encToken, optionValuesByFieldId, submissionId, submitted, packetAlreadyDone]
     );
 
     const handleSubmit = useCallback(async () => {
-        if (!submissionId || submitting || submitted || interStepThanks || packetAlreadyDone) return;
+        if (!submissionId || submitting || submitted || packetAlreadyDone) return;
         setSubmitting(true);
         setMessage(null);
         setValidationErrors(null);
@@ -245,9 +269,10 @@ export function FormEmbedClient({
 
             const data = json.ok ? json.data : undefined;
             if (data?.next_form_available === true && data.packet_complete === false) {
-                setInterStepThanks(true);
+                setAdvancingToNextPacketStep(true);
                 setSubmissionId(null);
                 setSchema(null);
+                await bootstrap();
                 return;
             }
 
@@ -260,23 +285,12 @@ export function FormEmbedClient({
         } finally {
             setSubmitting(false);
         }
-    }, [
-        encToken,
-        optionValuesByFieldId,
-        payload,
-        submissionId,
-        submitting,
-        submitted,
-        interStepThanks,
-        packetAlreadyDone,
-        packetProgress,
-        token,
-    ]);
+    }, [bootstrap, encToken, optionValuesByFieldId, payload, packetAlreadyDone, packetProgress, submissionId, submitting, submitted, token]);
 
     if (phase === "loading") {
         return (
             <div className="flex min-h-[200px] items-center justify-center p-6 text-sm text-neutral-600">
-                Loading form…
+                {advancingToNextPacketStep ? "Loading next step…" : "Loading form…"}
             </div>
         );
     }
@@ -299,29 +313,6 @@ export function FormEmbedClient({
                         <p className="mt-4 text-sm leading-relaxed text-neutral-700">
                             This enrollment packet has already been submitted. You can close this window.
                         </p>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-
-    if (interStepThanks) {
-        return (
-            <div className="min-h-screen bg-neutral-50">
-                {showPreviewBanner ? <PreviewBanner /> : null}
-                <div className="mx-auto max-w-lg px-4 py-16">
-                    <div className="rounded-2xl border border-blue-200 bg-white px-8 py-12 text-center shadow-md">
-                        <h1 className="text-xl font-semibold text-neutral-900">Step saved</h1>
-                        <p className="mt-4 text-sm leading-relaxed text-neutral-700">
-                            Continue to the next form in this packet.
-                        </p>
-                        <button
-                            type="button"
-                            className="mt-8 w-full rounded-lg bg-neutral-900 py-3.5 text-sm font-semibold text-white shadow-sm"
-                            onClick={() => void bootstrap()}
-                        >
-                            Continue to next form
-                        </button>
                     </div>
                 </div>
             </div>
@@ -382,21 +373,43 @@ export function FormEmbedClient({
     }
 
     const errorLines = validationErrors?.length ? formatPublicValidationErrors(validationErrors) : [];
-    const stepLabel =
-        packetProgress ?
-            `Step ${packetProgress.current_sequence_index + 1} of ${packetProgress.total_steps}`
-        : null;
+    const summaries = packetProgress?.step_summaries ?? [];
+    const currentStepNum = packetProgress ? packetProgress.current_sequence_index + 1 : 0;
+    const remaining = packetProgress
+        ? summaries.filter((s) => s.sequence_index > packetProgress.current_sequence_index)
+        : [];
 
     return (
         <div className="min-h-screen bg-white">
             {showPreviewBanner ? <PreviewBanner /> : null}
-            <div className={clsx("mx-auto max-w-xl px-3 pt-4 pb-16", submitting && "opacity-[0.98]")}>
-                {stepLabel ?
-                    <p className="mb-3 text-center text-xs font-medium uppercase tracking-wide text-neutral-500">
-                        {stepLabel}
-                        {packetProgress?.packet_name ? ` · ${packetProgress.packet_name}` : ""}
-                    </p>
-                : null}
+            <div className={clsx("mx-auto max-w-xl px-3 pt-4 pb-16", submitting && "pointer-events-none opacity-90")}>
+                {packetProgress && summaries.length > 0 ? (
+                    <div className="mb-4 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-3 text-sm text-neutral-800">
+                        <p className="font-semibold text-neutral-900">
+                            Step {currentStepNum} of {packetProgress.total_steps}
+                            {packetProgress.packet_name ? ` · ${packetProgress.packet_name}` : ""}
+                        </p>
+                        <p className="mt-1 text-neutral-700">
+                            Now:{" "}
+                            <span className="font-medium">
+                                {summaries.find((s) => s.sequence_index === packetProgress.current_sequence_index)
+                                    ?.form_name ?? "This form"}
+                            </span>
+                        </p>
+                        {remaining.length > 0 ? (
+                            <div className="mt-2 border-t border-neutral-200 pt-2">
+                                <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Still to do</p>
+                                <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-xs text-neutral-700">
+                                    {remaining.map((s) => (
+                                        <li key={s.sequence_index}>{s.form_name}</li>
+                                    ))}
+                                </ol>
+                            </div>
+                        ) : (
+                            <p className="mt-2 text-xs text-neutral-600">This is the last form in the packet.</p>
+                        )}
+                    </div>
+                ) : null}
                 <FormEngineRenderer
                     schema={schema}
                     payload={payload}

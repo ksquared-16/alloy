@@ -5,6 +5,7 @@ import {
     findActivePacketSessionItem,
     listPacketDefinitionItems,
     loadPacketDefinitionName,
+    loadPacketDefinitionStepSummaries,
     resolveActiveStepEnvelope,
 } from "@/lib/forms/packets/formPacketService";
 import {
@@ -43,6 +44,8 @@ export type PublicEmbedResolved = {
         current_sequence_index: number;
         total_steps: number;
         current_session_item_id: string;
+        /** Ordered steps for progress UI (sequence_index + form display name). */
+        step_summaries?: { sequence_index: number; form_name: string }[];
     };
 };
 
@@ -79,6 +82,9 @@ export async function resolvePublicFormEmbedContext(
     }
 
     const packetDefinitionId = String(meta.packet_definition_id).trim();
+    const versionPolicy =
+        typeof meta.packet_step_version_policy === "string" ? meta.packet_step_version_policy.trim() : "follow_latest";
+    const followLatestPublished = versionPolicy !== "pinned";
 
     let launchFks;
     try {
@@ -152,7 +158,11 @@ export async function resolvePublicFormEmbedContext(
         return { ok: false, error: { code: "NOT_FOUND", message: "Packet definition missing" } };
     }
 
-    const { envelope, error: envErr } = await resolveActiveStepEnvelope(supabase, v.orgId, active, defItems);
+    const { data: stepSummaries } = await loadPacketDefinitionStepSummaries(supabase, v.orgId, packetDefinitionId);
+
+    const { envelope, error: envErr } = await resolveActiveStepEnvelope(supabase, v.orgId, active, defItems, {
+        followLatestPublished,
+    });
     if (envErr || !envelope) {
         return {
             ok: false,
@@ -183,6 +193,7 @@ export async function resolvePublicFormEmbedContext(
                 current_sequence_index: active.sequence_index,
                 total_steps: totalSteps,
                 current_session_item_id: active.id,
+                step_summaries: stepSummaries ?? undefined,
             },
         },
     };
