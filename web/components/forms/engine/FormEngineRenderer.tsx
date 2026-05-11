@@ -10,6 +10,7 @@ import type {
     NormalizedValidationError,
 } from "@/lib/forms/validateSubmission";
 import { evaluateFieldVisibility } from "@/lib/forms/validateSubmission";
+import { chunkFieldsForHalfRowLayout } from "@/lib/forms/fieldLayoutChunks";
 import { emptyPayload, ensureGroupRows, setSignature, setTopLevelValue } from "./formEnginePayload";
 
 export type FormEngineOptionChoice = { value: string; label: string };
@@ -697,35 +698,42 @@ export function FormEngineRenderer({
                         </h2>
                     ) : null}
                     <div className="space-y-4">
-                        {fields.map((field) => {
-                            const vis = evaluateFieldVisibility(field.id, schema, (id) => payload.values[id]);
-                            if (!vis) return null;
-                            if (field.type === "group") {
-                                return <div key={field.id}>{renderGroup(field)}</div>;
-                            }
-                            if (field.type === "signature") {
-                                const sig = payload.signatures?.[field.id];
-                                return (
-                                    <div key={field.id}>
-                                        {renderSignatureControl(field, sig, (nextSig) =>
-                                            onChange(setSignature(payload, field.id, nextSig)), ["signatures", field.id]
-                                        )}
-                                    </div>
-                                );
-                            }
-                            return (
-                                <div key={field.id}>
-                                    {renderScalarControl(
-                                        field,
-                                        payload.values,
-                                        (fid, v) => {
-                                            onChange(setTopLevelValue(payload, fid, v));
-                                        },
-                                        ["values", field.id]
-                                    )}
-                                </div>
-                            );
-                        })}
+                        {chunkFieldsForHalfRowLayout(
+                            fields.filter((field) => evaluateFieldVisibility(field.id, schema, (id) => payload.values[id]))
+                        ).map((row, ri) => (
+                            <div
+                                key={`row-${ri}-${row.map((f) => f.id).join("-")}`}
+                                className={row.length === 2 ? "grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6" : "block"}
+                            >
+                                {row.map((field) => {
+                                    if (field.type === "group") {
+                                        return <div key={field.id}>{renderGroup(field)}</div>;
+                                    }
+                                    if (field.type === "signature") {
+                                        const sig = payload.signatures?.[field.id];
+                                        return (
+                                            <div key={field.id}>
+                                                {renderSignatureControl(field, sig, (nextSig) =>
+                                                    onChange(setSignature(payload, field.id, nextSig)), ["signatures", field.id]
+                                                )}
+                                            </div>
+                                        );
+                                    }
+                                    return (
+                                        <div key={field.id}>
+                                            {renderScalarControl(
+                                                field,
+                                                payload.values,
+                                                (fid, v) => {
+                                                    onChange(setTopLevelValue(payload, fid, v));
+                                                },
+                                                ["values", field.id]
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ))}
                     </div>
                 </section>
             ))}

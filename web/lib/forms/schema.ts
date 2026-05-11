@@ -59,6 +59,8 @@ export const formFieldSourceSchema = z
 
 export type FormFieldSource = z.infer<typeof formFieldSourceSchema>;
 
+export type FormFieldLayoutWidth = "full" | "half";
+
 type FormFieldBase = {
     id: string;
     label: string;
@@ -67,6 +69,8 @@ type FormFieldBase = {
     description?: string;
     /** Input placeholder where applicable (text-like controls). */
     placeholder?: string;
+    /** Row width on desktop; half fields pair with the next half in reading order. Default full. */
+    layout_width?: FormFieldLayoutWidth;
     /** Provenance for operational mapping (CRM, shared_values, etc.); optional for legacy/demo schemas. */
     field_source?: FormFieldSource;
     /** When true, public PATCH/submit restore values from the saved draft baseline (operator/server wins). */
@@ -120,6 +124,7 @@ const fieldCoreSchema = z
         pdf_slot: z.string().min(1).optional(),
         read_only: z.boolean().optional().default(false),
         field_source: formFieldSourceSchema.optional(),
+        layout_width: z.enum(["full", "half"]).optional(),
     })
     .strict();
 

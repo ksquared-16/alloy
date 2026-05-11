@@ -66,13 +66,20 @@ function isTypeLocked(entry: SystemFieldRegistryEntry | null, custom: boolean): 
     return k === "date" || k === "number" || k === "checkbox" || k === "signature" || k === "select";
 }
 
+function layoutPassThrough(field: FormField): { layout_width?: "full" | "half" } {
+    if ("layout_width" in field && (field.layout_width === "half" || field.layout_width === "full")) {
+        return { layout_width: field.layout_width };
+    }
+    return {};
+}
+
 function applyTextLikeKind(field: FormField, kind: UiScalarKind, preserveId: string): FormField {
     const label = field.label;
     const required = field.required;
     const description = field.description;
     const placeholder = field.placeholder;
     const src = field.field_source;
-    const base = { id: preserveId, label, required, description, placeholder, field_source: src };
+    const base = { id: preserveId, label, required, description, placeholder, field_source: src, ...layoutPassThrough(field) };
     switch (kind) {
         case "text":
             return { ...base, type: "text" };
@@ -249,13 +256,14 @@ export default function StructuredFormSchemaEditor({ schema, onChange, disabled 
             </div>
 
             <div className="overflow-x-auto rounded-lg border border-[#e6e8ec]">
-                <table className="w-full min-w-[800px] text-left text-sm">
+                <table className="w-full min-w-[900px] text-left text-sm">
                     <thead className="bg-[#fafbfd] text-xs font-semibold uppercase text-[#59678b]">
                         <tr>
                             <th className="px-2 py-2">Data field</th>
                             <th className="px-2 py-2">Label</th>
                             <th className="px-2 py-2">Help</th>
                             <th className="px-2 py-2">Req</th>
+                            <th className="px-2 py-2">Width</th>
                             <th className="px-2 py-2">Input type</th>
                             <th className="px-2 py-2">Placeholder / options</th>
                             <th className="px-2 py-2">Order</th>
@@ -350,6 +358,27 @@ export default function StructuredFormSchemaEditor({ schema, onChange, disabled 
                                         />
                                     </td>
                                     <td className="px-2 py-2">
+                                        {field.type === "group" ? (
+                                            <span className="text-xs text-[#59678b]">—</span>
+                                        ) : (
+                                            <select
+                                                className="max-w-[100px] rounded border border-[#e6e8ec] px-1 py-1 text-xs"
+                                                disabled={disabled}
+                                                value={field.layout_width === "half" ? "half" : "full"}
+                                                onChange={(e) => {
+                                                    const v = e.target.value === "half" ? "half" : "full";
+                                                    setFieldAt(idx, {
+                                                        ...field,
+                                                        ...(v === "full" ? { layout_width: undefined } : { layout_width: "half" }),
+                                                    } as FormField);
+                                                }}
+                                            >
+                                                <option value="full">Full</option>
+                                                <option value="half">Half</option>
+                                            </select>
+                                        )}
+                                    </td>
+                                    <td className="px-2 py-2">
                                         <select
                                             className="max-w-[130px] rounded border border-[#e6e8ec] px-1 py-1 text-xs"
                                             disabled={disabled || locked}
@@ -363,6 +392,7 @@ export default function StructuredFormSchemaEditor({ schema, onChange, disabled 
                                                     const nf = buildFieldFromUiCustom(nextKind, field.id, field.label);
                                                     setFieldAt(idx, {
                                                         ...nf,
+                                                        ...layoutPassThrough(field),
                                                         required: field.required,
                                                         description: field.description,
                                                         placeholder: field.placeholder,
@@ -398,7 +428,10 @@ export default function StructuredFormSchemaEditor({ schema, onChange, disabled 
                                                     if (entry) {
                                                         setFieldAt(
                                                             idx,
-                                                            formFieldFromRegistryEntry(entry, { static_options_lines: raw })
+                                                            {
+                                                                ...formFieldFromRegistryEntry(entry, { static_options_lines: raw }),
+                                                                ...layoutPassThrough(field),
+                                                            } as FormField
                                                         );
                                                     } else {
                                                         setFieldAt(idx, {

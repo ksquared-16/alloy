@@ -134,7 +134,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             if (!pubVer?.id) {
                 return jsonError(`Form at step ${i} has no published version — publish the form or pin a version`, 400);
             }
-            pinnedId = pubVer.id as string;
+            /** Unpinned steps follow latest published at resolve time (packet links stay valid across republishes). */
+            pinnedId = null;
         }
 
         const meta: Record<string, unknown> = {};

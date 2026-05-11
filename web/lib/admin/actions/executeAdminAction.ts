@@ -674,7 +674,8 @@ export async function executeAdminAction(
             const tourAtLocal = tourDate && tourTime ? `${tourDate}T${tourTime}:00` : null;
 
             // Enrollment v1: persist tour inputs onto the opportunity metadata for display/conditions.
-            // Canonical scheduling entities will come later; for now keep it in metadata.
+            // `tour_bookings` is scheduling SoT (Tour Scheduling V1); this path stays legacy metadata + workflow.
+            // TODO (Card 6): converge schedule_tour / action UI onto `createTourBooking` so CRM mirror is driven from bookings.
             if (table === "opportunities" && formKey === "schedule_tour" && (tourDate || tourTime)) {
                 const { data: cur, error: curErr } = await supabase
                     .from("opportunities")

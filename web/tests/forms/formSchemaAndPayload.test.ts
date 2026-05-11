@@ -440,6 +440,35 @@ describe("Forms Engine V1 — payload validation", () => {
         });
         expect(r.ok).toBe(false);
     });
+
+    it("accepts layout_width half on text fields and submit still validates", () => {
+        const s = validateFormSchema(
+            baseSchema({
+                fields: [
+                    { id: "fn", type: "text", label: "First", layout_width: "half" },
+                    { id: "ln", type: "text", label: "Last", layout_width: "half" },
+                ],
+                sections: [{ id: "main", field_ids: ["fn", "ln"] }],
+            })
+        );
+        expect(s.fields[0].layout_width).toBe("half");
+        const r = validateFormPayload({
+            schemaJson: s,
+            payload: { values: { fn: "A", ln: "B" }, signatures: {} },
+            mode: "submit",
+        });
+        expect(r.ok).toBe(true);
+    });
+
+    it("rejects invalid layout_width", () => {
+        expect(() =>
+            validateFormSchema(
+                baseSchema({
+                    fields: [{ id: "a", type: "text", label: "A", layout_width: "wide" }],
+                })
+            )
+        ).toThrow(ZodError);
+    });
 });
 
 describe("evaluateFieldVisibility", () => {

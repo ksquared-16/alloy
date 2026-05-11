@@ -7,6 +7,7 @@ import PrimaryButton from "@/components/PrimaryButton";
 import SectionCard from "@/components/admin/SectionCard";
 import { ADMIN_FORMS_UI_BASE } from "@/lib/forms/adminFormsUiBase";
 import { mergeFormListWithPacketItems, type PacketStepFormOption } from "@/lib/admin/forms/packetDefinitionStepForms";
+import { applyRecentFormToSteps, trimLeadingEmptyStepRows } from "@/lib/admin/forms/packetStepRecentFormPlacement";
 
 type PacketItem = {
     id: string;
@@ -196,7 +197,11 @@ export default function PacketDefinitionDetailClient() {
     };
 
     const addStep = () => setSteps((s) => [...s, { form_definition_id: "", step_label: "" }]);
-    const removeStep = (i: number) => setSteps((s) => (s.length <= 1 ? s : s.filter((_, j) => j !== i)));
+    const removeStep = (i: number) =>
+        setSteps((s) => {
+            const next = s.length <= 1 ? s : s.filter((_, j) => j !== i);
+            return trimLeadingEmptyStepRows(next);
+        });
     const moveStep = (i: number, dir: -1 | 1) => {
         setSteps((s) => {
             const j = i + dir;
@@ -354,9 +359,7 @@ export default function PacketDefinitionDetailClient() {
                                             type="button"
                                             className="rounded-full border border-[#e6e8ec] bg-white px-3 py-1.5 text-xs font-medium text-[#00458C] hover:bg-[#fafbfd]"
                                             disabled={busy}
-                                            onClick={() =>
-                                                setSteps((rows) => [...rows, { form_definition_id: f.id, step_label: "" }])
-                                            }
+                                            onClick={() => setSteps((rows) => applyRecentFormToSteps(rows, f.id))}
                                         >
                                             + {f.name}
                                         </button>
