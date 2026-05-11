@@ -9,9 +9,14 @@ import {
     groupTourSlotsByLocalDate,
     localDateKeyForSlot,
 } from "@/lib/tours/availability/groupTourSlotsByLocalDate";
+import {
+    TOUR_SLOT_PAGE_DAYS,
+    formatTourSlotWindowRangeLabel,
+    tourSlotWindowBoundsUtc,
+} from "@/lib/tours/availability/tourSlotWindowPagination";
 
-/** Default slot query window (days). Kept modest for faster `computeAvailableTourSlots` + rule scans. */
-const DEFAULT_SLOT_RANGE_DAYS = 14;
+/** Furthest page (0-based) — ~1 year of 14-day windows without unbounded queries. */
+const MAX_RANGE_PAGE_INDEX = 26;
 
 export type OpportunityTourSlotSchedulePanelProps = {
     opportunityId: string;
@@ -20,7 +25,7 @@ export type OpportunityTourSlotSchedulePanelProps = {
     /** Required when mode is reschedule */
     primaryBooking: TourBookingRow | null;
     onCancel: () => void;
-    onSuccess: () => void | Promise<void>;
+    onSuccess: (result?: { booking?: TourBookingRow }) => void | Promise<void>;
     /** Optional link row above actions (e.g. legacy fallback) */
     footerSlot?: ReactNode;
 };
@@ -34,21 +39,28 @@ export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSched
     const [selectedSlot, setSelectedSlot] = useState<AvailableTourSlot | null>(null);
     const [selectedDayKey, setSelectedDayKey] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
+    const [rangePageIndex, setRangePageIndex] = useState(0);
     const loadGeneration = useRef(0);
+
+    useEffect(() => {
+        setRangePageIndex(0);
+    }, [opportunityId, locationId, mode]);
+
+    const { from: windowFrom, to: windowTo } = useMemo(
+        () => tourSlotWindowBoundsUtc(rangePageIndex, TOUR_SLOT_PAGE_DAYS),
+        [rangePageIndex]
+    );
+    const rangeLabel = useMemo(() => formatTourSlotWindowRangeLabel(windowFrom, windowTo), [windowFrom, windowTo]);
 
     const loadSlots = useCallback(async () => {
         const gen = ++loadGeneration.current;
         setSlotsErr(null);
         setSlotsLoading(true);
         setSelectedSlot(null);
-        const from = new Date();
-        from.setUTCHours(0, 0, 0, 0);
-        const to = new Date(from);
-        to.setUTCDate(to.getUTCDate() + DEFAULT_SLOT_RANGE_DAYS);
         const qs = new URLSearchParams({
             location_id: locationId,
-            from: from.toISOString(),
-            to: to.toISOString(),
+            from: windowFrom.toISOString(),
+            to: windowTo.toISOString(),
         });
         const slotsUrl = `/api/admin/tours/slots?${qs.toString()}`;
         try {
@@ -85,7 +97,7 @@ export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSched
                 setSlotsLoading(false);
             }
         }
-    }, [locationId, mode]);
+    }, [locationId, mode, windowFrom, windowTo]);
 
     useEffect(() => {
         void loadSlots();
@@ -133,8 +145,9 @@ export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSched
                         timezone: selectedSlot.timezone,
                     }),
                 });
-                const j = (await res.json()) as { error?: string };
+                const j = (await res.json()) as { booking?: TourBookingRow; error?: string };
                 if (!res.ok) throw new Error(j.error ?? res.statusText);
+                await onSuccess({ booking: j.booking });
             } else {
                 const rule = rulesById[selectedSlot.ruleId];
                 const approvalRequired = Boolean(rule?.approval_required);
@@ -151,10 +164,10 @@ export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSched
                         approval_required: approvalRequired,
                     }),
                 });
-                const j = (await res.json()) as { error?: string };
+                const j = (await res.json()) as { booking?: TourBookingRow; error?: string };
                 if (!res.ok) throw new Error(j.error ?? res.statusText);
+                await onSuccess({ booking: j.booking });
             }
-            await onSuccess();
         } catch (e) {
             setSlotsErr(e instanceof Error ? e.message : String(e));
         } finally {
@@ -167,13 +180,45 @@ export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSched
     const slotMatchesSelection = (s: AvailableTourSlot) =>
         selectedSlot != null && selectedSlot.startAt === s.startAt && selectedSlot.ruleId === s.ruleId;
 
+    const canGoPrev = rangePageIndex > 0;
+    const canGoNext = rangePageIndex < MAX_RANGE_PAGE_INDEX;
+
     return (
         <div className="text-sm text-alloy-midnight" onClick={(e) => e.stopPropagation()}>
             <div className="border-b border-alloy-stone/15 px-5 py-4">
                 <div className="text-base font-semibold">{title}</div>
-                <div className="mt-0.5 text-xs text-alloy-midnight/60">
-                    Uses live availability rules and <code className="rounded bg-alloy-stone/10 px-1">tour_bookings</code>. Next{" "}
-                    {DEFAULT_SLOT_RANGE_DAYS} days — pick a day, then a time.
+                <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+                    <div className="text-xs font-medium text-alloy-midnight/70">{rangeLabel}</div>
+                    <div className="flex items-center gap-1">
+                        <button
+                            type="button"
+                            className="rounded-md border border-alloy-stone/20 px-2 py-1 text-[11px] font-semibold text-alloy-midnight disabled:opacity-40"
+                            disabled={!canGoPrev || slotsLoading}
+                            aria-label="Previous date range"
+                            onClick={() => {
+                                if (!canGoPrev) return;
+                                setRangePageIndex((p) => Math.max(0, p - 1));
+                            }}
+                        >
+                            ← Prev
+                        </button>
+                        <button
+                            type="button"
+                            className="rounded-md border border-alloy-stone/20 px-2 py-1 text-[11px] font-semibold text-alloy-midnight disabled:opacity-40"
+                            disabled={!canGoNext || slotsLoading}
+                            aria-label="Next date range"
+                            onClick={() => {
+                                if (!canGoNext) return;
+                                setRangePageIndex((p) => Math.min(MAX_RANGE_PAGE_INDEX, p + 1));
+                            }}
+                        >
+                            Next →
+                        </button>
+                    </div>
+                </div>
+                <div className="mt-1 text-[11px] text-alloy-midnight/50">
+                    {TOUR_SLOT_PAGE_DAYS}-day windows (UTC). Pick a day, then a time —{" "}
+                    <code className="rounded bg-alloy-stone/10 px-1">tour_bookings</code> stays the source of truth.
                 </div>
             </div>
             <div className="max-h-[70vh] space-y-3 overflow-auto px-5 py-4">
@@ -200,18 +245,16 @@ export function OpportunityTourSlotSchedulePanel(props: OpportunityTourSlotSched
                 ) : null}
 
                 {!slotsLoading && !slotsErr && slots.length === 0 ? (
-                    <p className="text-sm text-alloy-midnight/60">No availability in this window. Try another site or extend rules.</p>
+                    <p className="text-sm text-alloy-midnight/60">
+                        No availability in this window. Try <strong>Next</strong> for later dates, another site, or extend rules.
+                    </p>
                 ) : null}
 
                 {!slotsLoading && !slotsErr && slots.length > 0 ? (
                     <div className="space-y-3">
                         <div>
                             <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Day</div>
-                            <div
-                                className="flex gap-2 overflow-x-auto pb-1"
-                                role="tablist"
-                                aria-label="Available days"
-                            >
+                            <div className="flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Available days">
                                 {grouped.orderedDayKeys.map((dayKey) => {
                                     const daySlots = grouped.byDay.get(dayKey) ?? [];
                                     const sample = daySlots[0];

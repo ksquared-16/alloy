@@ -14,9 +14,13 @@ describe("Opportunity tour schedule UX alignment", () => {
         expect(src).toContain("Source of truth");
     });
 
-    it("header schedule action uses slot panel + legacy escape hatch", () => {
+    it("header schedule action uses slot panel, duplicate guard, and legacy escape hatch", () => {
         const src = readFileSync(comp("OpportunityTourScheduleActionModal.tsx"), "utf8");
         expect(src).toContain("OpportunityTourSlotSchedulePanel");
+        expect(src).toContain("/api/admin/tours/opportunities/");
+        expect(src).toContain("active_bookings");
+        expect(src).toContain("duplicate_guard");
+        expect(src).toContain("Reschedule tour");
         expect(src).toContain("legacy");
     });
 
@@ -33,5 +37,20 @@ describe("Opportunity tour schedule UX alignment", () => {
         expect(src).toContain("slotsForSelectedDay");
         expect(src).toContain("selectedSlot.startAt");
         expect(src).not.toMatch(/<ul className=\"max-h-56 space-y-1/);
+    });
+
+    it("slot panel pages availability with next/prev and shared UTC window helper", () => {
+        const src = readFileSync(comp("OpportunityTourSlotSchedulePanel.tsx"), "utf8");
+        expect(src).toContain("rangePageIndex");
+        expect(src).toContain("tourSlotWindowBoundsUtc");
+        expect(src).toContain("formatTourSlotWindowRangeLabel");
+        expect(src).toContain("Next →");
+        expect(src).toContain("← Prev");
+    });
+
+    it("AdminEntityDrawer slot booking handler mirrors confirmed booking metadata and awaits refetch", () => {
+        const src = readFileSync(join(here, "..", "..", "components", "admin", "AdminEntityDrawer.tsx"), "utf8");
+        expect(src).toContain("deriveTourMetadataMirrorFromBooking");
+        expect(src).toContain("if (rf) await rf;");
     });
 });

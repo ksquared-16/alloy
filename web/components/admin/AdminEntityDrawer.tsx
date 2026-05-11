@@ -80,6 +80,7 @@ import { recordSurfaceContextStyle } from "@/lib/visualContext";
 import OpportunityInquiryChildrenSection, { type InquiryChildRow } from "@/components/admin/entity/OpportunityInquiryChildrenSection";
 import { OpportunityInquiryChildrenRegistryActions } from "@/components/admin/opportunity/OpportunityInquiryChildrenRegistryActions";
 import { formatTourDateTime } from "@/lib/enrollment/formatTourDateTime";
+import { deriveTourMetadataMirrorFromBooking } from "@/lib/tours/opportunity/tourBookingOpportunityIntegration";
 import { validateQueueDefinition, type QueueDefinitionV1, type QueueFilter } from "@/lib/config/queueDefinitionSchema";
 import {
     JobDrawerV2TabBar,
@@ -138,9 +139,9 @@ import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegi
 import { formatActivityRelativeShort, type ActivitySignalResult } from "@/lib/admin/activitySignals";
 import { formatOpportunityActivityTimelineEvent } from "@/lib/admin/opportunityActivityTimelineFormat";
 import OpportunityQuoteIntakeSection from "@/components/admin/quoteIntake/OpportunityQuoteIntakeSection";
-import OpportunityLaunchPacketSection, {
+import OpportunityEnrollmentPacketModal, {
     type OpportunityPacketLaunchSummary,
-} from "@/components/admin/opportunity/OpportunityLaunchPacketSection";
+} from "@/components/admin/opportunity/OpportunityEnrollmentPacketModal";
 import OpportunityEnrollmentPacketStatusSection from "@/components/admin/opportunity/OpportunityEnrollmentPacketStatusSection";
 
 function dispatchAfterPaymentRun(jobId: string, scheduleId: string | null) {
@@ -1646,15 +1647,15 @@ export default function AdminEntityDrawer() {
         "documents",
         "subscriptions",
     ];
-    const refetch = useCallback(() => {
-        if (!drawer.type || !drawer.id) return;
+    const refetch = useCallback((): Promise<void> | undefined => {
+        if (!drawer.type || !drawer.id) return Promise.resolve();
         const url = buildAdminEntityFetchUrl(
             drawer.type,
             drawer.id,
             drawer.jobRecordSurface,
             drawer.type === "opportunities" ? "full" : undefined
         );
-        if (!url) return;
+        if (!url) return Promise.resolve();
         if (adminEntityRefetchShouldBlockDrawerShell(error, data, drawer.id)) {
             setLoading(true);
         }
@@ -1666,7 +1667,7 @@ export default function AdminEntityDrawer() {
                 alloyPerfSet("drawer_opportunity_full_req", now);
             }
         }
-        fetch(url)
+        return fetch(url)
             .then((res) => {
                 captureDrawerEntityResponsePerf(res);
                 if (!res.ok) throw new Error(res.status === 404 ? "Not found" : "Failed to load");
@@ -5341,16 +5342,10 @@ export default function AdminEntityDrawer() {
                                       <button
                                           type="button"
                                           disabled={!!opportunityActionLoading}
-                                          onClick={() => {
-                                              setOppLaunchPacketOpen((o) => {
-                                                  const next = !o;
-                                                  if (next) setDrawerTab("overview");
-                                                  return next;
-                                              });
-                                          }}
+                                          onClick={() => setOppLaunchPacketOpen(true)}
                                           className={overflowCls}
                                       >
-                                          {oppLaunchPacketOpen ? "Close enrollment packet" : "Send enrollment packet"}
+                                          Send enrollment packet
                                       </button>
                                   ) : null}
                               </>
@@ -5379,20 +5374,6 @@ export default function AdminEntityDrawer() {
                 }}
             />
         ) : null;
-
-    const opportunityLaunchPacketNode = oppLaunchPacketOpen ? (
-        <OpportunityLaunchPacketSection
-            opportunityId={drawer.id as string}
-            opportunityLabel={String((data as { name?: string } | null)?.name ?? "").trim() || "Opportunity"}
-            opportunityRecord={data && !(data as { _create?: boolean })._create ? (data as Record<string, unknown>) : null}
-            canMutate={!!canMutate}
-            onClose={() => setOppLaunchPacketOpen(false)}
-            onLaunched={(row) => {
-                setOpportunityEnrollmentPacketLaunches((prev) => [row, ...prev].slice(0, 8));
-                setEnrollmentPacketStatusNonce((n) => n + 1);
-            }}
-        />
-    ) : null;
 
     const opportunityQuoteSummaryNode =
         drawer.type !== "opportunities" || !overviewData || (overviewData as { _create?: boolean })._create
@@ -10203,7 +10184,6 @@ export default function AdminEntityDrawer() {
                         drawer.id !== "new" &&
                         !(data as { _create?: boolean })?._create && (
                             <>
-                                {opportunityLaunchPacketNode}
                                 <OpportunityEnrollmentPacketStatusSection
                                     opportunityId={String(drawer.id)}
                                     refreshNonce={enrollmentPacketStatusNonce}
@@ -10222,7 +10202,13 @@ export default function AdminEntityDrawer() {
                                                     <div className="font-medium text-alloy-midnight/90">{L.packetName}</div>
                                                     <div className="mt-0.5 text-[11px] text-alloy-midnight/65">
                                                         {L.enrolleeLabel} · {L.recipientLabel} ·{" "}
-                                                        {L.deliveryIntent === "email_later" ? "Email later" : "Copy link"}
+                                                        {L.emailSent
+                                                            ? "Emailed (Communications)"
+                                                            : L.deliveryIntent === "send_email"
+                                                              ? `Copy links · email: ${L.emailSkippedReason ?? "unavailable"}`
+                                                              : L.deliveryIntent === "email_later"
+                                                                ? "Email later"
+                                                                : "Copy links"}
                                                     </div>
                                                     <div className="mt-1 flex flex-wrap gap-2">
                                                         <a
@@ -12523,6 +12509,25 @@ export default function AdminEntityDrawer() {
                     )}
                 </div>
             ) : null}
+            {drawer.type === "opportunities" && drawer.id && drawer.id !== "new" && oppLaunchPacketOpen ? (
+                <OpportunityEnrollmentPacketModal
+                    open={oppLaunchPacketOpen}
+                    opportunityId={String(drawer.id)}
+                    opportunityLabel={String((data as { name?: string } | null)?.name ?? "").trim() || "Opportunity"}
+                    opportunityRecord={data && !(data as { _create?: boolean })._create ? (data as Record<string, unknown>) : null}
+                    canMutate={!!canMutate}
+                    onLaunched={(row) => {
+                        setOpportunityEnrollmentPacketLaunches((prev) => [row, ...prev].slice(0, 8));
+                    }}
+                    onDismiss={({ createdPacketCount }) => {
+                        setOppLaunchPacketOpen(false);
+                        if (createdPacketCount > 0) {
+                            setEnrollmentPacketStatusNonce((n) => n + 1);
+                            void refetch();
+                        }
+                    }}
+                />
+            ) : null}
             {memberLinkModalOpen && (
                 <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-label="Link contact" onClick={() => setMemberLinkModalOpen(false)}>
                     <div className="bg-white rounded-lg shadow-lg border border-alloy-stone/30 p-4 max-w-sm w-full mx-4" onClick={(e) => e.stopPropagation()}>
@@ -12685,9 +12690,34 @@ export default function AdminEntityDrawer() {
                     const t = md && typeof md.tour_time === "string" ? md.tour_time.trim() : "";
                     return t || null;
                 })()}
-                onSlotBooked={async () => {
+                onSlotBooked={async (result) => {
                     if (!drawer.id || drawer.id === "new" || drawer.type !== "opportunities") return;
-                    refetch();
+                    const booking = result?.booking;
+                    const sk = booking && typeof booking.status_key === "string" ? booking.status_key : "";
+                    if (
+                        booking &&
+                        typeof booking.start_at === "string" &&
+                        typeof booking.timezone === "string" &&
+                        (sk === "confirmed" || sk === "rescheduled")
+                    ) {
+                        try {
+                            const mirror = deriveTourMetadataMirrorFromBooking(booking.start_at, booking.timezone);
+                            setData((prev) => {
+                                if (!prev || typeof prev !== "object") return prev;
+                                const p = prev as Record<string, unknown>;
+                                const mdRaw = p.metadata;
+                                const md =
+                                    mdRaw && typeof mdRaw === "object" && !Array.isArray(mdRaw)
+                                        ? { ...(mdRaw as Record<string, unknown>) }
+                                        : {};
+                                return { ...p, metadata: { ...md, ...mirror } };
+                            });
+                        } catch {
+                            /* invalid start_at — rely on refetch */
+                        }
+                    }
+                    const rf = refetch();
+                    if (rf) await rf;
                     window.dispatchEvent(
                         new CustomEvent("adminv2:opportunity-updated", { detail: { id: drawer.id, action_key: "schedule_tour" } })
                     );
