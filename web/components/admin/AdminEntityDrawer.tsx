@@ -137,6 +137,7 @@ import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegi
 import { formatActivityRelativeShort, type ActivitySignalResult } from "@/lib/admin/activitySignals";
 import { formatOpportunityActivityTimelineEvent } from "@/lib/admin/opportunityActivityTimelineFormat";
 import OpportunityQuoteIntakeSection from "@/components/admin/quoteIntake/OpportunityQuoteIntakeSection";
+import OpportunityLaunchPacketSection from "@/components/admin/opportunity/OpportunityLaunchPacketSection";
 
 function dispatchAfterPaymentRun(jobId: string, scheduleId: string | null) {
     window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "jobs", id: jobId } }));
@@ -1245,6 +1246,7 @@ export default function AdminEntityDrawer() {
     }, [drawer.type, drawer.id]);
 
     const [oppQuoteIntakeOpen, setOppQuoteIntakeOpen] = useState(false);
+    const [oppLaunchPacketOpen, setOppLaunchPacketOpen] = useState(false);
     const [oppDiscountOptions, setOppDiscountOptions] = useState<{ value: string; label: string }[] | null>(null);
     const [oppDiscountLoading, setOppDiscountLoading] = useState(false);
     const [oppDiscountSelection, setOppDiscountSelection] = useState<string>("");
@@ -5265,72 +5267,85 @@ export default function AdminEntityDrawer() {
 
     const opportunityHeaderQuickActionsNode =
         isOpportunityExistingView && drawer.id && !loading && data != null && entityRowReady
-            ? useOpportunityActionRegistryHeader
-                ? (
-            <div
-                className={`flex flex-wrap gap-2 items-center ${
-                    drawerShellVariant === "adminV2"
-                        ? opportunityInquiryWorkflowDrawer
-                            ? "rounded-xl border border-admin-border/45 bg-white/80 px-2.5 py-2 shadow-sm ring-1 ring-alloy-stone/10"
-                            : "rounded-lg border border-admin-border/45 bg-white/70 px-2.5 py-1.5 shadow-sm"
-                        : ""
-                }`}
-                data-opportunity-record-actions={drawerShellVariant === "adminV2" ? "true" : undefined}
-            >
-                <>
-                    {(() => {
-                        const blueOutline = "border border-alloy-blue/30 bg-alloy-blue/5 text-alloy-blue hover:bg-alloy-blue/10 hover:border-alloy-blue/45";
-                        const primaryCls = opportunityInquiryWorkflowDrawer
-                            ? `px-4 py-2 text-[12px] font-semibold rounded-full ${blueOutline} disabled:opacity-50`
-                            : `px-3 py-1.5 text-sm font-semibold rounded-md ${blueOutline} disabled:opacity-50`;
-                        const secondaryCls = opportunityInquiryWorkflowDrawer
-                            ? `px-4 py-2 text-[12px] font-semibold rounded-full ${blueOutline} disabled:opacity-50`
-                            : `px-3 py-1.5 text-sm font-semibold rounded-md ${blueOutline} disabled:opacity-50`;
-                        const overflowCls = opportunityInquiryWorkflowDrawer
-                            ? `px-4 py-2 text-[12px] font-semibold rounded-full ${blueOutline} disabled:opacity-50`
-                            : `px-3 py-1.5 text-sm font-semibold rounded-md ${blueOutline} disabled:opacity-50`;
-                        return (
-                            <>
-                    {(resolvedHeader?.primary ?? []).map((a) => (
-                        <button
-                            key={a.key}
-                            type="button"
-                            disabled={!canMutate || !!opportunityActionLoading}
-                            onClick={() => void handleResolvedOpportunityHeaderAction(a)}
-                            className={primaryCls}
-                        >
-                            {opportunityActionLoading === a.key ? "…" : a.label}
-                        </button>
-                    ))}
-                    {(resolvedHeader?.secondary ?? []).map((a) => (
-                        <button
-                            key={a.key}
-                            type="button"
-                            disabled={!canMutate || !!opportunityActionLoading}
-                            onClick={() => void handleResolvedOpportunityHeaderAction(a)}
-                            className={secondaryCls}
-                        >
-                            {opportunityActionLoading === a.key ? "…" : a.label}
-                        </button>
-                    ))}
-                    {(resolvedHeader?.overflow ?? []).map((a) => (
-                        <button
-                            key={a.key}
-                            type="button"
-                            disabled={!canMutate || !!opportunityActionLoading}
-                            onClick={() => void handleResolvedOpportunityHeaderAction(a)}
-                            className={overflowCls}
-                        >
-                            {opportunityActionLoading === a.key ? "…" : a.label}
-                        </button>
-                    ))}
-                            </>
-                        );
-                    })()}
-                </>
-            </div>
-                  )
-                : null
+            ? (
+                  <div
+                      className={`flex flex-wrap gap-2 items-center ${
+                          drawerShellVariant === "adminV2"
+                              ? opportunityInquiryWorkflowDrawer
+                                  ? "rounded-xl border border-admin-border/45 bg-white/80 px-2.5 py-2 shadow-sm ring-1 ring-alloy-stone/10"
+                                  : "rounded-lg border border-admin-border/45 bg-white/70 px-2.5 py-1.5 shadow-sm"
+                              : ""
+                      }`}
+                      data-opportunity-record-actions={drawerShellVariant === "adminV2" ? "true" : undefined}
+                  >
+                      {(() => {
+                          const blueOutline =
+                              "border border-alloy-blue/30 bg-alloy-blue/5 text-alloy-blue hover:bg-alloy-blue/10 hover:border-alloy-blue/45";
+                          const primaryCls = opportunityInquiryWorkflowDrawer
+                              ? `px-4 py-2 text-[12px] font-semibold rounded-full ${blueOutline} disabled:opacity-50`
+                              : `px-3 py-1.5 text-sm font-semibold rounded-md ${blueOutline} disabled:opacity-50`;
+                          const secondaryCls = opportunityInquiryWorkflowDrawer
+                              ? `px-4 py-2 text-[12px] font-semibold rounded-full ${blueOutline} disabled:opacity-50`
+                              : `px-3 py-1.5 text-sm font-semibold rounded-md ${blueOutline} disabled:opacity-50`;
+                          const overflowCls = opportunityInquiryWorkflowDrawer
+                              ? `px-4 py-2 text-[12px] font-semibold rounded-full ${blueOutline} disabled:opacity-50`
+                              : `px-3 py-1.5 text-sm font-semibold rounded-md ${blueOutline} disabled:opacity-50`;
+                          return (
+                              <>
+                                  {useOpportunityActionRegistryHeader ?
+                                      <>
+                                          {(opportunityResolvedHeaderActions?.primary ?? []).map((a) => (
+                                              <button
+                                                  key={a.key}
+                                                  type="button"
+                                                  disabled={!canMutate || !!opportunityActionLoading}
+                                                  onClick={() => void handleResolvedOpportunityHeaderAction(a)}
+                                                  className={primaryCls}
+                                              >
+                                                  {opportunityActionLoading === a.key ? "…" : a.label}
+                                              </button>
+                                          ))}
+                                          {(opportunityResolvedHeaderActions?.secondary ?? []).map((a) => (
+                                              <button
+                                                  key={a.key}
+                                                  type="button"
+                                                  disabled={!canMutate || !!opportunityActionLoading}
+                                                  onClick={() => void handleResolvedOpportunityHeaderAction(a)}
+                                                  className={secondaryCls}
+                                              >
+                                                  {opportunityActionLoading === a.key ? "…" : a.label}
+                                              </button>
+                                          ))}
+                                          {(opportunityResolvedHeaderActions?.overflow ?? []).map((a) => (
+                                              <button
+                                                  key={a.key}
+                                                  type="button"
+                                                  disabled={!canMutate || !!opportunityActionLoading}
+                                                  onClick={() => void handleResolvedOpportunityHeaderAction(a)}
+                                                  className={overflowCls}
+                                              >
+                                                  {opportunityActionLoading === a.key ? "…" : a.label}
+                                              </button>
+                                          ))}
+                                      </>
+                                  : null}
+                                  {canMutate ? (
+                                      <button
+                                          type="button"
+                                          disabled={!!opportunityActionLoading}
+                                          onClick={() => {
+                                              setOppLaunchPacketOpen((o) => !o);
+                                          }}
+                                          className={overflowCls}
+                                      >
+                                          {oppLaunchPacketOpen ? "Close enrollment packet" : "Send enrollment packet"}
+                                      </button>
+                                  ) : null}
+                              </>
+                          );
+                      })()}
+                  </div>
+              )
             : null;
 
     const dataMatchesDrawer = entityDataMatchesDrawer(data, drawer.id);
@@ -5350,6 +5365,16 @@ export default function AdminEntityDrawer() {
                 onClose={() => {
                     setOppQuoteIntakeOpen(false);
                 }}
+            />
+        ) : null;
+
+    const opportunityLaunchPacketNode =
+        drawer.type === "opportunities" && drawer.id && drawer.id !== "new" && oppLaunchPacketOpen ? (
+            <OpportunityLaunchPacketSection
+                opportunityId={drawer.id}
+                opportunityLabel={String((data as { name?: string } | null)?.name ?? "").trim() || "Opportunity"}
+                canMutate={!!canMutate}
+                onClose={() => setOppLaunchPacketOpen(false)}
             />
         ) : null;
 
@@ -10610,6 +10635,7 @@ export default function AdminEntityDrawer() {
                                 ) : null}
                                 {drawer.type === "opportunities" && !opportunityInquiryWorkflowDrawer ? opportunityQuoteSummaryNode : null}
                                 {drawer.type === "opportunities" && !opportunityInquiryWorkflowDrawer ? opportunityQuoteIntakeNode : null}
+                                {drawer.type === "opportunities" && !opportunityInquiryWorkflowDrawer ? opportunityLaunchPacketNode : null}
                                 <EntityDrawerOverview
                                     entityType={presentationType}
                                     data={entityDrawerOverviewData}

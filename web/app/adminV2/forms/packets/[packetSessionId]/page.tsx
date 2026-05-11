@@ -218,6 +218,33 @@ export default async function AdminV2PacketSessionDetailPage({
     const launchCtx = (session.launch_context ?? {}) as Record<string, unknown>;
     const sharedVals = (session.shared_values ?? {}) as Record<string, unknown>;
 
+    const oppFk = typeof crm.opportunity_id === "string" && UUID_RE.test(crm.opportunity_id as string) ? crm.opportunity_id : null;
+    const custFk = typeof crm.customer_id === "string" && UUID_RE.test(crm.customer_id as string) ? crm.customer_id : null;
+    let opportunityDisplayName: string | null = null;
+    let customerDisplayName: string | null = null;
+    if (oppFk) {
+        const { data: oRow } = await supabase
+            .from("opportunities")
+            .select("name")
+            .eq("id", oppFk)
+            .eq("org_id", auth.orgId)
+            .maybeSingle();
+        const n = (oRow as { name?: string | null } | null)?.name;
+        opportunityDisplayName = typeof n === "string" && n.trim() ? n.trim() : null;
+    }
+    if (custFk) {
+        const { data: cRow } = await supabase
+            .from("customers")
+            .select("name")
+            .eq("id", custFk)
+            .eq("org_id", auth.orgId)
+            .maybeSingle();
+        const n = (cRow as { name?: string | null } | null)?.name;
+        customerDisplayName = typeof n === "string" && n.trim() ? n.trim() : null;
+    }
+    const launchSurface =
+        typeof launchCtx.launch_surface === "string" ? launchCtx.launch_surface.trim() : "";
+
     const totalSteps = enriched.length;
     const currentSeq = session.current_sequence_index as number;
     const anyStepNeedsReview = enriched.some((step) => {
@@ -265,6 +292,39 @@ export default async function AdminV2PacketSessionDetailPage({
                     </div>
                 : null}
             </div>
+
+            {oppFk || custFk || launchSurface ?
+                <div className="rounded-lg border border-[#c7d2fe] bg-[#eef2ff] px-4 py-3 text-sm text-[#1e3a8a]">
+                    <h2 className="text-sm font-semibold text-[#172554]">Enrollment context</h2>
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-[#1e3a8a]/90">
+                        {launchSurface === "crm_opportunity" ?
+                            <li>
+                                <span className="font-medium">Launch:</span> sent from an Alloy opportunity (CRM-native
+                                packet link).
+                            </li>
+                        : null}
+                        {oppFk ?
+                            <li>
+                                <span className="font-medium">Opportunity:</span>{" "}
+                                {opportunityDisplayName ? `${opportunityDisplayName} · ` : null}
+                                <span className="font-mono text-[11px]">{oppFk}</span>
+                            </li>
+                        : null}
+                        {custFk ?
+                            <li>
+                                <span className="font-medium">Customer / household:</span>{" "}
+                                {customerDisplayName ? `${customerDisplayName} · ` : null}
+                                <span className="font-mono text-[11px]">{custFk}</span>
+                            </li>
+                        : null}
+                    </ul>
+                    <p className="mt-2 text-xs text-[#475569]">
+                        Workflow events for this packet (for example{" "}
+                        <span className="font-mono text-[11px]">form_packet_completed</span>) include the public link id
+                        and CRM snapshot for correlation in automation.
+                    </p>
+                </div>
+            : null}
 
             <div className="grid gap-3 md:grid-cols-2">
                 <JsonPanel

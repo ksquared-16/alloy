@@ -7,6 +7,7 @@ import { hashFormLinkToken } from "@/lib/public/forms/tokenHash";
 import { generateSecureFormLinkPlaintext, buildPublicFormEmbedPath } from "@/lib/admin/forms/formPublicLinkToken";
 import { mergePublicLinkMetadataForCreate } from "@/lib/forms/intake/defaultPublicLinkMetadata";
 import { assertEntityInOrg } from "@/lib/admin/assertEntityInOrg";
+import { defaultOpportunityLaunchPrefillFieldMap } from "@/lib/forms/prefill/defaultOpportunityLaunchPrefillFieldMap";
 import { parsePrefillFieldMapBody } from "@/lib/forms/prefill/prefillFieldMap";
 
 function deriveEmbedBaseUrl(request: NextRequest): string | null {
@@ -150,12 +151,20 @@ export async function POST(request: NextRequest) {
         metadata.prefill_enabled = lf.prefill_enabled !== false;
         metadata.lead_capture = false;
         metadata.intake = false;
+        if (entityType === "opportunity") {
+            metadata.launch_surface = "crm_opportunity";
+        }
     }
 
-    if ("prefill_field_map" in body) {
-        const parsed = parsePrefillFieldMapBody(body.prefill_field_map);
-        if (!parsed.ok) return jsonError(parsed.message, 400);
-        if (parsed.map) metadata.prefill_field_map = parsed.map;
+    const prefillParsed = parsePrefillFieldMapBody(
+        "prefill_field_map" in body ? body.prefill_field_map : undefined
+    );
+    if (!prefillParsed.ok) return jsonError(prefillParsed.message, 400);
+    const oppDefaults =
+        metadata.source_entity_type === "opportunity" ? defaultOpportunityLaunchPrefillFieldMap() : {};
+    const mergedPrefill = { ...oppDefaults, ...(prefillParsed.map ?? {}) };
+    if (Object.keys(mergedPrefill).length > 0) {
+        metadata.prefill_field_map = mergedPrefill;
     }
 
     const label =

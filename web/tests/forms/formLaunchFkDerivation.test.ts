@@ -36,13 +36,57 @@ function mockSupabaseForOpportunity() {
                     eq: () => ({
                         eq: () => ({
                             maybeSingle: async () => ({
-                                data: { customer_id: CID },
+                                data: {
+                                    customer_id: CID,
+                                    primary_person_id: PID,
+                                    primary_contact_id: null,
+                                },
                                 error: null,
                             }),
                         }),
                     }),
                 }),
             };
+        }),
+    };
+}
+
+function mockSupabaseForOpportunityViaContact() {
+    return {
+        from: vi.fn((table: string) => {
+            if (table === "opportunities") {
+                return {
+                    select: () => ({
+                        eq: () => ({
+                            eq: () => ({
+                                maybeSingle: async () => ({
+                                    data: {
+                                        customer_id: CID,
+                                        primary_person_id: null,
+                                        primary_contact_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+                                    },
+                                    error: null,
+                                }),
+                            }),
+                        }),
+                    }),
+                };
+            }
+            if (table === "contacts") {
+                return {
+                    select: () => ({
+                        eq: () => ({
+                            eq: () => ({
+                                maybeSingle: async () => ({
+                                    data: { person_id: PID },
+                                    error: null,
+                                }),
+                            }),
+                        }),
+                    }),
+                };
+            }
+            throw new Error(`unexpected table ${table}`);
         }),
     };
 }
@@ -81,5 +125,17 @@ describe("deriveSubmissionFksFromLaunchMetadata", () => {
         });
         expect(r.opportunity_id).toBe(OID);
         expect(r.customer_id).toBe(CID);
+        expect(r.person_id).toBe(PID);
+    });
+
+    it("maps opportunity person_id via primary contact when primary_person_id is null", async () => {
+        const r = await deriveSubmissionFksFromLaunchMetadata(mockSupabaseForOpportunityViaContact() as never, ORG, {
+            form_context_mode: "packet",
+            source_entity_type: "opportunity",
+            source_entity_id: OID,
+        });
+        expect(r.opportunity_id).toBe(OID);
+        expect(r.customer_id).toBe(CID);
+        expect(r.person_id).toBe(PID);
     });
 });

@@ -53,13 +53,33 @@ export async function deriveSubmissionFksFromLaunchMetadata(
         case "opportunity": {
             const { data, error } = await supabase
                 .from("opportunities")
-                .select("customer_id")
+                .select("customer_id, primary_person_id, primary_contact_id")
                 .eq("org_id", orgId)
                 .eq("id", id)
                 .maybeSingle();
             if (error) throw new Error(error.message);
-            const cid = (data as { customer_id?: string | null } | null)?.customer_id ?? null;
-            return { ...EMPTY, opportunity_id: id, customer_id: cid };
+            const row = data as {
+                customer_id?: string | null;
+                primary_person_id?: string | null;
+                primary_contact_id?: string | null;
+            } | null;
+            const cid = row?.customer_id ?? null;
+            let personId: string | null =
+                typeof row?.primary_person_id === "string" && UUID_RE.test(row.primary_person_id)
+                    ? row.primary_person_id
+                    : null;
+            if (!personId && typeof row?.primary_contact_id === "string" && UUID_RE.test(row.primary_contact_id)) {
+                const { data: con, error: cErr } = await supabase
+                    .from("contacts")
+                    .select("person_id")
+                    .eq("org_id", orgId)
+                    .eq("id", row.primary_contact_id)
+                    .maybeSingle();
+                if (cErr) throw new Error(cErr.message);
+                const pid = (con as { person_id?: string | null } | null)?.person_id ?? null;
+                if (typeof pid === "string" && UUID_RE.test(pid)) personId = pid;
+            }
+            return { ...EMPTY, opportunity_id: id, customer_id: cid, person_id: personId };
         }
         default:
             return { ...EMPTY };
