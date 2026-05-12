@@ -213,8 +213,50 @@ function supabaseFrom() {
                     select: () => ({
                         eq: () => ({
                             eq: () => ({
-                                maybeSingle: async () => ({ data: { name: "Fall intake" }, error: null }),
+                                maybeSingle: async () => ({
+                                    data: {
+                                        name: "Fall intake",
+                                        metadata: {
+                                            enrollment_email: {
+                                                subject_template: "Custom: {{household_name}}",
+                                                body_template: "Hello\n{{packet_links}}",
+                                            },
+                                        },
+                                    },
+                                    error: null,
+                                }),
                             }),
+                        }),
+                    }),
+                };
+            }
+            if (table === "customers") {
+                return {
+                    select: () => ({
+                        eq: () => ({
+                            eq: () => ({
+                                maybeSingle: async () => ({ data: { name: "Jones Family" }, error: null }),
+                            }),
+                        }),
+                    }),
+                };
+            }
+            if (table === "persons") {
+                return {
+                    select: () => ({
+                        eq: () => ({
+                            eq: () => ({
+                                maybeSingle: async () => ({ data: { first_name: "Pat", last_name: "Lee" }, error: null }),
+                            }),
+                        }),
+                    }),
+                };
+            }
+            if (table === "organizations") {
+                return {
+                    select: () => ({
+                        eq: () => ({
+                            maybeSingle: async () => ({ data: { name: "Acme Org" }, error: null }),
                         }),
                     }),
                 };
@@ -280,6 +322,8 @@ describe("POST /api/admin/opportunities/[id]/enrollment-packet-launch", () => {
                 recipient_person_id: null,
                 customer_member_ids: [MEM1],
                 delivery: "send_email",
+                email_subject: "Enrollment for {{household_name}}",
+                email_body: "Hi {{recipient_name}},\n\n{{packet_links}}\n",
             }),
             { params: Promise.resolve({ id: OPP }) }
         );
@@ -289,12 +333,19 @@ describe("POST /api/admin/opportunities/[id]/enrollment-packet-launch", () => {
             primaryEntityType: string;
             primaryEntityId: string;
             metadata: Record<string, unknown>;
+            bodyRaw: string;
+            emailSubjectRaw: string | null;
         };
         expect(arg.primaryEntityType).toBe("opportunities");
         expect(arg.primaryEntityId).toBe(OPP);
         expect(arg.metadata.delivery_surface).toBe("enrollment_packet");
         expect(arg.metadata.opportunity_id).toBe(OPP);
         expect(arg.metadata.entity_type).toBeUndefined();
+        expect(typeof arg.bodyRaw).toBe("string");
+        expect(String(arg.bodyRaw)).toContain("https://example.com/embed/");
+        expect(String(arg.emailSubjectRaw ?? "")).toContain("Jones Family");
+        expect(arg.metadata.enrollment_packet_email_sent_subject).toBeDefined();
+        expect(arg.metadata.enrollment_packet_email_sent_body).toBeDefined();
         expect(emitSentMock).toHaveBeenCalled();
         const j = (await res.json()) as { email: { ok: boolean } };
         expect(j.email.ok).toBe(true);

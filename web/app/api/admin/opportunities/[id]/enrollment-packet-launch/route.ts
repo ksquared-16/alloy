@@ -23,6 +23,13 @@ import {
 } from "@/lib/communications/drawerEmailRecipients";
 import { triggerBackendMessagesQueue } from "@/lib/communications/triggerBackendMessagesQueue";
 import { emitOpportunityEnrollmentPacketSentSafe } from "@/lib/forms/workflow/opportunityEnrollmentPacketProjections";
+import {
+    DEFAULT_ENROLLMENT_EMAIL_BODY_TEMPLATE,
+    DEFAULT_ENROLLMENT_EMAIL_SUBJECT_TEMPLATE,
+    finalizeEnrollmentOutboundEmail,
+    parseEnrollmentEmailTemplatesFromPacketMetadata,
+    type EnrollmentPacketLinkRow,
+} from "@/lib/forms/packets/enrollmentPacketEmailTemplate";
 
 const UUID_RE =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -252,68 +259,136 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
                         if (!em) {
                             emailResult = { ok: false, skipped_reason: "recipient has no usable email" };
                         } else {
-                            const lines = created.map((c, i) => `${i + 1}. ${c.enrollee_label ?? "Link"}: ${c.embed_url ?? "(URL unavailable)"}`);
-                            const bodyText = [`Enrollment packet link(s) for ${oppName || "your opportunity"}:`, "", ...lines, "", "Thank you."].join("\n");
-                            const { data: pktName } = await supabase
+                            const { data: pktRow } = await supabase
                                 .from("form_packet_definitions")
-                                .select("name")
+                                .select("name, metadata")
                                 .eq("id", packetDefinitionId)
                                 .eq("org_id", ctx.orgId)
                                 .maybeSingle();
-                            const pn = (pktName as { name?: string } | null)?.name;
-                            const subject = typeof pn === "string" && pn.trim() ? `Enrollment: ${pn.trim()}` : "Enrollment forms";
+                            const pkt = pktRow as { name?: string | null; metadata?: unknown } | null;
+                            const packetName =
+                                typeof pkt?.name === "string" && pkt.name.trim() ? pkt.name.trim() : "Enrollment packet";
 
-                            const metaOut: Record<string, unknown> = {
-                                source: "enrollment_packet_modal",
-                                delivery_surface: "enrollment_packet",
-                                form_public_link_ids: linkIds,
-                                packet_definition_id: packetDefinitionId,
-                                opportunity_id: opportunityId,
-                                recipient_person_id: toPerson,
-                                selected_customer_member_ids: memberIds,
-                            };
+                            const metaTemplates = parseEnrollmentEmailTemplatesFromPacketMetadata(pkt?.metadata ?? null);
+                            const rawEmailSubject = typeof body.email_subject === "string" ? body.email_subject.trim() : "";
+                            const rawEmailBody = typeof body.email_body === "string" ? body.email_body.trim() : "";
+                            const operatorSubject =
+                                rawEmailSubject || metaTemplates?.subject || DEFAULT_ENROLLMENT_EMAIL_SUBJECT_TEMPLATE;
+                            const operatorBody = rawEmailBody || metaTemplates?.body || DEFAULT_ENROLLMENT_EMAIL_BODY_TEMPLATE;
 
-                            const res = await enqueueCanonicalOutboundMessage({
-                                supabase,
-                                orgId: ctx.orgId,
-                                primaryEntityType: "opportunities",
-                                primaryEntityId: opportunityId,
-                                channelRaw: "email",
-                                toRaw: em,
-                                bodyRaw: bodyText,
-                                emailSubjectRaw: subject,
-                                workflowRunId: null,
-                                metadata: metaOut,
-                                contextLocationId: null,
-                                communicationProviderBindingId: resolvedBindingId,
+                            let householdDisplay = oppName || "your household";
+                            const custId =
+                                oppRow && typeof (oppRow as { customer_id?: string | null }).customer_id === "string"
+                                    ? (oppRow as { customer_id: string }).customer_id.trim()
+                                    : "";
+                            if (custId) {
+                                const { data: cust } = await supabase
+                                    .from("customers")
+                                    .select("name")
+                                    .eq("org_id", ctx.orgId)
+                                    .eq("id", custId)
+                                    .maybeSingle();
+                                const cn = (cust as { name?: string | null } | null)?.name;
+                                if (typeof cn === "string" && cn.trim()) householdDisplay = cn.trim();
+                            }
+
+                            const { data: personRow } = await supabase
+                                .from("persons")
+                                .select("first_name, last_name")
+                                .eq("org_id", ctx.orgId)
+                                .eq("id", toPerson)
+                                .maybeSingle();
+                            const pr = personRow as { first_name?: string | null; last_name?: string | null } | null;
+                            const recipientName =
+                                [pr?.first_name, pr?.last_name]
+                                    .filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+                                    .join(" ")
+                                    .trim() || "there";
+
+                            const { data: orgRow } = await supabase
+                                .from("organizations")
+                                .select("name")
+                                .eq("id", ctx.orgId)
+                                .maybeSingle();
+                            const organizationName =
+                                typeof (orgRow as { name?: string | null } | null)?.name === "string"
+                                    ? String((orgRow as { name: string }).name).trim()
+                                    : "";
+
+                            const linkRows: EnrollmentPacketLinkRow[] = created.map((c) => ({
+                                embed_url: c.embed_url,
+                                enrollee_label: c.enrollee_label,
+                            }));
+
+                            const finalized = finalizeEnrollmentOutboundEmail({
+                                operatorSubject,
+                                operatorBody,
+                                rows: linkRows,
+                                householdName: householdDisplay,
+                                recipientName,
+                                packetName,
+                                organizationName,
                             });
 
-                            if (res.skippedReason === "insert_failed" || !res.communicationMessageId) {
-                                emailResult = { ok: false, skipped_reason: `enqueue failed (${res.skippedReason ?? "unknown"})` };
+                            if (!finalized.ok) {
+                                emailResult = { ok: false, skipped_reason: finalized.error };
                             } else {
-                                emailResult = {
-                                    ok: true,
-                                    communication_message_id: res.communicationMessageId,
+                                const metaOut: Record<string, unknown> = {
+                                    source: "enrollment_packet_modal",
+                                    delivery_surface: "enrollment_packet",
+                                    form_public_link_ids: linkIds,
+                                    packet_definition_id: packetDefinitionId,
+                                    opportunity_id: opportunityId,
+                                    recipient_person_id: toPerson,
+                                    selected_customer_member_ids: memberIds,
+                                    enrollment_packet_email_operator_subject: operatorSubject,
+                                    enrollment_packet_email_operator_body: operatorBody,
+                                    enrollment_packet_email_sent_subject: finalized.subject,
+                                    enrollment_packet_email_sent_body: finalized.body,
                                 };
-                                void triggerBackendMessagesQueue({ workflow_run_id: null, limit: 25 }).catch(() => {});
-                                const se = await emitOpportunityEnrollmentPacketSentSafe({
+
+                                const res = await enqueueCanonicalOutboundMessage({
+                                    supabase,
                                     orgId: ctx.orgId,
-                                    opportunityId,
-                                    packetDefinitionId,
-                                    formPublicLinkIds: linkIds,
-                                    recipientPersonId: toPerson,
-                                    selectedCustomerMemberIds: memberIds,
-                                    communicationMessageId: res.communicationMessageId,
+                                    primaryEntityType: "opportunities",
+                                    primaryEntityId: opportunityId,
+                                    channelRaw: "email",
+                                    toRaw: em,
+                                    bodyRaw: finalized.body,
+                                    emailSubjectRaw: finalized.subject,
+                                    workflowRunId: null,
+                                    metadata: metaOut,
+                                    contextLocationId: null,
+                                    communicationProviderBindingId: resolvedBindingId,
                                 });
-                                if (se.error) {
-                                    console.error("[enrollment-packet-launch] sent projection failed:", se.error.message);
+
+                                if (res.skippedReason === "insert_failed" || !res.communicationMessageId) {
+                                    emailResult = { ok: false, skipped_reason: `enqueue failed (${res.skippedReason ?? "unknown"})` };
+                                } else {
+                                    emailResult = {
+                                        ok: true,
+                                        communication_message_id: res.communicationMessageId,
+                                    };
+                                    void triggerBackendMessagesQueue({ workflow_run_id: null, limit: 25 }).catch(() => {});
+                                    const se = await emitOpportunityEnrollmentPacketSentSafe({
+                                        orgId: ctx.orgId,
+                                        opportunityId,
+                                        packetDefinitionId,
+                                        formPublicLinkIds: linkIds,
+                                        recipientPersonId: toPerson,
+                                        selectedCustomerMemberIds: memberIds,
+                                        communicationMessageId: res.communicationMessageId,
+                                    });
+                                    if (se.error) {
+                                        console.error("[enrollment-packet-launch] sent projection failed:", se.error.message);
+                                    }
                                 }
                             }
-                        }
                     }
                 }
             }
         }
+    }
     }
 
     return NextResponse.json({

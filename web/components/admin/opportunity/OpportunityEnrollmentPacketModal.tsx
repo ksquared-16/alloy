@@ -1,6 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+    DEFAULT_ENROLLMENT_EMAIL_BODY_TEMPLATE,
+    DEFAULT_ENROLLMENT_EMAIL_SUBJECT_TEMPLATE,
+    applyEnrollmentEmailPlaceholders,
+    parseEnrollmentEmailTemplatesFromPacketMetadata,
+} from "@/lib/forms/packets/enrollmentPacketEmailTemplate";
 
 type PacketDefRow = { id: string; name: string; key: string; is_active?: boolean | null };
 
@@ -121,6 +127,11 @@ export default function OpportunityEnrollmentPacketModal({
     const [expiresLocal, setExpiresLocal] = useState("");
     const [moreOptionsOpen, setMoreOptionsOpen] = useState(false);
 
+    const [packetDefMetadata, setPacketDefMetadata] = useState<Record<string, unknown> | null>(null);
+    const [emailSubject, setEmailSubject] = useState("");
+    const [emailBody, setEmailBody] = useState("");
+    const [emailEdited, setEmailEdited] = useState(false);
+
     const [busy, setBusy] = useState(false);
     const [launchErr, setLaunchErr] = useState<string | null>(null);
     const [phase, setPhase] = useState<Phase>("form");
@@ -151,6 +162,10 @@ export default function OpportunityEnrollmentPacketModal({
         setExpiresLocal("");
         setMoreOptionsOpen(false);
         setDeliveryMode(hasFiledEmail ? "send_email" : "copy_only");
+        setPacketDefMetadata(null);
+        setEmailSubject("");
+        setEmailBody("");
+        setEmailEdited(false);
     }, [open, hasFiledEmail]);
 
     useEffect(() => {
@@ -219,14 +234,16 @@ export default function OpportunityEnrollmentPacketModal({
         if (!packetDefId) {
             setDetailItems([]);
             setDetailName("");
+            setPacketDefMetadata(null);
             return;
         }
+        setEmailEdited(false);
         setDetailLoading(true);
         setDetailErr(null);
         try {
             const res = await fetch(`/api/admin/forms/packet-definitions/${encodeURIComponent(packetDefId)}`);
             const json = (await res.json().catch(() => ({}))) as {
-                data?: { definition?: { name?: string }; items?: PacketItemRow[] };
+                data?: { definition?: { name?: string; metadata?: unknown }; items?: PacketItemRow[] };
                 error?: string;
             };
             if (!res.ok) throw new Error(json.error ?? "Could not load packet detail");
@@ -234,10 +251,15 @@ export default function OpportunityEnrollmentPacketModal({
             const items = json.data?.items ?? [];
             setDetailName(typeof def?.name === "string" && def.name.trim() ? def.name.trim() : "Packet");
             setDetailItems(items);
+            const meta = def?.metadata;
+            setPacketDefMetadata(
+                meta && typeof meta === "object" && !Array.isArray(meta) ? (meta as Record<string, unknown>) : null
+            );
         } catch (e) {
             setDetailErr(e instanceof Error ? e.message : "Detail failed");
             setDetailItems([]);
             setDetailName("");
+            setPacketDefMetadata(null);
         } finally {
             setDetailLoading(false);
         }
@@ -320,6 +342,42 @@ export default function OpportunityEnrollmentPacketModal({
         return "—";
     }, [recipientChoice, primaryPersonName, primaryContactName, primaryPersonId, selectedMembers]);
 
+    const organizationNamePreview = useMemo(() => {
+        const r = opportunityRecord ?? {};
+        const v =
+            (typeof r._organization_name === "string" && r._organization_name.trim() && r._organization_name.trim()) ||
+            (typeof r.organization_name === "string" && r.organization_name.trim() && r.organization_name.trim()) ||
+            "";
+        return v;
+    }, [opportunityRecord]);
+
+    useEffect(() => {
+        if (!open || !selectedPacketId || emailEdited) return;
+        const parsed = parseEnrollmentEmailTemplatesFromPacketMetadata(packetDefMetadata);
+        const subjTemplate = parsed?.subject ?? DEFAULT_ENROLLMENT_EMAIL_SUBJECT_TEMPLATE;
+        const bodyTemplate = parsed?.body ?? DEFAULT_ENROLLMENT_EMAIL_BODY_TEMPLATE;
+        const household = (householdName ?? opportunityLabel).trim() || "your household";
+        const vars: Record<string, string> = {
+            household_name: household,
+            recipient_name: recipientPreviewLabel,
+            packet_name: detailName || "Packet",
+            organization_name: organizationNamePreview,
+            packet_links: "{{packet_links}}",
+        };
+        setEmailSubject(applyEnrollmentEmailPlaceholders(subjTemplate, vars));
+        setEmailBody(applyEnrollmentEmailPlaceholders(bodyTemplate, vars));
+    }, [
+        open,
+        selectedPacketId,
+        packetDefMetadata,
+        detailName,
+        householdName,
+        opportunityLabel,
+        recipientPreviewLabel,
+        organizationNamePreview,
+        emailEdited,
+    ]);
+
     const launchBlockedReason = useMemo(() => {
         if (!selectedPacketId) return "Select a packet.";
         if (detailItems.length === 0 && !detailLoading) return "This packet has no steps.";
@@ -361,6 +419,10 @@ export default function OpportunityEnrollmentPacketModal({
                 ...(internalNote.trim() ? { internal_note: internalNote.trim() } : {}),
                 ...(expires_at ? { expires_at } : {}),
             };
+            if (effectiveDelivery === "send_email") {
+                body.email_subject = emailSubject;
+                body.email_body = emailBody;
+            }
 
             const res = await fetch(`/api/admin/opportunities/${encodeURIComponent(opportunityId)}/enrollment-packet-launch`, {
                 method: "POST",
@@ -632,6 +694,42 @@ export default function OpportunityEnrollmentPacketModal({
                                     </div>
                                 </div>
 
+                                {deliveryMode === "send_email" && hasFiledEmail ? (
+                                    <div className="space-y-2 rounded-md border border-alloy-stone/30 bg-white px-2 py-2">
+                                        <p className="text-xs font-medium text-alloy-midnight/80">Email</p>
+                                        <label className="block text-[11px] font-medium text-alloy-midnight/65">
+                                            Subject
+                                            <input
+                                                type="text"
+                                                className="mt-0.5 block w-full rounded border border-alloy-stone/40 px-2 py-1 text-sm text-alloy-midnight"
+                                                value={emailSubject}
+                                                disabled={!canMutate}
+                                                onChange={(e) => {
+                                                    setEmailEdited(true);
+                                                    setEmailSubject(e.target.value);
+                                                }}
+                                            />
+                                        </label>
+                                        <label className="block text-[11px] font-medium text-alloy-midnight/65">
+                                            Body
+                                            <textarea
+                                                className="mt-0.5 block min-h-[7.5rem] w-full rounded border border-alloy-stone/40 px-2 py-1.5 font-mono text-xs leading-snug text-alloy-midnight"
+                                                value={emailBody}
+                                                disabled={!canMutate}
+                                                rows={7}
+                                                onChange={(e) => {
+                                                    setEmailEdited(true);
+                                                    setEmailBody(e.target.value);
+                                                }}
+                                            />
+                                        </label>
+                                        <p className="text-[10px] text-alloy-midnight/50">
+                                            {`{{packet_links}}`} is replaced with your packet URLs. If you remove it, links are appended
+                                            before send.
+                                        </p>
+                                    </div>
+                                ) : null}
+
                                 <div>
                                     <button
                                         type="button"
@@ -776,6 +874,7 @@ export default function OpportunityEnrollmentPacketModal({
                                     setEmailOutcome(null);
                                     setCopyAllOk(false);
                                     setDeliveryMode(hasFiledEmail ? "send_email" : "copy_only");
+                                    setEmailEdited(false);
                                 }}
                                 className="rounded-md border border-alloy-stone/45 px-3 py-1.5 text-sm font-medium text-alloy-midnight/85 hover:bg-alloy-stone/15"
                             >
