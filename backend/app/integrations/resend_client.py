@@ -46,7 +46,8 @@ def send_resend_email(
         raise RuntimeError(f"Resend HTTP {resp.status_code}: {resp.text[:500]}")
     data = resp.json() if resp.text else {}
     mid = data.get("id") if isinstance(data, dict) else None
-    logger.info("Resend send ok id_tail=%s", str(mid)[-8:] if mid else "none")
+    # Success logging with from/to context lives in communication_message_sender (dispatcher).
+    logger.debug("Resend API ok id_tail=%s", str(mid)[-8:] if mid else "none")
     return {"id": str(mid) if mid else "", "raw": data}
 
 

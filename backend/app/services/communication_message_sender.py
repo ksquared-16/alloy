@@ -25,6 +25,44 @@ logger = logging.getLogger("alloy-dispatcher")
 
 ERROR_TRUNCATE = 500
 
+
+def _tail_str(s: str, n: int = 8) -> str:
+    t = (s or "").strip()
+    if not t:
+        return "(empty)"
+    return t[-n:] if len(t) > n else t
+
+
+def _from_email_for_log(from_email: str) -> str:
+    """Log-friendly from: masked local + domain (not a secret; reduces shared-log PII)."""
+    s = (from_email or "").strip()
+    if not s:
+        return "(empty)"
+    if "@" not in s:
+        return s[:64]
+    local, _, domain = s.partition("@")
+    domain = domain.strip()
+    if not domain:
+        return s[:64]
+    if len(local) <= 2:
+        return f"...@{domain}"
+    return f"{local[0]}...{local[-1]}@{domain}"
+
+
+def _to_address_tail_for_log(to_email: str) -> str:
+    """Recipient: domain + last chars of local only."""
+    s = (to_email or "").strip()
+    if not s:
+        return "(empty)"
+    if "@" not in s:
+        return _tail_str(s, 12)
+    local, _, domain = s.partition("@")
+    domain = domain.strip()
+    if not domain:
+        return f"...{_tail_str(local, 4)}"
+    tail = local[-4:] if len(local) >= 4 else local
+    return f"...{tail}@{domain}"
+
 _JSON_HEADERS = {"Content-Type": "application/json", "Prefer": "return=representation"}
 
 
@@ -271,7 +309,15 @@ def process_communication_messages(
                         "provider_message_id": rid or None,
                         "error": None,
                         "communication_provider_binding_id": bound_id,
+                        "from_address": from_email.strip() or None,
                     },
+                )
+                logger.info(
+                    "COMM_MSG_EMAIL_RESEND_OK comm_msg_id=%s provider_id_tail=%s from=%s to_tail=%s",
+                    msg_id,
+                    _tail_str(str(rid or "")),
+                    _from_email_for_log(from_email),
+                    _to_address_tail_for_log(to_addr),
                 )
                 sent += 1
                 mids.append(str(msg_id))

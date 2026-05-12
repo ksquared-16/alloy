@@ -1,7 +1,45 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Webhook } from "svix";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-import { applyOutboundProviderDeliveryPatch } from "@/lib/communications/providerDeliveryPersistence";
+import {
+    applyOutboundProviderDeliveryPatch,
+    type ProviderDeliveryApplyResult,
+} from "@/lib/communications/providerDeliveryPersistence";
+
+function providerMessageIdTail(id: string): string {
+    const t = id.trim();
+    if (!t) return "(empty)";
+    return t.length > 8 ? t.slice(-8) : t;
+}
+
+/** Safe structured log for Resend lifecycle (no secrets, no full recipient). */
+function logResendWebhookDeliveryOutcome(
+    eventType: string,
+    providerMessageId: string,
+    result: ProviderDeliveryApplyResult
+): void {
+    const tail = providerMessageIdTail(providerMessageId);
+    const base: Record<string, unknown> = { event_type: eventType, provider_id_tail: tail };
+    if (result.ok) {
+        console.info(
+            "[resend-webhook]",
+            JSON.stringify({
+                ...base,
+                message_id: result.message_id,
+                updated: result.updated,
+            })
+        );
+    } else {
+        console.warn(
+            "[resend-webhook]",
+            JSON.stringify({
+                ...base,
+                outcome: "not_applied",
+                reason: result.reason,
+            })
+        );
+    }
+}
 
 /**
  * POST /api/webhooks/resend — Resend email lifecycle (Svix-signed).
@@ -62,6 +100,7 @@ export async function POST(request: NextRequest) {
                 metadata_event: metaEvent,
             },
         });
+        logResendWebhookDeliveryOutcome(type, emailId, r);
         return jsonWebhookResult(r);
     }
 
@@ -74,6 +113,7 @@ export async function POST(request: NextRequest) {
                 metadata_event: metaEvent,
             },
         });
+        logResendWebhookDeliveryOutcome(type, emailId, r);
         return jsonWebhookResult(r);
     }
 
@@ -86,6 +126,7 @@ export async function POST(request: NextRequest) {
                 metadata_event: metaEvent,
             },
         });
+        logResendWebhookDeliveryOutcome(type, emailId, r);
         return jsonWebhookResult(r);
     }
 
@@ -114,7 +155,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, ignored: true, type });
 }
 
-function jsonWebhookResult(r: import("@/lib/communications/providerDeliveryPersistence").ProviderDeliveryApplyResult) {
+function jsonWebhookResult(r: ProviderDeliveryApplyResult) {
     if (!r.ok && r.reason === "message_not_found_or_not_outbound") {
         return NextResponse.json({ ok: true, ignored: true, reason: r.reason });
     }
