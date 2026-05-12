@@ -55,8 +55,15 @@ describe("Opportunity tour schedule UX alignment", () => {
         expect(src).toContain("← Prev");
     });
 
+    it("AdminEntityDrawer relabels schedule_tour header action when active bookings hook is wired", () => {
+        const drawer = readFileSync(drawerPath, "utf8");
+        expect(drawer).toContain("opportunityRecordHeaderActionsForUi");
+        expect(drawer).toContain("Reschedule tour");
+        expect(drawer).toContain("useOpportunityActiveTourBookings");
+    });
+
     it("AdminEntityDrawer slot booking handler mirrors confirmed booking metadata and awaits refetch", () => {
-        const src = readFileSync(join(here, "..", "..", "components", "admin", "AdminEntityDrawer.tsx"), "utf8");
+        const src = readFileSync(drawerPath, "utf8");
         expect(src).toContain("deriveTourMetadataMirrorFromBooking");
         expect(src).toContain("if (rf) await rf;");
     });

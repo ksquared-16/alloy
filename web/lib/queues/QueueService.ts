@@ -16,7 +16,8 @@ import {
     type StatusDefsResolveTelemetry,
 } from "@/lib/admin/statusDefinitionsResolve";
 import { logDbTiming, withDbTiming } from "@/lib/admin/dbQueryTiming";
-import { formatTourDateTime } from "@/lib/enrollment/formatTourDateTime";
+import { TOUR_BOOKING_ACTIVE_NON_TERMINAL_STATUS_KEYS } from "@/lib/tours/constants";
+import { formatOpportunityTourQueueDisplays } from "@/lib/tours/queue/opportunityQueueTourPreview";
 import { approximateAgeMonthsFromDobIso, programLabelAndAgeGroupFromAgeMonths } from "@/lib/childcare/childCareProgramFromDob";
 import { getOrgLocalTodayUtcBounds, type OrgLocalDayUtcBounds } from "@/lib/admin/orgLocalDayBounds";
 import { fetchOperationalTimezoneForOrgWithCache, UTC_FALLBACK_IANA } from "@/lib/admin/timezoneContract";
@@ -898,8 +899,10 @@ async function enrichOpportunityRows(params: {
 
     const emptyRel = Promise.resolve({ data: [] as any[], error: null as any });
 
+    const opportunityIds = [...new Set(rows.map((r) => String(r.id ?? "").trim()).filter(Boolean))];
+
     const tParallel0 = Date.now();
-    const [personsTimed, contactsTimed, customersTimed, membersTimed, defsTimed] = await Promise.all([
+    const [personsTimed, contactsTimed, customersTimed, membersTimed, defsTimed, tourBookingsTimed] = await Promise.all([
         plan.persons && personIds.length
             ? timedAwait(
                   supabase
@@ -935,8 +938,33 @@ async function enrichOpportunityRows(params: {
         preloadedDefs != null
             ? timedAwait(Promise.resolve(preloadedDefs))
             : timedAwait(fetchEffectiveStatusDefinitions(supabase as any, orgId, "opportunities", { activeOnly: true })),
+        opportunityIds.length > 0
+            ? timedAwait(
+                  supabase
+                      .from("tour_bookings")
+                      .select("opportunity_id, start_at, timezone, status_key")
+                      .eq("org_id", orgId)
+                      .in("opportunity_id", opportunityIds as any)
+                      .in("status_key", [...TOUR_BOOKING_ACTIVE_NON_TERMINAL_STATUS_KEYS] as any)
+              )
+            : timedAwait(emptyRel),
     ]);
     const parallelMainMs = Date.now() - tParallel0;
+
+    const tourBookingByOppId = new Map<string, { start_at: string; timezone: string }>();
+    for (const raw of (tourBookingsTimed.v as any).data ?? []) {
+        const row = raw as Record<string, unknown>;
+        const oid = String(row.opportunity_id ?? "").trim();
+        const sa = String(row.start_at ?? "");
+        const tz = String(row.timezone ?? "UTC");
+        if (!oid || !sa) continue;
+        const prev = tourBookingByOppId.get(oid);
+        const t = Date.parse(sa);
+        const pt = prev ? Date.parse(prev.start_at) : NaN;
+        if (!prev || (Number.isFinite(t) && (!Number.isFinite(pt) || t > pt))) {
+            tourBookingByOppId.set(oid, { start_at: sa, timezone: tz });
+        }
+    }
 
     const personsRes = personsTimed.v;
     const contactsRes = contactsTimed.v;
@@ -1046,8 +1074,6 @@ async function enrichOpportunityRows(params: {
         let programsDisplay: string | null = null;
         let programCombined: string | null = opportunityProgramLineFromMetadata(md);
         let desiredStart: string | null = null;
-        let tourDate: string | null = null;
-        let tourTime: string | null = null;
 
         let structuredFromMembers: ReturnType<typeof buildCrmCompactStructuredLinesFromCustomerMembers> | null = null;
 
@@ -1073,8 +1099,6 @@ async function enrichOpportunityRows(params: {
                     (typeof md?.program_label === "string" ? md.program_label.trim() : null);
             }
             desiredStart = typeof md?.desired_start_date === "string" ? md.desired_start_date : null;
-            tourDate = typeof md?.tour_date === "string" ? md.tour_date : null;
-            tourTime = typeof md?.tour_time === "string" ? md.tour_time : null;
         } else if (inquiryChildren.length > 0) {
             const names: string[] = [];
             const programs: string[] = [];
@@ -1101,16 +1125,16 @@ async function enrichOpportunityRows(params: {
                     ? `${programsDisplay} · ${ageGroup}`
                     : programsDisplay ?? opportunityProgramLineFromMetadata(md);
             desiredStart = typeof md?.desired_start_date === "string" ? md.desired_start_date : null;
-            tourDate = typeof md?.tour_date === "string" ? md.tour_date : null;
-            tourTime = typeof md?.tour_time === "string" ? md.tour_time : null;
         } else {
             childDisplay = null;
             programsDisplay = typeof md?.program_label === "string" ? md.program_label.trim() : null;
             programCombined = opportunityProgramLineFromMetadata(md);
             desiredStart = typeof md?.desired_start_date === "string" ? md.desired_start_date : null;
-            tourDate = typeof md?.tour_date === "string" ? md.tour_date : null;
-            tourTime = typeof md?.tour_time === "string" ? md.tour_time : null;
         }
+
+        const oppIdForTour = String(r.id ?? "").trim();
+        const bookingTour = oppIdForTour ? tourBookingByOppId.get(oppIdForTour) ?? null : null;
+        const { tourQueueDisplay, tourContext } = formatOpportunityTourQueueDisplays(md, bookingTour, displayTz);
 
         const sk = (r.status_key ?? "").trim();
         const statusDisplay = sk ? labelByKey.get(sk) ?? sk : null;
@@ -1140,7 +1164,6 @@ async function enrichOpportunityRows(params: {
         } else {
             attentionReasonLabel = opportunityNeedsAttentionReasonLabel(r, nowForAttention);
         }
-        const tourContext = tourDate ? `Tour: ${formatTourDateTime(tourDate, tourTime, { displayTimeZoneIana: displayTz }).display}` : null;
 
         const structuredFromInquiry = buildStructuredCrmCompactChildren([], inquiryChildren);
         const crmCompactChildrenStructured =
@@ -1164,6 +1187,7 @@ async function enrichOpportunityRows(params: {
             _requested_program: programsDisplay ?? programCombined,
             _desired_start_date: desiredStart,
             _tour_context: tourContext,
+            _tour_queue_display: tourQueueDisplay,
             _notes_preview: notesPreview,
             _next_step_preview: nextStepPreview,
             _status_display: statusDisplay,

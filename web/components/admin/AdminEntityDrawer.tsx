@@ -60,6 +60,7 @@ import {
 import EntityDrawerOverview from "@/components/admin/entity/EntityDrawerOverview";
 import OpportunityRecordSectionRegistryActions from "@/components/admin/opportunity/OpportunityRecordSectionRegistryActions";
 import { OpportunityHouseholdPeoplePanel } from "@/components/admin/opportunity/OpportunityHouseholdPeoplePanel";
+import { useOpportunityActiveTourBookings } from "@/lib/tours/hooks/useOpportunityActiveTourBookings";
 import { OpportunityInquiryTourDateBlock } from "@/components/admin/opportunity/tours/OpportunityInquiryTourDateBlock";
 import { FamilyContactsPanel, OppInquiryContactChannelsRow } from "@/components/admin/opportunity/FamilyContactsPanel";
 import EntityDrawerSection from "@/components/admin/entity/EntityDrawerSection";
@@ -1180,6 +1181,26 @@ export default function AdminEntityDrawer() {
     const [opportunityActionLoading, setOpportunityActionLoading] = useState<string | null>(null);
     const [opportunityResolvedHeaderActions, setOpportunityResolvedHeaderActions] = useState<ResolvedActionsBySlot | null>(null);
     const [opportunityResolvedHeaderLoading, setOpportunityResolvedHeaderLoading] = useState(false);
+    const opportunityRecordHeaderTourOpportunityId =
+        drawer.type === "opportunities" && drawer.id && drawer.id !== "new" ? drawer.id : null;
+    const { activeBookings: opportunityRecordHeaderActiveTours } = useOpportunityActiveTourBookings(
+        opportunityRecordHeaderTourOpportunityId
+    );
+    const opportunityRecordHeaderActionsForUi = useMemo(() => {
+        const base = opportunityResolvedHeaderActions;
+        if (!base || !opportunityRecordHeaderActiveTours.length) return base;
+        const relabel = (arr: ResolvedActionForClient[]) =>
+            arr.map((a) => (a.key === "schedule_tour" ? { ...a, label: "Reschedule tour" } : a));
+        return {
+            ...base,
+            primary: relabel(base.primary ?? []),
+            secondary: relabel(base.secondary ?? []),
+            overflow: relabel(base.overflow ?? []),
+            right_rail: relabel(base.right_rail ?? []),
+            row_inline: relabel(base.row_inline ?? []),
+            header: relabel(base.header ?? []),
+        };
+    }, [opportunityResolvedHeaderActions, opportunityRecordHeaderActiveTours]);
     /** After `drawer_visible_ready` + two animation frames — defer non-critical fetches (activity-signal, deletion check). */
     const [postDrawerVisibleKey, setPostDrawerVisibleKey] = useState<string | null>(null);
     /** Background `surface=full` after `drawer_visible` — avoids second loading shell; cleared on new entity fetch / drawer close. */
@@ -5302,7 +5323,7 @@ export default function AdminEntityDrawer() {
                               <>
                                   {useOpportunityActionRegistryHeader ?
                                       <>
-                                          {(opportunityResolvedHeaderActions?.primary ?? []).map((a) => (
+                                          {((opportunityRecordHeaderActionsForUi ?? opportunityResolvedHeaderActions)?.primary ?? []).map((a) => (
                                               <button
                                                   key={a.key}
                                                   type="button"
@@ -5313,7 +5334,7 @@ export default function AdminEntityDrawer() {
                                                   {opportunityActionLoading === a.key ? "…" : a.label}
                                               </button>
                                           ))}
-                                          {(opportunityResolvedHeaderActions?.secondary ?? []).map((a) => (
+                                          {((opportunityRecordHeaderActionsForUi ?? opportunityResolvedHeaderActions)?.secondary ?? []).map((a) => (
                                               <button
                                                   key={a.key}
                                                   type="button"
@@ -5324,7 +5345,7 @@ export default function AdminEntityDrawer() {
                                                   {opportunityActionLoading === a.key ? "…" : a.label}
                                               </button>
                                           ))}
-                                          {(opportunityResolvedHeaderActions?.overflow ?? []).map((a) => (
+                                          {((opportunityRecordHeaderActionsForUi ?? opportunityResolvedHeaderActions)?.overflow ?? []).map((a) => (
                                               <button
                                                   key={a.key}
                                                   type="button"

@@ -257,6 +257,8 @@ function computeCrmTimingSegments(
     const wantT = want("tour_date");
     if (!wantD && !wantT) return null;
 
+    const tourDirect = typeof row._tour_queue_display === "string" ? row._tour_queue_display.trim() : "";
+
     const desiredRaw =
         typeof row._desired_start_date === "string" ? row._desired_start_date.trim() : "";
     const desiredFormatted = wantD && desiredRaw ? formatDateUsShortHyphenUtc(desiredRaw) : null;
@@ -271,8 +273,9 @@ function computeCrmTimingSegments(
     const tourAlt = typeof row._tour_timing === "string" ? row._tour_timing.trim() : "";
     const tourRaw = tourPrimary || tourAlt;
     const tourStripped = tourRaw ? stripTourContextValuePrefix(tourRaw) : "";
-    const tourFormatted = wantT && tourStripped ? formatQueuePreviewTourTimingUtc(tourStripped) : "";
-    const tourVal = wantT ? (tourFormatted.trim() ? tourFormatted : "—") : "";
+    const tourFormatted =
+        wantT && tourStripped && !tourDirect ? formatQueuePreviewTourTimingUtc(tourStripped) : "";
+    const tourVal = wantT ? (tourDirect || (tourFormatted.trim() ? tourFormatted : "—")) : "";
 
     const segments: WorkUnitQueueCrmTimingSegmentVm[] = [];
     if (wantD && labels.desired_start_date) {
@@ -475,6 +478,8 @@ export function buildCrmQueueRowPreviewPresentation(
     const wantD = want("desired_start_date");
     const wantT = want("tour_date");
 
+    const tourDirect = typeof row._tour_queue_display === "string" ? row._tour_queue_display.trim() : "";
+
     const desiredRaw =
         typeof row._desired_start_date === "string" ? row._desired_start_date.trim() : "";
     const desiredFormatted = wantD && desiredRaw ? formatDateUsShortHyphenUtc(desiredRaw) : null;
@@ -492,8 +497,9 @@ export function buildCrmQueueRowPreviewPresentation(
     const tourAlt = typeof row._tour_timing === "string" ? row._tour_timing.trim() : "";
     const tourRaw = tourPrimary || tourAlt;
     const tourStripped = tourRaw ? stripTourContextValuePrefix(tourRaw) : "";
-    const tourFormatted = wantT && tourStripped ? formatQueuePreviewTourTimingUtc(tourStripped) : "";
-    const tourVal = wantT ? (tourFormatted.trim() ? tourFormatted : "—") : null;
+    const tourFormatted =
+        wantT && tourStripped && !tourDirect ? formatQueuePreviewTourTimingUtc(tourStripped) : "";
+    const tourVal = wantT ? (tourDirect || (tourFormatted.trim() ? tourFormatted : "—")) : null;
 
     const timingSegments = computeCrmTimingSegments(row, want, labels);
     const crmCompactTimingValueLine = timingSegments?.length
