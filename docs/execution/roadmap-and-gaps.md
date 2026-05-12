@@ -14,13 +14,13 @@ Phases are **planning buckets**. Dates are narrative, not contractual.
 
 ### Current phase (late May 2026 — end-of-week snapshot)
 
-- **Shipped / stable foundations:** Communications V1 core paths; roles + department/site scope enforcement on opted-in routes; fix-sprint alignment (identity, events, access, resolver vs queue boundaries); enrollment **Needs Attention** buckets + pipeline UX as documented in **`docs/product/crm-system.md`** / **`docs/system/workspace-system.md`**.
+- **Shipped / stable foundations:** Communications V1 core paths; roles + department/site scope enforcement on opted-in routes; fix-sprint alignment (identity, events, access, resolver vs queue boundaries); enrollment **Needs Attention** buckets + pipeline UX as documented in **`docs/product/crm-system.md`** / **`docs/system/workspace-system.md`**; **Tour Scheduling V1** (`tour_bookings` + availability rules + drawer UX — **`docs/sprints/05_2026/tour_scheduling_v1.md`**).
 - **Partially implemented:** **Forms engine V1** (definitions, versions, submissions, public links, packet APIs — **`docs/product/documents-and-forms.md`**); **waitlist** pipeline status + queues + placement **preview** ( **`docs/product/crm-system.md`** waitlist section).
 
 ### Next phase (near term)
 
 - Finish **enrollment/forms + waitlist** product behaviors (replace placeholders, E2E operator flows).
-- **Tour scheduling** product depth beyond raw **`schedules`** APIs.
+- **Tour scheduling depth** beyond V1 — reminders, public polish, calendar sync, analytics — see **`docs/sprints/05_2026/tour_scheduling_phase_2.md`**.
 - **Settings / configuration UI** breadth (not everything operators need is exposed or parity-checked — see **`docs/execution/admin-settings-config-parity.md`** if loaded).
 - **Required vs optional field** behavior for forms and drawer payloads — **needs verification** per surface.
 - **Editable record UX** + **action button cleanup**.
@@ -47,6 +47,7 @@ Capabilities below exist in **`web/` / `supabase/`**; “complete” means **fou
 - **Queue vs record boundary** — documented and reinforced in **`record-system.md`** / **`workspace-system.md`**; QueueService previews vs entity GET.
 - **Forms engine foundation** — migrations + admin/public routes + Forms hub (`documents-and-forms.md`).
 - **Enrollment workspace** — pipeline queue definitions, optional Needs Attention buckets metadata, resolver reason codes (`crm-system.md`, `workspace-system.md`).
+- **Tour Scheduling V1** — `tour_bookings`, `tour_availability_rules`, admin APIs + drawer UX, public link basics, opportunity mirror + status integration, Vitest coverage — **`docs/sprints/05_2026/tour_scheduling_v1.md`**; Phase 2 planning **`docs/sprints/05_2026/tour_scheduling_phase_2.md`**.
 - **Waitlist lane + placement preview** — status keys, queues, placement presets — **without** full waitlist action UX (placeholder action still in migrations).
 
 ---
@@ -66,7 +67,7 @@ Before treating Alloy as **broadly customer-ready**, expect progress on:
 
 1. **Enrollment/forms** — finished operator + family flows using packets where intended; required-field semantics validated.
 2. **Waitlist** — real transitions/actions replacing placeholders; placement rules validated with ops.
-3. **Tour scheduling** — dedicated UX/workflows on top of **`schedules`** primitives.
+3. **Tour scheduling** — **V1 shipped** (`tour_bookings` + rules + drawer); **depth** (communications, public maturity, calendars, reporting) tracked in **`docs/sprints/05_2026/tour_scheduling_phase_2.md`**.
 4. **Settings / configuration** — critical knobs exposed in UI with parity to APIs (**needs verification** per surface).
 5. **Editable records** — drawer/edit consistency with layouts and permissions.
 6. **Action buttons** — consistent routing, permissions, and event coverage.
@@ -80,7 +81,7 @@ Before treating Alloy as **broadly customer-ready**, expect progress on:
 Order is **default sequencing** — swap when dependencies demand.
 
 1. **Finish enrollment/forms + waitlist** — close placeholders, E2E tests, operator sign-off.
-2. **Tour scheduling** — product UX on **`schedules`** / booking surfaces.
+2. **Tour scheduling** — **V1 complete**; prioritize **Phase 2** slices (e.g. reminders, public hardening) per **`tour_scheduling_phase_2.md`**.
 3. **Settings / configuration UI pass** — expose and validate parity (`record_layouts`, queue defs, forms metadata, comms bindings already partial).
 4. **Editable records / record UX cleanup** — aligns with Active fix items (fields vs layouts).
 5. **Action button cleanup** — `executeAdminAction` registry, duplicates, permission gates.
@@ -103,7 +104,7 @@ Use this block for **velocity / stakeholder summaries**. Dates are **repo anchor
 | **Needs Attention** (resolver + configurable buckets; enrollment UX) | 2026-04-30 | **Partially shipped** — landed with Apr–May 2026 enrollment workspace migrations + follow-up cards; polish → TBD |
 | **Forms engine V1** (schema + admin/public APIs + hub) | 2026-05-06 | **Partially shipped** — foundation **2026-05-06**; follow-ons through **2026-05-10** (e.g. packets `20260510120000`); **enrollment/forms done** → TBD |
 | **Waitlist** (lanes → prioritization product) | **Lanes/preview:** 2026-04-30 migrations; **prioritization foundations work started:** **2026-05-08** | **In progress** — placeholder action remains; **Shipped** → TBD |
-| **Forms Platform** (strategy program) | 2026-05-05 | **Not a ship milestone** — see `docs/strategy/forms-platform.md` |
+| **Tour Scheduling V1** (`tour_bookings`, availability rules, admin + public link basics, opportunity integration) | **2026-05-11** migrations (`20260511143000`, `20260512140000`) | **Shipped** — manual QA **May 2026**; Phase 2 roadmap → **`docs/sprints/05_2026/tour_scheduling_phase_2.md`** |
 | **Communications phase 2** | TBD | **Not started** (planned) |
 | **Roles phase 2** | TBD | **Not started** (planned) |
 
@@ -300,7 +301,8 @@ When verified in code or DB, fold conclusions into **`docs/system/entity-model.m
 
 ### Scheduling / attendance / staffing
 
-- **`schedules`** primitives exist; tour product + attendance — **roadmap / later**.
+- **`schedules`** remains **job-attached** service scheduling (see **`entity-model.md`**).
+- **Tour Scheduling V1** uses **`tour_bookings`** (not `schedules` rows) — **shipped**; attendance, labor, and **Tour Phase 2** (calendars, comms, analytics) remain **roadmap**.
 
 ### Production readiness / security
 
@@ -315,7 +317,7 @@ When verified in code or DB, fold conclusions into **`docs/system/entity-model.m
 - **CRM scoped access:** Not every route uses **`getAdminAccessContextCached`** — grep when adding surfaces.
 - **Forms product completion:** Engine exists; **enrollment E2E + required-field story** — **partially implemented** (`documents-and-forms.md`).
 - **Waitlist actions:** Placeholder mutator — **not implemented** (`crm-system.md`).
-- **Tour scheduling product:** Beyond **`schedules`** CRUD — **not implemented** as dedicated UX.
+- **Tour Scheduling V1:** **`tour_bookings`** + operator drawer UX — **shipped** (`tour_scheduling_v1.md`). **Deeper product** (reminders, calendar sync, advanced public) — **Phase 2** (`tour_scheduling_phase_2.md`).
 - **Reporting V1:** KPI strips / dept routes exist; **full reporting** — **not implemented**.
 - **AI surface:** `web/app/api/admin/agent/**` — env-gated; **not** broad autonomous agents.
 - **Stripe webhooks:** May be **backend** URL — verify (`billing-and-financials.md`).

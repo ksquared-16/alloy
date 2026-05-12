@@ -37,6 +37,8 @@ All authoritative reads must come from:
 
 Workspace navigation context for queues: **`docs/system/workspace-system.md`**.
 
+For **opportunity** queues, **`QueueService.enrichOpportunityRows`** may attach person/contact/customer/member data and, where implemented, **read active `tour_bookings`** to improve tour-related preview fields — while **filters** may still use **`metadata.tour_date`** for historical compatibility. None of that makes the queue row authoritative: **Queue → select entity → entity GET → act** remains mandatory (see **`docs/sprints/05_2026/tour_scheduling_v1.md`** §12).
+
 ## Current state
 
 - **`GET /api/admin/entity/[type]/[id]`** is the generic drawer loader for many entity types.

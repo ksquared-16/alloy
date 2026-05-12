@@ -58,7 +58,7 @@ Work-unit **CRM compact** queue rows show **Child** and **Program** columns usin
 - **Opportunity** = lifecycle / sales process (status, work unit, inquiry timing).
 - **Customer** = household / account (`customers`).
 - **Child roster** = **`customer_members`** for the same **`customer_id`**, filtered **`relationship = 'child'`** and **`is_active = true`**.
-- **`QueueService.enrichOpportunityRows`** (`web/lib/queues/QueueService.ts`) loads those members, builds **`_crm_compact_children`** (one line per child: display name or first+last, age from DOB, optional `persons.date_of_birth` when linked), and repeats **`metadata.program_label`** on each line for the Program column until child-specific programs exist elsewhere.
+- **Tour / pipeline dates in previews:** CRM lanes may show **tour** or follow-up timing from **`opportunities.metadata`** (mirror of confirmed **`tour_bookings`**) and/or **enriched** fields populated from **`tour_bookings`** in **`QueueService`** — convenient for sorting and cards, **not** a second source of truth. Opening the drawer should still rely on **entity GET** for the final wall time and actions.
 - **Do not** treat **`opportunities.metadata`** as the source of truth for child names or DOB; it may hold **inquiry-only** attributes (e.g. program interest, tour dates, desired start). Duplicating household child identity into metadata is discouraged.
 - Preview rows remain **non-authoritative** (see **[Queue truth boundary](#queue-truth-boundary-critical-rule)**): enrichment may **read** canonical tables to render lanes, but the queue list is still not the system of record.
 
@@ -70,7 +70,7 @@ Work-unit **CRM compact** queue rows show **Child** and **Program** columns usin
 
 - Routes under **`web/app/adminV2/`** compose the shell (`AdminV2Shell.tsx`) with workspace navigation and embedded perf overlay.
 - **Departments** and **work units** model organizational scope; work units may carry **`queue_definition`** (validated v1 JSON) driving lane behavior. Per-user **department/site visibility** is enforced on workspace lists, queues/KPIs, entity drawers, and scoped mutators via **`user_access_profiles`** (see **`docs/system/configuration-system.md`**).
-- **`QueueService`** (`web/lib/queues/QueueService.ts`) interprets queue definitions, applies org timezone bounds, status definitions, filters/sorts allowlists, and returns summaries + item lists for opportunities/jobs/etc.
+- **`QueueService`** (`web/lib/queues/QueueService.ts`) interprets queue definitions, applies org timezone bounds, status definitions, filters/sorts allowlists, and returns summaries + item lists for opportunities/jobs/etc. For **opportunities**, preview enrichment may **read** active **`tour_bookings`** (alongside mirrored **`metadata.tour_date`**) to improve tour labels — still **preview-only**; authoritative scheduling state is on the opportunity entity GET + **`tour_bookings`** tables, not the queue row JSON.
 - **`AdminV2PerfOverlay`** (`web/components/admin/AdminV2PerfOverlay.tsx`) exposes client perf markers (`window.__alloyPerf` per `web/lib/perf/alloyPerfGlobal.ts`).
 - Hooks such as **`useDepartmentQueueData`** fetch schedules and related lists for department views.
 
