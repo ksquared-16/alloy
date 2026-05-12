@@ -128,6 +128,45 @@ describe("applyTourBookingOpportunityIntegration", () => {
         );
     });
 
+    it("confirmed_mirror resolves department_id from work_unit_id for validateStatusTransition", async () => {
+        const booking = baseBooking({ status_key: "confirmed" });
+        const chain = {
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                    id: "opp-1",
+                    org_id: "org-1",
+                    status_key: "new_inquiry",
+                    metadata: {},
+                    work_unit_id: "wu-1",
+                },
+                error: null,
+            }),
+        };
+        const wuChain = {
+            eq: vi.fn().mockReturnThis(),
+            maybeSingle: vi.fn().mockResolvedValue({ data: { department_id: "dept-9" }, error: null }),
+        };
+        const supabase = {
+            from: vi.fn((table: string) => {
+                if (table === "opportunities") {
+                    return { select: vi.fn(() => chain) };
+                }
+                if (table === "work_units") {
+                    return { select: vi.fn(() => wuChain) };
+                }
+                throw new Error(`unexpected table ${table}`);
+            }),
+        } as never;
+        await applyTourBookingOpportunityIntegration(supabase, { booking, kind: "confirmed_mirror" });
+        expect(validateStatusTransition).toHaveBeenCalledWith(
+            expect.objectContaining({
+                departmentId: "dept-9",
+                workUnitId: "wu-1",
+            })
+        );
+    });
+
     it("confirmed_mirror writes tour_date/tour_time and tour_scheduled", async () => {
         const booking = baseBooking({ status_key: "confirmed" });
         const supabase = makeSupabase({

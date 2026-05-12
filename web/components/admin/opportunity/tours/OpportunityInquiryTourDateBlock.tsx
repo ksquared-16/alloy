@@ -2,6 +2,7 @@
 
 import { formatTourDateTime } from "@/lib/enrollment/formatTourDateTime";
 import { useOpportunityActiveTourBookings } from "@/lib/tours/hooks/useOpportunityActiveTourBookings";
+import { formatTourBookingInstantSiteLocal } from "@/lib/tours/opportunity/formatTourBookingSiteLocalDisplay";
 import { resolveOpportunityInquiryTourDateDisplay } from "@/lib/tours/opportunity/resolveOpportunityInquiryTourDateDisplay";
 import { OpportunityTourBookingLifecycleBar } from "@/components/admin/opportunity/tours/OpportunityTourBookingLifecycleBar";
 
@@ -25,22 +26,21 @@ export function OpportunityInquiryTourDateBlock(props: OpportunityInquiryTourDat
 
     const { activeBookings } = useOpportunityActiveTourBookings(opportunityId);
 
-    const { tourDate, tourTime } = resolveOpportunityInquiryTourDateDisplay(metadata, activeBookings);
     const primary = activeBookings[0];
-    const siteTz =
-        primary && typeof primary.timezone === "string" && primary.timezone.trim() ? primary.timezone.trim() : null;
-    const fmtTz = siteTz ?? viewerTimezone ?? null;
-    const fmt = formatTourDateTime(tourDate, tourTime, { displayTimeZoneIana: fmtTz });
-    const siteTimeCaption = siteTz ? `Site time (${siteTz})` : null;
+    const bookingBacked = Boolean(primary && typeof primary.start_at === "string" && primary.start_at.trim());
+    let tourDisplay: string;
+    if (bookingBacked && primary) {
+        tourDisplay = formatTourBookingInstantSiteLocal(primary.start_at, primary.timezone);
+    } else {
+        const { tourDate, tourTime } = resolveOpportunityInquiryTourDateDisplay(metadata, activeBookings);
+        tourDisplay = formatTourDateTime(tourDate, tourTime, { displayTimeZoneIana: viewerTimezone ?? null }).display;
+    }
 
     return (
         <>
             <div className={labelClassName}>Tour date</div>
             <div className={readonlyFieldClassName} aria-label="Tour date (tour_bookings + metadata mirror)">
-                {fmt.display}
-                {siteTimeCaption ? (
-                    <div className="mt-0.5 text-[10px] font-normal text-alloy-midnight/50">{siteTimeCaption}</div>
-                ) : null}
+                {tourDisplay}
             </div>
             <OpportunityTourBookingLifecycleBar
                 opportunityId={opportunityId}

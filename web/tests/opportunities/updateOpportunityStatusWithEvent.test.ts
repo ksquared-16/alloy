@@ -10,19 +10,30 @@ vi.mock("@/lib/admin/emitStatusChangedEvent", () => ({
     emitStatusChangedEvent: (...args: unknown[]) => emitStatusChangedEvent(...args),
 }));
 
-function supabaseStub(statusFromFetch: string | null, updateErr: { message: string } | null = null) {
+function supabaseStub(
+    statusFromFetch: string | null,
+    updateErr: { message: string } | null = null,
+    updatedRowIds: string[] | null = ["opp-1"]
+) {
     const maybeSingle = vi.fn().mockResolvedValue({ data: { status_key: statusFromFetch }, error: null });
-    const fetchEq = vi.fn().mockReturnValue({ maybeSingle });
-    const fetchSelect = vi.fn().mockReturnValue({ eq: fetchEq });
-    const updateEq = vi.fn().mockResolvedValue({ error: updateErr });
-    const update = vi.fn().mockReturnValue({ eq: updateEq });
+    const fetchEqOrg = vi.fn().mockReturnValue({ maybeSingle });
+    const fetchEqId = vi.fn().mockReturnValue({ eq: fetchEqOrg });
+    const fetchSelect = vi.fn().mockReturnValue({ eq: fetchEqId });
+
+    const updateSelect = vi.fn().mockResolvedValue({
+        data: updatedRowIds,
+        error: updateErr,
+    });
+    const updateEqOrg = vi.fn().mockReturnValue({ select: updateSelect });
+    const updateEqId = vi.fn().mockReturnValue({ eq: updateEqOrg });
+    const update = vi.fn().mockReturnValue({ eq: updateEqId });
     return {
         from: vi.fn().mockReturnValue({
             select: fetchSelect,
             update,
         }),
         _maybeSingle: maybeSingle,
-        _updateEq: updateEq,
+        _updateSelect: updateSelect,
     };
 }
 
@@ -32,7 +43,7 @@ describe("updateOpportunityStatusWithEvent", () => {
         emitStatusChangedEvent.mockResolvedValue({} as never);
     });
 
-    it("loads previous status, updates row, and delegates to emitStatusChangedEvent once", async () => {
+    it("loads previous status with org scope, updates row, and delegates to emitStatusChangedEvent once", async () => {
         const sb = supabaseStub("needs_a_quote", null);
         const res = await updateOpportunityStatusWithEvent({
             supabase: sb as never,
@@ -73,11 +84,26 @@ describe("updateOpportunityStatusWithEvent", () => {
         expect(emitStatusChangedEvent).not.toHaveBeenCalled();
     });
 
+    it("returns error and does not emit when update affects 0 rows", async () => {
+        const sb = supabaseStub("needs_a_quote", null, []);
+        const res = await updateOpportunityStatusWithEvent({
+            supabase: sb as never,
+            orgId: "org-1",
+            opportunityId: "opp-1",
+            newStatusKey: "booked",
+            normalizeContext: "test",
+        });
+        expect(res.error?.message).toContain("0 rows");
+        expect(emitStatusChangedEvent).not.toHaveBeenCalled();
+    });
+
     it("uses explicit previousStatusKey without a select", async () => {
-        const updateEq = vi.fn().mockResolvedValue({ error: null });
+        const updateSelect = vi.fn().mockResolvedValue({ data: [{ id: "opp-x" }], error: null });
+        const updateEqOrg = vi.fn().mockReturnValue({ select: updateSelect });
+        const updateEqId = vi.fn().mockReturnValue({ eq: updateEqOrg });
         const supabase = {
             from: vi.fn().mockReturnValue({
-                update: vi.fn().mockReturnValue({ eq: updateEq }),
+                update: vi.fn().mockReturnValue({ eq: updateEqId }),
             }),
         };
         await updateOpportunityStatusWithEvent({

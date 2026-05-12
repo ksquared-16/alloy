@@ -80,7 +80,7 @@ import { recordSurfaceContextStyle } from "@/lib/visualContext";
 import OpportunityInquiryChildrenSection, { type InquiryChildRow } from "@/components/admin/entity/OpportunityInquiryChildrenSection";
 import { OpportunityInquiryChildrenRegistryActions } from "@/components/admin/opportunity/OpportunityInquiryChildrenRegistryActions";
 import { formatTourDateTime } from "@/lib/enrollment/formatTourDateTime";
-import { deriveTourMetadataMirrorFromBooking } from "@/lib/tours/opportunity/tourBookingOpportunityIntegration";
+import { deriveTourMetadataMirrorFromBooking, TOUR_BOOKING_OPPORTUNITY_STATUS } from "@/lib/tours/opportunity/tourBookingOpportunityIntegration";
 import { validateQueueDefinition, type QueueDefinitionV1, type QueueFilter } from "@/lib/config/queueDefinitionSchema";
 import {
     JobDrawerV2TabBar,
@@ -139,10 +139,7 @@ import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegi
 import { formatActivityRelativeShort, type ActivitySignalResult } from "@/lib/admin/activitySignals";
 import { formatOpportunityActivityTimelineEvent } from "@/lib/admin/opportunityActivityTimelineFormat";
 import OpportunityQuoteIntakeSection from "@/components/admin/quoteIntake/OpportunityQuoteIntakeSection";
-import OpportunityEnrollmentPacketModal, {
-    type OpportunityPacketLaunchSummary,
-} from "@/components/admin/opportunity/OpportunityEnrollmentPacketModal";
-import OpportunityEnrollmentPacketStatusSection from "@/components/admin/opportunity/OpportunityEnrollmentPacketStatusSection";
+import OpportunityEnrollmentPacketModal from "@/components/admin/opportunity/OpportunityEnrollmentPacketModal";
 
 function dispatchAfterPaymentRun(jobId: string, scheduleId: string | null) {
     window.dispatchEvent(new CustomEvent("admin-entity-saved", { detail: { type: "jobs", id: jobId } }));
@@ -1272,10 +1269,6 @@ export default function AdminEntityDrawer() {
 
     const [oppQuoteIntakeOpen, setOppQuoteIntakeOpen] = useState(false);
     const [oppLaunchPacketOpen, setOppLaunchPacketOpen] = useState(false);
-    const [opportunityEnrollmentPacketLaunches, setOpportunityEnrollmentPacketLaunches] = useState<
-        OpportunityPacketLaunchSummary[]
-    >([]);
-    const [enrollmentPacketStatusNonce, setEnrollmentPacketStatusNonce] = useState(0);
     const [oppDiscountOptions, setOppDiscountOptions] = useState<{ value: string; label: string }[] | null>(null);
     const [oppDiscountLoading, setOppDiscountLoading] = useState(false);
     const [oppDiscountSelection, setOppDiscountSelection] = useState<string>("");
@@ -10180,56 +10173,26 @@ export default function AdminEntityDrawer() {
                         drawer.id &&
                         drawer.id !== "new" &&
                         !(data as { _create?: boolean })?._create && (
-                            <>
-                                <OpportunityEnrollmentPacketStatusSection
-                                    opportunityId={String(drawer.id)}
-                                    refreshNonce={enrollmentPacketStatusNonce}
-                                />
-                                {opportunityEnrollmentPacketLaunches.length > 0 ? (
-                                    <section className="mb-4 rounded-lg border border-alloy-stone/40 bg-white/90 px-3 py-2.5 shadow-sm">
-                                        <p className="text-[11px] font-semibold uppercase tracking-wide text-alloy-midnight/45">
-                                            Recent packet launches (this session)
-                                        </p>
-                                        <ul className="mt-2 space-y-2">
-                                            {opportunityEnrollmentPacketLaunches.map((L) => (
-                                                <li
-                                                    key={L.key}
-                                                    className="rounded-md border border-alloy-stone/25 bg-alloy-stone/5 px-2 py-1.5 text-xs text-alloy-midnight/85"
-                                                >
-                                                    <div className="font-medium text-alloy-midnight/90">{L.packetName}</div>
-                                                    <div className="mt-0.5 text-[11px] text-alloy-midnight/65">
-                                                        {L.enrolleeLabel} · {L.recipientLabel} ·{" "}
-                                                        {L.emailSent
-                                                            ? "Emailed (Communications)"
-                                                            : L.deliveryIntent === "send_email"
-                                                              ? `Copy links · email: ${L.emailSkippedReason ?? "unavailable"}`
-                                                              : L.deliveryIntent === "email_later"
-                                                                ? "Email later"
-                                                                : "Copy links"}
-                                                    </div>
-                                                    <div className="mt-1 flex flex-wrap gap-2">
-                                                        <a
-                                                            href={L.url}
-                                                            target="_blank"
-                                                            rel="noreferrer"
-                                                            className="font-medium text-alloy-blue hover:underline"
-                                                        >
-                                                            Open
-                                                        </a>
-                                                        <button
-                                                            type="button"
-                                                            className="font-medium text-alloy-blue hover:underline"
-                                                            onClick={() => void navigator.clipboard.writeText(L.url)}
-                                                        >
-                                                            Copy
-                                                        </button>
-                                                    </div>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </section>
-                                ) : null}
-                            </>
+                            <p className="mb-4 rounded-md border border-alloy-stone/25 bg-alloy-stone/[0.04] px-3 py-2 text-xs text-alloy-midnight/70">
+                                <span className="font-medium text-alloy-midnight/80">Enrollment packets:</span> use &quot;Send enrollment packet&quot; in the toolbar.{" "}
+                                <button
+                                    type="button"
+                                    className="font-semibold text-alloy-blue hover:underline"
+                                    onClick={() => setDrawerTab("activity")}
+                                >
+                                    Activity
+                                </button>
+                                {" · "}
+                                <button
+                                    type="button"
+                                    className="font-semibold text-alloy-blue hover:underline"
+                                    onClick={() => setDrawerTab("documents")}
+                                >
+                                    Documents
+                                </button>
+                                {" "}
+                                for launches and packet-linked files.
+                            </p>
                         )}
                     {drawerTab === "overview" && useConfigDrivenOverview && presentationType && (
                         isJobDrawerV2 && drawer.type === "jobs" ? (
@@ -12525,13 +12488,9 @@ export default function AdminEntityDrawer() {
                     opportunityLabel={String((data as { name?: string } | null)?.name ?? "").trim() || "Opportunity"}
                     opportunityRecord={data && !(data as { _create?: boolean })._create ? (data as Record<string, unknown>) : null}
                     canMutate={!!canMutate}
-                    onLaunched={(row) => {
-                        setOpportunityEnrollmentPacketLaunches((prev) => [row, ...prev].slice(0, 8));
-                    }}
                     onDismiss={({ createdPacketCount }) => {
                         setOppLaunchPacketOpen(false);
                         if (createdPacketCount > 0) {
-                            setEnrollmentPacketStatusNonce((n) => n + 1);
                             void refetch();
                         }
                     }}
@@ -12719,8 +12678,13 @@ export default function AdminEntityDrawer() {
                                     mdRaw && typeof mdRaw === "object" && !Array.isArray(mdRaw)
                                         ? { ...(mdRaw as Record<string, unknown>) }
                                         : {};
-                                return { ...p, metadata: { ...md, ...mirror } };
+                                return {
+                                    ...p,
+                                    metadata: { ...md, ...mirror },
+                                    status_key: TOUR_BOOKING_OPPORTUNITY_STATUS.scheduled,
+                                };
                             });
+                            setFormData((prev) => ({ ...prev, status_key: TOUR_BOOKING_OPPORTUNITY_STATUS.scheduled }));
                         } catch {
                             /* invalid start_at — rely on refetch */
                         }

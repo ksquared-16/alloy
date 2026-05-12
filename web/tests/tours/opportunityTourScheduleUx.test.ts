@@ -19,6 +19,8 @@ describe("Opportunity tour schedule UX alignment", () => {
     it("inquiry summary uses OpportunityInquiryTourDateBlock for booking-backed Tour date", () => {
         const drawer = readFileSync(drawerPath, "utf8");
         expect(drawer).toContain("OpportunityInquiryTourDateBlock");
+        const tourBlock = readFileSync(comp("OpportunityInquiryTourDateBlock.tsx"), "utf8");
+        expect(tourBlock).toContain("formatTourBookingInstantSiteLocal");
     });
 
     it("header schedule action uses slot panel, duplicate guard, and legacy escape hatch", () => {
@@ -35,6 +37,8 @@ describe("Opportunity tour schedule UX alignment", () => {
         const src = readFileSync(comp("OpportunityTourBookingLifecycleBar.tsx"), "utf8");
         expect(src).toContain("/api/admin/tours/bookings/");
         expect(src).toContain("OpportunityTourSlotSchedulePanel");
+        expect(src).not.toContain("Tour date above follows this booking");
+        expect(src).not.toContain('">Tour booking</div>');
     });
 
     it("slot panel is calendar-style (day tabs + time chips), not a long flat ul list", () => {
@@ -62,9 +66,10 @@ describe("Opportunity tour schedule UX alignment", () => {
         expect(drawer).toContain("useOpportunityActiveTourBookings");
     });
 
-    it("AdminEntityDrawer slot booking handler mirrors confirmed booking metadata and awaits refetch", () => {
+    it("AdminEntityDrawer slot booking handler mirrors confirmed booking metadata, syncs tour_scheduled status, and awaits refetch", () => {
         const src = readFileSync(drawerPath, "utf8");
         expect(src).toContain("deriveTourMetadataMirrorFromBooking");
+        expect(src).toContain("TOUR_BOOKING_OPPORTUNITY_STATUS.scheduled");
         expect(src).toContain("if (rf) await rf;");
     });
 });

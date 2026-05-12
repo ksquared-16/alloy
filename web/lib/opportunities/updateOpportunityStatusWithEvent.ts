@@ -60,6 +60,7 @@ export async function updateOpportunityStatusWithEvent(
             .from("opportunities")
             .select("status_key")
             .eq("id", opportunityId)
+            .eq("org_id", orgId)
             .maybeSingle();
         if (error) return { error: { message: error.message } };
         previous = normalizeKey((data as { status_key?: unknown } | null)?.status_key);
@@ -71,8 +72,16 @@ export async function updateOpportunityStatusWithEvent(
 
     await normalizeOpportunityWritePayload(supabase, patch, normalizeContext);
 
-    const { error: upErr } = await supabase.from("opportunities").update(patch).eq("id", opportunityId);
+    const { data: updatedRows, error: upErr } = await supabase
+        .from("opportunities")
+        .update(patch)
+        .eq("id", opportunityId)
+        .eq("org_id", orgId)
+        .select("id");
     if (upErr) return { error: { message: upErr.message } };
+    if (!updatedRows?.length) {
+        return { error: { message: "Opportunity update affected 0 rows (check id and org scope)." } };
+    }
 
     await emitStatusChangedEvent({
         supabase,
