@@ -42,7 +42,8 @@ export type OpportunityPacketLaunchSummary = {
     enrolleeLabel: string;
     recipientLabel: string;
     deliveryIntent: string;
-    emailSent?: boolean;
+    /** True only when the provider has accepted the outbound email (not merely queued). */
+    emailProviderAccepted?: boolean;
     emailSkippedReason?: string | null;
 };
 
@@ -63,6 +64,50 @@ function memberLabel(m: HouseholdMemberRow): string {
 const RECIPIENT_DEFAULT = "__default__";
 
 type Phase = "form" | "done";
+
+type EnrollmentLaunchEmailOutcome = {
+    ok: boolean;
+    skipped_reason?: string;
+    communication_message_id?: string | null;
+    message_status?: string | null;
+    provider_message_id?: string | null;
+    message_error?: string | null;
+    delivery_state?: string;
+    queue_wake?: { attempted: boolean; status?: number; error?: string };
+};
+
+function enrollmentEmailDoneCopy(outcome: EnrollmentLaunchEmailOutcome | null): string | null {
+    if (!outcome) return null;
+    if (outcome.skipped_reason === "copy_only") return null;
+    if (!outcome.ok && outcome.skipped_reason) {
+        return `Email not sent — ${outcome.skipped_reason}.`;
+    }
+    if (outcome.ok && outcome.delivery_state === "provider_accepted") {
+        return "Email sent — your provider accepted the message for delivery (inbox delivery can still be asynchronous).";
+    }
+    if (outcome.ok && outcome.delivery_state === "failed") {
+        return `Email not sent — ${outcome.message_error || "provider reported failure"}.`;
+    }
+    if (outcome.ok && outcome.delivery_state === "bounced") {
+        return "Email not sent — message bounced.";
+    }
+    if (outcome.ok && outcome.queue_wake && !outcome.queue_wake.attempted) {
+        return "Email not automatically dispatched — outbound worker URL/token is not configured (INTERNAL_MESSAGES_PROCESS_URL / INTERNAL_CRON_TOKEN). The message is saved as queued in Communications until something processes it.";
+    }
+    if (outcome.ok && outcome.queue_wake?.attempted && typeof outcome.queue_wake.status === "number" && outcome.queue_wake.status >= 400) {
+        return `Email may not send — outbound processor returned HTTP ${outcome.queue_wake.status}.`;
+    }
+    if (outcome.ok && outcome.queue_wake?.attempted && outcome.queue_wake.error) {
+        return `Email may not send — could not reach outbound processor (${outcome.queue_wake.error}).`;
+    }
+    if (outcome.ok && outcome.message_status === "queued") {
+        return "Email queued for outbound processing (Communications).";
+    }
+    if (outcome.ok) {
+        return `Email status: ${outcome.message_status ?? "unknown"}.`;
+    }
+    return null;
+}
 
 function pillClass(active: boolean, disabled?: boolean): string {
     return [
@@ -136,11 +181,7 @@ export default function OpportunityEnrollmentPacketModal({
     const [launchErr, setLaunchErr] = useState<string | null>(null);
     const [phase, setPhase] = useState<Phase>("form");
     const [createdResults, setCreatedResults] = useState<CreatedEnrollmentLinkRow[]>([]);
-    const [emailOutcome, setEmailOutcome] = useState<{
-        ok: boolean;
-        skipped_reason?: string;
-        communication_message_id?: string | null;
-    } | null>(null);
+    const [emailOutcome, setEmailOutcome] = useState<EnrollmentLaunchEmailOutcome | null>(null);
     const [copyIdx, setCopyIdx] = useState<number | null>(null);
     const [copyAllOk, setCopyAllOk] = useState(false);
 
@@ -432,7 +473,7 @@ export default function OpportunityEnrollmentPacketModal({
             const json = (await res.json().catch(() => ({}))) as {
                 created_links?: CreatedEnrollmentLinkRow[];
                 created_links_partial?: CreatedEnrollmentLinkRow[];
-                email?: { ok: boolean; skipped_reason?: string; communication_message_id?: string | null };
+                email?: EnrollmentLaunchEmailOutcome;
                 error?: string;
             };
 
@@ -456,7 +497,7 @@ export default function OpportunityEnrollmentPacketModal({
                             enrolleeLabel: row.enrollee_label ?? "—",
                             recipientLabel: recipientPreviewLabel,
                             deliveryIntent: effectiveDelivery,
-                            emailSent: json.email?.ok,
+                            emailProviderAccepted: json.email?.delivery_state === "provider_accepted",
                             emailSkippedReason: json.email?.skipped_reason,
                         });
                     }
@@ -483,7 +524,7 @@ export default function OpportunityEnrollmentPacketModal({
                     enrolleeLabel: row.enrollee_label ?? "—",
                     recipientLabel: recipientPreviewLabel,
                     deliveryIntent: effectiveDelivery,
-                    emailSent: json.email?.ok,
+                    emailProviderAccepted: json.email?.delivery_state === "provider_accepted",
                     emailSkippedReason: json.email?.skipped_reason,
                 });
             }
@@ -822,14 +863,35 @@ export default function OpportunityEnrollmentPacketModal({
                                     ) : null}
                                 </div>
 
-                                {emailOutcome?.ok ? (
-                                    <p className="text-xs font-medium text-emerald-800">Email queued.</p>
-                                ) : emailOutcome &&
-                                  !emailOutcome.ok &&
-                                  emailOutcome.skipped_reason &&
-                                  emailOutcome.skipped_reason !== "copy_only" ? (
-                                    <p className="text-xs text-amber-800">Email unavailable — links will still be created.</p>
-                                ) : null}
+                                {(() => {
+                                    const line = enrollmentEmailDoneCopy(emailOutcome);
+                                    if (!line) return null;
+                                    const isPositive =
+                                        emailOutcome?.ok === true && emailOutcome.delivery_state === "provider_accepted";
+                                    const isWarn =
+                                        !isPositive &&
+                                        (emailOutcome?.ok === false ||
+                                            (emailOutcome?.ok === true &&
+                                                (emailOutcome.delivery_state === "failed" ||
+                                                    emailOutcome.delivery_state === "bounced" ||
+                                                    (emailOutcome.queue_wake && !emailOutcome.queue_wake.attempted) ||
+                                                    (typeof emailOutcome.queue_wake?.status === "number" &&
+                                                        emailOutcome.queue_wake.status >= 400) ||
+                                                    Boolean(emailOutcome.queue_wake?.error))));
+                                    return (
+                                        <p
+                                            className={
+                                                isPositive
+                                                    ? "text-xs font-medium text-emerald-800"
+                                                    : isWarn
+                                                      ? "text-xs text-amber-800"
+                                                      : "text-xs text-alloy-midnight/80"
+                                            }
+                                        >
+                                            {line}
+                                        </p>
+                                    );
+                                })()}
 
                                 <ul className="divide-y divide-alloy-stone/20 rounded-md border border-alloy-stone/25">
                                     {createdResults.map((row, idx) => (

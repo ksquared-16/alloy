@@ -130,7 +130,7 @@ vi.mock("@/lib/communications/drawerEmailRecipients", () => ({
 }));
 
 vi.mock("@/lib/communications/triggerBackendMessagesQueue", () => ({
-    triggerBackendMessagesQueue: vi.fn(async () => {}),
+    triggerBackendMessagesQueue: vi.fn(async () => ({ attempted: true, status: 200 })),
 }));
 
 vi.mock("@/lib/forms/workflow/opportunityEnrollmentPacketProjections", async (importOriginal) => {
@@ -261,6 +261,26 @@ function supabaseFrom() {
                     }),
                 };
             }
+            if (table === "communication_messages") {
+                return {
+                    select: () => ({
+                        eq: () => ({
+                            maybeSingle: async () => ({
+                                data: {
+                                    status: "queued",
+                                    provider_message_id: null,
+                                    error: null,
+                                    direction: "outbound",
+                                    channel: "email",
+                                    metadata: {},
+                                    delivered_at: null,
+                                },
+                                error: null,
+                            }),
+                        }),
+                    }),
+                };
+            }
             throw new Error(`unexpected supabase table ${table}`);
         },
     };
@@ -347,7 +367,18 @@ describe("POST /api/admin/opportunities/[id]/enrollment-packet-launch", () => {
         expect(arg.metadata.enrollment_packet_email_sent_subject).toBeDefined();
         expect(arg.metadata.enrollment_packet_email_sent_body).toBeDefined();
         expect(emitSentMock).toHaveBeenCalled();
-        const j = (await res.json()) as { email: { ok: boolean } };
+        const j = (await res.json()) as {
+            email: {
+                ok: boolean;
+                delivery_state?: string;
+                queue_wake?: { attempted: boolean; status?: number };
+                message_status?: string | null;
+            };
+        };
         expect(j.email.ok).toBe(true);
+        expect(j.email.message_status).toBe("queued");
+        expect(j.email.delivery_state).toBe("queued");
+        expect(j.email.queue_wake?.attempted).toBe(true);
+        expect(j.email.queue_wake?.status).toBe(200);
     });
 });

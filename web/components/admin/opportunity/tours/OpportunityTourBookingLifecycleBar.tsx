@@ -2,7 +2,28 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { TourBookingRow } from "@/lib/tours/bookings/types";
+import { TOUR_BOOKING_ACTIVE_NON_TERMINAL_STATUS_KEYS } from "@/lib/tours/constants";
 import { OpportunityTourSlotSchedulePanel } from "@/components/admin/opportunity/tours/OpportunityTourSlotSchedulePanel";
+
+const ACTIVE = new Set<string>(TOUR_BOOKING_ACTIVE_NON_TERMINAL_STATUS_KEYS);
+
+function statusLabel(statusKey: string | null | undefined): string {
+    if (!statusKey) return "Unknown";
+    const m: Record<string, string> = {
+        requested: "Requested",
+        pending_approval: "Pending approval",
+        confirmed: "Confirmed",
+        rescheduled: "Rescheduled",
+        canceled: "Canceled",
+        completed: "Completed",
+        no_show: "No-show",
+    };
+    if (m[statusKey]) return m[statusKey]!;
+    return statusKey
+        .split("_")
+        .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+        .join(" ");
+}
 
 type Props = {
     opportunityId: string;
@@ -89,7 +110,13 @@ export function OpportunityTourBookingLifecycleBar(props: Props) {
     const canComplete = canMutate && ["confirmed", "rescheduled"].includes(primary.status_key);
 
     return (
-        <div className="mt-1.5">
+        <div className="mt-1.5 space-y-1">
+            <p className="text-[11px] text-alloy-midnight/70">
+                Status: {statusLabel(primary.status_key)}
+                {ACTIVE.has(primary.status_key) ? (
+                    <span className="text-alloy-midnight/50"> · Inquiry tour date reflects this booking.</span>
+                ) : null}
+            </p>
             <div className="flex flex-wrap gap-1.5 pt-0.5">
                 <button
                     type="button"

@@ -22,6 +22,7 @@ import {
     getPersonEmailOrNull,
 } from "@/lib/communications/drawerEmailRecipients";
 import { triggerBackendMessagesQueue } from "@/lib/communications/triggerBackendMessagesQueue";
+import { mapToDeliveryState, type CommunicationMessage } from "@/lib/communications/deliveryStateAdapter";
 import { emitOpportunityEnrollmentPacketSentSafe } from "@/lib/forms/workflow/opportunityEnrollmentPacketProjections";
 import {
     DEFAULT_ENROLLMENT_EMAIL_BODY_TEMPLATE,
@@ -220,11 +221,18 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         if (UUID_RE.test(pp)) effectiveRecipient = pp;
     }
 
-    let emailResult: {
+    type EmailLaunchResult = {
         ok: boolean;
         skipped_reason?: string;
         communication_message_id?: string | null;
-    } = { ok: false, skipped_reason: wantEmail ? undefined : "copy_only" };
+        message_status?: string | null;
+        provider_message_id?: string | null;
+        message_error?: string | null;
+        delivery_state?: ReturnType<typeof mapToDeliveryState>;
+        queue_wake?: { attempted: boolean; status?: number; error?: string };
+    };
+
+    let emailResult: EmailLaunchResult = { ok: false, skipped_reason: wantEmail ? undefined : "copy_only" };
 
     if (wantEmail && created.length > 0) {
         const sendAuth = await assertCommunicationsSendAllowed({
@@ -365,11 +373,39 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
                                 if (res.skippedReason === "insert_failed" || !res.communicationMessageId) {
                                     emailResult = { ok: false, skipped_reason: `enqueue failed (${res.skippedReason ?? "unknown"})` };
                                 } else {
+                                    const queueWake = await triggerBackendMessagesQueue({ workflow_run_id: null, limit: 25 });
+                                    const { data: msgAfter } = await supabase
+                                        .from("communication_messages")
+                                        .select("status, provider_message_id, error, direction, channel, metadata, delivered_at")
+                                        .eq("id", res.communicationMessageId)
+                                        .maybeSingle();
+                                    const row = msgAfter as {
+                                        status?: string | null;
+                                        provider_message_id?: string | null;
+                                        error?: string | null;
+                                        direction?: string | null;
+                                        channel?: string | null;
+                                        metadata?: Record<string, unknown> | null;
+                                        delivered_at?: string | null;
+                                    } | null;
+                                    const asMsg: CommunicationMessage = {
+                                        direction: row?.direction ?? "outbound",
+                                        channel: row?.channel ?? "email",
+                                        status: row?.status ?? null,
+                                        provider_message_id: row?.provider_message_id ?? null,
+                                        metadata: row?.metadata ?? null,
+                                        delivered_at: row?.delivered_at ?? null,
+                                    };
+                                    const delivery_state = mapToDeliveryState(asMsg);
                                     emailResult = {
                                         ok: true,
                                         communication_message_id: res.communicationMessageId,
+                                        message_status: row?.status ?? null,
+                                        provider_message_id: row?.provider_message_id ?? null,
+                                        message_error: typeof row?.error === "string" && row.error.trim() ? row.error.trim() : null,
+                                        delivery_state,
+                                        queue_wake: queueWake,
                                     };
-                                    void triggerBackendMessagesQueue({ workflow_run_id: null, limit: 25 }).catch(() => {});
                                     const se = await emitOpportunityEnrollmentPacketSentSafe({
                                         orgId: ctx.orgId,
                                         opportunityId,

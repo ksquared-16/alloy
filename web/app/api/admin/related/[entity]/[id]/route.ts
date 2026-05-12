@@ -3,6 +3,8 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { normalizeDocumentRows, type NormalizedDocumentRow } from "@/lib/admin/normalizeDocumentRow";
 import { computeJobDisplayTotalCents, type JobPriceInput } from "@/lib/admin/jobDisplayPrice";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { dbListSubmissionLinkedDocumentsForSubmissionIds } from "@/lib/admin/forms/formsAdminDb";
 
 const LIMIT = 25;
 
@@ -27,6 +29,68 @@ function mergeDocumentLists(lists: (Record<string, unknown>[] | null | undefined
         const tb = b.created_at || b.uploaded_at || "";
         return tb.localeCompare(ta);
     }).slice(0, LIMIT);
+}
+
+/** Documents linked via form_submission_documents for packet sessions tied to this opportunity (not entity_type=opportunity rows). */
+async function loadPacketSubmissionDocumentRowsForOpportunity(
+    supabase: SupabaseClient,
+    orgId: string,
+    opportunityId: string
+): Promise<Record<string, unknown>[]> {
+    const { data: bySnap } = await supabase
+        .from("form_packet_sessions")
+        .select("id")
+        .eq("org_id", orgId)
+        .filter("crm_snapshot->>opportunity_id", "eq", opportunityId)
+        .limit(40);
+    let sessionIds = (bySnap ?? []).map((s: { id: string }) => s.id);
+    if (sessionIds.length === 0) {
+        const { data: links } = await supabase
+            .from("form_public_links")
+            .select("id")
+            .eq("org_id", orgId)
+            .filter("metadata->>form_context_mode", "eq", "packet")
+            .filter("metadata->>source_entity_type", "eq", "opportunity")
+            .filter("metadata->>source_entity_id", "eq", opportunityId)
+            .limit(80);
+        const linkIds = (links ?? []).map((r: { id: string }) => r.id).filter(Boolean);
+        if (linkIds.length > 0) {
+            const { data: byLink } = await supabase
+                .from("form_packet_sessions")
+                .select("id")
+                .eq("org_id", orgId)
+                .in("started_via_public_link_id", linkIds)
+                .limit(40);
+            sessionIds = (byLink ?? []).map((s: { id: string }) => s.id);
+        }
+    }
+    if (sessionIds.length === 0) return [];
+    const { data: items } = await supabase
+        .from("form_packet_session_items")
+        .select("form_submission_id")
+        .eq("org_id", orgId)
+        .in("packet_session_id", sessionIds)
+        .not("form_submission_id", "is", null);
+    const submissionIds = [
+        ...new Set((items ?? []).map((r: { form_submission_id: string }) => r.form_submission_id).filter(Boolean)),
+    ];
+    if (submissionIds.length === 0) return [];
+    const batch = await dbListSubmissionLinkedDocumentsForSubmissionIds(supabase, orgId, submissionIds);
+    if (batch.error || !batch.data) return [];
+    const allIds = new Set<string>();
+    for (const list of Object.values(batch.data)) {
+        for (const e of list) {
+            allIds.add(e.document.id);
+        }
+    }
+    if (allIds.size === 0) return [];
+    const { data: fullDocs, error } = await supabase
+        .from("documents")
+        .select(DOC_SELECT)
+        .eq("org_id", orgId)
+        .in("id", [...allIds]);
+    if (error) return [];
+    return (fullDocs ?? []) as Record<string, unknown>[];
 }
 
 export async function GET(
@@ -191,6 +255,8 @@ export async function GET(
                     .limit(LIMIT)
                     .then((r) => (r.error ? { data: [] } : r)),
             ]);
+            const packetSubmissionDocs = await loadPacketSubmissionDocumentRowsForOpportunity(supabase, ctx.orgId, id);
+            const documentsMerged = mergeDocumentLists([documentsRes.data, packetSubmissionDocs]);
             const jobIds = (jobsRes.data ?? []).map((j: { id: string }) => j.id);
             let discountRedemptions: { id: string; created_at?: string; discount_code_id?: string; customer_id?: string; job_id?: string }[] = [];
             if (jobIds.length > 0) {
@@ -208,7 +274,7 @@ export async function GET(
             return NextResponse.json({
                 jobs: jobsRes.data ?? [],
                 schedules: schedulesRes.data ?? [],
-                documents: normalizeDocumentRows(documentsRes.data ?? []),
+                documents: documentsMerged,
                 discount_redemptions: discountRedemptions,
                 quotes: [],
                 messages: [],

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
     buildCrmCompactWorkUnitFactGroups,
+    buildCrmQueueRowPreviewPresentation,
     buildWorkUnitQueueCrmCompactRowSlice,
 } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
 import type { QueueUiRowPreviewField } from "@/lib/ui-v2/queueUiConfig";
@@ -160,5 +161,17 @@ describe("buildWorkUnitQueueCrmCompactRowSlice (work-unit page path)", () => {
         );
         const contact = slice.crmFactGroups.find((g) => g.kind === "contact");
         expect(contact?.columnGrid?.columnKeys).toEqual(["primary_contact", "phone", "email"]);
+    });
+});
+
+describe("buildCrmQueueRowPreviewPresentation tour column", () => {
+    it("prefers _tour_queue_display over legacy _tour_context formatting", () => {
+        const row = {
+            _tour_queue_display: "06/20/2026, 3:00 PM (site time)",
+            _tour_context: "Tour: legacy",
+        };
+        const p = buildCrmQueueRowPreviewPresentation(row, wantAll, null);
+        expect(p.tourContext).toContain("06/20/2026");
+        expect(p.tourContext).toContain("(site time)");
     });
 });
