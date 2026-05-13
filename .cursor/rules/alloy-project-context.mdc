@@ -1,0 +1,48 @@
+---
+description: Alloy source-pack and project context rules
+alwaysApply: true
+---
+
+# Alloy Project Context
+
+Alloy is a flexible, configurable operating system for service businesses. Childcare providers are the first primary market, but product and architecture decisions should preserve cross-industry reuse wherever the existing platform model supports it.
+
+Treat the repo's active docs and schema reference as the canonical source of truth before relying on chat memory.
+
+## North Star
+
+Alloy should let operators run high-context workflows from one trusted workspace: records, queues, communication, workflows, documents, scheduling, financial-adjacent operations, and AI-assisted action. AI agents should increasingly handle coordination work, but they must operate through existing records, workflows, permissions, config, events, and audit paths.
+
+Do not build childcare-only assumptions into platform layers. Childcare-specific labels, buckets, presets, and templates belong in tenant/vertical configuration, seeds, or clearly scoped product surfaces.
+
+## Load Order
+
+When starting non-trivial Alloy work, load context in this order:
+
+1. `README.md`
+2. `docs/README.md`
+3. `docs/core/system-overview.md`
+4. `docs/core/glossary.md`
+5. The relevant `docs/system/*.md` topic file
+6. The relevant `docs/product/*.md` topic file
+7. `docs/execution/operating-doctrine.md` for behavior-changing work
+8. `docs/supabase/reference/*.csv` when touching schema, RLS, triggers, functions, or migrations
+
+Use `docs/sprints/**` and `docs/audits/**` only when the task touches that area. Treat `docs/archive/**` as historical or imported context, not current truth unless an active doc confirms it.
+
+## Imported ChatGPT Threads
+
+Raw exported ChatGPT project-thread context belongs under:
+
+`docs/archive/chatgpt-project-thread-imports/`
+
+Distill durable decisions from imported threads into the existing active topic docs rather than adding new active source-pack files.
+
+## Core Doctrine
+
+- Scope tenant reads and writes by `org_id`.
+- Prefer `persons` + `customer_persons` for human identity; `contacts` are compatibility infrastructure.
+- Route meaningful lifecycle, ledger, scheduling, and communications side effects through events, workflows, or admin actions where that pattern already exists.
+- Treat workspace queue rows as previews. Resolve authoritative detail through entity APIs, record responders, or underlying tables.
+- Keep service-role Supabase usage server-only.
+- Question hardcoding before adding it. Prefer platform rules + vertical config/presets over industry-specific branches in shared modules.
