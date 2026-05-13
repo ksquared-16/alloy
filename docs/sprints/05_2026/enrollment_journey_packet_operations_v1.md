@@ -1,5 +1,13 @@
 # Forms Engine V1.5 — Enrollment Journey & Packet Operations
 
+> **Status — May 2026**
+>
+> **Enrollment Packet E2E Phase 1 is shipped** for the operating loop described in **`docs/product/documents-and-forms.md`** and **`docs/product/crm-system.md`**: opportunity drawer packet launch (incl. multi-child/household launch metadata), Communications-backed templated email with packet link, public packet completion, **`workflow_events`** / Activity projections, compact opportunity overview review + operator **approve / reject / needs correction**, **approval-triggered** idempotent generated PDFs for steps with **`pdf_mapping_json`**, and opportunity **Documents** tab visibility via **`form_submission_documents`** + **`documents`** (not by storing files on `opportunities` rows). Public submit values remain **untrusted proposals** relative to canonical CRM until explicit intake / linkage / future **data change proposal** flows; Phase 1 does **not** auto-mutate person/customer/member from arbitrary public answers beyond existing intake rules.
+>
+> **This file** began as **Card 0 — audit & design** (Sections 1–8 below). Treat detailed bullets as **historical engineering context** where they predate Phase 1; for **current backlog and sequencing**, use **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**.
+>
+> **Phase 2 plan:** **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**
+
 **Sprint:** Enrollment Journey & Packet Operations  
 **Card:** 0 — Audit & Design Pass (no implementation in this card)  
 **Date:** May 2026  
@@ -190,6 +198,7 @@ Ground truth is taken from migrations under `supabase/migrations/20260510120000_
 - **Scope:** `POST /api/admin/forms/submissions/[submissionId]/generate-document` calls `createGeneratedPdfForSubmission` (`createGeneratedPdfForSubmission.ts`).
 - **Requirements:** submission must be `submitted`; version must have usable `pdf_mapping_json`; **CRM parent** required via `resolveFormSubmissionDocumentParent` (prefers `customer_member` → `opportunity` → `customer` → `person`).
 - **Artifacts:** Creates `documents` row + `form_submission_documents` junction; emits `form_document_generated` via `emitFormDocumentGeneratedSafe` (`formSubmissionEvents.ts`).
+- **Update (Phase 1 shipped):** Operator **approval** of a **completed** packet session triggers the **same** `createGeneratedPdfForSubmission` path for each **submitted** packet step (idempotent; skips forms without mapping). There is still **no** automatic PDF generation on mere **packet completion** without review approval (mid-packet generation remains admin/manual unless product expands later).
 
 **Strengths**
 
@@ -198,8 +207,8 @@ Ground truth is taken from migrations under `supabase/migrations/20260510120000_
 
 **Missing operational capabilities**
 
-- **Packet-aware packaging** (single enrollment PDF bundle across steps) does not exist — operators generate per submission.
-- No automatic generation on packet completion (only explicit admin action in current API).
+- **Packet-aware packaging** (single enrollment PDF bundle across steps) does not exist — operators still generate **per submission** (approval backfill runs that path once per step).
+- No automatic generation on packet **completion alone** without operator **approval** (see Phase 1 update above).
 
 **Architectural risks**
 
@@ -224,8 +233,8 @@ Ground truth is taken from migrations under `supabase/migrations/20260510120000_
 
 **Missing operational capabilities**
 
-- No **`packet_completed`** (or similar) event — automations cannot distinguish “mid-packet” vs “enrollment done” without correlating multiple `form_submitted` events by `public_link_id` + ordering.
-- Admin copy references workflow signals (`operatorFormGuidance.ts`) but packet correlation is not first-class.
+- No **`packet_completed`**-style **single** token on **`form_submissions`**-scoped `form_submitted` payloads — automations may still correlate multiple step events by `public_link_id` + ordering **unless** they subscribe to **`opportunity_enrollment_packet_*`** projections on **`opportunities`** (**Phase 1** added Activity visibility there; see **`docs/product/crm-system.md`**).
+- Admin copy references workflow signals (`operatorFormGuidance.ts`) but packet correlation is not first-class for all consumers.
 
 **Architectural risks**
 

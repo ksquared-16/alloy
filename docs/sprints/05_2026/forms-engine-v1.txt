@@ -20,6 +20,8 @@
   - Production rate limiting (token hash + IP; abuse profile tuning).
   - Real state form review / compliance validation (jurisdiction-specific gates).
 
+**Enrollment Packet E2E Phase 1 (May 2026)** — shipped: opportunity packet launch (incl. multi-child/household), Communications-backed email, public completion, Activity + compact review + operator decisions, **approval-triggered** mapped PDFs, Documents tab via **`form_submission_documents`**. **Docs:** **`docs/product/documents-and-forms.md`**, **`docs/product/crm-system.md`**, **`docs/sprints/05_2026/enrollment_journey_packet_operations_v1.md`**. **Phase 2:** **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**.
+
 **Follow-on (unchanged from implementation notes):** extend **`v1DocumentEntities`** / admin **`customer_member`** picker when shipping staff UX; apply pending migrations to Supabase staging/production via team pipeline when ready.
 
 ### Card 2 — validation note (engineering)

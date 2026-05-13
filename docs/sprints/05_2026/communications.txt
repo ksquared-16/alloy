@@ -2057,3 +2057,11 @@ ORDER BY channel, is_primary DESC, updated_at DESC;
 - No single **automated** assertion in CI for Twilio/Resend callbacks — manual or scripted HTTP replay still required.
 
 **Suggested commit message:** `docs(communications): V1 stabilization QA runbook`
+
+---
+
+#### 9. Enrollment packet outbound email (Phase 1 — May 2026)
+
+- **Path:** Packet invitation / follow-up from the opportunity drawer uses **Communications V1** — **`enqueueCanonicalOutboundMessage`** → **`communication_messages`** (`queued`) → Python worker → Resend/Twilio; same org/entity/thread model as other CRM email.
+- **States:** Distinguish **`queued`** (awaiting worker) vs **`sent`** + **`provider_message_id`** (provider accepted handoff) vs **delivery** timestamps updated by **Resend** / Twilio webhooks — see **`docs/product/communications.md`**.
+- **Docs:** Packet × CRM narrative — **`docs/sprints/05_2026/enrollment_journey_packet_operations_v1.md`** (status banner). **Phase 2** (template presets in packet settings, reminders, SMS option) — **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**.

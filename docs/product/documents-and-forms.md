@@ -14,7 +14,7 @@ Cover **`documents`** (file + metadata records) attached to entities and the **f
 - Drawer loads location documents arrays and payment-adjacent files depending on entity (`AdminEntityDrawer.tsx`).
 - **Signed URLs:** **`GET /api/admin/documents/[id]/signed-url`**, vendor variant under **`/api/admin/vendors/[id]/documents/signed-url`**.
 
-### Forms engine — partially implemented
+### Forms engine — partially implemented (foundation + **Enrollment Packet E2E Phase 1** shipped)
 
 **Implemented (foundation):**
 
@@ -24,9 +24,19 @@ Cover **`documents`** (file + metadata records) attached to entities and the **f
 - **Admin UI:** Forms hub **`/adminV2/forms`** (`FormsHubClient.tsx`) — workspace per definition, links to packet sessions.
 - **Tests:** Broad route coverage in **`web/tests/admin/formsAdminRoutes.test.ts`**.
 
-**Not complete / in progress:**
+**Enrollment Packet — Phase 1 (E2E operating loop, shipped May 2026):**
 
-- **Enrollment + intake product completion** — packet-first enrollment journeys, operator workflows, and vertical-specific parity are **still being wired and hardened**; treat behavior as **partially implemented** until sign-off.
+- **Canonical execution:** **`form_packet_sessions`** + **`form_packet_session_items`** remain execution truth; **`form_submissions`** hold per-step payloads; **no** parallel enrollment subsystem.
+- **CRM launch:** Operators mint packet public links from the **opportunity drawer** (packet definition, recipient, **multi-child / household-aware** launch metadata — config-driven, not a separate product silo).
+- **Delivery:** Packet invitation email uses **Communications V1** (canonical enqueue → worker → provider); templated subject/body with **packet link injection** (see **`docs/product/communications.md`**).
+- **Public completion:** Recipients complete steps on the public embed; session advances to **`completed`** with operator review fields (**`operator_review_status`**, mismatch hints JSON) where migrations apply.
+- **Operator review:** Approve / reject / needs correction via admin API; **approval** triggers **idempotent** **`createGeneratedPdfForSubmission`** for each **submitted** packet step that has usable **`pdf_mapping_json`** (same path as admin “Generate document”; skips unmapped forms).
+- **Documents tab (opportunity drawer):** Merges (a) **`documents`** rows already parented to the opportunity with (b) **`documents`** linked through **`form_submission_documents`** for submissions belonging to packet sessions for that opportunity — enriched with optional **Form submission** / **Packet session** admin links in the list. **Documents are not stored “on” the opportunity row** beyond normal `documents.entity_type` / `entity_id` when the PDF parent resolver chooses `opportunity`; packet artifacts are still tied through **submissions + junction**.
+- **Trust boundary:** Public values are **proposals** in **`form_submissions.payload`** until explicit operator/intake flows promote them; **Phase 1 does not** auto-write canonical CRM customer/person/member fields from arbitrary public packet answers beyond existing **intake** rules (see **`docs/forms/linkage-review-operator-flow.md`**, **`docs/product/crm-system.md`**).
+
+**Still open / Phase 2+ (not claiming “product complete” for all enrollment):**
+
+- **Field-level data change proposals**, richer review UX, non-PDF “submission visibility,” template/reminder productization — see **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**.
 - **Required vs optional field semantics** — JSON-schema / version payloads evolve; **needs verification** per form kind and publish path.
 - **Automatic sync from submission payload → entity field_values** — **not** assumed (migration comments: payload is canonical; no automatic sync).
 
@@ -58,9 +68,17 @@ Long-range program direction (PDF builder, compliance engine, AI ingestion as cr
 ## Known gaps / risks
 
 - **Needs verification:** Org-wide compliance hooks (virus scan, retention jobs) for documents — not evidenced beyond Storage + DB.
-- **Partially implemented:** End-to-end **enrollment / intake** operator + family flows using packets — code exists; **completion and polish** outstanding.
+- **Enrollment packets:** **Phase 1 E2E** (launch → email → public → activity → review → mapped PDFs → Documents tab) is **shipped**; broader **Phase 2** hardening (proposals, field-level review, reminders, queues, AI) is **planned** — **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**.
 - **Not implemented (production):** Automated **document AI parsing / extraction** pipeline (beyond mocks); do not assume OCR/LLM reliability from repo layout alone.
+
+## Related
+
+- **CRM / opportunity surfaces:** **`docs/product/crm-system.md`**
+- **Communications (packet email):** **`docs/product/communications.md`**
+- **Enrollment packet audit + status banner:** **`docs/sprints/05_2026/enrollment_journey_packet_operations_v1.md`**
+- **Phase 2 enhancement plan:** **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**
+- **Roadmap tracking:** **`docs/execution/roadmap-and-gaps.md`**
 
 ## When this doc must be updated
 
-Document schema changes; new attachment parents; storage bucket policy changes; forms versioning/linkage behavior changes; enrollment forms declared “complete” for a vertical.
+Document schema changes; new attachment parents; storage bucket policy changes; forms versioning/linkage behavior changes; enrollment packet Phase 1/2 status or review/PDF behavior changes.

@@ -12,6 +12,20 @@ Cover **opportunities**, pipeline status, CRM-adjacent admin behavior, and **sch
 - **Opportunity identity (writes):** All server paths that `insert` / `update` `opportunities` must run **`normalizeOpportunityWritePayload`** (`web/lib/opportunityIdentity.ts`) on the payload when identity keys may appear; metadata-only patches no-op. **`primary_person_id`** is canonical when present; **`primary_contact_id`** is legacy fallback only — resolution fills `primary_person_id` from `contacts.person_id` when possible. Python/sync use **`enrich_opportunity_payload_person_first`** before PostgREST writes.
 - **Child facts vs metadata:** Enrollment opportunities do **not** rely on **`metadata`** for child names or DOB. **Household children** live in **`customer_members`** (`relationship = 'child'`, `is_active = true`), joined **`opportunities.customer_id` → `customer_members.customer_id`**. Queue **CRM compact** lanes use **`QueueService`** to emit **`_crm_compact_children`** and **`metadata.program_label`** for the Program column per child. See **`docs/system/workspace-system.md`** (CRM compact doctrine) and **`docs/system/entity-model.md`**.
 
+## Enrollment packets — CRM surfaces (**Phase 1 E2E** shipped May 2026)
+
+**Doctrine:** No parallel **enrollment subsystem**. **Forms Engine** + **`form_packet_sessions`** / items are execution truth; **`workflow_events`** on **`opportunities`** are **Activity visibility** (projections), not a second source of truth. **Communications** delivers packet emails; **documents** attach through **`form_submissions`** + **`form_submission_documents`** (and normal `documents` parent linkage), not by stuffing blobs onto `opportunities` rows.
+
+**Shipped loop (operator + family):**
+
+- Drawer launches a **packet** (definition, recipient, **multi-child / household** launch metadata).
+- **Activity** tab shows packet projection events (opened, step completed, completed, submitted-for-review, review decision, etc.).
+- **Overview** shows a **compact** packet review indicator; full packet drill-down remains **Forms / packet session** admin surfaces — not a duplicate mega-card on the opportunity.
+- **Documents** tab lists packet-linked artifacts via **`/api/admin/related/opportunity/:id`** merge (opportunity-owned **`documents`** + submission junction graph), with optional inline links to **form submission** and **packet session** admin URLs when enriched.
+- **Operator review** (`approve` / `reject` / `needs_correction`) is a gate on **`form_packet_sessions`**; **approval** triggers **idempotent** generated PDFs for mapped published versions (see **`docs/product/documents-and-forms.md`**). **Public packet values remain untrusted proposals** until explicit intake / linkage / future **data change proposal** flows promote them — Phase 1 does **not** auto-mutate canonical CRM person/customer/member fields from arbitrary public answers beyond existing **intake** rules.
+
+**Phase 2** backlog: **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**.
+
 ## How it works
 
 - Operators work opportunities inside **workspace queues** and open **AdminEntityDrawer** for full detail (entity GET with optional `surface`).
@@ -142,4 +156,4 @@ Canonical documentation: **`docs/product/communications.md`** (threads, enqueue,
 
 ## When this doc must be updated
 
-Pipeline or CRM table changes; opportunity status/role semantics; schedule states, workforce features, or calendar integration changes. Communications channels/enqueue — **`docs/product/communications.md`**.
+Pipeline or CRM table changes; opportunity status/role semantics; schedule states, workforce features, or calendar integration changes; **enrollment packet** CRM surfaces (Activity / Documents / review) or trust-boundary behavior. Communications channels/enqueue — **`docs/product/communications.md`**.

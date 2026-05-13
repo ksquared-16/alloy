@@ -29,6 +29,13 @@ Outbound and inbound messaging threads tied to **entities** (person-first anchor
 
 - **Next.js:** **`POST /api/webhooks/twilio/sms-status`** (Twilio signature) and **`POST /api/webhooks/resend`** (Svix-signed Resend) update delivery/status on rows.
 
+**Enrollment packet email (Phase 1)**
+
+- Packet invitation / reminder copy from the **opportunity drawer** is sent through the **same canonical path** as other CRM email: **`enqueueCanonicalOutboundMessage`** → **`communication_messages.status: queued`** → Python worker → provider.
+- **States are not interchangeable:** **`queued`** (awaiting worker) → **`sent`** + non-null **`provider_message_id`** when the provider accepts the handoff → **`delivered_at`** / bounce metadata when **Resend** (email) or **Twilio** (SMS status) webhooks match the outbound id. Treat “queued” vs “provider accepted” vs “delivered to mailbox” as **distinct** when debugging deliverability.
+- **Resend:** Webhook handler is **`POST /api/webhooks/resend`** — requires **`RESEND_WEBHOOK_SECRET`** (Svix); misconfiguration yields **`ignored`** updates (see route comments). SPF/DKIM alignment remains **tenant DNS + provider** responsibility; Alloy does not auto-fix tenant deliverability.
+- Deeper sprint notes / QA matrix: **`docs/sprints/05_2026/communications.txt`**; packet × CRM narrative: **`docs/sprints/05_2026/enrollment_journey_packet_operations_v1.md`**. **Phase 2** (templating in packet settings, reminders, SMS option): **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**.
+
 **Threads, read/unread**
 
 - **Person-first UX:** Threads tie to CRM entities and recipient resolution as implemented in admin APIs; prefer **person-backed** recipients in new surfaces (`drawer-recipients`).
@@ -92,8 +99,9 @@ Outbound and inbound messaging threads tied to **entities** (person-first anchor
 ## Related
 
 - **CRM / opportunities context:** `docs/product/crm-system.md`
+- **Enrollment packet Phase 2 (templates, reminders, SMS):** `docs/sprints/05_2026/enrollment_packet_phase_2.md`
 - **Legacy retirement phases (audit):** `docs/audits/legacy-messages-retirement-plan.md`
 
 ## When this doc must be updated
 
-Channels, enqueue model, provider bindings, dual-write flags, worker contracts, or webhook behavior change.
+Channels, enqueue model, provider bindings, dual-write flags, worker contracts, webhook behavior change, **or enrollment packet email semantics** (queued/sent/delivered distinctions, Resend expectations).

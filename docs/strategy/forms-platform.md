@@ -26,7 +26,7 @@ A **unified intake, documents, and compliance-oriented system**: one platform pr
 Captured information and artifacts should feed recognizable business outcomes:
 
 - **CRM intake** — inquiries and pipeline progression with full context.
-- **Enrollment packets** — the documents and acknowledgments that accompany becoming enrolled.
+- **Enrollment packets** — the documents and acknowledgments that accompany becoming enrolled. **Phase 1 E2E** (CRM launch → Communications → public completion → Activity/review → **approval-gated** mapped PDFs → Documents via **`form_submission_documents`**) is **shipped** May 2026 — **`docs/product/documents-and-forms.md`**. **Phase 2** (data change proposals, field-level review, richer comms, AI) — **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**.
 - **Compliance documents** — attestations, policies, and other records that need to exist and be retrievable.
 - **Billing-related forms** — agreements and authorizations that sit next to financial workflows without owning billing logic itself.
 
@@ -59,4 +59,4 @@ Deliberately out of scope for an initial slice:
 
 ---
 
-*Last updated: May 2026*
+*Last updated: May 2026 — enrollment packet Phase 1 E2E shipped; Phase 2 plan `docs/sprints/05_2026/enrollment_packet_phase_2.md`.*
