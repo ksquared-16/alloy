@@ -24,12 +24,22 @@ export type AiStructuredRequestV1 = {
 
 export type AiProviderOutcome = "ok" | "disabled" | "policy_denied" | "timeout" | "error";
 
+/** Safe subset of OpenAI `error` + HTTP status — no raw response body, no secrets. */
+export type OpenAiProviderHttpErrorMeta = {
+    http_status: number;
+    openai_error_type?: string | null;
+    openai_error_code?: string | null;
+    openai_error_message?: string | null;
+};
+
 export type AiProviderErrorEnvelope = {
     code: string;
     message: string;
     retryable?: boolean;
-    /** Stable detail for logs — no PII. */
+    /** Avoid raw vendor bodies; prefer {@link openai_http} for OpenAI-compatible HTTP failures. */
     detail?: string;
+    /** Present for parsed OpenAI-compatible HTTP error responses (server / local diagnostics only). */
+    openai_http?: OpenAiProviderHttpErrorMeta;
 };
 
 /**
