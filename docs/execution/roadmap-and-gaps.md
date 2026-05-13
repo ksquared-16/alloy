@@ -47,9 +47,9 @@ Capabilities below exist in **`web/` / `supabase/`**; “complete” means **fou
 - **Roles / permissions / CRM scope** — grant union + access profiles + API enforcement pattern (`roles-and-permissions.md`, `accessScope.ts`).
 - **Queue vs record boundary** — documented and reinforced in **`record-system.md`** / **`workspace-system.md`**; QueueService previews vs entity GET.
 - **Forms engine foundation** — migrations + admin/public routes + Forms hub (`documents-and-forms.md`).
-- **Enrollment Packet E2E Phase 1** — opportunity-scoped packet launch (multi-child/household), Communications-backed packet email, public completion, **`workflow_events`** / Activity visibility, compact drawer review + operator approve/reject/needs correction, **approval-triggered** mapped PDF generation, opportunity **Documents** tab merge via **`form_submission_documents`**; **no** automatic CRM mutation from raw public answers beyond existing intake — **`docs/product/documents-and-forms.md`**, **`docs/product/crm-system.md`**, **`docs/sprints/05_2026/enrollment_journey_packet_operations_v1.md`**.
+- **Enrollment Packet E2E Phase 1** — opportunity-scoped packet launch (multi-child/household), Communications-backed packet email, public completion, **`workflow_events`** / Activity visibility, compact drawer review + operator approve/reject/needs correction, **approval-triggered** mapped PDF generation, opportunity **Documents** tab merge via **`form_submission_documents`**; **no** automatic CRM mutation from raw public answers beyond existing intake — **wall clock ~2026-05-07 (Thu) → 2026-05-13** — **`docs/product/documents-and-forms.md`**, **`docs/product/crm-system.md`**, **`docs/sprints/05_2026/enrollment_journey_packet_operations_v1.md`**.
 - **Enrollment workspace** — pipeline queue definitions, optional Needs Attention buckets metadata, resolver reason codes (`crm-system.md`, `workspace-system.md`).
-- **Tour Scheduling V1** — `tour_bookings`, `tour_availability_rules`, admin APIs + drawer UX, public link basics, opportunity mirror + status integration, Vitest coverage — **`docs/sprints/05_2026/tour_scheduling_v1.md`**; Phase 2 planning **`docs/sprints/05_2026/tour_scheduling_phase_2.md`**.
+- **Tour Scheduling V1** — `tour_bookings`, `tour_availability_rules`, admin APIs + drawer UX, public link basics, opportunity mirror + status integration, Vitest coverage — **wall clock ~2026-05-11 (start) → 2026-05-12 (Phase 1 complete)**; migrations **`20260511143000`**, **`20260512140000`** — **`docs/sprints/05_2026/tour_scheduling_v1.md`**; Phase 2 planning **`docs/sprints/05_2026/tour_scheduling_phase_2.md`**.
 - **Waitlist lane + placement preview** — status keys, queues, placement presets — **without** full waitlist action UX (placeholder action still in migrations).
 
 ---
@@ -104,10 +104,10 @@ Use this block for **velocity / stakeholder summaries**. Dates are **repo anchor
 | **Roles & permissions V1** (access + API enforcement) | 2026-05-04 | **Shipped** 2026-05-05 *(approx.; access-scope migration `20260504103000`; settings gate `20260505120100`)* |
 | **Enrollment pipeline + waitlist lanes** (status keys, queue defs, KPI hooks) | 2026-04-30 | **Foundation in repo** from **2026-04-30** migrations; **product completion** → TBD |
 | **Needs Attention** (resolver + configurable buckets; enrollment UX) | 2026-04-30 | **Partially shipped** — landed with Apr–May 2026 enrollment workspace migrations + follow-up cards; polish → TBD |
-| **Forms engine V1** (schema + admin/public APIs + hub) | 2026-05-06 | **Partially shipped** — foundation **2026-05-06**; packets **`20260510120000`**; **Enrollment Packet E2E Phase 1** shipped **May 2026** (see **`docs/sprints/05_2026/enrollment_journey_packet_operations_v1.md`** status); broad “forms product complete” → TBD |
-| **Enrollment Packet E2E Phase 1** (CRM → email → public → activity → review → PDFs → Documents) | **2026-05-08** → **2026-05-13** engineering window | **Shipped** — Phase 2 **`docs/sprints/05_2026/enrollment_packet_phase_2.md`** |
+| **Forms engine V1** (schema + admin/public APIs + hub) | 2026-05-06 (schema); **Enrollment Packet E2E Phase 1:** **2026-05-07 (Thu) → 2026-05-13** | **Partially shipped** — foundation **2026-05-06**; packets **`20260510120000`**; **Enrollment Packet E2E Phase 1** shipped that window (see **`docs/sprints/05_2026/enrollment_journey_packet_operations_v1.md`**); broad “forms product complete” → TBD |
+| **Enrollment Packet E2E Phase 1** (CRM → email → public → activity → review → PDFs → Documents) | **2026-05-07 (Thu) → 2026-05-13** | **Shipped** — Phase 2 **`docs/sprints/05_2026/enrollment_packet_phase_2.md`** |
 | **Waitlist** (lanes → prioritization product) | **Lanes/preview:** 2026-04-30 migrations; **prioritization foundations work started:** **2026-05-08** | **In progress** — placeholder action remains; **Shipped** → TBD |
-| **Tour Scheduling V1** (`tour_bookings`, availability rules, admin + public link basics, opportunity integration) | **2026-05-11** migrations (`20260511143000`, `20260512140000`) | **Shipped** — manual QA **May 2026**; Phase 2 roadmap → **`docs/sprints/05_2026/tour_scheduling_phase_2.md`** |
+| **Tour Scheduling V1** (`tour_bookings`, availability rules, admin + public link basics, opportunity integration) | **2026-05-11 → 2026-05-12** (Phase 1 wall clock); migrations **`20260511143000`**, **`20260512140000`** | **Shipped** — Phase 2 roadmap → **`docs/sprints/05_2026/tour_scheduling_phase_2.md`** |
 | **Communications phase 2** | TBD | **Not started** (planned) |
 | **Roles phase 2** | TBD | **Not started** (planned) |
 
@@ -128,6 +128,8 @@ Use this block for **velocity / stakeholder summaries**. Dates are **repo anchor
 | **Forms engine V1 foundations** | **~4 days** — migration span **2026-05-06 → 2026-05-10** (foundation + follow-ons incl. packets `20260510120000`; wall-clock team time **not** identical). |
 | **Communications V1 core** | **~1 sprint** — calendar anchors **2026-04-30 → 2026-05-05** (enqueue, worker, webhooks, drawer/modal, bindings). |
 | **Needs Attention operational overlays** | **Incremental Apr–May 2026** — resolver + bucket metadata + workspace UX; multiple merges (e.g. enrollment pipeline + right-rail migrations **2026-04-30** onward). |
+| **Tour Scheduling V1 (Phase 1)** | **2026-05-11 → 2026-05-12** — ~2 calendar days wall clock (migration-anchored **`20260511143000`**, **`20260512140000`**); align with git if drift. |
+| **Enrollment Packet E2E Phase 1** | **2026-05-07 (Thu) → 2026-05-13** — enrollment engineering / polish window (parallel-friendly with other work; align with merge history). |
 
 **Guardrail:** If a row above disagrees with **git history**, **git wins** — update this table in the same pass as release notes.
 
@@ -196,7 +198,7 @@ Shipped features list **capabilities that exist in repo** at a high level. **Not
 
 - **Start:** 2026-05-06 (schema landing — migration **`20260506100000_forms_engine_v1_foundation.sql`**)
 - **Incremental milestones:** 2026-05-07 — 2026-05-10 *(follow-on migrations, e.g. submissions/metadata **`20260509134500`**, packets **`20260510120000_forms_packet_foundation.sql`** — not exhaustive)*
-- **Enrollment Packet E2E Phase 1:** **Shipped May 2026** — see **`docs/product/documents-and-forms.md`**, **`docs/sprints/05_2026/enrollment_journey_packet_operations_v1.md`** (status banner).
+- **Enrollment Packet E2E Phase 1:** **Shipped** — **wall clock 2026-05-07 (Thu) → 2026-05-13** — see **`docs/product/documents-and-forms.md`**, **`docs/sprints/05_2026/enrollment_journey_packet_operations_v1.md`** (status banner).
 - **Shipped (entire forms product “complete”):** TBD *(Phase 2 + vertical polish — **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**)*
 
 #### Capabilities
@@ -306,7 +308,7 @@ When verified in code or DB, fold conclusions into **`docs/system/entity-model.m
 ### Scheduling / attendance / staffing
 
 - **`schedules`** remains **job-attached** service scheduling (see **`entity-model.md`**).
-- **Tour Scheduling V1** uses **`tour_bookings`** (not `schedules` rows) — **shipped**; attendance, labor, and **Tour Phase 2** (calendars, comms, analytics) remain **roadmap**.
+- **Tour Scheduling V1** uses **`tour_bookings`** (not `schedules` rows) — **shipped** **2026-05-11 → 2026-05-12** (Phase 1); attendance, labor, and **Tour Phase 2** (calendars, comms, analytics) remain **roadmap**.
 
 ### Production readiness / security
 
@@ -319,9 +321,9 @@ When verified in code or DB, fold conclusions into **`docs/system/entity-model.m
 - **Opportunity vs contact vs person:** `docs/audits/person-vs-contact-audit.md`.
 - **Event coverage:** `docs/audits/event-integrity-audit.md`.
 - **CRM scoped access:** Not every route uses **`getAdminAccessContextCached`** — grep when adding surfaces.
-- **Forms product completion:** Engine exists; **enrollment E2E + required-field story** — **partially implemented** (`documents-and-forms.md`).
+- **Forms product completion:** Engine exists; **Enrollment Packet E2E Phase 1** **shipped** **2026-05-07 → 2026-05-13**; **required-field semantics + Phase 2** — still open (`documents-and-forms.md`, **`docs/sprints/05_2026/enrollment_packet_phase_2.md`**).
 - **Waitlist actions:** Placeholder mutator — **not implemented** (`crm-system.md`).
-- **Tour Scheduling V1:** **`tour_bookings`** + operator drawer UX — **shipped** (`tour_scheduling_v1.md`). **Deeper product** (reminders, calendar sync, advanced public) — **Phase 2** (`tour_scheduling_phase_2.md`).
+- **Tour Scheduling V1:** **`tour_bookings`** + operator drawer UX — **shipped** **2026-05-11 → 2026-05-12** (`tour_scheduling_v1.md`). **Deeper product** (reminders, calendar sync, advanced public) — **Phase 2** (`tour_scheduling_phase_2.md`).
 - **Reporting V1:** KPI strips / dept routes exist; **full reporting** — **not implemented**.
 - **AI surface:** `web/app/api/admin/agent/**` — env-gated; **not** broad autonomous agents.
 - **Stripe webhooks:** May be **backend** URL — verify (`billing-and-financials.md`).
@@ -334,7 +336,7 @@ When verified in code or DB, fold conclusions into **`docs/system/entity-model.m
 |-------|-----|
 | Share of `opportunities` using `primary_person_id` vs `primary_contact_id` | DB-dependent |
 | RRS coverage beyond jobs | Flat selects may remain |
-| Forms enrollment E2E + required/optional field behavior | Routes exist; completion in flight |
+| Forms enrollment **Phase 1 E2E** shipped **2026-05-07 → 2026-05-13**; **required/optional field** behavior still needs verification per surface | Phase 2 + field semantics |
 | Waitlist transitions beyond status + previews | Placeholder action |
 | Attendance / staffing | Later / thin signal |
 | OpenAPI / public SDK | Route handlers only |
