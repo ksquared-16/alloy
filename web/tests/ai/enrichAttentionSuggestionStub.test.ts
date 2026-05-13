@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NEEDS_ATTENTION_SUGGESTION_AGENT_KEY } from "@/lib/agent/needsAttentionSuggestion/types";
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
+import type { AttentionSuggestionAiEnrichmentV1 } from "@/lib/ai/enrichmentContracts";
 import { AI_POLICY_METADATA_KEY } from "@/lib/ai/aiPolicy";
 import { enrichAttentionSuggestionStubEnvelope, NEEDS_ATTENTION_DRAFT_ENRICHMENT_FEATURE } from "@/lib/ai/enrichAttentionSuggestionStub";
 import { maybeEmitAiEnrichmentTelemetryEvent, shouldEmitAiEnrichmentTelemetry } from "@/lib/ai/enrichmentTelemetry";
@@ -208,7 +209,8 @@ describe("enrichAttentionSuggestionStubEnvelope", () => {
         });
         expect(emitted).toBe(true);
         expect(emitEventMock).toHaveBeenCalledTimes(1);
-        const arg = emitEventMock.mock.calls[0]![0] as { event_type?: string; payload?: Record<string, unknown> };
+        const first = (emitEventMock.mock.calls as unknown as [[{ event_type?: string; payload?: Record<string, unknown> }]])[0];
+        const arg = first[0];
         expect(arg.event_type).toBe("ai_enrichment_usage_v1");
         expect(JSON.stringify(arg.payload)).not.toContain("PII");
 
@@ -246,7 +248,7 @@ describe("createAiProviderForPolicy stub path", () => {
         });
         const prov = createAiProviderForPolicy(policy);
         expect(prov.key).toBe("stub");
-        const res = await prov.completeStructured({
+        const res = await prov.completeStructured<AttentionSuggestionAiEnrichmentV1>({
             schema_version: 1,
             request_id: "r1",
             correlation_id: "c1",
@@ -271,7 +273,7 @@ describe("createAiProviderForPolicy stub path", () => {
         });
         const prov = createAiProviderForPolicy(policy);
         expect(prov.key).toBe("stub");
-        const res = await prov.completeStructured({
+        const res = await prov.completeStructured<AttentionSuggestionAiEnrichmentV1>({
             schema_version: 1,
             request_id: "r1",
             correlation_id: "c1",

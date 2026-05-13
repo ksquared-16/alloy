@@ -11,6 +11,7 @@ import {
     aiUsageTelemetryPayloadV1ToJson,
     aiEnrichmentEnvelopeV1ToJson,
 } from "@/lib/ai";
+import type { AttentionSuggestionAiEnrichmentV1 } from "@/lib/ai/enrichmentContracts";
 import type { AiStructuredRequestV1 } from "@/lib/ai/providerTypes";
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
 
@@ -167,7 +168,7 @@ describe("createAiProviderForPolicy", () => {
         });
         const prov = createAiProviderForPolicy(policy, { openai_live_invocation_permitted: true });
         expect(prov.key).toBe("openai");
-        const res = await prov.completeStructured({
+        const res = await prov.completeStructured<AttentionSuggestionAiEnrichmentV1>({
             schema_version: 1,
             request_id: "r1",
             correlation_id: "c1",
