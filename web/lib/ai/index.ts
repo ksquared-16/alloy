@@ -13,7 +13,7 @@ export type {
     AiStructuredProvider,
 } from "@/lib/ai/providerTypes";
 
-export { createDisabledAiProvider, createAiProviderForPolicy } from "@/lib/ai/disabledProvider";
+export { createDisabledAiProvider, createAiProviderForPolicy, type ResolveStructuredAiProviderOptions } from "@/lib/ai/disabledProvider";
 
 export {
     AI_POLICY_METADATA_KEY,
@@ -54,7 +54,7 @@ export {
     toOperationalSummaryQueuePreview,
 } from "@/lib/ai/buildOperationalSummary";
 
-export { isAiEnrichmentStubEnvEnabled, isAiEnrichmentTelemetryEnvEnabled } from "@/lib/ai/aiEnrichmentEnv";
+export { isAiEnrichmentStubEnvEnabled, isAiEnrichmentTelemetryEnvEnabled, hasOpenAiStructuredCredentials } from "@/lib/ai/aiEnrichmentEnv";
 
 export { createStubAiProvider } from "@/lib/ai/stubProvider";
 
@@ -76,11 +76,15 @@ export {
 export {
     AI_ENRICHMENT_USE_PERMISSION_KEY,
     isAiEnrichmentUsePermissionRequired,
+    computeOpenAiLiveInvocationPermitted,
     resolveAiEnrichmentPortalAccess,
     type AiEnrichmentRouteAccessFailure,
 } from "@/lib/ai/aiEnrichmentPermissions";
 
-export { evaluateOrgPolicyForStubAttentionDraftEnrichmentRoute } from "@/lib/ai/aiEnrichmentRouteGuards";
+export {
+    evaluateOrgPolicyForStubAttentionDraftEnrichmentRoute,
+    evaluateOrgPolicyForOpenAiAttentionDraftEnrichmentRoute,
+} from "@/lib/ai/aiEnrichmentRouteGuards";
 
 export type {
     AlloyLiveProviderFamily,

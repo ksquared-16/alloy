@@ -41,3 +41,34 @@ export function evaluateOrgPolicyForStubAttentionDraftEnrichmentRoute(
     }
     return { ok: true, policy };
 }
+
+/**
+ * OpenAI draft-enrichment admin route: org must enable AI, use `openai` provider, and allow `draft_enrichment`.
+ */
+export function evaluateOrgPolicyForOpenAiAttentionDraftEnrichmentRoute(
+    orgMetadata: unknown,
+): { ok: true; policy: ResolvedAiOrgPolicyV1 } | OrgPolicyGuardFailure {
+    const policy = parseAiPolicyFromMetadata(orgMetadata);
+    if (!policy.enabled) {
+        return {
+            ok: false,
+            error: "AI_POLICY_DISABLED",
+            message: "Org metadata.ai_policy.enabled must be true.",
+        };
+    }
+    if (policy.provider !== "openai") {
+        return {
+            ok: false,
+            error: "AI_POLICY_PROVIDER",
+            message: "This route’s live path requires ai_policy.provider openai.",
+        };
+    }
+    if (!policy.allowed_features.includes("draft_enrichment")) {
+        return {
+            ok: false,
+            error: "AI_FEATURE_NOT_ALLOWED",
+            message: "draft_enrichment must appear in ai_policy.allowed_features.",
+        };
+    }
+    return { ok: true, policy };
+}

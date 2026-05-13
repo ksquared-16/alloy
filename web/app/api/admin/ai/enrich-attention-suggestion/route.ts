@@ -4,9 +4,13 @@ import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion
 import { NEEDS_ATTENTION_SUGGESTION_AGENT_KEY } from "@/lib/agent/needsAttentionSuggestion/types";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
-import { isAiEnrichmentStubEnvEnabled } from "@/lib/ai/aiEnrichmentEnv";
-import { resolveAiEnrichmentPortalAccess } from "@/lib/ai/aiEnrichmentPermissions";
-import { evaluateOrgPolicyForStubAttentionDraftEnrichmentRoute } from "@/lib/ai/aiEnrichmentRouteGuards";
+import { hasOpenAiStructuredCredentials, isAiEnrichmentStubEnvEnabled } from "@/lib/ai/aiEnrichmentEnv";
+import { computeOpenAiLiveInvocationPermitted, resolveAiEnrichmentPortalAccess } from "@/lib/ai/aiEnrichmentPermissions";
+import { parseAiPolicyFromMetadata } from "@/lib/ai/aiPolicy";
+import {
+    evaluateOrgPolicyForOpenAiAttentionDraftEnrichmentRoute,
+    evaluateOrgPolicyForStubAttentionDraftEnrichmentRoute,
+} from "@/lib/ai/aiEnrichmentRouteGuards";
 import { enrichAttentionSuggestionStubEnvelope } from "@/lib/ai/enrichAttentionSuggestionStub";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
@@ -24,10 +28,12 @@ function parseAttentionSuggestionBody(raw: unknown): AttentionSuggestionV1 | nul
 }
 
 /**
- * POST — experimental stub enrichment for an existing deterministic needs-attention suggestion.
+ * POST — structured enrichment for an existing deterministic needs-attention suggestion.
  *
- * **Gates:** portal + org-scoped access (see {@link resolveAiEnrichmentPortalAccess}), `AI_ENRICHMENT_STUB_ENABLED`,
- * org `metadata.ai_policy` (enabled, provider stub, `draft_enrichment` allowed).
+ * **Gates:** portal + org-scoped access (see {@link resolveAiEnrichmentPortalAccess}), org `metadata.ai_policy`
+ * (`enabled`, `provider` stub or openai, `draft_enrichment` allowed). Stub path also requires `AI_ENRICHMENT_STUB_ENABLED`.
+ * OpenAI-compatible live path requires `AI_ENRICHMENT_USE_PERMISSION_REQUIRED=true`, `ai.enrichment.use` grant,
+ * `OPENAI_API_KEY` + `OPENAI_MODEL` (optional `OPENAI_BASE_URL`). Server-only — no client env.
  *
  * **Body:** `{ correlation_id: string, request_id?: string, deterministic_suggestion: AttentionSuggestionV1 }`
  *
@@ -48,16 +54,7 @@ export async function POST(request: NextRequest) {
         );
     }
 
-    if (!isAiEnrichmentStubEnvEnabled()) {
-        return NextResponse.json(
-            {
-                ok: false,
-                error: "FEATURE_DISABLED",
-                message: "Set AI_ENRICHMENT_STUB_ENABLED=true to enable stub enrichment.",
-            },
-            { status: 403 },
-        );
-    }
+    const openaiLiveInvocationPermitted = computeOpenAiLiveInvocationPermitted(access);
 
     let body: unknown;
     try {
@@ -87,10 +84,62 @@ export async function POST(request: NextRequest) {
     }
 
     const org_metadata = orgSettings?.metadata ?? {};
-    const policyGate = evaluateOrgPolicyForStubAttentionDraftEnrichmentRoute(org_metadata);
-    if (!policyGate.ok) {
+    const policyQuick = parseAiPolicyFromMetadata(org_metadata);
+
+    if (policyQuick.provider === "openai") {
+        if (!openaiLiveInvocationPermitted) {
+            return NextResponse.json(
+                {
+                    ok: false,
+                    error: "AI_OPENAI_FORBIDDEN",
+                    message:
+                        "OpenAI-compatible enrichment requires AI_ENRICHMENT_USE_PERMISSION_REQUIRED=true and permission ai.enrichment.use.",
+                },
+                { status: 403 },
+            );
+        }
+        if (!hasOpenAiStructuredCredentials()) {
+            return NextResponse.json(
+                {
+                    ok: false,
+                    error: "OPENAI_NOT_CONFIGURED",
+                    message: "Set OPENAI_API_KEY and OPENAI_MODEL (optional OPENAI_BASE_URL) for live enrichment.",
+                },
+                { status: 503 },
+            );
+        }
+        const policyGate = evaluateOrgPolicyForOpenAiAttentionDraftEnrichmentRoute(org_metadata);
+        if (!policyGate.ok) {
+            return NextResponse.json(
+                { ok: false, error: policyGate.error, message: policyGate.message },
+                { status: 403 },
+            );
+        }
+    } else if (policyQuick.provider === "stub") {
+        if (!isAiEnrichmentStubEnvEnabled()) {
+            return NextResponse.json(
+                {
+                    ok: false,
+                    error: "FEATURE_DISABLED",
+                    message: "Set AI_ENRICHMENT_STUB_ENABLED=true to enable stub enrichment.",
+                },
+                { status: 403 },
+            );
+        }
+        const policyGate = evaluateOrgPolicyForStubAttentionDraftEnrichmentRoute(org_metadata);
+        if (!policyGate.ok) {
+            return NextResponse.json(
+                { ok: false, error: policyGate.error, message: policyGate.message },
+                { status: 403 },
+            );
+        }
+    } else {
         return NextResponse.json(
-            { ok: false, error: policyGate.error, message: policyGate.message },
+            {
+                ok: false,
+                error: "AI_POLICY_PROVIDER",
+                message: "This route supports ai_policy.provider stub or openai with draft_enrichment.",
+            },
             { status: 403 },
         );
     }
@@ -103,6 +152,7 @@ export async function POST(request: NextRequest) {
         deterministic: det,
         correlation_id: correlationId,
         request_id: requestId,
+        openai_live_invocation_permitted: openaiLiveInvocationPermitted,
     });
 
     return NextResponse.json({

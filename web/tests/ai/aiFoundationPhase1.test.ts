@@ -1,9 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
     AI_POLICY_METADATA_KEY,
     createAiProviderForPolicy,
     createDisabledAiProvider,
+    NEEDS_ATTENTION_DRAFT_ENRICHMENT_FEATURE,
     parseAiPolicyFromMetadata,
     redactObjectForAi,
     safeParseAiUsageTelemetryPayloadV1,
@@ -113,7 +114,13 @@ describe("createDisabledAiProvider", () => {
 });
 
 describe("createAiProviderForPolicy", () => {
-    it("matches disabled provider behavior in Phase 1", async () => {
+    beforeEach(() => vi.unstubAllEnvs());
+    afterEach(() => {
+        vi.unstubAllEnvs();
+        vi.unstubAllGlobals();
+    });
+
+    it("returns disabled for openai policy without strict live options", async () => {
         const policy = parseAiPolicyFromMetadata({
             [AI_POLICY_METADATA_KEY]: { enabled: true, provider: "openai", allowed_features: ["draft_enrichment"] },
         });
@@ -122,12 +129,55 @@ describe("createAiProviderForPolicy", () => {
             schema_version: 1,
             request_id: "r1",
             correlation_id: "c1",
-            feature: "draft_enrichment",
+            feature: NEEDS_ATTENTION_DRAFT_ENRICHMENT_FEATURE,
             org_id: "o1",
             payload: {},
             requested_at_iso: "2026-05-13T12:00:00.000Z",
         });
         expect(res.outcome).toBe("disabled");
+    });
+
+    it("resolves OpenAI-compatible provider when strict mode, credentials, and live flag are set", async () => {
+        vi.stubEnv("AI_ENRICHMENT_USE_PERMISSION_REQUIRED", "true");
+        vi.stubEnv("OPENAI_API_KEY", "sk-test");
+        vi.stubEnv("OPENAI_MODEL", "gpt-test");
+        const fetchMock = vi.fn().mockResolvedValue(
+            new Response(
+                JSON.stringify({
+                    choices: [
+                        {
+                            message: {
+                                content: JSON.stringify({
+                                    version: 1,
+                                    agent_key: "needs_attention_suggestion_enrichment",
+                                    generated_at_iso: "2026-05-13T12:00:00.000Z",
+                                    provider_report: { provider_key: "openai", execution_mode: "live" },
+                                }),
+                            },
+                        },
+                    ],
+                }),
+                { status: 200, headers: { "Content-Type": "application/json" } },
+            ),
+        );
+        vi.stubGlobal("fetch", fetchMock);
+
+        const policy = parseAiPolicyFromMetadata({
+            [AI_POLICY_METADATA_KEY]: { enabled: true, provider: "openai", allowed_features: ["draft_enrichment"] },
+        });
+        const prov = createAiProviderForPolicy(policy, { openai_live_invocation_permitted: true });
+        expect(prov.key).toBe("openai");
+        const res = await prov.completeStructured({
+            schema_version: 1,
+            request_id: "r1",
+            correlation_id: "c1",
+            feature: NEEDS_ATTENTION_DRAFT_ENRICHMENT_FEATURE,
+            org_id: "o1",
+            payload: { next_action_key: "k", primary_reason_code: "r" },
+            requested_at_iso: "2026-05-13T12:00:00.000Z",
+        });
+        expect(res.outcome).toBe("ok");
+        expect(res.data?.provider_report.provider_key).toBe("openai");
     });
 });
 

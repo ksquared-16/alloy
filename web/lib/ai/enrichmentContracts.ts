@@ -91,6 +91,7 @@ export type AiTelemetryOutcome =
     | "policy_denied"
     | "stub_noop"
     | "stub_success"
+    | "live_success"
     | "redaction_only"
     | "error";
 

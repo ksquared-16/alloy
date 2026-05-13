@@ -52,6 +52,7 @@ describe("enrichAttentionSuggestionStubEnvelope", () => {
     });
     afterEach(() => {
         vi.unstubAllEnvs();
+        vi.unstubAllGlobals();
     });
 
     it("returns null enrichment when stub env is off (policy on)", async () => {
@@ -97,6 +98,56 @@ describe("enrichAttentionSuggestionStubEnvelope", () => {
         const telJson = JSON.stringify(aiUsageTelemetryPayloadV1ToJson(r.telemetry_payload));
         expect(telJson).not.toContain("SECRET_DRAFT_XYZ");
         expect(telJson).not.toContain("Hello");
+    });
+
+    it("OpenAI path: strict live flag + credentials yields live telemetry (mock fetch)", async () => {
+        vi.stubEnv("AI_ENRICHMENT_USE_PERMISSION_REQUIRED", "true");
+        vi.stubEnv("OPENAI_API_KEY", "sk-test");
+        vi.stubEnv("OPENAI_MODEL", "gpt-test");
+        vi.stubEnv("AI_ENRICHMENT_STUB_ENABLED", "false");
+        const fetchMock = vi.fn().mockResolvedValue(
+            new Response(
+                JSON.stringify({
+                    choices: [
+                        {
+                            message: {
+                                content: JSON.stringify({
+                                    version: 1,
+                                    agent_key: "needs_attention_suggestion_enrichment",
+                                    reasoning_summary_overlay: "Live overlay",
+                                    generated_at_iso: "2026-05-13T12:00:00.000Z",
+                                    provider_report: { provider_key: "openai", execution_mode: "live" },
+                                }),
+                            },
+                        },
+                    ],
+                }),
+                { status: 200, headers: { "Content-Type": "application/json" } },
+            ),
+        );
+        vi.stubGlobal("fetch", fetchMock);
+
+        const policyMeta = {
+            [AI_POLICY_METADATA_KEY]: {
+                enabled: true,
+                provider: "openai",
+                allowed_features: ["draft_enrichment"],
+                logging_mode: "minimal",
+            },
+        };
+        const r = await enrichAttentionSuggestionStubEnvelope({
+            org_id: "org-1",
+            org_metadata: policyMeta,
+            deterministic: suggestionWithSecretDraft("SECRET_LIVE"),
+            correlation_id: "corr-openai",
+            openai_live_invocation_permitted: true,
+        });
+        expect(r.envelope.enrichment?.provider_report.execution_mode).toBe("live");
+        expect(r.envelope.enrichment?.reasoning_summary_overlay).toContain("Live overlay");
+        expect(r.telemetry_payload.outcome).toBe("live_success");
+        expect(r.telemetry_payload.provider_key).toBe("openai");
+        const telJson = JSON.stringify(aiUsageTelemetryPayloadV1ToJson(r.telemetry_payload));
+        expect(telJson).not.toContain("SECRET_LIVE");
     });
 
     it("runs redaction before stub (draft body not passed verbatim to stub strings)", async () => {

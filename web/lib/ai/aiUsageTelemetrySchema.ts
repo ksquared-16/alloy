@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import type { AiUsageTelemetryPayloadV1 } from "@/lib/ai/enrichmentContracts";
 
-const outcomeZ = z.enum(["disabled", "policy_denied", "stub_noop", "stub_success", "redaction_only", "error"]);
+const outcomeZ = z.enum(["disabled", "policy_denied", "stub_noop", "stub_success", "live_success", "redaction_only", "error"]);
 
 export const aiUsageTelemetryPayloadV1Schema = z.object({
     schema_version: z.literal(1),

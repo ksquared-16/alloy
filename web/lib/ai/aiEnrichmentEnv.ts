@@ -17,3 +17,22 @@ export function isAiEnrichmentStubEnvEnabled(): boolean {
 export function isAiEnrichmentTelemetryEnvEnabled(): boolean {
     return truthyEnv("AI_ENRICHMENT_TELEMETRY_ENABLED");
 }
+
+/** True when OpenAI-compatible live enrichment may be configured (never log these values). */
+export function hasOpenAiStructuredCredentials(): boolean {
+    const key = process.env.OPENAI_API_KEY?.trim();
+    const model = process.env.OPENAI_MODEL?.trim();
+    return Boolean(key && model);
+}
+
+/** Model id for chat completions (e.g. `gpt-4o-mini`). Caller must guard with {@link hasOpenAiStructuredCredentials}. */
+export function getOpenAiModel(): string {
+    return process.env.OPENAI_MODEL?.trim() ?? "";
+}
+
+/** API origin without trailing slash; defaults to OpenAI when unset. */
+export function getOpenAiBaseUrl(): string {
+    const raw = process.env.OPENAI_BASE_URL?.trim();
+    if (raw) return raw.replace(/\/+$/, "");
+    return "https://api.openai.com";
+}

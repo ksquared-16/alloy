@@ -24,6 +24,11 @@ export type EnrichAttentionSuggestionStubInput = {
     deterministic: AttentionSuggestionV1 | null;
     correlation_id: string;
     request_id?: string | null;
+    /**
+     * When true, routes assert strict `AI_ENRICHMENT_USE_PERMISSION_REQUIRED` + `ai.enrichment.use` grant
+     * before calling OpenAI-compatible live enrichment (`ai_policy.provider === "openai"`).
+     */
+    openai_live_invocation_permitted?: boolean;
 };
 
 export type EnrichAttentionSuggestionStubResult = {
@@ -45,7 +50,8 @@ function uniqueKinds(kinds: readonly string[]): string[] {
     return [...new Set(kinds)];
 }
 
-function mapTelemetryOutcome(providerOutcome: string, hasEnrichment: boolean): AiTelemetryOutcome {
+function mapTelemetryOutcome(providerOutcome: string, hasEnrichment: boolean, providerKey: AiProviderKey): AiTelemetryOutcome {
+    if (providerOutcome === "ok" && hasEnrichment && providerKey === "openai") return "live_success";
     if (providerOutcome === "ok" && hasEnrichment) return "stub_success";
     if (providerOutcome === "ok" && !hasEnrichment) return "stub_noop";
     if (providerOutcome === "policy_denied") return "policy_denied";
@@ -134,7 +140,9 @@ export async function enrichAttentionSuggestionStubEnvelope(
 
     const { redacted, steps } = redactObjectForAi(rawForRedaction, { pii_mode: policy.pii_mode });
 
-    const provider = resolveStructuredAiProviderForPolicy(policy);
+    const provider = resolveStructuredAiProviderForPolicy(policy, {
+        openai_live_invocation_permitted: input.openai_live_invocation_permitted === true,
+    });
     const request: AiStructuredRequestV1 = {
         schema_version: 1,
         request_id: (input.request_id ?? randomUUID()).trim() || randomUUID(),
@@ -163,7 +171,7 @@ export async function enrichAttentionSuggestionStubEnvelope(
         request_id: request.request_id,
         feature: NEEDS_ATTENTION_DRAFT_ENRICHMENT_FEATURE,
         provider_key: res.provider_key,
-        outcome: mapTelemetryOutcome(res.outcome, enrichment != null),
+        outcome: mapTelemetryOutcome(res.outcome, enrichment != null, res.provider_key),
         steps,
         latency_ms,
         entity_type: det.target.entity_type,

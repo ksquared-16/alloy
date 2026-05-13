@@ -26,6 +26,14 @@ export function isAiEnrichmentUsePermissionRequired(): boolean {
     return truthyEnv("AI_ENRICHMENT_USE_PERMISSION_REQUIRED");
 }
 
+/**
+ * Live OpenAI-compatible calls are allowed only under strict permission mode with an explicit
+ * {@link AI_ENRICHMENT_USE_PERMISSION_KEY} grant (routes should still pass {@link resolveAiEnrichmentPortalAccess}).
+ */
+export function computeOpenAiLiveInvocationPermitted(access: AdminAccessContextSuccess): boolean {
+    return isAiEnrichmentUsePermissionRequired() && access.permissionKeys.includes(AI_ENRICHMENT_USE_PERMISSION_KEY);
+}
+
 export type AiEnrichmentRouteAccessFailure = {
     ok: false;
     status: 401 | 403;
