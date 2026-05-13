@@ -4,14 +4,13 @@ import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion
 import { parseAiPolicyFromMetadata, type ResolvedAiOrgPolicyV1 } from "@/lib/ai/aiPolicy";
 import { redactObjectForAi } from "@/lib/ai/redaction";
 import { resolveStructuredAiProviderForPolicy } from "@/lib/ai/resolveStructuredAiProvider";
-import type { AiStructuredRequestV1 } from "@/lib/ai/providerTypes";
+import type { AiProviderErrorEnvelope, AiProviderKey, AiStructuredRequestV1 } from "@/lib/ai/providerTypes";
 import type {
     AiEnrichmentEnvelopeV1,
     AiUsageTelemetryPayloadV1,
     AttentionSuggestionAiEnrichmentV1,
     AiTelemetryOutcome,
 } from "@/lib/ai/enrichmentContracts";
-import type { AiProviderKey } from "@/lib/ai/providerTypes";
 import { maybeEmitAiEnrichmentTelemetryEvent } from "@/lib/ai/enrichmentTelemetry";
 
 /** Stable feature key for needs-attention stub enrichment. */
@@ -35,6 +34,10 @@ export type EnrichAttentionSuggestionStubResult = {
     envelope: AiEnrichmentEnvelopeV1;
     telemetry_payload: AiUsageTelemetryPayloadV1;
     telemetry_emitted: boolean;
+    /** When the structured provider returns a non-ok outcome (diagnostics only; not sent to clients). */
+    provider_last_error_code?: string | null;
+    /** Full last provider error (server / local tools); HTTP route does not return this field. */
+    provider_last_error?: AiProviderErrorEnvelope | null;
 };
 
 function policySnapshot(policy: ResolvedAiOrgPolicyV1): AiEnrichmentEnvelopeV1["policy_snapshot"] {
@@ -125,7 +128,13 @@ export async function enrichAttentionSuggestionStubEnvelope(
             policy,
             payload: telemetry_payload,
         });
-        return { envelope, telemetry_payload, telemetry_emitted: emitted };
+        return {
+            envelope,
+            telemetry_payload,
+            telemetry_emitted: emitted,
+            provider_last_error_code: null,
+            provider_last_error: null,
+        };
     }
 
     const det = input.deterministic;
@@ -184,5 +193,8 @@ export async function enrichAttentionSuggestionStubEnvelope(
         payload: telemetry_payload,
     });
 
-    return { envelope, telemetry_payload, telemetry_emitted: emitted };
+    const provider_last_error: AiProviderErrorEnvelope | null = res.outcome !== "ok" ? (res.error ?? null) : null;
+    const provider_last_error_code = provider_last_error?.code ?? null;
+
+    return { envelope, telemetry_payload, telemetry_emitted: emitted, provider_last_error_code, provider_last_error };
 }
