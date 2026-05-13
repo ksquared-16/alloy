@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { LaunchFkStamp } from "@/lib/forms/formLaunchFkDerivation";
 import { loadPublishedFormEnvelope, type PublishedFormEnvelope } from "@/lib/public/forms/loadPublishedFormEnvelope";
+import { computePacketOperatorReviewWarnings } from "@/lib/forms/packets/packetOperatorReviewWarnings";
+import { emitOpportunityEnrollmentPacketSubmittedForReviewSafe } from "@/lib/forms/workflow/opportunityEnrollmentPacketProjections";
 
 /** RFC4122 UUID — align with formLaunchFkDerivation / public routes. */
 const UUID_RE =
@@ -441,6 +443,18 @@ export async function advancePacketSessionAfterSubmit(
         };
     }
 
+    const snapObj =
+        session.crm_snapshot && typeof session.crm_snapshot === "object" && !Array.isArray(session.crm_snapshot)
+            ? (session.crm_snapshot as Record<string, unknown>)
+            : {};
+
+    const warnings = await computePacketOperatorReviewWarnings({
+        supabase,
+        orgId,
+        crmSnapshot: snapObj,
+        sharedValues: shared,
+    });
+
     const { error: doneErr } = await supabase
         .from("form_packet_sessions")
         .update({
@@ -448,11 +462,22 @@ export async function advancePacketSessionAfterSubmit(
             status: "completed",
             completed_at: now,
             updated_at: now,
+            operator_review_status: "needs_review",
+            operator_review_warnings: warnings,
         })
         .eq("id", packetSessionId)
         .eq("org_id", orgId);
 
     if (doneErr) return { result: null, error: new Error(doneErr.message) };
+
+    const revEmit = await emitOpportunityEnrollmentPacketSubmittedForReviewSafe({
+        orgId,
+        packetSessionId,
+        warningCount: warnings.length,
+    });
+    if (revEmit.error) {
+        console.error("[packet advance] submitted_for_review projection failed:", revEmit.error.message);
+    }
 
     return {
         result: {

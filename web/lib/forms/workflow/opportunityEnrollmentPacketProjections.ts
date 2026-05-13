@@ -15,6 +15,7 @@ export const OPPORTUNITY_ENROLLMENT_PACKET_OPENED = "opportunity_enrollment_pack
 export const OPPORTUNITY_ENROLLMENT_PACKET_STEP_COMPLETED = "opportunity_enrollment_packet_step_completed";
 export const OPPORTUNITY_ENROLLMENT_PACKET_COMPLETED = "opportunity_enrollment_packet_completed";
 export const OPPORTUNITY_ENROLLMENT_PACKET_SENT = "opportunity_enrollment_packet_sent";
+export const OPPORTUNITY_ENROLLMENT_PACKET_SUBMITTED_FOR_REVIEW = "opportunity_enrollment_packet_submitted_for_review";
 
 async function projectionExists(
     supabase: SupabaseClient,
@@ -413,6 +414,83 @@ export async function emitOpportunityEnrollmentPacketCompletedProjectionSafe(par
                 child_display,
                 completed_at: row.completed_at ?? null,
                 summary: packet_name ? `Enrollment packet completed: ${packet_name}` : "Enrollment packet completed",
+            },
+        });
+        return { error: null };
+    } catch (e) {
+        return { error: e instanceof Error ? e : new Error(String(e)) };
+    }
+}
+
+/** Emitted once when a packet session completes and enters operator_review_status = needs_review. */
+export async function emitOpportunityEnrollmentPacketSubmittedForReviewSafe(params: {
+    orgId: string;
+    packetSessionId: string;
+    warningCount: number;
+}): Promise<{ error: Error | null }> {
+    try {
+        const supabase = createAdminClient();
+        const { orgId, packetSessionId, warningCount } = params;
+        const opportunityId = await resolveOpportunityIdForPacketSession(supabase, orgId, packetSessionId);
+        if (!opportunityId) return { error: null };
+
+        if (
+            await projectionExists(supabase, orgId, OPPORTUNITY_ENROLLMENT_PACKET_SUBMITTED_FOR_REVIEW, opportunityId, {
+                packet_session_id: packetSessionId,
+            })
+        ) {
+            return { error: null };
+        }
+
+        const { data: sess } = await supabase
+            .from("form_packet_sessions")
+            .select("packet_definition_id, started_via_public_link_id, launch_context, crm_snapshot")
+            .eq("id", packetSessionId)
+            .eq("org_id", orgId)
+            .maybeSingle();
+        if (!sess) return { error: null };
+        const row = sess as {
+            packet_definition_id: string;
+            started_via_public_link_id: string | null;
+            launch_context?: unknown;
+            crm_snapshot?: unknown;
+        };
+        const launch =
+            row.launch_context && typeof row.launch_context === "object" && !Array.isArray(row.launch_context)
+                ? (row.launch_context as Record<string, unknown>)
+                : {};
+        const snap =
+            row.crm_snapshot && typeof row.crm_snapshot === "object" && !Array.isArray(row.crm_snapshot)
+                ? (row.crm_snapshot as Record<string, unknown>)
+                : {};
+        const { packet_name, recipient_display, child_display } = await buildDisplayEnrichment(
+            supabase,
+            orgId,
+            row.packet_definition_id,
+            launch,
+            snap
+        );
+
+        const hintPart =
+            warningCount > 0 ? ` (${warningCount} mismatch hint${warningCount === 1 ? "" : "s"})` : "";
+        await emitEvent({
+            org_id: orgId,
+            event_type: OPPORTUNITY_ENROLLMENT_PACKET_SUBMITTED_FOR_REVIEW,
+            entity_type: "opportunities",
+            entity_id: opportunityId,
+            payload: {
+                org_id: orgId,
+                opportunity_id: opportunityId,
+                packet_session_id: packetSessionId,
+                public_link_id: row.started_via_public_link_id ?? null,
+                packet_definition_id: row.packet_definition_id,
+                packet_name,
+                recipient_display,
+                child_display,
+                warning_count: warningCount,
+                summary: packet_name
+                    ? `Packet submitted — needs review: ${packet_name}${hintPart}`
+                    : `Packet submitted — needs review${hintPart}`,
             },
         });
         return { error: null };
