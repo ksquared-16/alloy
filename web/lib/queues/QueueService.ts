@@ -32,6 +32,7 @@ import {
 import { resolveOpportunityAttention, type OpportunityAttentionEntityInput } from "@/lib/opportunities/opportunityAttentionResolver";
 import { buildNeedsAttentionSuggestion } from "@/lib/agent/needsAttentionSuggestion/buildNeedsAttentionSuggestion";
 import type { AttentionSuggestionQueuePreviewV1 } from "@/lib/agent/needsAttentionSuggestion/types";
+import { buildOperationalSummaryDeterministic, toOperationalSummaryQueuePreview } from "@/lib/ai/buildOperationalSummary";
 import { DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1 } from "@/lib/workspace/opportunityAttentionRules";
 import { buildQueueServiceAttentionSemantics } from "@/lib/workspace/opportunityAttentionCountSemantics";
 import { applyPlacementToOpportunityQueueRows } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
@@ -1183,6 +1184,12 @@ async function enrichOpportunityRows(params: {
                       why_line: truncateAttentionSuggestionQueueWhyLine(sug.reasoning.summary, 140),
                   }
                 : null;
+            const opSummary = buildOperationalSummaryDeterministic({
+                attention: attn,
+                suggestion: sug,
+                nowIso: new Date(opportunityAttentionResolution.nowMs).toISOString(),
+            });
+            const operationalSummaryPreview = opSummary ? toOperationalSummaryQueuePreview(opSummary) : null;
             attentionExtras = {
                 _needs_attention: attn.needs_attention,
                 _attention_priority_score: attn.priority_score,
@@ -1190,6 +1197,7 @@ async function enrichOpportunityRows(params: {
                 _attention_reasons_detail: attn.reasons,
                 _attention_priority_breakdown: attn.priority_breakdown,
                 ...(suggestionPreview ? { _attention_suggestion_preview: suggestionPreview } : {}),
+                ...(operationalSummaryPreview ? { _operational_summary_preview: operationalSummaryPreview } : {}),
             };
         } else {
             attentionReasonLabel = opportunityNeedsAttentionReasonLabel(r, nowForAttention);

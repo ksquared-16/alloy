@@ -626,6 +626,18 @@ export function CrmCompactQueuePreview({
             {slots.attentionReason?.trim() ? (
               <div className="adminv2-ws-crm-queue-preview__attention-headline">{slots.attentionReason.trim()}</div>
             ) : null}
+            {slots.operationalSummaryPreview?.headline?.trim() ? (
+              <div
+                className="adminv2-ws-crm-queue-preview__operational-summary-preview"
+                data-queue-preview-slot="operational_summary"
+                title="Preview only — open the record for the full operational read."
+              >
+                <span className="adminv2-ws-crm-queue-preview__operational-summary-preview-label">Read</span>
+                <span className="adminv2-ws-crm-queue-preview__operational-summary-preview-text">
+                  {slots.operationalSummaryPreview.headline.trim()}
+                </span>
+              </div>
+            ) : null}
             {sugPrev?.nextLabel ? (
               <div
                 className="adminv2-ws-crm-queue-preview__suggestion"
@@ -696,6 +708,18 @@ export function CrmCompactQueuePreview({
           ) : null}
           {slots.attentionReason?.trim() ? (
             <div className="adminv2-ws-crm-queue-preview__attention">{slots.attentionReason.trim()}</div>
+          ) : null}
+          {slots.operationalSummaryPreview?.headline?.trim() ? (
+            <div
+              className="adminv2-ws-crm-queue-preview__operational-summary-preview adminv2-ws-crm-queue-preview__operational-summary-preview--full"
+              data-queue-preview-slot="operational_summary"
+              title="Preview only — open the record for the full operational read."
+            >
+              <span className="adminv2-ws-crm-queue-preview__operational-summary-preview-label">Read</span>
+              <span className="adminv2-ws-crm-queue-preview__operational-summary-preview-text">
+                {slots.operationalSummaryPreview.headline.trim()}
+              </span>
+            </div>
           ) : null}
           {sugPrev?.nextLabel ? (
             <div

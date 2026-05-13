@@ -98,6 +98,8 @@ describe("OperationalAttentionHeaderStrip", () => {
             />,
         );
         expect(html).toContain("Recommended by Alloy");
+        expect(html).toContain("Operational read");
+        expect(html).toContain("data-drawer-slot=\"operational_summary_narrative\"");
         expect(html).toContain("Needs attention:");
         expect(html).toContain("Suggested next step");
         expect(html).toContain("Respond to new request");
@@ -178,5 +180,23 @@ describe("CrmCompactQueuePreview suggestion preview", () => {
         expect(html).toContain("Alloy suggestion");
         expect(html).toContain("Respond to new request");
         expect(html).toContain("Operational attention: New inquiry is stale.");
+    });
+});
+
+describe("CrmCompactQueuePreview operational summary preview", () => {
+    it("renders compact read strip when headline is present", () => {
+        const html = renderToStaticMarkup(
+            <CrmCompactQueuePreview
+                scanMode
+                slots={baseSlots({
+                    operationalSummaryPreview: {
+                        headline: "Stale inquiry — draft ready for review.",
+                        risk_urgency_hint: "medium",
+                    },
+                })}
+            />,
+        );
+        expect(html).toContain('data-queue-preview-slot="operational_summary"');
+        expect(html).toContain("Stale inquiry");
     });
 });

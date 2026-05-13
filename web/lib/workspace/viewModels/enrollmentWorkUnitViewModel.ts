@@ -213,6 +213,20 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
         attentionSuggestionPreview?.nextLabel ? attentionSuggestionPreview : null;
     const operationalNextHint =
         attentionSuggestionPreviewResolved?.nextLabel ? null : attnPres.nextHintLine;
+
+    const operationalSummaryPreview = (() => {
+        const raw = rowRec._operational_summary_preview as
+            | { headline?: unknown; risk_urgency_hint?: unknown }
+            | null
+            | undefined;
+        if (!raw || typeof raw !== "object") return null;
+        const headline = typeof raw.headline === "string" ? raw.headline.trim() : "";
+        if (!headline) return null;
+        const r = raw.risk_urgency_hint;
+        const risk_urgency_hint = r === "low" || r === "medium" || r === "high" ? r : ("medium" as const);
+        return { headline: headline.slice(0, 160), risk_urgency_hint };
+    })();
+
     const notesRaw = (row as { _notes_preview?: string | null })._notes_preview;
     const familyNotePreview = formatOpportunityQueueNotesPreviewParts(notesRaw, options?.viewerTimezone ?? undefined);
     const familyNote = formatOpportunityQueueNotesPreview(notesRaw, options?.viewerTimezone ?? undefined);
@@ -269,6 +283,7 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
         roomContext,
         attentionReason,
         attentionSuggestionPreview: attentionSuggestionPreviewResolved,
+        operationalSummaryPreview,
         operationalNextHint,
         familyNote,
         familyNotePreview,

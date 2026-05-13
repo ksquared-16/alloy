@@ -12,7 +12,13 @@ import {
     type OperationalAttentionAttachmentError,
 } from "@/lib/admin/operationalAttentionEntityAttachment";
 import type { StatusDefinitionRow } from "@/lib/admin/statusDefinitionsResolve";
-import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
+import {
+    applyStubOperationalSummaryOverlay,
+    buildOperationalSummaryDeterministic,
+} from "@/lib/ai/buildOperationalSummary";
+import { isAiEnrichmentStubEnvEnabled } from "@/lib/ai/aiEnrichmentEnv";
+import { parseAiPolicyFromMetadata } from "@/lib/ai/aiPolicy";
+import type { OperationalSummaryV1 } from "@/lib/ai/enrichmentContracts";
 
 const EMPTY_ACTIVITY: ActivitySignalResult = {
     last_activity_at: null,
@@ -59,6 +65,7 @@ export async function attachOpportunityAttentionSuggestionBundle(params: {
     _operational_attention: OpportunityAttentionResult | null;
     _operational_attention_error: OperationalAttentionAttachmentError | null;
     _attention_suggestion: AttentionSuggestionV1 | null;
+    _operational_summary: OperationalSummaryV1 | null;
 }> {
     const nowMs = params.nowMs ?? Date.now();
     const nowIso = new Date(nowMs).toISOString();
@@ -99,8 +106,29 @@ export async function attachOpportunityAttentionSuggestionBundle(params: {
                   nowIso,
               });
 
+    let _operational_summary: OperationalSummaryV1 | null = null;
+    if (!attn._operational_attention_error && attn._operational_attention) {
+        let sum = buildOperationalSummaryDeterministic({
+            attention: attn._operational_attention,
+            suggestion,
+            nowIso,
+        });
+        if (sum && isAiEnrichmentStubEnvEnabled()) {
+            const { data: osRow, error } = await params.supabase
+                .from("org_settings")
+                .select("metadata")
+                .eq("org_id", params.orgId)
+                .maybeSingle();
+            if (!error) {
+                sum = applyStubOperationalSummaryOverlay(sum, parseAiPolicyFromMetadata(osRow?.metadata ?? {}));
+            }
+        }
+        _operational_summary = sum;
+    }
+
     return {
         ...attn,
         _attention_suggestion: suggestion,
+        _operational_summary,
     };
 }

@@ -4,6 +4,9 @@ import { Sparkles } from "lucide-react";
 
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
 import type { OperationalAttentionAttachmentError } from "@/lib/admin/operationalAttentionEntityAttachment";
+import OperationalSummaryNarrativeBlock from "@/components/admin/drawer/OperationalSummaryNarrativeBlock";
+import { buildOperationalSummaryDeterministic } from "@/lib/ai/buildOperationalSummary";
+import type { OperationalSummaryV1 } from "@/lib/ai/enrichmentContracts";
 import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
 import {
     nextStepGuidance,
@@ -52,6 +55,17 @@ export default function OperationalAttentionHeaderStrip({ overviewData, variant 
 
     if (!payload) return null;
 
+    const hasBundledSummary = Object.prototype.hasOwnProperty.call(overviewData, "_operational_summary");
+    const stableNow =
+        suggestion?.generated_at_iso ?? payload.computed_at_iso ?? "1970-01-01T00:00:00.000Z";
+    const operationalSummary: OperationalSummaryV1 | null = hasBundledSummary
+        ? ((overviewData._operational_summary as OperationalSummaryV1 | null) ?? null)
+        : buildOperationalSummaryDeterministic({
+              attention: payload,
+              suggestion: suggestion ?? null,
+              nowIso: stableNow,
+          });
+
     const wb = payload.waiting.bucket;
     const safeBucket: EnrollmentWaitBucket = isEnrollmentWaitBucket(wb) ? wb : "none";
     const worst = worstTierAmongReasons(payload.reasons);
@@ -98,11 +112,15 @@ export default function OperationalAttentionHeaderStrip({ overviewData, variant 
         const draftBody = suggestion.suggested_content?.body?.trim();
         const frame = chrome ? premiumChromeFrame : premiumPanelFrame;
         return (
-            <div
-                className={frame}
-                data-drawer-slot="operational_attention_header"
-                data-attention-surface="suggestion_primary"
-            >
+            <>
+                {operationalSummary ? (
+                    <OperationalSummaryNarrativeBlock summary={operationalSummary} density={chrome ? "chrome" : "panel"} />
+                ) : null}
+                <div
+                    className={frame}
+                    data-drawer-slot="operational_attention_header"
+                    data-attention-surface="suggestion_primary"
+                >
                 <div className="flex items-start gap-1.5">
                     <Sparkles
                         className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[color-mix(in_srgb,rgb(188,67,0)_85%,#273f52)] opacity-90"
@@ -178,15 +196,20 @@ export default function OperationalAttentionHeaderStrip({ overviewData, variant 
                     </div>
                 </div>
             </div>
+            </>
         );
     }
 
     if (chrome) {
         return (
-            <div
-                className="rounded-md border border-[color-mix(in_srgb,rgb(188,67,0)_30%,var(--d-border, rgba(39,63,82,0.14)))] border-l-[3px] border-l-[rgb(188,67,0)] bg-[color-mix(in_srgb,rgb(255,244,235)_55%,white)] px-2 py-1.5 text-[11px] leading-snug shadow-[inset_3px_0_0_color-mix(in_srgb,var(--d-admin-amber, #c95a00)_32%,transparent)]"
-                data-drawer-slot="operational_attention_header"
-            >
+            <>
+                {operationalSummary ? (
+                    <OperationalSummaryNarrativeBlock summary={operationalSummary} density="chrome" />
+                ) : null}
+                <div
+                    className="rounded-md border border-[color-mix(in_srgb,rgb(188,67,0)_30%,var(--d-border, rgba(39,63,82,0.14)))] border-l-[3px] border-l-[rgb(188,67,0)] bg-[color-mix(in_srgb,rgb(255,244,235)_55%,white)] px-2 py-1.5 text-[11px] leading-snug shadow-[inset_3px_0_0_color-mix(in_srgb,var(--d-admin-amber, #c95a00)_32%,transparent)]"
+                    data-drawer-slot="operational_attention_header"
+                >
                 <div className="font-semibold text-[rgb(72,32,0)]">{headlinePrimaryOnly}</div>
                 {otherReasons.length > 0 ? (
                     factorsPreferDetails ? (
@@ -208,14 +231,19 @@ export default function OperationalAttentionHeaderStrip({ overviewData, variant 
                     {nextLine}
                 </div>
             </div>
+            </>
         );
     }
 
     return (
-        <div
-            className="mt-2 rounded-lg border border-admin-border border-l-[3px] border-l-[rgb(188,67,0)] bg-white/90 px-2.5 py-1.5 shadow-sm"
-            data-drawer-slot="operational_attention_header"
-        >
+        <>
+            {operationalSummary ? (
+                <OperationalSummaryNarrativeBlock summary={operationalSummary} density="panel" />
+            ) : null}
+            <div
+                className="mt-2 rounded-lg border border-admin-border border-l-[3px] border-l-[rgb(188,67,0)] bg-white/90 px-2.5 py-1.5 shadow-sm"
+                data-drawer-slot="operational_attention_header"
+            >
             <div className="text-[12px] font-semibold leading-snug text-alloy-midnight/92">{headlinePrimaryOnly}</div>
             <div className="mt-0.5 text-[11px] leading-snug text-alloy-midnight/72">
                 <span className="font-medium text-alloy-midnight/80">Suggested next step · </span>
@@ -234,5 +262,6 @@ export default function OperationalAttentionHeaderStrip({ overviewData, variant 
                 </details>
             ) : null}
         </div>
+        </>
     );
 }

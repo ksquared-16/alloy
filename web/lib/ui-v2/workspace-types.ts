@@ -196,6 +196,11 @@ export type CrmCompactRowSemanticSlots = {
    * Same builder as entity GET; list paths usually omit activity so text may differ slightly from the drawer.
    */
   attentionSuggestionPreview?: { nextLabel: string; whyLine: string } | null;
+  /**
+   * One-line derived operational narrative (`_operational_summary_preview` on enriched rows when attention resolution runs).
+   * Preview-only — full bullets live on entity GET (`_operational_summary`).
+   */
+  operationalSummaryPreview?: { headline: string; risk_urgency_hint: "low" | "medium" | "high" } | null;
   /** Deterministic resolver-backed next-step hint (enrollment operational attention). */
   operationalNextHint?: string | null;
   familyNote: string | null;

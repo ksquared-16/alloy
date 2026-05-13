@@ -6356,6 +6356,39 @@
   color: rgb(72, 32, 0);
 }
 
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__operational-summary-preview {
+  margin-top: 3px;
+  padding: 3px 8px 4px 8px;
+  border-radius: 5px;
+  border: 1px dashed color-mix(in srgb, var(--d-border) 70%, rgb(39, 63, 82));
+  background: color-mix(in srgb, var(--d-surface) 88%, white);
+  font-size: 10px;
+  line-height: 1.35;
+  color: color-mix(in srgb, var(--d-muted) 35%, var(--d-fg));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  align-items: baseline;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__operational-summary-preview-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--d-muted) 55%, var(--d-fg));
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__operational-summary-preview-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 500;
+}
+
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__operational-summary-preview--full {
+  margin-top: 4px;
+}
+
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-crm-queue-preview__operational-next-scan {
   font-size: 10.5px;
   line-height: 1.38;
