@@ -1,4 +1,5 @@
 import type { StatusDefinitionRow } from "@/lib/admin/statusDefinitionsResolve";
+import type { ActivitySignalResult } from "@/lib/admin/activitySignals";
 import { resolveOpportunityAttentionConfigFromMetadata } from "@/lib/opportunities/opportunityAttentionConfig";
 import {
     resolveOpportunityAttention,
@@ -52,6 +53,11 @@ export function computeOperationalAttentionAttachment(input: {
     defs: StatusDefinitionRow[];
     /** Typically `work_units.metadata` for `opportunity.work_unit_id` (QueueService parity). */
     attentionConfigMetadata: unknown | null;
+    /**
+     * Activity Signals V1 result — same pipeline as queue enrichment / activity-signal route.
+     * When `stale_signal` is set, passed through to the resolver as `optionalSignals.activityStale`.
+     */
+    activitySignal?: ActivitySignalResult | null;
     nowMs?: number;
 }): {
     _operational_attention: OpportunityAttentionResult | null;
@@ -60,12 +66,13 @@ export function computeOperationalAttentionAttachment(input: {
     try {
         const config = resolveOpportunityAttentionConfigFromMetadata(input.attentionConfigMetadata ?? null);
         const entity = opportunityRowToAttentionEntity(input.opportunityRow);
+        const stale = input.activitySignal?.stale_signal ?? null;
         const result = resolveOpportunityAttention({
             opportunity: entity,
             defs: input.defs,
             nowMs: input.nowMs ?? Date.now(),
             config,
-            optionalSignals: null,
+            optionalSignals: stale ? { activityStale: stale } : null,
         });
         return { _operational_attention: result, _operational_attention_error: null };
     } catch (e) {

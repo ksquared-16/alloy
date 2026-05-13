@@ -18,7 +18,8 @@ import { logDbTiming, withDbTiming } from "@/lib/admin/dbQueryTiming";
 import { perfDrawerFullHydrate, timingOpportunityApiVisible } from "@/lib/perf/adminV2PerfLog";
 import type { AdminAccessScopeDimensions } from "@/lib/admin/accessScope";
 import { assertOpportunityInAccessScope } from "@/lib/admin/accessScope";
-import { computeOperationalAttentionAttachment } from "@/lib/admin/operationalAttentionEntityAttachment";
+import { fetchDepartmentMetadataForActivity } from "@/lib/admin/loadOpportunityActivitySignal";
+import { attachOpportunityAttentionSuggestionBundle } from "@/lib/admin/opportunityAttentionSuggestionAttachment";
 
 type AdminSupabase = ReturnType<typeof createAdminClient>;
 
@@ -858,10 +859,23 @@ export async function respondOpportunityEntityGet(
       wuidForDept && wuDeptRowV.data
         ? (wuDeptRowV.data as { metadata?: unknown }).metadata ?? null
         : null;
-    const attnVisible = computeOperationalAttentionAttachment({
+    const deptMetaVisible = await fetchDepartmentMetadataForActivity(
+      supabase,
+      orgId,
+      (wuDeptRowV.data as { department_id?: string | null } | null)?.department_id,
+    );
+    const attnVisible = await attachOpportunityAttentionSuggestionBundle({
+      supabase,
+      orgId,
       opportunityRow: vis as Record<string, unknown>,
       defs: opportunityDefsVisible,
       attentionConfigMetadata: wuMetaVisible,
+      workUnitId: wuidForDept,
+      statusKey: oppSkRawV,
+      preloadedActivityOrgMetadata: {
+        workUnitMetadata: (wuDeptRowV.data as { metadata?: unknown } | null)?.metadata ?? null,
+        departmentMetadata: deptMetaVisible,
+      },
       nowMs: Date.now(),
     });
     Object.assign(vis, attnVisible);
@@ -1156,10 +1170,23 @@ export async function respondOpportunityEntityGet(
       wuidForDept && wuDeptRow.data
         ? (wuDeptRow.data as { metadata?: unknown }).metadata ?? null
         : null;
-    const attnInitial = computeOperationalAttentionAttachment({
+    const deptMetaInitial = await fetchDepartmentMetadataForActivity(
+      supabase,
+      orgId,
+      (wuDeptRow.data as { department_id?: string | null } | null)?.department_id,
+    );
+    const attnInitial = await attachOpportunityAttentionSuggestionBundle({
+      supabase,
+      orgId,
       opportunityRow: out as Record<string, unknown>,
       defs: opportunityDefs,
       attentionConfigMetadata: wuMetaInitial,
+      workUnitId: wuidForDept,
+      statusKey: oppSkRaw,
+      preloadedActivityOrgMetadata: {
+        workUnitMetadata: (wuDeptRow.data as { metadata?: unknown } | null)?.metadata ?? null,
+        departmentMetadata: deptMetaInitial,
+      },
       nowMs: Date.now(),
     });
     Object.assign(out, attnInitial);
@@ -1721,10 +1748,23 @@ export async function respondOpportunityEntityGet(
     wuidForDept && wuDeptRow.data
       ? (wuDeptRow.data as { metadata?: unknown }).metadata ?? null
       : null;
-  const attnFull = computeOperationalAttentionAttachment({
+  const deptMetaFull = await fetchDepartmentMetadataForActivity(
+    supabase,
+    orgId,
+    (wuDeptRow.data as { department_id?: string | null } | null)?.department_id,
+  );
+  const attnFull = await attachOpportunityAttentionSuggestionBundle({
+    supabase,
+    orgId,
     opportunityRow: out as Record<string, unknown>,
     defs: opportunityDefs,
     attentionConfigMetadata: wuMetaFull,
+    workUnitId: wuidForDept,
+    statusKey: oppSkRaw,
+    preloadedActivityOrgMetadata: {
+      workUnitMetadata: (wuDeptRow.data as { metadata?: unknown } | null)?.metadata ?? null,
+      departmentMetadata: deptMetaFull,
+    },
     nowMs: Date.now(),
   });
   Object.assign(out, attnFull);

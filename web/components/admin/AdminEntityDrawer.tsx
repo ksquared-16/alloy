@@ -94,6 +94,7 @@ import {
 import JobRecordModalV2, { isCleaningJobRecord } from "@/components/admin/drawer/JobRecordModalV2";
 import ScheduleRecordModalV2 from "@/components/admin/drawer/ScheduleRecordModalV2";
 import OperationalAttentionHeaderStrip from "@/components/admin/drawer/OperationalAttentionHeaderStrip";
+import OperationalAttentionDrawerSection from "@/components/admin/drawer/OperationalAttentionDrawerSection";
 import { isScheduleCanceledStatusKey } from "@/lib/admin/scheduleCanceledStatus";
 import { AdminCollectPaymentModal, type AdminCollectPaymentModalContext } from "@/components/admin/AdminCollectPaymentModal";
 import { JobReceivableChargesPanel, jobTotalSummaryLabel } from "@/components/admin/JobReceivableChargesPanel";
@@ -10207,6 +10208,22 @@ export default function AdminEntityDrawer() {
                                 </p>
                             </div>
                         )}
+                    {drawerTab === "overview" &&
+                        drawer.type === "opportunities" &&
+                        drawer.id &&
+                        drawer.id !== "new" &&
+                        !(data as { _create?: boolean })?._create &&
+                        !useConfigDrivenOverview &&
+                        overviewData && (
+                            <section
+                                className="mb-3 rounded-xl border border-admin-border bg-white/80 px-2.5 py-2.5 shadow-sm"
+                                data-drawer-section="operational_attention_detail_legacy"
+                            >
+                                <OperationalAttentionDrawerSection
+                                    overviewData={overviewData as Record<string, unknown>}
+                                />
+                            </section>
+                        )}
                     {drawerTab === "overview" && useConfigDrivenOverview && presentationType && (
                         isJobDrawerV2 && drawer.type === "jobs" ? (
                             showJobRecordModalV2 ? (
@@ -10675,6 +10692,20 @@ export default function AdminEntityDrawer() {
                                 ) : null}
                                 {drawer.type === "opportunities" && !opportunityInquiryWorkflowDrawer ? opportunityQuoteSummaryNode : null}
                                 {drawer.type === "opportunities" && !opportunityInquiryWorkflowDrawer ? opportunityQuoteIntakeNode : null}
+                                {drawer.type === "opportunities" &&
+                                    overviewData &&
+                                    !(overviewData as { _create?: boolean })._create &&
+                                    drawer.id &&
+                                    drawer.id !== "new" && (
+                                        <section
+                                            className="mb-3 rounded-xl border border-admin-border bg-white/80 px-2.5 py-2.5 shadow-sm"
+                                            data-drawer-section="operational_attention_detail"
+                                        >
+                                            <OperationalAttentionDrawerSection
+                                                overviewData={overviewData as Record<string, unknown>}
+                                            />
+                                        </section>
+                                    )}
                                 <EntityDrawerOverview
                                     entityType={presentationType}
                                     data={entityDrawerOverviewData}
