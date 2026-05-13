@@ -8,6 +8,8 @@
 import type { ResolvedAiOrgPolicyV1 } from "@/lib/ai/aiPolicy";
 import { safeParseAttentionSuggestionAiEnrichmentV1 } from "@/lib/ai/attentionSuggestionAiEnrichmentSchema";
 import { getOpenAiBaseUrl, getOpenAiModel, hasOpenAiStructuredCredentials } from "@/lib/ai/aiEnrichmentEnv";
+import { resolveOpenAiStructuredCompletionTemperature } from "@/lib/ai/openAiModelCapabilities";
+import { buildOpenAiHttpProviderError } from "@/lib/ai/openAiHttpError";
 import type { AiStructuredProvider, AiStructuredRequestV1, AiStructuredResponseV1 } from "@/lib/ai/providerTypes";
 
 const FEATURE_NEEDS_ATTENTION_DRAFT = "needs_attention_draft_enrichment";
@@ -36,6 +38,34 @@ function systemPrompt(): string {
         "}",
         "Content must be operator-safe: no secrets, no raw PII; overlays are suggestions only — never instructions to send autonomously.",
     ].join(" ");
+}
+
+function buildChatCompletionsRequestBody(input: {
+    model: string;
+    request: AiStructuredRequestV1;
+}): Record<string, unknown> {
+    const temperature = resolveOpenAiStructuredCompletionTemperature(input.model);
+    const body: Record<string, unknown> = {
+        model: input.model,
+        response_format: { type: "json_object" },
+        messages: [
+            { role: "system", content: systemPrompt() },
+            {
+                role: "user",
+                content: JSON.stringify({
+                    correlation_id: input.request.correlation_id,
+                    request_id: input.request.request_id,
+                    org_id: input.request.org_id,
+                    feature: input.request.feature,
+                    redacted_context: input.request.payload,
+                }),
+            },
+        ],
+    };
+    if (temperature !== undefined) {
+        body.temperature = temperature;
+    }
+    return body;
 }
 
 /**
@@ -125,39 +155,32 @@ export function createOpenAiCompatibleStructuredProvider(policy: ResolvedAiOrgPo
                         "Content-Type": "application/json",
                         Authorization: `Bearer ${apiKey}`,
                     },
-                    body: JSON.stringify({
-                        model,
-                        temperature: 0.2,
-                        response_format: { type: "json_object" },
-                        messages: [
-                            { role: "system", content: systemPrompt() },
-                            {
-                                role: "user",
-                                content: JSON.stringify({
-                                    correlation_id: request.correlation_id,
-                                    request_id: request.request_id,
-                                    org_id: request.org_id,
-                                    feature: request.feature,
-                                    redacted_context: request.payload,
-                                }),
-                            },
-                        ],
-                    }),
+                    body: JSON.stringify(
+                        buildChatCompletionsRequestBody({
+                            model,
+                            request,
+                        }),
+                    ),
                 });
 
                 const text = await res.text();
                 if (!res.ok) {
                     const retryable = res.status === 429 || res.status === 503;
+                    const built = buildOpenAiHttpProviderError({
+                        httpStatus: res.status,
+                        responseText: text,
+                        retryable,
+                    });
                     return {
                         outcome: "error",
                         provider_key: "openai",
                         execution_mode: "live",
                         completed_at_iso: new Date().toISOString(),
                         error: {
-                            code: "OPENAI_HTTP_ERROR",
-                            message: `OpenAI-compatible HTTP ${res.status}`,
-                            retryable,
-                            detail: text.length > 280 ? `${text.slice(0, 280)}…` : text,
+                            code: built.code,
+                            message: built.message,
+                            retryable: built.retryable,
+                            openai_http: built.openai_http,
                         },
                     };
                 }

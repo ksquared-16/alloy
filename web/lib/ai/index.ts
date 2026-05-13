@@ -10,6 +10,7 @@ export type {
     AiStructuredResponseV1,
     AiProviderOutcome,
     AiProviderErrorEnvelope,
+    OpenAiProviderHttpErrorMeta,
     AiStructuredProvider,
 } from "@/lib/ai/providerTypes";
 
@@ -55,6 +56,11 @@ export {
 } from "@/lib/ai/buildOperationalSummary";
 
 export { isAiEnrichmentStubEnvEnabled, isAiEnrichmentTelemetryEnvEnabled, hasOpenAiStructuredCredentials } from "@/lib/ai/aiEnrichmentEnv";
+
+export {
+    supportsCustomTemperature,
+    resolveOpenAiStructuredCompletionTemperature,
+} from "@/lib/ai/openAiModelCapabilities";
 
 export { createStubAiProvider } from "@/lib/ai/stubProvider";
 

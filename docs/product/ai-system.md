@@ -40,7 +40,7 @@ Definitions use **`SET search_path TO 'public'`** in live exports — keep align
 | Agent routes | `web/app/api/admin/agent/**` |
 | Agent tests | `web/tests/agent/` |
 | Field visibility v2 | `web/lib/agent/v2/*`, `web/app/api/admin/agent/v2/field-visibility/route.ts` |
-| **AI enrichment foundation (Phase 1–2)** | **`web/lib/ai/**`**, **`enrichAttentionSuggestionRouteValidation.ts`**, **`supabase/migrations/20260520100000_ai_enrichment_permission_keys_seed.sql`** (`ai.enrichment.use`), **`POST /api/admin/ai/enrich-attention-suggestion`**, **`_operational_summary`** attach; tests **`web/tests/ai/**`**; **`docs/sprints/05_2026/ai_enrichment_and_agent_actions_v1.md`**. |
+| **AI enrichment foundation (Phase 1–2)** | **`web/lib/ai/**`**, **`openAiModelCapabilities.ts`** (model sampling rules), **`enrichAttentionSuggestionRouteValidation.ts`**, **`supabase/migrations/20260520100000_ai_enrichment_permission_keys_seed.sql`** (`ai.enrichment.use`), **`POST /api/admin/ai/enrich-attention-suggestion`**, **`_operational_summary`** attach; tests **`web/tests/ai/**`**; **`docs/sprints/05_2026/ai_enrichment_and_agent_actions_v1.md`**. |
 | Perf/debug globals | `web/lib/perf/alloyPerfGlobal.ts` |
 
 ## Guardrails
@@ -49,6 +49,7 @@ Definitions use **`SET search_path TO 'public'`** in live exports — keep align
 - **Do not** train or prompt against production PII without policy.
 - **Configuration updates** made by AI must use the same validation paths as human-submitted JSON (e.g. queue definition schema) and the **DEFINER RPC + stale-check + audit insert** pattern above — not raw table patches.
 - **Do not** bypass `executeAdminAction` / events when an operation is standardized there.
+- **OpenAI Chat Completions:** Some models (e.g. **gpt-5** family, many **o-series** ids) **reject or ignore** non-default **`temperature`**; the structured enrichment client **omits** that field unless the model is allow-listed for custom sampling (**`web/lib/ai/openAiModelCapabilities.ts`**). Prefer **deterministic prompts**, **`response_format: json_object`**, and **response schema validation** over aggressive temperature tuning. Unknown deployment names default to **omission** (safest).
 
 ## Known gaps / risks
 
@@ -120,13 +121,14 @@ Confirm JSON includes at least: **`enabled`**, **`provider`** (`stub` or `openai
 
 ### Vercel / runtime env (server-only)
 
-Confirm in the Vercel project (or `.env.local` for local parity), **never** as `NEXT_PUBLIC_*`:
+Confirm in the Vercel project (or `.env.local` for local parity). **Never** put **`OPENAI_API_KEY`** (or other model secrets) in **`NEXT_PUBLIC_*`**.
 
 | Variable | When needed |
 |----------|----------------|
 | **`AI_ENRICHMENT_USE_PERMISSION_REQUIRED`** | `true` to require **`ai.enrichment.use`** for enrichment routes (recommended before live OpenAI). |
 | **`AI_ENRICHMENT_STUB_ENABLED`** | `true` when org policy uses **`provider: stub`**. |
 | **`OPENAI_API_KEY`**, **`OPENAI_MODEL`** | When org policy uses **`provider: openai`** (optional **`OPENAI_BASE_URL`**). |
+| **`OPENAI_CHAT_TEMPERATURE`** | Optional `0`–`2` float; used only when **`OPENAI_MODEL`** supports custom **`temperature`** (ignored for **gpt-5**-style models — see **`supportsCustomTemperature`** in **`web/lib/ai/openAiModelCapabilities.ts`**). |
 | **`AI_ENRICHMENT_TELEMETRY_ENABLED`** | Optional; with org **`logging_mode: verbose`** emits **`ai_enrichment_usage_v1`** events. |
 
 ### Drawer UI (record overview)
@@ -140,6 +142,21 @@ Confirm in the Vercel project (or `.env.local` for local parity), **never** as `
 
 - With **Postman/curl** and a valid admin session (or CI), send a minimal body: **`correlation_id`**, **`deterministic_suggestion`** (`AttentionSuggestionV1`).
 - Expect **`403`** when portal RBAC denies; **`403`** when org policy denies; **`403`** stub path when **`AI_ENRICHMENT_STUB_ENABLED`** is off; **`200`** with **`envelope`** when gates pass. Response must **not** echo **`OPENAI_API_KEY`**; **`console`** must not log the key on success paths; outbound provider calls use **redacted** context only (see **`web/tests/ai/enrichAttentionSuggestionRoute.test.ts`**).
+
+### TEMPORARY — local OpenAI path smoke check (remove after validation)
+
+**Purpose:** one developer machine calls the **same** server enrichment helper as the route (**`enrichAttentionSuggestionStubEnvelope`**: redact → structured provider → telemetry shape), using a built-in **`AttentionSuggestionV1`** fixture — **no** browser UI, **no** `NEXT_PUBLIC_*` flags.
+
+**Run** (from **`web/`**), with secrets only in **`web/.env.local`** (never committed):
+
+```bash
+cd web
+npm run -s validate:ai-openai-local
+```
+
+**Requires:** `NODE_ENV` must **not** be `production`; **`AI_ENRICHMENT_USE_PERMISSION_REQUIRED=true`**; **`OPENAI_API_KEY`** + **`OPENAI_MODEL`** (optional **`OPENAI_BASE_URL`**). The script prints **one** JSON line: **`provider_key`**, **`outcome`**, **`has_enrichment`**, **`schema_ok`**, **`redaction_steps`**, **`error_code`** (when failed), and on failures **`http_status`**, **`openai_error_type`**, **`openai_error_code`**, **`openai_error_message`** (from the vendor JSON when present), plus **`model`** and **`base_url_host`** (host only). No prompt, draft, full HTTP body, or API key.
+
+**Remove when done:** delete **`web/scripts/validateOpenAiEnrichmentLocal.ts`**, drop the **`validate:ai-openai-local`** script from **`web/package.json`**, and delete this subsection.
 
 ---
 
