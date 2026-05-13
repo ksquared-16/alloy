@@ -11,7 +11,8 @@ Document **actual** admin/agent HTTP routes and env gates in `web/` — not futu
   - **`.../v1/record-overview-layout`**, **`.../v1/activity`**.
   - **`.../v2/field-visibility`** — structured apply path; **disabled unless** **`AGENT_V2_FIELD_VISIBILITY_ENABLED`** is `true`/`1`/`yes` (see `web/app/api/admin/agent/v2/field-visibility/route.ts`).
 - **Admin V2 UI** may surface AI/command UX under **`web/app/adminV2/`** (search `ai`, `agent` in subtree).
-- **Tests:** `web/tests/agent/` (e.g. queue definition update, field visibility route).
+- **AI enrichment (Phase 1 — stub + telemetry):** **`POST /api/admin/ai/enrich-attention-suggestion`** — **`getAdminContextCached`** + **`getAdminAccessContextCached`** (org scope + `permissionKeys`); legacy **admin-only** unless **`AI_ENRICHMENT_USE_PERMISSION_REQUIRED`** + grant **`ai.enrichment.use`** (key seeded by **`supabase/migrations/20260520100000_ai_enrichment_permission_keys_seed.sql`**); org policy pre-check (`enabled`, stub, `draft_enrichment`); **`AI_ENRICHMENT_STUB_ENABLED`**. Telemetry: **`AI_ENRICHMENT_TELEMETRY_ENABLED`** + verbose org logging → **`ai_enrichment_usage_v1`**. See sprint doc §16–§Phase 2.5.
+- **Operational summaries (Phase 2 — derived):** Opportunity GET attaches **`_operational_summary`** (`OperationalSummaryV1`) via **`attachOpportunityAttentionSuggestionBundle`**; drawer shows **`OperationalSummaryNarrativeBlock`**. Work-unit queue rows may include **`_operational_summary_preview`** (headline + risk hint) when attention enrichment runs — **`data-queue-preview-slot="operational_summary"`**; **no** extra per-row activity fetches. See sprint doc **§17**.
 
 ## How it works
 
@@ -39,6 +40,7 @@ Definitions use **`SET search_path TO 'public'`** in live exports — keep align
 | Agent routes | `web/app/api/admin/agent/**` |
 | Agent tests | `web/tests/agent/` |
 | Field visibility v2 | `web/lib/agent/v2/*`, `web/app/api/admin/agent/v2/field-visibility/route.ts` |
+| **AI enrichment foundation (Phase 1–2)** | **`web/lib/ai/**`**, **`supabase/migrations/20260520100000_ai_enrichment_permission_keys_seed.sql`** (`ai.enrichment.use`), **`POST /api/admin/ai/enrich-attention-suggestion`**, **`_operational_summary`** attach; tests **`web/tests/ai/**`**; **`docs/sprints/05_2026/ai_enrichment_and_agent_actions_v1.md`**. |
 | Perf/debug globals | `web/lib/perf/alloyPerfGlobal.ts` |
 
 ## Guardrails
@@ -50,9 +52,9 @@ Definitions use **`SET search_path TO 'public'`** in live exports — keep align
 
 ## Known gaps / risks
 
-- **Needs verification:** Model provider(s), logging/redaction policy, and kill switches **beyond** the `AGENT_V2_*` env pattern — not fully enumerated here.
+- Model provider(s), logging/redaction policy, and kill switches **beyond** the `AGENT_V2_*` env pattern — partially addressed by **`web/lib/ai`** (Phase 1: metadata policy + redaction + **stub-only** enrichment + gated telemetry); **no** live provider calls until explicitly approved.
 - **Partially implemented:** Broad “AI command center” product may be **mostly UI/mock** in places — inspect `adminV2` components before treating as production automation.
 
 ## When this doc must be updated
 
-New agent routes, env gate names, or when agent behavior becomes customer-facing.
+New agent routes, env gate names, **`web/lib/ai` contracts**, or when agent behavior becomes customer-facing.

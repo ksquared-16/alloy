@@ -5,6 +5,7 @@
 
 import { cache } from "react";
 import { NextResponse } from "next/server";
+import type { AdminAccessContextFailure } from "@/lib/admin/getAdminAccessContext";
 import { loadAdminAccessBundleCached } from "@/lib/admin/getAdminAccessContext";
 import { compatibilityPortalRole } from "@/lib/admin/adminPortalRolePick";
 
@@ -71,8 +72,8 @@ export async function getAdminContextCached(): Promise<AdminContextResult> {
 /** @deprecated Use `getAdminContextCached` in new code — behavior is identical (cached). */
 export const getAdminContext = getAdminContextCached;
 
-/** JSON error for `getAdminContext` failure (401 / 403). */
-export function adminContextFailureResponse(failure: AdminContextFailure): NextResponse {
+/** JSON error for `getAdminContext` / `getAdminAccessContext` failure (401 / 403). */
+export function adminContextFailureResponse(failure: AdminContextFailure | AdminAccessContextFailure): NextResponse {
     const message = failure.status === 401 ? "Unauthorized" : "Forbidden";
     return NextResponse.json({ error: message }, { status: failure.status });
 }

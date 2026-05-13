@@ -38,6 +38,11 @@ Separate **capability** (what actions a user may perform) from **data visibility
 
 - **Needs verification:** Exhaustive list of admin routes with vs without scope enforcement (grep-driven maintenance).
 
+## AI enrichment (Phase 2.5 scaffold)
+
+- **Capability keys (seeded):** Migration **`supabase/migrations/20260520100000_ai_enrichment_permission_keys_seed.sql`** inserts **`ai.enrichment.use`** (default grant: org **`admin`**) and catalog-only **`ai.provider.config.manage`**, **`ai.telemetry.review`** (no default grants). Code: `web/lib/ai/aiEnrichmentPermissions.ts`.
+- **Strict gate:** set env **`AI_ENRICHMENT_USE_PERMISSION_REQUIRED=true`** to require the grant on enrichment routes. Default **off** preserves legacy portal-admin-only behavior for stub routes until rollout (see sprint doc Phase 2.5 — strict-mode steps).
+
 ## When this doc must be updated
 
 New permission keys, changes to portal eligibility rules, or scope table/schema changes.
