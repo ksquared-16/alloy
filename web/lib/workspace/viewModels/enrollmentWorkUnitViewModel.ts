@@ -223,7 +223,8 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
         const headline = typeof raw.headline === "string" ? raw.headline.trim() : "";
         if (!headline) return null;
         const r = raw.risk_urgency_hint;
-        const risk_urgency_hint = r === "low" || r === "medium" || r === "high" ? r : ("medium" as const);
+        const risk_urgency_hint: "low" | "medium" | "high" =
+            r === "low" || r === "medium" || r === "high" ? (r as "low" | "medium" | "high") : "medium";
         return { headline: headline.slice(0, 160), risk_urgency_hint };
     })();
 

@@ -42,10 +42,10 @@ export function createStubAiProvider(policy: ResolvedAiOrgPolicyV1): AiStructure
     return {
         key: "stub",
         executionMode: "stub",
-        async completeStructured(
+        async completeStructured<T = unknown>(
             request: AiStructuredRequestV1,
             options?: { timeout_ms?: number },
-        ): Promise<AiStructuredResponseV1<AttentionSuggestionAiEnrichmentV1>> {
+        ): Promise<AiStructuredResponseV1<T>> {
             void options;
             const completedAt = new Date().toISOString();
             if (request.feature !== FEATURE_NEEDS_ATTENTION_DRAFT) {
@@ -77,7 +77,7 @@ export function createStubAiProvider(policy: ResolvedAiOrgPolicyV1): AiStructure
             const data = buildStubEnrichmentFromRedactedPayload(request, completedAt);
             return {
                 outcome: "ok",
-                data,
+                data: data as T,
                 provider_key: "stub",
                 execution_mode: "stub",
                 completed_at_iso: completedAt,

@@ -19,6 +19,7 @@ import {
 import { isAiEnrichmentStubEnvEnabled } from "@/lib/ai/aiEnrichmentEnv";
 import { parseAiPolicyFromMetadata } from "@/lib/ai/aiPolicy";
 import type { OperationalSummaryV1 } from "@/lib/ai/enrichmentContracts";
+import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
 
 const EMPTY_ACTIVITY: ActivitySignalResult = {
     last_activity_at: null,

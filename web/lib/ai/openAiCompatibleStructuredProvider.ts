@@ -9,7 +9,6 @@ import type { ResolvedAiOrgPolicyV1 } from "@/lib/ai/aiPolicy";
 import { safeParseAttentionSuggestionAiEnrichmentV1 } from "@/lib/ai/attentionSuggestionAiEnrichmentSchema";
 import { getOpenAiBaseUrl, getOpenAiModel, hasOpenAiStructuredCredentials } from "@/lib/ai/aiEnrichmentEnv";
 import type { AiStructuredProvider, AiStructuredRequestV1, AiStructuredResponseV1 } from "@/lib/ai/providerTypes";
-import type { AttentionSuggestionAiEnrichmentV1 } from "@/lib/ai/enrichmentContracts";
 
 const FEATURE_NEEDS_ATTENTION_DRAFT = "needs_attention_draft_enrichment";
 
@@ -47,10 +46,10 @@ export function createOpenAiCompatibleStructuredProvider(policy: ResolvedAiOrgPo
     return {
         key: "openai",
         executionMode: "live",
-        async completeStructured(
+        async completeStructured<T = unknown>(
             request: AiStructuredRequestV1,
             options?: { timeout_ms?: number },
-        ): Promise<AiStructuredResponseV1<AttentionSuggestionAiEnrichmentV1>> {
+        ): Promise<AiStructuredResponseV1<T>> {
             const completedAt = new Date().toISOString();
             const timeout_ms = options?.timeout_ms ?? DEFAULT_TIMEOUT_MS;
 
@@ -229,7 +228,7 @@ export function createOpenAiCompatibleStructuredProvider(policy: ResolvedAiOrgPo
 
                 return {
                     outcome: "ok",
-                    data: validated,
+                    data: validated as T,
                     provider_key: "openai",
                     execution_mode: "live",
                     completed_at_iso: new Date().toISOString(),
