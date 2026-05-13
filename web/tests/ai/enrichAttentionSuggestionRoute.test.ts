@@ -224,7 +224,14 @@ describe("POST /api/admin/ai/enrich-attention-suggestion", () => {
             }),
         );
         expect(res.status).toBe(200);
-        const j = (await res.json()) as { envelope?: { enrichment?: unknown } };
+        const j = (await res.json()) as {
+            envelope?: { enrichment?: unknown };
+            enrichment_telemetry?: { provider_key?: string; outcome?: string };
+            provider_error_code?: string | null;
+        };
+        expect(j.enrichment_telemetry?.provider_key).toBe("stub");
+        expect(j.enrichment_telemetry?.outcome).toBe("stub_success");
+        expect(j.provider_error_code ?? null).toBeNull();
         const parsed = safeParseAttentionSuggestionAiEnrichmentV1(j.envelope?.enrichment ?? null);
         expect(parsed).not.toBeNull();
         expect(parsed?.provider_report.execution_mode).toBe("stub");
@@ -299,9 +306,12 @@ describe("POST /api/admin/ai/enrich-attention-suggestion", () => {
             ok?: boolean;
             envelope?: { enrichment?: unknown };
             telemetry_emitted?: boolean;
+            enrichment_telemetry?: { provider_key?: string; outcome?: string };
         };
         expect(j.ok).toBe(true);
         expect(j.telemetry_emitted).toBe(false);
+        expect(j.enrichment_telemetry?.provider_key).toBe("openai");
+        expect(j.enrichment_telemetry?.outcome).toBe("live_success");
         const parsed = safeParseAttentionSuggestionAiEnrichmentV1(j.envelope?.enrichment ?? null);
         expect(parsed).not.toBeNull();
         expect(parsed?.provider_report.provider_key).toBe("openai");

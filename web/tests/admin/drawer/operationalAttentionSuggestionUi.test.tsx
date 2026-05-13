@@ -111,6 +111,7 @@ describe("OperationalAttentionHeaderStrip", () => {
         expect(html).toContain("Copy draft");
         expect(html).toContain("Activity");
         expect(html).toContain("Idle signal");
+        expect(html).toContain("Test AI enrichment");
     });
 
     it("uses deterministic copy when suggestion is absent", () => {

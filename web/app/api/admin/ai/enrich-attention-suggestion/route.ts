@@ -135,5 +135,10 @@ export async function POST(request: NextRequest) {
         ok: true,
         envelope: result.envelope,
         telemetry_emitted: result.telemetry_emitted,
+        enrichment_telemetry: {
+            provider_key: result.telemetry_payload.provider_key,
+            outcome: result.telemetry_payload.outcome,
+        },
+        provider_error_code: result.provider_last_error_code ?? null,
     });
 }

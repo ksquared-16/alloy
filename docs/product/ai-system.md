@@ -130,6 +130,7 @@ Confirm in the Vercel project (or `.env.local` for local parity). **Never** put 
 | **`OPENAI_API_KEY`**, **`OPENAI_MODEL`** | When org policy uses **`provider: openai`** (optional **`OPENAI_BASE_URL`**). |
 | **`OPENAI_CHAT_TEMPERATURE`** | Optional `0`–`2` float; used only when **`OPENAI_MODEL`** supports custom **`temperature`** (ignored for **gpt-5**-style models — see **`supportsCustomTemperature`** in **`web/lib/ai/openAiModelCapabilities.ts`**). |
 | **`AI_ENRICHMENT_TELEMETRY_ENABLED`** | Optional; with org **`logging_mode: verbose`** emits **`ai_enrichment_usage_v1`** events. |
+| **`NEXT_PUBLIC_AI_ENRICHMENT_STAGING_TEST_UI`** | **`true`/`1`/`yes` only** on **non-production** Vercel/preview when **`NODE_ENV=production`** so the temporary **“Test AI enrichment”** drawer control appears (see **TEMPORARY — drawer staging test** below). **Never** set on customer production. |
 
 ### Drawer UI (record overview)
 
@@ -141,7 +142,17 @@ Confirm in the Vercel project (or `.env.local` for local parity). **Never** put 
 ### Enrichment route (`POST /api/admin/ai/enrich-attention-suggestion`)
 
 - With **Postman/curl** and a valid admin session (or CI), send a minimal body: **`correlation_id`**, **`deterministic_suggestion`** (`AttentionSuggestionV1`).
-- Expect **`403`** when portal RBAC denies; **`403`** when org policy denies; **`403`** stub path when **`AI_ENRICHMENT_STUB_ENABLED`** is off; **`200`** with **`envelope`** when gates pass. Response must **not** echo **`OPENAI_API_KEY`**; **`console`** must not log the key on success paths; outbound provider calls use **redacted** context only (see **`web/tests/ai/enrichAttentionSuggestionRoute.test.ts`**).
+- Expect **`403`** when portal RBAC denies; **`403`** when org policy denies; **`403`** stub path when **`AI_ENRICHMENT_STUB_ENABLED`** is off; **`200`** with **`envelope`** when gates pass. Successful **`200`** bodies also include safe **`enrichment_telemetry`** (`provider_key`, `outcome`) and **`provider_error_code`** (nullable) for lightweight clients — **no** prompt text, **no** raw redacted payload dump, **no** API key. Response must **not** echo **`OPENAI_API_KEY`**; **`console`** must not log the key on success paths; outbound provider calls use **redacted** context only (see **`web/tests/ai/enrichAttentionSuggestionRoute.test.ts`**).
+
+### TEMPORARY — drawer “Test AI enrichment” (remove after validation)
+
+**Purpose:** from an opportunity drawer that already has **`_attention_suggestion`**, POST the current suggestion to **`/api/admin/ai/enrich-attention-suggestion`** without copying JSON from Network.
+
+**Visibility:** **`NODE_ENV !== "production"`** (e.g. `next dev`, Vitest) **or** **`NEXT_PUBLIC_AI_ENRICHMENT_STAGING_TEST_UI=true`** on a **non-customer** Vercel environment (preview / internal staging). Production customer sites must leave the flag **unset**.
+
+**Behavior:** button label **“Test AI enrichment”**; on success/failure, **`console.info`** one line prefixed with **`[alloy-staging-ai-enrichment-test]`** plus a small JSON object: **`status`**, **`provider_key`**, **`outcome`**, **`has_enrichment`**, **`schema_ok`**, **`error_code`** only. Inline **`output`** shows the same summary. **No** persistence, send, or apply.
+
+**Remove when done:** delete **`AiEnrichmentStagingTestButton.tsx`**, **`web/lib/dev/aiEnrichmentStagingTestUi.ts`**, strip **`AiEnrichmentStagingTestButton`** import/usage from **`OperationalAttentionHeaderStrip.tsx`**, remove **`NEXT_PUBLIC_AI_ENRICHMENT_STAGING_TEST_UI`** from Vercel env + this subsection; optionally revert the extra **`enrichment_telemetry`** / **`provider_error_code`** fields on the route **`200`** JSON if no longer needed.
 
 ### TEMPORARY — local OpenAI path smoke check (remove after validation)
 
