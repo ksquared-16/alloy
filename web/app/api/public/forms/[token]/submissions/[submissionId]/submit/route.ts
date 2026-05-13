@@ -378,14 +378,16 @@ export async function POST(
     }
 
     if (adv.result?.packet_complete === true && ctx.packet) {
-        const pe = await emitFormPacketCompletedSafe(ctx.orgId, ctx.packet.packet_session_id);
+        const [pe, oDone] = await Promise.all([
+            emitFormPacketCompletedSafe(ctx.orgId, ctx.packet.packet_session_id),
+            emitOpportunityEnrollmentPacketCompletedProjectionSafe({
+                orgId: ctx.orgId,
+                packetSessionId: ctx.packet.packet_session_id,
+            }),
+        ]);
         if (pe.error) {
             console.error("[public submit] form_packet_completed emit failed:", pe.error.message);
         }
-        const oDone = await emitOpportunityEnrollmentPacketCompletedProjectionSafe({
-            orgId: ctx.orgId,
-            packetSessionId: ctx.packet.packet_session_id,
-        });
         if (oDone.error) {
             console.error("[public submit] enrollment completed projection failed:", oDone.error.message);
         }

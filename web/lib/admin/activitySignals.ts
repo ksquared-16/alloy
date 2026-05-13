@@ -121,7 +121,9 @@ export function summarizeWorkflowEventForSignal(ev: WorkflowEventLike): string {
         t === "opportunity_enrollment_packet_opened" ||
         t === "opportunity_enrollment_packet_step_completed" ||
         t === "opportunity_enrollment_packet_completed" ||
-        t === "opportunity_enrollment_packet_sent"
+        t === "opportunity_enrollment_packet_sent" ||
+        t === "opportunity_enrollment_packet_submitted_for_review" ||
+        t === "opportunity_enrollment_packet_review_decision"
     ) {
         const s = p.summary != null && String(p.summary).trim() ? String(p.summary).trim() : "";
         if (s) return s;

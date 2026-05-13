@@ -26,6 +26,10 @@ describe("opportunityActivityTimelineFormat", () => {
         expect(getWorkflowActivityEventTitle("opportunity_enrollment_packet_step_completed")).toBe(
             "Enrollment packet step completed"
         );
+        expect(getWorkflowActivityEventTitle("opportunity_enrollment_packet_submitted_for_review")).toBe(
+            "Packet submitted for review"
+        );
+        expect(getWorkflowActivityEventTitle("opportunity_enrollment_packet_review_decision")).toBe("Packet review decision");
     });
 
     it("enrollment projection detail uses payload.summary", () => {

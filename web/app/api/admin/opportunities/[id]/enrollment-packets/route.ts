@@ -49,6 +49,11 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
         started_via_public_link_id,
         launch_context,
         crm_snapshot,
+        operator_review_status,
+        operator_review_warnings,
+        operator_review_notes,
+        operator_reviewed_at,
+        operator_reviewed_by_user_id,
         form_packet_definitions ( name, key )
       `
         )
@@ -87,6 +92,11 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
             started_via_public_link_id,
             launch_context,
             crm_snapshot,
+            operator_review_status,
+            operator_review_warnings,
+            operator_review_notes,
+            operator_reviewed_at,
+            operator_reviewed_by_user_id,
             form_packet_definitions ( name, key )
           `
                 )
@@ -214,6 +224,11 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
                 ? (sess.launch_context as Record<string, unknown>)
                 : {};
 
+        const warnRaw = (sess as { operator_review_warnings?: unknown }).operator_review_warnings;
+        const operator_review_warnings = Array.isArray(warnRaw)
+            ? (warnRaw as { kind?: string; message?: string; field_key?: string }[])
+            : [];
+
         return {
             id: sid,
             status: sess.status as string,
@@ -224,6 +239,12 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
             packet_definition_id: sess.packet_definition_id as string,
             packet_name: typeof defName === "string" && defName.trim() ? defName.trim() : null,
             started_via_public_link_id: (sess.started_via_public_link_id as string | null) ?? null,
+            operator_review_status: (sess as { operator_review_status?: string | null }).operator_review_status ?? null,
+            operator_review_warnings,
+            operator_review_notes: (sess as { operator_review_notes?: string | null }).operator_review_notes ?? null,
+            operator_reviewed_at: (sess as { operator_reviewed_at?: string | null }).operator_reviewed_at ?? null,
+            operator_reviewed_by_user_id:
+                (sess as { operator_reviewed_by_user_id?: string | null }).operator_reviewed_by_user_id ?? null,
             crm_snapshot: {
                 opportunity_id: typeof snap.opportunity_id === "string" ? snap.opportunity_id : null,
                 customer_id: typeof snap.customer_id === "string" ? snap.customer_id : null,

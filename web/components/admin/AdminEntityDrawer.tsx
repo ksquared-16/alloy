@@ -79,6 +79,7 @@ import { mergeUnifiedStatusIntoConfigOverview } from "@/lib/admin/unifiedDrawerS
 import { recordSurfaceContextStyle } from "@/lib/visualContext";
 import OpportunityInquiryChildrenSection, { type InquiryChildRow } from "@/components/admin/entity/OpportunityInquiryChildrenSection";
 import { OpportunityInquiryChildrenRegistryActions } from "@/components/admin/opportunity/OpportunityInquiryChildrenRegistryActions";
+import { OpportunityPacketReviewOverview } from "@/components/admin/opportunity/OpportunityPacketReviewOverview";
 import { formatTourDateTime } from "@/lib/enrollment/formatTourDateTime";
 import { deriveTourMetadataMirrorFromBooking, TOUR_BOOKING_OPPORTUNITY_STATUS } from "@/lib/tours/opportunity/tourBookingOpportunityIntegration";
 import { validateQueueDefinition, type QueueDefinitionV1, type QueueFilter } from "@/lib/config/queueDefinitionSchema";
@@ -2113,7 +2114,7 @@ export default function AdminEntityDrawer() {
         return () => {
             cancelled = true;
         };
-    }, [drawer.id, drawer.type, drawerTab]);
+    }, [drawer.id, drawer.type, drawerTab, opportunityActivitySignalNonce]);
 
     useEffect(() => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
@@ -3033,6 +3034,7 @@ export default function AdminEntityDrawer() {
             }
             refetch();
             setOpportunityActivitySignalNonce((n) => n + 1);
+            setOpportunityRelatedData(null);
             // Also refetch resolved header actions so conditional actions swap (schedule ↔ reschedule).
             const ctxWu = (drawer.opportunityWorkspaceContext?.work_unit_id ?? "").trim();
             const ctxDept = (drawer.opportunityWorkspaceContext?.department_id ?? "").trim();
@@ -10173,26 +10175,37 @@ export default function AdminEntityDrawer() {
                         drawer.id &&
                         drawer.id !== "new" &&
                         !(data as { _create?: boolean })?._create && (
-                            <p className="mb-4 rounded-md border border-alloy-stone/25 bg-alloy-stone/[0.04] px-3 py-2 text-xs text-alloy-midnight/70">
-                                <span className="font-medium text-alloy-midnight/80">Enrollment packets:</span> use &quot;Send enrollment packet&quot; in the toolbar.{" "}
-                                <button
-                                    type="button"
-                                    className="font-semibold text-alloy-blue hover:underline"
-                                    onClick={() => setDrawerTab("activity")}
-                                >
-                                    Activity
-                                </button>
-                                {" · "}
-                                <button
-                                    type="button"
-                                    className="font-semibold text-alloy-blue hover:underline"
-                                    onClick={() => setDrawerTab("documents")}
-                                >
-                                    Documents
-                                </button>
-                                {" "}
-                                for launches and packet-linked files.
-                            </p>
+                            <div className="mb-4 space-y-3">
+                                <OpportunityPacketReviewOverview
+                                    opportunityId={drawer.id}
+                                    canMutate={!!canMutate}
+                                    onInvalidate={() => {
+                                        setOpportunityRelatedData(null);
+                                        setOpportunityActivitySignalNonce((n) => n + 1);
+                                    }}
+                                />
+                                <p className="rounded-md border border-alloy-stone/25 bg-alloy-stone/[0.04] px-3 py-2 text-[11px] leading-relaxed text-alloy-midnight/65">
+                                    Send new packets from the toolbar (
+                                    <span className="font-medium text-alloy-midnight/75">Send enrollment packet</span>
+                                    ).{" "}
+                                    <button
+                                        type="button"
+                                        className="font-semibold text-alloy-blue hover:underline"
+                                        onClick={() => setDrawerTab("activity")}
+                                    >
+                                        Activity
+                                    </button>
+                                    {" · "}
+                                    <button
+                                        type="button"
+                                        className="font-semibold text-alloy-blue hover:underline"
+                                        onClick={() => setDrawerTab("documents")}
+                                    >
+                                        Documents
+                                    </button>{" "}
+                                    list launches and linked files.
+                                </p>
+                            </div>
                         )}
                     {drawerTab === "overview" && useConfigDrivenOverview && presentationType && (
                         isJobDrawerV2 && drawer.type === "jobs" ? (
