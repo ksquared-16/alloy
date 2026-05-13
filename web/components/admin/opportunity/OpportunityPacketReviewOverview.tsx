@@ -106,8 +106,16 @@ export function OpportunityPacketReviewOverview({ opportunityId, canMutate, onIn
                     operator_review_notes: notes.trim() || undefined,
                 }),
             });
-            const j = (await res.json().catch(() => ({}))) as { error?: string };
-            if (!res.ok) throw new Error(j.error ?? "Update failed");
+            const text = await res.text();
+            let msg = "";
+            try {
+                const j = JSON.parse(text) as { error?: unknown };
+                if (typeof j.error === "string" && j.error.trim()) msg = j.error.trim();
+            } catch {
+                /* non-JSON body */
+            }
+            if (!msg) msg = text.trim().slice(0, 300) || `Update failed (${res.status})`;
+            if (!res.ok) throw new Error(msg);
             setOpen(false);
             setActiveSession(null);
             setNotes("");
