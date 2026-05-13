@@ -234,7 +234,7 @@ The next phases add **optional** intelligence and **optional** durability while 
 |------|------|----------------|
 | **7** | Summary input audit | **Done:** §17.1 input matrix — safe inputs are resolver outputs (`_operational_attention`), suggestion (`_attention_suggestion`), activity signal (already loaded in attach), `workflow_events`-backed stale labels; **avoid** per-row heavy activity fetches in queues; queue uses existing enrichment map only. |
 | **8** | Summary contract design | **Done:** expanded `OperationalSummaryV1` in `web/lib/ai/enrichmentContracts.ts` + `safeParseOperationalSummaryV1` (`operationalSummarySchema.ts`). |
-| **9** | Drawer summary surface | **Done:** `OperationalSummaryNarrativeBlock` + `OperationalAttentionHeaderStrip`; server attaches `_operational_summary` on opportunity GET (`attachOpportunityAttentionSuggestionBundle`). |
+| **9** | Drawer summary surface | **Done:** `OperationalAttentionHeaderStrip` — primary **“Recommended by Alloy”** surface (headline, next step, concise why, collapsed draft, linked-actions placeholder). **`_operational_summary`** still attached on opportunity GET (`attachOpportunityAttentionSuggestionBundle`) for payload / queue previews; duplicate “Operational read” narrative removed from drawer chrome. |
 | **10** | Queue / work-unit summary preview | **Done:** `_operational_summary_preview` on queue rows (`QueueService`) → `semanticCrmCompact.operationalSummaryPreview` → `QueueBlock` slot `operational_summary` (preview-only). |
 | **11** | Caching / persistence decision | **Done:** §17.4 — **derived-only** for V1; **no** `operational_summaries` table; optional ephemeral cache only if latency forces later revisit. |
 
@@ -294,31 +294,31 @@ The next phases add **optional** intelligence and **optional** durability while 
 | Module | Role |
 |--------|------|
 | `web/lib/ai/providerTypes.ts` | `AiStructuredProvider`, request/response envelopes, outcomes — **no I/O**. |
-| `web/lib/ai/disabledProvider.ts` | `createDisabledAiProvider`, `createAiProviderForPolicy` (stub when env + policy match; otherwise disabled). |
+| `web/lib/ai/disabledProvider.ts` | `createDisabledAiProvider`, `createAiProviderForPolicy` (stub / OpenAI-compatible / disabled per policy + env + RBAC). |
 | `web/lib/ai/aiPolicy.ts` | `parseAiPolicyFromMetadata` reads **`metadata.ai_policy`** only; default **off**. |
 | `web/lib/ai/redaction.ts` | `redactObjectForAi` — deep clone + redaction + `{ steps }` metadata. |
 | `web/lib/ai/enrichmentContracts.ts` | `AttentionSuggestionAiEnrichmentV1`, `OperationalSummaryV1`, `AiEnrichmentEnvelopeV1`, `AiUsageTelemetryPayloadV1`. |
 | `web/lib/ai/aiUsageTelemetrySchema.ts` | Zod `safeParseAiUsageTelemetryPayloadV1` for schema-bound telemetry. |
 | `web/lib/ai/aiEnrichmentEnv.ts` | `AI_ENRICHMENT_STUB_ENABLED`, `AI_ENRICHMENT_TELEMETRY_ENABLED` helpers. |
 | `web/lib/ai/stubProvider.ts` | `createStubAiProvider` — synthetic overlay only; **no** network. |
-| `web/lib/ai/resolveStructuredAiProvider.ts` | Resolves stub vs disabled from policy + env. |
+| `web/lib/ai/resolveStructuredAiProvider.ts` | Resolves stub vs OpenAI-compatible vs disabled from policy + env + strict live flag. |
 | `web/lib/ai/enrichAttentionSuggestionStub.ts` | `enrichAttentionSuggestionStubEnvelope` — redaction **before** provider; returns `AiEnrichmentEnvelopeV1`. |
 | `web/lib/ai/enrichmentTelemetry.ts` | `maybeEmitAiEnrichmentTelemetryEvent` — gated `emitEvent` / `workflow_events`. |
 | `web/lib/ai/liveProviderAdapterPlaceholder.ts` | Phase 2.5: scaffold `AiStructuredProvider` returning `disabled` (no I/O). |
 | `web/lib/ai/providerAdapterDesign.ts` | Phase 2.5: live adapter **types** only (timeout/retry/capability contracts). |
 | `web/lib/ai/aiEnrichmentPermissions.ts` | `AI_ENRICHMENT_USE_PERMISSION_KEY`, `resolveAiEnrichmentPortalAccess`, strict env. |
-| `web/lib/ai/aiEnrichmentRouteGuards.ts` | Org policy pre-check for stub draft route. |
-| `web/app/api/admin/ai/enrich-attention-suggestion/route.ts` | POST stub enrichment — access + policy + env gates. |
+| `web/lib/ai/aiEnrichmentRouteGuards.ts` | Org policy pre-checks for stub and OpenAI draft enrichment routes. |
+| `web/app/api/admin/ai/enrich-attention-suggestion/route.ts` | POST structured enrichment — access + policy + env gates (stub vs OpenAI branches). |
+| `web/lib/ai/enrichAttentionSuggestionRouteValidation.ts` | Parse-only POST body validation for enrich route (unit-tested). |
 | `supabase/migrations/20260520100000_ai_enrichment_permission_keys_seed.sql` | **`ai.enrichment.use`** (+ optional AI keys); default **admin** grant only. |
 | `web/lib/ai/index.ts` | Public barrel for server imports. |
 | `web/lib/ai/buildOperationalSummary.ts` | Phase 2: `buildOperationalSummaryDeterministic`, `applyStubOperationalSummaryOverlay`, queue preview helper. |
 | `web/lib/ai/operationalSummarySchema.ts` | Zod `safeParseOperationalSummaryV1`. |
-| `web/components/admin/drawer/OperationalSummaryNarrativeBlock.tsx` | Drawer “Operational read” narrative. |
 | `web/lib/admin/opportunityAttentionSuggestionAttachment.ts` | Attaches `_operational_summary` (+ optional stub overlay + `org_settings` read **only** when stub env on). |
 
 **Still true (explicit):**
 
-- **No** live OpenAI/Anthropic (or other) provider SDK or network calls in this slice.  
+- **OpenAI-compatible** HTTP is **gated** (strict **`AI_ENRICHMENT_USE_PERMISSION_REQUIRED`** + **`ai.enrichment.use`**, org **`provider: openai`**, **`OPENAI_API_KEY`** / **`OPENAI_MODEL`**, redaction before provider). **Stub** path remains **`AI_ENRICHMENT_STUB_ENABLED`** + **`provider: stub`**.  
 - **No** new Supabase migrations for **AI policy** — policy remains **jsonb metadata** (`ai_policy` subtree). **Permission keys** for AI enrichment are seeded by **`supabase/migrations/20260520100000_ai_enrichment_permission_keys_seed.sql`** (RBAC catalog + default admin grant for `ai.enrichment.use` only).  
 - **No** persistence of model outputs.  
 - **No** autonomous actions — enrichment is an **overlay**; `AttentionSuggestionV1` / resolver outputs remain authoritative for operational recommendations.
@@ -361,7 +361,7 @@ The next phases add **optional** intelligence and **optional** durability while 
 
 ### 17.3 Cards 9–10 — Surfaces
 
-- **Drawer:** `OperationalSummaryNarrativeBlock` renders above “Recommended by Alloy” when data exists; `_operational_summary` from server when attach ran; client-side deterministic fallback when the key is absent (older payloads).
+- **Drawer:** Primary narrative is **“Recommended by Alloy”** in `OperationalAttentionHeaderStrip` when a deterministic suggestion exists; **`_operational_summary`** remains on the overview payload (and queue preview uses **`_operational_summary_preview`**) — no duplicate operational-read block in the drawer header.
 - **Queue:** `_operational_summary_preview` { `headline`, `risk_urgency_hint` } — **preview-only**; `data-queue-preview-slot="operational_summary"`.
 
 ### 17.4 Card 11 — Caching / persistence decision
@@ -373,7 +373,7 @@ The next phases add **optional** intelligence and **optional** durability while 
 
 ## Phase 2.5 — Real provider adapter + permission hardening (Cards 11.5–11.8)
 
-**Purpose:** Permission hardening, provider isolation contracts, rollout governance, and pilot readiness — **without** live HTTP, SDKs, secrets, or persisted model output.
+**Purpose:** Permission hardening, provider isolation contracts, rollout governance, and pilot readiness. **OpenAI-compatible** enrichment HTTP is **opt-in** behind org policy + env + RBAC + redaction; no persisted model output and no apply/send automation in this slice.
 
 ### Card 11.5 — AI permission model audit (**Done**)
 

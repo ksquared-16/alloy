@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
-import { NEEDS_ATTENTION_SUGGESTION_AGENT_KEY } from "@/lib/agent/needsAttentionSuggestion/types";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { hasOpenAiStructuredCredentials, isAiEnrichmentStubEnvEnabled } from "@/lib/ai/aiEnrichmentEnv";
@@ -12,20 +10,8 @@ import {
     evaluateOrgPolicyForStubAttentionDraftEnrichmentRoute,
 } from "@/lib/ai/aiEnrichmentRouteGuards";
 import { enrichAttentionSuggestionStubEnvelope } from "@/lib/ai/enrichAttentionSuggestionStub";
+import { parseEnrichAttentionSuggestionRequest } from "@/lib/ai/enrichAttentionSuggestionRouteValidation";
 import { createAdminClient } from "@/lib/supabaseAdmin";
-
-function parseAttentionSuggestionBody(raw: unknown): AttentionSuggestionV1 | null {
-    if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return null;
-    const o = raw as Record<string, unknown>;
-    if (o.version !== 1) return null;
-    if (o.agent_key !== NEEDS_ATTENTION_SUGGESTION_AGENT_KEY) return null;
-    const target = o.target;
-    if (target == null || typeof target !== "object" || Array.isArray(target)) return null;
-    const t = target as Record<string, unknown>;
-    if (t.entity_type !== "opportunities") return null;
-    if (typeof t.entity_id !== "string" || !t.entity_id.trim()) return null;
-    return raw as AttentionSuggestionV1;
-}
 
 /**
  * POST — structured enrichment for an existing deterministic needs-attention suggestion.
@@ -62,19 +48,11 @@ export async function POST(request: NextRequest) {
     } catch {
         return NextResponse.json({ ok: false, error: "BAD_JSON" }, { status: 400 });
     }
-    if (body == null || typeof body !== "object" || Array.isArray(body)) {
-        return NextResponse.json({ ok: false, error: "BAD_BODY" }, { status: 400 });
+    const parsed = parseEnrichAttentionSuggestionRequest(body);
+    if (!parsed.ok) {
+        return NextResponse.json({ ok: false, error: parsed.error }, { status: parsed.status });
     }
-    const b = body as Record<string, unknown>;
-    const correlationId = typeof b.correlation_id === "string" && b.correlation_id.trim() ? b.correlation_id.trim() : null;
-    if (!correlationId) {
-        return NextResponse.json({ ok: false, error: "MISSING_CORRELATION_ID" }, { status: 400 });
-    }
-
-    const det = parseAttentionSuggestionBody(b.deterministic_suggestion);
-    if (!det) {
-        return NextResponse.json({ ok: false, error: "INVALID_SUGGESTION" }, { status: 400 });
-    }
+    const { correlation_id: correlationId, request_id: requestIdFromBody, deterministic: det } = parsed;
 
     const supabase = createAdminClient();
     const { data: orgSettings, error } = await supabase.from("org_settings").select("metadata").eq("org_id", ctx.orgId).maybeSingle();
@@ -144,14 +122,12 @@ export async function POST(request: NextRequest) {
         );
     }
 
-    const requestId = typeof b.request_id === "string" && b.request_id.trim() ? b.request_id.trim() : undefined;
-
     const result = await enrichAttentionSuggestionStubEnvelope({
         org_id: ctx.orgId,
         org_metadata,
         deterministic: det,
         correlation_id: correlationId,
-        request_id: requestId,
+        request_id: requestIdFromBody,
         openai_live_invocation_permitted: openaiLiveInvocationPermitted,
     });
 

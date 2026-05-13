@@ -98,14 +98,15 @@ describe("OperationalAttentionHeaderStrip", () => {
             />,
         );
         expect(html).toContain("Recommended by Alloy");
-        expect(html).toContain("Operational read");
-        expect(html).toContain("data-drawer-slot=\"operational_summary_narrative\"");
+        expect(html).toContain('data-drawer-slot="alloy_linked_actions_placeholder"');
+        expect(html).not.toContain("Operational read");
+        expect(html).not.toContain("data-drawer-slot=\"operational_summary_narrative\"");
         expect(html).toContain("Needs attention:");
-        expect(html).toContain("Suggested next step");
+        expect(html).toContain("Next ·");
         expect(html).toContain("Respond to new request");
-        expect(html).toContain("Why");
+        expect(html).toContain("Why ·");
         expect(html).toContain("Operational attention: New inquiry is stale.");
-        expect(html).toContain("Draft message");
+        expect(html).toContain("Draft · not sent");
         expect(html).toContain("Hello there, test.");
         expect(html).toContain("Copy draft");
         expect(html).toContain("Activity");
@@ -125,7 +126,7 @@ describe("OperationalAttentionHeaderStrip", () => {
         );
         expect(html).toContain("Suggested next step");
         expect(html).not.toContain("Recommended by Alloy");
-        expect(html).not.toContain("Draft message");
+        expect(html).not.toContain("Draft · not sent");
     });
 });
 
@@ -144,7 +145,7 @@ describe("OperationalAttentionDrawerSection", () => {
         expect(html).toContain("<details");
         expect(html).not.toContain("Respond to new request");
         expect(html).not.toContain("Primary ·");
-        expect(html).not.toContain("Draft message");
+        expect(html).not.toContain("Draft · not sent");
     });
 
     it("shows full operational panel in body when no suggestion", () => {
