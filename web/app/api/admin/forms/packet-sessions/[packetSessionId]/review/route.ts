@@ -5,6 +5,7 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { emitEvent } from "@/lib/emitEvent";
 import { resolveOpportunityIdFromSessionSnapshotFields } from "@/lib/forms/workflow/opportunityEnrollmentPacketProjections";
+import { ensureGeneratedPdfsForApprovedPacketSession } from "@/lib/forms/packets/ensureGeneratedPdfsForApprovedPacketSession";
 
 const UUID_RE =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -105,6 +106,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
             { error: "Update did not apply (session missing, wrong org, or row could not be updated)." },
             { status: 409 }
         );
+    }
+
+    if (next === "approved") {
+        const pdfRes = await ensureGeneratedPdfsForApprovedPacketSession(supabase, orgId, packetSessionId);
+        if (pdfRes.errors.length > 0) {
+            console.error("[packet review] approval PDF backfill:", pdfRes.errors);
+        }
     }
 
     const snap = (sess as { crm_snapshot?: unknown }).crm_snapshot;

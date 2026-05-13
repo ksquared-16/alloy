@@ -15,6 +15,9 @@ export type EntityDocumentListItem = {
     status?: string | null;
     uploaded_at?: string | null;
     created_at?: string | null;
+    source_form_submission_id?: string | null;
+    source_form_submission_admin_path?: string | null;
+    source_packet_session_admin_path?: string | null;
 };
 
 type Props = {
@@ -224,6 +227,26 @@ export default function EntityDocumentsSection({
                                 <p className="text-xs text-alloy-muted">
                                     {[doc.document_type, doc.status, displayWhen(doc)].filter(Boolean).join(" · ") || "—"}
                                 </p>
+                                {(doc.source_form_submission_admin_path || doc.source_packet_session_admin_path) && (
+                                    <p className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px]">
+                                        {doc.source_form_submission_admin_path ? (
+                                            <a
+                                                href={doc.source_form_submission_admin_path}
+                                                className="font-medium text-alloy-blue hover:underline"
+                                            >
+                                                Form submission
+                                            </a>
+                                        ) : null}
+                                        {doc.source_packet_session_admin_path ? (
+                                            <a
+                                                href={doc.source_packet_session_admin_path}
+                                                className="font-medium text-alloy-blue hover:underline"
+                                            >
+                                                Packet session
+                                            </a>
+                                        ) : null}
+                                    </p>
+                                )}
                             </div>
                             <button
                                 type="button"

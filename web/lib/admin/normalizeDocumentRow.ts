@@ -10,6 +10,10 @@ export type NormalizedDocumentRow = {
     status: string | null;
     uploaded_at: string | null;
     created_at: string | null;
+    /** When this row came from a packet step submission via `form_submission_documents`. */
+    source_form_submission_id?: string | null;
+    source_form_submission_admin_path?: string | null;
+    source_packet_session_admin_path?: string | null;
 };
 
 export function normalizeDocumentRow(row: Record<string, unknown>): NormalizedDocumentRow {
@@ -25,6 +29,15 @@ export function normalizeDocumentRow(row: Record<string, unknown>): NormalizedDo
             : createdStr;
     const titleStr = title != null && String(title).trim() !== "" ? String(title) : null;
     const origStr = orig != null && String(orig).trim() !== "" ? String(orig) : null;
+    const sidRaw = row.source_form_submission_id;
+    const subPathRaw = row.source_form_submission_admin_path;
+    const packetPathRaw = row.source_packet_session_admin_path;
+    const source_form_submission_id =
+        typeof sidRaw === "string" && sidRaw.trim() ? sidRaw.trim() : sidRaw != null ? String(sidRaw) : null;
+    const source_form_submission_admin_path =
+        typeof subPathRaw === "string" && subPathRaw.trim() ? subPathRaw.trim() : null;
+    const source_packet_session_admin_path =
+        typeof packetPathRaw === "string" && packetPathRaw.trim() ? packetPathRaw.trim() : null;
     return {
         id: String(row.id),
         name: titleStr ?? origStr,
@@ -33,6 +46,13 @@ export function normalizeDocumentRow(row: Record<string, unknown>): NormalizedDo
         status: row.status != null && String(row.status) !== "" ? String(row.status) : null,
         uploaded_at: uploadedStr,
         created_at: createdStr,
+        ...(source_form_submission_admin_path
+            ? {
+                  source_form_submission_id,
+                  source_form_submission_admin_path,
+                  ...(source_packet_session_admin_path ? { source_packet_session_admin_path } : {}),
+              }
+            : {}),
     };
 }
 

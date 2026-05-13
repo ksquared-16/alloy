@@ -25,6 +25,20 @@ vi.mock("@/lib/emitEvent", () => ({
     emitEvent: (...args: unknown[]) => emitEventMock(...(args as [])),
 }));
 
+const ensurePdfMock = vi.hoisted(() =>
+    vi.fn(async (_supabase: unknown, _orgId: string, _packetSessionId: string) => ({
+        submissionIds: [] as string[],
+        attempted: 0,
+        createdOrReused: 0,
+        skipped: 0,
+        errors: [] as string[],
+    }))
+);
+vi.mock("@/lib/forms/packets/ensureGeneratedPdfsForApprovedPacketSession", () => ({
+    ensureGeneratedPdfsForApprovedPacketSession: (supabase: unknown, orgId: string, packetSessionId: string) =>
+        ensurePdfMock(supabase, orgId, packetSessionId),
+}));
+
 const mockCreateAdminClient = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/supabaseAdmin", () => ({
     createAdminClient: () => mockCreateAdminClient(),
@@ -86,6 +100,7 @@ function makeClient(
 describe("PATCH /api/admin/forms/packet-sessions/[packetSessionId]/review", () => {
     beforeEach(() => {
         emitEventMock.mockClear();
+        ensurePdfMock.mockClear();
         mockCreateAdminClient.mockReset();
     });
 
@@ -102,6 +117,10 @@ describe("PATCH /api/admin/forms/packet-sessions/[packetSessionId]/review", () =
         expect(res.status).toBe(200);
         const body = (await res.json()) as { ok?: boolean; operator_review_status?: string };
         expect(body).toMatchObject({ ok: true, operator_review_status: "approved" });
+        expect(ensurePdfMock).toHaveBeenCalledTimes(1);
+        const pdfCall = ensurePdfMock.mock.calls[0] as unknown[] | undefined;
+        expect(pdfCall?.[1]).toBe(ORG);
+        expect(pdfCall?.[2]).toBe(SESS);
         expect(emitEventMock).toHaveBeenCalledTimes(1);
         const firstCall = emitEventMock.mock.calls[0] as unknown[] | undefined;
         expect(firstCall?.[0]).toMatchObject({
@@ -123,6 +142,7 @@ describe("PATCH /api/admin/forms/packet-sessions/[packetSessionId]/review", () =
         expect(res.status).toBe(200);
         const body = (await res.json()) as { ok?: boolean; operator_review_status?: string };
         expect(body).toMatchObject({ ok: true, operator_review_status: "needs_correction" });
+        expect(ensurePdfMock).not.toHaveBeenCalled();
         expect(emitEventMock).toHaveBeenCalled();
     });
 
