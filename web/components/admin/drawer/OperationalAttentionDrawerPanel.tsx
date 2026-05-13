@@ -17,6 +17,8 @@ import { isEnrollmentWaitBucket } from "@/lib/opportunities/attentionPlatformCat
 type Props = {
     payload: OpportunityAttentionResult | null | undefined;
     error?: OperationalAttentionAttachmentError | null | undefined;
+    /** When true, skip primary + deterministic next blocks (shown in drawer header). */
+    omitPrimaryAndNext?: boolean;
     /** Dev/review fixtures only — initial disclosure for deterministic screenshots */
     defaultReasonsExpanded?: boolean;
     defaultAdvancedExpanded?: boolean;
@@ -25,6 +27,7 @@ type Props = {
 export default function OperationalAttentionDrawerPanel({
     payload,
     error,
+    omitPrimaryAndNext = false,
     defaultReasonsExpanded = false,
     defaultAdvancedExpanded = false,
 }: Props) {
@@ -92,24 +95,28 @@ export default function OperationalAttentionDrawerPanel({
 
     return (
         <div className="space-y-3 text-sm text-alloy-midnight/85">
-            <div className="space-y-1">
-                <p>
-                    <span className="font-medium text-alloy-midnight/90">Primary · </span>
-                    {primary.label}
-                    <span className="text-alloy-midnight/55"> · {slaSummary}</span>
-                </p>
-                {extra > 0 ? (
-                    <p className="text-xs text-alloy-midnight/60">
-                        +{extra} additional operational factor{extra === 1 ? "" : "s"}
-                    </p>
-                ) : null}
-                {waitLine ? <p className="text-xs text-alloy-midnight/65">{waitLine}</p> : null}
-            </div>
+            {omitPrimaryAndNext ? null : (
+                <>
+                    <div className="space-y-1">
+                        <p>
+                            <span className="font-medium text-alloy-midnight/90">Primary · </span>
+                            {primary.label}
+                            <span className="text-alloy-midnight/55"> · {slaSummary}</span>
+                        </p>
+                        {extra > 0 ? (
+                            <p className="text-xs text-alloy-midnight/60">
+                                +{extra} additional operational factor{extra === 1 ? "" : "s"}
+                            </p>
+                        ) : null}
+                        {waitLine ? <p className="text-xs text-alloy-midnight/65">{waitLine}</p> : null}
+                    </div>
 
-            <div className="rounded-md border border-alloy-stone/18 bg-white/60 px-2.5 py-2">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/45">Next</p>
-                <p className="mt-0.5 text-[13px] leading-snug text-alloy-midnight/88">{nextLine}</p>
-            </div>
+                    <div className="rounded-md border border-alloy-stone/18 bg-white/60 px-2.5 py-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-alloy-midnight/45">Suggested next step</p>
+                        <p className="mt-0.5 text-[13px] leading-snug text-alloy-midnight/88">{nextLine}</p>
+                    </div>
+                </>
+            )}
 
             <button
                 type="button"

@@ -57,6 +57,15 @@ export type AttentionSuggestionV1 = {
     generated_at_iso: string;
 };
 
+/**
+ * Work-unit queue row preview only — same `buildNeedsAttentionSuggestion` contract as entity GET,
+ * compacted for list payloads. Not authoritative (drawer + entity GET remain SOT).
+ */
+export type AttentionSuggestionQueuePreviewV1 = {
+    next_label: string;
+    why_line: string;
+};
+
 /** JSON-serializable snapshot for tests / API contracts. */
 export function attentionSuggestionV1ToJson(value: AttentionSuggestionV1): Record<string, unknown> {
     return JSON.parse(JSON.stringify(value)) as Record<string, unknown>;

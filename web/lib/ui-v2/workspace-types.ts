@@ -191,6 +191,11 @@ export type CrmCompactRowSemanticSlots = {
   roomContext: string | null;
   ageContext: string | null;
   attentionReason: string | null;
+  /**
+   * Queue-only preview of deterministic suggestion (`_attention_suggestion_preview` on enriched rows).
+   * Same builder as entity GET; list paths usually omit activity so text may differ slightly from the drawer.
+   */
+  attentionSuggestionPreview?: { nextLabel: string; whyLine: string } | null;
   /** Deterministic resolver-backed next-step hint (enrollment operational attention). */
   operationalNextHint?: string | null;
   familyNote: string | null;

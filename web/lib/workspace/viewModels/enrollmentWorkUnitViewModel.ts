@@ -198,7 +198,21 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
     const attentionReason =
         attnPres.summaryLine ??
         ((row as { _attention_reason_label?: string | null })._attention_reason_label?.trim() || null);
-    const operationalNextHint = attnPres.nextHintLine;
+    const rawSugPrev = rowRec._attention_suggestion_preview as { next_label?: unknown; why_line?: unknown } | null | undefined;
+    const attentionSuggestionPreview =
+        rawSugPrev &&
+        typeof rawSugPrev === "object" &&
+        typeof rawSugPrev.next_label === "string" &&
+        typeof rawSugPrev.why_line === "string"
+            ? {
+                  nextLabel: rawSugPrev.next_label.trim(),
+                  whyLine: rawSugPrev.why_line.trim(),
+              }
+            : null;
+    const attentionSuggestionPreviewResolved =
+        attentionSuggestionPreview?.nextLabel ? attentionSuggestionPreview : null;
+    const operationalNextHint =
+        attentionSuggestionPreviewResolved?.nextLabel ? null : attnPres.nextHintLine;
     const notesRaw = (row as { _notes_preview?: string | null })._notes_preview;
     const familyNotePreview = formatOpportunityQueueNotesPreviewParts(notesRaw, options?.viewerTimezone ?? undefined);
     const familyNote = formatOpportunityQueueNotesPreview(notesRaw, options?.viewerTimezone ?? undefined);
@@ -254,6 +268,7 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
         programContext,
         roomContext,
         attentionReason,
+        attentionSuggestionPreview: attentionSuggestionPreviewResolved,
         operationalNextHint,
         familyNote,
         familyNotePreview,

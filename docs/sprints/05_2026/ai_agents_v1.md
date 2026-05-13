@@ -36,6 +36,22 @@ Work is sequenced as **cards** (audit validation → model → engine → integr
 
 ---
 
+## 3.1 V1.1 / V2 — AI enrichment path (planning only)
+
+**V1 (shipped posture):** Deterministic `AttentionSuggestionV1` from `buildNeedsAttentionSuggestion` — resolver output → stable `next_action`, template-backed optional `suggested_content`, deterministic `suggestion_id`, and a short `reasoning.summary` composed from resolver labels + optional activity context. **No LLM** on the critical path unless explicitly approved per environment.
+
+**V1.1 (optional enrichment layer, still structured):** Add an **optional** model pass **after** the deterministic object is built, gated by org / product policy:
+
+- **AI-enriched reasoning** — expand or rephrase `reasoning.summary` (and optional bullets) while preserving reason codes and traceability to `OpportunityAttentionResult`.
+- **AI-generated drafts** — editable bodies and **tone variants**; **templates remain the deterministic fallback** when the model is unavailable, denied by policy, or validation fails.
+- **Prioritization hints** — ordered `next_action` candidates or scores as **structured fields only**; never executable without explicit UI/API acceptance.
+
+**V2 (product + audit):** **Accept / dismiss / apply** events; **apply** only through existing explicit mutations after operator confirmation. **Workflow proposal generation** follows the Agent 2 template (`WorkflowAssistSuggestionV1`). **Persistence** and **audit rows** for accepted suggestions when proposals become durable — still **no headless autonomous execution**.
+
+**Invariants:** JSON-shaped contracts; **human review before any side effect**; queue and list payloads remain **preview-only** relative to entity GET.
+
+---
+
 ## 4. Non-goals
 
 - **No autonomous actions** (no auto-send, auto-status-change, auto-workflow-start from the suggestion agent).
@@ -45,7 +61,7 @@ Work is sequenced as **cards** (audit validation → model → engine → integr
 - **No** deep learning, cross-opportunity reasoning, or prediction models in V1.
 - **No** full **Workflow Assist** runtime (no NL → workflow create, no auto-apply of workflow config) in this sprint.
 - **No** new workflow DSL.
-- **Queue row suggestion preview** is **out of initial build** unless explicitly approved later (queue remains preview-only; see locked decisions).
+- **Queue row suggestion preview** is **not authoritative** — compact `_attention_suggestion_preview` on enriched opportunity queue rows is allowed as **display-only** (same builder as entity GET; list paths may omit activity so copy can differ slightly from the drawer).
 
 ---
 
@@ -113,9 +129,9 @@ Implementation is **modules + types**, not a generic agent runtime.
 | Persistence | **Derived-only** — compute on entity GET (or shared helper invoked from it). **No suggestion table.** |
 | DB writes | **No** agent-generated writes. |
 | Autonomy | **No** autonomous actions. |
-| Queue rows | **Not** source of truth; **no** requirement to show suggestion on queue in V1 (**optional / future** unless explicitly approved). |
+| Queue rows | **Not** source of truth; optional **compact preview** (`_attention_suggestion_preview` + CRM compact slots) derived from the **same** `buildNeedsAttentionSuggestion` helper used on entity GET (activity often `null` on lists). |
 | Attachment | **`_attention_suggestion`** on **authoritative opportunity entity GET**, adjacent to **`_operational_attention`**. |
-| Primary UI | **Drawer** (operational attention surfaces). |
+| Primary UI | **Drawer header chrome** — headline, suggested next step, why, draft affordance; overview body holds **collapsible operational detail** only. |
 
 ---
 
@@ -260,6 +276,23 @@ Finalized in **§8.1** (`activity_summary` optional block added for monitoring m
 
 Reserved names: `agent_suggestion_generated`, `agent_suggestion_accepted`, `agent_suggestion_dismissed`. **Do not** emit `agent_suggestion_generated` on every drawer open in V1 (noise). Emit when suggestions become **durable proposals** or operator actions exist.
 
+### 9.4 Configurability audit (V1 — what stays hardcoded)
+
+**Hardcoded today (code, not DB):**
+
+- **Reason code → next action** — `web/lib/agent/needsAttentionSuggestion/suggestionActionMap.ts` (stable `next_action.key` / label strings).
+- **Reason → message template** — `suggestedContentTemplates.ts` + `suggestedContentForReason` wiring in `buildNeedsAttentionSuggestion.ts`.
+- **Resolver labels / severity** — `opportunityAttentionResolver` + platform catalog (orthogonal to the suggestion agent but feed its inputs).
+
+**Configurable today:** `resolveOpportunityAttention` thresholds and policies via org **metadata** (`opportunity_attention_rules` / resolved config); activity signal rules in metadata — these shape **whether** attention fires, not the suggestion copy map.
+
+**Proposed path (no heavy config UI yet):**
+
+1. **Platform defaults** — keep current maps/templates as the shipped default module.
+2. **Vertical presets** — versioned JSON or TS presets (e.g. childcare tone) selected by `industry` / org template key.
+3. **Org / work-unit overrides** — small merge layer: optional metadata keys pointing to **allowlisted** preset ids or sparse overrides for labels only (never new arbitrary reason codes without resolver support).
+4. **AI enrichment policy flags** — org-level booleans + model allowlist (future); when off, only deterministic `AttentionSuggestionV1` is returned.
+
 ---
 
 ## 10. Integration plan
@@ -270,16 +303,17 @@ Reserved names: `agent_suggestion_generated`, `agent_suggestion_accepted`, `agen
    - Compute **`_attention_suggestion`** from the same opportunity row + attention result + **activity signal when loaded** on that path.
    - Ensure **permissions mirror entity GET** (read-only attachment).
    - **Open question** (from design): include on **`drawer_visible` only**, **`full` only**, or both — **decide in Card 0 / 3** based on header latency and payload size; default recommendation: **at least `full`**; add `drawer_visible` only if fast shell needs suggestion without second round-trip.
-4. **No** queue list changes in default scope.
+4. **Queue list (work-unit):** When opportunity attention resolution runs in `QueueService.enrichOpportunityRows`, attach compact **`_attention_suggestion_preview`** (`next_label`, `why_line`) from the **same** `buildNeedsAttentionSuggestion` helper (`activity: null` on list paths). **Never** use queue preview as membership or authoritative suggestion.
 5. **No** migrations, **no** suggestion tables in V1.
 
 ---
 
 ## 11. UI surface plan
 
-- **Primary:** Opportunity **drawer** — extend existing operational attention UX (**`OperationalAttentionHeaderStrip`** stays compact; **structured** suggestion detail in **`OperationalAttentionDrawerPanel`** **or** equivalent drawer section — **production-wire** the panel per Card 4 so operators see “Suggested next step”, “Why this is suggested”, optional “Draft message”).
-- **Copy tone:** Operational, not theatrical — avoid implying autonomy or magic.
-- **Queue:** **Optional / future** — short preview only if product explicitly approves; must still treat drawer + entity GET as authoritative.
+- **Primary:** Opportunity **drawer header** — **`OperationalAttentionHeaderStrip`** (`variant="chrome"`) is the **main** surface: needs-attention headline, **Suggested next step**, **Why**, optional **Draft message** behind expand + copy; subtle **“Recommended by Alloy”** framing. Avoid duplicating the same block in the overview body.
+- **Secondary:** Overview tab — **`OperationalAttentionDrawerSection`** as a **collapsed-by-default** `<details>` (“Operational detail”) for factors, timing, and priority breakdown; omit redundant primary/next when the header already shows the structured suggestion.
+- **Queue (work-unit):** CRM compact left column shows a **compact** preview (chip + next + one-line why) from `semanticCrmCompact.attentionSuggestionPreview`; **drawer + entity GET** remain authoritative if copy diverges (e.g. activity only on GET).
+- **Copy tone:** Operational — **Suggested next step**, **Why**, **Draft message**; no “AI magic” language; drafts labeled not sent.
 
 ---
 
@@ -287,7 +321,8 @@ Reserved names: `agent_suggestion_generated`, `agent_suggestion_accepted`, `agen
 
 - **Unit:** Reason-code → `next_action` mapping; null cases; template rendering + `variables` substitution; deterministic `suggestion_id` stability for fixed inputs.
 - **Integration / payload:** Entity GET includes **`_attention_suggestion`** when `_operational_attention` has a primary reason; absent when not needed.
-- **Regression:** Queue enrichment paths remain **preview-only**; no new requirement for queue rows to carry authoritative suggestion.
+- **Regression:** Queue enrichment paths remain **preview-only**; `_attention_suggestion_preview` is non-authoritative and optional.
+- **UI (Vitest / static render):** Header strip with and without suggestion; drawer section does not duplicate header primary strings when suggestion is present; CRM compact renders queue preview slot when preview fields exist.
 - **Manual:** Drawer flows for multi-reason and no-attention cases; verify no send / no write from UI affordances.
 
 ---
@@ -298,6 +333,7 @@ Reserved names: `agent_suggestion_generated`, `agent_suggestion_accepted`, `agen
 |------|------------|
 | Suggestions diverge from resolver | Single builder input: **`OpportunityAttentionResult`**; factors must mirror `reasons[]`. |
 | Queue row becomes implicit SOT | **Forbidden** in V1 scope; document explicitly; code review on any queue touch. |
+| Queue / GET copy drift | Queue preview calls the **same** builder but usually passes **`activity: null`**; entity GET may attach activity context — operators should **open the drawer** for the authoritative bundle. |
 | “AI” oversell | UI labels and docs: **suggested / draft / deterministic** language. |
 | Audit noise | **No** per-view `agent_suggestion_generated` event in V1. |
 | Vertical leakage | Default strings and templates **neutral**; pilots use presets later. |
@@ -310,11 +346,11 @@ Reserved names: `agent_suggestion_generated`, `agent_suggestion_accepted`, `agen
 
 | Card | Name | Scope |
 |------|------|--------|
-| **0** | **Audit validation** | Walk through `ai_agents_v1_step0_audit.md` with product/engineering; confirm locked decisions (derived-only, no table, no writes, drawer primary, no queue preview unless approved, deterministic messages, Agent 2 doc-only). Resolve open questions (e.g. `drawer_visible` vs `full` for `_attention_suggestion`). |
+| **0** | **Audit validation** | Walk through `ai_agents_v1_step0_audit.md` with product/engineering; confirm locked decisions (derived-only, no table, no writes, drawer header primary, queue preview non-authoritative, deterministic messages, Agent 2 doc-only). Resolve open questions (e.g. `drawer_visible` vs `full` for `_attention_suggestion`). |
 | **1** | **Suggestion data model** | TypeScript types for `AttentionSuggestionV1` (+ tests for shape and invariants). |
 | **2** | **Suggestion logic engine** | `buildNeedsAttentionSuggestion`, action map, template keys; pure deterministic logic. |
 | **3** | **Needs attention integration** | Attach **`_attention_suggestion`** on authoritative opportunity **entity GET** next to **`_operational_attention`**; wire activity input when available on that path. |
-| **4** | **UI rendering (drawer)** | Production drawer: show structured suggestion in operational attention area; match Admin V2 patterns. |
+| **4** | **UI rendering (drawer)** | Production drawer: **header chrome** as primary suggestion surface; collapsible operational detail in overview; Admin V2 patterns. |
 | **5** | **Suggested message generation** | Deterministic **`suggested_content`** only; safe channels/families; no send path. |
 | **6** | **Workflow Assist Agent — template docs only** | Sprint/design doc updates: `WorkflowAssistSuggestionV1`, API mapping notes, future apply/audit pattern — **no runtime**. |
 | **7** | **Testing + validation** | Run targeted tests, typecheck, doc tweaks if behavior is adjusted; sign-off checklist. |
@@ -323,7 +359,7 @@ Reserved names: `agent_suggestion_generated`, `agent_suggestion_accepted`, `agen
 
 ## 15. Card 7 — Testing & validation record (sprint hardening)
 
-**Automated (targeted):** Vitest for `web/lib/agent/needsAttentionSuggestion/**`, `web/tests/admin/drawer/AttentionSuggestionDrawerBlock.test.tsx`, `web/tests/admin/operationalAttentionEntityAttachment.test.ts`. ESLint on those modules (not the full `AdminEntityDrawer.tsx` baseline).
+**Automated (targeted):** Vitest for `web/lib/agent/needsAttentionSuggestion/**`, `web/tests/admin/drawer/operationalAttentionSuggestionUi.test.tsx`, `web/tests/admin/operationalAttentionEntityAttachment.test.ts`. ESLint on those modules (not the full `AdminEntityDrawer.tsx` baseline).
 
 **Behavior verified (design / code review):**
 

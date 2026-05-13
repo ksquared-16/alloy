@@ -30,6 +30,8 @@ import {
     resolveNeedsAttentionBucketsWithPrecedence,
 } from "@/lib/opportunities/needsAttentionBuckets";
 import { resolveOpportunityAttention, type OpportunityAttentionEntityInput } from "@/lib/opportunities/opportunityAttentionResolver";
+import { buildNeedsAttentionSuggestion } from "@/lib/agent/needsAttentionSuggestion/buildNeedsAttentionSuggestion";
+import type { AttentionSuggestionQueuePreviewV1 } from "@/lib/agent/needsAttentionSuggestion/types";
 import { DEFAULT_OPPORTUNITY_ATTENTION_RULES_V1 } from "@/lib/workspace/opportunityAttentionRules";
 import { buildQueueServiceAttentionSemantics } from "@/lib/workspace/opportunityAttentionCountSemantics";
 import { applyPlacementToOpportunityQueueRows } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
@@ -413,6 +415,13 @@ function minLifecycleStaleHoursFromResolvedConfig(thresholdsHours: OpportunityAt
             thresholdsHours.missing_quote_after_execution
         )
     );
+}
+
+function truncateAttentionSuggestionQueueWhyLine(text: string, maxChars: number): string {
+    const t = text.trim();
+    if (t.length <= maxChars) return t;
+    if (maxChars < 2) return "…";
+    return `${t.slice(0, maxChars - 1)}…`;
 }
 
 export function opportunityPreviewToResolverEntity(row: OpportunityRowPreview): OpportunityAttentionEntityInput {
@@ -1154,12 +1163,33 @@ async function enrichOpportunityRows(params: {
             attentionReasonCode = attn.primary_reason?.code ?? null;
             attentionReasonLabel = attn.primary_reason?.label ?? null;
             attentionSeverity = attn.primary_reason?.severity ?? null;
+            const sug = buildNeedsAttentionSuggestion({
+                opportunity: {
+                    id: String(r.id),
+                    status_key: r.status_key ?? null,
+                    metadata:
+                        r.metadata && typeof r.metadata === "object" && !Array.isArray(r.metadata)
+                            ? (r.metadata as Record<string, unknown>)
+                            : null,
+                    primary_display_name: (customer?.name ?? r.name ?? "").trim() || null,
+                },
+                attention: attn,
+                activity: null,
+                nowIso: new Date(opportunityAttentionResolution.nowMs).toISOString(),
+            });
+            const suggestionPreview: AttentionSuggestionQueuePreviewV1 | null = sug
+                ? {
+                      next_label: sug.next_action.label,
+                      why_line: truncateAttentionSuggestionQueueWhyLine(sug.reasoning.summary, 140),
+                  }
+                : null;
             attentionExtras = {
                 _needs_attention: attn.needs_attention,
                 _attention_priority_score: attn.priority_score,
                 _attention_waiting_bucket: attn.waiting.bucket,
                 _attention_reasons_detail: attn.reasons,
                 _attention_priority_breakdown: attn.priority_breakdown,
+                ...(suggestionPreview ? { _attention_suggestion_preview: suggestionPreview } : {}),
             };
         } else {
             attentionReasonLabel = opportunityNeedsAttentionReasonLabel(r, nowForAttention);
