@@ -22,10 +22,12 @@ const suggestionWithDraft = (): AttentionSuggestionV1 => ({
 });
 
 describe("OperationalAttentionEnhanceDraft", () => {
-    it("renders Enhance draft control when suggested_content body exists", () => {
+    it("renders Enhance draft affordance when suggested_content body exists (idle — no provider call)", () => {
         const html = renderToStaticMarkup(<OperationalAttentionEnhanceDraft suggestion={suggestionWithDraft()} />);
         expect(html).toContain("Enhance draft");
         expect(html).toContain('data-drawer-slot="enhance_draft_action"');
+        expect(html).not.toContain("data-drawer-slot=\"enhance_draft_loading\"");
+        expect(html).not.toContain("Enhanced draft ready");
         expect(html).not.toContain("Apply draft");
     });
 });

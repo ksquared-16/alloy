@@ -5,39 +5,43 @@ import { CrmCompactQueuePreview } from "@/app/adminV2/components/workspace/block
 import OperationalAttentionDrawerSection from "@/components/admin/drawer/OperationalAttentionDrawerSection";
 import OperationalAttentionHeaderStrip from "@/components/admin/drawer/OperationalAttentionHeaderStrip";
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
+import { suggestedContentForReason } from "@/lib/agent/needsAttentionSuggestion/suggestedContentTemplates";
 import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
 import type { CrmCompactRowSemanticSlots } from "@/lib/ui-v2/workspace-types";
 
-const minimalSuggestion = (): AttentionSuggestionV1 => ({
-    version: 1,
-    agent_key: "needs_attention_suggestion",
-    suggestion_id: "a".repeat(48),
-    target: { entity_type: "opportunities", entity_id: "opp-1" },
-    source: {
-        resolver: "opportunity_attention",
-        resolver_version: 2,
-        primary_reason_code: "stale_new_inquiry",
-        reason_codes: ["stale_new_inquiry"],
-        activity_signal_key: "idle",
-    },
-    next_action: {
-        key: "respond_to_new_request",
-        label: "Respond to new request",
-        action_family: "follow_up",
-        confidence: "deterministic",
-    },
-    reasoning: {
-        summary: "Operational attention: New inquiry is stale.",
-        factors: [{ code: "stale_new_inquiry", label: "New inquiry is stale", severity: "medium", sla_tier: "breached" }],
-    },
-    suggested_content: {
-        channel: "email",
-        template_key: "generic_follow_up_short",
-        body: "Hello there, test.",
-        variables: { contact_name: "there", record_ref: "opp1" },
-    },
-    generated_at_iso: "2026-05-13T12:00:00.000Z",
-});
+const minimalSuggestion = (): AttentionSuggestionV1 => {
+    const sc = suggestedContentForReason("stale_new_inquiry", {
+        entity_id: "opp-1",
+        record_ref: "opp-1",
+        contact_name: "there",
+    });
+    if (!sc) throw new Error("template");
+    return {
+        version: 1,
+        agent_key: "needs_attention_suggestion",
+        suggestion_id: "a".repeat(48),
+        target: { entity_type: "opportunities", entity_id: "opp-1" },
+        source: {
+            resolver: "opportunity_attention",
+            resolver_version: 2,
+            primary_reason_code: "stale_new_inquiry",
+            reason_codes: ["stale_new_inquiry"],
+            activity_signal_key: "idle",
+        },
+        next_action: {
+            key: "respond_to_new_request",
+            label: "Respond to new request",
+            action_family: "follow_up",
+            confidence: "deterministic",
+        },
+        reasoning: {
+            summary: "Operational attention: New inquiry is stale.",
+            factors: [{ code: "stale_new_inquiry", label: "New inquiry is stale", severity: "medium", sla_tier: "breached" }],
+        },
+        suggested_content: sc,
+        generated_at_iso: "2026-05-13T12:00:00.000Z",
+    };
+};
 
 const minimalAttention = (): OpportunityAttentionResult => ({
     needs_attention: true,
@@ -107,7 +111,8 @@ describe("OperationalAttentionHeaderStrip", () => {
         expect(html).toContain("Why ·");
         expect(html).toContain("Operational attention: New inquiry is stale.");
         expect(html).toContain("Draft · not sent");
-        expect(html).toContain("Hello there, test.");
+        expect(html).toContain("Hi there,");
+        expect(html).toContain("I wanted to follow up on your inquiry");
         expect(html).toContain("Copy draft");
         expect(html).toContain("Activity");
         expect(html).toContain("Idle signal");
@@ -194,12 +199,12 @@ describe("CrmCompactQueuePreview queue priority explanation", () => {
                 scanMode
                 slots={baseSlots({
                     attentionReason: "Needs attention: Follow-up overdue",
-                    queuePriorityExplanation: "Follow-up overdue · Past due vs goal",
+                    queuePriorityExplanation: "Overdue follow-up",
                 })}
             />,
         );
         expect(html).toContain('data-queue-preview-slot="queue_priority_explanation"');
-        expect(html).toContain("Follow-up overdue · Past due vs goal");
+        expect(html).toContain("Overdue follow-up");
     });
 });
 

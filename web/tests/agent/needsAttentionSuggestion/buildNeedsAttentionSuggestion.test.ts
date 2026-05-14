@@ -71,7 +71,8 @@ describe("buildNeedsAttentionSuggestion", () => {
         expect(r!.source.reason_codes).toEqual(["stale_new_inquiry"]);
         expect(r!.suggested_content?.template_key).toBe("generic_follow_up_short");
         expect(r!.suggested_content?.variables.contact_name).toBe("there");
-        expect(r!.suggested_content?.variables.record_ref).toBe("0000aa01");
+        expect(r!.suggested_content?.variables.team_line).toBe("Your team");
+        expect(r!.suggested_content?.body).toContain("Hi there,");
     });
 
     it("embeds activity_signal_key from stale_signal", () => {

@@ -1,30 +1,47 @@
-import type { AttentionSlaTier } from "@/lib/opportunities/attentionSla";
-import { worstSlaTier } from "@/lib/opportunities/attentionSla";
+import type { OpportunityAttentionReasonCode } from "@/lib/opportunities/attentionPlatformCatalog";
+import { isOpportunityAttentionReasonCode } from "@/lib/opportunities/attentionPlatformCatalog";
 
-const MAX_LEN = 100;
+const MAX_LEN = 72;
 
 /**
- * Compact deterministic line for needs-attention work-unit queue rows (not AI).
- * Prefer resolver primary label; append worst-case SLA tier when it adds signal.
+ * Short queue-row line: why this record ranks high (deterministic, not AI).
+ * Uses reason code so we do not repeat the full "Needs attention: …" headline.
  */
+const PRIORITY_SHORT_BY_CODE: Partial<Record<OpportunityAttentionReasonCode, string>> = {
+    follow_up_date_passed: "Overdue follow-up",
+    stale_new_inquiry: "Stale new inquiry",
+    high_value_stale: "High-priority stale record",
+    mid_funnel_stale: "High-priority stale record",
+    stale_qualified: "High-priority stale record",
+    stale_quote_followup: "High-priority stale record",
+    missing_quote_after_execution: "High-priority stale record",
+    overdue_commitment: "Overdue follow-up",
+    tour_date_passed: "Tour date passed",
+    waiting_on_documents: "Waiting on documents",
+    waiting_on_family: "Waiting on family",
+    waiting_on_staff: "Waiting on staff",
+    waiting_on_payment: "Waiting on payment",
+    blocked_internal: "Blocked",
+    blocked_external: "Blocked",
+    missing_identity: "Missing contact details",
+};
+
 export function buildQueueRowPriorityExplanationLine(row: Record<string, unknown>): string | null {
     if (row._needs_attention !== true) return null;
+
+    const codeRaw = row._attention_reason;
+    const code = typeof codeRaw === "string" && codeRaw.trim() && isOpportunityAttentionReasonCode(codeRaw.trim())
+        ? (codeRaw.trim() as OpportunityAttentionReasonCode)
+        : null;
+    const mapped = code ? PRIORITY_SHORT_BY_CODE[code] : null;
+    if (mapped) {
+        if (mapped.length <= MAX_LEN) return mapped;
+        return `${mapped.slice(0, MAX_LEN - 1)}…`;
+    }
+
     const label = String(row._attention_reason_label ?? "").trim();
     if (!label) return null;
-
-    const details = row._attention_reasons_detail;
-    const tiers: AttentionSlaTier[] = Array.isArray(details)
-        ? (details as { sla_tier?: AttentionSlaTier }[])
-              .map((x) => x.sla_tier)
-              .filter((t): t is AttentionSlaTier => t === "ok" || t === "approaching" || t === "breached")
-        : [];
-    let worst: AttentionSlaTier = "ok";
-    for (const t of tiers) worst = worstSlaTier(worst, t);
-
-    let out = label;
-    if (worst === "breached") out = `${out} · Past due vs goal`;
-    else if (worst === "approaching") out = `${out} · Due soon`;
-
-    if (out.length > MAX_LEN) return `${out.slice(0, MAX_LEN - 1)}…`;
-    return out;
+    const compact = label.replace(/^needs attention:\s*/i, "").trim() || label;
+    if (compact.length <= MAX_LEN) return compact;
+    return `${compact.slice(0, MAX_LEN - 1)}…`;
 }

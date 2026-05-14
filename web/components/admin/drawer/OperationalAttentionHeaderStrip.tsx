@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Sparkles } from "lucide-react";
 
 import OperationalAttentionEnhanceDraft from "@/components/admin/drawer/OperationalAttentionEnhanceDraft";
@@ -43,6 +44,7 @@ function copyDraftMessage(body: string) {
  * duplicate it here — queue list previews may still use `operationalSummaryPreview` separately.
  */
 export default function OperationalAttentionHeaderStrip({ overviewData, variant = "panel" }: Props) {
+    const [originalDraftFolded, setOriginalDraftFolded] = useState(false);
     const payload = overviewData._operational_attention as OpportunityAttentionResult | null | undefined;
     const err = overviewData._operational_attention_error as OperationalAttentionAttachmentError | null | undefined;
     const suggestion = overviewData._attention_suggestion as AttentionSuggestionV1 | null | undefined;
@@ -170,25 +172,50 @@ export default function OperationalAttentionHeaderStrip({ overviewData, variant 
                         </p>
 
                         {draftBody ? (
-                            <details className="group/draft mt-0.5 rounded border border-alloy-stone/16 bg-white/55 px-1 py-0.5">
-                                <summary className="cursor-pointer select-none text-[8px] font-semibold text-alloy-blue hover:underline [&::-webkit-details-marker]:hidden">
-                                    Draft · not sent
-                                </summary>
-                                <p className="mt-0.5 text-[8px] text-alloy-midnight/50">Copy and edit before using.</p>
-                                <pre className="mt-0.5 max-h-24 overflow-y-auto whitespace-pre-wrap break-words rounded border border-alloy-stone/12 bg-alloy-stone/[0.03] px-1 py-0.5 font-sans text-[9px] leading-snug text-alloy-midnight/85">
-                                    {draftBody}
-                                </pre>
-                                <button
-                                    type="button"
-                                    className="mt-0.5 text-[8px] font-semibold text-alloy-blue hover:underline"
-                                    onClick={(e) => {
-                                        e.preventDefault();
-                                        copyDraftMessage(draftBody);
-                                    }}
+                            originalDraftFolded ? (
+                                <details
+                                    className="mt-0.5 rounded border border-alloy-stone/14 bg-white/45 px-1 py-0.5"
+                                    data-drawer-slot="original_draft_collapsed"
                                 >
-                                    Copy draft
-                                </button>
-                            </details>
+                                    <summary className="cursor-pointer select-none text-[8px] font-semibold text-alloy-blue hover:underline [&::-webkit-details-marker]:hidden">
+                                        Original draft
+                                    </summary>
+                                    <p className="mt-0.5 text-[8px] text-alloy-midnight/50">Not sent — copy and edit before using.</p>
+                                    <pre className="mt-0.5 max-h-24 overflow-y-auto whitespace-pre-wrap break-words rounded border border-alloy-stone/12 bg-alloy-stone/[0.03] px-1 py-0.5 font-sans text-[9px] leading-snug text-alloy-midnight/85">
+                                        {draftBody}
+                                    </pre>
+                                    <button
+                                        type="button"
+                                        className="mt-0.5 text-[8px] font-semibold text-alloy-blue hover:underline"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            copyDraftMessage(draftBody);
+                                        }}
+                                    >
+                                        Copy original
+                                    </button>
+                                </details>
+                            ) : (
+                                <details className="group/draft mt-0.5 rounded border border-alloy-stone/16 bg-white/55 px-1 py-0.5">
+                                    <summary className="cursor-pointer select-none text-[8px] font-semibold text-alloy-blue hover:underline [&::-webkit-details-marker]:hidden">
+                                        Draft · not sent
+                                    </summary>
+                                    <p className="mt-0.5 text-[8px] text-alloy-midnight/50">Copy and edit before using.</p>
+                                    <pre className="mt-0.5 max-h-24 overflow-y-auto whitespace-pre-wrap break-words rounded border border-alloy-stone/12 bg-alloy-stone/[0.03] px-1 py-0.5 font-sans text-[9px] leading-snug text-alloy-midnight/85">
+                                        {draftBody}
+                                    </pre>
+                                    <button
+                                        type="button"
+                                        className="mt-0.5 text-[8px] font-semibold text-alloy-blue hover:underline"
+                                        onClick={(e) => {
+                                            e.preventDefault();
+                                            copyDraftMessage(draftBody);
+                                        }}
+                                    >
+                                        Copy draft
+                                    </button>
+                                </details>
+                            )
                         ) : null}
 
                         <div
@@ -200,7 +227,7 @@ export default function OperationalAttentionHeaderStrip({ overviewData, variant 
                             wired; no send/apply.
                         </div>
 
-                        <OperationalAttentionEnhanceDraft suggestion={suggestion} />
+                        <OperationalAttentionEnhanceDraft suggestion={suggestion} onEnhancedSurfaceChange={setOriginalDraftFolded} />
 
                         {otherReasons.length > 0 ? (
                             factorsPreferDetails ? (

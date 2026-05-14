@@ -7970,7 +7970,11 @@ export default function AdminEntityDrawer() {
                     <span className="shrink-0">{opportunityInquiryWorkflowHeaderStatus}</span>
                 </div>
                 {overviewData && !(overviewData as { _create?: boolean })._create ? (
-                    <OperationalAttentionHeaderStrip variant="chrome" overviewData={overviewData as Record<string, unknown>} />
+                    <OperationalAttentionHeaderStrip
+                        key={`attn-hdr-${String((overviewData as { id?: string }).id ?? "")}`}
+                        variant="chrome"
+                        overviewData={overviewData as Record<string, unknown>}
+                    />
                 ) : null}
                 {opportunityActivityHeaderLine}
             </div>
@@ -7978,7 +7982,11 @@ export default function AdminEntityDrawer() {
             <div className="mt-0.5 space-y-1.5">
                 {headerSubtitleBase ? <div>{headerSubtitleBase}</div> : null}
                 {overviewData && !(overviewData as { _create?: boolean })._create ? (
-                    <OperationalAttentionHeaderStrip variant="chrome" overviewData={overviewData as Record<string, unknown>} />
+                    <OperationalAttentionHeaderStrip
+                        key={`attn-hdr-${String((overviewData as { id?: string }).id ?? "")}`}
+                        variant="chrome"
+                        overviewData={overviewData as Record<string, unknown>}
+                    />
                 ) : null}
                 {opportunityActivityHeaderLine}
             </div>

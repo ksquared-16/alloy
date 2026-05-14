@@ -76,6 +76,7 @@ export function buildNeedsAttentionSuggestion(input: BuildNeedsAttentionSuggesti
         entity_id: entityId,
         record_ref: entityId.length >= 8 ? entityId.slice(-8) : entityId || "record",
         contact_name,
+        team_line: "Your team",
     });
 
     const out: AttentionSuggestionV1 = {

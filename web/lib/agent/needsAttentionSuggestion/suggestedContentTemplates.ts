@@ -8,16 +8,18 @@ export type SuggestedContentTemplateKey =
     | "payment_status_check"
     | "scheduled_event_follow_up";
 
-/** Variables for deterministic templates (all values are plain strings for audit). */
+/** Variables for deterministic templates (plain strings for audit). No user-facing record IDs. */
 export type SuggestedMessageTemplateContext = {
     entity_id: string;
-    /** Short human-facing id tail for drafts. */
+    /** @deprecated Not interpolated into copy — kept for callers/tests that still pass it. */
     record_ref: string;
     /**
      * Greeting name when known; otherwise a neutral placeholder (never empty).
-     * Vertical-neutral default — not childcare-specific.
+     * Prefer a real contact / household name from entity resolution — vertical-neutral.
      */
     contact_name: string;
+    /** Sign-off line (e.g. team name). Defaults to “Your team” when omitted. */
+    team_line?: string;
 };
 
 function fill(template: string, vars: Record<string, string>): string {
@@ -35,55 +37,79 @@ type TemplateDef = {
     variablesFor: (ctx: SuggestedMessageTemplateContext) => Record<string, string>;
 };
 
+const DEFAULT_TEAM_LINE = "Your team";
+
 const TEMPLATES: Record<SuggestedContentTemplateKey, TemplateDef> = {
     generic_follow_up_short: {
         key: "generic_follow_up_short",
         channel: "email",
-        template:
-            "Hello {{contact_name}}, following up regarding this inquiry (reference {{record_ref}}). Please reply when you can.",
+        template: `Hi {{contact_name}},
+
+I wanted to follow up on your inquiry. We're ready for the next step whenever you are.
+
+Let us know if you'd like to move forward or if you have any questions.
+
+Thank you,
+{{team_line}}`,
         variablesFor: (ctx) => ({
             contact_name: ctx.contact_name,
-            record_ref: ctx.record_ref,
+            team_line: ctx.team_line?.trim() || DEFAULT_TEAM_LINE,
         }),
     },
     pending_decision_check_in: {
         key: "pending_decision_check_in",
         channel: "email",
-        template:
-            "Hello {{contact_name}}, checking in on a pending decision for this inquiry (reference {{record_ref}}). Let us know if you have questions.",
+        template: `Hi {{contact_name}},
+
+Just checking in on where things stand on your side. Whenever you're ready, we're happy to answer questions or help you decide on next steps.
+
+Thank you,
+{{team_line}}`,
         variablesFor: (ctx) => ({
             contact_name: ctx.contact_name,
-            record_ref: ctx.record_ref,
+            team_line: ctx.team_line?.trim() || DEFAULT_TEAM_LINE,
         }),
     },
     documents_request_short: {
         key: "documents_request_short",
         channel: "email",
-        template:
-            "Hello {{contact_name}}, we still need outstanding documents to move this inquiry forward (reference {{record_ref}}). Please upload or send them when you can.",
+        template: `Hi {{contact_name}},
+
+We're missing a few items we need to keep your request moving. If you can share what's outstanding when you have a moment, we'll take it from there.
+
+Thank you,
+{{team_line}}`,
         variablesFor: (ctx) => ({
             contact_name: ctx.contact_name,
-            record_ref: ctx.record_ref,
+            team_line: ctx.team_line?.trim() || DEFAULT_TEAM_LINE,
         }),
     },
     payment_status_check: {
         key: "payment_status_check",
         channel: "email",
-        template:
-            "Hello {{contact_name}}, confirming payment status for this inquiry (reference {{record_ref}}). Please reply with any questions.",
+        template: `Hi {{contact_name}},
+
+I wanted to touch base on payment or billing status so we can keep things on track. Reply with any questions and we'll help sort it out.
+
+Thank you,
+{{team_line}}`,
         variablesFor: (ctx) => ({
             contact_name: ctx.contact_name,
-            record_ref: ctx.record_ref,
+            team_line: ctx.team_line?.trim() || DEFAULT_TEAM_LINE,
         }),
     },
     scheduled_event_follow_up: {
         key: "scheduled_event_follow_up",
         channel: "email",
-        template:
-            "Hello {{contact_name}}, following up after a recent scheduled appointment tied to this inquiry (reference {{record_ref}}). We would appreciate a quick update when convenient.",
+        template: `Hi {{contact_name}},
+
+Following up after your recent scheduled visit or milestone. We'd love to hear how you'd like to proceed when you have a moment.
+
+Thank you,
+{{team_line}}`,
         variablesFor: (ctx) => ({
             contact_name: ctx.contact_name,
-            record_ref: ctx.record_ref,
+            team_line: ctx.team_line?.trim() || DEFAULT_TEAM_LINE,
         }),
     },
 };
@@ -108,7 +134,7 @@ const REASON_TO_TEMPLATE_KEY: Partial<Record<OpportunityAttentionReasonCode, Sug
 };
 
 /**
- * Deterministic draft content only — no send path.
+ * Deterministic draft content only — no send path. Copy avoids internal IDs and weak filler phrasing.
  * Returns null when no template is mapped for this reason (V1 conservative).
  */
 export function suggestedContentForReason(
