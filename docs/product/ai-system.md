@@ -11,8 +11,8 @@ Document **actual** admin/agent HTTP routes and env gates in `web/` — not futu
   - **`.../v1/record-overview-layout`**, **`.../v1/activity`**.
   - **`.../v2/field-visibility`** — structured apply path; **disabled unless** **`AGENT_V2_FIELD_VISIBILITY_ENABLED`** is `true`/`1`/`yes` (see `web/app/api/admin/agent/v2/field-visibility/route.ts`).
 - **Admin V2 UI** may surface AI/command UX under **`web/app/adminV2/`** (search `ai`, `agent` in subtree).
-- **AI enrichment (stub + OpenAI-compatible + telemetry):** **`POST /api/admin/ai/enrich-attention-suggestion`** — **`getAdminContextCached`** + **`getAdminAccessContextCached`** (org scope + `permissionKeys`); legacy **admin-only** unless **`AI_ENRICHMENT_USE_PERMISSION_REQUIRED`** + grant **`ai.enrichment.use`** (key seeded by **`supabase/migrations/20260520100000_ai_enrichment_permission_keys_seed.sql`**); org policy pre-check (`enabled`, **`provider`** `stub` or **`openai`**, `draft_enrichment`); stub path also requires **`AI_ENRICHMENT_STUB_ENABLED`**; OpenAI path requires strict permission mode + **`OPENAI_API_KEY`** / **`OPENAI_MODEL`** (optional **`OPENAI_BASE_URL`**). Request body parsing: **`web/lib/ai/enrichAttentionSuggestionRouteValidation.ts`**; route tests **`web/tests/ai/enrichAttentionSuggestionRoute.test.ts`**. Telemetry: **`AI_ENRICHMENT_TELEMETRY_ENABLED`** + verbose org logging → **`ai_enrichment_usage_v1`**. See sprint doc §16–§Phase 2.5.
-- **Operational summaries (Phase 2 — derived):** Opportunity GET still attaches **`_operational_summary`** (`OperationalSummaryV1`) via **`attachOpportunityAttentionSuggestionBundle`** (payload for APIs / future use). **Drawer chrome** uses a single premium surface — **`OperationalAttentionHeaderStrip`** (“Recommended by Alloy”) — without duplicating operational summary narrative copy there. Work-unit queue rows may include **`_operational_summary_preview`** (headline + risk hint) — **`data-queue-preview-slot="operational_summary"`**; **no** extra per-row activity fetches. See sprint doc **§17**.
+- **AI enrichment (stub + OpenAI-compatible + telemetry):** **`POST /api/admin/ai/enrich-attention-suggestion`** — **`getAdminContextCached`** + **`getAdminAccessContextCached`** (org scope + `permissionKeys`); legacy **admin-only** unless **`AI_ENRICHMENT_USE_PERMISSION_REQUIRED`** + grant **`ai.enrichment.use`** (key seeded by **`supabase/migrations/20260520100000_ai_enrichment_permission_keys_seed.sql`**); org policy pre-check (`enabled`, **`provider`** `stub` or **`openai`**, `draft_enrichment`); stub path also requires **`AI_ENRICHMENT_STUB_ENABLED`**; OpenAI path requires strict permission mode + **`OPENAI_API_KEY`** / **`OPENAI_MODEL`** (optional **`OPENAI_BASE_URL`**). Request body parsing: **`web/lib/ai/enrichAttentionSuggestionRouteValidation.ts`**; route tests **`web/tests/ai/enrichAttentionSuggestionRoute.test.ts`**. Telemetry: **`AI_ENRICHMENT_TELEMETRY_ENABLED`** + verbose org logging → **`ai_enrichment_usage_v1`**. **Drawer:** **`OperationalAttentionEnhanceDraft`** calls this route for **“Enhance draft”** (copy-only preview) when a deterministic draft exists — no send/apply/persistence. See sprint doc §16–§Phase 2.5.
+- **Operational summaries (Phase 2 — derived):** Opportunity GET still attaches **`_operational_summary`** (`OperationalSummaryV1`) via **`attachOpportunityAttentionSuggestionBundle`** (payload for APIs / future use). **Drawer chrome** uses a single premium surface — **`OperationalAttentionHeaderStrip`** (“Recommended by Alloy”) — without duplicating operational summary narrative copy there. Work-unit queue rows may include **`_operational_summary_preview`** (headline + risk hint) — **`data-queue-preview-slot="operational_summary"`**; **no** extra per-row activity fetches. **Needs-attention list order** is **deterministic** (resolver `priority_score`, SLA tiers, severity, waiting facet, then queue-definition sort / `updated_at`) — applied in **`loadOpportunityNeedsAttentionRows`** after membership filter; **AI does not reorder queues**. See sprint doc **§17** and **§AI operational experience V1.1**.
 
 ## How it works
 
@@ -129,13 +129,14 @@ Confirm in the Vercel project (or `.env.local` for local parity). **Never** put 
 | **`AI_ENRICHMENT_STUB_ENABLED`** | `true` when org policy uses **`provider: stub`**. |
 | **`OPENAI_API_KEY`**, **`OPENAI_MODEL`** | When org policy uses **`provider: openai`** (optional **`OPENAI_BASE_URL`**). |
 | **`OPENAI_CHAT_TEMPERATURE`** | Optional `0`–`2` float; used only when **`OPENAI_MODEL`** supports custom **`temperature`** (ignored for **gpt-5**-style models — see **`supportsCustomTemperature`** in **`web/lib/ai/openAiModelCapabilities.ts`**). |
+| **`OPENAI_REQUEST_TIMEOUT_MS`** | Optional integer ms for Chat Completions used by structured enrichment; **default `20000`**; clamped **`1000`–`30000`** (see **`getOpenAiStructuredRequestTimeoutMs`** in **`web/lib/ai/aiEnrichmentEnv.ts`**). |
 | **`AI_ENRICHMENT_TELEMETRY_ENABLED`** | Optional; with org **`logging_mode: verbose`** emits **`ai_enrichment_usage_v1`** events. |
-| **`NEXT_PUBLIC_AI_ENRICHMENT_STAGING_TEST_UI`** | **`true`/`1`/`yes` only** on **non-production** Vercel/preview when **`NODE_ENV=production`** so the temporary **“Test AI enrichment”** drawer control appears (see **TEMPORARY — drawer staging test** below). **Never** set on customer production. |
 
 ### Drawer UI (record overview)
 
 - Open an opportunity that **needs attention** with a deterministic **`_attention_suggestion`**.
 - Confirm **one** compact **“Recommended by Alloy”** block: attention headline, inline **Next ·** label, **Why ·** summary, collapsed **Draft · not sent** when a draft exists, dashed placeholder referencing **`next_action.action_family`** (future configurable actions — **no** execution, send, or apply today).
+- When a draft body exists, confirm **“Enhance draft”** appears ( **`OperationalAttentionEnhanceDraft`** ): optional **POST** to **`/api/admin/ai/enrich-attention-suggestion`**; on success an **“Enhanced draft · preview”** details block with **copy only**; deterministic draft remains in **Draft · not sent** above. **No** send/apply/persistence from this control.
 - **`AttentionSuggestionV1.next_action.action_family`** is reserved to map later onto existing configurable queue/record action buttons (same catalog as lane quick actions). **No** wiring or autonomous execution in this build.
 - Expand **Operational detail** in the body for factors / timing; **`_operational_summary`** remains on the API payload for previews / future use — **not** rendered as a separate “Operational read” card above Recommended by Alloy.
 
@@ -144,19 +145,9 @@ Confirm in the Vercel project (or `.env.local` for local parity). **Never** put 
 - With **Postman/curl** and a valid admin session (or CI), send a minimal body: **`correlation_id`**, **`deterministic_suggestion`** (`AttentionSuggestionV1`).
 - Expect **`403`** when portal RBAC denies; **`403`** when org policy denies; **`403`** stub path when **`AI_ENRICHMENT_STUB_ENABLED`** is off; **`200`** with **`envelope`** when gates pass. Successful **`200`** bodies also include safe **`enrichment_telemetry`** (`provider_key`, `outcome`) and **`provider_error_code`** (nullable) for lightweight clients — **no** prompt text, **no** raw redacted payload dump, **no** API key. Response must **not** echo **`OPENAI_API_KEY`**; **`console`** must not log the key on success paths; outbound provider calls use **redacted** context only (see **`web/tests/ai/enrichAttentionSuggestionRoute.test.ts`**).
 
-### TEMPORARY — drawer “Test AI enrichment” (remove after validation)
+### Local OpenAI path smoke check (developer workstation)
 
-**Purpose:** from an opportunity drawer that already has **`_attention_suggestion`**, POST the current suggestion to **`/api/admin/ai/enrich-attention-suggestion`** without copying JSON from Network.
-
-**Visibility:** **`NODE_ENV !== "production"`** (e.g. `next dev`, Vitest) **or** **`NEXT_PUBLIC_AI_ENRICHMENT_STAGING_TEST_UI=true`** on a **non-customer** Vercel environment (preview / internal staging). Production customer sites must leave the flag **unset**.
-
-**Behavior:** button label **“Test AI enrichment”**; on success/failure, **`console.info`** one line prefixed with **`[alloy-staging-ai-enrichment-test]`** plus a small JSON object: **`status`**, **`provider_key`**, **`outcome`**, **`has_enrichment`**, **`schema_ok`**, **`error_code`** only. Inline **`output`** shows the same summary. **No** persistence, send, or apply.
-
-**Remove when done:** delete **`AiEnrichmentStagingTestButton.tsx`**, **`web/lib/dev/aiEnrichmentStagingTestUi.ts`**, strip **`AiEnrichmentStagingTestButton`** import/usage from **`OperationalAttentionHeaderStrip.tsx`**, remove **`NEXT_PUBLIC_AI_ENRICHMENT_STAGING_TEST_UI`** from Vercel env + this subsection; optionally revert the extra **`enrichment_telemetry`** / **`provider_error_code`** fields on the route **`200`** JSON if no longer needed.
-
-### TEMPORARY — local OpenAI path smoke check (remove after validation)
-
-**Purpose:** one developer machine calls the **same** server enrichment helper as the route (**`enrichAttentionSuggestionStubEnvelope`**: redact → structured provider → telemetry shape), using a built-in **`AttentionSuggestionV1`** fixture — **no** browser UI, **no** `NEXT_PUBLIC_*` flags.
+**Purpose:** one developer machine calls the **same** server enrichment helper as the route (**`enrichAttentionSuggestionStubEnvelope`**: redact → structured provider → telemetry shape), using a built-in **`AttentionSuggestionV1`** fixture — **no** browser UI.
 
 **Run** (from **`web/`**), with secrets only in **`web/.env.local`** (never committed):
 
@@ -165,9 +156,9 @@ cd web
 npm run -s validate:ai-openai-local
 ```
 
-**Requires:** `NODE_ENV` must **not** be `production`; **`AI_ENRICHMENT_USE_PERMISSION_REQUIRED=true`**; **`OPENAI_API_KEY`** + **`OPENAI_MODEL`** (optional **`OPENAI_BASE_URL`**). The script prints **one** JSON line: **`provider_key`**, **`outcome`**, **`has_enrichment`**, **`schema_ok`**, **`redaction_steps`**, **`error_code`** (when failed), and on failures **`http_status`**, **`openai_error_type`**, **`openai_error_code`**, **`openai_error_message`** (from the vendor JSON when present), plus **`model`** and **`base_url_host`** (host only). No prompt, draft, full HTTP body, or API key.
+**Requires:** `NODE_ENV` must **not** be `production`; **`AI_ENRICHMENT_USE_PERMISSION_REQUIRED=true`**; **`OPENAI_API_KEY`** + **`OPENAI_MODEL`** (optional **`OPENAI_BASE_URL`**, optional **`OPENAI_REQUEST_TIMEOUT_MS`** — same defaults/clamps as production provider). The script prints **one** JSON line: **`provider_key`**, **`outcome`**, **`has_enrichment`**, **`schema_ok`**, **`redaction_steps`**, **`error_code`** (when failed), and on failures **`http_status`**, **`openai_error_type`**, **`openai_error_code`**, **`openai_error_message`** (from the vendor JSON when present), plus **`model`** and **`base_url_host`** (host only). No prompt, draft, full HTTP body, or API key.
 
-**Remove when done:** delete **`web/scripts/validateOpenAiEnrichmentLocal.ts`**, drop the **`validate:ai-openai-local`** script from **`web/package.json`**, and delete this subsection.
+This script is the **supported** local parity check for the OpenAI-compatible enrichment path; keep it alongside route tests.
 
 ---
 

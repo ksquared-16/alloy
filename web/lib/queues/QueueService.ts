@@ -38,6 +38,7 @@ import { buildQueueServiceAttentionSemantics } from "@/lib/workspace/opportunity
 import { applyPlacementToOpportunityQueueRows } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
 import type { WorkUnitPlacementQueueDiagnostics } from "@/lib/orchestration/placement/applyPlacementToOpportunityQueueRows";
 import { resolvePlacementQueueConfig } from "@/lib/orchestration/placement/resolvePlacementQueueConfig";
+import { sortNeedsAttentionFilteredRows } from "@/lib/queues/needsAttentionQueuePrioritySort";
 
 type JobRowPreview = {
     id: string;
@@ -1400,17 +1401,22 @@ export async function loadOpportunityNeedsAttentionRows(params: {
         throw new QueueServiceError(error.message, 400, "DB_ERROR");
     }
     const rawRows = (data ?? []) as OpportunityRowPreview[];
-    const filtered = rawRows.filter((r) =>
-        resolveOpportunityAttention({
+    const attentionByRowId = new Map<string, ReturnType<typeof resolveOpportunityAttention>>();
+    const filtered: OpportunityRowPreview[] = [];
+    for (const r of rawRows) {
+        const attention = resolveOpportunityAttention({
             opportunity: opportunityPreviewToResolverEntity(r),
             defs: params.opportunityStatusDefs,
             config: attentionConfig,
             nowMs,
             optionalSignals: null,
-        }).needs_attention
-    );
+        });
+        if (!attention.needs_attention) continue;
+        attentionByRowId.set(String(r.id), attention);
+        filtered.push(r);
+    }
     return {
-        filtered: sortOpportunityRowsByPlan(filtered, params.sort),
+        filtered: sortNeedsAttentionFilteredRows(filtered, attentionByRowId, params.sort),
         raw_candidates_fetched: rawRows.length,
         fetch_cap: cap,
     };

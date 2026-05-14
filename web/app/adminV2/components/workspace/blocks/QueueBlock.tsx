@@ -626,6 +626,15 @@ export function CrmCompactQueuePreview({
             {slots.attentionReason?.trim() ? (
               <div className="adminv2-ws-crm-queue-preview__attention-headline">{slots.attentionReason.trim()}</div>
             ) : null}
+            {slots.queuePriorityExplanation?.trim() ? (
+              <div
+                className="adminv2-ws-crm-queue-preview__operational-next-scan text-alloy-midnight/62"
+                data-queue-preview-slot="queue_priority_explanation"
+                title="Deterministic priority hint — not AI-generated."
+              >
+                {slots.queuePriorityExplanation.trim()}
+              </div>
+            ) : null}
             {slots.operationalSummaryPreview?.headline?.trim() ? (
               <div
                 className="adminv2-ws-crm-queue-preview__operational-summary-preview"
@@ -708,6 +717,15 @@ export function CrmCompactQueuePreview({
           ) : null}
           {slots.attentionReason?.trim() ? (
             <div className="adminv2-ws-crm-queue-preview__attention">{slots.attentionReason.trim()}</div>
+          ) : null}
+          {slots.queuePriorityExplanation?.trim() ? (
+            <div
+              className="adminv2-ws-crm-queue-preview__operational-next text-[11px] leading-snug text-alloy-midnight/58"
+              data-queue-preview-slot="queue_priority_explanation"
+              title="Deterministic priority hint — not AI-generated."
+            >
+              {slots.queuePriorityExplanation.trim()}
+            </div>
           ) : null}
           {slots.operationalSummaryPreview?.headline?.trim() ? (
             <div

@@ -459,6 +459,35 @@ ON CONFLICT (org_id, role_key, permission_key) DO NOTHING;
 
 ---
 
+## AI operational experience V1.1 (2026-05-13)
+
+**Goal:** Ship operator-safe **Enhance draft** in the drawer, **deterministic** needs-attention list ordering + compact **“why this row”** copy on CRM queue rows — without AI-driven reorder, persistence, or send/apply.
+
+### Queue ordering audit (Card 2)
+
+| Question | Answer |
+|----------|--------|
+| Where does sorting happen today? | **PostgREST:** `loadOpportunityNeedsAttentionRows` applies the queue definition’s **`sort`** array via **`.order(column, { ascending })`** on the capped candidate query (same as other opportunity queues). **In-memory:** after the resolver **`needs_attention`** membership filter, rows were previously re-sorted with **`sortOpportunityRowsByPlan`** (lexicographic compare on plan columns — default often **`updated_at`**). |
+| Is **`priority_score`** on rows? | **Yes, after list enrichment:** **`_attention_priority_score`** is attached in **`QueueService`** opportunity row shaping when **`opportunityAttentionResolution`** runs (along with **`_attention_reason_label`**, **`_attention_waiting_bucket`**, etc.). It is **not** a PostgREST column. |
+| Do needs-attention queues already sort by resolver score? | **Not before V1.1:** list order followed **DB sort plan** then **plan-only** in-memory sort; **`priority_score`** was available on enriched rows for display/diagnostics but **did not** drive default ordering. |
+| How do work-unit queues differ from “needs-attention” semantics? | **`needs_attention`** is an **opportunity** queue key using a **candidate OR** prefilter + **resolver membership** in **`loadOpportunityNeedsAttentionRows`**. Other work-unit queues use their **`queue_definition`** filters without that resolver gate. **Department “attention” lanes** are rollups keyed off the same resolver signals but are **not** this list loader. |
+| Safest place for default priority ordering | **After** the resolver membership filter **inside `loadOpportunityNeedsAttentionRows`** (same cap / same candidate set): reorder the filtered slice with a **deterministic comparator** (`web/lib/queues/needsAttentionQueuePrioritySort.ts`), then **tie-break** with the existing **`sortOpportunityRowsByPlan`** order so manually configured **`sort`** in the queue definition is preserved as a **secondary** key. **Does not** change PostgREST `.order` (keeps candidate fetch stable and avoids breaking other queues). |
+
+### Ordering policy (Card 3)
+
+- **Deterministic only** — descending **`priority_score`**, then worst **SLA tier** among reasons, then primary **severity**, then primary reason **SLA tier**, then **waiting.active**, then **`updated_at`** (newer first), then **queue-definition sort** as final tie-breaker.
+- **AI does not control ordering** — no model calls in the list path; optional enrichment remains drawer-local.
+
+### Drawer “Enhance draft” (Card 1)
+
+- **`OperationalAttentionEnhanceDraft`** — shown only when **`suggested_content.body`** is non-empty; **POST `/api/admin/ai/enrich-attention-suggestion`**; surfaces **`envelope.enrichment.suggested_draft_body_overlay`** when present; **copy-only**; deterministic draft stays in **Draft · not sent**.
+
+### Queue row priority line (Card 4)
+
+- **`buildQueueRowPriorityExplanationLine`** — needs-attention lane only; **`semanticCrmCompact.queuePriorityExplanation`**; rendered in **`CrmCompactQueuePreview`** with **`data-queue-preview-slot="queue_priority_explanation"`**.
+
+---
+
 **Document history**
 
 - **2026-05-13** — Initial plan from repo audit (no implementation).
@@ -466,4 +495,4 @@ ON CONFLICT (org_id, role_key, permission_key) DO NOTHING;
 - **2026-05-13** — Cards 5–6: stub provider + `enrichAttentionSuggestionStubEnvelope` + admin POST route + gated `emitEvent` telemetry + `web/tests/ai/enrichAttentionSuggestionStub.test.ts`.
 - **2026-05-13** — Phase 2 Cards 7–11: `OperationalSummaryV1`, `buildOperationalSummary.ts`, drawer + queue preview, `_operational_summary` attach + `web/tests/ai/operationalSummary.test.ts`.
 - **2026-05-13** — Phase 2.5 Cards 11.5–11.8: permission + policy route gates, adapter design types, placeholder provider, pilot checklist, `web/tests/ai/aiEnrichmentRouteAccess.test.ts`, `liveProviderAdapterPlaceholder.test.ts`.
-- **2026-05-13** — `20260520100000_ai_enrichment_permission_keys_seed.sql`: `ai.enrichment.use` (+ optional `ai.provider.config.manage`, `ai.telemetry.review`); default admin grant; staging / strict rollout docs in Phase 2.5.
+- **2026-05-13** — AI operational experience **V1.1**: drawer **Enhance draft** (`OperationalAttentionEnhanceDraft`), deterministic needs-attention ordering (`needsAttentionQueuePrioritySort.ts` + `loadOpportunityNeedsAttentionRows`), queue row priority line (`queueRowPriorityExplanation.ts`, `CrmCompactQueuePreview`), removed temporary staging test UI/docs.

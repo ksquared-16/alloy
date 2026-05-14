@@ -192,6 +192,10 @@ export type CrmCompactRowSemanticSlots = {
   ageContext: string | null;
   attentionReason: string | null;
   /**
+   * Needs-attention lane only: compact deterministic “why this row” line (resolver labels + SLA), not AI.
+   */
+  queuePriorityExplanation?: string | null;
+  /**
    * Queue-only preview of deterministic suggestion (`_attention_suggestion_preview` on enriched rows).
    * Same builder as entity GET; list paths usually omit activity so text may differ slightly from the drawer.
    */

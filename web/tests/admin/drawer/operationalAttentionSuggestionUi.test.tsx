@@ -111,7 +111,9 @@ describe("OperationalAttentionHeaderStrip", () => {
         expect(html).toContain("Copy draft");
         expect(html).toContain("Activity");
         expect(html).toContain("Idle signal");
-        expect(html).toContain("Test AI enrichment");
+        expect(html).toContain("Enhance draft");
+        expect(html).not.toContain("Test AI enrichment");
+        expect(html).toContain('data-drawer-slot="enhance_draft_action"');
     });
 
     it("uses deterministic copy when suggestion is absent", () => {
@@ -182,6 +184,22 @@ describe("CrmCompactQueuePreview suggestion preview", () => {
         expect(html).toContain("Alloy suggestion");
         expect(html).toContain("Respond to new request");
         expect(html).toContain("Operational attention: New inquiry is stale.");
+    });
+});
+
+describe("CrmCompactQueuePreview queue priority explanation", () => {
+    it("renders deterministic priority line when present", () => {
+        const html = renderToStaticMarkup(
+            <CrmCompactQueuePreview
+                scanMode
+                slots={baseSlots({
+                    attentionReason: "Needs attention: Follow-up overdue",
+                    queuePriorityExplanation: "Follow-up overdue · Past due vs goal",
+                })}
+            />,
+        );
+        expect(html).toContain('data-queue-preview-slot="queue_priority_explanation"');
+        expect(html).toContain("Follow-up overdue · Past due vs goal");
     });
 });
 

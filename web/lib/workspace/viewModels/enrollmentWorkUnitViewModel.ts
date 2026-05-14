@@ -21,6 +21,7 @@ import { normalizePhone } from "@/lib/contactNormalize";
 import { formatWorkspaceUsdGrouped } from "@/lib/ui-v2/formatWorkspaceCurrency";
 import type { WorkspaceOpportunityQueueRuntime } from "@/lib/workspace/types";
 import { buildQueueOperationalAttentionPresentation } from "@/lib/opportunities/operationalAttentionExplain";
+import { buildQueueRowPriorityExplanationLine } from "@/lib/opportunities/queueRowPriorityExplanation";
 
 type OppRow = WorkspaceOpportunityQueueRuntime["items"][number];
 
@@ -144,6 +145,8 @@ export type BuildEnrollmentCrmRowOptions = {
     rowPreviewFieldLabels?: Record<string, string> | null;
     previewWant?: ((field: QueueUiRowPreviewField) => boolean) | null;
     viewerTimezone?: string | null;
+    /** When `needs_attention`, enables {@link CrmCompactRowSemanticSlots.queuePriorityExplanation}. */
+    workUnitKey?: string | null;
 };
 
 export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildEnrollmentCrmRowOptions): CrmCompactRowSemanticSlots {
@@ -241,6 +244,11 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
     const programRaw = (row as { _requested_program?: string | null })._requested_program?.trim() || null;
     const programContextDeduped = programRaw ? dedupeRedundantProgramAgeInPreview(programRaw) : null;
 
+    const queuePriorityExplanation =
+        options?.workUnitKey?.trim().toLowerCase() === "needs_attention" && rowRec._needs_attention === true
+            ? buildQueueRowPriorityExplanationLine(rowRec)
+            : null;
+
     const want = options?.previewWant ?? ((_f: QueueUiRowPreviewField) => true);
     const childrenLinesRefined = deriveCrmCompactChildrenLinesForWorkUnitRow({
         want,
@@ -283,6 +291,7 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
         programContext,
         roomContext,
         attentionReason,
+        queuePriorityExplanation,
         attentionSuggestionPreview: attentionSuggestionPreviewResolved,
         operationalSummaryPreview,
         operationalNextHint,
@@ -300,7 +309,10 @@ export function buildEnrollmentOpportunityQueueItemVm(
     row: OppRow,
     ctx: { workUnitKey: string; rowPreviewFieldLabels?: Record<string, string> | null }
 ): QueueItemVm {
-    const slots = buildEnrollmentCrmRowSemanticSlots(row, { rowPreviewFieldLabels: ctx.rowPreviewFieldLabels });
+    const slots = buildEnrollmentCrmRowSemanticSlots(row, {
+        rowPreviewFieldLabels: ctx.rowPreviewFieldLabels,
+        workUnitKey: ctx.workUnitKey,
+    });
     const titleBase = (row.name ?? "").trim();
     const title = (row._customer_name ?? "").trim() || titleBase || row.id.slice(-8);
     const status = (row.status_key ?? "").trim();

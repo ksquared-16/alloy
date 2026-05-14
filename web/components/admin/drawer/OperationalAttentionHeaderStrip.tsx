@@ -2,7 +2,7 @@
 
 import { Sparkles } from "lucide-react";
 
-import AiEnrichmentStagingTestButton from "@/components/admin/dev/AiEnrichmentStagingTestButton";
+import OperationalAttentionEnhanceDraft from "@/components/admin/drawer/OperationalAttentionEnhanceDraft";
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
 import type { OperationalAttentionAttachmentError } from "@/lib/admin/operationalAttentionEntityAttachment";
 import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
@@ -200,7 +200,7 @@ export default function OperationalAttentionHeaderStrip({ overviewData, variant 
                             wired; no send/apply.
                         </div>
 
-                        <AiEnrichmentStagingTestButton suggestion={suggestion} />
+                        <OperationalAttentionEnhanceDraft suggestion={suggestion} />
 
                         {otherReasons.length > 0 ? (
                             factorsPreferDetails ? (
