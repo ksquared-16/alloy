@@ -20,6 +20,8 @@ import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
 import EntityDocumentsSection from "@/components/admin/EntityDocumentsSection";
 import CommunicationsDrawerSection from "@/components/admin/communications/CommunicationsDrawerSection";
+import TaskAssistV1OpportunityPanel from "@/components/admin/taskAssist/TaskAssistV1OpportunityPanel";
+import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
 import {
     scheduleDeferredCommunicationsDrawerPrefetch,
     invalidateCommunicationsDrawerPrefetch,
@@ -9714,6 +9716,9 @@ export default function AdminEntityDrawer() {
                         drawer.id !== "new" &&
                         opportunityRecordGateWorkflowLayout && (
                             <div className="pt-2 space-y-3" data-admin-opportunity-comms-panel="true">
+                                {isTaskAssistV1UiEnabled() ? (
+                                    <TaskAssistV1OpportunityPanel entityId={drawer.id} active={drawerTab === "communications"} />
+                                ) : null}
                                 <CommunicationsDrawerSection
                                     embedded
                                     apiEntityType="opportunities"
@@ -10753,6 +10758,9 @@ export default function AdminEntityDrawer() {
                                     drawer.id !== "new" &&
                                     !(overviewData as { _create?: boolean })?._create && (
                                         <div className="mb-4 rounded-xl border border-admin-border bg-white/80 px-2.5 py-2.5 shadow-sm">
+                                            {isTaskAssistV1UiEnabled() ? (
+                                                <TaskAssistV1OpportunityPanel entityId={drawer.id} active />
+                                            ) : null}
                                             <CommunicationsDrawerSection
                                                 key={drawer.id}
                                                 embedded

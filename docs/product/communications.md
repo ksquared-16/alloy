@@ -13,7 +13,8 @@ Outbound and inbound messaging threads tied to **entities** (person-first anchor
 **Outbound (SMS + email)**
 
 - **Enqueue (Next):** **`enqueueCanonicalOutboundMessage`** (`web/lib/communications/canonicalOutboundEnqueue.ts`) upserts the thread, inserts **`communication_messages`** with **`status: queued`**, then **`emitEvent`** **`message_queued`** for workflow fan-out.
-- **Admin send:** **`POST /api/admin/communications/send`** validates org + scope and calls canonical enqueue (see route header comment).
+- **Admin send:** **`POST /api/admin/communications/send`** validates org + scope and calls **`executeCommunicationsSend`** → canonical enqueue (see route header comment and **`web/lib/communications/executeCommunicationsSend.ts`**).
+- **Task Assist (Agent 2 — V1):** **`POST /api/admin/ai/task-assist/apply`** validates the operator-approved payload, enforces **`assertCommunicationsSendAllowed`**, then calls the **same** **`executeCommunicationsSend`** helper as admin send (no duplicated enqueue logic; **no** Task Assist references to legacy **`public.messages`** / **`messages_outbox`**). **Proposals:** **`POST /api/admin/ai/task-assist/propose`**. **Drawer:** **`TaskAssistV1OpportunityPanel`** in **`AdminEntityDrawer`** when **`NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED`** is **`true`** / **`1`**. Product scope + limitations: **`docs/sprints/05_2026/task_assist_v1.md`**.
 - **Drawer + modal:** **`AdminEntityDrawer`** communications section / **`CommunicationsDrawerSection`**, plus **Quick Message** modal (`web/app/adminV2/components/QuickMessageModal.tsx`).
 
 **Delivery (dispatcher + cron)**
@@ -75,6 +76,8 @@ Outbound and inbound messaging threads tied to **entities** (person-first anchor
 |---------|-----------|
 | Thread listing | `web/app/api/admin/communications/threads/route.ts` |
 | Send | `web/app/api/admin/communications/send/route.ts` |
+| **Shared send executor** | **`web/lib/communications/executeCommunicationsSend.ts`** (used by **`POST /api/admin/communications/send`** and **`POST /api/admin/ai/task-assist/apply`**) |
+| Task Assist apply / propose | `web/app/api/admin/ai/task-assist/apply/route.ts`, `web/app/api/admin/ai/task-assist/propose/route.ts` |
 | Canonical enqueue + `message_queued` | `web/lib/communications/canonicalOutboundEnqueue.ts` |
 | Worker dequeue | `backend/app/routes/messages_sender.py`, `backend/app/services/communication_message_sender.py` |
 | Twilio / Resend webhooks | `web/app/api/webhooks/twilio/sms-status/route.ts`, `web/app/api/webhooks/resend/route.ts` |

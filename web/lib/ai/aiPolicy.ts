@@ -12,6 +12,8 @@ export const AI_ALLOWED_FEATURES = [
     "draft_enrichment",
     "operational_summary",
     "reasoning_paraphrase",
+    /** Task Assist V1 — deterministic proposal generation (no LLM in default path). @see docs/sprints/05_2026/task_assist_v1.md */
+    "task_assist_draft",
 ] as const;
 
 export type AiAllowedFeature = (typeof AI_ALLOWED_FEATURES)[number];

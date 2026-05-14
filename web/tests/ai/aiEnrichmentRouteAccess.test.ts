@@ -9,7 +9,7 @@ import {
     isAiEnrichmentUsePermissionRequired,
     resolveAiEnrichmentPortalAccess,
 } from "@/lib/ai/aiEnrichmentPermissions";
-import { evaluateOrgPolicyForStubAttentionDraftEnrichmentRoute } from "@/lib/ai/aiEnrichmentRouteGuards";
+import { evaluateOrgPolicyForStubAttentionDraftEnrichmentRoute, evaluateOrgPolicyForStubTaskAssistProposeRoute } from "@/lib/ai/aiEnrichmentRouteGuards";
 
 const adminCtx = { ok: true as const, orgId: "org-1", role: "admin", userId: "u1" };
 const opsCtx = { ok: true as const, orgId: "org-1", role: "ops", userId: "u1" };
@@ -100,6 +100,31 @@ describe("evaluateOrgPolicyForStubAttentionDraftEnrichmentRoute", () => {
         });
         expect(r.ok).toBe(false);
         if (!r.ok) expect(r.error).toBe("AI_POLICY_PROVIDER");
+    });
+});
+
+describe("evaluateOrgPolicyForStubTaskAssistProposeRoute", () => {
+    it("allows stub + task_assist_draft when policy enabled", () => {
+        const r = evaluateOrgPolicyForStubTaskAssistProposeRoute({
+            [AI_POLICY_METADATA_KEY]: {
+                enabled: true,
+                provider: "stub",
+                allowed_features: ["task_assist_draft"],
+            },
+        });
+        expect(r.ok).toBe(true);
+    });
+
+    it("denies when task_assist_draft missing", () => {
+        const r = evaluateOrgPolicyForStubTaskAssistProposeRoute({
+            [AI_POLICY_METADATA_KEY]: {
+                enabled: true,
+                provider: "stub",
+                allowed_features: ["draft_enrichment"],
+            },
+        });
+        expect(r.ok).toBe(false);
+        if (!r.ok) expect(r.error).toBe("AI_FEATURE_NOT_ALLOWED");
     });
 });
 

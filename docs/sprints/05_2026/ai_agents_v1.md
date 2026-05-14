@@ -1,4 +1,4 @@
-# Sprint: AI Agents V1 (Suggestion + Workflow Assist)
+# Sprint: AI Agents V1 (Suggestion + Task Assist + Workflow Assist)
 
 **Path:** `docs/sprints/05_2026/ai_agents_v1.md`  
 **Status:** Sprint specification — implementation follows cards in order.  
@@ -8,9 +8,15 @@
 
 ## 1. Overview
 
-This sprint introduces **AI agents as first-class platform capabilities** without a standalone agent framework. **Agent 1** extends the existing **needs attention / operational attention** system with a **structured, deterministic suggestion** (`next_action`, `reasoning`, optional **draft** message content). **Agent 2** is **design and documentation only** — a reusable template aligned with Agent 1’s pattern so future agents can ship quickly.
+This sprint introduces **AI agents as first-class platform capabilities** without a standalone agent framework.
 
-Work is sequenced as **cards** (audit validation → model → engine → integration → drawer UI → message templates → workflow template docs → testing). **No code implementation** is implied by this document alone; cards are executed in a later loop.
+- **Agent 1 — Needs Attention Suggestion:** extends the existing **needs attention / operational attention** system with a **structured, deterministic suggestion** (`next_action`, `reasoning`, optional **draft** message content) tied to resolver output.
+- **Agent 2 — Task Assist V1:** **Shipped (narrow V1)** per **`docs/sprints/05_2026/task_assist_v1.md`** — **transactional, one-off, user-directed** draft + approve-to-send for **opportunities** (SMS/email, single recipient, no durable proposals, no scheduled send in-product). **Out of scope for Agent 2:** reusable workflow configuration, workflow graph authoring, and any durable automation definition as the deliverable.
+- **Agent 3 — Workflow Assist:** **design and documentation only** in this sprint — **reusable workflow configuration** (draft generation, maintenance, diagnostics). **Out of scope for Agent 3:** one-off transactional execution (send/schedule) as the agent’s core job; those belong to **Task Assist**.
+
+**Product separation (non-negotiable):** **Task Assist** and **Workflow Assist** are **separate agents**. They share the same **four-layer architecture** (see §6) but must **not** be conflated: one addresses **ephemeral / transactional** operator intents with **human approval before send** (scheduled send and follow-up apply are **out of scope** for shipped Task Assist V1 — see **`task_assist_v1.md`**); the other addresses **workflow definitions** with drafts **disabled by default** and human approval before save/apply to persisted automation.
+
+Work is sequenced as **cards** (audit validation → model → engine → integration → drawer UI → message templates → **Task Assist + Workflow Assist docs** → testing). **Agent 1** and **Task Assist V1** have **implementation** in-repo; **Workflow Assist** remains **documentation-first** until its card pack ships. This overview is not a build checklist by itself — see **`task_assist_v1.md`** and **`ai_enrichment_and_agent_actions_v1.md`** for executable scope.
 
 ---
 
@@ -46,7 +52,7 @@ Work is sequenced as **cards** (audit validation → model → engine → integr
 - **AI-generated drafts** — editable bodies and **tone variants**; **templates remain the deterministic fallback** when the model is unavailable, denied by policy, or validation fails.
 - **Prioritization hints** — ordered `next_action` candidates or scores as **structured fields only**; never executable without explicit UI/API acceptance.
 
-**V2 (product + audit):** **Accept / dismiss / apply** events; **apply** only through existing explicit mutations after operator confirmation. **Workflow proposal generation** follows the Agent 2 template (`WorkflowAssistSuggestionV1`). **Persistence** and **audit rows** for accepted suggestions when proposals become durable — still **no headless autonomous execution**.
+**V2 (product + audit):** **Accept / dismiss / apply** events; **apply** only through existing explicit mutations after operator confirmation. **Reusable workflow proposal generation** follows the **Agent 3** template (`WorkflowAssistSuggestionV1`). **Task-oriented proposals** (send/schedule/reminder) follow the **Agent 2** template (`TaskAssistSuggestionV1`). **Persistence** and **audit rows** for accepted proposals when they become durable — still **no headless autonomous execution**.
 
 **Invariants:** JSON-shaped contracts; **human review before any side effect**; queue and list payloads remain **preview-only** relative to entity GET.
 
@@ -59,8 +65,10 @@ Work is sequenced as **cards** (audit validation → model → engine → integr
 - **No suggestion / proposal table** in V1 — suggestions are **derived at read time** only.
 - **No** new global “needs attention” lifecycle or replacement of `resolveOpportunityAttention`.
 - **No** deep learning, cross-opportunity reasoning, or prediction models in V1.
-- **No** full **Workflow Assist** runtime (no NL → workflow create, no auto-apply of workflow config) in this sprint.
+- **No** full **Workflow Assist (Agent 3)** runtime (no NL → workflow create, no auto-apply of workflow config) in this sprint.
+- **Task Assist (Agent 2)** **V1** is **scoped** to **`task_assist_v1.md`** (opportunity drawer, ephemeral proposals, canonical comms send) — not scheduled reminders/comms as shipped product in that pack.
 - **No** new workflow DSL.
+- **No** merging Task Assist transactional surfaces with Workflow Assist configuration surfaces in a single agent contract.
 - **Queue row suggestion preview** is **not authoritative** — compact `_attention_suggestion_preview` on enriched opportunity queue rows is allowed as **display-only** (same builder as entity GET; list paths may omit activity so copy can differ slightly from the drawer).
 
 ---
@@ -95,14 +103,27 @@ Work is sequenced as **cards** (audit validation → model → engine → integr
 
 ## 6. Agent V1 reusable pattern
 
-All agents (including future Workflow Assist) follow:
+All agents (**Agent 1**, **Agent 2 — Task Assist**, **Agent 3 — Workflow Assist**, and future agents) follow the **same four-layer architecture**:
 
-1. **Input layer** — Authoritative server state (entity row, resolver outputs, signals, config). **Never** trust queue preview rows as sole input for authoritative suggestions.
+1. **Input layer** — Authoritative server state (entity row, resolver outputs, signals, config, workflow rows/run history as applicable). **Never** trust queue preview rows as sole input for authoritative outputs.
 2. **Evaluation layer** — **Deterministic rules first**; optional light AI later behind explicit gates (not in V1 for Agent 1 core path).
 3. **Output layer** — **Versioned structured** types (`version`, `agent_key`, stable keys, `generated_at_iso`).
 4. **Surface layer** — UI renders payloads; **does not** own truth or side effects.
 
 Implementation is **modules + types**, not a generic agent runtime.
+
+### 6.1 Per-agent ownership (do not merge)
+
+The architecture is shared; **product contracts are not**. Each agent owns its own:
+
+| Dimension | Agent 1 (Needs Attention Suggestion) | Agent 2 (Task Assist V1) | Agent 3 (Workflow Assist) |
+|-----------|--------------------------------------|---------------------------|---------------------------|
+| **Intent scope** | Explain resolver-backed attention; next step + optional draft copy | One-off user-directed **opportunity** drafts + **send now** (SMS/email); **no** in-app channel, **no** scheduled send, **no** follow-up apply in V1 | Reusable workflow definitions; drafts; maintenance; diagnostics |
+| **Proposal contract** | `AttentionSuggestionV1` | **`TaskAssistSuggestionV1`** — see **`task_assist_v1.md` §3** | `WorkflowAssistSuggestionV1` (template — §9) |
+| **Safety rules** | No send/write; derived suggestion; queue non-SOT | No auto-send; **human approval** + server re-validation; no workflow graph keys on bodies; **no** legacy `messages` / `messages_outbox` in Task Assist code | No auto-apply; drafts **disabled by default**; **human approval before save/apply**; no substitution for `executeWorkflowRun` authorization |
+| **Approval flow** | N/A in V1 (display/copy only); future apply is explicit | **Apply** POST with operator `final_body` / `final_subject`; **`assertCommunicationsSendAllowed`** then **`executeCommunicationsSend`** | Confirm before persisting workflow CRUD |
+| **UI surface** | Drawer header / operational strip; optional queue preview | **Opportunity drawer** — **`TaskAssistV1OpportunityPanel`** when **`NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED`** | **Distinct** surfaces (e.g. `/adminV2/workflows` family, proposal review) |
+| **Execution / apply path** | None in V1 | **`POST /api/admin/ai/task-assist/apply`** → **`executeCommunicationsSend`** (same as **`POST /api/admin/communications/send`**) | Existing admin workflow APIs / future proposal RPC — **not** Task Assist paths |
 
 ---
 
@@ -135,13 +156,43 @@ Implementation is **modules + types**, not a generic agent runtime.
 
 ---
 
-## 8. Agent 2 — Workflow Assist Agent (template only)
+## 8. Agent 2 — Task Assist V1 (shipped narrow V1)
 
-**Purpose (future):** Help operators **author** and **understand** workflows (intent → structured draft config, template suggestions, read-only activity summaries).
+**Purpose:** Support **one-time, user-directed** operator work on **opportunities**: **draft SMS/email** and **send now** after explicit approval — **not** a reusable automation definition.
 
-**This sprint:** **Documentation only** (Card 6) — finalized template below. **No** runtime, **no** NL→workflow, **no** auto-create, **no** new workflow DSL.
+**Shipped routes:** **`POST /api/admin/ai/task-assist/propose`**, **`POST /api/admin/ai/task-assist/apply`**. **UI flag:** **`NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED`**. **Org policy feature:** **`task_assist_draft`** (with enrichment portal / stub / OpenAI gates as implemented). **Send path:** **`executeCommunicationsSend`** only — **no** Task Assist code against legacy **`public.messages`** / **`messages_outbox`**.
 
-### 8.1 Finalized `WorkflowAssistSuggestionV1` (contract)
+**Explicit non-goals (V1):** authoring **reusable workflow configuration** (`workflows` / conditions / actions graphs), NL→workflow, scheduled send, durable proposals, reminders/follow-up apply, bulk send, **`jobs`** drawer — see **`task_assist_v1.md`** limitations + follow-ups.
+
+**Canonical spec:** **`docs/sprints/05_2026/task_assist_v1.md`** — contract §3, validation §4, apply §5, UI §6, safety §7.
+
+### 8.1 `TaskAssistSuggestionV1`
+
+The strict contract lives in **`task_assist_v1.md` §3**. The sketch block was removed in favor of that single source of truth.
+
+### 8.2 Apply path (implementation)
+
+**`POST /api/admin/ai/task-assist/apply`** validates the merged proposal + operator fields, enforces **`assertCommunicationsSendAllowed`**, then calls **`executeCommunicationsSend`** (shared with **`POST /api/admin/communications/send`**). See **`docs/product/communications.md`** (Task Assist subsection).
+
+### 8.3 Risks / anti-drift (Task Assist)
+
+| Risk | Mitigation |
+|------|------------|
+| Conflation with Workflow Assist | Separate **`agent_key`**, separate UI lanes, no `proposed_workflow` on this contract. |
+| “Assist” sends mail | **Approval gate** in product copy and routes; no auto-apply. |
+| Workflow creep | Reject `action_type` / workflow graph fields here; redirect design to Agent 3. |
+
+---
+
+## 9. Agent 3 — Workflow Assist (template only)
+
+**Purpose (future):** Help operators **author**, **maintain**, and **diagnose** **reusable workflow configuration** (draft generation, explainability, run/noise signals, structured proposals aligned to admin workflow APIs).
+
+**Explicit non-goals for Workflow Assist:** one-off **transactional** send/schedule as the primary contract (that is **Task Assist**); autonomous **`executeWorkflowRun`** from assist; auto-enable workflows.
+
+**This sprint:** **Documentation only** (Card 6) — finalized template below. **No** runtime, **no** NL→workflow, **no** auto-create, **no** new workflow DSL. **Drafts disabled by default** in product language until an operator explicitly opens or accepts a draft workflow for review.
+
+### 9.1 Finalized `WorkflowAssistSuggestionV1` (contract)
 
 Structured JSON only; same pattern as Agent 1 (`version`, `agent_key`, deterministic `suggestion_id` when derived, `generated_at_iso`).
 
@@ -199,7 +250,7 @@ type WorkflowAssistSuggestionV1 = {
 };
 ```
 
-### 8.2 Intent → workflow config draft (pattern)
+### 9.2 Intent → workflow config draft (pattern)
 
 | Step | Responsibility |
 |------|------------------|
@@ -210,17 +261,17 @@ type WorkflowAssistSuggestionV1 = {
 
 Intent catalog and mapping tables live in **docs + future code**, not in workflow rows.
 
-### 8.3 Activity summary (pattern)
+### 9.3 Activity summary (pattern)
 
 - **Sources (read-only):** `workflow_runs`, `workflow_action_runs` (if needed), `workflow_events`, optional **`GET`** admin routes such as workflow run lists already used by the admin UI.
 - **Output:** `activity_summary` with **only** ids and timestamps returned from queries — **no** synthetic events.
 - **Mode:** `mode: "activity_summary"` when the assist output is **monitoring-only** (no `proposed_workflow`).
 
-### 8.4 Proposed workflow structure (mapping to existing system)
+### 9.4 Proposed workflow structure (mapping to existing system)
 
 `proposed_workflow` fields align with the existing **`workflows`** row model and admin create payload (`web/app/api/admin/workflows/route.ts`): `name`, `description`, `event_type`, `entity_type`, plus future JSON for conditions/actions that **`executeWorkflowRun`** already consumes — **express as structured arrays**, not a new DSL string.
 
-### 8.5 Validation boundaries (must hold)
+### 9.5 Validation boundaries (must hold)
 
 | Boundary | Rule |
 |----------|------|
@@ -230,7 +281,7 @@ Intent catalog and mapping tables live in **docs + future code**, not in workflo
 | NL | **No** natural-language interpreter in runtime for this sprint. |
 | Queue / drawer | Assist output is **display / draft only**; never queue SOT. |
 
-### 8.6 Future apply path (design — not built)
+### 9.6 Future apply path (design — not built)
 
 Mirror proven **agent proposal / audit** style (see `agent_v1_record_layout` patterns in repo docs):
 
@@ -240,7 +291,7 @@ Mirror proven **agent proposal / audit** style (see `agent_v1_record_layout` pat
 4. **Persist** proposal row (future table) → optional operator **Apply** → **transactional** insert/update workflow via existing admin API or service-role path.
 5. **Audit** row for apply result; **emit** business events only through existing **`emitEvent`** / workflow machinery.
 
-### 8.7 Risks / anti-drift (Workflow Assist)
+### 9.7 Risks / anti-drift (Workflow Assist)
 
 | Risk | Mitigation |
 |------|------------|
@@ -251,9 +302,9 @@ Mirror proven **agent proposal / audit** style (see `agent_v1_record_layout` pat
 
 ---
 
-## 9. Data contracts / structured output shapes
+## 10. Data contracts / structured output shapes
 
-### 9.1 `AttentionSuggestionV1` (Agent 1)
+### 10.1 `AttentionSuggestionV1` (Agent 1)
 
 As specified in Step 1 design (verbatim structure — implement in TypeScript in Card 1):
 
@@ -268,15 +319,19 @@ As specified in Step 1 design (verbatim structure — implement in TypeScript in
 
 **Suggested messages:** **Deterministic templates only** in V1 — no model-generated body text.
 
-### 9.2 `WorkflowAssistSuggestionV1` (Agent 2 — doc-only this sprint)
+### 10.2 `TaskAssistSuggestionV1` (Agent #2)
 
-Finalized in **§8.1** (`activity_summary` optional block added for monitoring mode). **Not** shipped on APIs unless explicitly approved later.
+Canonical contract and execution plan: **`docs/sprints/05_2026/task_assist_v1.md` §3** (supersedes the §8.1 sketch pointer in this file).
 
-### 9.3 Events (future-ready, not V1 behavior)
+### 10.3 `WorkflowAssistSuggestionV1` (Agent 3 — doc-only this sprint)
+
+Finalized in **§9.1** (`activity_summary` optional block added for monitoring mode). **Not** shipped on APIs unless explicitly approved later.
+
+### 10.4 Events (future-ready, not V1 behavior)
 
 Reserved names: `agent_suggestion_generated`, `agent_suggestion_accepted`, `agent_suggestion_dismissed`. **Do not** emit `agent_suggestion_generated` on every drawer open in V1 (noise). Emit when suggestions become **durable proposals** or operator actions exist.
 
-### 9.4 Configurability audit (V1 — what stays hardcoded)
+### 10.5 Configurability audit (V1 — what stays hardcoded)
 
 **Hardcoded today (code, not DB):**
 
@@ -295,7 +350,7 @@ Reserved names: `agent_suggestion_generated`, `agent_suggestion_accepted`, `agen
 
 ---
 
-## 10. Integration plan
+## 11. Integration plan
 
 1. **Card 1** — Add types (+ tests for shape / invariants).
 2. **Card 2** — Implement `buildNeedsAttentionSuggestion` + reason → `next_action` map + template registry for `suggested_content` (pure functions).
@@ -308,7 +363,7 @@ Reserved names: `agent_suggestion_generated`, `agent_suggestion_accepted`, `agen
 
 ---
 
-## 11. UI surface plan
+## 12. UI surface plan
 
 - **Primary:** Opportunity **drawer header** — **`OperationalAttentionHeaderStrip`** (`variant="chrome"`) is the **main** surface: needs-attention headline, **Suggested next step**, **Why**, optional **Draft message** behind expand + copy; subtle **“Recommended by Alloy”** framing. Avoid duplicating the same block in the overview body.
 - **Secondary:** Overview tab — **`OperationalAttentionDrawerSection`** as a **collapsed-by-default** `<details>` (“Operational detail”) for factors, timing, and priority breakdown; omit redundant primary/next when the header already shows the structured suggestion.
@@ -317,7 +372,7 @@ Reserved names: `agent_suggestion_generated`, `agent_suggestion_accepted`, `agen
 
 ---
 
-## 12. Testing strategy
+## 13. Testing strategy
 
 - **Unit:** Reason-code → `next_action` mapping; null cases; template rendering + `variables` substitution; deterministic `suggestion_id` stability for fixed inputs.
 - **Integration / payload:** Entity GET includes **`_attention_suggestion`** when `_operational_attention` has a primary reason; absent when not needed.
@@ -327,7 +382,7 @@ Reserved names: `agent_suggestion_generated`, `agent_suggestion_accepted`, `agen
 
 ---
 
-## 13. Risks / anti-drift rules
+## 14. Risks / anti-drift rules
 
 | Risk | Mitigation |
 |------|------------|
@@ -337,27 +392,27 @@ Reserved names: `agent_suggestion_generated`, `agent_suggestion_accepted`, `agen
 | “AI” oversell | UI labels and docs: **suggested / draft / deterministic** language. |
 | Audit noise | **No** per-view `agent_suggestion_generated` event in V1. |
 | Vertical leakage | Default strings and templates **neutral**; pilots use presets later. |
-| Scope creep (Workflow Assist) | **Card 6 = docs only**; no API surface without explicit approval. |
+| Scope creep (Task Assist / Workflow Assist) | **Card 6 = docs only** for both agents; no API surface without explicit approval; **do not** merge transactional and workflow-config agents. |
 | Performance on entity GET | Batch / reuse fetches; resolve activity signal once per GET if needed; gate `drawer_visible` inclusion per open question. |
 
 ---
 
-## 14. Card breakdown
+## 15. Card breakdown
 
 | Card | Name | Scope |
 |------|------|--------|
-| **0** | **Audit validation** | Walk through `ai_agents_v1_step0_audit.md` with product/engineering; confirm locked decisions (derived-only, no table, no writes, drawer header primary, queue preview non-authoritative, deterministic messages, Agent 2 doc-only). Resolve open questions (e.g. `drawer_visible` vs `full` for `_attention_suggestion`). |
+| **0** | **Audit validation** | Walk through `ai_agents_v1_step0_audit.md` with product/engineering; confirm locked decisions (derived-only, no table, no writes, drawer header primary, queue preview non-authoritative, deterministic messages, **Agent 2 + Agent 3 doc-only templates**). Resolve open questions (e.g. `drawer_visible` vs `full` for `_attention_suggestion`). |
 | **1** | **Suggestion data model** | TypeScript types for `AttentionSuggestionV1` (+ tests for shape and invariants). |
 | **2** | **Suggestion logic engine** | `buildNeedsAttentionSuggestion`, action map, template keys; pure deterministic logic. |
 | **3** | **Needs attention integration** | Attach **`_attention_suggestion`** on authoritative opportunity **entity GET** next to **`_operational_attention`**; wire activity input when available on that path. |
 | **4** | **UI rendering (drawer)** | Production drawer: **header chrome** as primary suggestion surface; collapsible operational detail in overview; Admin V2 patterns. |
 | **5** | **Suggested message generation** | Deterministic **`suggested_content`** only; safe channels/families; no send path. |
-| **6** | **Workflow Assist Agent — template docs only** | Sprint/design doc updates: `WorkflowAssistSuggestionV1`, API mapping notes, future apply/audit pattern — **no runtime**. |
+| **6** | **Task Assist + Workflow Assist — docs** | **Task Assist:** Step 1 + cards in **`docs/sprints/05_2026/task_assist_v1.md`** (implementation follows that file after Card 0). **Workflow Assist:** template docs only (`WorkflowAssistSuggestionV1`, …) — **no runtime** unless a separate card pack is opened. |
 | **7** | **Testing + validation** | Run targeted tests, typecheck, doc tweaks if behavior is adjusted; sign-off checklist. |
 
 ---
 
-## 15. Card 7 — Testing & validation record (sprint hardening)
+## 16. Card 7 — Testing & validation record (sprint hardening)
 
 **Automated (targeted):** Vitest for `web/lib/agent/needsAttentionSuggestion/**`, `web/tests/admin/drawer/operationalAttentionSuggestionUi.test.tsx`, `web/tests/admin/operationalAttentionEntityAttachment.test.ts`. ESLint on those modules (not the full `AdminEntityDrawer.tsx` baseline).
 
@@ -383,9 +438,11 @@ Reserved names: `agent_suggestion_generated`, `agent_suggestion_accepted`, `agen
 
 ---
 
-## References
+## 17. References
 
 - `docs/sprints/05_2026/ai_agents_v1_step0_audit.md`
+- `docs/sprints/05_2026/task_assist_v1_step0_audit.md` (Agent #2 — Task Assist V1)
+- `docs/sprints/05_2026/task_assist_v1.md` (Agent #2 — Step 1 design + cards)
 - `docs/sprints/05_2026/ai_agents_v1_step1_design.md`
 - `web/lib/opportunities/opportunityAttentionResolver.ts`
 - `web/lib/admin/operationalAttentionEntityAttachment.ts`

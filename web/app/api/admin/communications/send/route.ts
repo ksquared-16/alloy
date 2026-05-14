@@ -4,23 +4,10 @@ import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import {
-    activeOutboundBindings,
-    availableComposerChannels,
-    type BindingSummary,
-} from "@/lib/communications/composerChannels";
-import {
     COMMUNICATIONS_SEND_PERMISSION_KEY,
     assertCommunicationsSendAllowed,
 } from "@/lib/communications/communicationPermissions";
-import { enqueueCanonicalOutboundMessage } from "@/lib/communications/canonicalOutboundEnqueue";
-import {
-    assertRecipientPersonEligibleForDrawerEmail,
-    assertRecipientPersonEligibleForDrawerSms,
-    getPersonEmailOrNull,
-    getPersonSmsToOrNull,
-} from "@/lib/communications/drawerEmailRecipients";
-import { normalizeRecipientKeyEmail, normalizeRecipientKeySms } from "@/lib/communications/recipientKey";
-import { triggerBackendMessagesQueue } from "@/lib/communications/triggerBackendMessagesQueue";
+import { executeCommunicationsSend } from "@/lib/communications/executeCommunicationsSend";
 
 const UUID_RE = /^[0-9a-f-]{36}$/i;
 
@@ -41,25 +28,6 @@ function normalizeChannel(raw: string): "sms" | "email" | "in_app" | null {
     if (x === "sms") return "sms";
     if (x === "email") return "email";
     if (x === "in_app" || x === "in-app") return "in_app";
-    return null;
-}
-
-async function resolveContextLocationId(
-    supabase: ReturnType<typeof createAdminClient>,
-    orgId: string,
-    entityType: string,
-    entityId: string
-): Promise<string | null> {
-    if (entityType === "jobs") {
-        const { data } = await supabase
-            .from("jobs")
-            .select("location_id")
-            .eq("id", entityId)
-            .eq("org_id", orgId)
-            .maybeSingle();
-        const lid = data && typeof data === "object" ? (data as { location_id?: string }).location_id : null;
-        return lid ? String(lid) : null;
-    }
     return null;
 }
 
@@ -98,7 +66,6 @@ export async function POST(request: NextRequest) {
     let entityId = String(body.entity_id ?? "").trim();
     const channel = normalizeChannel(String(body.channel ?? ""));
     const toRawInput = String(body.to ?? body.to_address ?? "").trim();
-    let toRaw = toRawInput;
     const textRaw = String(body.body ?? "").trim();
     const subjectRawEmail =
         channel === "email" && typeof body.subject === "string" ? body.subject : undefined;
@@ -145,160 +112,34 @@ export async function POST(request: NextRequest) {
 
     const primaryEntityType = entityType;
 
-    if (channel === "email" && recipientPersonIdRaw && UUID_RE.test(recipientPersonIdRaw)) {
-        if (quickMessage) {
-            const em = await getPersonEmailOrNull(supabase, ctx.orgId, recipientPersonIdRaw);
-            if (!em) {
-                return NextResponse.json({ error: "Recipient person has no usable email" }, { status: 400 });
-            }
-            toRaw = em;
-        } else {
-            const elig = await assertRecipientPersonEligibleForDrawerEmail(
-                supabase,
-                ctx.orgId,
-                primaryEntityType as "opportunities" | "jobs",
-                entityId,
-                recipientPersonIdRaw
-            );
-            if (!elig) {
-                return NextResponse.json(
-                    { error: "recipient_person_id is not an eligible person-with-email for this record" },
-                    { status: 400 }
-                );
-            }
-            const em = await getPersonEmailOrNull(supabase, ctx.orgId, recipientPersonIdRaw);
-            if (!em) {
-                return NextResponse.json({ error: "Recipient person has no usable email" }, { status: 400 });
-            }
-            toRaw = em;
-        }
-    }
-
-    if (channel === "sms" && recipientPersonIdRaw && UUID_RE.test(recipientPersonIdRaw)) {
-        if (quickMessage) {
-            const sms = await getPersonSmsToOrNull(supabase, ctx.orgId, recipientPersonIdRaw);
-            if (!sms) {
-                return NextResponse.json({ error: "Recipient person has no usable SMS number" }, { status: 400 });
-            }
-            toRaw = sms;
-        } else {
-            const elig = await assertRecipientPersonEligibleForDrawerSms(
-                supabase,
-                ctx.orgId,
-                primaryEntityType as "opportunities" | "jobs",
-                entityId,
-                recipientPersonIdRaw
-            );
-            if (!elig) {
-                return NextResponse.json(
-                    { error: "recipient_person_id is not an eligible person-with-phone for this record" },
-                    { status: 400 }
-                );
-            }
-            const sms = await getPersonSmsToOrNull(supabase, ctx.orgId, recipientPersonIdRaw);
-            if (!sms) {
-                return NextResponse.json({ error: "Recipient person has no usable SMS number" }, { status: 400 });
-            }
-            toRaw = sms;
-        }
-    }
-
-    const { data: rows, error: bindErr } = await supabase
-        .from("communication_provider_bindings")
-        .select("id, channel, scope, location_id, display_label, provider, status, is_primary, secret_ref, inbound_to_e164, config")
-        .eq("org_id", ctx.orgId)
-        .order("updated_at", { ascending: false });
-
-    if (bindErr) return NextResponse.json({ error: bindErr.message }, { status: 500 });
-    const bindList = (rows ?? []) as BindingSummary[];
-
-    const allowed = availableComposerChannels(bindList);
-    if (!allowed.includes(channel)) {
-        return NextResponse.json(
-            { error: `${channel} is not configured for outbound in this org (check bindings)`, code: "channel_unavailable" },
-            { status: 422 }
-        );
-    }
-
-    const locId = await resolveContextLocationId(supabase, ctx.orgId, primaryEntityType, entityId);
-
-    let resolvedBindingId: string | null = null;
-    if (channel !== "in_app") {
-        if (!toRaw) return NextResponse.json({ error: "to address required for sms/email" }, { status: 400 });
-        const norm = channel === "sms" ? normalizeRecipientKeySms(toRaw) : normalizeRecipientKeyEmail(toRaw);
-        if (channel === "sms" && !norm.replace(/\D/g, "").length) {
-            return NextResponse.json({ error: "Invalid SMS destination" }, { status: 400 });
-        }
-        if (channel === "email" && !norm.includes("@")) {
-            return NextResponse.json({ error: "Invalid email destination" }, { status: 400 });
-        }
-
-        const pool = activeOutboundBindings(bindList, channel);
-        let candidates = pool;
-        if (bindingIdOpt && UUID_RE.test(bindingIdOpt)) {
-            candidates = pool.filter((b) => b.id === bindingIdOpt);
-            if (!candidates.length) {
-                return NextResponse.json({ error: "binding_id not valid for channel/org" }, { status: 400 });
-            }
-        }
-        if (!candidates.length) {
-            return NextResponse.json(
-                { error: "No actionable binding rows for chosen channel", code: "binding_missing" },
-                { status: 422 }
-            );
-        }
-        resolvedBindingId =
-            bindingIdOpt && UUID_RE.test(bindingIdOpt) ? bindingIdOpt : (candidates[0]?.id ?? null);
-    } else if (bindingIdOpt) {
-        return NextResponse.json({ error: "binding_id applies only to sms/email" }, { status: 400 });
-    }
-
-    const meta: Record<string, unknown> = {
-        source: quickMessage ? "header_quick_message" : "drawer_composer",
-        ...(quickMessage ? { quick_message: true } : {}),
-        ...(bindingIdOpt && UUID_RE.test(bindingIdOpt) ? { requested_binding_id: bindingIdOpt } : {}),
-        ...(recipientPersonIdRaw && UUID_RE.test(recipientPersonIdRaw) ? { recipient_person_id: recipientPersonIdRaw } : {}),
-    };
-
-    const res = await enqueueCanonicalOutboundMessage({
+    const exec = await executeCommunicationsSend({
         supabase,
         orgId: ctx.orgId,
+        quickMessage,
         primaryEntityType,
         primaryEntityId: entityId,
-        channelRaw: channel,
-        toRaw,
-        bodyRaw: textRaw,
-        ...(channel === "email" ? { emailSubjectRaw: subjectRawEmail ?? "" } : {}),
-        workflowRunId: null,
-        metadata: meta,
-        contextLocationId: locId,
-        communicationProviderBindingId: resolvedBindingId,
+        channel,
+        textRaw,
+        subjectRawEmail,
+        bindingIdOpt,
+        recipientPersonIdRaw,
+        toRawInput,
+        sendMetadataAugment: null,
     });
 
-    if (res.skippedReason === "insert_failed" || !res.communicationMessageId) {
+    if (!exec.ok) {
         return NextResponse.json(
-            {
-                error: `Failed to enqueue message (${res.skippedReason ?? "unknown"})`,
-                thread_id: res.threadId,
-            },
-            { status: 500 }
+            exec.code ? { error: exec.error, code: exec.code, thread_id: exec.thread_id } : { error: exec.error, thread_id: exec.thread_id },
+            { status: exec.status }
         );
     }
-
-    void triggerBackendMessagesQueue({ workflow_run_id: null, limit: 25 }).catch(() => {});
-
-    const envUnset =
-        !(process.env.INTERNAL_MESSAGES_PROCESS_URL ?? "").trim() ||
-        !(process.env.INTERNAL_CRON_TOKEN ?? "").trim();
 
     return NextResponse.json({
         ok: true,
-        communication_message_id: res.communicationMessageId,
-        thread_id: res.threadId,
-        channel,
+        communication_message_id: exec.communication_message_id,
+        thread_id: exec.thread_id,
+        channel: exec.channel,
         permission_note: sendAuth.ok ? COMMUNICATIONS_SEND_PERMISSION_KEY : undefined,
-        process_trigger_attempted_note: envUnset
-            ? "INTERNAL_MESSAGES_PROCESS_URL/INTERNAL_CRON_TOKEN unset — row stays queued until cron runs."
-            : "Backend process trigger dispatched (best-effort).",
+        process_trigger_attempted_note: exec.process_trigger_attempted_note,
     });
 }
