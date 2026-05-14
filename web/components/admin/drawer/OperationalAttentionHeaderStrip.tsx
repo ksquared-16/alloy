@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Sparkles } from "lucide-react";
 
+import OperationalAttentionAnchoredDraftPopover from "@/components/admin/drawer/OperationalAttentionAnchoredDraftPopover";
 import OperationalAttentionEnhanceDraft from "@/components/admin/drawer/OperationalAttentionEnhanceDraft";
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
 import type { OperationalAttentionAttachmentError } from "@/lib/admin/operationalAttentionEntityAttachment";
@@ -31,12 +32,6 @@ function conciseWhy(text: string): string {
     return `${t.slice(0, WHY_MAX_CHARS - 1)}…`;
 }
 
-function copyDraftMessage(body: string) {
-    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-        void navigator.clipboard.writeText(body);
-    }
-}
-
 /**
  * Primary operational-attention chrome for the drawer.
  * Premium surface is **Recommended by Alloy** (deterministic suggestion + optional draft).
@@ -44,7 +39,8 @@ function copyDraftMessage(body: string) {
  * duplicate it here — queue list previews may still use `operationalSummaryPreview` separately.
  */
 export default function OperationalAttentionHeaderStrip({ overviewData, variant = "panel" }: Props) {
-    const [originalDraftFolded, setOriginalDraftFolded] = useState(false);
+    const draftTriggerRef = useRef<HTMLButtonElement>(null);
+    const [draftPopoverOpen, setDraftPopoverOpen] = useState(false);
     const payload = overviewData._operational_attention as OpportunityAttentionResult | null | undefined;
     const err = overviewData._operational_attention_error as OperationalAttentionAttachmentError | null | undefined;
     const suggestion = overviewData._attention_suggestion as AttentionSuggestionV1 | null | undefined;
@@ -122,7 +118,7 @@ export default function OperationalAttentionHeaderStrip({ overviewData, variant 
          */
         return (
             <div
-                className={frame}
+                className={`${frame} relative overflow-visible`}
                 data-drawer-slot="operational_attention_header"
                 data-attention-surface="suggestion_primary"
             >
@@ -172,50 +168,28 @@ export default function OperationalAttentionHeaderStrip({ overviewData, variant 
                         </p>
 
                         {draftBody ? (
-                            originalDraftFolded ? (
-                                <details
-                                    className="mt-0.5 rounded border border-alloy-stone/14 bg-white/45 px-1 py-0.5"
-                                    data-drawer-slot="original_draft_collapsed"
+                            <div className="relative mt-0.5 w-full min-w-0" data-drawer-slot="deterministic_draft_row">
+                                <button
+                                    ref={draftTriggerRef}
+                                    type="button"
+                                    className="w-full rounded border border-alloy-stone/16 bg-white/55 px-1 py-0.5 text-left text-[8px] font-semibold text-alloy-blue hover:bg-white/70 focus:outline-none focus-visible:ring-1 focus-visible:ring-alloy-blue/35"
+                                    aria-expanded={draftPopoverOpen}
+                                    data-drawer-slot="deterministic_draft_trigger"
+                                    onClick={() => setDraftPopoverOpen((v) => !v)}
                                 >
-                                    <summary className="cursor-pointer select-none text-[8px] font-semibold text-alloy-blue hover:underline [&::-webkit-details-marker]:hidden">
-                                        Original draft
-                                    </summary>
-                                    <p className="mt-0.5 text-[8px] text-alloy-midnight/50">Not sent — copy and edit before using.</p>
-                                    <pre className="mt-0.5 max-h-24 overflow-y-auto whitespace-pre-wrap break-words rounded border border-alloy-stone/12 bg-alloy-stone/[0.03] px-1 py-0.5 font-sans text-[9px] leading-snug text-alloy-midnight/85">
-                                        {draftBody}
-                                    </pre>
-                                    <button
-                                        type="button"
-                                        className="mt-0.5 text-[8px] font-semibold text-alloy-blue hover:underline"
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            copyDraftMessage(draftBody);
-                                        }}
-                                    >
-                                        Copy original
-                                    </button>
-                                </details>
-                            ) : (
-                                <details className="group/draft mt-0.5 rounded border border-alloy-stone/16 bg-white/55 px-1 py-0.5">
-                                    <summary className="cursor-pointer select-none text-[8px] font-semibold text-alloy-blue hover:underline [&::-webkit-details-marker]:hidden">
-                                        Draft · not sent
-                                    </summary>
-                                    <p className="mt-0.5 text-[8px] text-alloy-midnight/50">Copy and edit before using.</p>
-                                    <pre className="mt-0.5 max-h-24 overflow-y-auto whitespace-pre-wrap break-words rounded border border-alloy-stone/12 bg-alloy-stone/[0.03] px-1 py-0.5 font-sans text-[9px] leading-snug text-alloy-midnight/85">
-                                        {draftBody}
-                                    </pre>
-                                    <button
-                                        type="button"
-                                        className="mt-0.5 text-[8px] font-semibold text-alloy-blue hover:underline"
-                                        onClick={(e) => {
-                                            e.preventDefault();
-                                            copyDraftMessage(draftBody);
-                                        }}
-                                    >
-                                        Copy draft
-                                    </button>
-                                </details>
-                            )
+                                    Draft · not sent
+                                </button>
+                                <OperationalAttentionAnchoredDraftPopover
+                                    open={draftPopoverOpen}
+                                    onClose={() => setDraftPopoverOpen(false)}
+                                    anchorRef={draftTriggerRef}
+                                    title="Draft"
+                                    subtitle="Copy and edit before using."
+                                    body={draftBody}
+                                    copyLabel="Copy draft"
+                                    data-drawer-slot="attention_draft_popover"
+                                />
+                            </div>
                         ) : null}
 
                         <div
@@ -227,7 +201,7 @@ export default function OperationalAttentionHeaderStrip({ overviewData, variant 
                             wired; no send/apply.
                         </div>
 
-                        <OperationalAttentionEnhanceDraft suggestion={suggestion} onEnhancedSurfaceChange={setOriginalDraftFolded} />
+                        <OperationalAttentionEnhanceDraft suggestion={suggestion} />
 
                         {otherReasons.length > 0 ? (
                             factorsPreferDetails ? (

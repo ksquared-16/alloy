@@ -22,6 +22,16 @@ export type SuggestedMessageTemplateContext = {
     team_line?: string;
 };
 
+/**
+ * Greeting token for `Hi {{contact_name}},` — avoids awkward “Hi {Name} household,” when only a household label exists.
+ */
+export function greetingContactNameForDraft(primaryDisplayName: string): string {
+    const t = primaryDisplayName.trim();
+    if (!t) return "there";
+    if (t.toLowerCase().endsWith("household")) return "there";
+    return t;
+}
+
 function fill(template: string, vars: Record<string, string>): string {
     let out = template;
     for (const [k, v] of Object.entries(vars)) {

@@ -75,6 +75,28 @@ describe("buildNeedsAttentionSuggestion", () => {
         expect(r!.suggested_content?.body).toContain("Hi there,");
     });
 
+    it("uses neutral greeting when primary_display_name ends with household", () => {
+        const r = buildNeedsAttentionSuggestion({
+            opportunity: { id: "o1", primary_display_name: "Mitchell household" },
+            attention: baseAttention(),
+            nowIso: "2026-05-13T15:00:00.000Z",
+        });
+        expect(r).not.toBeNull();
+        expect(r!.suggested_content?.variables.contact_name).toBe("there");
+        expect(r!.suggested_content?.body).toMatch(/^Hi there,/m);
+    });
+
+    it("uses display name in greeting for normal contact names", () => {
+        const r = buildNeedsAttentionSuggestion({
+            opportunity: { id: "o1", primary_display_name: "Jordan" },
+            attention: baseAttention(),
+            nowIso: "2026-05-13T15:00:00.000Z",
+        });
+        expect(r).not.toBeNull();
+        expect(r!.suggested_content?.variables.contact_name).toBe("Jordan");
+        expect(r!.suggested_content?.body).toMatch(/^Hi Jordan,/m);
+    });
+
     it("embeds activity_signal_key from stale_signal", () => {
         const r = buildNeedsAttentionSuggestion({
             opportunity: { id: "o1" },

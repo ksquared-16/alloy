@@ -1,12 +1,29 @@
 import { describe, expect, it } from "vitest";
 
-import { suggestedContentForReason } from "@/lib/agent/needsAttentionSuggestion/suggestedContentTemplates";
+import { greetingContactNameForDraft, suggestedContentForReason } from "@/lib/agent/needsAttentionSuggestion/suggestedContentTemplates";
 
 const ctx = (over: Partial<{ record_ref: string; contact_name: string; team_line?: string }> = {}) => ({
     entity_id: "e1",
     record_ref: "abc12345",
     contact_name: "there",
     ...over,
+});
+
+describe("greetingContactNameForDraft", () => {
+    it("returns neutral token for empty input", () => {
+        expect(greetingContactNameForDraft("")).toBe("there");
+        expect(greetingContactNameForDraft("   ")).toBe("there");
+    });
+
+    it("prefers neutral token when display name ends with household (case-insensitive)", () => {
+        expect(greetingContactNameForDraft("Mitchell household")).toBe("there");
+        expect(greetingContactNameForDraft("Mitchell HouseHold")).toBe("there");
+    });
+
+    it("preserves real names that do not end with household", () => {
+        expect(greetingContactNameForDraft("Alex")).toBe("Alex");
+        expect(greetingContactNameForDraft("The Households")).toBe("The Households");
+    });
 });
 
 describe("suggestedContentForReason (deterministic drafts)", () => {

@@ -28,6 +28,9 @@ describe("OperationalAttentionEnhanceDraft", () => {
         expect(html).toContain('data-drawer-slot="enhance_draft_action"');
         expect(html).not.toContain("data-drawer-slot=\"enhance_draft_loading\"");
         expect(html).not.toContain("Enhanced draft ready");
-        expect(html).not.toContain("Apply draft");
+        expect(html).not.toContain("View");
+        expect(html).not.toContain('data-drawer-slot="enhance_draft_popover"');
+        expect(html).not.toContain("Draft text");
+        expect(html).not.toMatch(/\bApply draft\b/);
     });
 });

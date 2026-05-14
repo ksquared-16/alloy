@@ -111,9 +111,12 @@ describe("OperationalAttentionHeaderStrip", () => {
         expect(html).toContain("Why ·");
         expect(html).toContain("Operational attention: New inquiry is stale.");
         expect(html).toContain("Draft · not sent");
-        expect(html).toContain("Hi there,");
-        expect(html).toContain("I wanted to follow up on your inquiry");
-        expect(html).toContain("Copy draft");
+        expect(html).toContain('data-drawer-slot="deterministic_draft_trigger"');
+        expect(html).toContain('aria-expanded="false"');
+        expect(html).not.toContain("I wanted to follow up on your inquiry");
+        expect(html).not.toContain("Copy draft");
+        expect(html).not.toContain('data-drawer-slot="attention_draft_popover"');
+        expect(html).not.toMatch(/\bApply draft\b/);
         expect(html).toContain("Activity");
         expect(html).toContain("Idle signal");
         expect(html).toContain("Enhance draft");

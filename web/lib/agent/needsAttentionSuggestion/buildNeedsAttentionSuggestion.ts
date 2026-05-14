@@ -3,7 +3,10 @@ import { createHash } from "node:crypto";
 import type { ActivitySignalResult } from "@/lib/admin/activitySignals";
 import type { OpportunityAttentionResult } from "@/lib/opportunities/opportunityAttentionResolver";
 import { suggestionActionForReasonCode } from "@/lib/agent/needsAttentionSuggestion/suggestionActionMap";
-import { suggestedContentForReason } from "@/lib/agent/needsAttentionSuggestion/suggestedContentTemplates";
+import {
+    greetingContactNameForDraft,
+    suggestedContentForReason,
+} from "@/lib/agent/needsAttentionSuggestion/suggestedContentTemplates";
 import {
     NEEDS_ATTENTION_SUGGESTION_AGENT_KEY,
     type AttentionSuggestionV1,
@@ -70,7 +73,7 @@ export function buildNeedsAttentionSuggestion(input: BuildNeedsAttentionSuggesti
         typeof input.opportunity.primary_display_name === "string" && input.opportunity.primary_display_name.trim()
             ? input.opportunity.primary_display_name.trim()
             : "";
-    const contact_name = display || "there";
+    const contact_name = greetingContactNameForDraft(display);
 
     const suggested = suggestedContentForReason(primary.code, {
         entity_id: entityId,

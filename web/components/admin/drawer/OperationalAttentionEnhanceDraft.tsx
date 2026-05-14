@@ -1,22 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 
+import OperationalAttentionAnchoredDraftPopover from "@/components/admin/drawer/OperationalAttentionAnchoredDraftPopover";
 import type { AttentionSuggestionV1 } from "@/lib/agent/needsAttentionSuggestion/types";
 import { userFacingEnrichAttentionError } from "@/lib/admin/enrichAttentionDraftMessages";
 
 type Props = {
     suggestion: AttentionSuggestionV1;
-    /** When true, parent may collapse the deterministic draft under “Original draft”. */
-    onEnhancedSurfaceChange?: (supersedesOriginalDraft: boolean) => void;
 };
-
-function copyText(body: string) {
-    if (typeof navigator !== "undefined" && navigator.clipboard?.writeText) {
-        void navigator.clipboard.writeText(body);
-    }
-}
 
 function newCorrelationId(): string {
     if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -29,15 +22,13 @@ function newCorrelationId(): string {
  * Operator-only draft polish: POST enrich route, copy-only. No send/apply/persistence.
  * Live provider runs only on explicit Enhance / Regenerate — not on mount or expand/collapse.
  */
-export default function OperationalAttentionEnhanceDraft({ suggestion, onEnhancedSurfaceChange }: Props) {
+export default function OperationalAttentionEnhanceDraft({ suggestion }: Props) {
     const draftBody = suggestion.suggested_content?.body?.trim();
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [enhancedBody, setEnhancedBody] = useState<string | null>(null);
-
-    useEffect(() => {
-        onEnhancedSurfaceChange?.(Boolean(enhancedBody));
-    }, [enhancedBody, onEnhancedSurfaceChange]);
+    const [enhancedPopoverOpen, setEnhancedPopoverOpen] = useState(false);
+    const enhancedTriggerRef = useRef<HTMLButtonElement>(null);
 
     const runEnhance = useCallback(async () => {
         setLoading(true);
@@ -75,17 +66,17 @@ export default function OperationalAttentionEnhanceDraft({ suggestion, onEnhance
     }, [suggestion]);
 
     const onRegenerate = useCallback(() => {
-        onEnhancedSurfaceChange?.(false);
+        setEnhancedPopoverOpen(false);
         void runEnhance();
-    }, [onEnhancedSurfaceChange, runEnhance]);
+    }, [runEnhance]);
 
     if (!draftBody) return null;
 
-    const showSuccessLine = Boolean(enhancedBody) && !loading;
+    const showSuccessLine = Boolean(enhancedBody);
     const showRegenerate = Boolean(enhancedBody) && !loading;
 
     return (
-        <div className="mt-1 space-y-1" data-drawer-slot="enhance_draft_action">
+        <div className="relative mt-1 w-full min-w-0 space-y-1" data-drawer-slot="enhance_draft_action">
             {loading ? (
                 <div
                     className="flex items-center gap-1.5 text-[9px] font-medium text-alloy-midnight/72"
@@ -115,38 +106,38 @@ export default function OperationalAttentionEnhanceDraft({ suggestion, onEnhance
             )}
 
             {showSuccessLine ? (
-                <p className="text-[9px] font-medium text-emerald-800/90" data-drawer-slot="enhance_draft_success">
-                    Enhanced draft ready
-                </p>
+                <div className={`relative w-full min-w-0 ${loading ? "pointer-events-none opacity-55" : ""}`}>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                        <p className="text-[9px] font-medium text-emerald-800/90" data-drawer-slot="enhance_draft_success">
+                            Enhanced draft ready
+                        </p>
+                        <button
+                            ref={enhancedTriggerRef}
+                            type="button"
+                            className="text-[8px] font-semibold text-alloy-blue hover:underline"
+                            data-drawer-slot="enhance_draft_view_toggle"
+                            aria-expanded={enhancedPopoverOpen}
+                            onClick={() => setEnhancedPopoverOpen((v) => !v)}
+                        >
+                            {enhancedPopoverOpen ? "Hide" : "View"}
+                        </button>
+                    </div>
+                    <OperationalAttentionAnchoredDraftPopover
+                        open={enhancedPopoverOpen}
+                        onClose={() => setEnhancedPopoverOpen(false)}
+                        anchorRef={enhancedTriggerRef}
+                        title="Enhanced draft"
+                        subtitle="Review before using."
+                        body={enhancedBody ?? ""}
+                        copyLabel="Copy"
+                        data-drawer-slot="enhance_draft_popover"
+                    />
+                </div>
             ) : null}
 
             {error ? (
                 <div className="rounded border border-amber-200/80 bg-amber-50/60 px-1.5 py-1 text-[9px] leading-snug text-alloy-midnight/80" role="alert">
                     {error}
-                </div>
-            ) : null}
-
-            {enhancedBody ? (
-                <div
-                    className={`mt-0.5 rounded-md border border-alloy-stone/20 bg-white/80 px-1.5 py-1 shadow-sm ${loading ? "pointer-events-none opacity-55" : ""}`}
-                    data-drawer-slot="enhance_draft_enhanced_panel"
-                >
-                    <div className="text-[8px] font-semibold uppercase tracking-wide text-alloy-midnight/45">Enhanced draft</div>
-                    <p className="mt-0.5 text-[8px] text-alloy-midnight/55">Review before using</p>
-                    <p className="mt-0.5 text-[8px] italic text-alloy-midnight/48">Not sent — copy and edit as needed.</p>
-                    <pre className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap break-words rounded border border-alloy-stone/12 bg-alloy-stone/[0.04] px-1.5 py-1 font-sans text-[10px] leading-relaxed text-alloy-midnight/88">
-                        {enhancedBody}
-                    </pre>
-                    <button
-                        type="button"
-                        className="mt-1 text-[9px] font-semibold text-alloy-blue hover:underline"
-                        onClick={(e) => {
-                            e.preventDefault();
-                            copyText(enhancedBody);
-                        }}
-                    >
-                        Copy
-                    </button>
                 </div>
             ) : null}
 
