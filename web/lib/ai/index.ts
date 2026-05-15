@@ -55,7 +55,13 @@ export {
     toOperationalSummaryQueuePreview,
 } from "@/lib/ai/buildOperationalSummary";
 
-export { isAiEnrichmentStubEnvEnabled, isAiEnrichmentTelemetryEnvEnabled, hasOpenAiStructuredCredentials } from "@/lib/ai/aiEnrichmentEnv";
+export {
+    isAiEnrichmentStubEnvEnabled,
+    isAiEnrichmentTelemetryEnvEnabled,
+    hasOpenAiStructuredCredentials,
+    DEFAULT_OPENAI_REQUEST_TIMEOUT_MS,
+    getOpenAiStructuredRequestTimeoutMs,
+} from "@/lib/ai/aiEnrichmentEnv";
 
 export {
     supportsCustomTemperature,

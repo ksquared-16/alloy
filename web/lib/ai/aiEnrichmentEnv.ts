@@ -36,3 +36,24 @@ export function getOpenAiBaseUrl(): string {
     if (raw) return raw.replace(/\/+$/, "");
     return "https://api.openai.com";
 }
+
+/** Default Chat Completions client timeout for structured enrichment (ms). */
+export const DEFAULT_OPENAI_REQUEST_TIMEOUT_MS = 20_000;
+const MAX_OPENAI_REQUEST_TIMEOUT_MS = 30_000;
+/** Values below this are treated as unset / invalid and fall back to {@link DEFAULT_OPENAI_REQUEST_TIMEOUT_MS}. */
+const MIN_OPENAI_REQUEST_TIMEOUT_MS = 1_000;
+
+/**
+ * Timeout for OpenAI-compatible `/v1/chat/completions` calls used by structured enrichment.
+ * **`OPENAI_REQUEST_TIMEOUT_MS`**: optional integer ms; defaults to **20_000**; clamped to **1_000–30_000**;
+ * non-numeric or too-low values use the default.
+ */
+export function getOpenAiStructuredRequestTimeoutMs(): number {
+    const raw = process.env.OPENAI_REQUEST_TIMEOUT_MS?.trim();
+    if (!raw) return DEFAULT_OPENAI_REQUEST_TIMEOUT_MS;
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n < MIN_OPENAI_REQUEST_TIMEOUT_MS) {
+        return DEFAULT_OPENAI_REQUEST_TIMEOUT_MS;
+    }
+    return Math.min(MAX_OPENAI_REQUEST_TIMEOUT_MS, Math.floor(n));
+}

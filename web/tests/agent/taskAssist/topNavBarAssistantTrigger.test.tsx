@@ -10,6 +10,7 @@ describe("TopNavBar Task Assist trigger", () => {
         const src = readFileSync(topNavPath, "utf8");
         expect(src).toContain("isTaskAssistV1UiEnabled");
         expect(src).toContain("data-global-assistant-header-trigger");
+        expect(src).toContain("focusCommandBar");
         expect(src).toContain("Assistant");
     });
 

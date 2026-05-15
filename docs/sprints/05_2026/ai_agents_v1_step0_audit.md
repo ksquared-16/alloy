@@ -2,9 +2,9 @@
 
 Status: audit only. Do not treat this as design approval.
 
-## Sprint Frame
+## Sprint frame
 
-AI Agents V1 starts with Suggestion + Workflow Assist. Agents are first-class platform capabilities, not standalone systems. The product north star is cross-industry: childcare is the first primary market, but platform behavior should stay flexible through shared records, queues, workflows, events, permissions, configuration, and vertical presets.
+AI Agents V1 starts with **Needs Attention Suggestion (Agent 1)**, **Task Assist V1 (Agent 2)**, and **Workflow Assist (Agent 3)** as **separate** product intents. **Task Assist** covers one-off transactional / scheduled operator actions (drafts, reminders, comms) with approval before send or schedule. **Workflow Assist** covers reusable workflow configuration (drafts, diagnostics, maintenance) with approval before save or apply — not the same agent. Agents are first-class platform capabilities, not standalone systems. The product north star is cross-industry: childcare is the first primary market, but platform behavior should stay flexible through shared records, queues, workflows, events, permissions, configuration, and vertical presets.
 
 ## Files Inspected
 
@@ -229,7 +229,8 @@ Current validation:
 
 - Routes enforce org context and basic shape.
 - Conditions/actions are stored as structured DB rows.
-- Workflow Assist Agent can reuse this shape, but the current workflow create/update APIs are not yet an agent-specific proposal/preview/apply path.
+
+**Agent alignment (documentation):** **Agent 3 (Workflow Assist)** is scoped to reusable workflow configuration; proposals should map to these APIs when implemented. **Agent 2 (Task Assist)** is scoped to one-off transactional / schedule intents and must **not** share proposal storage or contracts with workflow graphs. Neither agent has a dedicated preview/apply/audit path yet — today’s workflow routes are standard admin CRUD.
 
 ## 7. Events: Emitted and Consumed
 
@@ -331,12 +332,13 @@ These are audit findings only, not approved design.
 - A server path that hydrates authoritative opportunity state before generating suggestions.
 - UI placement in the drawer attention surface, with queue rows remaining preview-only.
 - Tests for resolver/suggestion behavior, drawer payload shape, and queue parity if queue hints are touched.
-- A workflow assist template shape that reuses the same agent pattern without fully building the workflow agent.
+- A **Task Assist** proposal shape for transactional / schedule intents (separate from workflow graphs).
+- A workflow assist template shape that reuses the same **four-layer agent pattern** without fully building either agent.
 
 ## Step 0 Conclusion
 
 Agent 1 can start from existing Needs Attention infrastructure. The safest V1 direction is to extend the resolver-backed operational attention output with a deterministic, structured suggestion layer, displayed in the opportunity drawer and optionally previewed in queue rows.
 
-Agent 2 should remain design/template only for this sprint. Workflows already have structured DB/API foundations, but there is not yet a safe agent-specific workflow preview/apply/audit contract.
+**Agent 2 (Task Assist V1)** and **Agent 3 (Workflow Assist)** should remain **design/template only** for this sprint’s doc alignment unless a later card pack explicitly schedules implementation. Workflows already have structured DB/API foundations, but there is not yet a safe agent-specific workflow preview/apply/audit contract. Transactional task proposals must not be conflated with reusable automation configuration.
 
 Do not design or build from this document alone. Use it as the Step 0 audit input for Step 1 design.

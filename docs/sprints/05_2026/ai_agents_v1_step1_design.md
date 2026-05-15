@@ -4,7 +4,7 @@ Status: design draft for review. Do not build until this is accepted or revised.
 
 ## Product Intent
 
-AI Agents V1 should make Alloy feel more intelligent without introducing a separate agent system. The first agent extends existing operational attention into clear, structured next-step suggestions. The second agent is a template for future workflow assistance, not a full build in this sprint.
+AI Agents V1 should make Alloy feel more intelligent without introducing a separate agent system. **Agent 1** extends existing operational attention into clear, structured next-step suggestions. **Agent 2 (Task Assist V1)** and **Agent 3 (Workflow Assist)** are **separate** documented templates for future implementation — transactional one-off / schedule assistance vs reusable workflow configuration; they must not be merged into a single agent contract.
 
 All design decisions must preserve Alloy's broader north star: a flexible, configurable operating system that can sell across industries. Childcare is the first source market, but shared agent contracts should be vertical-neutral.
 
@@ -29,6 +29,8 @@ Every agent should follow the same four-layer pattern:
 4. **Surface Layer**: UI presentation that never becomes the source of truth.
 
 For V1, the pattern should be implemented as plain modules and typed outputs, not as a broad framework.
+
+Each agent still owns its own **intent scope**, **proposal contract**, **safety rules**, **approval flow**, **UI surface**, and **execution/apply path** (see `ai_agents_v1.md` §6.1) even though the four layers are shared.
 
 ## Agent 1: Needs Attention Suggestion Agent
 
@@ -250,13 +252,54 @@ Minimum tests for Agent 1 build:
 - Entity payload test proving `_attention_suggestion` attaches when `_operational_attention` has a primary reason.
 - Regression tests to ensure queue rows remain preview-only if touched.
 
-## Agent 2: Workflow Assist Agent Template
+## Agent 2: Task Assist V1 (template)
+
+**Canonical Step 1 design:** `docs/sprints/05_2026/task_assist_v1.md` (contract §3, cards §8). The sketch below is **obsolete** — kept only as a historical stub.
+
+### Purpose (summary)
+
+Document a **transactional, one-time** assistance pattern: draft SMS/email from record context — **human approval before send**. **V1:** see **`task_assist_v1.md`** (scheduled send deferred; reminder optional via opportunity metadata only). **Not in scope:** reusable `workflows` configuration (that is **Agent #3 — Workflow Assist**).
+
+### V1 template output shape (sketch)
+
+```ts
+type TaskAssistSuggestionV1 = {
+  version: 1;
+  agent_key: "task_assist";
+  suggestion_id: string;
+  mode: "draft_message" | "schedule_reminder" | "schedule_communication" | "transactional_preview";
+  target: {
+    entity_type: string;
+    entity_id: string;
+  };
+  intent: {
+    raw_text?: string | null;
+    normalized_key: string;
+  };
+  proposed_task?: Record<string, unknown> | null;
+  reasoning: {
+    summary: string;
+    warnings: string[];
+  };
+  generated_at_iso: string;
+};
+```
+
+### Task Assist boundaries (this sprint)
+
+- Design the template and map future apply to **existing** comms/schedule/status routes after explicit operator confirmation.
+- No auto-send, no auto-schedule, no persisted automation graph as the deliverable for this agent.
+- Do not embed `proposed_workflow` or workflow `action_type` graphs here.
+
+---
+
+## Agent 3: Workflow Assist (template)
 
 ### Purpose
 
-Create a reusable design pattern for assisting workflow creation and monitoring without fully building the workflow agent in this sprint.
+Document **reusable workflow configuration** assistance: draft generation, monitoring summaries, maintenance/diagnostics — **human approval before save/apply** to persisted workflows. **Drafts disabled by default** in product until explicitly reviewed. **Not in scope:** one-off transactional execution as the primary contract (that is **Agent 2**).
 
-### V1 Template Output Shape
+### V1 template output shape
 
 ```ts
 type WorkflowAssistSuggestionV1 = {
@@ -293,10 +336,11 @@ type WorkflowAssistSuggestionV1 = {
     summary: string;
     warnings: string[];
   };
+  generated_at_iso: string;
 };
 ```
 
-### Workflow Assist Boundaries
+### Workflow Assist boundaries
 
 For this sprint:
 
@@ -316,7 +360,7 @@ Future workflow apply path should mirror existing agent config routes:
 - apply audit row
 - service-role-only RPC or equivalent transaction
 
-### Monitoring Summary
+### Monitoring summary
 
 Workflow activity summary can use:
 
@@ -353,9 +397,9 @@ Render suggestion in the opportunity drawer attention surface, matching current 
 
 Add deterministic draft message templates for safe action families only. Do not send.
 
-### Card 6 - Workflow Agent Design Template
+### Card 6 - Task Assist + Workflow Assist design templates
 
-Create sprint/design documentation only for Workflow Assist. No runtime implementation unless explicitly approved.
+Create sprint/design documentation only for **Task Assist V1** and **Workflow Assist** as **separate** agents (contracts, boundaries, future apply paths). No runtime implementation unless explicitly approved.
 
 ### Card 7 - Testing + Validation
 
@@ -370,4 +414,4 @@ Run targeted tests, typecheck, and update docs if behavior changes.
 
 ## Recommendation
 
-Proceed with derived-only Agent 1 suggestions attached to opportunity entity GET and rendered in the drawer. Keep queue rows as they are unless later review says a compact preview is worth the extra surface area. Keep Agent 2 as design/template only for this sprint.
+Proceed with derived-only Agent 1 suggestions attached to opportunity entity GET and rendered in the drawer. Keep queue rows as they are unless later review says a compact preview is worth the extra surface area. Keep **Agent 2 (Task Assist)** and **Agent 3 (Workflow Assist)** as **separate** design/template documentation for this sprint — do not merge transactional and workflow-configuration agents.

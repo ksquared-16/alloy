@@ -9,33 +9,35 @@ import { GlobalAssistantProvider, useGlobalAssistant } from "@/contexts/GlobalAs
 const contextPath = join(dirname(fileURLToPath(import.meta.url)), "../../../contexts/GlobalAssistantContext.tsx");
 
 function ContextProbe() {
-    const { isOpen, currentContext } = useGlobalAssistant();
+    const { commandSurfaceMode, currentContext } = useGlobalAssistant();
     return (
         <span
             data-global-assistant-probe="true"
-            data-open={isOpen ? "true" : "false"}
+            data-command-surface-mode={commandSurfaceMode}
             data-has-context={currentContext ? "true" : "false"}
         />
     );
 }
 
 describe("GlobalAssistantContext", () => {
-    it("exports provider API for shell and launcher", () => {
+    it("exports provider API for command bar and launcher", () => {
         const src = readFileSync(contextPath, "utf8");
         expect(src).toContain("openAssistantWithContext");
         expect(src).toContain("setAssistantContext");
         expect(src).toContain("closeAssistant");
+        expect(src).toContain("focusCommandBar");
+        expect(src).toContain("commandSurfaceMode");
         expect(src).toContain("entity_type");
         expect(src).toContain("source_surface");
     });
 
-    it("defaults to closed with no context", () => {
+    it("defaults to job_overview mode with no context", () => {
         const html = renderToStaticMarkup(
             <GlobalAssistantProvider>
                 <ContextProbe />
             </GlobalAssistantProvider>
         );
-        expect(html).toContain('data-open="false"');
+        expect(html).toContain('data-command-surface-mode="job_overview"');
         expect(html).toContain('data-has-context="false"');
     });
 });

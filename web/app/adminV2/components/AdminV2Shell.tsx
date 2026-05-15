@@ -11,7 +11,6 @@ import Sidebar from "./Sidebar";
 import InspectorPanel from "./InspectorPanel";
 import AICommandBar from "./AICommandBar";
 import AICommandSurfaceShell from "./aiCommandSurface/AICommandSurfaceShell";
-import GlobalAssistantShell from "./globalAssistant/GlobalAssistantShell";
 import RecentAiActionsStrip from "./aiActivity/RecentAiActionsStrip";
 import { GlobalAssistantProvider } from "@/contexts/GlobalAssistantContext";
 import BreadcrumbBar from "./navigation/BreadcrumbBar";
@@ -222,7 +221,6 @@ export default function AdminV2Shell({
           )}
         </div>
       </div>
-      <GlobalAssistantShell />
       </GlobalAssistantProvider>
     );
   }
@@ -309,7 +307,6 @@ export default function AdminV2Shell({
         </div>
       </div>
     </div>
-    <GlobalAssistantShell />
     </GlobalAssistantProvider>
   );
 }

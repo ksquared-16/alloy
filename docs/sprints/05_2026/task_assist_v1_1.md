@@ -1,7 +1,7 @@
 # Sprint: Task Assist V1.1 — Durable proposals, scheduling, reminders
 
 **Path:** `docs/sprints/05_2026/task_assist_v1_1.md`  
-**Status:** **Task Assist V1.1 complete** (Cards **0–8**). Backend, worker, durable UI flows, docs, and **global AdminV2 assistant shell** (Card 8) shipped. Card 6 drawer-embedded UI was superseded by Card 8 placement.  
+**Status:** **Task Assist V1.1 complete** (Cards **0–9**, including **9b** entity search + **9c** intent routing). **Agent #2 (Task Assist)** operator UI lives in the AdminV2 bottom **`AICommandSurfaceShell`** — not a right rail or drawer-embedded panel. Card 9 pivot did not change propose/apply validators or schema; **9b** added read-only **`entity-search`** only.  
 **Prerequisite (shipped):** `docs/sprints/05_2026/task_assist_v1.md` (V1 — ephemeral proposal, send-now, opportunities, SMS/email, **`executeCommunicationsSend`**).  
 **Non-goals:** Workflow configuration (Agent #3), bulk/mass send, autonomous agents, legacy **`public.messages`** / **`messages_outbox`**, bypassing **`enqueueCanonicalOutboundMessage`**.
 
@@ -9,9 +9,14 @@
 
 ### V1.1 shipped behavior summary (operator-facing)
 
-- **Global AdminV2 assistant (Card 8)** — **`GlobalAssistantProvider`** + **`GlobalAssistantShell`** mounted once in **`AdminV2Shell`** (`web/app/adminV2/components/AdminV2Shell.tsx`). **Header** **`TopNavBar`** **Assistant** button opens the slide-over panel; it travels with the operator across workspace, settings, forms, and other AdminV2 routes. Gated by **`NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED`** / **`isTaskAssistV1UiEnabled()`**.
-- **Opportunity context, not drawer-owned UI** — **`AdminEntityDrawer`** communications tab shows **`TaskAssistOpportunityLauncher`** only (“Open assistant for this opportunity”); full propose / review / schedule / task UI lives in **`TaskAssistOpportunityWorkspace`** inside the global shell via **`GlobalAssistantPanelRouter`**. **`CommunicationsDrawerSection`** (threads) stays in the drawer.
-- **Distinct from other AI surfaces** — bottom **`AICommandSurfaceShell`** is job **layout** assistant; **AI log** is apply history — neither hosts Task Assist.
+- **Command bar = primary Task Assist surface (Card 9)** — **`AICommandSurfaceShell`** at the bottom of **`AdminV2Shell`** is the always-visible assistant home. **`GlobalAssistantProvider`** holds **`currentContext`**, **`commandSurfaceMode`** (`job_overview` \| `task_assist`), and **`focusCommandBar`**. **Job layout** tab unchanged; **Task Assist** tab hosts resolution tray + **`TaskAssistOpportunityWorkspace`**. **Header** **Assistant** scrolls/focuses the bar. Gated by **`NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED`**. Card 8 right **`GlobalAssistantShell`** removed.
+- **Ambient context (9b)** — Drawer **`TaskAssistOpportunityLauncher`** or open opportunity sets **`currentContext`**. Commands like “send **them** a reminder” resolve to the current opportunity after **Confirm target** (pronoun / deictic heuristics).
+- **Explicit search context (9b)** — Commands naming a family/opportunity (e.g. “Smith family”) call **`GET /api/admin/ai/task-assist/entity-search`**, show **0 / 1 / N** candidates, and require **Confirm target** even for a single match — no navigation to the drawer required.
+- **Deterministic intent routing (9c)** — **`parseTaskAssistCommandIntent`** (no LLM) infers **draft_message**, **schedule_message**, or **create_reminder** + channel/timing hints; after target confirm, **`TaskAssistOpportunityWorkspace`** is prefilled (instruction, schedule panel, reminder fields). **Enter** never auto-sends or auto-proposes.
+- **Workflow phrase block (9c)** — NL containing workflow/automation vocabulary (e.g. “when forms complete…”, “automatically”, “workflow”) shows **“That sounds like Workflow Assist, not Task Assist”** and does not proceed.
+- **Never auto-send** — Search and intent routing only resolve **context**; **propose**, **apply**, schedule create, and task create remain explicit operator actions inside the workspace with existing server gates.
+- **Opportunity context, not drawer-owned UI** — Drawer communications tab: **`TaskAssistOpportunityLauncher`** + **`CommunicationsDrawerSection`** (threads) only; full Task Assist UI in the command bar tray.
+- **Distinct from AI log** — bottom bar = **layout** + **Task Assist**; **AI log** = apply history.
 - **Send now (V1 preserved)** — operator-approved payload → **`POST /api/admin/ai/task-assist/apply`** → **`executeCommunicationsSend`** (canonical **`communication_messages`** enqueue).
 - **Save draft** — durable row in **`task_assist_proposals`** via **`POST /api/admin/ai/task-assist/proposals`**; list drafts for the opportunity; **approve** / **reject** on **`draft`** only — **approve does not send** (explicit operator send or schedule step).
 - **Schedule send** — from an approved/edited draft: **single recipient**, final body (and email subject when channel is email), **`scheduled_for` in the future** → **`POST /api/admin/communication-scheduled-sends`** creates **`pending`** snapshot rows only. **Delivery** happens when **`POST /api/admin/communication-scheduled-sends/process-due`** runs (cron with **`INTERNAL_CRON_TOKEN`** or admin-scoped run), which claims due rows and calls **`executeCommunicationsSend`**. Operators may **`PATCH`** cancel while **`pending`**.
@@ -221,7 +226,7 @@ Reference CSVs after migrations: regenerate or hand-update **`docs/supabase/refe
 
 ## 5. UI — **Card 6 (logic shipped) + Card 8 (global shell placement)**
 
-**Card 8 (current):** Full UI in **`TaskAssistOpportunityWorkspace`** (`web/components/admin/taskAssist/TaskAssistOpportunityWorkspace.tsx`), routed by **`GlobalAssistantPanelRouter`**, with client helpers **`web/lib/agent/taskAssist/taskAssistV11OpportunityApi.ts`**. Drawer: **`TaskAssistOpportunityLauncher`** only.
+**Card 9 (current UI):** Full UI in **`TaskAssistOpportunityWorkspace`** (`web/components/admin/taskAssist/TaskAssistOpportunityWorkspace.tsx`), mounted from **`AICommandSurfaceShell`** when **`commandSurfaceMode === 'task_assist'`**, with client helpers **`web/lib/agent/taskAssist/taskAssistV11OpportunityApi.ts`**. Drawer: **`TaskAssistOpportunityLauncher`** only (sets context + focuses command bar). **Card 8** slide-over shell removed.
 
 **Capabilities (unchanged from Card 6):**
 
@@ -294,7 +299,11 @@ If the worker **crashes after claim** and **before** enqueue, or the success-pat
 | **5** | **Scheduled send worker** | **Done** — RPC claim + **`processDueCommunicationScheduledSends`** + **`POST …/process-due`**; tests; **Card 5 hardening** adds **`releaseStaleClaimedCommunicationScheduledSends`** + sprint §6 recovery notes. |
 | **6** | **UI extension** | **Done (drawer-embedded)** — Full panel in **`AdminEntityDrawer`**; superseded by **Card 8** placement. Logic + tests remain valid; **mount point moves**. |
 | **7** | **Docs + references** | **Done** — This sprint doc completion checklist, **`docs/product/ai-system.md`**, **`docs/product/communications.md`**, **`docs/product/crm-system.md`** pointer, **`task_assist_v1.md`** V1.1 forward pointer; Supabase reference CSVs verified for V1.1 tables + claim RPC. |
-| **8** | **Global assistant shell pivot** | **Done** — **`GlobalAssistantProvider`** / **`GlobalAssistantShell`** in **`AdminV2Shell`**; header **Assistant** trigger; drawer launcher only; **`TaskAssistOpportunityWorkspace`**. **No backend changes.** See §Card 8. |
+| **8** | **Global assistant shell pivot** | **Superseded (UI)** by **Card 9** — shipped **`GlobalAssistantShell`** then removed; context provider retained. See §Card 8 (historical) + §Card 9. |
+| **9** | **Command bar assistant pivot** | **Done** — Task Assist home = **`AICommandSurfaceShell`**; **`focusCommandBar`** event; drawer launcher; no right rail. **No backend changes** in the pivot. See §Card 9 (§9.1–9.7). |
+| **9a** | **Command bar — ambient + confirm** | **Done (merged into 9b/9c)** — Ambient pronoun path + mandatory **Confirm target** before workspace; drawer launcher sets context. See §9.8–9.11. |
+| **9b** | **Command bar — entity search API** | **Done** — **`GET /api/admin/ai/task-assist/entity-search`**; opportunities by **`name`/`title`**; optional **customer→opportunity** when dept/site scope is **all**; **`requireAdminOrOps`** + access scope. **Persons** deferred. See §9.12. |
+| **9c** | **Command bar — intent routing** | **Done** — **`parseTaskAssistCommandIntent`** + workspace bootstrap; workflow phrase block; 0/1/N candidate UX; no LLM. See §9.9–9.11, §9.13. |
 
 ---
 
@@ -315,7 +324,7 @@ If the worker **crashes after claim** and **before** enqueue, or the success-pat
 
 | Gate | Purpose |
 |------|---------|
-| **`NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED`** | Client + **`isTaskAssistV1UiEnabled()`** — global **Assistant** shell + drawer launcher (V1 send-now + V1.1 durable flows). |
+| **`NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED`** | Client + **`isTaskAssistV1UiEnabled()`** — Task Assist mode tabs + tray + drawer launcher + header focus control. |
 | **`metadata.ai_policy`** on **`org_settings`** | **`enabled`**, **`provider`** (`stub` \| `openai`), **`allowed_features`** must include **`task_assist_draft`** for **`POST /api/admin/ai/task-assist/propose`** (and the same portal / permission pattern as AI enrichment where applicable). |
 | **`AI_ENRICHMENT_STUB_ENABLED`** | Required **`true`** when org policy uses **`provider: stub`** for routes that use the stub guard (including Task Assist **propose** on the stub branch). |
 | **`AI_ENRICHMENT_USE_PERMISSION_REQUIRED`** + **`ai.enrichment.use`** | When strict enrichment permission mode is on, Task Assist **propose** follows the same **`computeOpenAiLiveInvocationPermitted`** / portal checks as enrichment (see **`docs/product/ai-system.md`**). |
@@ -331,7 +340,10 @@ If the worker **crashes after claim** and **before** enqueue, or the success-pat
 | **Opportunities only** | **`entity_type`** enforced to **`opportunities`** in migrations, validators, and UI. |
 | **Single recipient** | One **`recipient_person_id`** per send / schedule row; no bulk or BCC lists. |
 | **No bulk** | No multi-select or campaign semantics. |
-| **No workflow config** | No **`workflows`** / NL→workflow / Agent #3 surfaces in Task Assist. |
+| **No workflow config** | No **`workflows`** / NL→workflow / Agent #3 surfaces in Task Assist. Command bar **blocks** workflow-like NL with a clear message (9c). |
+| **Command bar heuristics only (9c)** | Intent + entity binding use **deterministic** rules — not an LLM. Misclassification possible; operator confirms target and uses workspace controls. |
+| **Persons search deferred (9b)** | **`entity-search`** returns **opportunities** (direct + optional customer→opp). **Persons** not queried in V1.1 command bar. |
+| **Timing hints approximate (9c)** | Parsed “tomorrow”, “at 9”, etc. prefill **`datetime-local`** best-effort; operator must verify before schedule/reminder submit. |
 | **Scheduled sends require worker/cron** | **`pending`** rows do not enqueue **`communication_messages`** until **`process-due`** claims and runs **`executeCommunicationsSend`**. Align deployment with **`INTERNAL_CRON_TOKEN`** (see **`docs/product/communications.md`**). |
 | **No live LLM on Task Assist propose** | **`POST …/propose`** builds proposals **deterministically**; **`openai`** in policy does **not** enable model sampling on that route today. |
 | **Stuck `claimed` rows** | Recovery is **manual / secondary cron** via **`releaseStaleClaimedCommunicationScheduledSends`** (see §6) — not automatic inside **`process-due`**. |
@@ -357,6 +369,7 @@ All under **`web/app/api/admin/`** unless noted. Auth follows each route’s **`
 | **POST** | **`/api/admin/communication-scheduled-sends`** |
 | **PATCH** | **`/api/admin/communication-scheduled-sends/[id]`** |
 | **POST** | **`/api/admin/communication-scheduled-sends/process-due`** |
+| **GET** | **`/api/admin/ai/task-assist/entity-search`** (Card **9b** — read-only; **`q`**, optional **`entity_type`**, **`limit`**) |
 
 ---
 
@@ -371,20 +384,21 @@ Use after migrations **`20260521103000_task_assist_v1_1_foundation.sql`** and **
 - [ ] If **`provider: stub`**, **`AI_ENRICHMENT_STUB_ENABLED=true`** in server env.
 - [ ] If using strict enrichment RBAC, confirm portal user can pass **`resolveAiEnrichmentPortalAccess`** for **propose** (same pattern as **`docs/product/ai-system.md`** staging checklist).
 
-**B. Global assistant shell (Card 8)**
+**B. Command bar + header (Card 9)**
 
-- [ ] With flag on, **Assistant** appears in **`TopNavBar`** (distinct from **AI log** and bottom layout assistant).
-- [ ] Click **Assistant** opens right slide-over **`GlobalAssistantShell`**; **Escape** or backdrop closes it.
-- [ ] With no context, empty state explains how to pick a record; with context, header shows opportunity **label**.
-- [ ] Navigate workspace → settings with shell closed; reopen **Assistant** — context persists (last opportunity label in header chip when set).
+- [ ] With flag on, **Assistant** appears in **`TopNavBar`** (distinct from **AI log**).
+- [ ] Click **Assistant** scrolls the bottom **`AICommandSurfaceShell`** into view and focuses the input; with opportunity context, bar is in **Task Assist** mode (or switches via **`preferMode`**).
+- [ ] **Job layout** tab still runs overview layout preview/apply when selected; **Task Assist** tab shows the tray + workspace when context **`entity_id`** is set.
+- [ ] **Escape** from an expanded job layout panel still collapses it; **Escape** in Task Assist mode returns to **Job layout** tab (does not clear context).
+- [ ] Navigate workspace → settings; header **Assistant** + launcher still set/focus context as expected.
 
 **C. Opportunity drawer launcher**
 
 - [ ] Open opportunity **communications** tab; **full Task Assist workspace is not embedded** in the drawer.
-- [ ] **Open assistant for this opportunity** launcher appears when flag on; opens global shell with correct **`entity_id`** and label.
+- [ ] **Use assistant for this opportunity** launcher appears when flag on; focuses command bar, sets **Task Assist** mode, loads workspace for correct **`entity_id`** / label.
 - [ ] **`CommunicationsDrawerSection`** (threads) still works unchanged beside the launcher.
 
-**D. Draft and send-now (in global workspace)**
+**D. Draft and send-now (Task Assist tray)**
 
 - [ ] **Draft with Task Assist** returns a valid SMS or email draft; operator can edit body (and subject for email) and select **one** eligible recipient.
 - [ ] **Send approved draft** enqueues via canonical path (thread + **`communication_messages`** **`queued`**); no legacy **`messages`** from Task Assist.
@@ -414,16 +428,30 @@ Use after migrations **`20260521103000_task_assist_v1_1_foundation.sql`** and **
 - [ ] No hidden recipients — selected person matches visible radios.
 - [ ] Task Assist copy distinguishes itself from **layout assistant** (bottom bar) and **AI log**.
 
-**I. Regression**
+**I. Command bar — search, intent, confirm (Cards 9b + 9c)**
+
+- [ ] With **no** drawer context, **`text Smith family about missing forms`** → **Find target** / **Enter** runs search, shows candidate(s), **Confirm target** required before workspace; instruction prefilled with “missing forms”; SMS channel hint.
+- [ ] **`email Smith family tomorrow about tour next steps`** → schedule intent after confirm; email channel; schedule panel opens with approximate tomorrow time (operator verifies).
+- [ ] **`remind me to follow up with Smith tomorrow`** → reminder intent after confirm; reminder title/due prefilled (operator verifies).
+- [ ] **`when forms complete move them to ready to enroll`** → blocked: **“That sounds like Workflow Assist, not Task Assist”** — no search, no workspace mount from Enter alone.
+- [ ] **Exactly one** search match still shows **Confirm target**; **`Draft with Task Assist`** does not run until operator clicks it in workspace.
+- [ ] **Multiple** matches require row pick + confirm.
+- [ ] **Zero** matches show clarify copy (no silent fallback).
+- [ ] **Ambient** “text **them** about …” with drawer opportunity open → ambient confirm; confirm before workspace.
+- [ ] Search results respect org + permissions (restricted operators: opportunity-scoped only; no customer bridge when dept/site restricted).
+
+**J. Regression**
 
 - [ ] **`cd web && npx tsc --noEmit`**
 - [ ] **`cd web && npm run test -- tests/agent/taskAssist/`**
 
 ---
 
-## Card 8 — Global Assistant Shell Pivot (2026-05-15) — **shipped**
+## Card 8 — Global Assistant Shell Pivot (2026-05-15) — **superseded by Card 9 (UI placement)**
 
-**Problem (resolved):** Task Assist V1.1 UI was initially mounted **inside** **`AdminEntityDrawer`**. Product direction: the assistant is **global** — it travels with the operator across AdminV2 routes; the drawer **supplies context** or **launches** the assistant but does not host the full proposal/review/schedule/task surface.
+**Note:** Card 8 shipped a **right slide-over** **`GlobalAssistantShell`**. **Card 9** removes that shell and moves Task Assist into **`AICommandSurfaceShell`**. The audit and component list below remain **historical context**; do not re-mount **`GlobalAssistantShell`** without a new product decision.
+
+**Problem (resolved in Card 8, placement revised in Card 9):** Task Assist V1.1 UI was initially mounted **inside** **`AdminEntityDrawer`**. Product direction: the assistant is **global** — it travels with the operator across AdminV2 routes; the drawer **supplies context** or **launches** the assistant but does not host the full proposal/review/schedule/task surface.
 
 **Shipped constraints:** **No backend changes** (routes, validators, worker, migrations unchanged). **No** autonomous send, workflow config, or bulk. **`NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED`** remains the UI gate. **Opportunities-only** scope unchanged. **AdminV2 only** — legacy **`/admin`** layout has no global provider (launcher no-ops without provider).
 
@@ -585,14 +613,220 @@ AdminV2WorkspaceClientProviders
 
 ---
 
-## 15. V1.1 completion checklist (Cards 0–8)
+## Card 9 — Command Bar Assistant Pivot (2026-05-15) — **shipped** (9 pivot + **9b** search + **9c** intent)
+
+**Problem:** The right-side **`GlobalAssistantShell`** was closer to product than drawer-embedded UI, but AdminV2 already dedicates persistent chrome to the **bottom** **`AICommandSurfaceShell`**. Operators should not chase a second slide-over rail for Task Assist.
+
+**Constraints (locked for pivot §9.1–9.7):** **No** backend route, schema, worker, or validator changes for the **placement pivot** alone. **No** auto-send, bulk, or workflow configuration surfaces. **Canonical** send/schedule/task routes only. **`NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED`** remains the UI gate.
+
+**Shipped sub-cards:** **9b** (`entity-search` + candidate UX), **9c** (`parseTaskAssistCommandIntent` + workspace bootstrap + workflow block). **9a** ambient confirm merged into 9b/9c. Optional future: LLM extract-only (not in V1.1), persons search, layout orientation toggle (§9.2).
+
+### 9.1 Audit findings
+
+| Area | File(s) | Finding |
+|------|---------|---------|
+| **Bottom command surface** | `web/app/adminV2/components/aiCommandSurface/AICommandSurfaceShell.tsx` | Already the persistent AI chrome (`data-adminv2-ai-command-surface`), job overview preview/apply, expand/collapse, success strip. Natural **single home** for a second “mode” (Task Assist) without a new panel. |
+| **Shell layout** | `web/app/adminV2/components/AdminV2Shell.tsx` | Mounts **`AICommandSurfaceShell`** with content **`pb-[96px]`** reserve — Task Assist should consume **this** footprint, not add a right overlay. |
+| **Context** | `web/contexts/GlobalAssistantContext.tsx` | **`GlobalAssistantProvider`** is the right layer for **`currentContext`** + **`commandSurfaceMode`**; slide-over **`isOpen`** state is unnecessary once the bar is the host. |
+| **Focus contract** | `web/lib/adminV2/aiCommandSurface/adminV2CommandBarEvents.ts` | CustomEvent **`alloy-adminv2-focus-command-bar`** + **`preferMode`** lets drawer/header focus the bar without importing the shell. |
+| **Right rail (removed)** | ~~`GlobalAssistantShell`~~ / ~~`GlobalAssistantPanelRouter`~~ | Duplicated AI chrome; **deleted** after Card 9. |
+| **Workspace** | `web/components/admin/taskAssist/TaskAssistOpportunityWorkspace.tsx` | Unchanged API; **`source_surface`** includes **`command_bar`** for provenance. |
+| **Launcher** | `web/components/admin/taskAssist/TaskAssistOpportunityLauncher.tsx` | Calls **`openAssistantWithContext`** → sets context, **`task_assist`** mode, **`focusCommandBar`**. |
+
+### 9.2 Recommended architecture
+
+1. **`GlobalAssistantProvider`** — unchanged mount in **`AdminV2Shell`**; exposes **`commandSurfaceMode`**, **`setCommandSurfaceMode`**, **`focusCommandBar`**, **`openAssistantWithContext`**, **`setAssistantContext`**, **`closeAssistant`** (returns bar to **Job layout** tab without clearing context).
+2. **`AICommandSurfaceShell`** — when flag + provider exist: **mode tabs** (**Task Assist** \| **Job layout**). **Task Assist** shows an **anchored tray** above the input with **`TaskAssistOpportunityWorkspace`** (`active` when mode + **`entity_id`**). Job overview preview/apply **disabled** in Task Assist mode (no accidental layout runs from the same field).
+3. **Header** — **`TopNavBar`** **Assistant** calls **`focusCommandBar()`** (scroll into view + focus); optional **`preferMode`** from **`openAssistant()`** when context is an opportunity.
+4. **Drawer** — launcher copy **“Use assistant for this opportunity”**; no embedded workspace.
+
+**Future layout (not implemented):** A user preference could move the “assistant block” between **bottom row** (current) and **right column** orientation. Card 9 keeps **bottom-only**; any dock/orientation switch would reuse the same **`commandSurfaceMode`** + workspace component, wrapped in a layout shell.
+
+### 9.3 What to remove / keep from Card 8
+
+| Remove (Card 9) | Keep from Card 8 |
+|-----------------|------------------|
+| **`GlobalAssistantShell.tsx`**, **`GlobalAssistantPanelRouter.tsx`** | **`GlobalAssistantProvider`**, entity context types, **`openAssistantWithContext`**, **`setAssistantContext`**, drawer **launcher-only** rule |
+| Right slide-over, backdrop, shell-specific z-index | **`TaskAssistOpportunityWorkspace`**, **`taskAssistV11OpportunityApi.ts`**, all admin API routes |
+| Tests tied to shell DOM | Context + command surface **source contract** tests |
+
+### 9.4 How Task Assist routes through the command bar
+
+- **Context = opportunity** (`currentContext.entity_type === 'opportunities'` + **`entity_id`**): **`openAssistantWithContext`** sets **`commandSurfaceMode: task_assist`** and dispatches **`focusCommandBar({ preferMode: 'task_assist' })`**. **`AICommandSurfaceShell`** listens and applies mode, **`scrollIntoView`** on the footer ref.
+- **Header “Assistant”**: **`focusCommandBar()`** with **`preferMode: task_assist`** only when **`currentContext`** is an opportunity; otherwise job overview focus only.
+- **Route change** (pathname): shell resets **`commandSurfaceMode`** to **`job_overview`** (existing pattern extended).
+- **Propose/apply** unchanged — workspace still calls the same client helpers and canonical routes.
+
+### 9.5 Component plan
+
+| Piece | Role |
+|-------|------|
+| **`adminV2CommandBarEvents.ts`** | Event name + **`AdminV2FocusCommandBarDetail`**. |
+| **`GlobalAssistantContext.tsx`** | State + **`focusCommandBar`** dispatcher. |
+| **`AICommandSurfaceShell.tsx`** | Mode tabs, tray, Task Assist placeholder/guards, Escape to exit Task Assist mode, pathname reset. |
+| **`TopNavBar.tsx`** | **`focusCommandBar`** trigger. |
+| **`TaskAssistOpportunityLauncher.tsx`** | CTA + **`openAssistantWithContext`**. |
+| **`AdminV2Shell.tsx`** | Provider only — **no** **`GlobalAssistantShell`**. |
+
+### 9.6 Test plan
+
+| Test | Intent |
+|------|--------|
+| **`globalAssistantContext.test.tsx`** | Default **`job_overview`**; exports **`focusCommandBar`**, **`commandSurfaceMode`**. |
+| **`aiCommandSurfaceTaskAssistContract.test.tsx`** | Shell imports workspace, tray **`data-*`**, focus listener, **`command_bar`** source. |
+| **`taskAssistOpportunityLauncher.test.tsx`** | Copy + **`openAssistantWithContext`** contract. |
+| **`topNavBarAssistantTrigger.test.tsx`** | **`focusCommandBar`** in header. |
+| **`tests/agent/taskAssist/**`** + **`tsc --noEmit`** | Regression |
+
+### 9.7 Card 9 exit checklist
+
+- [x] **`GlobalAssistantShell`** / **`GlobalAssistantPanelRouter`** removed; **`AdminV2Shell`** does not mount them.
+- [x] Task Assist primary UI in **`AICommandSurfaceShell`** tray; job layout preserved on **Job layout** tab.
+- [x] Drawer launcher focuses bar + sets context; no full panel in drawer.
+- [x] **No** backend / schema / worker / validator edits in **Card 9 pivot** (§9.1–9.7).
+- [x] Product + sprint docs aligned.
+
+### 9.8 Extension — Dual context: **ambient** + **explicit search** (follow-on)
+
+**Product vocabulary (required):** This pipeline is **operator-assistive** interpretation and record **lookup**. It is **not** an **autonomous agent** (no unsupervised loops, no “act while away,” no self-chaining sends). The operator submits text from the command bar; the system may **propose** targets and **must** obtain **explicit confirmation** before any Task Assist **`propose`** call or outbound **`apply`**. **No auto-send**; all communications remain **draft / propose → review → approve** (or explicit operator **send now** inside the workspace) per existing Task Assist rules.
+
+#### Ambient context
+
+- When the user is **on or inside** an opportunity (drawer open, opportunity-scoped route, queue selection that sets assistant context), the surface calls **`setAssistantContext`** / **`openAssistantWithContext`** so **`GlobalAssistantContext.currentContext`** carries **`entity_type`**, **`entity_id`**, **`label`**, **`source_surface`**.
+- Commands that omit a named entity (e.g. “send **them** a reminder”) may bind **`them`** to **`currentContext`** **only when** `currentContext.entity_type === 'opportunities'` and the detected intent is in scope for Task Assist V1.1. If **`currentContext`** is **null** or **wrong type**, **do not** invent an entity — proceed to **search or clarification** (§9.10).
+- **Conflict rule:** If NL contains a **different** proper name than `currentContext.label`, treat as **explicit search** (or clarification), not silent ambient override.
+
+#### Explicit search context
+
+- If the utterance includes a **family / customer / person / opportunity** fragment that is not resolved by ambient rules, the command bar **searches** org-scoped, permissioned records and shows **candidates** before any **`POST /api/admin/ai/task-assist/propose`** or **`apply`**.
+- The user **must** select or confirm a target record **even when exactly one** high-confidence match exists: show a **resolved-context** summary and a **Confirm** control before wiring **`TaskAssistOpportunityWorkspace`** to that **`entity_id`**.
+- **0 matches** → short **clarify** message (“No match for ‘…’ — try a legal name or open the opportunity”) + optional refine field; **N matches** → disambiguation list.
+
+### 9.9 Search + interpretation architecture (layered; LLM not mandatory for V1)
+
+| Layer | Responsibility | Notes |
+|-------|----------------|-------|
+| **L0 — Parse** | Normalize text, length limits, strip mode routing (Task Assist vs job layout already separated). | Deterministic first: quoted strings, “for [Name]”, obvious patterns. |
+| **L1 — Intent** | Coarse bucket: e.g. `draft_message`, `schedule_send`, `reminder_task`, `needs_entity`, `unsupported`. | May be **rules** or a **small structured classifier**; **must not** enqueue sends or call **`apply`**. |
+| **L2 — Entity binding** | Prefer validated **ambient** `currentContext`; else extract **search query strings** (names/titles). | Optional **gated** **`openai`** **extract-only** JSON (no tools) **only** if heuristics fail — same org **`ai_policy`** / portal gates as enrichment; **never** skip §9.11 confirm. |
+| **L3 — Search** | Server queries with **identical org + permission** posture to existing admin list/search routes. | See §9.12. |
+| **L4 — Confirm** | UI sets **confirmed** `GlobalAssistantEntityContext` (may mirror ambient after explicit **Confirm**). | **`TaskAssistOpportunityWorkspace`** `entityId` updates **only** after this step. |
+| **L5 — Task Assist** | Unchanged **`propose`** / drafts / approve / schedule / task flows. | Telemetry: add **`resolution: ambient \| search`** + **`confirmed: true`** in client metadata where useful; **`source_surface`** stays **`command_bar`**. |
+
+Internal engineering docs: prefer **“structured interpretation”** or **“assistive resolution”** over marketing **“AI agent”** for this pipeline.
+
+### 9.10 Context resolution flow (target)
+
+1. **Parse** user command.  
+2. **Detect action intent** (L1).  
+3. **Detect / resolve entity context** — ambient vs conflicting vs missing.  
+4. If **no** confirmed entity → **search** records (§9.12) or ask **clarification** without search when query empty.  
+5. **User selects / confirms** target (**required** for search path; **recommended** one-click **Confirm** even for ambient when NL-driven).  
+6. **Route to Task Assist** — mount workspace / enable **`propose`** only for **confirmed** `entity_id`.
+
+```mermaid
+flowchart TD
+  A[Parse command] --> B{Task Assist mode?}
+  B -->|no| Z[Job layout path]
+  B -->|yes| C[Detect intent]
+  C --> D{Ambient context fits NL without conflict?}
+  D -->|yes| E[Show resolved target + Confirm]
+  D -->|no| F[Entity search API]
+  F --> G{0 / 1 / N matches?}
+  G -->|0| H[Clarify / refine]
+  G -->|1| E
+  G -->|N| I[User picks row]
+  I --> E
+  E --> J[User confirms]
+  J --> K[TaskAssistOpportunityWorkspace then existing propose flows]
+```
+
+### 9.11 Candidate selection UX (command bar)
+
+- **Placement:** Reuse the **anchored tray** above the input (same real estate as **`TaskAssistOpportunityWorkspace`**) or a **stacked** sub-panel: **resolution strip** → **candidate list** → **workspace** after confirm — avoid a second modal where possible.
+- **List row:** type badge (Opportunity / Customer / Person), **primary label**, **subtitle** (status, site, primary person), stable **`id`**.
+- **Single match:** Still show **full resolved row** + **Confirm target** (no auto-run **`propose`**).
+- **Keyboard:** arrows + Enter to highlight; **Esc** clears candidate state without side effects.
+- **Chips:** When drawer has set context, show **“Use open opportunity”** vs **“Search instead”** if NL implies a different name.
+
+### 9.12 Minimal search API (V1)
+
+| Approach | Detail |
+|----------|--------|
+| **Recommended** | **`GET /api/admin/task-assist/entity-search`** (name TBD) with **`q`**, optional **`types=opportunities,customers,persons`**, **`limit`≤20**. Handler uses **`getAdminContextCached`** + **`requireAdminOrOps`** (or **stricter** read key if product requires). Implementation composes **existing** query helpers or thin SQL with **parameterized** `ilike` — **no** raw string SQL. |
+| **MVP fallback** | Three parallel client fetches to existing admin list endpoints — only if server aggregation slips schedule; watch for **inconsistent** permission errors and over-fetch. |
+
+**V1 match scope (simple):**
+
+| Kind | Minimal match |
+|------|----------------|
+| **Opportunities** | Title / display fields already used in admin opportunity lists (align with actual columns + indexes). |
+| **Customers** | Family / account name fields exposed on existing admin customer search. |
+| **Persons** | First / last / full name **only if** a supported admin/CRM search exists — **reuse**; do not ship net-new person SQL without schema + RLS review. |
+
+**Invariants:** **Org-scoped**; respect **site / department** filters **where list UIs do today**; **403 or empty** when the actor cannot read the row class; **no** cross-tenant data.
+
+### 9.13 Safety requirements (extension)
+
+| Rule | Detail |
+|------|--------|
+| **Not autonomous** | No cron, no background chain, no “auto-run on idle.” Every search and propose is **user-initiated** from the bar. |
+| **No auto-send** | **`executeCommunicationsSend`** only after existing operator-approved **apply** path inside workspace. |
+| **No bulk** | One **confirmed** `entity_id` per resolution cycle; no multi-select campaigns. |
+| **No workflow NL config** | Out of scope; no **`workflows`** writes from this path. |
+| **Canonical routes only** | After confirm, only documented admin Task Assist + comms + task routes. |
+| **Injection / abuse** | Treat command text as **untrusted**; bound length; parameterized DB; never echo unsanitized HTML into admin chrome. |
+| **Audit** | Correlate search **`request_id`** with subsequent **`propose`** logs (extend existing patterns). |
+
+### 9.14 Implementation cards (split — recommended)
+
+| Sub-card | Scope | Suggested exit |
+|----------|--------|----------------|
+| **9a** | Ambient + **confirm strip** | Resolved **`currentContext`** always visible in Task Assist mode; **Confirm** gates **`propose`** when binding is NL-derived; optional drawer → **`setAssistantContext`** sync. |
+| **9b** | **Entity search API** | §9.12 route + tests + permission parity with list APIs; opportunities + customers + persons **as available**. |
+| **9c** | **Parse + intent + candidate UX** | **`parseTaskAssistCommandIntent`**, workflow block, workspace **`command_bootstrap`**, tray 0/1/N + confirm — **shipped**. |
+
+**Key implementation files (Card 9 handoff):**
+
+| File | Role |
+|------|------|
+| `web/lib/adminV2/aiCommandSurface/adminV2CommandBarEvents.ts` | **`alloy-adminv2-focus-command-bar`** event |
+| `web/lib/agent/taskAssist/taskAssistEntitySearchService.ts` | Org-scoped search logic |
+| `web/lib/agent/taskAssist/taskAssistCommandIntent.ts` | Intent parser + bootstrap builder |
+| `web/lib/agent/taskAssist/taskAssistCommandBarResolution.ts` | Ambient vs search heuristics |
+| `web/app/api/admin/ai/task-assist/entity-search/route.ts` | **`GET entity-search`** |
+| `web/tests/agent/taskAssist/aiCommandSurfaceTaskAssistContract.test.tsx` | Shell contract |
+| `web/tests/agent/taskAssist/taskAssistEntitySearchRoute.test.ts` | Route tests |
+| `web/tests/agent/taskAssist/taskAssistCommandIntent.test.ts` | Parser tests |
+
+### 9.15 Doc / QA (shipped)
+
+- [x] **`docs/product/ai-system.md`**, **`crm-system.md`**, **`communications.md`** — command bar Task Assist + **`entity-search`**.
+- [x] **§13 Manual QA** — example NL commands (§I).
+
+### 9.16 Extension — test plan (9b + 9c — shipped)
+
+| Area | Cases |
+|------|--------|
+| **Ambient** | With `currentContext` set, “remind them” resolves only for **opportunities**; wrong entity type → clarification, not silent bind. |
+| **Conflict** | Drawer context “Smith”; command “for Jones” → **search**, not Smith. |
+| **Search API** | Org A cannot see org B rows; missing `q` returns **400**; `limit` capped; SQL injection strings return safe empty/error. |
+| **UX** | 0 / 1 / N match states; **Confirm** required for single match; **Esc** clears candidates; keyboard selection. |
+| **Regression** | After confirm, existing **`propose`** / proposal / apply tests unchanged; no **`apply`** without workspace approval path. |
+
+---
+
+## 15. V1.1 completion checklist (Cards 0–9)
 
 - [x] Schema + RLS + claim RPC (Cards 0–1).
 - [x] Proposal, operational task, scheduled send HTTP + worker (Cards 2–5).
-- [x] Task Assist UI flows (Card 6 logic; Card 8 global shell placement).
+- [x] Task Assist UI flows (Card 6 logic; Card 8 then **Card 9** command bar placement).
 - [x] Docs + reference CSVs (Card 7).
-- [x] Global assistant shell + drawer launcher (Card 8).
-- [ ] **Operational follow-ups (post-V1.1):** cron for **`process-due`** in each deployment; optional **`next_follow_up_at`** sync from **`operational_tasks`**; legacy **`/admin`** provider parity if needed.
+- [x] Global assistant shell + drawer launcher (**Card 8**, superseded by **Card 9** for placement).
+- [x] **Command bar Task Assist home** (**Card 9** pivot, §9.1–9.7).
+- [x] **Card 9b** — Entity search **`GET /api/admin/ai/task-assist/entity-search`** + command bar resolution UX.
+- [x] **Card 9c** — Deterministic intent routing + workspace bootstrap + workflow phrase block.
+- [ ] **Operational follow-ups (post-V1.1):** cron for **`process-due`** in each deployment; optional **`next_follow_up_at`** sync from **`operational_tasks`**; persons search; legacy **`/admin`** provider parity.
 
 ---
 

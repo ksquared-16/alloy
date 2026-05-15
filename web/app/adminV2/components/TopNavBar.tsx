@@ -80,7 +80,7 @@ export default function TopNavBar() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [quickMessageOpen, setQuickMessageOpen] = useState(false);
-  const { openAssistant, currentContext } = useGlobalAssistant();
+  const { focusCommandBar, currentContext } = useGlobalAssistant();
   const taskAssistEnabled = isTaskAssistV1UiEnabled();
 
   // NOTE:
@@ -207,10 +207,10 @@ export default function TopNavBar() {
         {taskAssistEnabled ? (
           <button
             type="button"
-            onClick={() => openAssistant()}
+            onClick={() => focusCommandBar()}
             className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium leading-none"
             style={secondaryTabStyle(false)}
-            title="Task Assist — draft and review outbound messages (not layout assistant or AI log)"
+            title="Scroll to the bottom AI bar — Task Assist when an opportunity is in context, otherwise job layout commands"
             data-global-assistant-header-trigger="true"
           >
             <Sparkles className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden strokeWidth={2} />

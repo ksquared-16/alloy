@@ -3,11 +3,35 @@ import type { TaskAssistSuggestionV1 } from "@/lib/agent/taskAssist/types";
 const JSON_HEADERS = { "Content-Type": "application/json" } as const;
 
 export const TASK_ASSIST_PROPOSALS_URL = "/api/admin/ai/task-assist/proposals";
+export const TASK_ASSIST_ENTITY_SEARCH_URL = "/api/admin/ai/task-assist/entity-search";
 export const COMMUNICATION_SCHEDULED_SENDS_URL = "/api/admin/communication-scheduled-sends";
 export const OPERATIONAL_TASKS_URL = "/api/admin/operational-tasks";
 
 export function proposalsListUrl(entityId: string): string {
     return `${TASK_ASSIST_PROPOSALS_URL}?entity_type=opportunities&entity_id=${encodeURIComponent(entityId)}`;
+}
+
+export function taskAssistEntitySearchUrl(params: {
+    q: string;
+    entity_type?: "all" | "opportunities";
+    limit?: number;
+    include_customers?: boolean;
+}): string {
+    const sp = new URLSearchParams();
+    sp.set("q", params.q);
+    if (params.entity_type) sp.set("entity_type", params.entity_type);
+    if (params.limit != null) sp.set("limit", String(params.limit));
+    if (params.include_customers === false) sp.set("include_customers", "false");
+    return `${TASK_ASSIST_ENTITY_SEARCH_URL}?${sp.toString()}`;
+}
+
+export async function fetchTaskAssistEntitySearch(params: {
+    q: string;
+    entity_type?: "all" | "opportunities";
+    limit?: number;
+    include_customers?: boolean;
+}): Promise<Response> {
+    return fetch(taskAssistEntitySearchUrl(params), { credentials: "include" });
 }
 
 export function scheduledSendsListUrl(entityId: string): string {

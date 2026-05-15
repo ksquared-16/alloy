@@ -24,4 +24,12 @@ describe("TaskAssistOpportunityWorkspace source contract (V1 UI safety)", () => 
         expect(src).toContain("data-task-assist-v11");
         expect(src).toContain("data-task-assist-save-draft");
     });
+
+    it("accepts command bar bootstrap without auto-propose", () => {
+        const src = readFileSync(workspacePath, "utf8");
+        expect(src).toContain("command_bootstrap");
+        expect(src).toContain("command_bootstrap_key");
+        expect(src).toContain("data-task-assist-intent-clarify");
+        expect(src).toContain("setScheduleOpen(true)");
+    });
 });

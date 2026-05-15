@@ -26,7 +26,7 @@ describe("TaskAssistOpportunityLauncher", () => {
             </GlobalAssistantProvider>
         );
         expect(html).toContain("data-task-assist-launcher");
-        expect(html).toContain("Open assistant for this opportunity");
+        expect(html).toContain("Use assistant for this opportunity");
     });
 
     it("calls openAssistantWithContext with opportunity drawer context (source contract)", () => {

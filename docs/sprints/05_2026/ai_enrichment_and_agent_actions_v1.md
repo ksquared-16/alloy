@@ -2,7 +2,7 @@
 
 **Path:** `docs/sprints/05_2026/ai_enrichment_and_agent_actions_v1.md`  
 **Status:** Phase 1 **Cards 0–6** + Phase 2 **Cards 7–11** + Phase 2.5 **Cards 11.5–11.8** implemented: permission-aware AI route gate, org policy pre-check, adapter design placeholders, **RBAC seed migration** for **`ai.enrichment.use`** (+ optional catalog keys). No live HTTP providers / SDKs / secrets. Live provider remains behind pilot approval.  
-**Prerequisite:** AI Agents V1 complete (`docs/sprints/05_2026/ai_agents_v1.md`) — deterministic needs-attention suggestion, `_attention_suggestion`, drawer header UX, queue preview, Workflow Assist template only.
+**Prerequisite:** AI Agents V1 complete (`docs/sprints/05_2026/ai_agents_v1.md`) — deterministic needs-attention suggestion, `_attention_suggestion`, drawer header UX, queue preview, and **documentation templates** for **Agent 2 — Task Assist V1** (transactional / schedule; approval before send-schedule) and **Agent 3 — Workflow Assist** (reusable workflow config; drafts disabled-by-default; approval before save-apply) as **separate** agents.
 
 ---
 
@@ -80,7 +80,7 @@ The next phases add **optional** intelligence and **optional** durability while 
 | 17 | Existing proposal/apply patterns? | **Yes — mature:** proposal row + apply audit + **SECURITY DEFINER** RPC with stale checks for agent v0/v1/v2. This is the **template** for durable needs-attention proposals. |
 | 18 | Approval / audit flows? | Same RPC pattern encodes **human-initiated apply** with trace ids (`proposal_id`, `request_id`, `correlation_id`, `result_id`). |
 | 19 | Tables for accept/dismiss/apply suggestion? | **New** tables (or new agent version namespace) **recommended** for suggestion proposals — do **not** overload field-visibility or queue-definition proposal tables. Mirror **shape**: proposals + apply_audit + optional dismiss table or status column. |
-| 20 | Connection to workflows / comms / records? | **Apply** should call **existing** mutations (`executeWorkflowRun` where appropriate, comms APIs, status actions) **only** after validated proposal + permission check — same doctrine as `docs/sprints/05_2026/ai_agents_v1.md` Agent 2 §8.6 “future apply path”. |
+| 20 | Connection to workflows / comms / records? | **Apply** should call **existing** mutations (`executeWorkflowRun` where appropriate, comms APIs, status actions) **only** after validated proposal + permission check — same doctrine as `docs/sprints/05_2026/ai_agents_v1.md` **Agent 3** §9.6 “future apply path” for workflow config, and **Agent 2** §8.2 for transactional send/schedule (separate contracts and surfaces). |
 
 ---
 
@@ -122,7 +122,7 @@ The next phases add **optional** intelligence and **optional** durability while 
 
 ## 6. Phase 3 — Proposal / Apply System V1
 
-**Goal:** **Durable** proposals for needs-attention (and optionally Workflow Assist), explicit **accept / dismiss / apply**, audit trail, RPC or service-layer apply consistent with agent v0–v2.
+**Goal:** **Durable** proposals for needs-attention, and optionally **Agent 2 (Task Assist)** and/or **Agent 3 (Workflow Assist)** — each with its own proposal store shape — explicit **accept / dismiss / apply**, audit trail, RPC or service-layer apply consistent with agent v0–v2.
 
 **Non-goals:** Auto-apply on drawer open; applying without user id + org scope + permission matrix.
 

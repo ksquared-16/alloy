@@ -2,11 +2,16 @@
 
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 
+import {
+    ADMIN_V2_FOCUS_COMMAND_BAR,
+    type AdminV2FocusCommandBarDetail,
+} from "@/lib/adminV2/aiCommandSurface/adminV2CommandBarEvents";
+
 export type GlobalAssistantEntityType = "opportunities";
 
 export type GlobalAssistantAction = "draft_sms" | "draft_email" | "schedule" | "reminder";
 
-export type GlobalAssistantSourceSurface = "opportunity_drawer" | "header" | "queue" | "global_shell";
+export type GlobalAssistantSourceSurface = "opportunity_drawer" | "header" | "queue" | "global_shell" | "command_bar";
 
 export type GlobalAssistantEntityContext = {
     entity_type: GlobalAssistantEntityType;
@@ -16,10 +21,18 @@ export type GlobalAssistantEntityContext = {
     available_actions?: GlobalAssistantAction[];
 };
 
+export type CommandSurfaceMode = "job_overview" | "task_assist";
+
 type GlobalAssistantContextValue = {
-    isOpen: boolean;
+    /** Card 9: which assistant mode the bottom command bar shows (job layout vs Task Assist). */
+    commandSurfaceMode: CommandSurfaceMode;
+    setCommandSurfaceMode: (mode: CommandSurfaceMode) => void;
     currentContext: GlobalAssistantEntityContext | null;
+    /** Scroll/focus the bottom command bar; optional mode hint for Task Assist vs job layout. */
+    focusCommandBar: (detail?: AdminV2FocusCommandBarDetail) => void;
+    /** @deprecated Card 9 — use {@link focusCommandBar}. Kept for compatibility. */
     openAssistant: () => void;
+    /** Switch to job layout tab on the command bar; does not clear context. */
     closeAssistant: () => void;
     setAssistantContext: (context: GlobalAssistantEntityContext | null) => void;
     openAssistantWithContext: (context: GlobalAssistantEntityContext) => void;
@@ -28,36 +41,58 @@ type GlobalAssistantContextValue = {
 const GlobalAssistantContext = createContext<GlobalAssistantContextValue | null>(null);
 
 export function GlobalAssistantProvider({ children }: { children: ReactNode }) {
-    const [isOpen, setIsOpen] = useState(false);
+    const [commandSurfaceMode, setCommandSurfaceMode] = useState<CommandSurfaceMode>("job_overview");
     const [currentContext, setCurrentContext] = useState<GlobalAssistantEntityContext | null>(null);
 
-    const openAssistant = useCallback(() => {
-        setIsOpen(true);
+    const focusCommandBar = useCallback((detail?: AdminV2FocusCommandBarDetail) => {
+        if (typeof window !== "undefined") {
+            window.dispatchEvent(new CustomEvent(ADMIN_V2_FOCUS_COMMAND_BAR, { detail: detail ?? {} }));
+        }
     }, []);
 
+    const openAssistant = useCallback(() => {
+        focusCommandBar({
+            preferMode: currentContext?.entity_type === "opportunities" ? "task_assist" : "job_overview",
+        });
+    }, [currentContext, focusCommandBar]);
+
     const closeAssistant = useCallback(() => {
-        setIsOpen(false);
+        setCommandSurfaceMode("job_overview");
     }, []);
 
     const setAssistantContext = useCallback((context: GlobalAssistantEntityContext | null) => {
         setCurrentContext(context);
     }, []);
 
-    const openAssistantWithContext = useCallback((context: GlobalAssistantEntityContext) => {
-        setCurrentContext(context);
-        setIsOpen(true);
-    }, []);
+    const openAssistantWithContext = useCallback(
+        (context: GlobalAssistantEntityContext) => {
+            setCurrentContext(context);
+            setCommandSurfaceMode("task_assist");
+            focusCommandBar({ preferMode: "task_assist" });
+        },
+        [focusCommandBar]
+    );
 
     const value = useMemo(
         () => ({
-            isOpen,
+            commandSurfaceMode,
+            setCommandSurfaceMode,
             currentContext,
+            focusCommandBar,
             openAssistant,
             closeAssistant,
             setAssistantContext,
             openAssistantWithContext,
         }),
-        [isOpen, currentContext, openAssistant, closeAssistant, setAssistantContext, openAssistantWithContext]
+        [
+            commandSurfaceMode,
+            currentContext,
+            focusCommandBar,
+            openAssistant,
+            closeAssistant,
+            setAssistantContext,
+            openAssistantWithContext,
+        ]
     );
 
     return <GlobalAssistantContext.Provider value={value}>{children}</GlobalAssistantContext.Provider>;
@@ -71,7 +106,6 @@ export function useGlobalAssistant(): GlobalAssistantContextValue {
     return ctx;
 }
 
-/** Optional hook for components that may render outside the provider (e.g. tests). */
 export function useGlobalAssistantOptional(): GlobalAssistantContextValue | null {
     return useContext(GlobalAssistantContext);
 }

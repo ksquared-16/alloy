@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
 import { usePathname } from "next/navigation";
-import { neutral, derived, brand, semantic } from "@/styles/tokens/colors";
+import { neutral, derived, brand, semantic, palette } from "@/styles/tokens/colors";
 import type { JobOverviewPlannerSuccess, JobOverviewPlannerFailure } from "@/lib/agent/planner/jobOverviewPlannerTypes";
 import { runOverviewLayoutSemanticPreview } from "@/lib/admin/agentLab/overviewLayoutSemanticAssistant";
 import { shouldBlockSemanticNoopApply } from "@/lib/admin/agentLab/semanticOverviewNoopSummary";
@@ -16,6 +16,25 @@ import {
   type ResponseKind,
 } from "@/lib/adminV2/aiCommandSurface/aiCommandSurfaceModel";
 import { dispatchAiActivityRefresh } from "@/app/adminV2/components/aiActivity/RecentAiActionsStrip";
+import TaskAssistOpportunityWorkspace from "@/components/admin/taskAssist/TaskAssistOpportunityWorkspace";
+import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
+import {
+  extractTaskAssistEntitySearchQuery,
+  looksLikeAmbientOnlyCommand,
+} from "@/lib/agent/taskAssist/taskAssistCommandBarResolution";
+import {
+  buildTaskAssistCommandBootstrap,
+  parseTaskAssistCommandIntent,
+  type TaskAssistCommandBootstrap,
+  type TaskAssistCommandIntent,
+} from "@/lib/agent/taskAssist/taskAssistCommandIntent";
+import type { TaskAssistEntitySearchCandidate } from "@/lib/agent/taskAssist/taskAssistEntitySearchTypes";
+import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
+import { fetchTaskAssistEntitySearch, readJson } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
+import {
+    ADMIN_V2_FOCUS_COMMAND_BAR,
+    type AdminV2FocusCommandBarDetail,
+} from "@/lib/adminV2/aiCommandSurface/adminV2CommandBarEvents";
 
 const CMD = {
   textBody: neutral.textPrimary,
@@ -154,10 +173,15 @@ async function loadCurrentJobOverviewConfig(): Promise<unknown> {
   return data.layout?.config ?? {};
 }
 
-function SurfaceCard(props: { children: ReactNode; expanded: boolean }) {
-  const { children, expanded } = props;
+function SurfaceCard(props: {
+  children: ReactNode;
+  expanded: boolean;
+  rootRef?: RefObject<HTMLElement | null>;
+}) {
+  const { children, expanded, rootRef } = props;
   return (
     <footer
+      ref={rootRef}
       data-adminv2-ai-command-surface
       role="contentinfo"
       aria-label="AI command surface"
@@ -415,11 +439,34 @@ function AdvancedDrawer(props: {
   );
 }
 
+type TaskAssistResolveState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "ambient_confirm"; entityId: string; label: string }
+  | { kind: "pick"; candidates: TaskAssistEntitySearchCandidate[] }
+  | { kind: "confirm_one"; candidate: TaskAssistEntitySearchCandidate }
+  | { kind: "none"; message: string };
+
 export default function AICommandSurfaceShell() {
   const pathname = usePathname();
   const routePathRef = useRef(pathname);
   const postApplyCollapseRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const successStripRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const shellRootRef = useRef<HTMLElement | null>(null);
+
+  const globalAssistant = useGlobalAssistantOptional();
+  const taskAssistUiEnabled = isTaskAssistV1UiEnabled();
+  const taskAssistBarMode =
+    Boolean(taskAssistUiEnabled) && Boolean(globalAssistant) && globalAssistant!.commandSurfaceMode === "task_assist";
+  const taskAssistWorkspaceVisible =
+    taskAssistBarMode &&
+    globalAssistant!.currentContext?.entity_type === "opportunities" &&
+    Boolean(globalAssistant!.currentContext?.entity_id);
+
+  const [taskAssistResolve, setTaskAssistResolve] = useState<TaskAssistResolveState>({ kind: "idle" });
+  const [taskAssistPendingIntent, setTaskAssistPendingIntent] = useState<TaskAssistCommandIntent | null>(null);
+  const [taskAssistCommandBootstrap, setTaskAssistCommandBootstrap] = useState<TaskAssistCommandBootstrap | null>(null);
+  const [taskAssistBootstrapKey, setTaskAssistBootstrapKey] = useState<string | null>(null);
 
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const [commandText, setCommandText] = useState("");
@@ -454,6 +501,119 @@ export default function AICommandSurfaceShell() {
     setAdvancedOpen(false);
     setDetailsOpen(false);
   }, [clearPostApplyTimer]);
+
+  const applyTaskAssistCandidate = useCallback(
+    (c: TaskAssistEntitySearchCandidate, intent?: TaskAssistCommandIntent | null) => {
+      if (!globalAssistant) return;
+      const effectiveIntent = intent ?? taskAssistPendingIntent;
+      globalAssistant.setAssistantContext({
+        entity_type: "opportunities",
+        entity_id: c.entity_id,
+        label: c.label,
+        source_surface: "command_bar",
+      });
+      if (effectiveIntent) {
+        setTaskAssistCommandBootstrap(buildTaskAssistCommandBootstrap(effectiveIntent));
+        setTaskAssistBootstrapKey(`${c.entity_id}-${Date.now()}`);
+      }
+      setTaskAssistResolve({ kind: "idle" });
+    },
+    [globalAssistant, taskAssistPendingIntent],
+  );
+
+  const taskAssistIntentSummary = useCallback((intent: TaskAssistCommandIntent | null): string | null => {
+    if (!intent || intent.intent_type === "unknown") return null;
+    const ch = intent.channel_hint ? ` · ${intent.channel_hint.toUpperCase()}` : "";
+    switch (intent.intent_type) {
+      case "draft_message":
+        return `Draft message${ch}`;
+      case "schedule_message":
+        return `Schedule send${ch}${intent.timing_hint_text ? ` · ${intent.timing_hint_text}` : ""}`;
+      case "create_reminder":
+        return `Reminder / task${intent.timing_hint_text ? ` · ${intent.timing_hint_text}` : ""}`;
+      default:
+        return null;
+    }
+  }, []);
+
+  const runTaskAssistResolve = useCallback(async () => {
+    if (!taskAssistBarMode || !globalAssistant) return;
+    const cmd = commandText.trim();
+    if (!cmd) return;
+    setTaskAssistResolve({ kind: "loading" });
+    try {
+      const parsed = parseTaskAssistCommandIntent(cmd);
+      setTaskAssistPendingIntent(parsed);
+
+      if (parsed.workflow_blocked) {
+        setTaskAssistResolve({
+          kind: "none",
+          message: parsed.warnings[0] ?? "That sounds like Workflow Assist, not Task Assist.",
+        });
+        return;
+      }
+
+      if (
+        looksLikeAmbientOnlyCommand(cmd) &&
+        globalAssistant.currentContext?.entity_type === "opportunities" &&
+        globalAssistant.currentContext.entity_id
+      ) {
+        setTaskAssistResolve({
+          kind: "ambient_confirm",
+          entityId: globalAssistant.currentContext.entity_id,
+          label: globalAssistant.currentContext.label,
+        });
+        return;
+      }
+      const qFromIntent = parsed.search_text_hint?.trim() ?? "";
+      const qExtract = qFromIntent.length >= 2 ? qFromIntent : extractTaskAssistEntitySearchQuery(cmd);
+      const qEff = (qExtract.length >= 2 ? qExtract : cmd).trim();
+      const res = await fetchTaskAssistEntitySearch({ q: qEff, entity_type: "all" });
+      const j = await readJson<{
+        ok?: boolean;
+        candidates?: TaskAssistEntitySearchCandidate[];
+        message?: string;
+      }>(res);
+      if (!res.ok || j.ok === false) {
+        setTaskAssistResolve({
+          kind: "none",
+          message: typeof j.message === "string" && j.message.trim() ? j.message : "Could not search right now.",
+        });
+        return;
+      }
+      let list = Array.isArray(j.candidates) ? j.candidates : [];
+      const ctxOpp =
+        globalAssistant.currentContext?.entity_type === "opportunities" && globalAssistant.currentContext.entity_id ?
+          globalAssistant.currentContext
+        : null;
+      if (ctxOpp && !looksLikeAmbientOnlyCommand(cmd)) {
+        const chip: TaskAssistEntitySearchCandidate = {
+          entity_type: "opportunities",
+          entity_id: ctxOpp.entity_id,
+          label: ctxOpp.label || "Current opportunity",
+          subtitle: "From drawer / ambient context — pick if this is who you mean",
+          confidence: "high",
+          source: "opportunity_name",
+          matched_fields: ["ambient_context"],
+        };
+        list = [chip, ...list.filter((c) => c.entity_id !== ctxOpp.entity_id)];
+      }
+      if (list.length === 0) {
+        setTaskAssistResolve({
+          kind: "none",
+          message: "Could not find a matching family or opportunity. Try another name or open the record in the drawer.",
+        });
+        return;
+      }
+      if (list.length === 1) {
+        setTaskAssistResolve({ kind: "confirm_one", candidate: list[0]! });
+        return;
+      }
+      setTaskAssistResolve({ kind: "pick", candidates: list });
+    } catch {
+      setTaskAssistResolve({ kind: "none", message: "Search failed. Try again." });
+    }
+  }, [commandText, globalAssistant, taskAssistBarMode]);
 
   const activePlanner = response?.plannerOk ?? null;
   const applyBlockedByNoop = shouldBlockSemanticNoopApply({
@@ -495,23 +655,54 @@ export default function AICommandSurfaceShell() {
       setShowSuccessStrip(false);
       clearSuccessStripTimer();
       collapsePanel();
+      globalAssistant?.setCommandSurfaceMode("job_overview");
+      setTaskAssistResolve({ kind: "idle" });
+      setTaskAssistPendingIntent(null);
+      setTaskAssistCommandBootstrap(null);
+      setTaskAssistBootstrapKey(null);
     }
-  }, [pathname, collapsePanel, clearSuccessStripTimer]);
+  }, [pathname, collapsePanel, clearSuccessStripTimer, globalAssistant]);
 
   useEffect(() => {
-    const panelOpen = expanded && response != null;
-    if (!panelOpen || busy) return;
+    const onFocusBar = (ev: Event) => {
+      const detail = (ev as CustomEvent<AdminV2FocusCommandBarDetail>).detail ?? {};
+      shellRootRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      if (detail.preferMode && globalAssistant) {
+        globalAssistant.setCommandSurfaceMode(detail.preferMode);
+      }
+    };
+    window.addEventListener(ADMIN_V2_FOCUS_COMMAND_BAR, onFocusBar as EventListener);
+    return () => window.removeEventListener(ADMIN_V2_FOCUS_COMMAND_BAR, onFocusBar as EventListener);
+  }, [globalAssistant]);
+
+  useEffect(() => {
+    const jobPanelOpen = expanded && response != null;
+    const listenEsc = jobPanelOpen || taskAssistBarMode;
+    if (!listenEsc || busy) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();
-        collapsePanel();
+        if (taskAssistResolve.kind !== "idle" && taskAssistResolve.kind !== "loading") {
+          setTaskAssistResolve({ kind: "idle" });
+          return;
+        }
+        if (taskAssistResolve.kind === "loading") {
+          setTaskAssistResolve({ kind: "idle" });
+          return;
+        }
+        if (taskAssistBarMode && globalAssistant) {
+          globalAssistant.setCommandSurfaceMode("job_overview");
+        } else {
+          collapsePanel();
+        }
       }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [expanded, response, busy, collapsePanel]);
+  }, [expanded, response, busy, collapsePanel, taskAssistBarMode, globalAssistant, taskAssistResolve.kind]);
 
   const runPreview = useCallback(async () => {
+    if (taskAssistBarMode) return;
     const submitted = commandText.trim();
     if (!submitted) return;
 
@@ -581,9 +772,10 @@ export default function AICommandSurfaceShell() {
         inputRef.current?.focus();
       });
     }
-  }, [commandText, clearPostApplyTimer, clearSuccessStripTimer]);
+  }, [commandText, clearPostApplyTimer, clearSuccessStripTimer, taskAssistBarMode]);
 
   const apply = useCallback(async () => {
+    if (taskAssistBarMode) return;
     if (!structuredOverrideJson) return;
     if (applyBlockedByNoop) return;
 
@@ -693,7 +885,7 @@ export default function AICommandSurfaceShell() {
         inputRef.current?.focus();
       });
     }
-  }, [structuredOverrideJson, applyBlockedByNoop, activePlanner, response?.submittedCommand, clearPostApplyTimer, clearSuccessStripTimer]);
+  }, [structuredOverrideJson, applyBlockedByNoop, activePlanner, response?.submittedCommand, clearPostApplyTimer, clearSuccessStripTimer, taskAssistBarMode]);
 
   const refine = useCallback(() => {
     setExpanded(true);
@@ -704,11 +896,12 @@ export default function AICommandSurfaceShell() {
     });
   }, [commandText]);
 
-  const showPanel = expanded && response != null;
+  const showJobPanel = !taskAssistBarMode && expanded && response != null;
+  const surfaceExpanded = showJobPanel || showSuccessStrip || taskAssistBarMode;
 
   return (
-    <SurfaceCard expanded={showPanel || showSuccessStrip}>
-      {showSuccessStrip && !expanded && response?.kind === "applied_success" ? (
+    <SurfaceCard expanded={surfaceExpanded} rootRef={shellRootRef}>
+      {!taskAssistBarMode && showSuccessStrip && !expanded && response?.kind === "applied_success" ? (
         <div
           className="mb-0 flex items-center justify-between gap-2 rounded-t-lg px-3 py-1.5"
           style={{
@@ -730,7 +923,169 @@ export default function AICommandSurfaceShell() {
         </div>
       ) : null}
 
-      {showPanel && response ? (
+      {taskAssistUiEnabled && globalAssistant ? (
+        <div
+          className="flex flex-wrap items-center gap-2 border-b border-alloy-stone/15 px-3 py-2"
+          style={{ backgroundColor: neutral.surface }}
+          data-adminv2-command-surface-mode-tabs="true"
+        >
+          <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: CMD.textLabel }}>
+            Mode
+          </span>
+          <button
+            type="button"
+            className={`rounded-md px-2.5 py-1 text-[11px] font-semibold ${
+              globalAssistant.commandSurfaceMode === "task_assist"
+                ? "bg-alloy-midnight/90 text-white"
+                : "border border-alloy-stone/25 text-alloy-midnight/75"
+            }`}
+            title="Task Assist — find an opportunity from the bar, then draft / save / schedule (no auto-send)"
+            onClick={() => globalAssistant.setCommandSurfaceMode("task_assist")}
+          >
+            Task Assist
+          </button>
+          <button
+            type="button"
+            className={`rounded-md px-2.5 py-1 text-[11px] font-semibold ${
+              globalAssistant.commandSurfaceMode === "job_overview"
+                ? "bg-alloy-midnight/90 text-white"
+                : "border border-alloy-stone/25 text-alloy-midnight/75"
+            }`}
+            onClick={() => globalAssistant.setCommandSurfaceMode("job_overview")}
+          >
+            Job layout
+          </button>
+          {globalAssistant.currentContext?.label ? (
+            <span className="min-w-0 max-w-[min(280px,40vw)] truncate text-[10px]" style={{ color: CMD.textSupporting }}>
+              Context: {globalAssistant.currentContext.label}
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+
+      {taskAssistBarMode ? (
+        <div
+          className="max-h-[min(52vh,440px)] overflow-y-auto border-b"
+          style={{ borderColor: derived.border, backgroundColor: neutral.surface }}
+          data-adminv2-task-assist-command-tray="true"
+        >
+          {taskAssistResolve.kind === "loading" ? (
+            <div className="px-3 py-2 text-[12px]" style={{ color: CMD.textSupporting }}>
+              Searching…
+            </div>
+          ) : null}
+          {taskAssistResolve.kind === "ambient_confirm" ? (
+            <div className="space-y-2 border-b px-3 py-2" style={{ borderColor: derived.border }} data-adminv2-task-assist-ambient-confirm="true">
+              <div className="text-[12px] font-semibold" style={{ color: CMD.textBody }}>
+                Use current opportunity?
+              </div>
+              <div className="text-[11px]" style={{ color: CMD.textSupporting }}>
+                {taskAssistResolve.label}
+              </div>
+              {taskAssistIntentSummary(taskAssistPendingIntent) ? (
+                <div className="text-[10px]" style={{ color: CMD.textLabel }} data-adminv2-task-assist-intent-summary="true">
+                  Next: {taskAssistIntentSummary(taskAssistPendingIntent)} — confirm target, then review in the workspace (no auto-send).
+                </div>
+              ) : null}
+              <button
+                type="button"
+                className="rounded-md bg-alloy-midnight/90 px-3 py-1.5 text-[12px] font-semibold text-white"
+                onClick={() =>
+                  applyTaskAssistCandidate(
+                    {
+                      entity_type: "opportunities",
+                      entity_id: taskAssistResolve.entityId,
+                      label: taskAssistResolve.label,
+                      subtitle: null,
+                      confidence: "high",
+                      source: "opportunity_name",
+                      matched_fields: ["ambient_pronoun"],
+                    },
+                    taskAssistPendingIntent,
+                  )
+                }
+              >
+                Confirm target
+              </button>
+            </div>
+          ) : null}
+          {taskAssistResolve.kind === "confirm_one" ? (
+            <div className="space-y-2 border-b px-3 py-2" style={{ borderColor: derived.border }} data-adminv2-task-assist-single-confirm="true">
+              <div className="text-[12px] font-semibold" style={{ color: CMD.textBody }}>
+                Confirm Task Assist target
+              </div>
+              <div className="text-[11px]" style={{ color: CMD.textBody }}>
+                {taskAssistResolve.candidate.label}
+              </div>
+              {taskAssistResolve.candidate.subtitle ? (
+                <div className="text-[10px]" style={{ color: CMD.textSupporting }}>
+                  {taskAssistResolve.candidate.subtitle}
+                </div>
+              ) : null}
+              {taskAssistIntentSummary(taskAssistPendingIntent) ? (
+                <div className="text-[10px]" style={{ color: CMD.textLabel }} data-adminv2-task-assist-intent-summary="true">
+                  Next: {taskAssistIntentSummary(taskAssistPendingIntent)} — confirm target, then review in the workspace (no auto-send).
+                </div>
+              ) : null}
+              <button
+                type="button"
+                className="rounded-md bg-alloy-midnight/90 px-3 py-1.5 text-[12px] font-semibold text-white"
+                onClick={() => applyTaskAssistCandidate(taskAssistResolve.candidate, taskAssistPendingIntent)}
+              >
+                Confirm target
+              </button>
+            </div>
+          ) : null}
+          {taskAssistResolve.kind === "pick" ? (
+            <div className="border-b px-2 py-2" style={{ borderColor: derived.border }} data-adminv2-task-assist-candidates="true">
+              <div className="px-1 pb-1 text-[11px] font-semibold" style={{ color: CMD.textLabel }}>
+                Pick an opportunity
+              </div>
+              <ul className="space-y-1">
+                {taskAssistResolve.candidates.map((c) => (
+                  <li key={c.entity_id}>
+                    <button
+                      type="button"
+                      data-adminv2-task-assist-candidate-row="true"
+                      className="flex w-full flex-col rounded-md border px-2 py-1.5 text-left text-[11px] hover:bg-alloy-stone/[0.06]"
+                      style={{ borderColor: derived.border, color: CMD.textBody }}
+                      onClick={() => setTaskAssistResolve({ kind: "confirm_one", candidate: c })}
+                    >
+                      <span className="font-semibold">{c.label}</span>
+                      {c.subtitle ? <span style={{ color: CMD.textSupporting }}>{c.subtitle}</span> : null}
+                      <span className="text-[10px]" style={{ color: CMD.textLabel }}>
+                        {c.matched_fields.join(" · ")}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {taskAssistResolve.kind === "none" ? (
+            <div className="border-b px-3 py-2 text-[12px]" style={{ borderColor: derived.border, color: semantic.warning }} data-adminv2-task-assist-no-match="true">
+              {taskAssistResolve.message}
+            </div>
+          ) : null}
+          {taskAssistWorkspaceVisible && globalAssistant?.currentContext ? (
+            <TaskAssistOpportunityWorkspace
+              entityId={globalAssistant.currentContext.entity_id}
+              active
+              source_surface="command_bar"
+              command_bootstrap={taskAssistCommandBootstrap}
+              command_bootstrap_key={taskAssistBootstrapKey}
+              className="mb-0 border-0 bg-transparent px-2 py-2 shadow-none"
+            />
+          ) : taskAssistResolve.kind === "idle" && !taskAssistWorkspaceVisible ? (
+            <div className="px-3 py-2 text-[11px] leading-snug" style={{ color: CMD.textSupporting }}>
+              Describe who to contact (e.g. a family name) and press <strong className="font-semibold">Enter</strong> or{" "}
+              <strong className="font-semibold">Find target</strong> — then confirm before drafting. No auto-send.
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {showJobPanel && response ? (
         <div
           className="rounded-t-xl overflow-hidden border-b"
           style={{
@@ -779,17 +1134,15 @@ export default function AICommandSurfaceShell() {
         </div>
       ) : null}
 
-      <div className={`flex items-end gap-2 ${showPanel || showSuccessStrip ? "mt-0" : "mt-2"}`}>
+      <div className={`flex items-end gap-2 ${surfaceExpanded ? "mt-0" : "mt-2"}`}>
         <div
           className={`flex-1 min-w-0 border-2 bg-white px-3 py-2 ${
-            showPanel || showSuccessStrip
-              ? "rounded-b-xl rounded-t-none border-t border-t-[rgba(0,0,0,0.06)]"
-              : "rounded-2xl px-3.5 py-2.5"
+            surfaceExpanded ? "rounded-b-xl rounded-t-none border-t border-t-[rgba(0,0,0,0.06)]" : "rounded-2xl px-3.5 py-2.5"
           }`}
           style={{
             borderColor: derived.adminV2AiInputPineRing,
             boxShadow:
-              showPanel || showSuccessStrip
+              surfaceExpanded
                 ? `inset 0 1px 0 rgba(255,255,255,0.95)`
                 : `0 1px 0 rgba(0, 162, 131, 0.06), inset 0 1px 0 rgba(255,255,255,0.9)`,
           }}
@@ -800,21 +1153,32 @@ export default function AICommandSurfaceShell() {
             onChange={(e) => {
               const v = e.target.value;
               setCommandText(v);
-              if (response && v.trim().length > 0) {
+              if (!taskAssistBarMode && response && v.trim().length > 0) {
                 setExpanded(true);
               }
             }}
             onFocus={() => {
-              if (commandText.trim().length > 0) {
+              if (!taskAssistBarMode && commandText.trim().length > 0) {
                 setExpanded(true);
               }
             }}
-            placeholder="Command: configure job overview… (e.g. “make the overview more customer-focused”)"
+            placeholder={
+              taskAssistBarMode
+                ? "e.g. “Text the Smith family about missing forms” — Enter finds matching opportunities (no auto-send)."
+                : "Command: configure job overview… (e.g. “make the overview more customer-focused”)"
+            }
             className="w-full resize-none bg-transparent outline-none text-sm leading-snug"
             rows={1}
             style={{ color: neutral.textPrimary }}
             aria-label="AI command input"
             onKeyDown={(e) => {
+              if (taskAssistBarMode) {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  if (!busy && taskAssistResolve.kind !== "loading") void runTaskAssistResolve();
+                }
+                return;
+              }
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 if (!busy) void runPreview();
@@ -822,23 +1186,43 @@ export default function AICommandSurfaceShell() {
             }}
           />
           <div className="mt-0.5 text-[10px] leading-tight" style={{ color: CMD.textSupporting }}>
-            Job overview only · Enter to preview
+            {taskAssistBarMode
+              ? "Enter or Find target searches records — confirm before drafting. Job layout preview is disabled."
+              : "Job overview only · Enter to preview"}
           </div>
         </div>
-        <button
-          type="button"
-          disabled={busy || !commandText.trim()}
-          onClick={() => void runPreview()}
-          className="shrink-0 rounded-xl px-3.5 py-2.5 text-xs font-bold tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{
-            backgroundColor: brand.secondary,
-            color: neutral.surface,
-            letterSpacing: "0.14em",
-            boxShadow: `0 2px 8px rgba(0, 162, 131, 0.35)`,
-          }}
-        >
-          {busy ? "Working…" : "Preview"}
-        </button>
+        <div className="flex shrink-0 flex-col gap-1">
+          {taskAssistBarMode ? (
+            <button
+              type="button"
+              data-adminv2-task-assist-find-target="true"
+              disabled={busy || taskAssistResolve.kind === "loading" || !commandText.trim()}
+              onClick={() => void runTaskAssistResolve()}
+              className="shrink-0 rounded-xl px-3.5 py-2.5 text-xs font-bold tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                backgroundColor: palette.midnightForge,
+                color: neutral.surface,
+                letterSpacing: "0.12em",
+              }}
+            >
+              {taskAssistResolve.kind === "loading" ? "Searching…" : "Find target"}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            disabled={busy || !commandText.trim() || taskAssistBarMode}
+            onClick={() => void runPreview()}
+            className="shrink-0 rounded-xl px-3.5 py-2.5 text-xs font-bold tracking-widest disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              backgroundColor: brand.secondary,
+              color: neutral.surface,
+              letterSpacing: "0.14em",
+              boxShadow: `0 2px 8px rgba(0, 162, 131, 0.35)`,
+            }}
+          >
+            {busy ? "Working…" : "Preview"}
+          </button>
+        </div>
       </div>
     </SurfaceCard>
   );

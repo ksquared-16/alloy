@@ -5,7 +5,8 @@
  * Run from `web/`: `npm run validate:ai-openai-local`
  *
  * Requires `web/.env.local` (server vars): `AI_ENRICHMENT_USE_PERMISSION_REQUIRED=true`,
- * `OPENAI_API_KEY`, `OPENAI_MODEL` (optional `OPENAI_BASE_URL`). Refuses `NODE_ENV=production`.
+ * `OPENAI_API_KEY`, `OPENAI_MODEL` (optional `OPENAI_BASE_URL`, optional **`OPENAI_REQUEST_TIMEOUT_MS`**
+ * — default **20000**, max **30000**; see **`getOpenAiStructuredRequestTimeoutMs`**). Refuses `NODE_ENV=production`.
  *
  * **Remove this script** (and the npm script + doc section) once staging validation is done.
  */

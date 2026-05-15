@@ -26,6 +26,8 @@ import {
     readJson,
 } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
+import type { TaskAssistCommandBootstrap } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
+import { timingHintToDatetimeLocal } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
 import { validateTaskAssistSuggestionV1ForSendApply } from "@/lib/agent/taskAssist/taskAssistSuggestionValidators";
 
 export type TaskAssistOpportunityWorkspaceProps = {
@@ -35,6 +37,10 @@ export type TaskAssistOpportunityWorkspaceProps = {
     className?: string;
     /** Provenance for operator context; propose route still uses server defaults today. */
     source_surface?: GlobalAssistantSourceSurface | "opportunity_drawer";
+    /** Card 9c — prefills from command bar after target confirm (does not auto-propose or send). */
+    command_bootstrap?: TaskAssistCommandBootstrap | null;
+    /** Bumps when a new bootstrap should apply (e.g. entity id + timestamp). */
+    command_bootstrap_key?: string | null;
 };
 
 function listText(lines: string[]): ReactNode {
@@ -139,6 +145,8 @@ export default function TaskAssistOpportunityWorkspace({
     active = true,
     className = "",
     source_surface = "global_shell",
+    command_bootstrap = null,
+    command_bootstrap_key = null,
 }: TaskAssistOpportunityWorkspaceProps) {
     const v11 = isTaskAssistV1UiEnabled();
 
@@ -170,6 +178,7 @@ export default function TaskAssistOpportunityWorkspace({
     const [reminderProposalId, setReminderProposalId] = useState<string>("");
     const [reminderSubmitLoading, setReminderSubmitLoading] = useState(false);
     const [taskActionId, setTaskActionId] = useState<string | null>(null);
+    const [intentClarify, setIntentClarify] = useState<string | null>(null);
 
     const refreshLists = useCallback(async () => {
         if (!active || !v11) return;
@@ -213,7 +222,34 @@ export default function TaskAssistOpportunityWorkspace({
         setReminderTitle("");
         setReminderDueLocal("");
         setReminderProposalId("");
+        setIntentClarify(null);
     }, [entityId]);
+
+    useEffect(() => {
+        if (!active || !command_bootstrap || !command_bootstrap_key) return;
+        const b = command_bootstrap;
+        setIntentClarify(
+            b.intent_type === "unknown" ?
+                "Choose draft a message, schedule a send, or create a reminder below — nothing runs until you confirm in this panel."
+            :   null,
+        );
+        if (b.channel_hint === "sms" || b.channel_hint === "email") {
+            setChannel(b.channel_hint);
+        }
+        if (b.instruction?.trim()) {
+            setInstruction(b.instruction.trim());
+        }
+        if (b.intent_type === "schedule_message") {
+            setScheduleOpen(true);
+            const dt = timingHintToDatetimeLocal(b.timing_hint_text);
+            if (dt) setScheduledForLocal(dt);
+        }
+        if (b.intent_type === "create_reminder") {
+            if (b.reminder_title?.trim()) setReminderTitle(b.reminder_title.trim());
+            const due = timingHintToDatetimeLocal(b.reminder_due_hint ?? b.timing_hint_text);
+            if (due) setReminderDueLocal(due);
+        }
+    }, [active, command_bootstrap, command_bootstrap_key]);
 
     useEffect(() => {
         if (!active || !v11) return;
@@ -569,6 +605,14 @@ export default function TaskAssistOpportunityWorkspace({
             {error ? (
                 <p className="text-xs font-medium text-red-800/90 bg-red-50/80 border border-red-200/60 rounded-md px-2 py-1.5 mb-2" role="alert">
                     {error}
+                </p>
+            ) : null}
+            {intentClarify ? (
+                <p
+                    className="text-xs text-alloy-midnight/75 bg-alloy-stone/[0.08] border border-alloy-stone/20 rounded-md px-2 py-1.5 mb-2"
+                    data-task-assist-intent-clarify="true"
+                >
+                    {intentClarify}
                 </p>
             ) : null}
 

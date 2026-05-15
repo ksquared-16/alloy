@@ -7,14 +7,12 @@
 
 import type { ResolvedAiOrgPolicyV1 } from "@/lib/ai/aiPolicy";
 import { safeParseAttentionSuggestionAiEnrichmentV1 } from "@/lib/ai/attentionSuggestionAiEnrichmentSchema";
-import { getOpenAiBaseUrl, getOpenAiModel, hasOpenAiStructuredCredentials } from "@/lib/ai/aiEnrichmentEnv";
+import { getOpenAiBaseUrl, getOpenAiModel, getOpenAiStructuredRequestTimeoutMs, hasOpenAiStructuredCredentials } from "@/lib/ai/aiEnrichmentEnv";
 import { resolveOpenAiStructuredCompletionTemperature } from "@/lib/ai/openAiModelCapabilities";
 import { buildOpenAiHttpProviderError } from "@/lib/ai/openAiHttpError";
 import type { AiStructuredProvider, AiStructuredRequestV1, AiStructuredResponseV1 } from "@/lib/ai/providerTypes";
 
 const FEATURE_NEEDS_ATTENTION_DRAFT = "needs_attention_draft_enrichment";
-
-const DEFAULT_TIMEOUT_MS = 55_000;
 
 function hasDraftFeature(policy: ResolvedAiOrgPolicyV1): boolean {
     return policy.allowed_features.includes("draft_enrichment");
@@ -81,7 +79,7 @@ export function createOpenAiCompatibleStructuredProvider(policy: ResolvedAiOrgPo
             options?: { timeout_ms?: number },
         ): Promise<AiStructuredResponseV1<T>> {
             const completedAt = new Date().toISOString();
-            const timeout_ms = options?.timeout_ms ?? DEFAULT_TIMEOUT_MS;
+            const timeout_ms = options?.timeout_ms ?? getOpenAiStructuredRequestTimeoutMs();
 
             if (!hasOpenAiStructuredCredentials()) {
                 return {
@@ -265,7 +263,7 @@ export function createOpenAiCompatibleStructuredProvider(policy: ResolvedAiOrgPo
                     completed_at_iso: new Date().toISOString(),
                     error: {
                         code: aborted ? "OPENAI_TIMEOUT" : "OPENAI_REQUEST_FAILED",
-                        message: aborted ? "Request timed out." : e instanceof Error ? e.message : "Request failed.",
+                        message: aborted ? "Request timed out." : "Request failed.",
                         retryable: aborted,
                     },
                 };
