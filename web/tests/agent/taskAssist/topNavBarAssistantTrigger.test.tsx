@@ -5,18 +5,18 @@ import { describe, expect, it } from "vitest";
 
 const topNavPath = join(dirname(fileURLToPath(import.meta.url)), "../../../app/adminV2/components/TopNavBar.tsx");
 
-describe("TopNavBar Task Assist trigger", () => {
-    it("gates Assistant header control on isTaskAssistV1UiEnabled", () => {
+describe("TopNavBar assistant entry (Interaction Layer V1 Card 6)", () => {
+    it("does not expose a header Assistant trigger — bottom command bar is the home", () => {
         const src = readFileSync(topNavPath, "utf8");
-        expect(src).toContain("isTaskAssistV1UiEnabled");
-        expect(src).toContain("data-global-assistant-header-trigger");
-        expect(src).toContain("focusCommandBar");
-        expect(src).toContain("Assistant");
+        expect(src).not.toContain("data-global-assistant-header-trigger");
+        expect(src).not.toContain(">Assistant<");
+        expect(src).not.toContain("focusCommandBar");
     });
 
-    it("does not conflate with AI activity log route", () => {
+    it("retains AI log and Messages nav", () => {
         const src = readFileSync(topNavPath, "utf8");
         expect(src).toContain("/adminV2/ai-activity");
         expect(src).toContain("AI log");
+        expect(src).toContain("Messages");
     });
 });

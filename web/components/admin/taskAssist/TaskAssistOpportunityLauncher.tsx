@@ -10,7 +10,7 @@ export type TaskAssistOpportunityLauncherProps = {
 };
 
 /**
- * Drawer contextual launcher — sets opportunity context and focuses the bottom AdminV2 command bar (Task Assist mode).
+ * Drawer contextual launcher — seeds opportunity context and focuses the bottom assistant command bar.
  */
 export default function TaskAssistOpportunityLauncher({ entityId, label, className = "" }: TaskAssistOpportunityLauncherProps) {
     const assistant = useGlobalAssistantOptional();
@@ -22,7 +22,7 @@ export default function TaskAssistOpportunityLauncher({ entityId, label, classNa
     return (
         <div className={`rounded-lg border border-alloy-stone/15 bg-alloy-stone/[0.04] px-3 py-2.5 ${className}`} data-task-assist-launcher="true">
             <p className="text-[11px] text-alloy-midnight/65 mb-2">
-                Draft messages, save for review, schedule sends, and reminders from the bottom assistant bar — not in this drawer.
+                Draft messages, schedule sends, and reminders from the assistant at the bottom of the screen — confirm before anything sends.
             </p>
             <button
                 type="button"

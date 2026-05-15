@@ -2,6 +2,7 @@
  * Card 9c — Deterministic Task Assist command intent (no LLM).
  */
 
+import { extractCommandSurfaceSlots } from "@/lib/adminV2/aiCommandSurface/commandSurfaceSlotExtract";
 import { stripTaskAssistCommandPrefixes } from "@/lib/agent/taskAssist/taskAssistCommandBarResolution";
 
 export type TaskAssistCommandIntentType = "draft_message" | "schedule_message" | "create_reminder" | "unknown";
@@ -34,11 +35,9 @@ const EMAIL_RE = /\bemail\b/i;
 const TIMING_RE =
     /\b(tomorrow|next\s+week|later|tonight|this\s+evening|schedule(?:d)?|send\s+later|at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\b/i;
 
-const ABOUT_RE = /\b(?:about|regarding|re:)\s+(.+?)(?:\s+(?:tomorrow|next\s+week|later|tonight|at\s+\d)|$)/i;
-
-/** Names / families for entity search — strip timing and trailing goal clauses. */
+/** Legacy fallback when slot extract yields no entity fragment. */
 const SEARCH_STOP =
-    /\b(about|regarding|missing|forms|tomorrow|next\s+week|later|tonight|at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?|please|thanks)\b/gi;
+    /\b(about|regarding|that|missing|forms|tomorrow|next\s+week|later|tonight|at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?|please|thanks)\b/gi;
 
 function pad(n: number): string {
     return String(n).padStart(2, "0");
@@ -86,21 +85,14 @@ function extractTimingHint(raw: string): string | null {
     return m ? m[0].trim() : null;
 }
 
-function extractMessageGoal(raw: string): string | null {
-    const m = raw.match(ABOUT_RE);
-    if (m?.[1]) return m[1].trim().replace(/\s+/g, " ").slice(0, 240) || null;
-    return null;
-}
-
-function buildSearchTextHint(raw: string, goal: string | null): string | null {
+function buildSearchTextHintFallback(raw: string, goal: string | null): string | null {
     let s = stripTaskAssistCommandPrefixes(raw);
     s = s.replace(TIMING_RE, " ").trim();
     if (goal) {
-        s = s.replace(new RegExp(`\\b(?:about|regarding|re:)\\s+${goal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i"), " ");
+        s = s.replace(new RegExp(`\\b(?:about|regarding|re:|that)\\s+${goal.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "i"), " ");
     }
     s = s.replace(SEARCH_STOP, " ").replace(/\s+/g, " ").trim();
     s = s.replace(/^(the|a|an)\s+/i, "").trim();
-    s = s.replace(/\bfamily\b/gi, " ").replace(/\s+/g, " ").trim();
     if (s.length < 2) return null;
     return s.slice(0, 64);
 }
@@ -138,9 +130,11 @@ export function parseTaskAssistCommandIntent(input: string): TaskAssistCommandIn
         };
     }
 
-    const timing_hint_text = extractTimingHint(raw);
-    const message_goal_text = extractMessageGoal(raw);
-    const search_text_hint = buildSearchTextHint(raw, message_goal_text);
+    const slots = extractCommandSurfaceSlots(raw);
+    const timing_hint_text = slots.timing_phrase ?? extractTimingHint(raw);
+    const message_goal_text = slots.message_goal_text;
+    const search_text_hint =
+        slots.entity_search_text?.trim() || buildSearchTextHintFallback(raw, message_goal_text);
 
     let channel_hint: "sms" | "email" | null = null;
     if (EMAIL_RE.test(raw)) channel_hint = "email";

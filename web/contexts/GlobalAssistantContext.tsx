@@ -24,7 +24,7 @@ export type GlobalAssistantEntityContext = {
 export type CommandSurfaceMode = "job_overview" | "task_assist";
 
 type GlobalAssistantContextValue = {
-    /** Card 9: which assistant mode the bottom command bar shows (job layout vs Task Assist). */
+    /** Internal compat for drawer launcher — not exposed in command bar UI (Interaction Layer V1). */
     commandSurfaceMode: CommandSurfaceMode;
     setCommandSurfaceMode: (mode: CommandSurfaceMode) => void;
     currentContext: GlobalAssistantEntityContext | null;
