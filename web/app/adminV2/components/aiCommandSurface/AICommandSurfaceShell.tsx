@@ -37,6 +37,7 @@ import type { CommandSurfaceThreadState } from "@/lib/adminV2/aiCommandSurface/c
 import CommandSurfaceThread from "@/app/adminV2/components/aiCommandSurface/CommandSurfaceThread";
 import type { TaskAssistEntitySearchCandidate } from "@/lib/agent/taskAssist/taskAssistEntitySearchTypes";
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
+import { formatTaskAssistEntitySearchNoMatchMessage } from "@/lib/agent/taskAssist/taskAssistEntitySearchVariants";
 import { fetchTaskAssistEntitySearch, readJson } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
 import {
     ADMIN_V2_FOCUS_COMMAND_BAR,
@@ -570,7 +571,7 @@ export default function AICommandSurfaceShell() {
           setThread((prev) =>
             appendThreadTurn(prev, {
               kind: "error",
-              text: "Could not find a matching family or opportunity. Try another name or open the record in the drawer.",
+              text: formatTaskAssistEntitySearchNoMatchMessage(qEff),
             })
           );
           return;

@@ -3,8 +3,12 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
-import { routeCommandSurface } from "@/lib/adminV2/aiCommandSurface/commandSurfaceRouter";
+import {
+    commandSurfaceEntitySearchQuery,
+    routeCommandSurface,
+} from "@/lib/adminV2/aiCommandSurface/commandSurfaceRouter";
 import { extractCommandSurfaceSlots } from "@/lib/adminV2/aiCommandSurface/commandSurfaceSlotExtract";
+import { formatTaskAssistEntitySearchNoMatchMessage } from "@/lib/agent/taskAssist/taskAssistEntitySearchVariants";
 
 const shellPath = join(
     dirname(fileURLToPath(import.meta.url)),
@@ -28,13 +32,18 @@ describe("Interaction Layer V1 command surface contract (Card 7)", () => {
         expect(src).not.toContain("data-global-assistant-header-trigger");
     });
 
-    it("Mitchell-family phrase extracts entity and goal separately", () => {
-        const slots = extractCommandSurfaceSlots(
-            "text the Mitchell family that we're excited for her youngest child to start"
-        );
+    it("Mitchell-family phrase extracts entity and goal separately (not full sentence)", () => {
+        const cmd = "text the Mitchell family that we're excited for her youngest child to start";
+        const slots = extractCommandSurfaceSlots(cmd);
         expect(slots.entity_search_text?.toLowerCase()).toMatch(/mitchell/);
         expect(slots.message_goal_text?.toLowerCase()).toContain("excited");
         expect(slots.message_goal_text?.toLowerCase()).not.toContain("mitchell");
+
+        const r = routeCommandSurface(cmd);
+        const q = commandSurfaceEntitySearchQuery(r.slots.raw, r.slots, r.taskAssistIntent);
+        expect(q.toLowerCase()).toMatch(/mitchell/);
+        expect(q.length).toBeLessThan(48);
+        expect(q.toLowerCase()).not.toContain("excited");
     });
 
     it("workflow phrase routes to workflow_assist_notice", () => {
@@ -51,5 +60,9 @@ describe("Interaction Layer V1 command surface contract (Card 7)", () => {
         const r = routeCommandSurface("email Smith family tomorrow about tour next steps");
         expect(r.route).toBe("task_assist");
         expect(r.taskAssistIntent?.intent_type).toBe("schedule_message");
+    });
+
+    it("no-match copy includes searched token", () => {
+        expect(formatTaskAssistEntitySearchNoMatchMessage("Mitchell")).toContain("'Mitchell'");
     });
 });

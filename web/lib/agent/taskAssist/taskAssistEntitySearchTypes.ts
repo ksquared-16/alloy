@@ -2,7 +2,13 @@
 
 export type TaskAssistEntitySearchConfidence = "high" | "medium" | "low";
 
-export type TaskAssistEntitySearchSource = "opportunity_name" | "customer_family" | "uuid_match";
+export type TaskAssistEntitySearchSource =
+    | "opportunity_name"
+    | "customer_family"
+    | "customer_member"
+    | "primary_person"
+    | "primary_contact"
+    | "uuid_match";
 
 export type TaskAssistEntitySearchCandidate = {
     entity_type: "opportunities";

@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
     const dim = scopeDimensionsFromAccess(access);
 
     try {
-        const { q, candidates } = await runTaskAssistEntitySearch({
+        const { q, candidates, variants } = await runTaskAssistEntitySearch({
             supabase,
             orgId: ctx.orgId,
             accessDim: dim,
@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
             includeCustomers: includeCustomers && entityType === "all",
         });
 
-        return NextResponse.json({ ok: true, q, candidates });
+        return NextResponse.json({ ok: true, q, variants, candidates });
     } catch (e) {
         console.error("[task-assist/entity-search]", e);
         return NextResponse.json(
