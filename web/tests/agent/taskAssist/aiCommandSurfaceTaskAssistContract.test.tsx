@@ -28,23 +28,23 @@ describe("AICommandSurfaceShell Interaction Layer V1", () => {
         expect(src).toContain("CommandSurfaceThread");
     });
 
-    it("thread hosts compact Task Assist actions before full workspace", () => {
+    it("thread hosts compact auto-draft card before full workspace", () => {
         const threadSrc = readFileSync(threadPath, "utf8");
+        expect(threadSrc).toContain("TaskAssistCompactDraftCard");
         expect(threadSrc).toContain("TaskAssistOpportunityWorkspace");
         expect(threadSrc).toContain("data-command-surface-task-assist-action-card");
         expect(threadSrc).toContain('source_surface="command_bar"');
-        expect(threadSrc).toContain("command_bootstrap");
-        expect(threadSrc).toContain('uiPhase === "choose"');
+        expect(threadSrc).toContain('uiPhase === "draft"');
+        expect(threadSrc).toContain("TaskAssistCompactDraftCard");
         expect(threadSrc).toContain("I found these matching records.");
-        expect(threadSrc).toContain("Draft message");
-        expect(threadSrc).toContain("Schedule for later");
+        expect(threadSrc).toContain("autoPropose");
     });
 
-    it("shell opens choose phase with follow-up notice after candidate confirm", () => {
+    it("shell auto-drafts after candidate confirm for message intents", () => {
         const shellSrc = readFileSync(shellPath, "utf8");
         expect(shellSrc).toContain("taskAssistFollowUpNoticeText");
-        expect(shellSrc).toContain('uiPhase: "choose"');
-        expect(shellSrc).toContain("onChooseTaskAssistAction");
+        expect(shellSrc).toContain('? "draft" : "workspace"');
+        expect(shellSrc).toContain("dedupeTaskAssistEntitySearchCandidates");
     });
 
     it("exports stable focus event name for GlobalAssistantContext", () => {

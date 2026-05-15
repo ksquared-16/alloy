@@ -42,11 +42,8 @@ import CommandSurfaceThread from "@/app/adminV2/components/aiCommandSurface/Comm
 import type { TaskAssistEntitySearchCandidate } from "@/lib/agent/taskAssist/taskAssistEntitySearchTypes";
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
 import { formatTaskAssistEntitySearchNoMatchMessage } from "@/lib/agent/taskAssist/taskAssistEntitySearchVariants";
-import {
-  bootstrapForTaskAssistCompactAction,
-  taskAssistFollowUpNoticeText,
-  type TaskAssistCompactAction,
-} from "@/lib/agent/taskAssist/taskAssistCompactActionCard";
+import { taskAssistFollowUpNoticeText } from "@/lib/agent/taskAssist/taskAssistCompactActionCard";
+import { dedupeTaskAssistEntitySearchCandidates } from "@/lib/agent/taskAssist/taskAssistEntitySearchDedupe";
 import { fetchTaskAssistEntitySearch, readJson } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
 import {
     ADMIN_V2_FOCUS_COMMAND_BAR,
@@ -514,6 +511,11 @@ export default function AICommandSurfaceShell() {
         workflow_blocked: false,
       });
       const locationLabel = candidate.disambiguation?.location_name ?? null;
+      const messageIntent =
+        intent?.intent_type === "draft_message" ||
+        intent?.intent_type === "schedule_message" ||
+        Boolean(intent?.message_goal_text?.trim());
+      const uiPhase = messageIntent && intent?.intent_type !== "create_reminder" ? "draft" : "workspace";
       setThread((prev) => {
         let next = appendThreadTurn(prev, {
           kind: "target_confirmed",
@@ -533,8 +535,8 @@ export default function AICommandSurfaceShell() {
             locationLabel,
             bootstrap,
             bootstrapKey: `${candidate.entity_id}-${Date.now()}`,
-            expanded: false,
-            uiPhase: "choose",
+            expanded: uiPhase === "workspace",
+            uiPhase,
             chosenAction: null,
             showMoreOptions: false,
           },
@@ -542,27 +544,7 @@ export default function AICommandSurfaceShell() {
         return next;
       });
     },
-    [globalAssistant]
-  );
-
-  const onChooseTaskAssistAction = useCallback(
-    (turnId: string, action: TaskAssistCompactAction) => {
-      setThread((prev) => {
-        const turn = prev.turns.find((t) => t.id === turnId && t.kind === "action_card" && t.card.type === "task_assist");
-        if (!turn || turn.kind !== "action_card" || turn.card.type !== "task_assist") return prev;
-        const intentTurn = [...prev.turns].reverse().find((t) => t.kind === "candidate_results" || t.kind === "target_confirmed");
-        const intent = intentTurn?.kind === "candidate_results" ? intentTurn.intent : intentTurn?.kind === "target_confirmed" ? intentTurn.intent : null;
-        const bootstrap = bootstrapForTaskAssistCompactAction(intent, action);
-        return patchTaskAssistActionCard(prev, turnId, {
-          bootstrap,
-          bootstrapKey: `${turn.card.entityId}-${action}-${Date.now()}`,
-          uiPhase: "workspace",
-          chosenAction: action,
-          expanded: true,
-        });
-      });
-    },
-    [setThread]
+    [globalAssistant, setThread]
   );
 
   const onToggleTaskAssistMoreOptions = useCallback(
@@ -629,7 +611,7 @@ export default function AICommandSurfaceShell() {
           );
           return;
         }
-        let list = Array.isArray(j.candidates) ? j.candidates : [];
+        let list = dedupeTaskAssistEntitySearchCandidates(Array.isArray(j.candidates) ? j.candidates : []);
         const ctxOpp =
           globalAssistant.currentContext?.entity_type === "opportunities" && globalAssistant.currentContext.entity_id ?
             globalAssistant.currentContext
@@ -988,7 +970,6 @@ export default function AICommandSurfaceShell() {
                 onPickCandidate={(turnId, candidate, intent) => confirmTaskAssistTarget(turnId, candidate, intent)}
                 onConfirmCandidate={confirmTaskAssistTarget}
           onToggleActionCard={(turnId) => setThread((prev) => toggleActionCardExpanded(prev, turnId))}
-          onChooseTaskAssistAction={onChooseTaskAssistAction}
           onToggleTaskAssistMoreOptions={onToggleTaskAssistMoreOptions}
           renderJobLayoutCardActions={renderJobLayoutCardActions}
               />

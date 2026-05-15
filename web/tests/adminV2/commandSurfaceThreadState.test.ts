@@ -26,7 +26,7 @@ describe("commandSurfaceThreadState", () => {
                 bootstrap: { intent_type: "draft_message" },
                 bootstrapKey: "k1",
                 expanded: false,
-                uiPhase: "choose",
+                uiPhase: "draft",
             },
         });
         const id = state.turns[0]!.id;

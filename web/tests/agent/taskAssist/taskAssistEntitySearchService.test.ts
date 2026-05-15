@@ -381,6 +381,40 @@ describe("runTaskAssistEntitySearch", () => {
         expect(candidates[0]?.source).toBe("primary_person");
     });
 
+    it("dedupes same opportunity from customer and person bridges", async () => {
+        const supabase = createSearchSupabase(ORG_A, {
+            opportunities: [
+                {
+                    id: OPP_ID,
+                    org_id: ORG_A,
+                    name: "Family inquiry — Mitchell / South Campus",
+                    title: "Family inquiry — Mitchell / South Campus",
+                    customer_id: CUST_ID,
+                    primary_person_id: PERSON_ID,
+                    location_id: "loc-south",
+                },
+            ],
+            customers: [{ id: CUST_ID, org_id: ORG_A, name: "Mitchell household" }],
+            persons: [{ id: PERSON_ID, org_id: ORG_A, first_name: "Sarah", last_name: "Mitchell", full_name: "Sarah Mitchell" }],
+            contacts: [],
+            customer_members: [],
+            locations: [{ id: "loc-south", org_id: ORG_A, label: "South Campus" }],
+        });
+
+        const { candidates } = await runTaskAssistEntitySearch({
+            supabase,
+            orgId: ORG_A,
+            accessDim: openDim,
+            rawQ: "Mitchell",
+        });
+
+        expect(candidates).toHaveLength(1);
+        expect(candidates[0]?.matched_fields).toEqual(
+            expect.arrayContaining(["customer.name", "primary_person_id"])
+        );
+        expect(candidates[0]?.disambiguation?.location_name).toBe("South Campus");
+    });
+
     it("dedupes same opportunity from multiple variants", async () => {
         const supabase = createSearchSupabase(ORG_A, {
             opportunities: [

@@ -28,6 +28,7 @@ import {
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
 import type { TaskAssistCommandBootstrap } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
 import { timingHintToDatetimeLocal } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
+import { formatTaskAssistClientError } from "@/lib/agent/taskAssist/taskAssistClientErrorMessages";
 import { validateTaskAssistSuggestionV1ForSendApply } from "@/lib/agent/taskAssist/taskAssistSuggestionValidators";
 
 export type TaskAssistOpportunityWorkspaceProps = {
@@ -109,7 +110,7 @@ export function computeReminderSubmitDisabled(title: string, dueAtLocal: string)
     return false;
 }
 
-function minDatetimeLocalValue(): string {
+export function minDatetimeLocalValue(): string {
     const d = new Date(Date.now() + 60_000);
     const pad = (n: number) => String(n).padStart(2, "0");
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -333,7 +334,7 @@ export default function TaskAssistOpportunityWorkspace({
                 message?: string | null;
             };
             if (!res.ok || !json.ok || !json.proposal) {
-                throw new Error(json.message || json.error || `Draft request failed (${res.status})`);
+                throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
             }
             setProposal(json.proposal);
             setProposalValid(json.proposal_valid === true);
@@ -349,7 +350,7 @@ export default function TaskAssistOpportunityWorkspace({
                 setSelectedPersonId(null);
             }
         } catch (e: unknown) {
-            setError((e as Error).message);
+            setError(formatTaskAssistClientError((e as Error).message));
         } finally {
             setProposeLoading(false);
         }
@@ -381,7 +382,7 @@ export default function TaskAssistOpportunityWorkspace({
                 message?: string | null;
             };
             if (!res.ok || !json.ok || !json.send?.communication_message_id) {
-                throw new Error(json.message || json.error || `Send failed (${res.status})`);
+                throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
             }
             setSuccess(
                 `Message queued for delivery (id ${json.send.communication_message_id}). ${json.send.process_trigger_attempted_note ?? ""}`.trim()
@@ -394,7 +395,7 @@ export default function TaskAssistOpportunityWorkspace({
             setInstruction("");
             if (v11) void refreshLists();
         } catch (e: unknown) {
-            setError((e as Error).message);
+            setError(formatTaskAssistClientError((e as Error).message));
         } finally {
             setApplyLoading(false);
         }

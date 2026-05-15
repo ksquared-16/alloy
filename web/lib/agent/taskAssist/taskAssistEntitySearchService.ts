@@ -19,6 +19,10 @@ import {
     sanitizeCrmSearchToken,
 } from "@/lib/admin/forms/crmEntitySearchShared";
 import {
+    dedupeTaskAssistEntitySearchCandidates,
+    mergeTaskAssistEntitySearchCandidates,
+} from "@/lib/agent/taskAssist/taskAssistEntitySearchDedupe";
+import {
     buildTaskAssistEntitySearchVariants,
     primaryTaskAssistEntitySearchToken,
 } from "@/lib/agent/taskAssist/taskAssistEntitySearchVariants";
@@ -405,8 +409,11 @@ export async function runTaskAssistEntitySearch(params: RunTaskAssistEntitySearc
     const oppRowsById = new Map<string, OppRow>();
 
     const push = (c: TaskAssistEntitySearchCandidate, row?: OppRow) => {
-        if (!byId.has(c.entity_id)) byId.set(c.entity_id, c);
-        if (row) oppRowsById.set(c.entity_id, row);
+        const id = String(c.entity_id).trim();
+        if (!id) return;
+        const prev = byId.get(id);
+        byId.set(id, prev ? mergeTaskAssistEntitySearchCandidates(prev, c) : c);
+        if (row) oppRowsById.set(id, row);
     };
 
     const remaining = () => Math.max(0, limit - byId.size);
@@ -419,20 +426,22 @@ export async function runTaskAssistEntitySearch(params: RunTaskAssistEntitySearc
         }
         const locationIds = [...oppRowsById.values()].map((o) => o.location_id).filter(Boolean) as string[];
         const locLabels = await fetchLocationLabelsById(params.supabase, params.orgId, locationIds);
-        const candidates = [...byId.values()].map((c) => {
-            const opp = oppRowsById.get(c.entity_id);
-            const loc = opp?.location_id ? locLabels.get(String(opp.location_id)) ?? null : null;
-            if (!loc) return c;
-            return buildCandidate(
-                opp!,
-                c.source,
-                c.matched_fields,
-                c.confidence,
-                c.disambiguation?.customer_name ?? null,
-                null,
-                loc
-            );
-        });
+        const candidates = dedupeTaskAssistEntitySearchCandidates(
+            [...byId.values()].map((c) => {
+                const opp = oppRowsById.get(c.entity_id);
+                const loc = opp?.location_id ? locLabels.get(String(opp.location_id)) ?? null : null;
+                if (!loc) return c;
+                return buildCandidate(
+                    opp!,
+                    c.source,
+                    c.matched_fields,
+                    c.confidence,
+                    c.disambiguation?.customer_name ?? null,
+                    null,
+                    loc
+                );
+            })
+        );
         return { q: id, variants: [id], candidates };
     }
 
@@ -475,7 +484,6 @@ export async function runTaskAssistEntitySearch(params: RunTaskAssistEntitySearc
                     remaining()
                 );
                 for (const o of oppsFromCust) {
-                    if (byId.has(o.id)) continue;
                     const cn = o.customer_id ? custMap.get(o.customer_id) ?? null : null;
                     push(
                         buildCandidate(
@@ -503,7 +511,6 @@ export async function runTaskAssistEntitySearch(params: RunTaskAssistEntitySearc
                     remaining()
                 );
                 for (const o of oppsFromMembers) {
-                    if (byId.has(o.id)) continue;
                     const memberLabel = o.customer_id ? memberByCustomer.get(o.customer_id) ?? null : null;
                     push(
                         buildCandidate(
@@ -532,7 +539,6 @@ export async function runTaskAssistEntitySearch(params: RunTaskAssistEntitySearc
                 remaining()
             );
             for (const o of oppsFromPerson) {
-                if (byId.has(o.id)) continue;
                 const pid = o.primary_person_id?.trim() ?? "";
                 const personLabel = pid ? personMap.get(pid) : undefined;
                 push(
@@ -561,7 +567,6 @@ export async function runTaskAssistEntitySearch(params: RunTaskAssistEntitySearc
                 remaining()
             );
             for (const o of oppsFromContact) {
-                if (byId.has(o.id)) continue;
                 const cid = o.primary_contact_id?.trim() ?? "";
                 const contactLabel = cid ? contactMap.get(cid) : undefined;
                 push(
@@ -581,7 +586,7 @@ export async function runTaskAssistEntitySearch(params: RunTaskAssistEntitySearc
 
     const locationIds = [...oppRowsById.values()].map((o) => o.location_id).filter(Boolean) as string[];
     const locLabels = await fetchLocationLabelsById(params.supabase, params.orgId, locationIds);
-    const candidates = [...byId.values()].slice(0, limit).map((c) => {
+    const withLocation = [...byId.values()].map((c) => {
         const opp = oppRowsById.get(c.entity_id);
         const loc = opp?.location_id ? locLabels.get(String(opp.location_id)) ?? null : null;
         if (!loc) return c;
@@ -601,6 +606,8 @@ export async function runTaskAssistEntitySearch(params: RunTaskAssistEntitySearc
             loc
         );
     });
+
+    const candidates = dedupeTaskAssistEntitySearchCandidates(withLocation).slice(0, limit);
 
     return {
         q: primaryToken,

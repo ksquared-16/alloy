@@ -10,7 +10,7 @@ export function taskAssistFollowUpNoticeText(
 ): string {
     const loc = locationLabel?.trim() || candidate.disambiguation?.location_name?.trim() || null;
     const atLoc = loc ? ` at ${loc}` : "";
-    return `I found ${candidate.label}${atLoc}. I can draft that message. Send now or schedule it?`;
+    return `I found ${candidate.label}${atLoc}. Drafting your message now — review before anything sends.`;
 }
 
 export function bootstrapForTaskAssistCompactAction(
