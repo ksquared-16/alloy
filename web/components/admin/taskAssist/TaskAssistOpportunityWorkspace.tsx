@@ -749,7 +749,7 @@ export default function TaskAssistOpportunityWorkspace({
                         disabled={proposeDisabled}
                         className="rounded-md bg-alloy-midnight/90 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-alloy-midnight disabled:opacity-45 disabled:pointer-events-none"
                     >
-                        {proposeLoading ? "Drafting…" : "Draft with Task Assist"}
+                        {proposeLoading ? "Drafting…" : "Draft message"}
                     </button>
                 </div>
 

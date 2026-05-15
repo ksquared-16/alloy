@@ -64,6 +64,7 @@ describe("POST /api/admin/ai/workflow-assist/apply", () => {
             userId,
             role: "admin",
         });
+        mockExecuteWorkflowAssistApply.mockReset();
         mockExecuteWorkflowAssistApply.mockResolvedValue({
             ok: true,
             workflow_id: wfId,
@@ -103,7 +104,40 @@ describe("POST /api/admin/ai/workflow-assist/apply", () => {
         expect(mockExecuteWorkflowAssistApply).not.toHaveBeenCalled();
     });
 
-    it("delegates to executeWorkflowAssistApply on valid body", async () => {
+    it("delegates edit_workflow to executeWorkflowAssistApply", async () => {
+        mockExecuteWorkflowAssistApply.mockResolvedValue({
+            ok: true,
+            workflow_id: wfId,
+            workflow: { id: wfId, name: "Renamed via Assist" },
+        });
+        const suggestion = buildWorkflowAssistSuggestionV1({
+            orgId,
+            actorUserId: userId,
+            parsed: {
+                version: 1,
+                proposal_kind: "edit_workflow",
+                workflow_id: wfId,
+                patch: { name: "Renamed via Assist" },
+            },
+        });
+        const res = await POST(
+            postJson({
+                version: 1,
+                suggestion_id: suggestion.suggestion_id,
+                proposal: suggestion,
+                confirm: true,
+            }),
+        );
+        expect(res.status).toBe(200);
+        expect(mockExecuteWorkflowAssistApply).toHaveBeenCalledTimes(1);
+        const arg = mockExecuteWorkflowAssistApply.mock.calls[0]![0] as {
+            proposal: { proposal_kind: string; patch?: { name?: string } };
+        };
+        expect(arg.proposal.proposal_kind).toBe("edit_workflow");
+        expect(arg.proposal.patch?.name).toBe("Renamed via Assist");
+    });
+
+    it("delegates to executeWorkflowAssistApply on valid pause body", async () => {
         const suggestion = validPauseSuggestion();
         const res = await POST(
             postJson({

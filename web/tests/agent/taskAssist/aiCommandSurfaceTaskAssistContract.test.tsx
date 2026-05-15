@@ -40,6 +40,8 @@ describe("AICommandSurfaceShell Interaction Layer V1", () => {
         expect(threadSrc).toContain('source_surface="command_bar"');
         expect(threadSrc).toContain("entity_display_label={entityLabel}");
         expect(threadSrc).toContain('uiPhase === "draft"');
+        expect(threadSrc).toContain('uiPhase === "reminder"');
+        expect(threadSrc).toContain("TaskAssistCompactReminderCard");
         expect(threadSrc).toContain("TaskAssistCompactDraftCard");
         expect(threadSrc).toContain("I found these matching records.");
         expect(threadSrc).toContain("autoPropose");
@@ -49,21 +51,24 @@ describe("AICommandSurfaceShell Interaction Layer V1", () => {
         const threadSrc = readFileSync(threadPath, "utf8");
         expect(threadSrc).toContain("WorkflowAssistReadThreadCard");
         expect(threadSrc).toContain("workflowAssistMutation");
+        expect(threadSrc).toContain("workflowAssistMutationBlockedReason");
         expect(threadSrc).toContain("workflow_assist_proposal");
         expect(threadSrc).toContain("WorkflowAssistProposalActionCard");
+        expect(threadSrc).toContain("applyAllowed");
         expect(readFileSync(proposalCardPath, "utf8")).toContain("data-command-surface-workflow-assist-proposal-card");
     });
 
-    it("shell wires workflow-assist propose fetch", () => {
+    it("shell wires workflow-assist propose fetch and portal capability hint", () => {
         const shellSrc = readFileSync(shellPath, "utf8");
         expect(shellSrc).toContain("/api/admin/ai/workflow-assist/propose");
+        expect(shellSrc).toContain("/api/admin/ai/workflow-assist/capabilities");
         expect(shellSrc).toContain("workflowAssistMutation");
     });
 
     it("shell auto-drafts after candidate confirm for message intents", () => {
         const shellSrc = readFileSync(shellPath, "utf8");
         expect(shellSrc).toContain("taskAssistFollowUpNoticeText");
-        expect(shellSrc).toContain('? "draft" : "workspace"');
+        expect(shellSrc).toContain('isReminderIntent ? "reminder"');
         expect(shellSrc).toContain("dedupeTaskAssistEntitySearchCandidates");
     });
 

@@ -43,6 +43,20 @@ function pad(n: number): string {
     return String(n).padStart(2, "0");
 }
 
+/** True when the hint includes an explicit clock time (e.g. "at 3pm"), not just "tomorrow". */
+export function timingHintHasExplicitClock(hint: string | null | undefined): boolean {
+    if (!hint?.trim()) return false;
+    return /\bat\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?\b/i.test(hint.trim());
+}
+
+/** True for coarse calendar phrases without a clock (e.g. "tomorrow", "next week"). */
+export function timingHintIsDateGranularOnly(hint: string | null | undefined): boolean {
+    if (!hint?.trim()) return false;
+    const h = hint.trim().toLowerCase();
+    if (timingHintHasExplicitClock(hint)) return false;
+    return /\b(tomorrow|next\s+week)\b/i.test(h);
+}
+
 /** Best-effort `datetime-local` value from a timing hint (operator can edit). */
 export function timingHintToDatetimeLocal(hint: string | null | undefined): string | null {
     if (!hint?.trim()) return null;

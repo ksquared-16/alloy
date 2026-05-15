@@ -3,7 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { TaskAssistCommandBootstrap } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
-import { timingHintToDatetimeLocal } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
+import {
+    timingHintHasExplicitClock,
+    timingHintIsDateGranularOnly,
+    timingHintToDatetimeLocal,
+} from "@/lib/agent/taskAssist/taskAssistCommandIntent";
 import { formatTaskAssistClientError } from "@/lib/agent/taskAssist/taskAssistClientErrorMessages";
 import type { TaskAssistSuggestionV1 } from "@/lib/agent/taskAssist/types";
 import {
@@ -71,6 +75,9 @@ export default function TaskAssistCompactDraftCard({
     const [scheduleTimingText, setScheduleTimingText] = useState("");
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
+    const [scheduleNeedsExplicitTime, setScheduleNeedsExplicitTime] = useState(false);
+
+    const isScheduleIntent = bootstrap.intent_type === "schedule_message";
 
     const onPropose = useCallback(async () => {
         if (!instruction.trim()) {
@@ -106,6 +113,13 @@ export default function TaskAssistCompactDraftCard({
             setProposalValid(json.proposal_valid === true);
             setFinalBody(String(json.proposal.draft_body ?? ""));
             setFinalSubject(json.proposal.channel === "email" ? String(json.proposal.draft_subject ?? "") : "");
+            const hint = bootstrap.timing_hint_text ?? null;
+            const needsExplicitSendTime =
+                bootstrap.intent_type === "schedule_message" &&
+                Boolean(hint?.trim()) &&
+                timingHintIsDateGranularOnly(hint) &&
+                !timingHintHasExplicitClock(hint);
+            setScheduleNeedsExplicitTime(needsExplicitSendTime);
             const def =
                 json.proposal.recipient_candidates.find((c) => c.has_sms && channel === "sms") ||
                 json.proposal.recipient_candidates.find((c) => c.has_email && channel === "email") ||
@@ -113,14 +127,14 @@ export default function TaskAssistCompactDraftCard({
             if (def && recipientHasChannelHint(json.proposal.recipient_candidates, def.person_id, channel)) {
                 setSelectedPersonId(def.person_id);
             }
-            setPhase("review");
+            setPhase(needsExplicitSendTime ? "schedule_prompt" : "review");
         } catch (e: unknown) {
             setError(formatTaskAssistClientError((e as Error).message));
             setPhase("review");
         } finally {
             setProposeLoading(false);
         }
-    }, [channel, entityId, instruction]);
+    }, [channel, entityId, instruction, bootstrap.intent_type, bootstrap.timing_hint_text]);
 
     useEffect(() => {
         if (!autoPropose || !bootstrapKey) return;
@@ -128,6 +142,14 @@ export default function TaskAssistCompactDraftCard({
         proposedRef.current = bootstrapKey;
         setChannel(bootstrap.channel_hint === "email" ? "email" : "sms");
         setInstruction(bootstrap.instruction?.trim() ?? "");
+        setScheduleNeedsExplicitTime(false);
+        const th = bootstrap.timing_hint_text ?? null;
+        if (bootstrap.intent_type === "schedule_message" && th && timingHintHasExplicitClock(th)) {
+            setScheduledForLocal(timingHintToDatetimeLocal(th) ?? "");
+        } else {
+            setScheduledForLocal("");
+        }
+        setScheduleTimingText("");
         setPhase("loading");
         void onPropose();
     }, [autoPropose, bootstrapKey, bootstrap, onPropose]);
@@ -219,6 +241,12 @@ export default function TaskAssistCompactDraftCard({
 
     const openSchedulePrompt = useCallback(() => {
         onSchedulePrompt?.();
+        const th = bootstrap.timing_hint_text ?? null;
+        if (bootstrap.intent_type === "schedule_message" && th && timingHintIsDateGranularOnly(th) && !timingHintHasExplicitClock(th)) {
+            setScheduledForLocal("");
+            setPhase("schedule_prompt");
+            return;
+        }
         const fromBootstrap = timingHintToDatetimeLocal(bootstrap.timing_hint_text);
         if (fromBootstrap) {
             setScheduledForLocal(fromBootstrap);
@@ -228,7 +256,7 @@ export default function TaskAssistCompactDraftCard({
         setScheduleTimingText("");
         setScheduledForLocal("");
         setPhase("schedule_prompt");
-    }, [bootstrap.timing_hint_text, onSchedulePrompt]);
+    }, [bootstrap.timing_hint_text, bootstrap.intent_type, onSchedulePrompt]);
 
     const applyScheduleTimingText = useCallback(() => {
         const dt = timingHintToDatetimeLocal(scheduleTimingText.trim() || null);
@@ -278,9 +306,11 @@ export default function TaskAssistCompactDraftCard({
     :   entityLabel;
 
     if (phase === "loading" || proposeLoading) {
+        const loadingLabel =
+            bootstrap.intent_type === "schedule_message" ? "Preparing message and schedule review…" : "Drafting message…";
         return (
             <div className="space-y-1" data-task-assist-compact-draft="loading">
-                <p className="text-[12px] font-medium text-alloy-midnight/80">Drafting message…</p>
+                <p className="text-[12px] font-medium text-alloy-midnight/80">{loadingLabel}</p>
                 <p className="text-[10px] text-alloy-midnight/55">{targetSummary}</p>
             </div>
         );
@@ -295,9 +325,17 @@ export default function TaskAssistCompactDraftCard({
     }
 
     if (phase === "schedule_prompt") {
+        const th = bootstrap.timing_hint_text ?? null;
+        const timeQuestion =
+            bootstrap.intent_type === "schedule_message" &&
+            th &&
+            timingHintIsDateGranularOnly(th) &&
+            !timingHintHasExplicitClock(th);
         return (
             <div className="space-y-2" data-task-assist-compact-draft="schedule-prompt">
-                <p className="text-[12px] font-medium text-alloy-midnight/85">When should I send it?</p>
+                <p className="text-[12px] font-medium text-alloy-midnight/85">
+                    {timeQuestion ? "What time should I send it?" : "When should I send it?"}
+                </p>
                 <input
                     type="text"
                     value={scheduleTimingText}
@@ -321,7 +359,7 @@ export default function TaskAssistCompactDraftCard({
                         onClick={() => void onSubmitSchedule()}
                         className="rounded-md bg-alloy-midnight/90 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-45"
                     >
-                        {scheduleSubmitLoading ? "Scheduling…" : "Confirm schedule"}
+                        {scheduleSubmitLoading ? "Scheduling…" : "Schedule send"}
                     </button>
                     <button
                         type="button"
@@ -427,38 +465,102 @@ export default function TaskAssistCompactDraftCard({
                 </ul>
             ) : null}
 
+            {isScheduleIntent ? (
+                <div className="rounded-md border border-alloy-stone/20 bg-alloy-stone/[0.04] p-2">
+                    <label className={LABEL} htmlFor={`ta-compact-send-at-${entityId}`}>
+                        Send time
+                    </label>
+                    <input
+                        id={`ta-compact-send-at-${entityId}`}
+                        type="datetime-local"
+                        value={scheduledForLocal}
+                        min={minDatetimeLocalValue()}
+                        onChange={(e) => {
+                            setScheduledForLocal(e.target.value);
+                            if (e.target.value.trim()) setScheduleNeedsExplicitTime(false);
+                        }}
+                        className="mt-0.5 w-full rounded-md border border-alloy-stone/25 bg-white px-2 py-1.5 text-[12px]"
+                    />
+                    {scheduleNeedsExplicitTime && !scheduledForLocal.trim() ? (
+                        <p className="mt-1 text-[10px] font-medium text-amber-900/85">
+                            What time tomorrow should we send it? Choose a send time — scheduling stays off until you pick one.
+                        </p>
+                    ) : null}
+                </div>
+            ) : null}
+
             <div className="flex flex-wrap gap-1.5 pt-1">
-                <button
-                    type="button"
-                    data-task-assist-compact-send-now="true"
-                    disabled={sendDisabled}
-                    onClick={() => void onApply()}
-                    className="rounded-md bg-alloy-midnight/90 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-45"
-                >
-                    {applyLoading ? "Sending…" : "Send now"}
-                </button>
-                <button
-                    type="button"
-                    data-task-assist-compact-schedule="true"
-                    disabled={!proposalValid || !selectedPersonId || !finalBody.trim()}
-                    onClick={openSchedulePrompt}
-                    className="rounded-md border border-alloy-stone/30 px-3 py-1.5 text-[11px] font-semibold disabled:opacity-45"
-                >
-                    Schedule for later
-                </button>
-                {v11 ? (
-                    <button
-                        type="button"
-                        data-task-assist-compact-save-draft="true"
-                        disabled={!proposalValid || saveDraftLoading}
-                        onClick={() => void onSaveDraft()}
-                        className="rounded-md border border-alloy-stone/30 px-3 py-1.5 text-[11px] font-semibold disabled:opacity-45"
-                    >
-                        {saveDraftLoading ? "Saving…" : "Save draft"}
-                    </button>
-                ) : null}
+                {isScheduleIntent ? (
+                    <>
+                        <button
+                            type="button"
+                            data-task-assist-compact-schedule-submit="true"
+                            disabled={scheduleDisabled}
+                            onClick={() => void onSubmitSchedule()}
+                            className="rounded-md bg-alloy-midnight/90 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-45"
+                        >
+                            {scheduleSubmitLoading ? "Scheduling…" : "Schedule send"}
+                        </button>
+                        <button
+                            type="button"
+                            data-task-assist-compact-send-now="true"
+                            disabled={sendDisabled}
+                            onClick={() => void onApply()}
+                            className="rounded-md border border-alloy-stone/30 px-3 py-1.5 text-[11px] font-semibold text-alloy-midnight/85 disabled:opacity-45"
+                        >
+                            {applyLoading ? "Sending…" : "Send now"}
+                        </button>
+                        {v11 ? (
+                            <button
+                                type="button"
+                                data-task-assist-compact-save-draft="true"
+                                disabled={!proposalValid || saveDraftLoading}
+                                onClick={() => void onSaveDraft()}
+                                className="rounded-md border border-alloy-stone/30 px-3 py-1.5 text-[11px] font-semibold disabled:opacity-45"
+                            >
+                                {saveDraftLoading ? "Saving…" : "Save draft"}
+                            </button>
+                        ) : null}
+                    </>
+                ) : (
+                    <>
+                        <button
+                            type="button"
+                            data-task-assist-compact-send-now="true"
+                            disabled={sendDisabled}
+                            onClick={() => void onApply()}
+                            className="rounded-md bg-alloy-midnight/90 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-45"
+                        >
+                            {applyLoading ? "Sending…" : "Send now"}
+                        </button>
+                        <button
+                            type="button"
+                            data-task-assist-compact-schedule="true"
+                            disabled={!proposalValid || !selectedPersonId || !finalBody.trim()}
+                            onClick={openSchedulePrompt}
+                            className="rounded-md border border-alloy-stone/30 px-3 py-1.5 text-[11px] font-semibold disabled:opacity-45"
+                        >
+                            Schedule for later
+                        </button>
+                        {v11 ? (
+                            <button
+                                type="button"
+                                data-task-assist-compact-save-draft="true"
+                                disabled={!proposalValid || saveDraftLoading}
+                                onClick={() => void onSaveDraft()}
+                                className="rounded-md border border-alloy-stone/30 px-3 py-1.5 text-[11px] font-semibold disabled:opacity-45"
+                            >
+                                {saveDraftLoading ? "Saving…" : "Save draft"}
+                            </button>
+                        ) : null}
+                    </>
+                )}
             </div>
-            <p className="text-[10px] text-alloy-midnight/50">Nothing sends until you confirm Send now or schedule.</p>
+            <p className="text-[10px] text-alloy-midnight/50">
+                {isScheduleIntent ?
+                    "Nothing sends until you confirm Schedule send or Send now. Pick a future send time for scheduling."
+                :   "Nothing sends until you confirm Send now or schedule."}
+            </p>
         </div>
     );
 }

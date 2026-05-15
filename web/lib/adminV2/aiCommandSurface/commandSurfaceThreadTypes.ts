@@ -50,8 +50,8 @@ export type CommandSurfaceThreadTurn =
                     bootstrap: TaskAssistCommandBootstrap;
                     bootstrapKey: string;
                     expanded: boolean;
-                    /** draft = auto-propose compact review card; workspace = full Task Assist surface */
-                    uiPhase: "draft" | "workspace";
+                    /** draft = message compact card; reminder = operational task only; workspace = full Task Assist surface */
+                    uiPhase: "draft" | "workspace" | "reminder";
                     chosenAction?: TaskAssistCompactAction | null;
                     showMoreOptions?: boolean;
                 }

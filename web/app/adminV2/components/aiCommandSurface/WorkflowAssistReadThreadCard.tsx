@@ -16,14 +16,31 @@ const CMD = {
     textLabel: "rgba(39, 63, 82, 0.52)",
 } as const;
 
+function MutationBlockedCallout({ message }: { message: string }) {
+    return (
+        <div
+            className="space-y-1 border-t pt-2"
+            style={{ borderColor: derived.border }}
+            data-command-surface-workflow-assist-mutation-blocked="true"
+        >
+            <p className="text-[10px] leading-snug" style={{ color: CMD.textSupporting }}>
+                {message}
+            </p>
+        </div>
+    );
+}
+
 function WorkflowAssistReadCardBody({
     payload,
     intent,
     mutation,
+    mutationBlockedReason,
 }: {
     payload: WorkflowAssistReadCardPayloadV1;
     intent: WorkflowAssistReadIntentV1;
     mutation?: WorkflowAssistThreadMutationHandlersV1 | null;
+    /** When set (e.g. ops user), show copy instead of propose CTAs. */
+    mutationBlockedReason?: string | null;
 }) {
     const showParseHint = process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test";
     const parseHint = showParseHint ? (
@@ -135,9 +152,11 @@ function WorkflowAssistReadCardBody({
                                 data-command-surface-workflow-assist-propose-create
                                 onClick={() => void mutation.onProposeCreateTemplate()}
                             >
-                                Propose new disabled workflow (template)
+                                Propose disabled draft (template starter)
                             </button>
                         </div>
+                    : mutationBlockedReason ?
+                        <MutationBlockedCallout message={mutationBlockedReason} />
                     : null}
                     {parseHint}
                 </div>
@@ -203,9 +222,11 @@ function WorkflowAssistReadCardBody({
                                 data-command-surface-workflow-assist-propose-create
                                 onClick={() => void mutation.onProposeCreateTemplate()}
                             >
-                                Propose new disabled workflow (template)
+                                Propose disabled draft (template starter)
                             </button>
                         </div>
+                    : mutationBlockedReason ?
+                        <MutationBlockedCallout message={mutationBlockedReason} />
                     : null}
                     {parseHint}
                 </div>
@@ -289,9 +310,11 @@ function WorkflowAssistReadCardBody({
                                 data-command-surface-workflow-assist-propose-create
                                 onClick={() => void mutation.onProposeCreateTemplate()}
                             >
-                                Propose new disabled workflow (template)
+                                Propose disabled draft (template starter)
                             </button>
                         </div>
+                    : mutationBlockedReason ?
+                        <MutationBlockedCallout message={mutationBlockedReason} />
                     : null}
                     {parseHint}
                 </div>
@@ -305,12 +328,14 @@ export function WorkflowAssistReadThreadCard({
     payload,
     error,
     mutation,
+    mutationBlockedReason,
 }: {
     submittedCommand: string;
     intent: WorkflowAssistReadIntentV1;
     payload: WorkflowAssistReadCardPayloadV1 | null;
     error: WorkflowAssistErrorEnvelopeV1 | null;
     mutation?: WorkflowAssistThreadMutationHandlersV1 | null;
+    mutationBlockedReason?: string | null;
 }) {
     return (
         <div className="space-y-2" data-command-surface-workflow-assist-read-card="true">
@@ -336,7 +361,12 @@ export function WorkflowAssistReadThreadCard({
                 </p>
             : null}
             {!error && payload ?
-                <WorkflowAssistReadCardBody payload={payload} intent={intent} mutation={mutation ?? undefined} />
+                <WorkflowAssistReadCardBody
+                    payload={payload}
+                    intent={intent}
+                    mutation={mutation ?? undefined}
+                    mutationBlockedReason={mutationBlockedReason ?? undefined}
+                />
             : null}
         </div>
     );

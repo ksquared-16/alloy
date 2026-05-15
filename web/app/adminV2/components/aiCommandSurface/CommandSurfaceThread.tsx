@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 
 import TaskAssistCompactDraftCard from "@/components/admin/taskAssist/TaskAssistCompactDraftCard";
+import TaskAssistCompactReminderCard from "@/components/admin/taskAssist/TaskAssistCompactReminderCard";
 import TaskAssistOpportunityWorkspace from "@/components/admin/taskAssist/TaskAssistOpportunityWorkspace";
 import { WorkflowAssistProposalActionCard } from "@/app/adminV2/components/aiCommandSurface/WorkflowAssistProposalActionCard";
 import { WorkflowAssistReadThreadCard } from "@/app/adminV2/components/aiCommandSurface/WorkflowAssistReadThreadCard";
@@ -87,6 +88,10 @@ export type CommandSurfaceThreadProps = {
     onToggleTaskAssistMoreOptions?: (turnId: string) => void;
     renderJobLayoutCardActions?: (turnId: string) => ReactNode;
     workflowAssistMutation?: WorkflowAssistThreadMutationHandlersV1 | null;
+    /** When false, proposal/apply CTAs stay disabled (e.g. ops or capability not yet loaded). */
+    workflowAssistMutationsAllowed?: boolean;
+    /** Shown on read cards when mutations are not allowed for this session. */
+    workflowAssistMutationBlockedReason?: string | null;
 };
 
 export default function CommandSurfaceThread({
@@ -98,6 +103,8 @@ export default function CommandSurfaceThread({
     onToggleTaskAssistMoreOptions,
     renderJobLayoutCardActions,
     workflowAssistMutation,
+    workflowAssistMutationsAllowed = false,
+    workflowAssistMutationBlockedReason,
 }: CommandSurfaceThreadProps) {
     const showSearchDebug = process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test";
 
@@ -126,6 +133,7 @@ export default function CommandSurfaceThread({
                                     payload={turn.payload}
                                     error={turn.error}
                                     mutation={workflowAssistMutation ?? undefined}
+                                    mutationBlockedReason={workflowAssistMutationBlockedReason ?? undefined}
                                 />
                             </AssistantBubble>
                         );
@@ -156,7 +164,9 @@ export default function CommandSurfaceThread({
                                     </div>
                                     {intentSummary(turn.intent) ? (
                                         <div className="text-[10px]" style={{ color: CMD.textSupporting }}>
-                                            Next: {intentSummary(turn.intent)} — confirm before any send.
+                                            {turn.intent?.intent_type === "create_reminder" ?
+                                                `Next: ${intentSummary(turn.intent)} — review below.`
+                                            :   `Next: ${intentSummary(turn.intent)} — confirm before any send.`}
                                         </div>
                                     ) : null}
                                     <ul className="space-y-1">
@@ -226,7 +236,10 @@ export default function CommandSurfaceThread({
                         if (turn.card.type === "workflow_assist_proposal") {
                             return (
                                 <AssistantBubble key={turn.id}>
-                                    <WorkflowAssistProposalActionCard suggestion={turn.card.suggestion} />
+                                    <WorkflowAssistProposalActionCard
+                                        suggestion={turn.card.suggestion}
+                                        applyAllowed={workflowAssistMutationsAllowed}
+                                    />
                                 </AssistantBubble>
                             );
                         }
@@ -244,6 +257,15 @@ export default function CommandSurfaceThread({
                             return (
                                 <AssistantBubble key={turn.id}>
                                     <div className="space-y-2" data-command-surface-task-assist-action-card="true">
+                                        {uiPhase === "reminder" ? (
+                                            <TaskAssistCompactReminderCard
+                                                entityId={entityId}
+                                                entityLabel={entityLabel}
+                                                locationLabel={locationLabel}
+                                                bootstrap={bootstrap}
+                                                bootstrapKey={bootstrapKey}
+                                            />
+                                        ) : null}
                                         {uiPhase === "draft" ? (
                                             <TaskAssistCompactDraftCard
                                                 entityId={entityId}

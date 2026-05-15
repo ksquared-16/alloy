@@ -23,6 +23,7 @@ import {
   type TaskAssistCommandIntent,
 } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
 import {
+  WORKFLOW_ASSIST_PORTAL_MUTATION_BLOCKED_USER_MESSAGE,
   buildWorkflowAssistReadCardPayload,
   workflowAssistErrorEnvelope,
   type WorkflowAssistErrorEnvelopeV1,
@@ -71,7 +72,8 @@ const WORKFLOW_ASSIST_CREATE_PROPOSE_BODY = {
   proposal_kind: "create_workflow" as const,
   draft: {
     name: "Assist draft (disabled)",
-    description: "Template from Workflow Assist — configure steps and enable in Automations.",
+    description:
+      "Template starter only — not production-ready. Uses generic opportunity trigger placeholders. In Automations: review name, event/entity, conditions, actions, then enable manually.",
     event_type: "opportunity_status_changed",
     entity_type: "opportunity",
   },
@@ -510,6 +512,7 @@ export default function AICommandSurfaceShell() {
   });
 
   const [busy, setBusy] = useState(false);
+  const [workflowAssistMutationCapable, setWorkflowAssistMutationCapable] = useState<boolean | null>(null);
   const [viewportH, setViewportH] = useState<number>(typeof window !== "undefined" ? window.innerHeight : 900);
 
   const panelMaxHeight = useMemo(() => clampExpandedHeightPx(viewportH), [viewportH]);
@@ -534,11 +537,13 @@ export default function AICommandSurfaceShell() {
         workflow_blocked: false,
       });
       const locationLabel = candidate.disambiguation?.location_name ?? null;
+      const isReminderIntent = intent?.intent_type === "create_reminder";
       const messageIntent =
-        intent?.intent_type === "draft_message" ||
-        intent?.intent_type === "schedule_message" ||
-        Boolean(intent?.message_goal_text?.trim());
-      const uiPhase = messageIntent && intent?.intent_type !== "create_reminder" ? "draft" : "workspace";
+        !isReminderIntent &&
+        (intent?.intent_type === "draft_message" ||
+            intent?.intent_type === "schedule_message" ||
+            Boolean(intent?.message_goal_text?.trim()));
+      const uiPhase: "draft" | "workspace" | "reminder" = isReminderIntent ? "reminder" : messageIntent ? "draft" : "workspace";
       setThread((prev) => {
         let next = appendThreadTurn(prev, {
           kind: "target_confirmed",
@@ -547,7 +552,7 @@ export default function AICommandSurfaceShell() {
         });
         next = appendThreadTurn(next, {
           kind: "assistant_notice",
-          text: taskAssistFollowUpNoticeText(candidate, locationLabel),
+          text: taskAssistFollowUpNoticeText(candidate, locationLabel, intent),
         });
         next = appendThreadTurn(next, {
           kind: "action_card",
@@ -875,6 +880,30 @@ export default function AICommandSurfaceShell() {
     [proposeWorkflowAssistBody]
   );
 
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/admin/ai/workflow-assist/capabilities", {
+          credentials: "include",
+          headers: { Accept: "application/json" },
+        });
+        const j = (await res.json()) as { ok?: boolean; can_propose_and_apply_workflow_assist?: boolean };
+        if (cancelled) return;
+        if (res.ok && j.ok === true && typeof j.can_propose_and_apply_workflow_assist === "boolean") {
+          setWorkflowAssistMutationCapable(j.can_propose_and_apply_workflow_assist);
+        } else {
+          setWorkflowAssistMutationCapable(false);
+        }
+      } catch {
+        if (!cancelled) setWorkflowAssistMutationCapable(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const handleSubmit = useCallback(async () => {
     const cmd = commandText.trim();
     if (!cmd || busy) return;
@@ -1083,6 +1112,9 @@ export default function AICommandSurfaceShell() {
   const hasThread = thread.turns.length > 0;
   const threadPreview = useMemo(() => lastThreadPreviewText(thread.turns), [thread.turns]);
   const surfaceExpanded = hasThread;
+  const workflowAssistMutationsAllowed = workflowAssistMutationCapable === true;
+  const workflowAssistMutationBlockedReasonShell =
+    workflowAssistMutationCapable === false ? WORKFLOW_ASSIST_PORTAL_MUTATION_BLOCKED_USER_MESSAGE : null;
 
   return (
     <SurfaceCard expanded={surfaceExpanded} rootRef={shellRootRef}>
@@ -1149,7 +1181,9 @@ export default function AICommandSurfaceShell() {
                 onToggleActionCard={(turnId) => setThread((prev) => toggleActionCardExpanded(prev, turnId))}
                 onToggleTaskAssistMoreOptions={onToggleTaskAssistMoreOptions}
                 renderJobLayoutCardActions={renderJobLayoutCardActions}
-                workflowAssistMutation={workflowAssistMutation}
+                workflowAssistMutation={workflowAssistMutationsAllowed ? workflowAssistMutation : undefined}
+                workflowAssistMutationBlockedReason={workflowAssistMutationBlockedReasonShell}
+                workflowAssistMutationsAllowed={workflowAssistMutationsAllowed}
               />
             </div>
           ) : null}

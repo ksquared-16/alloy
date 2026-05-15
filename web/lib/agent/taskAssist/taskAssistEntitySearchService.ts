@@ -524,10 +524,16 @@ export async function runTaskAssistEntitySearch(params: RunTaskAssistEntitySearc
                 for (const o of oppsFromMembers) {
                     const members = o.customer_id ? memberByCustomer.get(o.customer_id) ?? [] : [];
                     const childName = disambiguationFromOppRow(o).child_display_name;
+                    /** Keep every matched household member — inquiry child must not replace the full list. */
                     const membersForOpp =
-                        childName && members.includes(childName) ? [childName]
-                        : childName ? [childName, ...members.filter((m) => m !== childName)]
-                        : members;
+                        childName ?
+                            [
+                                childName,
+                                ...members.filter(
+                                    (m) => m.trim().toLowerCase() !== String(childName).trim().toLowerCase()
+                                ),
+                            ]
+                        :   members;
                     push(
                         buildCandidate(
                             o,

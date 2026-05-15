@@ -119,6 +119,10 @@ export type WorkflowAssistThreadMutationHandlersV1 = {
     onProposeCreateTemplate: () => Promise<void>;
 };
 
+/** Shown on read cards when the portal user is not `admin` (same gate as propose/apply `requireAdmin`). */
+export const WORKFLOW_ASSIST_PORTAL_MUTATION_BLOCKED_USER_MESSAGE =
+    "Workflow changes require admin approval." as const;
+
 export type WorkflowAssistFailedRunRowV1 = {
     run_id: string;
     workflow_id: string;

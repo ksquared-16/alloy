@@ -41,6 +41,16 @@ describe("taskAssistOpportunityChildProfiles", () => {
         expect(resolvePrimaryChildDisplayNameFromProfiles(profiles)).toBeNull();
     });
 
+    it("with four named children and full DOBs, picks youngest by latest DOB", () => {
+        const profiles: TaskAssistChildProfileV1[] = [
+            p({ display_name: "Oldest", dob_iso: "2015-03-10", customer_member_id: "cm1" }),
+            p({ display_name: "MidA", dob_iso: "2017-08-01", customer_member_id: "cm2" }),
+            p({ display_name: "MidB", dob_iso: "2019-12-20", customer_member_id: "cm3" }),
+            p({ display_name: "Youngest", dob_iso: "2024-01-15", customer_member_id: "cm4" }),
+        ];
+        expect(resolvePrimaryChildDisplayNameFromProfiles(profiles)).toBe("Youngest");
+    });
+
     it("normalizeChildDobToYyyyMmDd handles plain dates", () => {
         expect(normalizeChildDobToYyyyMmDd("2024-03-02")).toBe("2024-03-02");
         expect(normalizeChildDobToYyyyMmDd("2024-03-02T00:00:00.000Z")).toBe("2024-03-02");

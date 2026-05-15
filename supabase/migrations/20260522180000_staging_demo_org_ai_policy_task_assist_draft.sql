@@ -1,4 +1,5 @@
--- Staging / demo enablement: Task Assist V1.1 deterministic propose (`task_assist_draft`).
+-- Staging / demo enablement: Task Assist V1.1 deterministic propose (`task_assist_draft`) +
+-- Workflow Assist Cards 4–5 deterministic propose (`workflow_assist_draft`).
 --
 -- Target org: childcare staging / demo tenant used elsewhere in repo seeds
 -- (`93667019-bd28-49b5-a688-acc9bb1e0a19` — see e.g. `20260501200000_seed_staging_communication_provider_bindings.sql`).
@@ -8,14 +9,14 @@
 --   inventing payout defaults or partial rows if settings were never created).
 -- - Deep-merges `metadata.ai_policy` without removing sibling keys under `metadata` or under `ai_policy`.
 -- - Sets `ai_policy.enabled = true`.
--- - Unions `task_assist_draft` into `ai_policy.allowed_features` (preserves all existing feature strings).
+-- - Unions `task_assist_draft` and `workflow_assist_draft` into `ai_policy.allowed_features` (preserves all existing feature strings).
 -- - Sets `ai_policy.provider = 'stub'` **only when** `provider` is missing, null, or blank — otherwise preserves
 --   the existing provider (e.g. `openai` pilot orgs are not forced to stub by this migration).
 -- - Does not touch `pii_mode`, `logging_mode`, `retention_mode`, or other `ai_policy` keys except those above.
 --
--- Runtime (unchanged): stub Task Assist propose still requires `AI_ENRICHMENT_STUB_ENABLED=true` on the web
--- deployment when `provider` is `stub` — see `web/app/api/admin/ai/task-assist/propose/route.ts` and
--- `docs/product/ai-system.md`.
+-- Runtime (unchanged): stub Task Assist / Workflow Assist propose still requires `AI_ENRICHMENT_STUB_ENABLED=true` on the web
+-- deployment when `provider` is `stub` — see `web/app/api/admin/ai/task-assist/propose/route.ts`,
+-- `web/app/api/admin/ai/workflow-assist/propose/route.ts`, and `docs/product/ai-system.md`.
 
 UPDATE public.org_settings AS os
 SET
@@ -42,6 +43,8 @@ SET
                                 ) AS feat
                             UNION ALL
                             SELECT 'task_assist_draft'::text AS feat
+                            UNION ALL
+                            SELECT 'workflow_assist_draft'::text AS feat
                         ) AS merged
                     ) AS distinct_feats
                 )

@@ -171,4 +171,27 @@ describe("POST /api/admin/ai/workflow-assist/propose", () => {
         expect(tables).toContain("org_settings");
         expect(tables.every((t) => t !== "workflows")).toBe(true);
     });
+
+    it("returns suggestion for edit_workflow with allowed patch fields", async () => {
+        vi.stubEnv("AI_ENRICHMENT_USE_PERMISSION_REQUIRED", "true");
+        vi.stubEnv("AI_ENRICHMENT_STUB_ENABLED", "true");
+        const res = await POST(
+            postJson({
+                version: 1,
+                proposal_kind: "edit_workflow",
+                workflow_id: wfId,
+                patch: { name: "Renamed via Assist" },
+            }),
+        );
+        expect(res.status).toBe(200);
+        const j = (await res.json()) as {
+            ok?: boolean;
+            suggestion?: { proposal_kind?: string; patch?: { name?: string } };
+        };
+        expect(j.ok).toBe(true);
+        expect(j.suggestion?.proposal_kind).toBe("edit_workflow");
+        expect(j.suggestion?.patch?.name).toBe("Renamed via Assist");
+        const tables = fromSpy.mock.calls.map((c) => c[0]);
+        expect(tables).not.toContain("workflows");
+    });
 });

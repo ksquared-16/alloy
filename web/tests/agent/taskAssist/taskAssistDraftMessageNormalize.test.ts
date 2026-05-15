@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+    extractRecipientGreetingFirstName,
     formatTaskAssistDraftOpening,
     normalizeTaskAssistMessageGoal,
 } from "@/lib/agent/taskAssist/taskAssistDraftMessageNormalize";
@@ -21,6 +22,18 @@ const baseContext: TaskAssistOpportunityContextV1 = {
     activity_summary: null,
     last_activity_at: null,
     recipient_candidates: [],
+};
+
+const contextWithSarah: TaskAssistOpportunityContextV1 = {
+    ...baseContext,
+    recipient_candidates: [
+        {
+            person_id: "p1",
+            display_label: "Sarah Mitchell (Primary)",
+            has_sms: true,
+            has_email: true,
+        },
+    ],
 };
 
 describe("taskAssistDraftMessageNormalize", () => {
@@ -51,5 +64,25 @@ describe("taskAssistDraftMessageNormalize", () => {
             context: { ...baseContext, primary_child_display_name: "Emma" },
         });
         expect(body).toBe("We're excited for Emma to start with us soon!");
+    });
+
+    it("fixes grammar for interested in schedule a tour before formatting", () => {
+        expect(normalizeTaskAssistMessageGoal("interested in schedule a tour")).toContain("interested in scheduling");
+    });
+
+    it("formats tour interest follow-up with greeting from first recipient", () => {
+        const body = formatTaskAssistDraftOpening({
+            instruction: "Confirm they're still interested in schedule a tour.",
+            channel: "sms",
+            context: contextWithSarah,
+        });
+        expect(body).toBe(
+            "Hi Sarah, just checking in to see if you're still interested in scheduling a tour. We'd be happy to help with next steps."
+        );
+    });
+
+    it("extracts greeting first name from recipient display_label", () => {
+        expect(extractRecipientGreetingFirstName(contextWithSarah)).toBe("Sarah");
+        expect(extractRecipientGreetingFirstName(baseContext)).toBeNull();
     });
 });

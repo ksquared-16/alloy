@@ -148,7 +148,7 @@ describe("TaskAssistV1OpportunityPanel markup", () => {
         vi.stubEnv("NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED", "false");
         const html = renderToStaticMarkup(<TaskAssistV1OpportunityPanel entityId={OPP} active />);
         expect(html).not.toContain("data-task-assist-send");
-        expect(html).toContain("Draft with Task Assist");
+        expect(html).toContain("Draft message");
     });
 
     it("with V1 flag on, renders V1.1 lists section (save draft appears after a draft exists)", () => {

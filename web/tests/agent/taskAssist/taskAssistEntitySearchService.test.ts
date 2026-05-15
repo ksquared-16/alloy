@@ -483,4 +483,60 @@ describe("runTaskAssistEntitySearch", () => {
 
         expect(candidates).toHaveLength(1);
     });
+
+    it("keeps inquiry child plus every Mitchell-matched household member in matched_members", async () => {
+        const supabase = createSearchSupabase(ORG_A, {
+            opportunities: [
+                {
+                    id: OPP_ID,
+                    org_id: ORG_A,
+                    name: "Spring enrollment",
+                    title: null,
+                    customer_id: CUST_ID,
+                    primary_person_id: null,
+                    primary_contact_id: null,
+                    metadata: { inquiry_children: [{ display_name: "Emma Mitchell" }] },
+                },
+            ],
+            customers: [{ id: CUST_ID, org_id: ORG_A, name: "Mitchell household" }],
+            persons: [],
+            contacts: [],
+            customer_members: [
+                {
+                    customer_id: CUST_ID,
+                    org_id: ORG_A,
+                    is_active: true,
+                    display_name: "Emma Mitchell",
+                    first_name: null,
+                    last_name: null,
+                },
+                {
+                    customer_id: CUST_ID,
+                    org_id: ORG_A,
+                    is_active: true,
+                    display_name: "Tom Mitchell",
+                    first_name: null,
+                    last_name: null,
+                },
+                {
+                    customer_id: CUST_ID,
+                    org_id: ORG_A,
+                    is_active: true,
+                    display_name: "Sam Mitchell",
+                    first_name: null,
+                    last_name: null,
+                },
+            ],
+        });
+
+        const { candidates } = await runTaskAssistEntitySearch({
+            supabase,
+            orgId: ORG_A,
+            accessDim: openDim,
+            rawQ: "Mitchell",
+        });
+
+        const c = candidates.find((x) => x.entity_id === OPP_ID);
+        expect(c?.disambiguation?.matched_members?.slice().sort()).toEqual(["Emma Mitchell", "Sam Mitchell", "Tom Mitchell"]);
+    });
 });

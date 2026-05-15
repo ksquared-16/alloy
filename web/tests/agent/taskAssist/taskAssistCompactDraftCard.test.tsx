@@ -13,8 +13,12 @@ describe("TaskAssistCompactDraftCard", () => {
         const src = readFileSync(cardPath, "utf8");
         expect(src).toContain("autoPropose");
         expect(src).toContain("Drafting message");
+        expect(src).toContain("Preparing message and schedule review");
         expect(src).toContain("data-task-assist-compact-send-now");
         expect(src).toContain("When should I send it?");
+        expect(src).toContain("What time should I send it?");
+        expect(src).toContain("Schedule send");
+        expect(src).toContain('setPhase(needsExplicitSendTime ? "schedule_prompt" : "review")');
         expect(src).toContain("formatTaskAssistClientError");
         expect(src).toContain("/api/admin/ai/task-assist/propose");
     });

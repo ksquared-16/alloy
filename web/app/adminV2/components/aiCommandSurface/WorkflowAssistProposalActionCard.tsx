@@ -3,6 +3,7 @@
 import { useCallback, useState } from "react";
 
 import type { WorkflowAssistSuggestionV1 } from "@/lib/agent/workflowAssist/workflowAssistProposalV1";
+import { WORKFLOW_ASSIST_PORTAL_MUTATION_BLOCKED_USER_MESSAGE } from "@/lib/agent/workflowAssist/workflowAssistReadV1";
 import { brand, derived, neutral, semantic } from "@/styles/tokens/colors";
 
 const CMD = {
@@ -22,11 +23,19 @@ type ApplyJson =
       }
     | { ok: false; error?: string; message?: string | null; validation_errors?: string[] | null };
 
-export function WorkflowAssistProposalActionCard({ suggestion }: { suggestion: WorkflowAssistSuggestionV1 }) {
+export function WorkflowAssistProposalActionCard({
+    suggestion,
+    applyAllowed = true,
+}: {
+    suggestion: WorkflowAssistSuggestionV1;
+    /** When false, Apply stays disabled (session cannot mutate workflows via Assist). */
+    applyAllowed?: boolean;
+}) {
     const [busy, setBusy] = useState(false);
     const [done, setDone] = useState<ApplyJson | null>(null);
 
     const apply = useCallback(async () => {
+        if (!applyAllowed) return;
         setBusy(true);
         setDone(null);
         try {
@@ -56,7 +65,9 @@ export function WorkflowAssistProposalActionCard({ suggestion }: { suggestion: W
         } finally {
             setBusy(false);
         }
-    }, [suggestion]);
+    }, [suggestion, applyAllowed]);
+
+    const isCreate = suggestion.proposal_kind === "create_workflow";
 
     return (
         <div className="space-y-2" data-command-surface-workflow-assist-proposal-card="true">
@@ -71,13 +82,36 @@ export function WorkflowAssistProposalActionCard({ suggestion }: { suggestion: W
                     Admin approval required
                 </span>
             </div>
+            {isCreate ?
+                <div className="flex flex-wrap gap-1.5" data-command-surface-workflow-assist-create-guardrails="true">
+                    <span
+                        className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
+                        style={{ backgroundColor: "rgba(39, 63, 82, 0.08)", color: CMD.textLabel }}
+                    >
+                        Disabled draft
+                    </span>
+                    <span
+                        className="rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
+                        style={{ backgroundColor: "rgba(0, 162, 131, 0.1)", color: brand.secondary }}
+                    >
+                        Template starter
+                    </span>
+                </div>
+            : null}
             <p className="text-[11px] font-semibold" style={{ color: CMD.textBody }}>
-                {suggestion.proposal_kind === "create_workflow" ?
-                    `Create workflow (disabled): ${suggestion.draft_row?.name ?? "—"}`
+                {isCreate ?
+                    `Create disabled workflow: ${suggestion.draft_row?.name ?? "—"}`
                 : suggestion.proposal_kind === "pause_workflow" ?
                     `Disable workflow ${suggestion.target_workflow_id ?? ""}`
                 :   `Edit workflow ${suggestion.target_workflow_id ?? ""}`}
             </p>
+            {isCreate ?
+                <p className="text-[10px] leading-snug" style={{ color: CMD.textSupporting }}>
+                    Uses generic trigger placeholders ({suggestion.draft_row?.event_type ?? "—"} /{" "}
+                    {suggestion.draft_row?.entity_type ?? "—"}). This is not production-ready and stays off until you
+                    review in Automations.
+                </p>
+            : null}
             <p className="text-[10px]" style={{ color: CMD.textSupporting }}>
                 {suggestion.reasoning.summary}
             </p>
@@ -89,12 +123,18 @@ export function WorkflowAssistProposalActionCard({ suggestion }: { suggestion: W
                 </ul>
             : null}
             <div className="rounded-md border border-dashed px-2 py-1.5 text-[10px]" style={{ borderColor: derived.border, color: CMD.textLabel }}>
-                Read-only summary cards above do not change workflows. This action writes through the same admin paths
-                as Automations after you confirm.
+                Read-only summary cards above do not change workflows. Apply writes through the same admin paths as
+                Automations after you confirm — creates stay disabled; enable only from Automations.
             </div>
+            {!applyAllowed ?
+                <p className="text-[10px] leading-snug" style={{ color: CMD.textSupporting }} data-command-surface-workflow-assist-apply-blocked>
+                    {WORKFLOW_ASSIST_PORTAL_MUTATION_BLOCKED_USER_MESSAGE}
+                </p>
+            : null}
             <button
                 type="button"
-                disabled={busy || done?.ok === true}
+                disabled={busy || done?.ok === true || !applyAllowed}
+                title={!applyAllowed ? WORKFLOW_ASSIST_PORTAL_MUTATION_BLOCKED_USER_MESSAGE : undefined}
                 className="rounded-md bg-alloy-midnight/90 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
                 data-command-surface-workflow-assist-apply="true"
                 onClick={() => void apply()}

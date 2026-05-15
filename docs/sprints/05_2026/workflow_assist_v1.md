@@ -1,7 +1,7 @@
 # Sprint: Workflow Assist V1 (Agent #3)
 
 **Path:** `docs/sprints/05_2026/workflow_assist_v1.md`  
-**Status:** **Cards 1–5 shipped** — read-only cards (1–3) plus deterministic **propose** + admin-only **apply** (4–5). LLM, durable proposals, bulk pause, and explain correlation remain deferred.  
+**Status:** **Cards 1–5 + stabilization shipped** — read-only cards, deterministic propose/apply, role-aware Orchestrator UX (`GET …/capabilities`), create-template guardrails, edit API tests. LLM, durable proposals, bulk pause, explain correlation remain deferred.  
 **Prerequisites:** `docs/sprints/05_2026/agent_interaction_layer_v1.md` (Orchestrator + thread + action cards), `docs/sprints/05_2026/task_assist_v1_1.md` (Task Assist patterns), `docs/sprints/05_2026/ai_agents_v1.md` §9 (`WorkflowAssistSuggestionV1` template), `docs/product/ai-system.md`, `docs/system/actions-and-workflows.md`.
 
 **Non-goals for this document:** Task Assist transactional scope; new workflow execution engine; autonomous `executeWorkflowRun` from NL; childcare-only automation rules in platform code.
@@ -28,8 +28,8 @@
 | **Card 1** | **Shipped** | `web/lib/agent/workflowAssist/workflowAssistReadV1.ts` — `WorkflowAssistReadIntentV1`, `WorkflowAssistReadSubIntentV1`, `WorkflowAssistReadCardPayloadV1`, `WorkflowAssistErrorEnvelopeV1`, `parseWorkflowAssistReadIntent`, `buildWorkflowAssistReadCardPayload`, `workflowAssistErrorEnvelope`, `WorkflowAssistThreadMutationHandlersV1` (UI hooks for propose buttons on read cards). |
 | **Card 2** | **Shipped** | `routeCommandSurface` route kind **`workflow_assist`**; shell `runWorkflowAssistRoute` appends **`workflow_assist_read`** thread turns. Legacy **`workflow_notice`** turn still renders static copy for old sessions. |
 | **Card 3** | **Shipped** | Read-only thread card UI `WorkflowAssistReadThreadCard.tsx` — **summary**, **failed runs (7d sample + links)**, **enrollment keyword filter**, **explain placeholder** checklist. Data from **`GET /api/admin/workflows/summary`**, **`GET /api/admin/workflow-runs?range=7d&limit=100`**, **`GET /api/admin/workflow-runs?list=kpis`** (failed card only). |
-| **Card 4** | **Shipped** | **`POST /api/admin/ai/workflow-assist/propose`** — `requireAdmin` (ops excluded); portal + org `ai_policy` with feature **`workflow_assist_draft`** (stub + `AI_ENRICHMENT_STUB_ENABLED`; openai branch policy-only, **no LLM**). Parses **`WorkflowAssistProposeRequestV1`**; returns **`WorkflowAssistSuggestionV1`**; **no** `workflows` writes. Orchestrator read cards expose **Propose disable** / **Propose new disabled workflow (template)** → appends **`action_card`** with **`workflow_assist_proposal`**. |
-| **Card 5** | **Shipped** | **`POST /api/admin/ai/workflow-assist/apply`** — **`requireAdmin` only** (ops get 403). Validates **`WorkflowAssistApplyRequestV1`** + semantic checks; **`executeWorkflowAssistApply`** uses same field allowlist as admin workflow routes (`insert` create always **`enabled: false`**; `update` for edit/pause) + **`logAdminAudit`**. UI: **`WorkflowAssistProposalActionCard`** — preview, **Admin approval required**, **Apply as admin**, success/error. |
+| **Card 4** | **Shipped** | **`POST /api/admin/ai/workflow-assist/propose`** — `requireAdmin` (ops excluded); portal + org `ai_policy` with feature **`workflow_assist_draft`**. **`GET /api/admin/ai/workflow-assist/capabilities`** — read-only hint for UI (`can_propose_and_apply_workflow_assist` mirrors propose/apply admin gate). Read cards expose **Propose disable** / **Propose disabled draft (template starter)** when capabilities allow; otherwise **`WORKFLOW_ASSIST_PORTAL_MUTATION_BLOCKED_USER_MESSAGE`**. |
+| **Card 5** | **Shipped** | **`POST /api/admin/ai/workflow-assist/apply`** — **`requireAdmin` only** (ops get 403); proposal **Apply** disabled in UI unless **`GET …/capabilities`** reports admin. Validates **`WorkflowAssistApplyRequestV1`** + semantic checks; **`executeWorkflowAssistApply`** uses the same field allowlist as admin workflow routes (`insert` create always **`enabled: false`**; `update` for edit/pause) + **`logAdminAudit`**. UI: **`WorkflowAssistProposalActionCard`** — preview, **Admin approval required**, **Apply as admin**, success/error. |
 
 ### Supported proposal kinds (Card 4–5)
 
@@ -57,7 +57,12 @@
 | **Durable `workflow_assist_proposals`** | **Not implemented** — ephemeral suggestion JSON + client-held card (same pattern as early Task Assist). |
 | **LLM** | **Not implemented** for Workflow Assist; propose is fully deterministic. |
 | **Bulk pause / tag mute** | **Not implemented** — only single-workflow pause proposal. |
-| **Edit from UI** | Read cards surface **pause** and **create template** only; arbitrary **edit_workflow** is API-ready but not exposed as buttons yet. |
+| **Edit from UI** | Read cards surface **pause** and **create template** only; arbitrary **edit_workflow** is API-ready (propose + apply covered by tests) but not exposed as buttons yet. |
+| **Stabilization (role UX + guardrails)** | **Shipped:** **`GET /api/admin/ai/workflow-assist/capabilities`** (`can_propose_and_apply_workflow_assist` = compatibility **`admin`**); Orchestrator hides propose CTAs for ops and disables Apply unless admin; create proposal card stresses **disabled draft / template starter / review in Automations**; deterministic create template description warns placeholders are generic. |
+
+### Staging migration naming (do not rename if applied)
+
+The migration **`supabase/migrations/20260522180000_staging_demo_org_ai_policy_task_assist_draft.sql`** merges **`task_assist_draft`** and **`workflow_assist_draft`** for the childcare staging org. If this migration **already ran** in an environment, **do not rename** the file — add a **new** migration for further policy tweaks.
 
 ### Intentionally deferred (unchanged)
 
@@ -263,7 +268,7 @@ All inside **Orchestrator thread** (`CommandSurfaceThread` + action cards) — n
 | Layer | Tests |
 |-------|--------|
 | **Unit** | `parseWorkflowAssistReadIntent`, `buildWorkflowAssistReadCardPayload`, `routeCommandSurface` workflow branch — `web/tests/agent/workflowAssist/workflowAssistReadV1.test.ts`, `web/tests/adminV2/commandSurfaceRouter.test.ts`. |
-| **Integration** | `web/tests/agent/workflowAssist/workflowAssistProposeRoute.test.ts`, `workflowAssistApplyRoute.test.ts`; org policy guards in `web/tests/ai/aiEnrichmentRouteAccess.test.ts`. |
+| **Integration** | `workflowAssistProposeRoute.test.ts`, `workflowAssistApplyRoute.test.ts`, **`workflowAssistEditProposeApplyRoute.test.ts`** (edit propose→apply + org-scoped mock), **`workflowAssistCapabilitiesRoute.test.ts`**; org policy guards in `web/tests/ai/aiEnrichmentRouteAccess.test.ts`. |
 | **Permissions** | Matrix: admin vs ops vs missing `ai.enrichment.use` / future draft key — mirror `web/tests/ai/aiEnrichmentRouteAccess.test.ts` patterns. |
 | **Orchestrator routing** | Extend `web/tests/adminV2/commandSurface*.test.ts` — workflow NL → Workflow Assist route, not Task Assist. |
 | **Workflow proposal** | Golden fixtures: template → `POST /api/admin/workflows` body shape. |
@@ -290,6 +295,15 @@ All inside **Orchestrator thread** (`CommandSurfaceThread` + action cards) — n
 2. Whether **`workflows`** rows can be **global** (`org_id` null) for platform templates — grep `workflows` insert seeds.
 3. **DB uniqueness** constraints on workflow name per org.
 4. Whether **ops** can `GET` single workflow detail in all deployments (route uses `getAdminContextCached` on `GET [id]` — likely yes for read).
+
+---
+
+## 12. Recommended next feature batch (post-stabilization)
+
+1. **Edit from read cards** — narrow, safe patch (e.g. rename) with preview, still admin-only apply.  
+2. **Explain v0** — structured checklist backed by read-only workflow/run APIs.  
+3. **Durable proposals** — if compliance requires retained drafts + audit rows.  
+4. **Optional: propose for ops** — only if product explicitly widens policy (separate from apply); would need new gate design.
 
 ---
 
