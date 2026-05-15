@@ -9,6 +9,9 @@ import {
 } from "@/lib/communications/communicationScheduledSendsService";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
+import {
+    assertCommunicationsSendAllowed,
+} from "@/lib/communications/communicationPermissions";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
 /**
@@ -56,6 +59,17 @@ export async function POST(request: NextRequest) {
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+
+    const sendAuth = await assertCommunicationsSendAllowed({
+        orgId: ctx.orgId,
+        actor: ctx.userId ? { userId: ctx.userId } : null,
+    });
+    if (!sendAuth.ok) {
+        return NextResponse.json(
+            { ok: false, error: "communications_send_forbidden", message: sendAuth.message },
+            { status: 403 }
+        );
+    }
 
     let body: unknown;
     try {

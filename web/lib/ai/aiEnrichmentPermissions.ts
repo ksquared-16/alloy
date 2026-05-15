@@ -19,7 +19,7 @@ function truthyEnv(name: string): boolean {
 
 /**
  * When **true**, callers must have {@link AI_ENRICHMENT_USE_PERMISSION_KEY} in `permissionKeys`.
- * When **false** (default), legacy gate: compatibility portal **admin** role only (matches pre–2.5 stub route).
+ * When **false** (default), legacy gate: portal **admin or ops** (same surface as **`requireAdminOrOps`**).
  * Set to **true** in production before live provider pilot once grants exist.
  */
 export function isAiEnrichmentUsePermissionRequired(): boolean {
@@ -44,6 +44,7 @@ export type AiEnrichmentRouteAccessFailure = {
 /**
  * Org-scoped portal access + optional strict permission grant.
  * Does **not** evaluate org `ai_policy` or env stub flags — do those in the route after loading metadata.
+ * Legacy (strict off): portal **admin or ops** (`ctx.role` from {@link compatibilityPortalRole}). Strict: {@link AI_ENRICHMENT_USE_PERMISSION_KEY}.
  */
 export function resolveAiEnrichmentPortalAccess(input: {
     ctx: AdminContextSuccess;
@@ -70,13 +71,14 @@ export function resolveAiEnrichmentPortalAccess(input: {
         return { ok: true };
     }
 
-    if (input.ctx.role !== "admin") {
+    /** Legacy: same portal surface as `requireAdminOrOps` — **admin** or **ops** org role (not general members). */
+    if (input.ctx.role !== "admin" && input.ctx.role !== "ops") {
         return {
             ok: false,
             status: 403,
             error: "FORBIDDEN",
             message:
-                "AI stub enrichment requires portal admin role, or set AI_ENRICHMENT_USE_PERMISSION_REQUIRED=true and grant ai.enrichment.use.",
+                "AI stub routes require portal admin or ops role, or set AI_ENRICHMENT_USE_PERMISSION_REQUIRED=true and grant ai.enrichment.use.",
         };
     }
 

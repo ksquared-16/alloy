@@ -7,6 +7,7 @@ import {
 import { cancelCommunicationScheduledSend } from "@/lib/communications/communicationScheduledSendsService";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { requireAdminOrOps } from "@/lib/adminAuth";
+import { assertCommunicationsSendAllowed } from "@/lib/communications/communicationPermissions";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -42,6 +43,17 @@ export async function PATCH(request: NextRequest, context: { params: Promise<{ i
 
     const ctx = await getAdminContextCached();
     if (!ctx.ok) return adminContextFailureResponse(ctx);
+
+    const sendAuth = await assertCommunicationsSendAllowed({
+        orgId: ctx.orgId,
+        actor: ctx.userId ? { userId: ctx.userId } : null,
+    });
+    if (!sendAuth.ok) {
+        return NextResponse.json(
+            { ok: false, error: "communications_send_forbidden", message: sendAuth.message },
+            { status: 403 }
+        );
+    }
 
     const { id } = await context.params;
     if (!id?.trim() || !isTaskAssistV1Uuid(id)) {

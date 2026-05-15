@@ -39,13 +39,18 @@ describe("resolveAiEnrichmentPortalAccess", () => {
         if (!r.ok) expect(r.error).toBe("ORG_CONTEXT_MISMATCH");
     });
 
-    it("legacy mode: requires admin role when permission strict is off", () => {
+    it("legacy mode: allows admin or ops when permission strict is off", () => {
         vi.stubEnv("AI_ENRICHMENT_USE_PERMISSION_REQUIRED", "false");
         expect(isAiEnrichmentUsePermissionRequired()).toBe(false);
         const okAdmin = resolveAiEnrichmentPortalAccess({ ctx: adminCtx, access: accessBase });
         expect(okAdmin.ok).toBe(true);
-        const badOps = resolveAiEnrichmentPortalAccess({ ctx: opsCtx, access: accessBase });
-        expect(badOps.ok).toBe(false);
+        const okOps = resolveAiEnrichmentPortalAccess({ ctx: opsCtx, access: accessBase });
+        expect(okOps.ok).toBe(true);
+        const badOther = resolveAiEnrichmentPortalAccess({
+            ctx: { ok: true as const, orgId: "org-1", role: "manager", userId: "u1" },
+            access: accessBase,
+        });
+        expect(badOther.ok).toBe(false);
     });
 
     it("strict mode: requires ai.enrichment.use grant", () => {

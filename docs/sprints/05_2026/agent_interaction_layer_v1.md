@@ -17,6 +17,10 @@
 
 **North star:** One Orchestrator surface; **`routeCommandSurface`** picks the specialist; search + deterministic parse resolve entity + goal; thread holds the conversation; **specialist action cards** gate all side effects. **No auto-send.**
 
+### Permission matrix (org policy vs user capability)
+
+Orchestrator **never** performs sends, schedules, or workflow writes — it only calls read/search routes and mounts specialist UIs. **Org `metadata.ai_policy`** gates whether **AI draft/propose** features are enabled for the tenant; **role / `role_permission_grants`** gates whether the **signed-in user** may invoke the corresponding admin APIs. Canonical matrix: **`docs/product/ai-system.md`** § *Agent permission matrix*; summary in **`docs/system/roles-and-permissions.md`**.
+
 ---
 
 ## Card 0 — Audit findings (2026-05-15)

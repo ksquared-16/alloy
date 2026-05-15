@@ -25,9 +25,27 @@ The bottom **command bar** is the **Orchestrator Agent** surface — not Task As
   - **`.../v1/record-overview-layout`**, **`.../v1/activity`**.
   - **`.../v2/field-visibility`** — structured apply path; **disabled unless** **`AGENT_V2_FIELD_VISIBILITY_ENABLED`** is `true`/`1`/`yes` (see `web/app/api/admin/agent/v2/field-visibility/route.ts`).
 - **Admin V2 UI** may surface AI/command UX under **`web/app/adminV2/`** (search `ai`, `agent` in subtree).
-- **AI enrichment (stub + OpenAI-compatible + telemetry):** **`POST /api/admin/ai/enrich-attention-suggestion`** — **`getAdminContextCached`** + **`getAdminAccessContextCached`** (org scope + `permissionKeys`); legacy **admin-only** unless **`AI_ENRICHMENT_USE_PERMISSION_REQUIRED`** + grant **`ai.enrichment.use`** (key seeded by **`supabase/migrations/20260520100000_ai_enrichment_permission_keys_seed.sql`**); org policy pre-check (`enabled`, **`provider`** `stub` or **`openai`**, `draft_enrichment`); stub path also requires **`AI_ENRICHMENT_STUB_ENABLED`**; OpenAI path requires strict permission mode + **`OPENAI_API_KEY`** / **`OPENAI_MODEL`** (optional **`OPENAI_BASE_URL`**). Request body parsing: **`web/lib/ai/enrichAttentionSuggestionRouteValidation.ts`**; route tests **`web/tests/ai/enrichAttentionSuggestionRoute.test.ts`**. Telemetry: **`AI_ENRICHMENT_TELEMETRY_ENABLED`** + verbose org logging → **`ai_enrichment_usage_v1`**. **Drawer:** **`OperationalAttentionEnhanceDraft`** calls this route for **“Enhance draft”** (copy-only preview) when a deterministic draft exists — no send/apply/persistence. See sprint doc §16–§Phase 2.5.
-- **Task Assist V1 (Agent 2 — narrow ship):** **`POST /api/admin/ai/task-assist/propose`** and **`POST /api/admin/ai/task-assist/apply`** — **opportunities-only** SMS/email draft + operator-approved send. **Apply** calls **`executeCommunicationsSend`** (same canonical enqueue as **`POST /api/admin/communications/send`**; no legacy **`public.messages`** / **`messages_outbox`** in Task Assist code). **Org policy:** feature **`task_assist_draft`** in **`metadata.ai_policy.allowed_features`**, plus the same portal / stub / OpenAI permission pattern as enrichment where applicable (see propose route). Tests: **`web/tests/agent/taskAssist/**`**. Spec: **`docs/sprints/05_2026/task_assist_v1.md`**.
+- **AI enrichment (stub + OpenAI-compatible + telemetry):** **`POST /api/admin/ai/enrich-attention-suggestion`** — **`getAdminContextCached`** + **`getAdminAccessContextCached`** (org scope + `permissionKeys`); legacy portal **`admin` or `ops`** unless **`AI_ENRICHMENT_USE_PERMISSION_REQUIRED`** + grant **`ai.enrichment.use`** (key seeded by **`supabase/migrations/20260520100000_ai_enrichment_permission_keys_seed.sql`**); org policy pre-check (`enabled`, **`provider`** `stub` or **`openai`**, `draft_enrichment`); stub path also requires **`AI_ENRICHMENT_STUB_ENABLED`**; OpenAI path requires strict permission mode + **`OPENAI_API_KEY`** / **`OPENAI_MODEL`** (optional **`OPENAI_BASE_URL`**). Request body parsing: **`web/lib/ai/enrichAttentionSuggestionRouteValidation.ts`**; route tests **`web/tests/ai/enrichAttentionSuggestionRoute.test.ts`**. Telemetry: **`AI_ENRICHMENT_TELEMETRY_ENABLED`** + verbose org logging → **`ai_enrichment_usage_v1`**. **Drawer:** **`OperationalAttentionEnhanceDraft`** calls this route for **“Enhance draft”** (copy-only preview) when a deterministic draft exists — no send/apply/persistence. See sprint doc §16–§Phase 2.5.
+- **Task Assist V1 (Agent 2 — narrow ship):** **`POST /api/admin/ai/task-assist/propose`** and **`POST /api/admin/ai/task-assist/apply`** — **opportunities-only** SMS/email draft + operator-approved send. **Apply** calls **`executeCommunicationsSend`** (same canonical enqueue as **`POST /api/admin/communications/send`**; no legacy **`public.messages`** / **`messages_outbox`** in Task Assist code). **Org policy:** feature **`task_assist_draft`** in **`metadata.ai_policy.allowed_features`**, plus the same portal / stub / OpenAI permission pattern as enrichment where applicable (see propose route). **Stub path:** org policy **`provider: stub`** still requires **`AI_ENRICHMENT_STUB_ENABLED=true`** on the server (same gate as attention stub enrichment). **Reproducible staging/demo policy:** merge migration **`supabase/migrations/20260522180000_staging_demo_org_ai_policy_task_assist_draft.sql`** (childcare staging org id; idempotent merge — does not wipe metadata). Tests: **`web/tests/agent/taskAssist/**`**. Spec: **`docs/sprints/05_2026/task_assist_v1.md`**, **`task_assist_v1_1.md`** (staging §).
 - **Orchestrator + Task Assist V1.1 (Interaction Layer + Agent #2):** **Orchestrator** = bottom **`AICommandSurfaceShell`** — single input, **`routeCommandSurface`** orchestrator/router layer, thread + clarification/candidate turns, routes to specialists; **does not execute** sends/schedules/tasks/workflows itself. **Task Assist** = one routed destination for comms/reminder/schedule intents — same admin routes as V1 plus **`POST`/`GET /api/admin/ai/task-assist/proposals`**, approve/reject, **`GET /api/admin/ai/task-assist/entity-search`**, **`/api/admin/communication-scheduled-sends`** (+ **`process-due`**), **`/api/admin/operational-tasks`**; **`TaskAssistOpportunityWorkspace`** inside action cards with operator approval. **Workflow Assist** phrases → notice only (no config). Slot extract: **`commandSurfaceSlotExtract`**; session thread in **`GlobalAssistantProvider`**. Gated by **`NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED`**. Sprints: **`agent_interaction_layer_v1.md`**, **`task_assist_v1_1.md`**.
+
+### Agent permission matrix (org policy vs user RBAC)
+
+**Doctrine:** **`metadata.ai_policy`** = org capability switch. **`role_permission_grants` → `permissionKeys`** + portal **`admin` / `ops`** = user may call the route. Orchestrator **never** executes side effects; specialists use **canonical APIs** below.
+
+| Surface / API | Org policy | User capability | Implementation |
+|---------------|------------|-----------------|------------------|
+| **Orchestrator** (client parse, thread) | — | Portal **`admin` or `ops`** (same shell as AdminV2) | UI + downstream APIs |
+| **Entity search** | — | **`requireAdminOrOps`** + access scope | `GET /api/admin/ai/task-assist/entity-search` |
+| **Task Assist propose** | `ai_policy` + **`task_assist_draft`** + provider + env | **`resolveAiEnrichmentPortalAccess`**: strict → **`ai.enrichment.use`**; legacy → portal **admin or ops** | `POST /api/admin/ai/task-assist/propose` |
+| **Attention enrich (stub/OpenAI)** | `draft_enrichment`, provider | Same **`resolveAiEnrichmentPortalAccess`** | `POST /api/admin/ai/enrich-attention-suggestion` |
+| **Task Assist send / composer send** | — | **`requireAdminOrOps`** + **`assertCommunicationsSendAllowed`** | `POST .../task-assist/apply`, `POST .../communications/send` |
+| **Scheduled send create / cancel** | — | **`requireAdminOrOps`** + **`assertCommunicationsSendAllowed`** (no separate schedule key) | `POST .../communication-scheduled-sends`, `PATCH .../[id]` |
+| **Process due** | — | Cron token **or** **`requireAdminOrOps`** | `POST .../process-due` |
+| **Operational tasks** | — | **`requireAdminOrOps`** only | `.../operational-tasks` |
+| **Workflow CRUD (mutations)** | — | **`requireAdmin`** (admin-only) | `POST/PATCH/DELETE .../workflows` |
+| **Workflow Assist (future)** | TBD | Draft: **`ai.workflow.draft.generate`** (recommended, not seeded). Apply/save/enable: **`requireAdmin`** or **`workflows.manage`** — not general users | *Agent #3 TBD* |
+
 - **Operational summaries (Phase 2 — derived):** Opportunity GET still attaches **`_operational_summary`** (`OperationalSummaryV1`) via **`attachOpportunityAttentionSuggestionBundle`** (payload for APIs / future use). **Drawer chrome** uses a single premium surface — **`OperationalAttentionHeaderStrip`** (“Recommended by Alloy”) — without duplicating operational summary narrative copy there. Work-unit queue rows may include **`_operational_summary_preview`** (headline + risk hint) — **`data-queue-preview-slot="operational_summary"`**; **no** extra per-row activity fetches. **Needs-attention list order** is **deterministic** (resolver `priority_score`, SLA tiers, severity, waiting facet, then queue-definition sort / `updated_at`) — applied in **`loadOpportunityNeedsAttentionRows`** after membership filter; **AI does not reorder queues**. See sprint doc **§17** and **§AI operational experience V1.1**.
 
 ### Agent #1 — Needs attention suggestion + Enhance draft (usable V1)
@@ -123,7 +141,9 @@ from public.org_settings
 where org_id = '93667019-bd28-49b5-a688-acc9bb1e0a19'::uuid;
 ```
 
-**Example merge** (run only when intentionally changing policy — replaces the whole `ai_policy` object under `metadata`):
+**Prefer repo migrations for staging/demo merges** — do not hand-run destructive SQL that replaces the entire `ai_policy` object unless you intend to drop existing keys. For **Task Assist** stub drafting on the standard childcare staging org, apply **`supabase/migrations/20260522180000_staging_demo_org_ai_policy_task_assist_draft.sql`** (merges **`task_assist_draft`** into **`allowed_features`**, sets **`enabled: true`**, sets **`provider: stub`** only when provider is missing/blank; preserves other `ai_policy` fields and all non-`ai_policy` metadata).
+
+**Legacy example (destructive — replaces whole `ai_policy`)** — use only in disposable environments when you intentionally want to reset the object:
 
 ```sql
 update public.org_settings
@@ -141,7 +161,7 @@ set metadata = jsonb_set(
 where org_id = '93667019-bd28-49b5-a688-acc9bb1e0a19'::uuid;
 ```
 
-Confirm JSON includes at least: **`enabled`**, **`provider`** (`stub` or `openai`), **`allowed_features`** containing **`draft_enrichment`**. For OpenAI pilot set **`provider`** to **`openai`** and configure Vercel **`OPENAI_*`** env vars.
+Confirm JSON includes at least: **`enabled`**, **`provider`** (`stub` or `openai`), **`allowed_features`** containing **`draft_enrichment`** and/or **`task_assist_draft`** as needed. For OpenAI pilot set **`provider`** to **`openai`** and configure Vercel **`OPENAI_*`** env vars.
 
 ### Vercel / runtime env (server-only)
 
@@ -150,7 +170,7 @@ Confirm in the Vercel project (or `.env.local` for local parity). **Never** put 
 | Variable | When needed |
 |----------|----------------|
 | **`AI_ENRICHMENT_USE_PERMISSION_REQUIRED`** | `true` to require **`ai.enrichment.use`** for enrichment routes (recommended before live OpenAI). |
-| **`AI_ENRICHMENT_STUB_ENABLED`** | `true` when org policy uses **`provider: stub`**. |
+| **`AI_ENRICHMENT_STUB_ENABLED`** | `true` when org policy uses **`provider: stub`** (required for **`POST /api/admin/ai/enrich-attention-suggestion`** stub path **and** **`POST /api/admin/ai/task-assist/propose`** stub path — see propose route). |
 | **`OPENAI_API_KEY`**, **`OPENAI_MODEL`** | When org policy uses **`provider: openai`** (optional **`OPENAI_BASE_URL`**). |
 | **`OPENAI_CHAT_TEMPERATURE`** | Optional `0`–`2` float; used only when **`OPENAI_MODEL`** supports custom **`temperature`** (ignored for **gpt-5**-style models — see **`supportsCustomTemperature`** in **`web/lib/ai/openAiModelCapabilities.ts`**). |
 | **`OPENAI_REQUEST_TIMEOUT_MS`** | Optional integer ms for Chat Completions used by structured enrichment; **default `20000`**; clamped **`1000`–`30000`** (see **`getOpenAiStructuredRequestTimeoutMs`** in **`web/lib/ai/aiEnrichmentEnv.ts`**). |

@@ -23,6 +23,25 @@
 - **Reminder / operational task** — **`POST /api/admin/operational-tasks`** with **`source: task_assist`**, title + future **`due_at`**; list and **`PATCH`** complete/cancel for **`open`** tasks. **`opportunities.metadata.next_follow_up_at`** is **not** auto-synced from tasks in V1.1 (Card 0 — optional app-layer follow-up later).
 - **Proposal generation** — **`POST /api/admin/ai/task-assist/propose`** remains **deterministic** (`buildDeterministicTaskAssistSuggestionV1`); org **`ai_policy`** may allow **`openai`** for permission alignment, but **this route does not call a live LLM** (see route comment). Optional **`persist: true`** on propose inserts a proposal row without send.
 
+### Staging / demo org policy (reproducible)
+
+- **Migration:** `supabase/migrations/20260522180000_staging_demo_org_ai_policy_task_assist_draft.sql` merges **`task_assist_draft`** into **`org_settings.metadata.ai_policy.allowed_features`**, sets **`enabled: true`**, and sets **`provider: stub`** only when provider is absent/blank — for org **`93667019-bd28-49b5-a688-acc9bb1e0a19`** (same staging tenant as other repo seeds). **Skips** if no **`org_settings`** row exists (no INSERT).
+- **Env (stub path):** deployments must set **`AI_ENRICHMENT_STUB_ENABLED=true`** for **`POST .../task-assist/propose`** when org policy uses **`provider: stub`**; see **`docs/product/ai-system.md`** (Vercel / runtime env table).
+
+### Permission matrix (Task Assist specialist)
+
+| Action | Org policy | User / portal gate | Route / helper |
+|--------|------------|--------------------|----------------|
+| Entity search (Orchestrator) | — | **`requireAdminOrOps`** + access scope | `GET .../task-assist/entity-search` |
+| Deterministic draft (propose) | `ai_policy.enabled`, `task_assist_draft`, `provider` + env stub/openai | **`resolveAiEnrichmentPortalAccess`** (`ai.enrichment.use` when strict, else portal **admin or ops**) + openai branch needs **`ai.enrichment.use`** when env strict | `POST .../task-assist/propose` |
+| Send now (apply) | — | **`requireAdminOrOps`** + **`assertCommunicationsSendAllowed`** (`communications.send` or `ops.messaging.write` or admin/ops role bypass) | `POST .../task-assist/apply` |
+| Save / approve / reject proposal | — | **`requireAdminOrOps`** | `POST/GET .../task-assist/proposals`, approve/reject |
+| Schedule create / cancel | — | **`requireAdminOrOps`** + **`assertCommunicationsSendAllowed`** (same as send — no separate schedule key today) | `POST .../communication-scheduled-sends`, `PATCH .../[id]` |
+| Process due (worker / admin) | — | **`x-cron-token`** **or** **`requireAdminOrOps`** + org filter | `POST .../communication-scheduled-sends/process-due` |
+| Operational tasks | — | **`requireAdminOrOps`** only (no separate task permission key yet) | `GET/POST .../operational-tasks`, `PATCH .../[id]` |
+
+Full cross-agent matrix: **`docs/product/ai-system.md`**.
+
 ---
 
 ## Card 0 — locked decisions (2026-05-21)
