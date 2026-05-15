@@ -24,6 +24,7 @@ public,cleaning_service_types,BASE TABLE,true,false,true
 public,communication_message_reads,BASE TABLE,true,false,true
 public,communication_messages,BASE TABLE,true,false,true
 public,communication_provider_bindings,BASE TABLE,true,false,true
+public,communication_scheduled_sends,BASE TABLE,true,false,true
 public,communication_threads,BASE TABLE,true,false,true
 public,contact_tags,BASE TABLE,true,false,true
 public,contacts,BASE TABLE,true,false,true
@@ -81,6 +82,7 @@ public,opportunity_persons,BASE TABLE,true,false,true
 public,opportunity_tags,BASE TABLE,true,false,true
 public,option_set_items,BASE TABLE,true,false,true
 public,option_sets,BASE TABLE,true,false,true
+public,operational_tasks,BASE TABLE,true,false,true
 public,org_settings,BASE TABLE,true,false,true
 public,orgs,BASE TABLE,true,false,false
 public,payment_allocations,BASE TABLE,true,false,true
@@ -124,6 +126,7 @@ public,sqft_bands,BASE TABLE,true,false,true
 public,status_definitions,BASE TABLE,true,true,true
 public,status_transition_rules,BASE TABLE,true,false,true
 public,tags,BASE TABLE,true,false,true
+public,task_assist_proposals,BASE TABLE,true,false,true
 public,user_access_profiles,BASE TABLE,true,false,true
 public,user_department_access,BASE TABLE,true,false,true
 public,user_profiles,BASE TABLE,true,false,true

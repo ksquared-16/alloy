@@ -1,9 +1,10 @@
+import { parseOptionalExpiresAtIso } from "@/lib/agent/taskAssist/taskAssistProposalPayload";
 import {
     isTaskAssistV1Uuid,
     validateTaskAssistV1ParsedJsonNoForbiddenWorkflowKeys,
 } from "@/lib/agent/taskAssist/taskAssistSuggestionValidators";
 
-const ALLOWED_BODY_KEYS = new Set(["entity_type", "entity_id", "channel", "instruction", "goal"]);
+const ALLOWED_BODY_KEYS = new Set(["entity_type", "entity_id", "channel", "instruction", "goal", "persist", "expires_at"]);
 
 const MAX_INSTRUCTION_LEN = 8000;
 
@@ -16,6 +17,9 @@ export type ParsedTaskAssistProposeRequestV1 = {
     entity_id: string;
     channel: "sms" | "email";
     instruction: string;
+    /** When true, server may insert `task_assist_proposals` after a valid proposal (opt-in; default ephemeral). */
+    persist: boolean;
+    expiresAt: string | null;
 };
 
 export function parseTaskAssistProposeRequest(
@@ -82,6 +86,29 @@ export function parseTaskAssistProposeRequest(
     }
     const instruction = insRaw.length > MAX_INSTRUCTION_LEN ? insRaw.slice(0, MAX_INSTRUCTION_LEN) : insRaw;
 
+    const persist = body.persist === true;
+    const hasExpiresRaw =
+        body.expires_at != null &&
+        body.expires_at !== "" &&
+        !(typeof body.expires_at === "string" && body.expires_at.trim() === "");
+    if (hasExpiresRaw && !persist) {
+        return {
+            ok: false,
+            error: "EXPIRES_AT_REQUIRES_PERSIST",
+            status: 400,
+            message: "expires_at is only allowed when persist is true.",
+        };
+    }
+
+    let expiresAt: string | null = null;
+    if (persist) {
+        const ex = parseOptionalExpiresAtIso(body.expires_at);
+        if (!ex.ok) {
+            return { ok: false, error: "EXPIRES_AT_INVALID", status: 400, message: ex.message };
+        }
+        expiresAt = ex.expiresAt;
+    }
+
     return {
         ok: true,
         value: {
@@ -89,6 +116,8 @@ export function parseTaskAssistProposeRequest(
             entity_id: entityId,
             channel: channelRaw,
             instruction,
+            persist,
+            expiresAt,
         },
     };
 }

@@ -11,8 +11,17 @@ describe("TaskAssistV1OpportunityPanel source contract (V1 UI safety)", () => {
         expect(src).toContain("disabled={!eligible}");
         expect(src).toContain("onChannelChange");
         expect(src).toMatch(/setProposal\(null\)/);
-        expect(src).not.toMatch(/schedule/i);
-        expect(src.toLowerCase()).not.toContain("reminder");
+    });
+
+    it("does not introduce workflow vocabulary", () => {
+        const src = readFileSync(panelPath, "utf8");
         expect(src.toLowerCase()).not.toContain("workflow");
+    });
+
+    it("gates V1.1-only UI with isTaskAssistV1UiEnabled", () => {
+        const src = readFileSync(panelPath, "utf8");
+        expect(src).toContain("isTaskAssistV1UiEnabled");
+        expect(src).toContain("data-task-assist-v11");
+        expect(src).toContain("data-task-assist-save-draft");
     });
 });

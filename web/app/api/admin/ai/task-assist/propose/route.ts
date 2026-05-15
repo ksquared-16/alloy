@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { buildDeterministicTaskAssistSuggestionV1 } from "@/lib/agent/taskAssist/taskAssistDeterministicProposal";
 import { assembleTaskAssistOpportunityContextV1 } from "@/lib/agent/taskAssist/taskAssistOpportunityContext";
+import { createTaskAssistProposal } from "@/lib/agent/taskAssist/taskAssistProposalPersistence";
 import { parseTaskAssistProposeRequest } from "@/lib/agent/taskAssist/taskAssistProposeRouteValidation";
 import { validateTaskAssistSuggestionV1ForPropose } from "@/lib/agent/taskAssist/taskAssistSuggestionValidators";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
@@ -22,9 +23,9 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
  * org `metadata.ai_policy` must allow feature **`task_assist_draft`** with provider **stub** or **openai**.
  * Stub path also requires `AI_ENRICHMENT_STUB_ENABLED=true`. OpenAI policy branch does **not** call OpenAI here.
  *
- * **Body:** `{ entity_type: "opportunities", entity_id, channel: "sms"|"email", instruction?: string, goal?: string }`
+ * **Body:** `{ entity_type: "opportunities", entity_id, channel: "sms"|"email", instruction?: string, goal?: string, persist?: boolean, expires_at?: string|null }`
  *
- * Read-only: no DB writes, no send, no workflows.
+ * Read-only by default: no DB writes, no send, no workflows. With **`persist: true`** (explicit opt-in), inserts `task_assist_proposals` when the proposal validates (still no send).
  */
 export async function POST(request: NextRequest) {
     const ctx = await getAdminContextCached();
@@ -57,7 +58,7 @@ export async function POST(request: NextRequest) {
             { status: parsed.status }
         );
     }
-    const { entity_id: entityId, channel, instruction } = parsed.value;
+    const { entity_id: entityId, channel, instruction, persist, expiresAt } = parsed.value;
 
     const supabase = createAdminClient();
     const { data: orgSettings, error: orgErr } = await supabase
@@ -152,6 +153,42 @@ export async function POST(request: NextRequest) {
         ...proposal,
         validation_errors: [...validation_codes],
     };
+
+    if (persist) {
+        if (validation_codes.length > 0) {
+            return NextResponse.json(
+                {
+                    ok: false,
+                    error: "PERSIST_REQUIRES_VALID_PROPOSAL",
+                    message: "persist: true requires a proposal with no validation errors.",
+                    proposal: proposalOut,
+                    proposal_validation_codes: validation_codes,
+                    proposal_valid: false,
+                },
+                { status: 422 }
+            );
+        }
+        const persisted = await createTaskAssistProposal({
+            supabase,
+            orgId: ctx.orgId,
+            userId,
+            suggestion: proposalOut,
+            expiresAt,
+        });
+        if (!persisted.ok) {
+            return NextResponse.json(
+                { ok: false, error: persisted.error, message: persisted.message, proposal: proposalOut, proposal_valid: true },
+                { status: 400 }
+            );
+        }
+        return NextResponse.json({
+            ok: true,
+            proposal: proposalOut,
+            proposal_validation_codes: validation_codes,
+            proposal_valid: true,
+            persisted_proposal: persisted.row,
+        });
+    }
 
     return NextResponse.json({
         ok: true,

@@ -1577,3 +1577,4 @@ begin
 end;
 $function$
 "
+public,claim_due_communication_scheduled_sends,function,plpgsql,VOLATILE,false,"p_limit integer, p_now timestamptz, p_org_id uuid",SETOF public.communication_scheduled_sends,"Canonical DDL and grants: supabase/migrations/20260522140000_claim_due_communication_scheduled_sends.sql — atomically claims due communication_scheduled_sends rows (pending, scheduled_for <= p_now, communication_message_id IS NULL) using FOR UPDATE SKIP LOCKED; REVOKE ALL FROM PUBLIC; GRANT EXECUTE TO service_role only."

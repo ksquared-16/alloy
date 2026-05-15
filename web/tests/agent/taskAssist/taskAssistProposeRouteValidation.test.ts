@@ -74,4 +74,44 @@ describe("parseTaskAssistProposeRequest", () => {
         expect(r.ok).toBe(false);
         if (!r.ok) expect(r.error).toBe("UNKNOWN_BODY_KEYS");
     });
+
+    it("accepts persist: true with optional expires_at", () => {
+        const r = parseTaskAssistProposeRequest({
+            entity_type: "opportunities",
+            entity_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            channel: "sms",
+            instruction: "x",
+            persist: true,
+            expires_at: "2027-01-01T00:00:00.000Z",
+        });
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.value.persist).toBe(true);
+            expect(r.value.expiresAt).toBe("2027-01-01T00:00:00.000Z");
+        }
+    });
+
+    it("rejects expires_at without persist", () => {
+        const r = parseTaskAssistProposeRequest({
+            entity_type: "opportunities",
+            entity_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            channel: "sms",
+            instruction: "x",
+            expires_at: "2027-01-01T00:00:00.000Z",
+        });
+        expect(r.ok).toBe(false);
+        if (!r.ok) expect(r.error).toBe("EXPIRES_AT_REQUIRES_PERSIST");
+    });
+
+    it("treats persist: false as non-persisting", () => {
+        const r = parseTaskAssistProposeRequest({
+            entity_type: "opportunities",
+            entity_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+            channel: "sms",
+            instruction: "x",
+            persist: false,
+        });
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.value.persist).toBe(false);
+    });
 });

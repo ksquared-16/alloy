@@ -9,10 +9,11 @@ const orgId = "22222222-2222-2222-2222-222222222222";
 const userId = "33333333-3333-3333-3333-333333333333";
 const oppId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 
-const { mockGetAdminContextCached, mockGetAdminAccessContextCached, mockMaybeSingle } = vi.hoisted(() => ({
+const { mockGetAdminContextCached, mockGetAdminAccessContextCached, mockMaybeSingle, mockCreateTaskAssistProposal } = vi.hoisted(() => ({
     mockGetAdminContextCached: vi.fn(),
     mockGetAdminAccessContextCached: vi.fn(),
     mockMaybeSingle: vi.fn(),
+    mockCreateTaskAssistProposal: vi.fn(),
 }));
 
 vi.mock("@/lib/admin/getAdminContext", async () => {
@@ -32,6 +33,10 @@ vi.mock("@/lib/admin/getAdminAccessContext", async () => {
         getAdminAccessContextCached: mockGetAdminAccessContextCached,
     };
 });
+
+vi.mock("@/lib/agent/taskAssist/taskAssistProposalPersistence", () => ({
+    createTaskAssistProposal: (...args: unknown[]) => mockCreateTaskAssistProposal(...args),
+}));
 
 vi.mock("@/lib/supabaseAdmin", () => ({
     createAdminClient: vi.fn(() => ({
@@ -97,6 +102,7 @@ function postJson(body: unknown) {
 describe("POST /api/admin/ai/task-assist/propose", () => {
     beforeEach(() => {
         vi.unstubAllEnvs();
+        mockCreateTaskAssistProposal.mockReset();
         mockGetAdminContextCached.mockResolvedValue({
             ok: true,
             orgId,
@@ -251,5 +257,48 @@ describe("POST /api/admin/ai/task-assist/propose", () => {
         expect(j.proposal_valid).toBe(true);
         expect(j.proposal?.draft_body).toContain("tour time");
         expect(j.proposal?.validation_errors?.length).toBe(0);
+        expect(mockCreateTaskAssistProposal).not.toHaveBeenCalled();
+    });
+
+    it("does not persist by default when persist is omitted", async () => {
+        vi.stubEnv("AI_ENRICHMENT_USE_PERMISSION_REQUIRED", "true");
+        vi.stubEnv("AI_ENRICHMENT_STUB_ENABLED", "true");
+        await POST(
+            postJson({
+                entity_type: "opportunities",
+                entity_id: oppId,
+                channel: "sms",
+                instruction: "Hi",
+            }),
+        );
+        expect(mockCreateTaskAssistProposal).not.toHaveBeenCalled();
+    });
+
+    it("with persist: true inserts proposal and returns persisted_proposal", async () => {
+        vi.stubEnv("AI_ENRICHMENT_USE_PERMISSION_REQUIRED", "true");
+        vi.stubEnv("AI_ENRICHMENT_STUB_ENABLED", "true");
+        const persistedId = "55555555-5555-4555-8555-555555555555";
+        mockCreateTaskAssistProposal.mockResolvedValue({
+            ok: true,
+            row: { id: persistedId, status: "draft" } as never,
+        });
+        const res = await POST(
+            postJson({
+                entity_type: "opportunities",
+                entity_id: oppId,
+                channel: "sms",
+                instruction: "Please confirm tour time.",
+                persist: true,
+            }),
+        );
+        expect(res.status).toBe(200);
+        const j = (await res.json()) as { ok?: boolean; persisted_proposal?: { id: string }; proposal_valid?: boolean };
+        expect(j.ok).toBe(true);
+        expect(j.proposal_valid).toBe(true);
+        expect(j.persisted_proposal?.id).toBe(persistedId);
+        expect(mockCreateTaskAssistProposal).toHaveBeenCalledOnce();
+        const call = mockCreateTaskAssistProposal.mock.calls[0][0] as { expiresAt?: unknown; orgId?: string };
+        expect(call.orgId).toBe(orgId);
+        expect(call.expiresAt).toBeNull();
     });
 });

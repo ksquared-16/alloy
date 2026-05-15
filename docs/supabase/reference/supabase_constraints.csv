@@ -111,6 +111,25 @@ public,communication_threads_identity_uq,UNIQUE,public,communication_threads,"UN
 public,communication_threads_location_id_fkey,FOREIGN KEY,public,communication_threads,FOREIGN KEY (location_id) REFERENCES locations(id) ON DELETE SET NULL,false,false
 public,communication_threads_org_id_fkey,FOREIGN KEY,public,communication_threads,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
 public,communication_threads_pkey,PRIMARY KEY,public,communication_threads,PRIMARY KEY (id),false,false
+public,task_assist_proposals_agent_key_check,CHECK,public,task_assist_proposals,"CHECK (agent_key = 'task_assist'::text)",false,false
+public,task_assist_proposals_entity_id_fkey,FOREIGN KEY,public,task_assist_proposals,FOREIGN KEY (entity_id) REFERENCES opportunities(id) ON DELETE CASCADE,false,false
+public,task_assist_proposals_entity_type_check,CHECK,public,task_assist_proposals,"CHECK (entity_type = 'opportunities'::text)",false,false
+public,task_assist_proposals_org_id_fkey,FOREIGN KEY,public,task_assist_proposals,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,task_assist_proposals_pkey,PRIMARY KEY,public,task_assist_proposals,PRIMARY KEY (id),false,false
+public,task_assist_proposals_proposal_type_check,CHECK,public,task_assist_proposals,"CHECK (proposal_type = ANY (ARRAY['draft_sms'::text, 'draft_email'::text, 'schedule_send'::text, 'reminder'::text]))",false,false
+public,task_assist_proposals_status_check,CHECK,public,task_assist_proposals,"CHECK (status = ANY (ARRAY['draft'::text, 'approved'::text, 'rejected'::text, 'expired'::text, 'applied'::text]))",false,false
+public,communication_scheduled_sends_channel_check,CHECK,public,communication_scheduled_sends,"CHECK (channel = ANY (ARRAY['sms'::text, 'email'::text]))",false,false
+public,communication_scheduled_sends_communication_message_id_fkey,FOREIGN KEY,public,communication_scheduled_sends,FOREIGN KEY (communication_message_id) REFERENCES communication_messages(id) ON DELETE SET NULL,false,false
+public,communication_scheduled_sends_communication_provider_binding_id_fkey,FOREIGN KEY,public,communication_scheduled_sends,FOREIGN KEY (communication_provider_binding_id) REFERENCES communication_provider_bindings(id) ON DELETE SET NULL,false,false
+public,communication_scheduled_sends_entity_id_fkey,FOREIGN KEY,public,communication_scheduled_sends,FOREIGN KEY (entity_id) REFERENCES opportunities(id) ON DELETE CASCADE,false,false
+public,communication_scheduled_sends_entity_type_check,CHECK,public,communication_scheduled_sends,"CHECK (entity_type = 'opportunities'::text)",false,false
+public,communication_scheduled_sends_org_id_fkey,FOREIGN KEY,public,communication_scheduled_sends,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,communication_scheduled_sends_pkey,PRIMARY KEY,public,communication_scheduled_sends,PRIMARY KEY (id),false,false
+public,communication_scheduled_sends_proposal_id_fkey,FOREIGN KEY,public,communication_scheduled_sends,FOREIGN KEY (proposal_id) REFERENCES task_assist_proposals(id) ON DELETE SET NULL,false,false
+public,communication_scheduled_sends_recipient_person_id_fkey,FOREIGN KEY,public,communication_scheduled_sends,FOREIGN KEY (recipient_person_id) REFERENCES persons(id) ON DELETE RESTRICT,false,false
+public,communication_scheduled_sends_source_check,CHECK,public,communication_scheduled_sends,"CHECK (source = 'task_assist'::text)",false,false
+public,communication_scheduled_sends_status_check,CHECK,public,communication_scheduled_sends,"CHECK (status = ANY (ARRAY['pending'::text, 'claimed'::text, 'queued'::text, 'sent'::text, 'canceled'::text, 'failed'::text]))",false,false
+public,communication_scheduled_sends_chk_comm_sched_sends_schedule_after_approval,CHECK,public,communication_scheduled_sends,CHECK (scheduled_for > approved_at),false,false
 public,contact_tags_contact_id_fkey,FOREIGN KEY,public,contact_tags,FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE CASCADE,false,false
 public,contact_tags_pkey,PRIMARY KEY,public,contact_tags,"PRIMARY KEY (contact_id, tag_id)",false,false
 public,contact_tags_tag_id_fkey,FOREIGN KEY,public,contact_tags,FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE,false,false
@@ -359,6 +378,13 @@ public,messages_outbox_org_id_fkey,FOREIGN KEY,public,messages_outbox,FOREIGN KE
 public,messages_outbox_pkey,PRIMARY KEY,public,messages_outbox,PRIMARY KEY (id),false,false
 public,messages_outbox_workflow_id_fkey,FOREIGN KEY,public,messages_outbox,FOREIGN KEY (workflow_id) REFERENCES workflows(id) ON DELETE SET NULL,false,false
 public,messages_outbox_workflow_run_id_fkey,FOREIGN KEY,public,messages_outbox,FOREIGN KEY (workflow_run_id) REFERENCES workflow_runs(id) ON DELETE SET NULL,false,false
+public,operational_tasks_entity_id_fkey,FOREIGN KEY,public,operational_tasks,FOREIGN KEY (entity_id) REFERENCES opportunities(id) ON DELETE CASCADE,false,false
+public,operational_tasks_entity_type_check,CHECK,public,operational_tasks,"CHECK (entity_type = 'opportunities'::text)",false,false
+public,operational_tasks_org_id_fkey,FOREIGN KEY,public,operational_tasks,FOREIGN KEY (org_id) REFERENCES orgs(id) ON DELETE CASCADE,false,false
+public,operational_tasks_pkey,PRIMARY KEY,public,operational_tasks,PRIMARY KEY (id),false,false
+public,operational_tasks_proposal_id_fkey,FOREIGN KEY,public,operational_tasks,FOREIGN KEY (proposal_id) REFERENCES task_assist_proposals(id) ON DELETE SET NULL,false,false
+public,operational_tasks_source_check,CHECK,public,operational_tasks,"CHECK (source = 'task_assist'::text)",false,false
+public,operational_tasks_status_check,CHECK,public,operational_tasks,"CHECK (status = ANY (ARRAY['open'::text, 'completed'::text, 'canceled'::text]))",false,false
 public,opportunities_customer_id_fkey,FOREIGN KEY,public,opportunities,FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE SET NULL,false,false
 public,opportunities_discount_code_id_fkey,FOREIGN KEY,public,opportunities,FOREIGN KEY (discount_code_id) REFERENCES discount_codes(id),false,false
 public,opportunities_discount_program_id_fkey,FOREIGN KEY,public,opportunities,FOREIGN KEY (discount_program_id) REFERENCES discount_programs(id) ON DELETE SET NULL,false,false

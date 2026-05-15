@@ -20,6 +20,7 @@ const TASK_ASSIST_SOURCE_GLOBS = [
         "taskAssistSuggestionValidators.ts",
         "taskAssistV1ClientPayloads.ts",
         "taskAssistV1UiGate.ts",
+        "taskAssistV11OpportunityApi.ts",
         "types.ts",
         "index.ts",
     ].map((f) => join("lib/agent/taskAssist", f)),

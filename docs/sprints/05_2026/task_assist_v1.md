@@ -1,7 +1,7 @@
 # Sprint: Task Assist V1 (Agent #2)
 
 **Path:** `docs/sprints/05_2026/task_assist_v1.md`  
-**Status:** **V1 shipped** (Cards 0–7 complete as of 2026-05-14). Ephemeral proposals, **opportunities-only** drawer UI behind **`NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED`**, **`POST /api/admin/ai/task-assist/propose`** + **`POST /api/admin/ai/task-assist/apply`**, canonical send via **`executeCommunicationsSend`** (same stack as **`POST /api/admin/communications/send`**). No migrations for core path.  
+**Status:** **V1 shipped** (Cards 0–7 complete as of 2026-05-14). Ephemeral proposals, **opportunities-only** drawer UI behind **`NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED`**, **`POST /api/admin/ai/task-assist/propose`** + **`POST /api/admin/ai/task-assist/apply`**, canonical send via **`executeCommunicationsSend`** (same stack as **`POST /api/admin/communications/send`**). No migrations for core path. **Durable proposals, scheduled sends, and operational tasks** ship in **`docs/sprints/05_2026/task_assist_v1_1.md`** (Task Assist V1.1).  
 **Prerequisites:** `docs/sprints/05_2026/task_assist_v1_step0_audit.md`, `docs/sprints/05_2026/ai_agents_v1.md` (§6.1 Agent #2 ownership, §8 historical sketch — **canonical contract is §3 below**).
 
 **Sources of truth (behavior):** `docs/product/communications.md` (canonical comms system — there is no `docs/system/communications.md` in-repo; use this file), `docs/system/actions-and-workflows.md`, `docs/execution/operating-doctrine.md`, `web/app/api/admin/communications/send/route.ts`, `web/lib/communications/canonicalOutboundEnqueue.ts`.

@@ -14,7 +14,7 @@ Outbound and inbound messaging threads tied to **entities** (person-first anchor
 
 - **Enqueue (Next):** **`enqueueCanonicalOutboundMessage`** (`web/lib/communications/canonicalOutboundEnqueue.ts`) upserts the thread, inserts **`communication_messages`** with **`status: queued`**, then **`emitEvent`** **`message_queued`** for workflow fan-out.
 - **Admin send:** **`POST /api/admin/communications/send`** validates org + scope and calls **`executeCommunicationsSend`** → canonical enqueue (see route header comment and **`web/lib/communications/executeCommunicationsSend.ts`**).
-- **Task Assist (Agent 2 — V1):** **`POST /api/admin/ai/task-assist/apply`** validates the operator-approved payload, enforces **`assertCommunicationsSendAllowed`**, then calls the **same** **`executeCommunicationsSend`** helper as admin send (no duplicated enqueue logic; **no** Task Assist references to legacy **`public.messages`** / **`messages_outbox`**). **Proposals:** **`POST /api/admin/ai/task-assist/propose`**. **Drawer:** **`TaskAssistV1OpportunityPanel`** in **`AdminEntityDrawer`** when **`NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED`** is **`true`** / **`1`**. Product scope + limitations: **`docs/sprints/05_2026/task_assist_v1.md`**.
+- **Task Assist (Agent 2 — V1 + V1.1):** **`POST /api/admin/ai/task-assist/apply`** validates the operator-approved payload, enforces **`assertCommunicationsSendAllowed`**, then calls the **same** **`executeCommunicationsSend`** helper as admin send (no duplicated enqueue logic; **no** Task Assist references to legacy **`public.messages`** / **`messages_outbox`**). **Proposals:** **`POST /api/admin/ai/task-assist/propose`** (ephemeral draft; optional **`persist: true`**). **V1.1:** durable **`task_assist_proposals`** (**`POST`/`GET /api/admin/ai/task-assist/proposals`**, approve/reject routes), **`communication_scheduled_sends`** (**`GET`/`POST`**, **`PATCH`** cancel **`pending`**, **`POST …/process-due`** with **`INTERNAL_CRON_TOKEN`** for cross-org worker runs — rows become **`communication_messages`** only after **`executeCommunicationsSend`** at fire time). **`operational_tasks`** for reminder-style follow-ups (**`source: task_assist`**). **Drawer:** **`TaskAssistV1OpportunityPanel`** in **`AdminEntityDrawer`** when **`NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED`** is **`true`** / **`1`**. Product scope: **`docs/sprints/05_2026/task_assist_v1.md`**, **`docs/sprints/05_2026/task_assist_v1_1.md`**.
 - **Drawer + modal:** **`AdminEntityDrawer`** communications section / **`CommunicationsDrawerSection`**, plus **Quick Message** modal (`web/app/adminV2/components/QuickMessageModal.tsx`).
 
 **Delivery (dispatcher + cron)**
@@ -78,6 +78,9 @@ Outbound and inbound messaging threads tied to **entities** (person-first anchor
 | Send | `web/app/api/admin/communications/send/route.ts` |
 | **Shared send executor** | **`web/lib/communications/executeCommunicationsSend.ts`** (used by **`POST /api/admin/communications/send`** and **`POST /api/admin/ai/task-assist/apply`**) |
 | Task Assist apply / propose | `web/app/api/admin/ai/task-assist/apply/route.ts`, `web/app/api/admin/ai/task-assist/propose/route.ts` |
+| Task Assist V1.1 proposals | `web/app/api/admin/ai/task-assist/proposals/route.ts`, `web/app/api/admin/ai/task-assist/proposals/[id]/approve/route.ts`, `web/app/api/admin/ai/task-assist/proposals/[id]/reject/route.ts` |
+| Scheduled sends + worker | `web/app/api/admin/communication-scheduled-sends/route.ts`, `web/app/api/admin/communication-scheduled-sends/[id]/route.ts`, `web/app/api/admin/communication-scheduled-sends/process-due/route.ts`, `web/lib/communications/communicationScheduledSendsService.ts` |
+| Operational tasks | `web/app/api/admin/operational-tasks/route.ts`, `web/app/api/admin/operational-tasks/[id]/route.ts` |
 | Canonical enqueue + `message_queued` | `web/lib/communications/canonicalOutboundEnqueue.ts` |
 | Worker dequeue | `backend/app/routes/messages_sender.py`, `backend/app/services/communication_message_sender.py` |
 | Twilio / Resend webhooks | `web/app/api/webhooks/twilio/sms-status/route.ts`, `web/app/api/webhooks/resend/route.ts` |
@@ -107,4 +110,4 @@ Outbound and inbound messaging threads tied to **entities** (person-first anchor
 
 ## When this doc must be updated
 
-Channels, enqueue model, provider bindings, dual-write flags, worker contracts, webhook behavior change, **or enrollment packet email semantics** (queued/sent/delivered distinctions, Resend expectations).
+Channels, enqueue model, provider bindings, dual-write flags, worker contracts, webhook behavior change, **enrollment packet email semantics** (queued/sent/delivered distinctions, Resend expectations), **or Task Assist V1.1 scheduled-send / process-due contracts**.

@@ -6,4 +6,7 @@ export * from "@/lib/agent/taskAssist/taskAssistProposeRouteValidation";
 export * from "@/lib/agent/taskAssist/taskAssistApplyRouteValidation";
 export * from "@/lib/agent/taskAssist/taskAssistApplyMerge";
 export * from "@/lib/agent/taskAssist/taskAssistV1UiGate";
+export * from "@/lib/agent/taskAssist/taskAssistProposalPayload";
+export * from "@/lib/agent/taskAssist/taskAssistProposalPersistence";
 export * from "@/lib/agent/taskAssist/taskAssistV1ClientPayloads";
+export * from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";

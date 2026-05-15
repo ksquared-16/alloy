@@ -1,7 +1,11 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import TaskAssistV1OpportunityPanel, { computeTaskAssistSendDisabled } from "@/components/admin/taskAssist/TaskAssistV1OpportunityPanel";
+import TaskAssistV1OpportunityPanel, {
+    computeReminderSubmitDisabled,
+    computeScheduleSendDisabled,
+    computeTaskAssistSendDisabled,
+} from "@/components/admin/taskAssist/TaskAssistV1OpportunityPanel";
 import type { TaskAssistSuggestionV1 } from "@/lib/agent/taskAssist/types";
 import { TASK_ASSIST_AGENT_KEY } from "@/lib/agent/taskAssist/types";
 
@@ -87,17 +91,76 @@ describe("computeTaskAssistSendDisabled", () => {
     });
 });
 
+describe("computeScheduleSendDisabled", () => {
+    const base = {
+        proposalValid: true,
+        selectedPersonId: PERSON,
+        finalBody: "Hello",
+        finalSubject: "",
+        channel: "sms" as const,
+    };
+
+    it("disables when scheduled time is in the past", () => {
+        expect(
+            computeScheduleSendDisabled({
+                ...base,
+                scheduledForLocal: "2000-01-01T12:00",
+            })
+        ).toBe(true);
+    });
+
+    it("disables when proposal not valid", () => {
+        expect(
+            computeScheduleSendDisabled({
+                ...base,
+                proposalValid: false,
+                scheduledForLocal: "2099-01-01T12:00",
+            })
+        ).toBe(true);
+    });
+
+    it("disables email without subject", () => {
+        expect(
+            computeScheduleSendDisabled({
+                ...base,
+                channel: "email",
+                finalSubject: "   ",
+                scheduledForLocal: "2099-01-01T12:00",
+            })
+        ).toBe(true);
+    });
+});
+
+describe("computeReminderSubmitDisabled", () => {
+    it("requires title and future due", () => {
+        expect(computeReminderSubmitDisabled("", "2099-01-01T10:00")).toBe(true);
+        expect(computeReminderSubmitDisabled("x", "")).toBe(true);
+        expect(computeReminderSubmitDisabled("x", "2000-01-01T10:00")).toBe(true);
+    });
+});
+
 describe("TaskAssistV1OpportunityPanel markup", () => {
+    afterEach(() => {
+        vi.unstubAllEnvs();
+    });
+
     it("does not render send control until a draft exists", () => {
+        vi.stubEnv("NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED", "false");
         const html = renderToStaticMarkup(<TaskAssistV1OpportunityPanel entityId={OPP} active />);
         expect(html).not.toContain("data-task-assist-send");
         expect(html).toContain("Draft with Task Assist");
     });
 
-    it("does not render scheduling or reminder controls", () => {
+    it("with V1 flag on, renders V1.1 lists section (save draft appears after a draft exists)", () => {
+        vi.stubEnv("NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED", "true");
         const html = renderToStaticMarkup(<TaskAssistV1OpportunityPanel entityId={OPP} active />);
-        expect(html.toLowerCase()).not.toContain("schedule");
-        expect(html.toLowerCase()).not.toContain("reminder");
+        expect(html).toContain("data-task-assist-v11-lists");
+        expect(html).toContain("Saved proposals");
+    });
+
+    it("does not reference workflow in markup", () => {
+        vi.stubEnv("NEXT_PUBLIC_TASK_ASSIST_V1_ENABLED", "true");
+        const html = renderToStaticMarkup(<TaskAssistV1OpportunityPanel entityId={OPP} active />);
         expect(html.toLowerCase()).not.toContain("workflow");
     });
 });
