@@ -11,8 +11,12 @@ import {
 } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
 
 import { extractCommandSurfaceSlots, type CommandSurfaceSlots } from "./commandSurfaceSlotExtract";
+import {
+    parseWorkflowAssistReadIntent,
+    type WorkflowAssistReadIntentV1,
+} from "@/lib/agent/workflowAssist/workflowAssistReadV1";
 
-export type CommandSurfaceRouteKind = "workflow_assist_notice" | "task_assist" | "job_layout" | "clarify";
+export type CommandSurfaceRouteKind = "workflow_assist" | "task_assist" | "job_layout" | "clarify";
 
 export type CommandSurfaceRouteContext = {
     /** True when drawer / launcher set an opportunity on GlobalAssistantContext. */
@@ -24,6 +28,8 @@ export type CommandSurfaceRouteResult = {
     slots: CommandSurfaceSlots;
     taskAssistIntent: TaskAssistCommandIntent | null;
     clarifyMessage: string | null;
+    /** Set when `route === "workflow_assist"` (read-only Workflow Assist). */
+    workflowAssistReadIntent: WorkflowAssistReadIntentV1 | null;
 };
 
 export const WORKFLOW_ASSIST_NOTICE_TEXT =
@@ -57,7 +63,7 @@ function jobLayoutSignals(slots: CommandSurfaceSlots, intent: TaskAssistCommandI
  * Orchestrator: route operator NL to the correct specialist without UI mode tabs.
  *
  * Precedence:
- * 1. workflow-like → workflow_assist_notice (Workflow Assist specialist — notice only today)
+ * 1. workflow-like → workflow_assist (Workflow Assist read-only cards)
  * 2. comms / reminder / schedule → task_assist (Task Assist specialist)
  * 3. job / layout overview → job_layout
  * 4. entity-only or ambient pronoun → task_assist (search / confirm)
@@ -71,11 +77,15 @@ export function routeCommandSurface(
     const taskAssistIntent = parseTaskAssistCommandIntent(input);
 
     if (slots.workflow_like || taskAssistIntent.workflow_blocked) {
+        const workflowAssistReadIntent = parseWorkflowAssistReadIntent(input, {
+            hasAmbientOpportunity: ctx.hasAmbientOpportunity,
+        });
         return {
-            route: "workflow_assist_notice",
+            route: "workflow_assist",
             slots,
             taskAssistIntent,
             clarifyMessage: null,
+            workflowAssistReadIntent,
         };
     }
 
@@ -85,6 +95,7 @@ export function routeCommandSurface(
             slots,
             taskAssistIntent,
             clarifyMessage: null,
+            workflowAssistReadIntent: null,
         };
     }
 
@@ -94,6 +105,7 @@ export function routeCommandSurface(
             slots,
             taskAssistIntent,
             clarifyMessage: null,
+            workflowAssistReadIntent: null,
         };
     }
 
@@ -103,6 +115,7 @@ export function routeCommandSurface(
             slots,
             taskAssistIntent,
             clarifyMessage: null,
+            workflowAssistReadIntent: null,
         };
     }
 
@@ -112,6 +125,7 @@ export function routeCommandSurface(
             slots,
             taskAssistIntent,
             clarifyMessage: null,
+            workflowAssistReadIntent: null,
         };
     }
 
@@ -120,6 +134,7 @@ export function routeCommandSurface(
         slots,
         taskAssistIntent,
         clarifyMessage: CLARIFY_DEFAULT,
+        workflowAssistReadIntent: null,
     };
 }
 

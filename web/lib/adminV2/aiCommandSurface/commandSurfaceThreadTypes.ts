@@ -2,6 +2,11 @@ import type { JobOverviewPlannerSuccess } from "@/lib/agent/planner/jobOverviewP
 import type { TaskAssistCommandBootstrap, TaskAssistCommandIntent } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
 import type { TaskAssistCompactAction } from "@/lib/agent/taskAssist/taskAssistCompactActionCard";
 import type { TaskAssistEntitySearchCandidate } from "@/lib/agent/taskAssist/taskAssistEntitySearchTypes";
+import type {
+    WorkflowAssistErrorEnvelopeV1,
+    WorkflowAssistReadCardPayloadV1,
+    WorkflowAssistReadIntentV1,
+} from "@/lib/agent/workflowAssist/workflowAssistReadV1";
 import type { AIStatusBadge, ResponseKind } from "@/lib/adminV2/aiCommandSurface/aiCommandSurfaceModel";
 
 export type CommandSurfaceThreadTurn =
@@ -68,6 +73,15 @@ export type CommandSurfaceThreadTurn =
       }
     | {
           id: string;
+          kind: "workflow_assist_read";
+          submittedCommand: string;
+          intent: WorkflowAssistReadIntentV1;
+          payload: WorkflowAssistReadCardPayloadV1 | null;
+          error: WorkflowAssistErrorEnvelopeV1 | null;
+          at: string;
+      }
+    | {
+          id: string;
           kind: "error";
           text: string;
           at: string;
@@ -96,4 +110,11 @@ export type CommandSurfaceThreadTurnInput =
           card: Extract<CommandSurfaceThreadTurn, { kind: "action_card" }>["card"];
       }
     | { kind: "workflow_notice" }
+    | {
+          kind: "workflow_assist_read";
+          submittedCommand: string;
+          intent: WorkflowAssistReadIntentV1;
+          payload: WorkflowAssistReadCardPayloadV1 | null;
+          error: WorkflowAssistErrorEnvelopeV1 | null;
+      }
     | { kind: "error"; text: string };

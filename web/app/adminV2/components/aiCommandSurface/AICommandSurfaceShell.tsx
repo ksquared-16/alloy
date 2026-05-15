@@ -23,6 +23,13 @@ import {
   type TaskAssistCommandIntent,
 } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
 import {
+  buildWorkflowAssistReadCardPayload,
+  workflowAssistErrorEnvelope,
+  type WorkflowAssistErrorEnvelopeV1,
+  type WorkflowAssistReadCardPayloadV1,
+  type WorkflowAssistReadIntentV1,
+} from "@/lib/agent/workflowAssist/workflowAssistReadV1";
+import {
   commandSurfaceEntitySearchQuery,
   routeCommandSurface,
 } from "@/lib/adminV2/aiCommandSurface/commandSurfaceRouter";
@@ -74,6 +81,7 @@ function lastThreadPreviewText(turns: CommandSurfaceThreadTurn[]): string | null
     if (turn.kind === "assistant_notice") return turn.text.trim() || null;
     if (turn.kind === "error") return turn.text.trim() || null;
     if (turn.kind === "workflow_notice") return "Workflow assist";
+    if (turn.kind === "workflow_assist_read") return "Workflow assist";
     if (turn.kind === "candidate_results") return turn.candidates[0]?.label?.trim() || null;
     if (turn.kind === "target_confirmed") return turn.candidate.label?.trim() || null;
     if (turn.kind === "action_card") {
@@ -704,6 +712,111 @@ export default function AICommandSurfaceShell() {
     }
   }, []);
 
+  const runWorkflowAssistRoute = useCallback(
+    async (submitted: string, intent: WorkflowAssistReadIntentV1) => {
+      const ambientEntity =
+        globalAssistant?.currentContext?.entity_type === "opportunities" && globalAssistant.currentContext.entity_id ?
+          {
+            entity_type: "opportunities" as const,
+            entity_id: globalAssistant.currentContext.entity_id,
+          }
+        : null;
+
+      const needsSummary = intent.sub_intent !== "explain_placeholder";
+      const needsRuns = intent.sub_intent === "failed_runs_last_7d";
+
+      const appendRead = (args: {
+        payload: WorkflowAssistReadCardPayloadV1 | null;
+        error: WorkflowAssistErrorEnvelopeV1 | null;
+      }) => {
+        setThread((prev) =>
+          appendThreadTurn(prev, {
+            kind: "workflow_assist_read",
+            submittedCommand: submitted,
+            intent,
+            payload: args.payload,
+            error: args.error,
+          })
+        );
+      };
+
+      try {
+        let summaryJson: unknown = { workflows: [] };
+
+        if (needsSummary) {
+          const sRes = await fetch("/api/admin/workflows/summary", {
+            credentials: "include",
+            headers: { Accept: "application/json" },
+          });
+          summaryJson = await sRes.json().catch(() => ({}));
+          if (!sRes.ok) {
+            const msg =
+              typeof (summaryJson as { error?: string }).error === "string" ?
+                (summaryJson as { error: string }).error
+              : `HTTP ${sRes.status}`;
+            appendRead({
+              payload: null,
+              error: workflowAssistErrorEnvelope(
+                sRes.status === 403 ? "forbidden" : "fetch_failed",
+                msg,
+                sRes.status
+              ),
+            });
+            return;
+          }
+        }
+
+        let runs7dJson: unknown | null = null;
+        let kpisJson: unknown | null = null;
+        if (needsRuns) {
+          const [runsRes, kpisRes] = await Promise.all([
+            fetch("/api/admin/workflow-runs?range=7d&limit=100", {
+              credentials: "include",
+              headers: { Accept: "application/json" },
+            }),
+            fetch("/api/admin/workflow-runs?list=kpis", {
+              credentials: "include",
+              headers: { Accept: "application/json" },
+            }),
+          ]);
+          runs7dJson = await runsRes.json().catch(() => ({}));
+          kpisJson = await kpisRes.json().catch(() => ({}));
+          if (!runsRes.ok) {
+            const msg =
+              typeof (runs7dJson as { error?: string }).error === "string" ?
+                (runs7dJson as { error: string }).error
+              : `HTTP ${runsRes.status}`;
+            appendRead({
+              payload: null,
+              error: workflowAssistErrorEnvelope(
+                runsRes.status === 403 ? "forbidden" : "fetch_failed",
+                msg,
+                runsRes.status
+              ),
+            });
+            return;
+          }
+        }
+
+        const built = buildWorkflowAssistReadCardPayload(intent, summaryJson, runs7dJson, kpisJson, ambientEntity);
+        if (!built.ok) {
+          appendRead({ payload: null, error: built.error });
+          return;
+        }
+        appendRead({ payload: built.payload, error: null });
+      } catch (e) {
+        appendRead({
+          payload: null,
+          error: workflowAssistErrorEnvelope(
+            "fetch_failed",
+            e instanceof Error ? e.message : "Workflow Assist request failed."
+          ),
+        });
+      }
+    },
+    [globalAssistant, setThread]
+  );
+
   const handleSubmit = useCallback(async () => {
     const cmd = commandText.trim();
     if (!cmd || busy) return;
@@ -721,9 +834,15 @@ export default function AICommandSurfaceShell() {
 
     try {
       switch (routed.route) {
-        case "workflow_assist_notice":
-          setThread((prev) => appendThreadTurn(prev, { kind: "workflow_notice" }));
+        case "workflow_assist": {
+          const intent = routed.workflowAssistReadIntent;
+          if (!intent) {
+            setThread((prev) => appendThreadTurn(prev, { kind: "workflow_notice" }));
+            break;
+          }
+          await runWorkflowAssistRoute(cmd, intent);
           break;
+        }
         case "clarify":
           setThread((prev) =>
             appendThreadTurn(prev, {
@@ -743,7 +862,7 @@ export default function AICommandSurfaceShell() {
       setBusy(false);
       queueMicrotask(() => inputRef.current?.focus());
     }
-  }, [busy, commandText, globalAssistant, runJobLayoutRoute, runTaskAssistRoute]);
+  }, [busy, commandText, globalAssistant, runJobLayoutRoute, runTaskAssistRoute, runWorkflowAssistRoute]);
 
   const applyJobLayoutCard = useCallback(
     async (turnId: string) => {

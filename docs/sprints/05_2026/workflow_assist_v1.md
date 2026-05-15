@@ -1,0 +1,250 @@
+# Sprint: Workflow Assist V1 (Agent #3)
+
+**Path:** `docs/sprints/05_2026/workflow_assist_v1.md`  
+**Status:** **Design lock / audit (Card 0)** — no implementation in this pass.  
+**Prerequisites:** `docs/sprints/05_2026/agent_interaction_layer_v1.md` (Orchestrator + thread + action cards), `docs/sprints/05_2026/task_assist_v1_1.md` (Task Assist patterns), `docs/sprints/05_2026/ai_agents_v1.md` §9 (`WorkflowAssistSuggestionV1` template), `docs/product/ai-system.md`, `docs/system/actions-and-workflows.md`.
+
+**Non-goals for this document:** Task Assist transactional scope; new workflow execution engine; autonomous `executeWorkflowRun` from NL; childcare-only automation rules in platform code.
+
+---
+
+## Card 0 — Locked doctrine (2026-05-15)
+
+| Decision | Locked choice |
+|----------|----------------|
+| **Agent role** | Workflow Assist is a **proposal / explanation / oversight** layer over **existing** workflow config and run history — not a replacement engine and not a super-admin bypass. |
+| **Mutations** | **No** direct writes from model output. **Apply** uses the same server paths as human admins (`POST`/`PATCH`/`DELETE` on workflow family routes, or future DEFINER proposal+audit if adopted) **after** explicit human approval and re-validation. |
+| **Execution** | **`executeWorkflowRun`** remains the **only** runtime executor for workflow side effects; Assist may **propose** manual test runs only through existing **`POST /api/admin/workflows/[id]/run`** semantics (already `requireAdminOrOps`) — **not** “headless loop from AI.” |
+| **Orchestrator** | Continues to **route** and **never** apply workflow mutations; specialist owns action cards and API calls. |
+| **Determinism** | V1 favors **deterministic** intent classification + template/catalog mapping; optional gated LLM for **draft text only**, behind org policy (pattern: Task Assist / enrichment gates in `docs/product/ai-system.md`). |
+| **Vertical neutrality** | Example intents (“enrollment”, “tours”) are **documentation examples**; catalog keys and templates stay **industry-agnostic** unless expressed as org-local config or seeds. |
+
+---
+
+## 1. Current-state audit
+
+### 1.1 What already exists
+
+| Area | Evidence | Notes |
+|------|-----------|--------|
+| **Event spine** | `web/lib/emitEvent.ts` → `workflow_events` | Canonical insert; callers fan out to workflow matching (`docs/system/actions-and-workflows.md`). |
+| **Workflow runner** | `web/lib/workflowRun.ts` | Large implementation: loads workflows, enriches payload, evaluates conditions, executes `workflow_actions`, logs, integrations (comms mirror, action links, etc.). |
+| **Status → events** | `web/lib/admin/emitStatusChangedEvent.ts` | `opportunity_status_changed` / `entity_status_changed` + `executeWorkflowRun` with `event_id`. |
+| **Admin actions** | `web/lib/admin/actions/executeAdminAction.ts` | Workflow starts emit events + runs where applicable. |
+| **Schema** | `docs/supabase/reference/supabase_schema_columns.csv` | Tables include `workflows`, `workflow_actions`, `workflow_conditions`, `workflow_events`, `workflow_runs`, `workflow_run_events`, `workflow_action_runs`, links from `communication_messages.workflow_run_id`, `action_definitions.workflow_id`. |
+| **Admin APIs** | `web/app/api/admin/workflows/**` | List/create (`GET`/`POST` `.../workflows`), single workflow `GET`/`PATCH`/`DELETE`, nested `actions`, `conditions`, `field-catalog`, **`summary`** (KPI-style aggregates + last run), **`[id]/run`** (manual run with `event_payload`). |
+| **Auth split** | `workflows/route.ts`, `[id]/route.ts`, `[id]/run/route.ts` | **Needs verification:** `GET` list uses `getAdminContextCached` only (comment says admin+ops); **create/update/delete** use **`requireAdmin`**; **manual run** uses **`requireAdminOrOps`**. Align product copy and Workflow Assist gates with this split intentionally. |
+| **AdminV2 UI** | `web/app/adminV2/workflows/page.tsx` | “Understand what automations are running” — KPIs, workflow list, run history, run detail, **no visual canvas** (subtitle in UI). |
+| **Settings links** | `web/app/adminV2/settings/page.tsx` | “Automations” → `/adminV2/workflows`; separate **Actions** registry page (`/adminV2/settings/actions`). |
+| **Orchestrator routing** | `web/lib/adminV2/aiCommandSurface/commandSurfaceRouter.ts` | Route **`workflow_assist_notice`** when `slots.workflow_like` or Task Assist **`workflow_blocked`**; static copy: Workflow Assist “coming next.” |
+| **Slot detection** | `web/lib/adminV2/aiCommandSurface/commandSurfaceSlotExtract.ts` | `WORKFLOW_RE` — keywords: `workflow`, `automatically`, `when … happens/completes`, `trigger`, `rules`. |
+| **Task Assist guard** | `web/lib/agent/taskAssist/taskAssistCommandIntent.ts` | Duplicate `WORKFLOW_RE`; sets **`workflow_blocked`** so Task Assist does not absorb automation language. |
+| **Audits** | `docs/audits/workflow-execution-consistency-audit.md`, `docs/audits/event-integrity-audit.md` | Intended vs exceptional paths (e.g. manual run without `event_id`). |
+| **Agent config pattern** | `docs/product/ai-system.md` §SECURITY DEFINER RPCs | `agent_v0/v1/v2` proposal + apply audit + stale checks for **queue_definition**, record overview layout, field visibility — **template** for durable AI-mediated config (workflows are **not** yet on this pattern). |
+| **AI policy / RBAC** | `org_settings.metadata.ai_policy`, `ai.enrichment.use`, `docs/system/roles-and-permissions.md` | Task Assist draft gated by policy + permissions; workflow CRUD today is **`requireAdmin`**. |
+
+### 1.2 What is reusable
+
+- **Orchestrator:** `routeCommandSurface` precedence slot → replace **`workflow_assist_notice`** with **`workflow_assist`** route kind when specialist exists; reuse thread + action-card shell from Interaction Layer V1.
+- **Proposal shape:** `WorkflowAssistSuggestionV1` from `ai_agents_v1.md` §9.1 — align TypeScript types when implementing.
+- **Validation:** Reuse admin workflow API contracts (`POST` body shape, `workflow_actions` / `workflow_conditions` payloads) as the **only** structured target for drafts.
+- **Read-only diagnostics:** `GET /api/admin/workflows/summary`, workflow detail + runs APIs and UI data loaders — **no synthetic run ids**.
+- **Permission machinery:** `getAdminContextCached`, `requireAdmin`, `requireAdminOrOps`, future **`permission_key`** (e.g. `ai.workflow.draft.generate` per `docs/product/ai-system.md` matrix stub).
+- **Org policy:** Extend **`metadata.ai_policy.allowed_features`** with a workflow-assist feature flag (name TBD) following Task Assist / enrichment pattern.
+
+### 1.3 What should not be rebuilt
+
+- **Event insertion** — always `emitEvent` where canonical.
+- **Workflow execution semantics** — do not fork `executeWorkflowRun` for Assist.
+- **Parallel “workflow DSL” or second runner** — `proposed_workflow` stays JSON mirroring DB/API shapes (`ai_agents_v1.md` §9.4).
+- **Separate command bar or drawer-only AI** for the same intents — use Orchestrator thread + cards (`agent_interaction_layer_v1.md`).
+
+### 1.4 Gaps
+
+| Gap | Severity | Detail |
+|-----|----------|--------|
+| **No Workflow Assist APIs** | Expected | Orchestrator notice only; no `propose`/`apply`/`explain` routes. |
+| **No durable workflow proposals** | Medium | Unlike agent v0/v1/v2, workflows have **no** proposal/apply_audit DEFINER pair — direct Supabase from admin routes today. |
+| **NL → intent beyond regex** | Low–Med | `WORKFLOW_RE` is coarse; may false-positive/false-negative; no structured `normalized_key` pipeline in code yet. |
+| **Explain “why didn’t X move?”** | High product gap | Requires **correlation** across entity state, `workflow_events`, matching workflows, conditions, and run logs — **partially** available via DB + APIs; **no** single “explain” endpoint today. |
+| **Pause all enrollment workflows** | Not implemented | Only per-workflow **`enabled`** flag via `PATCH`; no bulk/pause-by-tag API **Needs verification** in codebase for bulk ops. |
+| **Canvas / visual editor** | Out of V1 | UI explicitly says no canvas — Assist should not depend on one. |
+| **Department/site scoped workflows** | **Needs verification** | `workflows.org_id` exists; whether workflows are further scoped by department/site in RLS or payload — confirm before designing scoped “pause in my site.” |
+
+---
+
+## 2. Product boundaries
+
+| Layer | Responsibilities | Does **not** |
+|-------|------------------|--------------|
+| **Orchestrator** | NL/slots, thread UX, entity context, **routing** to specialists, clarification/candidates | Execute sends, schedules, tasks, or workflow writes |
+| **Task Assist** | One-off comms, scheduled sends, operational tasks; **`TaskAssistSuggestionV1`**; approval before apply | Workflow graph authoring; condition/action editing |
+| **Workflow Assist** | Draft/explain/maintain **workflow configuration**; oversight summaries; **structured proposals**; human approval before persistence | Primary owner of transactional comms; autonomous execution loops |
+| **Workflow engine** (`executeWorkflowRun`, `emitEvent`, DB definitions) | **Authoritative** automation: match events, evaluate conditions, run actions, record runs | Interpret natural language; store AI drafts as truth |
+
+---
+
+## 3. Workflow Assist V1 scope
+
+### 3.1 In scope (recommended V1 — tighten in Card 1 if needed)
+
+1. **Orchestrator integration:** Route workflow-like NL to Workflow Assist **action cards** (replace static notice) with deterministic **first** implementation.
+2. **Read-heavy modes:** “List failed runs this week”, “show workflow summary for org” — powered by existing **`/api/admin/workflows/summary`** + run list queries used by AdminV2 workflows page **Needs verification** exact client fetch paths.
+3. **Proposal mode (constrained):** Small **catalog** of `intent.normalized_key` → template `proposed_workflow` (empty or stub conditions/actions where allowed) + operator **Review** → **Apply** calls existing **`POST /api/admin/workflows`** + actions/conditions routes **or** a staged multi-step apply — **design choice in Card 1**.
+4. **Explain v0 (deterministic):** For a given **workflow_id** + optional **entity** context, return **structured** “evaluation steps” from **known fields** (enabled flag, event/entity match, last run status) — **not** LLM hallucination of history.
+5. **Permissions:** Align with **`requireAdmin`** for any mutation path; optional read for **`requireAdminOrOps`** where consistent with `GET` workflows list; add org **`ai_policy`** feature for **draft generation** only.
+
+### 3.2 Out of scope (V1)
+
+- Visual workflow canvas editor.
+- Auto-enable / auto-deploy workflows without human accept.
+- LLM-only “figure out the whole graph” without template/catalog guardrails.
+- Cross-org workflow templates **productized** (internal seeds OK).
+- Replacing **`executeAdminAction`** or PATCH routes with Assist-only side doors.
+
+### 3.3 Explicit non-goals
+
+- Generic chatbot inside Automations settings.
+- **Super-admin** cross-tenant workflow management.
+- Headless **`executeWorkflowRun`** triggered by Assist without operator intent on a **named** test path.
+- Childcare-specific condition keys in shared catalog (use org config / metadata where industry-specific).
+
+---
+
+## 4. Proposed architecture
+
+### 4.1 Routing model
+
+1. **Orchestrator** `routeCommandSurface`: extend `CommandSurfaceRouteKind` with **`workflow_assist`** (or repurpose `workflow_assist_notice` into full route).
+2. **Precedence:** Keep workflow-like **before** Task Assist (already true).
+3. **Sub-intent:** Deterministic classifier → `{ kind: "oversight" | "draft" | "explain" | "clarify" }` with small keyword maps + optional future LLM **classify-only** (structured JSON) behind policy.
+
+### 4.2 Proposal / draft model
+
+- **Ephemeral first (Card A):** Server returns `WorkflowAssistSuggestionV1`; UI holds draft; Apply POSTs full validated body — **lowest migration cost** (mirrors early Task Assist V1).
+- **Durable later (Card B):** New `workflow_assist_proposals` + `workflow_assist_apply_audit` mirroring agent v1/v2 **if** compliance requires retained drafts — **not required for narrow V1**.
+
+### 4.3 Approval / apply model
+
+1. Card shows **diff** vs empty or vs selected workflow version (**Needs verification** if version column exists on `workflows` — CSV shows `created_at`/`updated_at` only).
+2. Operator **Approve** → server **`requireAdmin`** + org match + payload validation identical to human POST.
+3. **No** client-side trust of proposal JSON.
+
+### 4.4 Explain / debug model
+
+- **Inputs:** `workflow_id`, optional `entity_type`/`entity_id`, optional `run_id`.
+- **Outputs:** Structured checklist: event match, enabled, condition results **if** evaluator can run read-only with synthetic payload (**Needs verification** — may require explicit “replay” API with guardrails).
+- **Sources:** `workflow_runs`, `workflow_action_runs`, `workflow_events` (read paths only).
+
+### 4.5 Audit / logging model
+
+- **Apply:** Prefer same pattern as other AI config: correlation id + actor + result in dedicated audit table or extend existing agent audit namespace — **decision gate Card 1**.
+- **Telemetry:** Optional `ai_enrichment_usage_v1`-style events or minimized `workflow_events` **only** with non-PII payload contract — follow `docs/product/ai-system.md` guardrails.
+
+### 4.6 Permission model (summary — see §6)
+
+- **Draft generate (LLM or stub):** `ai_policy` + recommended `ai.workflow.draft.generate` (not seeded yet per `ai-system.md`).
+- **Read runs / explain:** `requireAdminOrOps` **if** aligned with existing workflow list/run endpoints.
+- **Create/update/delete/enable:** **`requireAdmin`** (or future `workflows.manage`).
+
+---
+
+## 5. UX model
+
+All inside **Orchestrator thread** (`CommandSurfaceThread` + action cards) — no disconnected page-only AI.
+
+| Card type | Purpose | Primary actions |
+|-----------|---------|-------------------|
+| **Workflow proposal** | Shows proposed name, trigger (`event_type` + `entity_type`), high-level steps count | **Edit in settings (deep link)** / **Apply draft** (admin-gated) |
+| **Workflow diff** | Before/after JSON or field list for PATCH | **Approve** / **Cancel** |
+| **Approval** | Confirms org + impact (“will create workflow X”) | **Confirm** |
+| **Debug / explanation** | Checklist: why run skipped/failed, which condition failed | **Copy summary** / **Open run in Automations** (`/adminV2/workflows?run=…`) |
+| **Failure / oversight** | Aggregates failed runs (7d), noisy workflows | **Mute** (**Not implemented** — only per-workflow disable today) / **Open workflow** |
+
+**Deep link:** Reuse AdminV2 workflows page highlight param **`?run=`** where present (`page.tsx` uses `highlightRunId`).
+
+---
+
+## 6. Permission model (detailed)
+
+| Action | Recommended gate | Scope notes |
+|--------|------------------|-------------|
+| Ask **oversight** questions (counts, last failures) | `requireAdminOrOps` + org | Read-only; align with `GET …/summary`. |
+| **Explain** workflow behavior (static + run-linked facts) | Same as read | Do not expose cross-org global workflows in tenant UI. |
+| **Draft** new workflow (AI-assisted JSON) | `ai_policy` + **`ai.workflow.draft.generate`** (recommended) + portal | Generation ≠ apply. |
+| **Approve / apply** workflow create/edit | **`requireAdmin`** (today) | Ops must not silently ship automation unless product explicitly grants — **current code: PATCH/POST admin-only**. |
+| **Pause / disable** workflow | **`requireAdmin`** | `enabled: false` via existing PATCH. |
+| **Manual test run** | `requireAdminOrOps` | Existing `POST …/run` — Assist should surface as explicit card, not auto-fire. |
+
+**Department / site:** CRM scope (`getAdminAccessContextCached`) applies to **entity** operations; workflows are org-level today — **Needs verification** whether any workflow steps filter by site; do not assume site-scoped workflow rows without schema proof.
+
+---
+
+## 7. Risk analysis
+
+| Risk | Mitigation |
+|------|------------|
+| **Approval bypass** | Apply only on server; `requireAdmin`; no service-role from client; single apply entrypoint with audit. |
+| **Runaway automation** | No auto-enable; templates start **disabled** or require explicit enable checkbox in card. |
+| **Workflow duplication** | Show warning if name/event/entity collision; validate uniqueness **Needs verification** DB constraints. |
+| **Config drift** | Proposals must round-trip through same validators as admin UI/API. |
+| **Permission escalation** | Never grant ops **`PATCH workflows`** via Assist without explicit product decision. |
+| **Opaque AI reasoning** | Structured `reasoning.warnings[]` + checklist explain mode; avoid raw model chain-of-thought in UI. |
+| **Event/action mismatch** | `normalized_key` maps to registered `event_type` values used in `emitEvent` paths — maintain catalog doc + tests. |
+
+---
+
+## 8. Implementation roadmap (Cards 0–N)
+
+| Card | Scope | Gate |
+|------|--------|------|
+| **0** | Audit + design lock (this doc) | Approved scope boundaries |
+| **1** | Contract freeze: TypeScript `WorkflowAssistSuggestionV1`, sub-intents, error envelope, org policy key name | Review with security |
+| **2** | Orchestrator: route to `workflow_assist` + placeholder **oversight card** (deterministic, no LLM) | UX review |
+| **3** | `GET`-backed features only: failed runs / summary card wiring | None |
+| **4** | `POST /api/admin/ai/workflow-assist/propose` (stub + policy) — returns proposal JSON, no DB | Env + policy tests |
+| **5** | `POST …/apply` — validates + calls existing workflow create/patch chain | **Admin-only** integration tests |
+| **6** | Explain v0 endpoint + card (structured checklist) | QA on staging |
+| **7** | Optional: durable proposals table | Compliance need |
+| **8** | Optional: gated LLM for draft **content only** | Pilot org policy |
+
+**Deferred (V2+):** Natural-language condition authoring; bulk pause by tag; cross-entity simulation; automatic “fix my workflow” apply.
+
+---
+
+## 9. Testing strategy
+
+| Layer | Tests |
+|-------|--------|
+| **Unit** | Intent classifier (`workflow_like` refinement, `normalized_key` mapping), proposal JSON schema validation. |
+| **Integration** | Propose/apply routes: org isolation, `requireAdmin` on apply, rejection when ops-only user. |
+| **Permissions** | Matrix: admin vs ops vs missing `ai.enrichment.use` / future draft key — mirror `web/tests/ai/aiEnrichmentRouteAccess.test.ts` patterns. |
+| **Orchestrator routing** | Extend `web/tests/adminV2/commandSurface*.test.ts` — workflow NL → Workflow Assist route, not Task Assist. |
+| **Workflow proposal** | Golden fixtures: template → `POST /api/admin/workflows` body shape. |
+| **Approval/apply** | Ensure double-submit / tampered proposal rejected. |
+| **Failure/explainability** | Fixture DB or mocked Supabase: stable explanation output from known run states. |
+| **Staging QA** | Org with `ai_policy` feature on; walkthrough: propose → edit → reject; propose → apply → verify row in `workflows`; run manual test from UI; verify audit row if implemented. |
+
+---
+
+## 10. Sources of truth and references
+
+- **Doctrine:** `docs/execution/operating-doctrine.md`, `docs/core/system-overview.md`
+- **Workflows:** `docs/system/actions-and-workflows.md`, `docs/audits/workflow-execution-consistency-audit.md`
+- **Config / AI:** `docs/system/configuration-system.md`, `docs/product/ai-system.md`
+- **API map:** `docs/system/api-contracts.md`
+- **RBAC:** `docs/system/roles-and-permissions.md`
+- **Prior agent sprints:** `docs/sprints/05_2026/task_assist_v1.md`, `agent_interaction_layer_v1.md`, `ai_enrichment_and_agent_actions_v1.md`, `ai_agents_v1.md` §9
+
+---
+
+## 11. Open questions (Needs verification)
+
+1. Exact **client** data loaders for `/adminV2/workflows` (parallel vs sequential) and whether all operators use `summary` variant.
+2. Whether **`workflows`** rows can be **global** (`org_id` null) for platform templates — grep `workflows` insert seeds.
+3. **DB uniqueness** constraints on workflow name per org.
+4. Whether **ops** can `GET` single workflow detail in all deployments (route uses `getAdminContextCached` on `GET [id]` — likely yes for read).
+
+---
+
+**When to update this doc:** Card 0 amendments; first route shipped; permission key seeded; any intentional change to `requireAdmin` vs ops for workflow mutations.
