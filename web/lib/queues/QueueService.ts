@@ -24,6 +24,11 @@ import { fetchOperationalTimezoneForOrgWithCache, UTC_FALLBACK_IANA } from "@/li
 import { formatDateTimeForUserDisplay } from "@/lib/adminFormatters";
 import type { RecordScopeConstraints } from "@/lib/admin/accessScope";
 import { applyRecordScopeConstraintsToQuery } from "@/lib/admin/accessScope";
+import {
+    LOCATION_DISPLAY_LABEL_SELECT,
+    locationDisplayLabelFromRow,
+    type LocationDisplayLabelRow,
+} from "@/lib/admin/locationDisplayLabel";
 import { resolveOpportunityAttentionConfigFromMetadata, type OpportunityAttentionResolvedConfig } from "@/lib/opportunities/opportunityAttentionConfig";
 import {
     opportunityAttentionResultMatchesBucket,
@@ -972,7 +977,7 @@ async function enrichOpportunityRows(params: {
             ? timedAwait(
                   supabase
                       .from("locations")
-                      .select("id, label, name, address1")
+                      .select(LOCATION_DISPLAY_LABEL_SELECT)
                       .eq("org_id", orgId)
                       .in("id", locationIds as any)
               )
@@ -983,10 +988,10 @@ async function enrichOpportunityRows(params: {
     const locationLabelById = new Map<string, string>();
     const locationRows = (locationsTimed.v as { data?: unknown[] | null }).data;
     for (const raw of Array.isArray(locationRows) ? locationRows : []) {
-        const row = raw as { id?: string; label?: string | null; name?: string | null; address1?: string | null };
+        const row = raw as { id?: string } & LocationDisplayLabelRow;
         const id = String(row.id ?? "").trim();
         if (!id) continue;
-        const label = (row.label ?? row.name ?? row.address1 ?? "").trim();
+        const label = locationDisplayLabelFromRow(row);
         if (label) locationLabelById.set(id, label);
     }
 

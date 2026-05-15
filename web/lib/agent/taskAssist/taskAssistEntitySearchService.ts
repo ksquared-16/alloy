@@ -8,6 +8,11 @@ import {
     type AdminAccessScopeDimensions,
     type RecordScopeConstraints,
 } from "@/lib/admin/accessScope";
+import {
+    LOCATION_DISPLAY_LABEL_SELECT,
+    locationDisplayLabelFromRow,
+    type LocationDisplayLabelRow,
+} from "@/lib/admin/locationDisplayLabel";
 import { resolveQueueRecordScopeConstraints } from "@/lib/admin/resolveQueueRecordScopeConstraints";
 import {
     CRM_ENTITY_SEARCH_UUID_RE,
@@ -122,12 +127,12 @@ async function fetchLocationLabelsById(
     if (!ids.length) return out;
     const { data, error } = await supabase
         .from("locations")
-        .select("id, label, name, address1")
+        .select(LOCATION_DISPLAY_LABEL_SELECT)
         .eq("org_id", orgId)
         .in("id", ids as any);
-    if (error) throw new Error(error.message);
-    for (const row of (data ?? []) as { id: string; label?: string | null; name?: string | null; address1?: string | null }[]) {
-        const label = (row.label ?? row.name ?? row.address1 ?? "").trim();
+    if (error) return out;
+    for (const row of (data ?? []) as Array<{ id: string } & LocationDisplayLabelRow>) {
+        const label = locationDisplayLabelFromRow(row);
         if (label) out.set(String(row.id), label);
     }
     return out;

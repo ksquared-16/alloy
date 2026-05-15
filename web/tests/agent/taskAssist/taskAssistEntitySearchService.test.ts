@@ -265,6 +265,35 @@ describe("runTaskAssistEntitySearch", () => {
         expect(candidates).toHaveLength(0);
     });
 
+    it("resolves location subtitle from label column only (no locations.name)", async () => {
+        const supabase = createSearchSupabase(ORG_A, {
+            opportunities: [
+                {
+                    id: OPP_ID,
+                    org_id: ORG_A,
+                    name: "Mitchell household",
+                    customer_id: CUST_ID,
+                    location_id: "loc-north",
+                },
+            ],
+            customers: [{ id: CUST_ID, org_id: ORG_A, name: "Mitchell household" }],
+            persons: [],
+            contacts: [],
+            customer_members: [],
+            locations: [{ id: "loc-north", org_id: ORG_A, label: "North Campus" }],
+        });
+
+        const { candidates } = await runTaskAssistEntitySearch({
+            supabase,
+            orgId: ORG_A,
+            accessDim: openDim,
+            rawQ: "Mitchell",
+        });
+
+        expect(candidates[0]?.disambiguation?.location_name).toBe("North Campus");
+        expect(candidates[0]?.subtitle).toContain("North Campus");
+    });
+
     it("respects workspace_site_id for customer bridge opportunities", async () => {
         const supabase = createSearchSupabase(ORG_A, {
             opportunities: [
