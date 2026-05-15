@@ -17,19 +17,24 @@ Users with **multiple allowed site locations** (`locations.location_type = site`
 | `WorkspaceSiteFilterProvider` + `WorkspaceSiteFilterGate` | Loads bootstrap once under `/adminV2/workspace/*`; holds `selectedSiteId` (`null` = all allowed). |
 | `TopNavBar` | Renders dropdown or single-site label on workspace routes only. |
 
-Selection is **client state only** until downstream routes read it.
+## Queue wiring (shipped polish)
+
+| Piece | Role |
+|-------|------|
+| `workspace_site_id` query param | Parsed by work-unit queue routes; intersected with permission scope via **`resolveQueueRecordScopeConstraints`**. |
+| Work-unit + department pages | Append param from **`useWorkspaceSiteFilter().selectedSiteId`**; cache keys include view-site fingerprint. |
+| `QueueService` | Existing **`recordScopeConstraints.locationIds`** filter on `opportunities.location_id` — no schema change. |
+
+Default (`selectedSiteId = null`) = all sites allowed by permission scope (unchanged corp behavior).
 
 ## Follow-up: layered location UX (not started)
 
 Product direction after the first-pass site filter is fully wired: **site first**, then optional **room / age grouping** where the org configures it. The current header dropdown is intentionally minimal; do not build the second layer until site-scoped list/workspace fetches are complete.
 
-## Remaining wiring (next PR)
+## Remaining wiring (follow-up)
 
-1. **Pass `selectedSiteId` into data fetches** — department queue summaries, work-unit queues, KPI resolvers — either:
-   - query param `workspace_site_id` on internal `fetch` calls, or
-   - extend existing `RecordScopeConstraints` / `applyRecordScopeConstraintsToQuery` paths used by queue services.
-2. **Invalidate caches** when selection changes (session cache keys for dept/work-unit pages).
-3. **Optional:** persist selection in `sessionStorage` under a stable key for reload continuity.
+1. **KPI resolvers** and legacy opportunity-queue endpoints — same `workspace_site_id` pattern where site-scoped counts are shown.
+2. **Optional:** persist header site selection in `sessionStorage` for reload continuity.
 
 ## Verification
 
