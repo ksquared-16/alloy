@@ -1,6 +1,6 @@
 /**
- * Workflow Assist V1 — read-only contracts (Cards 1–3).
- * No proposals, apply, LLM, or workflow mutations.
+ * Workflow Assist V1 — read-only contracts (Cards 1–3) + thread UI hooks for proposal actions (Cards 4–5).
+ * Proposal/apply payloads live in `workflowAssistProposalV1.ts`.
  */
 
 export const WORKFLOW_ASSIST_AGENT_KEY = "workflow_assist" as const;
@@ -112,6 +112,11 @@ export type WorkflowAssistSummaryRowV1 = {
     last_run_status: string | null;
     last_run_at: string | null;
     last_run_has_failed_action: boolean;
+};
+
+export type WorkflowAssistThreadMutationHandlersV1 = {
+    onProposePause: (workflowId: string) => Promise<void>;
+    onProposeCreateTemplate: () => Promise<void>;
 };
 
 export type WorkflowAssistFailedRunRowV1 = {

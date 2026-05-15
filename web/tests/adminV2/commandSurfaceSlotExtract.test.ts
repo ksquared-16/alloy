@@ -40,4 +40,9 @@ describe("extractCommandSurfaceSlots", () => {
         const s = extractCommandSurfaceSlots("when forms complete move them to ready to enroll");
         expect(s.workflow_like).toBe(true);
     });
+
+    it("detects plural workflows as workflow-like", () => {
+        const s = extractCommandSurfaceSlots("Show me workflows that failed this week");
+        expect(s.workflow_like).toBe(true);
+    });
 });

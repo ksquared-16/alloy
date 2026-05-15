@@ -11,6 +11,10 @@ const threadPath = join(
     dirname(fileURLToPath(import.meta.url)),
     "../../../app/adminV2/components/aiCommandSurface/CommandSurfaceThread.tsx"
 );
+const proposalCardPath = join(
+    dirname(fileURLToPath(import.meta.url)),
+    "../../../app/adminV2/components/aiCommandSurface/WorkflowAssistProposalActionCard.tsx"
+);
 const eventsPath = join(
     dirname(fileURLToPath(import.meta.url)),
     "../../../lib/adminV2/aiCommandSurface/adminV2CommandBarEvents.ts"
@@ -34,10 +38,26 @@ describe("AICommandSurfaceShell Interaction Layer V1", () => {
         expect(threadSrc).toContain("TaskAssistOpportunityWorkspace");
         expect(threadSrc).toContain("data-command-surface-task-assist-action-card");
         expect(threadSrc).toContain('source_surface="command_bar"');
+        expect(threadSrc).toContain("entity_display_label={entityLabel}");
         expect(threadSrc).toContain('uiPhase === "draft"');
         expect(threadSrc).toContain("TaskAssistCompactDraftCard");
         expect(threadSrc).toContain("I found these matching records.");
         expect(threadSrc).toContain("autoPropose");
+    });
+
+    it("thread renders workflow assist read + proposal action wiring", () => {
+        const threadSrc = readFileSync(threadPath, "utf8");
+        expect(threadSrc).toContain("WorkflowAssistReadThreadCard");
+        expect(threadSrc).toContain("workflowAssistMutation");
+        expect(threadSrc).toContain("workflow_assist_proposal");
+        expect(threadSrc).toContain("WorkflowAssistProposalActionCard");
+        expect(readFileSync(proposalCardPath, "utf8")).toContain("data-command-surface-workflow-assist-proposal-card");
+    });
+
+    it("shell wires workflow-assist propose fetch", () => {
+        const shellSrc = readFileSync(shellPath, "utf8");
+        expect(shellSrc).toContain("/api/admin/ai/workflow-assist/propose");
+        expect(shellSrc).toContain("workflowAssistMutation");
     });
 
     it("shell auto-drafts after candidate confirm for message intents", () => {

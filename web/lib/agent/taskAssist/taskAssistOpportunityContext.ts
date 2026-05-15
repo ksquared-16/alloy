@@ -3,6 +3,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { loadOpportunityActivitySignal } from "@/lib/admin/loadOpportunityActivitySignal";
 import { fetchOpportunityDrawerEmailRecipients } from "@/lib/communications/drawerEmailRecipients";
+import {
+    type TaskAssistChildProfileV1,
+    fetchTaskAssistChildProfilesForOpportunity,
+    resolvePrimaryChildDisplayNameFromProfiles,
+    summarizeChildrenFromProfiles,
+} from "@/lib/agent/taskAssist/taskAssistOpportunityChildProfiles";
 import type { TaskAssistRecipientCandidateV1 } from "@/lib/agent/taskAssist/types";
 
 export type TaskAssistOpportunityContextV1 = {
@@ -20,6 +26,8 @@ export type TaskAssistOpportunityContextV1 = {
     children_summary: string | null;
     /** First linked child display name when available — used for careful draft personalization only. */
     primary_child_display_name: string | null;
+    /** Structured child profiles (household members + inquiry metadata), org-scoped. */
+    child_profiles: TaskAssistChildProfileV1[];
     /** From activity signals — short line, no payload dumps. */
     activity_summary: string | null;
     last_activity_at: string | null;
@@ -38,41 +46,6 @@ function opportunityDisplayLabel(row: Record<string, unknown>): string {
     const title = trimOrNull(row.title);
     if (title) return title;
     return "Opportunity";
-}
-
-/**
- * Summarize `metadata.inquiry_children` without echoing child names into logs-heavy paths by default.
- * Names may appear only inside opportunity-scoped draft text when the assembler chooses; here we keep a count line.
- */
-function summarizeChildrenFromMetadata(metadata: unknown): string | null {
-    if (!metadata || typeof metadata !== "object") return null;
-    const m = metadata as Record<string, unknown>;
-    if (Array.isArray(m.inquiry_children) && m.inquiry_children.length > 0) {
-        const n = m.inquiry_children.length;
-        return n === 1 ? "One inquiry child profile is linked." : `${n} inquiry child profiles are linked.`;
-    }
-    return null;
-}
-
-function primaryChildDisplayNameFromMetadata(metadata: unknown): string | null {
-    if (!metadata || typeof metadata !== "object") return null;
-    const kids = (metadata as { inquiry_children?: unknown }).inquiry_children;
-    if (!Array.isArray(kids) || !kids.length) return null;
-    for (const raw of kids) {
-        if (!raw || typeof raw !== "object") continue;
-        const row = raw as Record<string, unknown>;
-        const joinedName = [row.first_name, row.last_name]
-            .filter((x) => typeof x === "string" && String(x).trim())
-            .join(" ")
-            .trim();
-        const name =
-            trimOrNull(row.display_name) ??
-            trimOrNull(row.child_name) ??
-            trimOrNull(row.name) ??
-            (joinedName || null);
-        if (name) return name;
-    }
-    return null;
 }
 
 /**
@@ -138,6 +111,15 @@ export async function assembleTaskAssistOpportunityContextV1(params: {
         has_email: r.email != null && String(r.email).trim() !== "",
     }));
 
+    const child_profiles = await fetchTaskAssistChildProfilesForOpportunity({
+        supabase,
+        orgId,
+        customerId,
+        opportunityMetadata: row.metadata,
+    });
+    const children_summary = summarizeChildrenFromProfiles(child_profiles);
+    const primary_child_display_name = resolvePrimaryChildDisplayNameFromProfiles(child_profiles);
+
     const context: TaskAssistOpportunityContextV1 = {
         opportunity_id: opportunityId,
         opportunity_label: opportunityDisplayLabel(row),
@@ -147,8 +129,9 @@ export async function assembleTaskAssistOpportunityContextV1(params: {
         customer_id: customerId,
         household_label: householdLabel,
         primary_person_id: primaryPersonId,
-        children_summary: summarizeChildrenFromMetadata(row.metadata),
-        primary_child_display_name: primaryChildDisplayNameFromMetadata(row.metadata),
+        children_summary,
+        primary_child_display_name,
+        child_profiles,
         activity_summary: activity.last_activity_summary,
         last_activity_at: activity.last_activity_at,
         recipient_candidates,

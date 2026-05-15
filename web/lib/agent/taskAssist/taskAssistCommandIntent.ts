@@ -22,7 +22,7 @@ export type TaskAssistCommandIntent = {
 };
 
 const WORKFLOW_RE =
-    /\b(workflow|automatically|every\s+time|when\s+.+\s+happens|trigger(?:ed|s)?|rules?)\b/i;
+    /\b(workflows?|automatically|every\s+time|when\s+.+\s+(?:happens|complete|completes|finish|finishes)|trigger(?:ed|s)?|rules?)\b/i;
 
 const REMINDER_RE =
     /\b(remind(?:\s+me|\s+them|\s+us)?|reminder|follow[\s-]?up|create\s+(?:a\s+)?(?:reminder|task)|operational\s+task)\b/i;

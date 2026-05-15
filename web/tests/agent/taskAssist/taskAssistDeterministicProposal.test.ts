@@ -17,7 +17,8 @@ function baseContext(overrides: Partial<TaskAssistOpportunityContextV1> = {}): T
         household_label: "Nguyen family",
         primary_person_id: PERSON,
         primary_child_display_name: null,
-        children_summary: "One inquiry child profile is linked.",
+        children_summary: "One child profile is linked for this household.",
+        child_profiles: [],
         activity_summary: "Note added",
         last_activity_at: "2026-05-01T12:00:00.000Z",
         recipient_candidates: [

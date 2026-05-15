@@ -9,7 +9,12 @@ import {
     isAiEnrichmentUsePermissionRequired,
     resolveAiEnrichmentPortalAccess,
 } from "@/lib/ai/aiEnrichmentPermissions";
-import { evaluateOrgPolicyForStubAttentionDraftEnrichmentRoute, evaluateOrgPolicyForStubTaskAssistProposeRoute } from "@/lib/ai/aiEnrichmentRouteGuards";
+import {
+    evaluateOrgPolicyForOpenAiWorkflowAssistProposeRoute,
+    evaluateOrgPolicyForStubAttentionDraftEnrichmentRoute,
+    evaluateOrgPolicyForStubTaskAssistProposeRoute,
+    evaluateOrgPolicyForStubWorkflowAssistProposeRoute,
+} from "@/lib/ai/aiEnrichmentRouteGuards";
 
 const adminCtx = { ok: true as const, orgId: "org-1", role: "admin", userId: "u1" };
 const opsCtx = { ok: true as const, orgId: "org-1", role: "ops", userId: "u1" };
@@ -130,6 +135,56 @@ describe("evaluateOrgPolicyForStubTaskAssistProposeRoute", () => {
         });
         expect(r.ok).toBe(false);
         if (!r.ok) expect(r.error).toBe("AI_FEATURE_NOT_ALLOWED");
+    });
+});
+
+describe("evaluateOrgPolicyForStubWorkflowAssistProposeRoute", () => {
+    it("allows stub + workflow_assist_draft when policy enabled", () => {
+        const r = evaluateOrgPolicyForStubWorkflowAssistProposeRoute({
+            [AI_POLICY_METADATA_KEY]: {
+                enabled: true,
+                provider: "stub",
+                allowed_features: ["workflow_assist_draft"],
+            },
+        });
+        expect(r.ok).toBe(true);
+    });
+
+    it("denies when workflow_assist_draft missing", () => {
+        const r = evaluateOrgPolicyForStubWorkflowAssistProposeRoute({
+            [AI_POLICY_METADATA_KEY]: {
+                enabled: true,
+                provider: "stub",
+                allowed_features: ["task_assist_draft"],
+            },
+        });
+        expect(r.ok).toBe(false);
+        if (!r.ok) expect(r.error).toBe("AI_FEATURE_NOT_ALLOWED");
+    });
+});
+
+describe("evaluateOrgPolicyForOpenAiWorkflowAssistProposeRoute", () => {
+    it("allows openai + workflow_assist_draft when policy enabled", () => {
+        const r = evaluateOrgPolicyForOpenAiWorkflowAssistProposeRoute({
+            [AI_POLICY_METADATA_KEY]: {
+                enabled: true,
+                provider: "openai",
+                allowed_features: ["workflow_assist_draft"],
+            },
+        });
+        expect(r.ok).toBe(true);
+    });
+
+    it("denies when provider is not openai", () => {
+        const r = evaluateOrgPolicyForOpenAiWorkflowAssistProposeRoute({
+            [AI_POLICY_METADATA_KEY]: {
+                enabled: true,
+                provider: "stub",
+                allowed_features: ["workflow_assist_draft"],
+            },
+        });
+        expect(r.ok).toBe(false);
+        if (!r.ok) expect(r.error).toBe("AI_POLICY_PROVIDER");
     });
 });
 

@@ -29,7 +29,7 @@ describe("Interaction Layer V1 command surface contract (Card 7)", () => {
         expect(src).toContain('busy ? "Working…" : "Ask"');
         expect(src).toContain("data-command-surface-thread-panel");
         expect(src).toContain("data-command-surface-thread-toggle");
-        expect(src).toContain("data-command-surface-clear");
+        expect(src).toContain('case "workflow_assist"');
     });
 
     it("header Assistant link is removed", () => {
@@ -51,9 +51,10 @@ describe("Interaction Layer V1 command surface contract (Card 7)", () => {
         expect(q.toLowerCase()).not.toContain("excited");
     });
 
-    it("workflow phrase routes to workflow_assist_notice", () => {
+    it("workflow phrase routes to workflow_assist", () => {
         const r = routeCommandSurface("when forms complete move them to ready to enroll");
-        expect(r.route).toBe("workflow_assist_notice");
+        expect(r.route).toBe("workflow_assist");
+        expect(r.workflowAssistReadIntent?.sub_intent).toBe("workflow_summary");
     });
 
     it("job layout command routes to job_layout", () => {

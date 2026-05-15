@@ -116,6 +116,11 @@ export function useAdminDrawer() {
     return ctx;
 }
 
+/** Same as {@link useAdminDrawer} but returns null outside a provider (e.g. isolated tests / SSR snippets). */
+export function useAdminDrawerOptional() {
+    return useContext(AdminDrawerContext);
+}
+
 export function AdminDrawerProvider({ children }: { children: ReactNode }) {
     const [drawer, setDrawer] = useState<AdminDrawerState>({ type: null, id: null });
     const [stack, setStack] = useState<DrawerStackItem[]>([]);

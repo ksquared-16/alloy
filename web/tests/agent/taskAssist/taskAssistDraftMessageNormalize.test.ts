@@ -17,6 +17,7 @@ const baseContext: TaskAssistOpportunityContextV1 = {
     primary_person_id: null,
     children_summary: null,
     primary_child_display_name: null,
+    child_profiles: [],
     activity_summary: null,
     last_activity_at: null,
     recipient_candidates: [],

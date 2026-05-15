@@ -4,12 +4,15 @@ import type { ReactNode } from "react";
 
 import TaskAssistCompactDraftCard from "@/components/admin/taskAssist/TaskAssistCompactDraftCard";
 import TaskAssistOpportunityWorkspace from "@/components/admin/taskAssist/TaskAssistOpportunityWorkspace";
+import { WorkflowAssistProposalActionCard } from "@/app/adminV2/components/aiCommandSurface/WorkflowAssistProposalActionCard";
+import { WorkflowAssistReadThreadCard } from "@/app/adminV2/components/aiCommandSurface/WorkflowAssistReadThreadCard";
 import { badgeLabel } from "@/lib/adminV2/aiCommandSurface/aiCommandSurfaceModel";
 import { WORKFLOW_ASSIST_NOTICE_TEXT } from "@/lib/adminV2/aiCommandSurface/commandSurfaceRouter";
 import type { CommandSurfaceThreadTurn } from "@/lib/adminV2/aiCommandSurface/commandSurfaceThreadTypes";
 import type { TaskAssistCommandIntent } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
 import { formatCandidateDebugLine } from "@/lib/agent/taskAssist/taskAssistEntitySearchDisambiguation";
 import type { TaskAssistEntitySearchCandidate } from "@/lib/agent/taskAssist/taskAssistEntitySearchTypes";
+import type { WorkflowAssistThreadMutationHandlersV1 } from "@/lib/agent/workflowAssist/workflowAssistReadV1";
 import { neutral, derived, brand, semantic } from "@/styles/tokens/colors";
 
 const CMD = {
@@ -83,6 +86,7 @@ export type CommandSurfaceThreadProps = {
     onToggleActionCard: (turnId: string) => void;
     onToggleTaskAssistMoreOptions?: (turnId: string) => void;
     renderJobLayoutCardActions?: (turnId: string) => ReactNode;
+    workflowAssistMutation?: WorkflowAssistThreadMutationHandlersV1 | null;
 };
 
 export default function CommandSurfaceThread({
@@ -93,6 +97,7 @@ export default function CommandSurfaceThread({
     onToggleActionCard,
     onToggleTaskAssistMoreOptions,
     renderJobLayoutCardActions,
+    workflowAssistMutation,
 }: CommandSurfaceThreadProps) {
     const showSearchDebug = process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test";
 
@@ -110,6 +115,18 @@ export default function CommandSurfaceThread({
                         return (
                             <AssistantBubble key={turn.id}>
                                 <span data-command-surface-assistant-notice="true">{turn.text}</span>
+                            </AssistantBubble>
+                        );
+                    case "workflow_assist_read":
+                        return (
+                            <AssistantBubble key={turn.id}>
+                                <WorkflowAssistReadThreadCard
+                                    submittedCommand={turn.submittedCommand}
+                                    intent={turn.intent}
+                                    payload={turn.payload}
+                                    error={turn.error}
+                                    mutation={workflowAssistMutation ?? undefined}
+                                />
                             </AssistantBubble>
                         );
                     case "workflow_notice":
@@ -206,6 +223,13 @@ export default function CommandSurfaceThread({
                             </AssistantBubble>
                         );
                     case "action_card":
+                        if (turn.card.type === "workflow_assist_proposal") {
+                            return (
+                                <AssistantBubble key={turn.id}>
+                                    <WorkflowAssistProposalActionCard suggestion={turn.card.suggestion} />
+                                </AssistantBubble>
+                            );
+                        }
                         if (turn.card.type === "task_assist") {
                             const {
                                 bootstrap,
@@ -251,6 +275,7 @@ export default function CommandSurfaceThread({
                                                 {expanded ? (
                                                     <TaskAssistOpportunityWorkspace
                                                         entityId={entityId}
+                                                        entity_display_label={entityLabel}
                                                         active
                                                         source_surface="command_bar"
                                                         command_bootstrap={bootstrap}
@@ -269,6 +294,7 @@ export default function CommandSurfaceThread({
                                         {showMoreOptions && uiPhase === "draft" ? (
                                             <TaskAssistOpportunityWorkspace
                                                 entityId={entityId}
+                                                entity_display_label={entityLabel}
                                                 active
                                                 source_surface="command_bar"
                                                 command_bootstrap={bootstrap}
@@ -293,42 +319,46 @@ export default function CommandSurfaceThread({
                                 </AssistantBubble>
                             );
                         }
-                        return (
-                            <AssistantBubble key={turn.id}>
-                                <div className="space-y-2" data-command-surface-job-layout-action-card="true">
-                                    <div className="flex flex-wrap items-start justify-between gap-2">
-                                        <div>
-                                            <div className="text-[13px] font-semibold">{turn.card.headline}</div>
-                                            {turn.card.subline ? (
-                                                <div className="text-[11px]" style={{ color: CMD.textSupporting }}>
-                                                    {turn.card.subline}
-                                                </div>
-                                            ) : null}
+                        if (turn.card.type === "job_layout") {
+                            const card = turn.card;
+                            return (
+                                <AssistantBubble key={turn.id}>
+                                    <div className="space-y-2" data-command-surface-job-layout-action-card="true">
+                                        <div className="flex flex-wrap items-start justify-between gap-2">
+                                            <div>
+                                                <div className="text-[13px] font-semibold">{card.headline}</div>
+                                                {card.subline ? (
+                                                    <div className="text-[11px]" style={{ color: CMD.textSupporting }}>
+                                                        {card.subline}
+                                                    </div>
+                                                ) : null}
+                                            </div>
+                                            <span
+                                                className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                                                style={{
+                                                    backgroundColor: "rgba(0, 162, 131, 0.14)",
+                                                    color: brand.secondary,
+                                                }}
+                                            >
+                                                {badgeLabel(card.confidence)}
+                                            </span>
                                         </div>
-                                        <span
-                                            className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                                            style={{
-                                                backgroundColor: "rgba(0, 162, 131, 0.14)",
-                                                color: brand.secondary,
-                                            }}
+                                        <button
+                                            type="button"
+                                            className="text-[11px] font-semibold underline-offset-2 hover:underline"
+                                            style={{ color: brand.secondary }}
+                                            onClick={() => onToggleActionCard(turn.id)}
                                         >
-                                            {badgeLabel(turn.card.confidence)}
-                                        </span>
+                                            {card.expanded ? "Hide details" : "Show layout preview"}
+                                        </button>
+                                        {card.expanded && renderJobLayoutCardActions ?
+                                            renderJobLayoutCardActions(turn.id)
+                                        :   null}
                                     </div>
-                                    <button
-                                        type="button"
-                                        className="text-[11px] font-semibold underline-offset-2 hover:underline"
-                                        style={{ color: brand.secondary }}
-                                        onClick={() => onToggleActionCard(turn.id)}
-                                    >
-                                        {turn.card.expanded ? "Hide details" : "Show layout preview"}
-                                    </button>
-                                    {turn.card.expanded && renderJobLayoutCardActions ?
-                                        renderJobLayoutCardActions(turn.id)
-                                    :   null}
-                                </div>
-                            </AssistantBubble>
-                        );
+                                </AssistantBubble>
+                            );
+                        }
+                        return null;
                     default:
                         return null;
                 }

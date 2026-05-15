@@ -50,6 +50,9 @@ export function toggleActionCardExpanded(
             if (t.card.type === "job_layout") {
                 return { ...t, card: { ...t.card, expanded: !t.card.expanded } };
             }
+            if (t.card.type === "workflow_assist_proposal") {
+                return t;
+            }
             return t;
         }),
     };

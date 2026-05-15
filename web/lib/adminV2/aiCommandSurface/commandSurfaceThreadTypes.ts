@@ -6,7 +6,9 @@ import type {
     WorkflowAssistErrorEnvelopeV1,
     WorkflowAssistReadCardPayloadV1,
     WorkflowAssistReadIntentV1,
+    WorkflowAssistThreadMutationHandlersV1,
 } from "@/lib/agent/workflowAssist/workflowAssistReadV1";
+import type { WorkflowAssistSuggestionV1 } from "@/lib/agent/workflowAssist/workflowAssistProposalV1";
 import type { AIStatusBadge, ResponseKind } from "@/lib/adminV2/aiCommandSurface/aiCommandSurfaceModel";
 
 export type CommandSurfaceThreadTurn =
@@ -63,6 +65,10 @@ export type CommandSurfaceThreadTurn =
                     plannerOk: JobOverviewPlannerSuccess | null;
                     structuredOverrideJson: string;
                     expanded: boolean;
+                }
+              | {
+                    type: "workflow_assist_proposal";
+                    suggestion: WorkflowAssistSuggestionV1;
                 };
           at: string;
       }

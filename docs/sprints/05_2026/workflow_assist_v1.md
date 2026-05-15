@@ -1,7 +1,7 @@
 # Sprint: Workflow Assist V1 (Agent #3)
 
 **Path:** `docs/sprints/05_2026/workflow_assist_v1.md`  
-**Status:** **Design lock / audit (Card 0)** — no implementation in this pass.  
+**Status:** **Cards 1–3 shipped (read-only Workflow Assist in Orchestrator)** — Cards 4+ not started.  
 **Prerequisites:** `docs/sprints/05_2026/agent_interaction_layer_v1.md` (Orchestrator + thread + action cards), `docs/sprints/05_2026/task_assist_v1_1.md` (Task Assist patterns), `docs/sprints/05_2026/ai_agents_v1.md` §9 (`WorkflowAssistSuggestionV1` template), `docs/product/ai-system.md`, `docs/system/actions-and-workflows.md`.
 
 **Non-goals for this document:** Task Assist transactional scope; new workflow execution engine; autonomous `executeWorkflowRun` from NL; childcare-only automation rules in platform code.
@@ -21,6 +21,31 @@
 
 ---
 
+## Implementation status — Cards 1–3
+
+| Card | Status | What shipped |
+|------|--------|----------------|
+| **Card 1** | **Shipped** | `web/lib/agent/workflowAssist/workflowAssistReadV1.ts` — `WorkflowAssistReadIntentV1`, `WorkflowAssistReadSubIntentV1`, `WorkflowAssistReadCardPayloadV1`, `WorkflowAssistErrorEnvelopeV1`, `parseWorkflowAssistReadIntent`, `buildWorkflowAssistReadCardPayload`, `workflowAssistErrorEnvelope`. |
+| **Card 2** | **Shipped** | `routeCommandSurface` route kind **`workflow_assist`** (replaces `workflow_assist_notice`); each result includes `workflowAssistReadIntent` or `null`; shell `runWorkflowAssistRoute` appends **`workflow_assist_read`** thread turns. Legacy **`workflow_notice`** turn still renders static copy for old persisted sessions only. |
+| **Card 3** | **Shipped** | Read-only thread card UI `WorkflowAssistReadThreadCard.tsx` — **summary**, **failed runs (7d sample + links)**, **enrollment keyword filter**, **explain placeholder** checklist. Data from **`GET /api/admin/workflows/summary`**, **`GET /api/admin/workflow-runs?range=7d&limit=100`**, **`GET /api/admin/workflow-runs?list=kpis`** (failed card only). **No** new admin mutation routes. |
+
+### Partially shipped / known gaps
+
+| Topic | State |
+|-------|--------|
+| **Explain v1** | **Placeholder only** — no entity/event/run correlation engine; no new explain API. |
+| **Failed runs list** | Client filters last-100 runs for `status === failed` or `has_failed_action`; may miss failures outside the cap. KPI line is approximate (same semantics as dashboard sample). |
+| **`WORKFLOW_ASSIST_NOTICE_TEXT`** | Still exported for legacy `workflow_notice` copy; primary path no longer appends that turn from the router. |
+| **Docs outside this sprint file** | `docs/product/ai-system.md` still mentions `workflow_assist_notice` in the shipped table — **update in a docs pass** when refreshing the agent matrix. |
+
+### Follow-up (Cards 4–5) prerequisites
+
+- Add **`POST /api/admin/ai/workflow-assist/propose`** (stub + org policy) returning a draft **without** persisting workflows.
+- Add **`POST …/apply`** gated **`requireAdmin`**, calling existing workflow CRUD only after explicit approval UI.
+- Optional: durable `workflow_assist_proposals` + audit rows mirroring agent v0/v1/v2.
+
+---
+
 ## 1. Current-state audit
 
 ### 1.1 What already exists
@@ -36,7 +61,7 @@
 | **Auth split** | `workflows/route.ts`, `[id]/route.ts`, `[id]/run/route.ts` | **Needs verification:** `GET` list uses `getAdminContextCached` only (comment says admin+ops); **create/update/delete** use **`requireAdmin`**; **manual run** uses **`requireAdminOrOps`**. Align product copy and Workflow Assist gates with this split intentionally. |
 | **AdminV2 UI** | `web/app/adminV2/workflows/page.tsx` | “Understand what automations are running” — KPIs, workflow list, run history, run detail, **no visual canvas** (subtitle in UI). |
 | **Settings links** | `web/app/adminV2/settings/page.tsx` | “Automations” → `/adminV2/workflows`; separate **Actions** registry page (`/adminV2/settings/actions`). |
-| **Orchestrator routing** | `web/lib/adminV2/aiCommandSurface/commandSurfaceRouter.ts` | Route **`workflow_assist_notice`** when `slots.workflow_like` or Task Assist **`workflow_blocked`**; static copy: Workflow Assist “coming next.” |
+| **Orchestrator routing** | `web/lib/adminV2/aiCommandSurface/commandSurfaceRouter.ts` | Route **`workflow_assist`** when `slots.workflow_like` or Task Assist **`workflow_blocked`**; read-only Workflow Assist thread card (Cards 1–3). |
 | **Slot detection** | `web/lib/adminV2/aiCommandSurface/commandSurfaceSlotExtract.ts` | `WORKFLOW_RE` — keywords: `workflow`, `automatically`, `when … happens/completes`, `trigger`, `rules`. |
 | **Task Assist guard** | `web/lib/agent/taskAssist/taskAssistCommandIntent.ts` | Duplicate `WORKFLOW_RE`; sets **`workflow_blocked`** so Task Assist does not absorb automation language. |
 | **Audits** | `docs/audits/workflow-execution-consistency-audit.md`, `docs/audits/event-integrity-audit.md` | Intended vs exceptional paths (e.g. manual run without `event_id`). |
@@ -45,7 +70,7 @@
 
 ### 1.2 What is reusable
 
-- **Orchestrator:** `routeCommandSurface` precedence slot → replace **`workflow_assist_notice`** with **`workflow_assist`** route kind when specialist exists; reuse thread + action-card shell from Interaction Layer V1.
+- **Orchestrator:** `routeCommandSurface` **`workflow_assist`** + `workflow_assist_read` thread turns; reuse Interaction Layer thread shell.
 - **Proposal shape:** `WorkflowAssistSuggestionV1` from `ai_agents_v1.md` §9.1 — align TypeScript types when implementing.
 - **Validation:** Reuse admin workflow API contracts (`POST` body shape, `workflow_actions` / `workflow_conditions` payloads) as the **only** structured target for drafts.
 - **Read-only diagnostics:** `GET /api/admin/workflows/summary`, workflow detail + runs APIs and UI data loaders — **no synthetic run ids**.
@@ -63,7 +88,7 @@
 
 | Gap | Severity | Detail |
 |-----|----------|--------|
-| **No Workflow Assist APIs** | Expected | Orchestrator notice only; no `propose`/`apply`/`explain` routes. |
+| **No Workflow Assist mutation APIs** | Open | Read path uses existing workflow summary / workflow-runs **GET** routes only; **no** `propose`/`apply` yet. |
 | **No durable workflow proposals** | Medium | Unlike agent v0/v1/v2, workflows have **no** proposal/apply_audit DEFINER pair — direct Supabase from admin routes today. |
 | **NL → intent beyond regex** | Low–Med | `WORKFLOW_RE` is coarse; may false-positive/false-negative; no structured `normalized_key` pipeline in code yet. |
 | **Explain “why didn’t X move?”** | High product gap | Requires **correlation** across entity state, `workflow_events`, matching workflows, conditions, and run logs — **partially** available via DB + APIs; **no** single “explain” endpoint today. |
@@ -115,7 +140,7 @@
 
 ### 4.1 Routing model
 
-1. **Orchestrator** `routeCommandSurface`: extend `CommandSurfaceRouteKind` with **`workflow_assist`** (or repurpose `workflow_assist_notice` into full route).
+1. **Orchestrator** `routeCommandSurface`: **`workflow_assist`** route kind is **shipped** (replaces the former `workflow_assist_notice` route name); `workflowAssistReadIntent` on the route result.
 2. **Precedence:** Keep workflow-like **before** Task Assist (already true).
 3. **Sub-intent:** Deterministic classifier → `{ kind: "oversight" | "draft" | "explain" | "clarify" }` with small keyword maps + optional future LLM **classify-only** (structured JSON) behind policy.
 
@@ -199,9 +224,9 @@ All inside **Orchestrator thread** (`CommandSurfaceThread` + action cards) — n
 | Card | Scope | Gate |
 |------|--------|------|
 | **0** | Audit + design lock (this doc) | Approved scope boundaries |
-| **1** | Contract freeze: TypeScript `WorkflowAssistSuggestionV1`, sub-intents, error envelope, org policy key name | Review with security |
-| **2** | Orchestrator: route to `workflow_assist` + placeholder **oversight card** (deterministic, no LLM) | UX review |
-| **3** | `GET`-backed features only: failed runs / summary card wiring | None |
+| **1** | **Shipped:** read contracts in `workflowAssistReadV1.ts` (not `WorkflowAssistSuggestionV1` yet — deferred to Cards 4–5) | — |
+| **2** | **Shipped:** Orchestrator `workflow_assist` route + `workflow_assist_read` thread turn | — |
+| **3** | **Shipped:** GET-backed summary / failed runs / enrollment filter / explain placeholder cards | — |
 | **4** | `POST /api/admin/ai/workflow-assist/propose` (stub + policy) — returns proposal JSON, no DB | Env + policy tests |
 | **5** | `POST …/apply` — validates + calls existing workflow create/patch chain | **Admin-only** integration tests |
 | **6** | Explain v0 endpoint + card (structured checklist) | QA on staging |
@@ -216,7 +241,7 @@ All inside **Orchestrator thread** (`CommandSurfaceThread` + action cards) — n
 
 | Layer | Tests |
 |-------|--------|
-| **Unit** | Intent classifier (`workflow_like` refinement, `normalized_key` mapping), proposal JSON schema validation. |
+| **Unit** | `parseWorkflowAssistReadIntent`, `buildWorkflowAssistReadCardPayload`, `routeCommandSurface` workflow branch — see `web/tests/agent/workflowAssist/workflowAssistReadV1.test.ts`, `web/tests/adminV2/commandSurfaceRouter.test.ts`. |
 | **Integration** | Propose/apply routes: org isolation, `requireAdmin` on apply, rejection when ops-only user. |
 | **Permissions** | Matrix: admin vs ops vs missing `ai.enrichment.use` / future draft key — mirror `web/tests/ai/aiEnrichmentRouteAccess.test.ts` patterns. |
 | **Orchestrator routing** | Extend `web/tests/adminV2/commandSurface*.test.ts` — workflow NL → Workflow Assist route, not Task Assist. |

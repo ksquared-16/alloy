@@ -41,10 +41,23 @@ describe("routeCommandSurface", () => {
         expect(r.route).toBe("job_layout");
     });
 
-    it("routes workflow phrase to workflow_assist_notice", () => {
+    it("routes workflow phrase to workflow_assist with read intent", () => {
         const r = routeCommandSurface("when forms complete move them to ready to enroll");
-        expect(r.route).toBe("workflow_assist_notice");
+        expect(r.route).toBe("workflow_assist");
+        expect(r.workflowAssistReadIntent?.sub_intent).toBe("workflow_summary");
         expect(WORKFLOW_ASSIST_NOTICE_TEXT).toContain("Workflow Assist");
+    });
+
+    it("routes failed-workflow phrase to workflow_assist failed_runs intent", () => {
+        const r = routeCommandSurface("Show me workflows that failed this week");
+        expect(r.route).toBe("workflow_assist");
+        expect(r.workflowAssistReadIntent?.sub_intent).toBe("failed_runs_last_7d");
+    });
+
+    it("non-workflow routes set workflowAssistReadIntent null", () => {
+        const r = routeCommandSurface("text the Smith family about tour");
+        expect(r.route).toBe("task_assist");
+        expect(r.workflowAssistReadIntent).toBeNull();
     });
 
     it("routes ambient pronoun to task_assist when context exists", () => {

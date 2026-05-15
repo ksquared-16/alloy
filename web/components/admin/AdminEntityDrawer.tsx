@@ -20,8 +20,12 @@ import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
 import EntityDocumentsSection from "@/components/admin/EntityDocumentsSection";
 import CommunicationsDrawerSection from "@/components/admin/communications/CommunicationsDrawerSection";
-import TaskAssistOpportunityLauncher from "@/components/admin/taskAssist/TaskAssistOpportunityLauncher";
+import OpportunityOperationalTasksSection from "@/components/admin/opportunity/OpportunityOperationalTasksSection";
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
+import {
+    ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS,
+    ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH,
+} from "@/lib/adminV2/opportunityDrawerTaskEvents";
 import {
     scheduleDeferredCommunicationsDrawerPrefetch,
     invalidateCommunicationsDrawerPrefetch,
@@ -2913,6 +2917,27 @@ export default function AdminEntityDrawer() {
         };
         window.addEventListener("adminv2:opportunity-focus-comms", onFocusComms as EventListener);
         return () => window.removeEventListener("adminv2:opportunity-focus-comms", onFocusComms as EventListener);
+    }, [drawer.type, drawer.id]);
+
+    useEffect(() => {
+        const onFocusOperationalTasks = (ev: Event) => {
+            const ce = ev as CustomEvent<{ opportunity_id?: string }>;
+            const id = typeof ce.detail?.opportunity_id === "string" ? ce.detail.opportunity_id.trim() : "";
+            if (!id || drawer.type !== "opportunities" || drawer.id !== id) return;
+            setDrawerTab("overview");
+            window.dispatchEvent(
+                new CustomEvent(ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH, { detail: { opportunity_id: id } })
+            );
+            requestAnimationFrame(() => {
+                document.querySelector("[data-admin-opportunity-operational-tasks]")?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "nearest",
+                });
+            });
+        };
+        window.addEventListener(ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS, onFocusOperationalTasks as EventListener);
+        return () =>
+            window.removeEventListener(ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS, onFocusOperationalTasks as EventListener);
     }, [drawer.type, drawer.id]);
 
     useEffect(() => {
@@ -6742,6 +6767,9 @@ export default function AdminEntityDrawer() {
                     />
                 );
             }
+            if (isTaskAssistV1UiEnabled() && drawer.id && drawer.id !== "new") {
+                out.operational_tasks_followups = <OpportunityOperationalTasksSection opportunityId={drawer.id} />;
+            }
             return out;
         }
         return {};
@@ -7335,6 +7363,27 @@ export default function AdminEntityDrawer() {
         if (drawer.type === "opportunities") {
             overviewSections = overviewSections.filter((s) => s.key !== "operational_attention");
             overviewSections = overviewSections.filter((s) => s.key !== "tour_scheduling");
+        }
+        if (
+            drawer.type === "opportunities" &&
+            overviewData &&
+            !(overviewData as { _create?: boolean })._create &&
+            isTaskAssistV1UiEnabled()
+        ) {
+            if (!overviewSections.some((s) => s.key === "operational_tasks_followups")) {
+                overviewSections = [
+                    ...overviewSections,
+                    {
+                        key: "operational_tasks_followups",
+                        title: "Operational tasks & follow-ups",
+                        defaultExpanded: true,
+                        collapsible: true,
+                        gridCols: 1,
+                        fields: [],
+                        locked: true,
+                    },
+                ];
+            }
         }
         return overviewSections;
     }, [drawer.type, overviewData, presentationType, recordChromeSchedule.layout, recordChromeOpportunity.layout]);
@@ -9746,9 +9795,6 @@ export default function AdminEntityDrawer() {
                         drawer.id !== "new" &&
                         opportunityRecordGateWorkflowLayout && (
                             <div className="pt-2 space-y-3" data-admin-opportunity-comms-panel="true">
-                                {isTaskAssistV1UiEnabled() ? (
-                                    <TaskAssistOpportunityLauncher entityId={drawer.id} label={String(drawerTitleResolved)} />
-                                ) : null}
                                 <CommunicationsDrawerSection
                                     embedded
                                     apiEntityType="opportunities"

@@ -28,7 +28,9 @@ import {
   type WorkflowAssistErrorEnvelopeV1,
   type WorkflowAssistReadCardPayloadV1,
   type WorkflowAssistReadIntentV1,
+  type WorkflowAssistThreadMutationHandlersV1,
 } from "@/lib/agent/workflowAssist/workflowAssistReadV1";
+import type { WorkflowAssistProposeRequestV1, WorkflowAssistSuggestionV1 } from "@/lib/agent/workflowAssist/workflowAssistProposalV1";
 import {
   commandSurfaceEntitySearchQuery,
   routeCommandSurface,
@@ -63,6 +65,18 @@ const CMD = {
   textLabel: "rgba(39, 63, 82, 0.52)",
 } as const;
 
+/** Deterministic create proposal for “Propose new disabled workflow (template)” from read cards. */
+const WORKFLOW_ASSIST_CREATE_PROPOSE_BODY = {
+  version: 1 as const,
+  proposal_kind: "create_workflow" as const,
+  draft: {
+    name: "Assist draft (disabled)",
+    description: "Template from Workflow Assist — configure steps and enable in Automations.",
+    event_type: "opportunity_status_changed",
+    entity_type: "opportunity",
+  },
+} satisfies WorkflowAssistProposeRequestV1;
+
 const BAR_MAX_WIDTH = 840;
 const EXPANDED_MAX_H = 320;
 
@@ -87,6 +101,7 @@ function lastThreadPreviewText(turns: CommandSurfaceThreadTurn[]): string | null
     if (turn.kind === "action_card") {
       if (turn.card.type === "task_assist") return turn.card.entityLabel?.trim() || null;
       if (turn.card.type === "job_layout") return turn.card.headline?.trim() || "Job layout";
+      if (turn.card.type === "workflow_assist_proposal") return "Workflow Assist proposal";
     }
   }
   return null;
@@ -817,6 +832,49 @@ export default function AICommandSurfaceShell() {
     [globalAssistant, setThread]
   );
 
+  const proposeWorkflowAssistBody = useCallback(
+    async (body: WorkflowAssistProposeRequestV1) => {
+      const res = await fetch("/api/admin/ai/workflow-assist/propose", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(body),
+      });
+      const j = (await res.json()) as {
+        ok?: boolean;
+        suggestion?: WorkflowAssistSuggestionV1;
+        error?: string;
+        message?: string;
+      };
+      const suggestion = j.suggestion;
+      if (!res.ok || !j.ok || !suggestion) {
+        const msg = j.message ?? j.error ?? `HTTP ${res.status}`;
+        setThread((prev) =>
+          appendThreadTurn(prev, {
+            kind: "error",
+            text: `Workflow Assist could not build a proposal: ${msg}`,
+          })
+        );
+        return;
+      }
+      setThread((prev) =>
+        appendThreadTurn(prev, {
+          kind: "action_card",
+          card: { type: "workflow_assist_proposal", suggestion },
+        })
+      );
+    },
+    [setThread]
+  );
+
+  const workflowAssistMutation = useMemo<WorkflowAssistThreadMutationHandlersV1>(
+    () => ({
+      onProposePause: (workflowId) => proposeWorkflowAssistBody({ version: 1, proposal_kind: "pause_workflow", workflow_id: workflowId }),
+      onProposeCreateTemplate: () => proposeWorkflowAssistBody(WORKFLOW_ASSIST_CREATE_PROPOSE_BODY),
+    }),
+    [proposeWorkflowAssistBody]
+  );
+
   const handleSubmit = useCallback(async () => {
     const cmd = commandText.trim();
     if (!cmd || busy) return;
@@ -1088,9 +1146,10 @@ export default function AICommandSurfaceShell() {
                 busy={busy}
                 onPickCandidate={(turnId, candidate, intent) => confirmTaskAssistTarget(turnId, candidate, intent)}
                 onConfirmCandidate={confirmTaskAssistTarget}
-          onToggleActionCard={(turnId) => setThread((prev) => toggleActionCardExpanded(prev, turnId))}
-          onToggleTaskAssistMoreOptions={onToggleTaskAssistMoreOptions}
-          renderJobLayoutCardActions={renderJobLayoutCardActions}
+                onToggleActionCard={(turnId) => setThread((prev) => toggleActionCardExpanded(prev, turnId))}
+                onToggleTaskAssistMoreOptions={onToggleTaskAssistMoreOptions}
+                renderJobLayoutCardActions={renderJobLayoutCardActions}
+                workflowAssistMutation={workflowAssistMutation}
               />
             </div>
           ) : null}

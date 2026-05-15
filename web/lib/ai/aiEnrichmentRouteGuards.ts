@@ -136,3 +136,66 @@ export function evaluateOrgPolicyForOpenAiTaskAssistProposeRoute(
     }
     return { ok: true, policy };
 }
+
+/**
+ * Workflow Assist propose route (stub): org must enable AI, stub provider, and allow `workflow_assist_draft`.
+ */
+export function evaluateOrgPolicyForStubWorkflowAssistProposeRoute(
+    orgMetadata: unknown,
+): { ok: true; policy: ResolvedAiOrgPolicyV1 } | OrgPolicyGuardFailure {
+    const policy = parseAiPolicyFromMetadata(orgMetadata);
+    if (!policy.enabled) {
+        return {
+            ok: false,
+            error: "AI_POLICY_DISABLED",
+            message: "Org metadata.ai_policy.enabled must be true.",
+        };
+    }
+    if (policy.provider !== "stub") {
+        return {
+            ok: false,
+            error: "AI_POLICY_PROVIDER",
+            message: "This path requires ai_policy.provider stub (or use the openai policy branch).",
+        };
+    }
+    if (!policy.allowed_features.includes("workflow_assist_draft")) {
+        return {
+            ok: false,
+            error: "AI_FEATURE_NOT_ALLOWED",
+            message: "workflow_assist_draft must appear in ai_policy.allowed_features.",
+        };
+    }
+    return { ok: true, policy };
+}
+
+/**
+ * Workflow Assist propose route (openai policy): org enables AI with `openai` provider and `workflow_assist_draft`.
+ * V1 propose is deterministic only — no OpenAI HTTP call from this handler.
+ */
+export function evaluateOrgPolicyForOpenAiWorkflowAssistProposeRoute(
+    orgMetadata: unknown,
+): { ok: true; policy: ResolvedAiOrgPolicyV1 } | OrgPolicyGuardFailure {
+    const policy = parseAiPolicyFromMetadata(orgMetadata);
+    if (!policy.enabled) {
+        return {
+            ok: false,
+            error: "AI_POLICY_DISABLED",
+            message: "Org metadata.ai_policy.enabled must be true.",
+        };
+    }
+    if (policy.provider !== "openai") {
+        return {
+            ok: false,
+            error: "AI_POLICY_PROVIDER",
+            message: "This branch requires ai_policy.provider openai.",
+        };
+    }
+    if (!policy.allowed_features.includes("workflow_assist_draft")) {
+        return {
+            ok: false,
+            error: "AI_FEATURE_NOT_ALLOWED",
+            message: "workflow_assist_draft must appear in ai_policy.allowed_features.",
+        };
+    }
+    return { ok: true, policy };
+}

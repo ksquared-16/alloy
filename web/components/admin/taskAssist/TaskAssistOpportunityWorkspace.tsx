@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import type { GlobalAssistantSourceSurface } from "@/contexts/GlobalAssistantContext";
+import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
+import {
+    ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS,
+    ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH,
+} from "@/lib/adminV2/opportunityDrawerTaskEvents";
 import type { TaskAssistSuggestionV1 } from "@/lib/agent/taskAssist/types";
 import {
     buildTaskAssistApplyRequestBody,
@@ -45,6 +50,8 @@ export type TaskAssistOpportunityWorkspaceProps = {
     /** Command bar compact flow — hides heavy V1.1 list chrome until operator expands more options. */
     command_bar_surface?: "compact" | "full";
     show_v11_lists?: boolean;
+    /** Display label for success / navigation (command bar). */
+    entity_display_label?: string | null;
 };
 
 function listText(lines: string[]): ReactNode {
@@ -153,8 +160,10 @@ export default function TaskAssistOpportunityWorkspace({
     command_bootstrap_key = null,
     command_bar_surface = "full",
     show_v11_lists = true,
+    entity_display_label = null,
 }: TaskAssistOpportunityWorkspaceProps) {
     const v11 = isTaskAssistV1UiEnabled();
+    const adminDrawer = useAdminDrawerOptional();
 
     const [channel, setChannel] = useState<"sms" | "email">("sms");
     const [instruction, setInstruction] = useState("");
@@ -185,6 +194,12 @@ export default function TaskAssistOpportunityWorkspace({
     const [reminderSubmitLoading, setReminderSubmitLoading] = useState(false);
     const [taskActionId, setTaskActionId] = useState<string | null>(null);
     const [intentClarify, setIntentClarify] = useState<string | null>(null);
+    const [lastCreatedOperationalTask, setLastCreatedOperationalTask] = useState<{
+        id: string;
+        title: string;
+        due_at: string;
+        status: string;
+    } | null>(null);
 
     const refreshLists = useCallback(async () => {
         if (!active || !v11) return;
@@ -229,6 +244,7 @@ export default function TaskAssistOpportunityWorkspace({
         setReminderDueLocal("");
         setReminderProposalId("");
         setIntentClarify(null);
+        setLastCreatedOperationalTask(null);
     }, [entityId]);
 
     useEffect(() => {
@@ -385,7 +401,7 @@ export default function TaskAssistOpportunityWorkspace({
                 throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
             }
             setSuccess(
-                `Message queued for delivery (id ${json.send.communication_message_id}). ${json.send.process_trigger_attempted_note ?? ""}`.trim()
+                `Message queued for delivery (communication_messages). Id ${json.send.communication_message_id}. ${json.send.process_trigger_attempted_note ?? ""}`.trim()
             );
             setProposal(null);
             setProposalValid(false);
@@ -412,7 +428,7 @@ export default function TaskAssistOpportunityWorkspace({
             if (!res.ok || !json.ok) {
                 throw new Error(json.message || json.error || `Save failed (${res.status})`);
             }
-            setSuccess("Draft saved for operator review. Approve when ready — nothing sends on approve.");
+            setSuccess("Draft saved to task_assist_proposals for later review — nothing sends until you approve from proposals.");
             await refreshLists();
         } catch (e: unknown) {
             setError((e as Error).message);
@@ -482,7 +498,9 @@ export default function TaskAssistOpportunityWorkspace({
             const res = await createCommunicationScheduledSend(body);
             const json = await readJson<{ ok?: boolean; error?: string; message?: string }>(res);
             if (!res.ok || !json.ok) throw new Error(json.message || json.error || `Schedule failed (${res.status})`);
-            setSuccess("Scheduled send saved. A background worker sends at the chosen time — not immediately.");
+            setSuccess(
+                "Scheduled send saved to communication_scheduled_sends. A background worker sends at the chosen time — not immediately."
+            );
             setScheduledForLocal("");
             setScheduleProposalId("");
             await refreshLists();
@@ -527,9 +545,31 @@ export default function TaskAssistOpportunityWorkspace({
                 proposalId: reminderProposalId.trim() || null,
             });
             const res = await createOperationalTask(body);
-            const json = await readJson<{ ok?: boolean; error?: string; message?: string }>(res);
+            const json = await readJson<{
+                ok?: boolean;
+                task?: { id: string; title: string; due_at: string; status: string };
+                error?: string;
+                message?: string | null;
+            }>(res);
             if (!res.ok || !json.ok) throw new Error(json.message || json.error || `Reminder failed (${res.status})`);
-            setSuccess("Reminder task created. Follow-up queues may use opportunity metadata when synced.");
+            setSuccess(
+                "Saved to operational_tasks as a personal reminder / follow-up. This is not a scheduled message — nothing sends automatically."
+            );
+            if (json.task) {
+                setLastCreatedOperationalTask({
+                    id: String(json.task.id),
+                    title: String(json.task.title),
+                    due_at: String(json.task.due_at),
+                    status: String(json.task.status),
+                });
+            } else {
+                setLastCreatedOperationalTask(null);
+            }
+            if (typeof window !== "undefined") {
+                window.dispatchEvent(
+                    new CustomEvent(ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH, { detail: { opportunity_id: entityId } })
+                );
+            }
             setReminderTitle("");
             setReminderDueLocal("");
             setReminderProposalId("");
@@ -590,6 +630,33 @@ export default function TaskAssistOpportunityWorkspace({
         );
     }, [proposal, selectedPersonId, finalBody, finalSubject, channel]);
 
+    const opportunityLinkLabel = (entity_display_label?.trim() || "This opportunity").trim();
+
+    const onViewCreatedOperationalTask = useCallback(() => {
+        if (!lastCreatedOperationalTask || typeof window === "undefined") return;
+        window.dispatchEvent(
+            new CustomEvent(ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH, { detail: { opportunity_id: entityId } })
+        );
+        const needsOpen =
+            !adminDrawer || adminDrawer.drawer.type !== "opportunities" || adminDrawer.drawer.id !== entityId;
+        if (needsOpen && adminDrawer) {
+            adminDrawer.openDrawer({ type: "opportunities", id: entityId, opportunityWorkspaceContext: null });
+            window.setTimeout(() => {
+                window.dispatchEvent(
+                    new CustomEvent(ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS, {
+                        detail: { opportunity_id: entityId, task_id: lastCreatedOperationalTask.id },
+                    })
+                );
+            }, 120);
+        } else {
+            window.dispatchEvent(
+                new CustomEvent(ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS, {
+                    detail: { opportunity_id: entityId, task_id: lastCreatedOperationalTask.id },
+                })
+            );
+        }
+    }, [adminDrawer, entityId, lastCreatedOperationalTask]);
+
     return (
         <div
             className={`mb-3 rounded-xl border border-alloy-stone/20 bg-alloy-stone/[0.04] px-3 py-2.5 shadow-sm ${className}`}
@@ -607,6 +674,29 @@ export default function TaskAssistOpportunityWorkspace({
 
             {success ? (
                 <p className="text-xs font-medium text-emerald-800/90 bg-emerald-50/80 border border-emerald-200/60 rounded-md px-2 py-1.5 mb-2">{success}</p>
+            ) : null}
+            {lastCreatedOperationalTask ? (
+                <div
+                    className="mb-2 rounded-lg border border-emerald-200/70 bg-white/90 px-2.5 py-2 text-[11px] shadow-sm"
+                    data-task-assist-reminder-created-card="true"
+                >
+                    <div className="font-semibold text-alloy-midnight/90">{lastCreatedOperationalTask.title}</div>
+                    <div className="mt-1 text-alloy-midnight/70">
+                        Due {new Date(lastCreatedOperationalTask.due_at).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })} ·{" "}
+                        <span className="capitalize">{lastCreatedOperationalTask.status}</span>
+                    </div>
+                    <div className="mt-1 text-alloy-midnight/65">Linked: {opportunityLinkLabel}</div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            data-task-assist-view-created-operational-task="true"
+                            className="rounded-md bg-alloy-midnight/90 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-alloy-midnight"
+                            onClick={onViewCreatedOperationalTask}
+                        >
+                            View task
+                        </button>
+                    </div>
+                </div>
             ) : null}
             {error ? (
                 <p className="text-xs font-medium text-red-800/90 bg-red-50/80 border border-red-200/60 rounded-md px-2 py-1.5 mb-2" role="alert">

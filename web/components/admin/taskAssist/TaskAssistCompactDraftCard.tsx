@@ -188,7 +188,9 @@ export default function TaskAssistCompactDraftCard({
             if (!res.ok || !json.ok || !json.send?.communication_message_id) {
                 throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
             }
-            setSuccess("Message queued for delivery. Nothing else sends until you approve future actions.");
+            setSuccess(
+                "Message queued for delivery (communication_messages). Nothing else sends until you approve future actions."
+            );
             setPhase("success");
         } catch (e: unknown) {
             setError(formatTaskAssistClientError((e as Error).message));
@@ -207,7 +209,7 @@ export default function TaskAssistCompactDraftCard({
             if (!res.ok || !json.ok) {
                 throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
             }
-            setSuccess("Draft saved for later review.");
+            setSuccess("Draft saved to task_assist_proposals for later review.");
         } catch (e: unknown) {
             setError(formatTaskAssistClientError((e as Error).message));
         } finally {
@@ -253,7 +255,9 @@ export default function TaskAssistCompactDraftCard({
             if (!res.ok || !json.ok) {
                 throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
             }
-            setSuccess("Scheduled send saved. It will send at the chosen time — not immediately.");
+            setSuccess(
+                "Scheduled send saved to communication_scheduled_sends. It will send at the chosen time — not immediately."
+            );
             setPhase("success");
         } catch (e: unknown) {
             setError(formatTaskAssistClientError((e as Error).message));

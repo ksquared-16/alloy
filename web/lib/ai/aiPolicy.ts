@@ -14,6 +14,8 @@ export const AI_ALLOWED_FEATURES = [
     "reasoning_paraphrase",
     /** Task Assist V1 — deterministic proposal generation (no LLM in default path). @see docs/sprints/05_2026/task_assist_v1.md */
     "task_assist_draft",
+    /** Workflow Assist Cards 4–5 — deterministic workflow draft proposals (no LLM). @see docs/sprints/05_2026/workflow_assist_v1.md */
+    "workflow_assist_draft",
 ] as const;
 
 export type AiAllowedFeature = (typeof AI_ALLOWED_FEATURES)[number];
