@@ -19,6 +19,10 @@ import {
     sanitizeCrmSearchToken,
 } from "@/lib/admin/forms/crmEntitySearchShared";
 import {
+    applyLabelDisambiguationForDuplicates,
+    disambiguationFromOppRow,
+} from "@/lib/agent/taskAssist/taskAssistEntitySearchDisambiguation";
+import {
     dedupeTaskAssistEntitySearchCandidates,
     mergeTaskAssistEntitySearchCandidates,
 } from "@/lib/agent/taskAssist/taskAssistEntitySearchDedupe";
@@ -46,10 +50,13 @@ type OppRow = {
     opportunity_number?: number | string | null;
     primary_person_id?: string | null;
     primary_contact_id?: string | null;
+    status_key?: string | null;
+    metadata?: unknown;
+    created_at?: string | null;
 };
 
 const OPP_SELECT =
-    "id, name, title, customer_id, work_unit_id, location_id, opportunity_number, primary_person_id, primary_contact_id";
+    "id, name, title, customer_id, work_unit_id, location_id, opportunity_number, primary_person_id, primary_contact_id, status_key, metadata, created_at";
 
 function clampLimit(n: number | undefined): number {
     const v = Number.isFinite(n) && n! > 0 ? Math.floor(n!) : DEFAULT_LIMIT;
@@ -80,10 +87,9 @@ function buildCandidate(
     conf: TaskAssistEntitySearchConfidence,
     customerName: string | null,
     subtitleExtra?: string | null,
-    locationName?: string | null
+    locationName?: string | null,
+    disambiguationPatch?: Partial<NonNullable<TaskAssistEntitySearchCandidate["disambiguation"]>>
 ): TaskAssistEntitySearchCandidate {
-    const rawNum = o.opportunity_number;
-    const n = rawNum != null && rawNum !== "" ? Number(rawNum) : null;
     const subtitleParts = [
         locationName ? `Location: ${locationName}` : null,
         customerName ? `Customer: ${customerName}` : null,
@@ -98,9 +104,10 @@ function buildCandidate(
         source,
         matched_fields: matched,
         disambiguation: {
+            ...disambiguationFromOppRow(o),
             customer_name: customerName,
-            opportunity_number: n != null && Number.isFinite(n) ? n : null,
             location_name: locationName ?? null,
+            ...disambiguationPatch,
         },
     };
 }
@@ -327,8 +334,8 @@ async function fetchCustomerIdsByMemberNamePatterns(
     supabase: SupabaseClient,
     orgId: string,
     variants: string[]
-): Promise<Map<string, string>> {
-    const byCustomer = new Map<string, string>();
+): Promise<Map<string, string[]>> {
+    const byCustomer = new Map<string, string[]>();
     for (const v of variants.slice(0, MAX_VARIANTS)) {
         const pattern = ilikePattern(v);
         const sel = "customer_id, display_name, first_name, last_name";
@@ -347,12 +354,14 @@ async function fetchCustomerIdsByMemberNamePatterns(
                 first_name?: string | null;
                 last_name?: string | null;
             }[]) {
-                if (!row?.customer_id || byCustomer.has(row.customer_id)) continue;
+                if (!row?.customer_id) continue;
                 const label =
                     (row.display_name ?? "").trim() ||
                     [row.first_name, row.last_name].filter(Boolean).join(" ").trim() ||
                     "household member";
-                byCustomer.set(row.customer_id, label);
+                const list = byCustomer.get(row.customer_id) ?? [];
+                if (!list.includes(label)) list.push(label);
+                byCustomer.set(row.customer_id, list);
             }
         }
         if (byCustomer.size >= 8) break;
@@ -426,7 +435,8 @@ export async function runTaskAssistEntitySearch(params: RunTaskAssistEntitySearc
         }
         const locationIds = [...oppRowsById.values()].map((o) => o.location_id).filter(Boolean) as string[];
         const locLabels = await fetchLocationLabelsById(params.supabase, params.orgId, locationIds);
-        const candidates = dedupeTaskAssistEntitySearchCandidates(
+        const candidates = applyLabelDisambiguationForDuplicates(
+            dedupeTaskAssistEntitySearchCandidates(
             [...byId.values()].map((c) => {
                 const opp = oppRowsById.get(c.entity_id);
                 const loc = opp?.location_id ? locLabels.get(String(opp.location_id)) ?? null : null;
@@ -441,6 +451,7 @@ export async function runTaskAssistEntitySearch(params: RunTaskAssistEntitySearc
                     loc
                 );
             })
+            )
         );
         return { q: id, variants: [id], candidates };
     }
@@ -511,7 +522,12 @@ export async function runTaskAssistEntitySearch(params: RunTaskAssistEntitySearc
                     remaining()
                 );
                 for (const o of oppsFromMembers) {
-                    const memberLabel = o.customer_id ? memberByCustomer.get(o.customer_id) ?? null : null;
+                    const members = o.customer_id ? memberByCustomer.get(o.customer_id) ?? [] : [];
+                    const childName = disambiguationFromOppRow(o).child_display_name;
+                    const membersForOpp =
+                        childName && members.includes(childName) ? [childName]
+                        : childName ? [childName, ...members.filter((m) => m !== childName)]
+                        : members;
                     push(
                         buildCandidate(
                             o,
@@ -519,7 +535,9 @@ export async function runTaskAssistEntitySearch(params: RunTaskAssistEntitySearc
                             ["customer_members.name"],
                             confidenceForMatch(false, primaryToken.length, "person"),
                             null,
-                            memberLabel ? `Matched member: ${memberLabel}` : null
+                            membersForOpp.length ? `Matched member: ${membersForOpp.join(", ")}` : null,
+                            null,
+                            { matched_members: membersForOpp }
                         ),
                         o
                     );
@@ -548,7 +566,9 @@ export async function runTaskAssistEntitySearch(params: RunTaskAssistEntitySearc
                         ["primary_person_id", "persons.last_name"],
                         confidenceForMatch(false, primaryToken.length, "person"),
                         null,
-                        personLabel ? `Matched contact: ${personLabel}` : "Matched primary contact"
+                        personLabel ? `Matched contact: ${personLabel}` : "Matched primary contact",
+                        null,
+                        personLabel ? { matched_contacts: [personLabel] } : undefined
                     ),
                     o
                 );
@@ -576,7 +596,9 @@ export async function runTaskAssistEntitySearch(params: RunTaskAssistEntitySearc
                         ["primary_contact_id", "contacts.last_name"],
                         confidenceForMatch(false, primaryToken.length, "person"),
                         null,
-                        contactLabel ? `Matched contact: ${contactLabel}` : "Matched primary contact"
+                        contactLabel ? `Matched contact: ${contactLabel}` : "Matched primary contact",
+                        null,
+                        contactLabel ? { matched_contacts: [contactLabel] } : undefined
                     ),
                     o
                 );
@@ -607,7 +629,9 @@ export async function runTaskAssistEntitySearch(params: RunTaskAssistEntitySearc
         );
     });
 
-    const candidates = dedupeTaskAssistEntitySearchCandidates(withLocation).slice(0, limit);
+    const candidates = applyLabelDisambiguationForDuplicates(
+        dedupeTaskAssistEntitySearchCandidates(withLocation).slice(0, limit)
+    );
 
     return {
         q: primaryToken,

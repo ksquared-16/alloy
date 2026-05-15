@@ -381,6 +381,48 @@ describe("runTaskAssistEntitySearch", () => {
         expect(candidates[0]?.source).toBe("primary_person");
     });
 
+    it("returns separate candidates for sibling inquiries with same label but different entity ids", async () => {
+        const supabase = createSearchSupabase(ORG_A, {
+            opportunities: [
+                {
+                    id: OPP_ID,
+                    org_id: ORG_A,
+                    name: "Family inquiry — Mitchell / South Campus",
+                    customer_id: CUST_ID,
+                    location_id: "loc-south",
+                    metadata: { inquiry_children: [{ display_name: "Mia Mitchell" }] },
+                    opportunity_number: 101,
+                },
+                {
+                    id: "opp-ethan",
+                    org_id: ORG_A,
+                    name: "Family inquiry — Mitchell / South Campus",
+                    customer_id: CUST_ID,
+                    location_id: "loc-south",
+                    metadata: { inquiry_children: [{ display_name: "Ethan Mitchell" }] },
+                    opportunity_number: 102,
+                },
+            ],
+            customers: [{ id: CUST_ID, org_id: ORG_A, name: "Mitchell household" }],
+            persons: [],
+            contacts: [],
+            customer_members: [],
+            locations: [{ id: "loc-south", org_id: ORG_A, label: "South Campus" }],
+        });
+
+        const { candidates } = await runTaskAssistEntitySearch({
+            supabase,
+            orgId: ORG_A,
+            accessDim: openDim,
+            rawQ: "Mitchell",
+        });
+
+        expect(candidates).toHaveLength(2);
+        expect(new Set(candidates.map((c) => c.entity_id)).size).toBe(2);
+        expect(candidates.some((c) => c.label.includes("Mia Mitchell"))).toBe(true);
+        expect(candidates.some((c) => c.label.includes("Ethan Mitchell"))).toBe(true);
+    });
+
     it("dedupes same opportunity from customer and person bridges", async () => {
         const supabase = createSearchSupabase(ORG_A, {
             opportunities: [

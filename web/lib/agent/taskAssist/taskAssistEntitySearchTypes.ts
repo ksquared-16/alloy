@@ -20,8 +20,17 @@ export type TaskAssistEntitySearchCandidate = {
     matched_fields: string[];
     disambiguation?: {
         customer_name?: string | null;
+        customer_id?: string | null;
+        primary_person_id?: string | null;
+        primary_contact_id?: string | null;
         opportunity_number?: string | number | null;
         location_name?: string | null;
+        status_key?: string | null;
+        child_display_name?: string | null;
+        tour_date_hint?: string | null;
+        created_at_hint?: string | null;
+        matched_members?: string[];
+        matched_contacts?: string[];
     };
 };
 

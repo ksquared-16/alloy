@@ -1,3 +1,4 @@
+import { mergeMatchedNameLists } from "@/lib/agent/taskAssist/taskAssistEntitySearchDisambiguation";
 import type {
     TaskAssistEntitySearchCandidate,
     TaskAssistEntitySearchConfidence,
@@ -58,8 +59,24 @@ export function mergeTaskAssistEntitySearchCandidates(
     const matched_fields = [...new Set([...existing.matched_fields, ...incoming.matched_fields])];
     const disambiguation = {
         customer_name: existing.disambiguation?.customer_name ?? incoming.disambiguation?.customer_name ?? null,
+        customer_id: existing.disambiguation?.customer_id ?? incoming.disambiguation?.customer_id ?? null,
+        primary_person_id: existing.disambiguation?.primary_person_id ?? incoming.disambiguation?.primary_person_id ?? null,
+        primary_contact_id: existing.disambiguation?.primary_contact_id ?? incoming.disambiguation?.primary_contact_id ?? null,
         opportunity_number: existing.disambiguation?.opportunity_number ?? incoming.disambiguation?.opportunity_number ?? null,
         location_name: existing.disambiguation?.location_name ?? incoming.disambiguation?.location_name ?? null,
+        status_key: existing.disambiguation?.status_key ?? incoming.disambiguation?.status_key ?? null,
+        child_display_name:
+            existing.disambiguation?.child_display_name ?? incoming.disambiguation?.child_display_name ?? null,
+        tour_date_hint: existing.disambiguation?.tour_date_hint ?? incoming.disambiguation?.tour_date_hint ?? null,
+        created_at_hint: existing.disambiguation?.created_at_hint ?? incoming.disambiguation?.created_at_hint ?? null,
+        matched_members: mergeMatchedNameLists(
+            existing.disambiguation?.matched_members,
+            incoming.disambiguation?.matched_members
+        ),
+        matched_contacts: mergeMatchedNameLists(
+            existing.disambiguation?.matched_contacts,
+            incoming.disambiguation?.matched_contacts
+        ),
     };
     const label = existing.label.trim() || incoming.label.trim();
     return {

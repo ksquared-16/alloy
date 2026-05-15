@@ -23,6 +23,10 @@ export function formatTaskAssistClientError(
         return "Message drafting is not enabled for this organization yet.";
     }
 
+    if (/AI_ENRICHMENT_STUB_ENABLED/i.test(raw) || code === "FEATURE_DISABLED") {
+        return "Message drafting is not enabled in this environment yet.";
+    }
+
     if (raw) return raw;
     if (code) return "Something went wrong. Try again or contact your administrator.";
     return "Something went wrong. Try again.";

@@ -8,6 +8,7 @@ import { badgeLabel } from "@/lib/adminV2/aiCommandSurface/aiCommandSurfaceModel
 import { WORKFLOW_ASSIST_NOTICE_TEXT } from "@/lib/adminV2/aiCommandSurface/commandSurfaceRouter";
 import type { CommandSurfaceThreadTurn } from "@/lib/adminV2/aiCommandSurface/commandSurfaceThreadTypes";
 import type { TaskAssistCommandIntent } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
+import { formatCandidateDebugLine } from "@/lib/agent/taskAssist/taskAssistEntitySearchDisambiguation";
 import type { TaskAssistEntitySearchCandidate } from "@/lib/agent/taskAssist/taskAssistEntitySearchTypes";
 import { neutral, derived, brand, semantic } from "@/styles/tokens/colors";
 
@@ -93,6 +94,8 @@ export default function CommandSurfaceThread({
     onToggleTaskAssistMoreOptions,
     renderJobLayoutCardActions,
 }: CommandSurfaceThreadProps) {
+    const showSearchDebug = process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test";
+
     if (turns.length === 0) {
         return null;
     }
@@ -145,6 +148,9 @@ export default function CommandSurfaceThread({
                                                 <button
                                                     type="button"
                                                     data-command-surface-candidate-row="true"
+                                                    data-entity-id={c.entity_id}
+                                                    data-entity-source={c.source}
+                                                    data-matched-fields={c.matched_fields.join("|")}
                                                     disabled={busy}
                                                     className="flex w-full flex-col rounded-md border px-2 py-1.5 text-left text-[11px] hover:bg-alloy-stone/[0.06] disabled:opacity-50"
                                                     style={{ borderColor: derived.border, color: CMD.textBody }}
@@ -157,6 +163,15 @@ export default function CommandSurfaceThread({
                                                     <span className="font-semibold">{c.label}</span>
                                                     {c.subtitle ? (
                                                         <span style={{ color: CMD.textSupporting }}>{c.subtitle}</span>
+                                                    ) : null}
+                                                    {showSearchDebug ? (
+                                                        <span
+                                                            className="font-mono text-[9px] leading-tight"
+                                                            style={{ color: CMD.textLabel }}
+                                                            data-command-surface-candidate-debug="true"
+                                                        >
+                                                            {formatCandidateDebugLine(c)}
+                                                        </span>
                                                     ) : null}
                                                 </button>
                                             </li>
