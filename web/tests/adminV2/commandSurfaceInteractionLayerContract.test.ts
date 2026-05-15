@@ -22,9 +22,14 @@ describe("Interaction Layer V1 command surface contract (Card 7)", () => {
         expect(src).not.toContain("data-adminv2-command-surface-mode-tabs");
         expect(src).not.toContain("Find target");
         expect(src).not.toMatch(/>\s*Preview\s*</);
+        expect(src).not.toContain("Enter to send · confirm targets and approve actions before anything sends");
+        expect(src).not.toContain("Ask anything — text a family");
+        expect(src).toContain('placeholder="Ask me anything"');
         expect(src).toContain("data-command-surface-submit");
         expect(src).toContain('busy ? "Working…" : "Ask"');
         expect(src).toContain("data-command-surface-thread-panel");
+        expect(src).toContain("data-command-surface-thread-toggle");
+        expect(src).toContain("data-command-surface-clear");
     });
 
     it("header Assistant link is removed", () => {

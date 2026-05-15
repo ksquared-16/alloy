@@ -75,7 +75,10 @@ import {
     inferOpportunityDiscountSelectionToken,
     type JobDiscountOptionDto,
 } from "@/lib/admin/jobDiscountSelection";
-import { opportunityOverviewStatusBadgeLabel } from "@/lib/admin/opportunityOverviewLabels";
+import {
+    opportunityOverviewRelationshipReadLabel,
+    opportunityOverviewStatusBadgeLabel,
+} from "@/lib/admin/opportunityOverviewLabels";
 import { formatVendorOptionLabel, type AdminVendorSelectOption } from "@/lib/admin/vendorOptionLabel";
 import { mergeUnifiedStatusIntoConfigOverview } from "@/lib/admin/unifiedDrawerStatus";
 import { recordSurfaceContextStyle } from "@/lib/visualContext";
@@ -5709,6 +5712,15 @@ export default function AdminEntityDrawer() {
         return drawerRecordNumberSubtitle(drawer.type, overviewData as Record<string, unknown>);
     }, [overviewData, drawer.type]);
 
+    const opportunityHeaderLocationLabel = useMemo(() => {
+        if (drawer.type !== "opportunities" || !overviewData || (overviewData as { _create?: boolean })._create) {
+            return null;
+        }
+        const loc = opportunityOverviewRelationshipReadLabel(overviewData as Record<string, unknown>, "location_id");
+        if (loc === undefined || !loc.trim()) return null;
+        return loc.trim();
+    }, [drawer.type, overviewData]);
+
     const title: React.ReactNode = overviewData
         ? drawer.type === "contacts"
             ? (overviewData as { _create?: boolean })._create
@@ -7970,6 +7982,15 @@ export default function AdminEntityDrawer() {
                 <div className="flex flex-wrap items-center gap-2">
                     {workflowCompactRecordNum ? <span>{workflowCompactRecordNum}</span> : null}
                     <span className="shrink-0">{opportunityInquiryWorkflowHeaderStatus}</span>
+                    {opportunityHeaderLocationLabel ? (
+                        <span
+                            className="inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[10px] font-medium"
+                            style={{ borderColor: "rgba(39, 63, 82, 0.18)", color: "rgba(39, 63, 82, 0.78)" }}
+                            data-opportunity-drawer-location="true"
+                        >
+                            {opportunityHeaderLocationLabel}
+                        </span>
+                    ) : null}
                 </div>
                 {overviewData && !(overviewData as { _create?: boolean })._create ? (
                     <OperationalAttentionHeaderStrip
@@ -7983,6 +8004,15 @@ export default function AdminEntityDrawer() {
         ) : drawer.type === "opportunities" && !opportunityInquiryWorkflowDrawer ? (
             <div className="mt-0.5 space-y-1.5">
                 {headerSubtitleBase ? <div>{headerSubtitleBase}</div> : null}
+                {opportunityHeaderLocationLabel ? (
+                    <div
+                        className="text-[11px] font-medium"
+                        style={{ color: "rgba(39, 63, 82, 0.72)" }}
+                        data-opportunity-drawer-location="true"
+                    >
+                        Location: {opportunityHeaderLocationLabel}
+                    </div>
+                ) : null}
                 {overviewData && !(overviewData as { _create?: boolean })._create ? (
                     <OperationalAttentionHeaderStrip
                         key={`attn-hdr-${String((overviewData as { id?: string }).id ?? "")}`}

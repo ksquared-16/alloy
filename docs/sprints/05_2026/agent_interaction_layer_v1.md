@@ -1,13 +1,21 @@
-# Sprint: Agent UX / Interaction Layer V1 — Universal command surface
+# Sprint: Agent UX / Interaction Layer V1 — Orchestrator command surface
 
 **Path:** `docs/sprints/05_2026/agent_interaction_layer_v1.md`  
 **Status:** **Interaction Layer V1 complete** (Cards **0–7**). Cards **1–5** shipped universal command surface; Cards **6–7** removed header Assistant, aligned docs, hardened tests.  
 **Prerequisite (shipped):** `docs/sprints/05_2026/task_assist_v1_1.md` (Cards **0–9** — Task Assist backend + command bar pivot, entity-search, intent routing).  
 **Non-goals (V1 interaction layer):** New backend send/schema routes; autonomous agents; bulk send; **Workflow Assist execution** (Agent #3); LLM-required parsing (optional gated extract-only is a **later** card, not V1 default).
 
-**Problem:** The bottom **`AICommandSurfaceShell`** works but reads like **two products stitched together** — visible **Task Assist / Job layout** tabs, **Find target**, **Preview** language, mode-gated Enter, and a full **`TaskAssistOpportunityWorkspace`** form in the tray. Operators should experience **one persistent assistant** at the bottom: type naturally, see a **thread**, confirm **action cards**, never wonder which “mode” they are in.
+**Product doctrine (2026-05):** The bottom command bar is the **Orchestrator Agent** — not Task Assist. Task Assist and Workflow Assist are **specialist agents** the Orchestrator routes to. See **`docs/product/ai-system.md`** (AdminV2 agent model).
 
-**North star:** One command/chat surface; **intent router** picks the right agent capability; **search + deterministic parse** resolve entity + goal; **thread state** holds the conversation; **approval cards** gate all side effects. **No auto-send.**
+| Agent | Owns | Does **not** do |
+|-------|------|------------------|
+| **Orchestrator** | **`AICommandSurfaceShell`**, **`routeCommandSurface`**, intent/slot parse, entity search orchestration, thread, candidate/clarify turns | Direct send, schedule, task create, workflow config |
+| **Task Assist (Agent #2)** | One-off drafts, scheduled sends, reminders/tasks — via action cards + existing APIs | Workflow configuration; autonomous execution |
+| **Workflow Assist (Agent #3)** | *(future)* workflow drafts, maintenance, oversight — disabled-by-default, approval before apply | One-off comms/tasks *(Task Assist territory)* |
+
+**Problem (resolved):** The bar previously read like **two products stitched together** (Task Assist vs Job layout tabs). Operators now get **one Orchestrator input**: type naturally, see a **thread**, confirm **action cards** for the routed specialist.
+
+**North star:** One Orchestrator surface; **`routeCommandSurface`** picks the specialist; search + deterministic parse resolve entity + goal; thread holds the conversation; **specialist action cards** gate all side effects. **No auto-send.**
 
 ---
 
@@ -71,11 +79,11 @@ Root causes:
 
 ### UX doctrine
 
-1. **One surface** — The bottom bar is **the** Alloy assistant for AdminV2; not “Task Assist mode” vs “Job mode.”
-2. **Conversation, not forms-first** — Operator sees **their message**, then **assistant turns** (text + structured cards). Full workspace controls move **inside cards** or **expand from cards**, not as default chrome.
-3. **Confirm before side effects** — Search resolves **candidates**; actions show **proposal cards**; send/schedule/task **only** on explicit approve (existing server gates unchanged).
+1. **Orchestrator surface** — The bottom bar is the **Orchestrator Agent** for AdminV2 — not “Task Assist mode” vs “Job mode.” Task Assist is **one route destination**, not the whole assistant.
+2. **Conversation, not forms-first** — Operator sees **their message**, then Orchestrator turns (text + structured cards). Specialist controls (**Task Assist** workspace, layout preview) live **inside cards**, not as default chrome.
+3. **Orchestrator never executes** — Search/clarify/candidate selection only. Send/schedule/task/workflow apply happen **inside specialist action cards** after explicit operator approve (existing server gates unchanged).
 4. **Progressive disclosure** — Advanced JSON / layout diff / proposal lists **collapsed** behind card expand or “Details,” not default tray layout.
-5. **Honest limits** — Workflow-like asks get a **clear future message**, not silent failure or wrong agent.
+5. **Honest routing** — Workflow-like asks → **Workflow Assist notice** now; Workflow Assist action cards **later**. Do not mis-route workflow config into Task Assist.
 6. **Not autonomous** — No background execution; thread is **operator-driven** turn-by-turn.
 
 ### Architecture (target)
@@ -89,35 +97,35 @@ AdminV2Shell
         └── (no mode tabs)
 
 Submit flow:
-  Input → commandSurfaceRouter.parseAndRoute(text, ambientContext, pageContext)
+  Input → routeCommandSurface (Orchestrator router)
         → thread.append(userMessage)
         → thread.append(assistantTurn | candidateList | clarify | workflowNotice)
-        → on entity confirmed → thread.append(actionCard)
-        → on card approve → existing APIs (propose/apply/schedule/task/layout apply)
+        → on entity confirmed → thread.append(specialist actionCard)
+        → on card approve → specialist APIs (Task Assist propose/apply/schedule/task; job layout apply)
 ```
 
-### Intent routing model (unified router)
+### Intent routing model (Orchestrator router)
 
-**New module (proposed):** `web/lib/adminV2/aiCommandSurface/commandSurfaceRouter.ts`
+**Module (shipped):** `web/lib/adminV2/aiCommandSurface/commandSurfaceRouter.ts` — **`routeCommandSurface`**. Implementation name retained; product = **Orchestrator routing layer**.
 
 | Route | Signals (deterministic V1) | Handler |
 |-------|---------------------------|---------|
-| **`workflow_future`** | Existing workflow regex family | Assistant message only — no API |
-| **`task_assist_*`** | Message/reminder verbs, comms vocabulary, opportunity context | Reuse + extend **`parseTaskAssistCommandIntent`** |
-| **`job_layout`** | Layout/overview vocabulary **or** current route is job record overview **and** no comms intent | Reuse **`runOverviewLayoutSemanticPreview`** |
+| **`workflow_assist_notice`** | Existing workflow regex family | Orchestrator notice → **Workflow Assist** (no API; specialist not built) |
+| **`task_assist`** | Message/reminder verbs, comms vocabulary, opportunity context | Route to **Task Assist** specialist — reuse **`parseTaskAssistCommandIntent`** |
+| **`job_layout`** | Layout/overview vocabulary **or** job overview context **and** no comms intent | Layout preview card — not Task Assist or Workflow Assist |
 | **`clarify`** | Unknown + no entity + no ambient | Assistant ask one short question |
 | **`entity_search`** | Named entity fragment without resolved **`entity_id`** | **`entity-search`** API |
 
 **Precedence (locked for V1):**
 
-1. Workflow block (inform only)  
+1. Workflow-like → **Workflow Assist notice** (Orchestrator stops; no Task Assist proceed)  
 2. If **`currentContext`** + pronoun-only → skip search, offer confirm card  
-3. If comms/reminder intent → Task Assist path  
-4. Else if layout intent OR (on job overview surface AND no comms) → job layout path  
+3. If comms/reminder intent → **Task Assist** route  
+4. Else if layout intent OR (on job overview surface AND no comms) → **job layout** route  
 5. Else entity search if name-like fragment  
 6. Else clarify  
 
-**No `commandSurfaceMode` in UI.** Optional internal **`lastRoute`** for analytics only.
+**No `commandSurfaceMode` in UI.** Orchestrator owns routing; specialists own execution.
 
 ### Command state model (thread)
 
@@ -139,7 +147,7 @@ type CommandSurfaceActionCard =
   | { type: "job_layout_preview"; planner: JobOverviewPlannerSuccess; structuredJson: string };
 ```
 
-**Persistence V1:** In-memory thread in React state + optional **`sessionStorage`** key per AdminV2 tab (no server thread table in V1). Clear on org switch / sign-out.
+**Persistence V1 (shipped polish):** Thread state lives in **`GlobalAssistantContext`** (`commandSurfaceThread`, `commandSurfaceJobCardUi`, `commandSurfaceThreadExpanded`) with **`sessionStorage`** backup (`commandSurfaceThreadPersistence.ts`). Survives **AdminV2 route changes within the tab session**; **Clear** resets explicitly. Full browser reload restores from `sessionStorage` until tab close. No server thread table in V1.
 
 **Confirmed entity** lives on thread session: `{ entity_type, entity_id, label }` — merges with **`GlobalAssistantContext.currentContext`** (drawer may seed; thread is authoritative after confirm).
 
@@ -196,14 +204,14 @@ Cards are **assistant thread items**, not a separate panel.
 | **`TaskAssistOpportunityLauncher.tsx`** | **`seedContext` + focus** — no mode switch |
 | **`TopNavBar.tsx`** | **Remove Assistant button** (Card 6) |
 
-### Workflow Assist messaging (design lock)
+### Workflow Assist messaging (Orchestrator → specialist notice)
 
-When workflow regex matches:
+When workflow regex matches, the **Orchestrator** shows a **Workflow Assist notice** in the thread — it does **not** proceed on the Task Assist path and does **not** execute workflow config.
 
 > **That sounds like Workflow Assist. This is coming next.**  
-> Task Assist can draft messages, schedule sends, and create reminders for an opportunity — try rephrasing without automation rules.
+> For one-off actions today, rephrase without automation rules (e.g. text a family, schedule an email, set a reminder).
 
-No route execution; no workflow table writes.
+**Later:** Workflow Assist **action cards** (draft workflow, maintenance) with disabled-by-default drafts and human approval. **Not built in V1.**
 
 ---
 

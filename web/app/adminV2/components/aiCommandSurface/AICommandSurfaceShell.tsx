@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from "react";
-import { usePathname } from "next/navigation";
 import { neutral, derived, brand, semantic } from "@/styles/tokens/colors";
 import type { JobOverviewPlannerSuccess } from "@/lib/agent/planner/jobOverviewPlannerTypes";
 import { runOverviewLayoutSemanticPreview } from "@/lib/admin/agentLab/overviewLayoutSemanticAssistant";
@@ -33,7 +32,10 @@ import {
   toggleActionCardExpanded,
   updateThreadTurn,
 } from "@/lib/adminV2/aiCommandSurface/commandSurfaceThreadState";
-import type { CommandSurfaceThreadState } from "@/lib/adminV2/aiCommandSurface/commandSurfaceThreadTypes";
+import type {
+  CommandSurfaceThreadState,
+  CommandSurfaceThreadTurn,
+} from "@/lib/adminV2/aiCommandSurface/commandSurfaceThreadTypes";
 import CommandSurfaceThread from "@/app/adminV2/components/aiCommandSurface/CommandSurfaceThread";
 import type { TaskAssistEntitySearchCandidate } from "@/lib/agent/taskAssist/taskAssistEntitySearchTypes";
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
@@ -59,6 +61,23 @@ function safeJson(x: unknown): string {
 
 function clampExpandedHeightPx(viewportH: number): number {
   return Math.max(220, Math.min(EXPANDED_MAX_H, Math.round(viewportH * 0.42)));
+}
+
+function lastThreadPreviewText(turns: CommandSurfaceThreadTurn[]): string | null {
+  for (let i = turns.length - 1; i >= 0; i--) {
+    const turn = turns[i]!;
+    if (turn.kind === "user_message") return turn.text.trim() || null;
+    if (turn.kind === "assistant_notice") return turn.text.trim() || null;
+    if (turn.kind === "error") return turn.text.trim() || null;
+    if (turn.kind === "workflow_notice") return "Workflow assist";
+    if (turn.kind === "candidate_results") return turn.candidates[0]?.label?.trim() || null;
+    if (turn.kind === "target_confirmed") return turn.candidate.label?.trim() || null;
+    if (turn.kind === "action_card") {
+      if (turn.card.type === "task_assist") return turn.card.entityLabel?.trim() || null;
+      if (turn.card.type === "job_layout") return turn.card.headline?.trim() || "Job layout";
+    }
+  }
+  return null;
 }
 
 function newIds(): { request_id: string; correlation_id: string } {
@@ -173,7 +192,7 @@ function SurfaceCard(props: {
       ref={rootRef}
       data-adminv2-ai-command-surface
       role="contentinfo"
-      aria-label="AI command surface"
+      aria-label="Orchestrator assistant"
       className="w-full flex justify-center px-4"
       style={{
         paddingTop: expanded ? 8 : 10,
@@ -429,8 +448,6 @@ function AdvancedDrawer(props: {
 }
 
 export default function AICommandSurfaceShell() {
-  const pathname = usePathname();
-  const routePathRef = useRef(pathname);
   const shellRootRef = useRef<HTMLElement | null>(null);
 
   const globalAssistant = useGlobalAssistantOptional();
@@ -438,10 +455,8 @@ export default function AICommandSurfaceShell() {
 
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const [commandText, setCommandText] = useState("");
-  const [thread, setThread] = useState<CommandSurfaceThreadState>(() => createEmptyThreadState());
-  const [busy, setBusy] = useState(false);
-  const [viewportH, setViewportH] = useState<number>(typeof window !== "undefined" ? window.innerHeight : 900);
-  const [jobCardUi, setJobCardUi] = useState<
+  const [localThread, setLocalThread] = useState<CommandSurfaceThreadState>(() => createEmptyThreadState());
+  const [localJobCardUi, setLocalJobCardUi] = useState<
     Record<
       string,
       {
@@ -452,6 +467,21 @@ export default function AICommandSurfaceShell() {
       }
     >
   >({});
+  const [localThreadExpanded, setLocalThreadExpanded] = useState(true);
+
+  const thread = globalAssistant?.commandSurfaceThread ?? localThread;
+  const setThread = globalAssistant?.setCommandSurfaceThread ?? setLocalThread;
+  const jobCardUi = globalAssistant?.commandSurfaceJobCardUi ?? localJobCardUi;
+  const setJobCardUi = globalAssistant?.setCommandSurfaceJobCardUi ?? setLocalJobCardUi;
+  const threadExpanded = globalAssistant?.commandSurfaceThreadExpanded ?? localThreadExpanded;
+  const setThreadExpanded = globalAssistant?.setCommandSurfaceThreadExpanded ?? setLocalThreadExpanded;
+  const clearConversation = globalAssistant?.clearCommandSurfaceConversation ?? (() => {
+    setLocalThread(createEmptyThreadState());
+    setLocalJobCardUi({});
+  });
+
+  const [busy, setBusy] = useState(false);
+  const [viewportH, setViewportH] = useState<number>(typeof window !== "undefined" ? window.innerHeight : 900);
 
   const panelMaxHeight = useMemo(() => clampExpandedHeightPx(viewportH), [viewportH]);
 
@@ -830,14 +860,6 @@ export default function AICommandSurfaceShell() {
   }, []);
 
   useEffect(() => {
-    if (routePathRef.current !== pathname) {
-      routePathRef.current = pathname;
-      setThread(createEmptyThreadState());
-      setJobCardUi({});
-    }
-  }, [pathname]);
-
-  useEffect(() => {
     const onFocusBar = (ev: Event) => {
       const detail = (ev as CustomEvent<AdminV2FocusCommandBarDetail>).detail ?? {};
       shellRootRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -850,13 +872,81 @@ export default function AICommandSurfaceShell() {
     return () => window.removeEventListener(ADMIN_V2_FOCUS_COMMAND_BAR, onFocusBar as EventListener);
   }, [globalAssistant]);
 
-  const surfaceExpanded = thread.turns.length > 0;
+  const hasThread = thread.turns.length > 0;
+  const threadPreview = useMemo(() => lastThreadPreviewText(thread.turns), [thread.turns]);
+  const surfaceExpanded = hasThread;
 
   return (
     <SurfaceCard expanded={surfaceExpanded} rootRef={shellRootRef}>
-      {globalAssistant?.currentContext?.label ? (
+      {hasThread ? (
         <div
-          className="border-b px-3 py-1.5 text-[10px] truncate"
+          className="rounded-t-xl border border-b-0 overflow-hidden"
+          style={{ borderColor: derived.border, backgroundColor: neutral.surface }}
+          data-command-surface-thread-panel="true"
+        >
+          <div
+            className="flex items-center gap-2 border-b px-3 py-1.5"
+            style={{ borderColor: derived.border, backgroundColor: derived.adminV2AiBarPineWash }}
+          >
+            <button
+              type="button"
+              className="text-[10px] font-semibold uppercase tracking-wide shrink-0"
+              style={{ color: CMD.textLabel }}
+              data-command-surface-thread-toggle="true"
+              onClick={() => setThreadExpanded(!threadExpanded)}
+              aria-expanded={threadExpanded}
+            >
+              {threadExpanded ? "Hide" : "Show"} conversation
+            </button>
+            {!threadExpanded && threadPreview ? (
+              <span className="min-w-0 flex-1 truncate text-[11px]" style={{ color: CMD.textSupporting }}>
+                {threadPreview.length > 72 ? `${threadPreview.slice(0, 69)}…` : threadPreview}
+              </span>
+            ) : (
+              <span className="min-w-0 flex-1 text-[11px]" style={{ color: CMD.textSupporting }}>
+                Assistant
+              </span>
+            )}
+            <button
+              type="button"
+              className="shrink-0 text-[10px] underline-offset-2 hover:underline"
+              style={{ color: CMD.textLabel }}
+              data-command-surface-clear="true"
+              onClick={() => clearConversation()}
+            >
+              Clear
+            </button>
+          </div>
+          {globalAssistant?.currentContext?.label ? (
+            <div
+              className="border-b px-3 py-1 text-[10px] truncate"
+              style={{ borderColor: derived.border, color: CMD.textSupporting }}
+              data-command-surface-ambient-context="true"
+            >
+              Context: {globalAssistant.currentContext.label}
+            </div>
+          ) : null}
+          {threadExpanded ? (
+            <div className="max-h-[min(52vh,440px)] overflow-y-auto rounded-b-none">
+              {busy && thread.turns[thread.turns.length - 1]?.kind === "user_message" ? (
+                <div className="px-3 py-2 text-[11px]" style={{ color: CMD.textSupporting }}>
+                  Working…
+                </div>
+              ) : null}
+              <CommandSurfaceThread
+                turns={thread.turns}
+                busy={busy}
+                onPickCandidate={(turnId, candidate, intent) => confirmTaskAssistTarget(turnId, candidate, intent)}
+                onConfirmCandidate={confirmTaskAssistTarget}
+                onToggleActionCard={(turnId) => setThread((prev) => toggleActionCardExpanded(prev, turnId))}
+                renderJobLayoutCardActions={renderJobLayoutCardActions}
+              />
+            </div>
+          ) : null}
+        </div>
+      ) : globalAssistant?.currentContext?.label ? (
+        <div
+          className="mb-2 rounded-xl border px-3 py-1.5 text-[10px] truncate"
           style={{ borderColor: derived.border, color: CMD.textSupporting, backgroundColor: neutral.surface }}
           data-command-surface-ambient-context="true"
         >
@@ -864,35 +954,15 @@ export default function AICommandSurfaceShell() {
         </div>
       ) : null}
 
-      <div
-        className="max-h-[min(52vh,440px)] overflow-y-auto border-b"
-        style={{ borderColor: derived.border, backgroundColor: neutral.surface }}
-        data-command-surface-thread-panel="true"
-      >
-        {busy && thread.turns.length > 0 && thread.turns[thread.turns.length - 1]?.kind === "user_message" ? (
-          <div className="px-3 py-2 text-[11px]" style={{ color: CMD.textSupporting }}>
-            Working…
-          </div>
-        ) : null}
-        <CommandSurfaceThread
-          turns={thread.turns}
-          busy={busy}
-          onPickCandidate={(turnId, candidate, intent) => confirmTaskAssistTarget(turnId, candidate, intent)}
-          onConfirmCandidate={confirmTaskAssistTarget}
-          onToggleActionCard={(turnId) => setThread((prev) => toggleActionCardExpanded(prev, turnId))}
-          renderJobLayoutCardActions={renderJobLayoutCardActions}
-        />
-      </div>
-
-      <div className={`flex items-end gap-2 ${surfaceExpanded ? "mt-0" : "mt-2"}`}>
+      <div className={`flex items-end gap-2 ${hasThread ? "mt-0" : "mt-2"}`}>
         <div
           className={`flex-1 min-w-0 border-2 bg-white px-3 py-2 ${
-            surfaceExpanded ? "rounded-b-xl rounded-t-none border-t border-t-[rgba(0,0,0,0.06)]" : "rounded-2xl px-3.5 py-2.5"
+            hasThread ? "rounded-b-xl rounded-t-none border-t border-t-[rgba(0,0,0,0.06)]" : "rounded-2xl px-3.5 py-2.5"
           }`}
           style={{
             borderColor: derived.adminV2AiInputPineRing,
             boxShadow:
-              surfaceExpanded
+              hasThread
                 ? `inset 0 1px 0 rgba(255,255,255,0.95)`
                 : `0 1px 0 rgba(0, 162, 131, 0.06), inset 0 1px 0 rgba(255,255,255,0.9)`,
           }}
@@ -901,7 +971,7 @@ export default function AICommandSurfaceShell() {
             ref={inputRef}
             value={commandText}
             onChange={(e) => setCommandText(e.target.value)}
-            placeholder='Ask anything — e.g. “Text the Mitchell family that we’re excited for her youngest child to start”'
+            placeholder="Ask me anything"
             className="w-full resize-none bg-transparent outline-none text-sm leading-snug"
             rows={1}
             style={{ color: neutral.textPrimary }}
@@ -914,9 +984,6 @@ export default function AICommandSurfaceShell() {
               }
             }}
           />
-          <div className="mt-0.5 text-[10px] leading-tight" style={{ color: CMD.textSupporting }}>
-            Enter to send · confirm targets and approve actions before anything sends
-          </div>
         </div>
         <button
           type="button"

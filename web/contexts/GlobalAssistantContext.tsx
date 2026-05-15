@@ -1,11 +1,20 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+/** Session state for the Orchestrator command bar (thread, context, focus). Task Assist is a routed specialist — not this provider's product name. */
+
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
 import {
     ADMIN_V2_FOCUS_COMMAND_BAR,
     type AdminV2FocusCommandBarDetail,
 } from "@/lib/adminV2/aiCommandSurface/adminV2CommandBarEvents";
+import {
+    clearPersistedCommandSurfaceSession,
+    loadPersistedCommandSurfaceSession,
+    persistCommandSurfaceSession,
+} from "@/lib/adminV2/aiCommandSurface/commandSurfaceThreadPersistence";
+import { createEmptyThreadState } from "@/lib/adminV2/aiCommandSurface/commandSurfaceThreadState";
+import type { CommandSurfaceThreadState } from "@/lib/adminV2/aiCommandSurface/commandSurfaceThreadTypes";
 
 export type GlobalAssistantEntityType = "opportunities";
 
@@ -23,6 +32,16 @@ export type GlobalAssistantEntityContext = {
 
 export type CommandSurfaceMode = "job_overview" | "task_assist";
 
+export type CommandSurfaceJobCardUiState = Record<
+    string,
+    {
+        advancedOpen: boolean;
+        detailsOpen: boolean;
+        applyAnyway: boolean;
+        applying: boolean;
+    }
+>;
+
 type GlobalAssistantContextValue = {
     /** Internal compat for drawer launcher — not exposed in command bar UI (Interaction Layer V1). */
     commandSurfaceMode: CommandSurfaceMode;
@@ -36,6 +55,18 @@ type GlobalAssistantContextValue = {
     closeAssistant: () => void;
     setAssistantContext: (context: GlobalAssistantEntityContext | null) => void;
     openAssistantWithContext: (context: GlobalAssistantEntityContext) => void;
+    /** Command surface thread — persisted in sessionStorage for AdminV2 navigation within the tab session. */
+    commandSurfaceThread: CommandSurfaceThreadState;
+    setCommandSurfaceThread: (
+        updater: CommandSurfaceThreadState | ((prev: CommandSurfaceThreadState) => CommandSurfaceThreadState)
+    ) => void;
+    commandSurfaceThreadExpanded: boolean;
+    setCommandSurfaceThreadExpanded: (expanded: boolean) => void;
+    clearCommandSurfaceConversation: () => void;
+    commandSurfaceJobCardUi: CommandSurfaceJobCardUiState;
+    setCommandSurfaceJobCardUi: (
+        updater: CommandSurfaceJobCardUiState | ((prev: CommandSurfaceJobCardUiState) => CommandSurfaceJobCardUiState)
+    ) => void;
 };
 
 const GlobalAssistantContext = createContext<GlobalAssistantContextValue | null>(null);
@@ -43,6 +74,50 @@ const GlobalAssistantContext = createContext<GlobalAssistantContextValue | null>
 export function GlobalAssistantProvider({ children }: { children: ReactNode }) {
     const [commandSurfaceMode, setCommandSurfaceMode] = useState<CommandSurfaceMode>("job_overview");
     const [currentContext, setCurrentContext] = useState<GlobalAssistantEntityContext | null>(null);
+
+    const [sessionLoaded] = useState(() => loadPersistedCommandSurfaceSession());
+    const [commandSurfaceThread, setCommandSurfaceThreadState] = useState<CommandSurfaceThreadState>(
+        () => sessionLoaded.thread
+    );
+    const [commandSurfaceThreadExpanded, setCommandSurfaceThreadExpandedState] = useState(
+        () => sessionLoaded.threadExpanded
+    );
+    const [commandSurfaceJobCardUi, setCommandSurfaceJobCardUiState] = useState<CommandSurfaceJobCardUiState>({});
+
+    useEffect(() => {
+        persistCommandSurfaceSession({
+            thread: commandSurfaceThread,
+            threadExpanded: commandSurfaceThreadExpanded,
+        });
+    }, [commandSurfaceThread, commandSurfaceThreadExpanded]);
+
+    const setCommandSurfaceThread = useCallback(
+        (updater: CommandSurfaceThreadState | ((prev: CommandSurfaceThreadState) => CommandSurfaceThreadState)) => {
+            setCommandSurfaceThreadState((prev) => (typeof updater === "function" ? updater(prev) : updater));
+        },
+        []
+    );
+
+    const setCommandSurfaceThreadExpanded = useCallback((expanded: boolean) => {
+        setCommandSurfaceThreadExpandedState(expanded);
+    }, []);
+
+    const setCommandSurfaceJobCardUi = useCallback(
+        (
+            updater:
+                | CommandSurfaceJobCardUiState
+                | ((prev: CommandSurfaceJobCardUiState) => CommandSurfaceJobCardUiState)
+        ) => {
+            setCommandSurfaceJobCardUiState((prev) => (typeof updater === "function" ? updater(prev) : updater));
+        },
+        []
+    );
+
+    const clearCommandSurfaceConversation = useCallback(() => {
+        setCommandSurfaceThreadState(createEmptyThreadState());
+        setCommandSurfaceJobCardUiState({});
+        clearPersistedCommandSurfaceSession();
+    }, []);
 
     const focusCommandBar = useCallback((detail?: AdminV2FocusCommandBarDetail) => {
         if (typeof window !== "undefined") {
@@ -83,6 +158,13 @@ export function GlobalAssistantProvider({ children }: { children: ReactNode }) {
             closeAssistant,
             setAssistantContext,
             openAssistantWithContext,
+            commandSurfaceThread,
+            setCommandSurfaceThread,
+            commandSurfaceThreadExpanded,
+            setCommandSurfaceThreadExpanded,
+            clearCommandSurfaceConversation,
+            commandSurfaceJobCardUi,
+            setCommandSurfaceJobCardUi,
         }),
         [
             commandSurfaceMode,
@@ -92,6 +174,13 @@ export function GlobalAssistantProvider({ children }: { children: ReactNode }) {
             closeAssistant,
             setAssistantContext,
             openAssistantWithContext,
+            commandSurfaceThread,
+            setCommandSurfaceThread,
+            commandSurfaceThreadExpanded,
+            setCommandSurfaceThreadExpanded,
+            clearCommandSurfaceConversation,
+            commandSurfaceJobCardUi,
+            setCommandSurfaceJobCardUi,
         ]
     );
 

@@ -6,10 +6,12 @@ import {
     accessScopeRestrictsData,
     departmentIdAllowed,
     fetchWorkUnitDepartmentId,
-    resolveRecordScopeConstraints,
     scopeDimensionsFromAccess,
-    type RecordScopeConstraints,
 } from "@/lib/admin/accessScope";
+import {
+    parseWorkspaceSiteIdFromSearchParams,
+    resolveQueueRecordScopeConstraints,
+} from "@/lib/admin/resolveQueueRecordScopeConstraints";
 import { fetchEffectiveUserDisplayTimezone } from "@/lib/admin/timezoneContract";
 import { getWorkUnitQueueItems, QueueServiceError } from "@/lib/queues/QueueService";
 import { perfQueueRowsServer } from "@/lib/perf/adminV2PerfLog";
@@ -100,13 +102,13 @@ export async function GET(
         }
     }
 
-    let recordScopeImpossible = false;
-    let recordScopeConstraints: RecordScopeConstraints | null = null;
-    if (accessScopeRestrictsData(dim)) {
-        const c = await resolveRecordScopeConstraints(supabase, ctx.orgId, dim);
-        if (c.impossible) recordScopeImpossible = true;
-        else recordScopeConstraints = c;
-    }
+    const workspaceSiteId = parseWorkspaceSiteIdFromSearchParams(request.nextUrl.searchParams);
+    const { recordScopeImpossible, recordScopeConstraints } = await resolveQueueRecordScopeConstraints(
+        supabase,
+        ctx.orgId,
+        dim,
+        workspaceSiteId
+    );
 
     try {
         const { limit, offset } = parseLimitOffset(request.nextUrl.searchParams);

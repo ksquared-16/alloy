@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
-import { accessScopeRestrictsData, resolveRecordScopeConstraints, scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import {
+    parseWorkspaceSiteIdFromSearchParams,
+    resolveQueueRecordScopeConstraints,
+} from "@/lib/admin/resolveQueueRecordScopeConstraints";
 import { fetchEffectiveUserDisplayTimezone } from "@/lib/admin/timezoneContract";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { getDepartmentWorkUnitQueueSummaries, QueueServiceError, type QueueSummaryRequestMode } from "@/lib/queues/QueueService";
@@ -81,13 +85,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ dep
 
     const t0 = Date.now();
     try {
-        let recordScopeImpossible = false;
-        let recordScopeConstraints: import("@/lib/admin/accessScope").RecordScopeConstraints | null = null;
-        if (accessScopeRestrictsData(dim)) {
-            const c = await resolveRecordScopeConstraints(supabase, ctx.orgId, dim);
-            if (c.impossible) recordScopeImpossible = true;
-            else recordScopeConstraints = c;
-        }
+        const workspaceSiteId = parseWorkspaceSiteIdFromSearchParams(request.nextUrl.searchParams);
+        const { recordScopeImpossible, recordScopeConstraints } = await resolveQueueRecordScopeConstraints(
+            supabase,
+            ctx.orgId,
+            dim,
+            workspaceSiteId
+        );
 
         const limit = parseLimit(request.nextUrl.searchParams);
         const workUnitConcurrency = parseWuConcurrency(request.nextUrl.searchParams);

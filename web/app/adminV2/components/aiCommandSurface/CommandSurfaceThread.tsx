@@ -91,19 +91,11 @@ export default function CommandSurfaceThread({
     renderJobLayoutCardActions,
 }: CommandSurfaceThreadProps) {
     if (turns.length === 0) {
-        return (
-            <div
-                className="px-3 py-2 text-[11px] leading-snug"
-                style={{ color: CMD.textSupporting }}
-                data-command-surface-thread-empty="true"
-            >
-                Ask anything — text a family, schedule an email, set a reminder, or adjust the job overview layout.
-            </div>
-        );
+        return null;
     }
 
     return (
-        <div className="space-y-2 px-3 py-2" data-command-surface-thread="true">
+        <div className="space-y-2 px-3 py-3" data-command-surface-thread="true">
             {turns.map((turn) => {
                 switch (turn.kind) {
                     case "user_message":

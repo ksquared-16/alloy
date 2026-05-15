@@ -4,6 +4,8 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
+import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
+import { appendWorkspaceSiteToUrl } from "@/lib/adminV2/workspaceSiteFilterClient";
 import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
 import { markWorkUnitNavigationStart } from "@/lib/perf/markWorkUnitNavigationStart";
 import {
@@ -247,6 +249,8 @@ export default function AdminV2WorkspaceDepartmentPage() {
     const router = useRouter();
     const { openDrawer } = useAdminDrawer();
     const { orgId, principalUserId, accessScopeFingerprint } = useWorkspaceOrg();
+    const siteFilter = useWorkspaceSiteFilter();
+    const selectedSiteId = siteFilter?.selectedSiteId ?? null;
     const departmentId = workspaceRouteParam(params.departmentId);
 
     /** True when layout applied readDepartmentPageCache for this dept (mirrors workspace root seeded shell). */
@@ -408,7 +412,10 @@ export default function AdminV2WorkspaceDepartmentPage() {
         setDeptQueueSummariesLoading(true);
         setDeptQueueSummariesError(null);
 
-        const summariesRoute = `/api/admin/departments/${encodeURIComponent(departmentId)}/work-unit-queue-summaries?include_previews=false&count_mode=exact&summary_mode=priority&priority_budget=5`;
+        const summariesRoute = appendWorkspaceSiteToUrl(
+            `/api/admin/departments/${encodeURIComponent(departmentId)}/work-unit-queue-summaries?include_previews=false&count_mode=exact&summary_mode=priority&priority_budget=5`,
+            selectedSiteId
+        );
 
         const applySummariesJson = (
             deptIdStr: string,
@@ -608,7 +615,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
         return () => {
             cancelled = true;
         };
-    }, [departmentId, orgId, principalUserId, accessScopeFingerprint]);
+    }, [departmentId, orgId, principalUserId, accessScopeFingerprint, selectedSiteId]);
 
     useEffect(() => {
         if (!departmentId) return;

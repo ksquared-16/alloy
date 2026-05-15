@@ -1,5 +1,7 @@
 /**
- * Interaction Layer V1 — unified command surface router (no LLM, no visible modes).
+ * Orchestrator Agent — routing layer for the AdminV2 command bar (Interaction Layer V1).
+ * Parses intent, decides specialist destination; does not execute operational side effects.
+ * Product: Orchestrator. Implementation: routeCommandSurface (name retained).
  */
 
 import { looksLikeAmbientOnlyCommand } from "@/lib/agent/taskAssist/taskAssistCommandBarResolution";
@@ -25,7 +27,7 @@ export type CommandSurfaceRouteResult = {
 };
 
 export const WORKFLOW_ASSIST_NOTICE_TEXT =
-    "That sounds like Workflow Assist. This is coming next. Task Assist can draft messages, schedule sends, and create reminders for an opportunity — try rephrasing without automation rules.";
+    "That sounds like Workflow Assist. Workflow Assist is coming next — it will handle automation rules and workflow configuration with your approval. For one-off actions today, rephrase without automation rules (e.g. text a family, schedule an email, or set a reminder).";
 
 const CLARIFY_DEFAULT =
     "Tell me what you'd like to do — for example, text a family, schedule an email, adjust the job overview layout, or set a reminder.";
@@ -52,11 +54,11 @@ function jobLayoutSignals(slots: CommandSurfaceSlots, intent: TaskAssistCommandI
 }
 
 /**
- * Route operator NL to the correct assistant capability without UI mode tabs.
+ * Orchestrator: route operator NL to the correct specialist without UI mode tabs.
  *
  * Precedence:
- * 1. workflow-like → workflow_assist_notice
- * 2. comms / reminder / schedule → task_assist
+ * 1. workflow-like → workflow_assist_notice (Workflow Assist specialist — notice only today)
+ * 2. comms / reminder / schedule → task_assist (Task Assist specialist)
  * 3. job / layout overview → job_layout
  * 4. entity-only or ambient pronoun → task_assist (search / confirm)
  * 5. otherwise → clarify

@@ -5,9 +5,12 @@ import {
     accessScopeRestrictsData,
     departmentIdAllowed,
     fetchWorkUnitDepartmentId,
-    resolveRecordScopeConstraints,
     scopeDimensionsFromAccess,
 } from "@/lib/admin/accessScope";
+import {
+    parseWorkspaceSiteIdFromSearchParams,
+    resolveQueueRecordScopeConstraints,
+} from "@/lib/admin/resolveQueueRecordScopeConstraints";
 import { assertRowOrg } from "@/lib/admin/assertRowOrg";
 import { fetchEffectiveUserDisplayTimezone } from "@/lib/admin/timezoneContract";
 import { createAdminClient } from "@/lib/supabaseAdmin";
@@ -80,13 +83,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ id:
         }
     }
 
-    let recordScopeImpossible = false;
-    let recordScopeConstraints: import("@/lib/admin/accessScope").RecordScopeConstraints | null = null;
-    if (accessScopeRestrictsData(dim)) {
-        const c = await resolveRecordScopeConstraints(supabase, ctx.orgId, dim);
-        if (c.impossible) recordScopeImpossible = true;
-        else recordScopeConstraints = c;
-    }
+    const workspaceSiteId = parseWorkspaceSiteIdFromSearchParams(request.nextUrl.searchParams);
+    const { recordScopeImpossible, recordScopeConstraints } = await resolveQueueRecordScopeConstraints(
+        supabase,
+        ctx.orgId,
+        dim,
+        workspaceSiteId
+    );
 
     const t0 = Date.now();
     try {

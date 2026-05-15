@@ -8,6 +8,11 @@ import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import WorkUnitWorkspace from "@/app/adminV2/components/workspace/shells/WorkUnitWorkspace";
 import { AutomationWorkflowsBlock } from "@/app/adminV2/components/workspace/blocks/AutomationWorkflowsBlock";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
+import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
+import {
+    appendWorkspaceSiteToUrl,
+    workspaceViewCacheFingerprint,
+} from "@/lib/adminV2/workspaceSiteFilterClient";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
 import { AdminV2RouteLoadingState } from "@/components/admin/workspace/AdminV2RouteLoadingState";
@@ -197,14 +202,15 @@ function resolveNavTimeRowQueueKey(wu: WorkUnitRow, qFromUrl: string): string | 
     }
 }
 
-function buildWorkUnitQueuesListRoute(workUnitId: string): string {
+function buildWorkUnitQueuesListRoute(workUnitId: string, selectedSiteId: string | null | undefined): string {
     const queueQs = new URLSearchParams({
         include_previews: "false",
         count_mode: "exact",
         limit: "3",
         summary_mode: "all",
     });
-    return `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?${queueQs.toString()}`;
+    const base = `/api/admin/work-units/${encodeURIComponent(workUnitId)}/queues?${queueQs.toString()}`;
+    return appendWorkspaceSiteToUrl(base, selectedSiteId);
 }
 
 /** Derives selected lane from summaries + work-unit definition + URL (same rules as post-summaries bootstrap). */
@@ -337,6 +343,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const searchParams = useSearchParams();
     const router = useRouter();
     const { accessScopeFingerprint } = useWorkspaceOrg();
+    const siteFilter = useWorkspaceSiteFilter();
+    const selectedSiteId = siteFilter?.selectedSiteId ?? null;
+    const viewScopeFingerprint = workspaceViewCacheFingerprint(accessScopeFingerprint, selectedSiteId);
     const { openDrawer } = useAdminDrawer();
     const viewerTz = useAdminViewerTimezone();
 
@@ -835,7 +844,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                           : attentionBucketKeyRef.current.trim())
                     : "";
             const fetchSig = `${workUnitId}|${queueKey}|omit|${abSnap}`;
-            const logicalKey = queueRowLogicalCacheKey(accessScopeFingerprint, workUnitId, queueKey, logicalUm, abSnap);
+            const logicalKey = queueRowLogicalCacheKey(viewScopeFingerprint, workUnitId, queueKey, logicalUm, abSnap);
             const qs = new URLSearchParams({
                 limit: "20",
                 offset: "0",
@@ -843,12 +852,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 omit_total_count: "true",
             });
             if (abSnap) qs.set("attention_bucket", abSnap);
-            const route = `/api/admin/queues/${encodeURIComponent(workUnitId)}/${encodeURIComponent(queueKey)}?${qs.toString()}`;
+            const route = appendWorkspaceSiteToUrl(
+                `/api/admin/queues/${encodeURIComponent(workUnitId)}/${encodeURIComponent(queueKey)}?${qs.toString()}`,
+                selectedSiteId
+            );
             const cache = queueRowClientCacheRef.current;
 
             if (options?.force) {
-                cache.delete(queueRowLogicalCacheKey(accessScopeFingerprint, workUnitId, queueKey, false, abSnap));
-                cache.delete(queueRowLogicalCacheKey(accessScopeFingerprint, workUnitId, queueKey, true, abSnap));
+                cache.delete(queueRowLogicalCacheKey(viewScopeFingerprint, workUnitId, queueKey, false, abSnap));
+                cache.delete(queueRowLogicalCacheKey(viewScopeFingerprint, workUnitId, queueKey, true, abSnap));
             }
 
             if (!options?.force && !options?.prefetchOnly && !options?.quietStaleRefresh) {
@@ -924,18 +936,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     unmappedOnlyRef.current === logicalUm &&
                     attentionBucketMatches;
                 if (options?.prefetchOnly) {
-                    putQueueRowCache(cache, accessScopeFingerprint, workUnitId, queueKey, payload, abSnap);
+                    putQueueRowCache(cache, viewScopeFingerprint, workUnitId, queueKey, payload, abSnap);
                     return;
                 }
                 if (options?.quietStaleRefresh) {
                     if (seq === queueItemsRequestSeq.current && stillSelected) {
-                        putQueueRowCache(cache, accessScopeFingerprint, workUnitId, queueKey, payload, abSnap);
+                        putQueueRowCache(cache, viewScopeFingerprint, workUnitId, queueKey, payload, abSnap);
                         setQueueItems(payload);
                     }
                     return;
                 }
                 if (seq === queueItemsRequestSeq.current) {
-                    putQueueRowCache(cache, accessScopeFingerprint, workUnitId, queueKey, payload, abSnap);
+                    putQueueRowCache(cache, viewScopeFingerprint, workUnitId, queueKey, payload, abSnap);
                     setQueueItems(payload);
                     if (pendingQueueTabPerfRef.current && typeof window !== "undefined" && typeof performance !== "undefined") {
                         pendingQueueTabPerfRef.current = false;
@@ -1045,7 +1057,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 }
             }
         },
-        [requestWorkUnitDeferredSupplement, markFirstUsefulPaintOnce, unmappedOnly, accessScopeFingerprint]
+        [requestWorkUnitDeferredSupplement, markFirstUsefulPaintOnce, unmappedOnly, viewScopeFingerprint, selectedSiteId]
     );
 
     const handleAttentionBucketSelect = useCallback(
@@ -1074,7 +1086,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
             limit: "3",
             summary_mode: "all",
         });
-        const route = `/api/admin/work-units/${encodeURIComponent(wuId)}/queues?${qs.toString()}`;
+        const route = appendWorkspaceSiteToUrl(
+            `/api/admin/work-units/${encodeURIComponent(wuId)}/queues?${qs.toString()}`,
+            selectedSiteId
+        );
         setQueueSummariesError(null);
         setQueueSummariesRoute(route);
         try {
@@ -1121,7 +1136,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 setQueueSummariesError(e instanceof Error ? e.message : "Failed to load queues");
             }
         }
-    }, []);
+    }, [selectedSiteId]);
 
     useEffect(() => {
         if (!departmentId || !workUnitId) {
@@ -1203,7 +1218,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
 
                 const wuUrl = `/api/admin/work-units/${encodeURIComponent(workUnitId)}`;
                 const deptUrl = `/api/admin/departments/${encodeURIComponent(departmentId)}`;
-                const queueListRoute = buildWorkUnitQueuesListRoute(workUnitId);
+                const queueListRoute = buildWorkUnitQueuesListRoute(workUnitId, selectedSiteId);
 
                 if (!cancelled) setQueueSummariesRoute(queueListRoute);
 
@@ -1468,19 +1483,19 @@ export default function AdminV2OpportunityWorkUnitPage() {
         return () => {
             cancelled = true;
         };
-    }, [departmentId, workUnitId, fetchQueueItems, requestWorkUnitDeferredSupplement, markFirstUsefulPaintOnce]);
+    }, [departmentId, workUnitId, selectedSiteId, fetchQueueItems, requestWorkUnitDeferredSupplement, markFirstUsefulPaintOnce]);
 
     const invalidate = useCallback(
         (opts?: { entity_type?: string; entity_id?: string; action_key?: string }) => {
             void opts;
             if (!workUnitId || !selectedQueueKey) return;
-            deleteQueueRowCacheKeysForWorkUnit(queueRowClientCacheRef.current, accessScopeFingerprint, workUnitId);
+            deleteQueueRowCacheKeysForWorkUnit(queueRowClientCacheRef.current, viewScopeFingerprint, workUnitId);
             void Promise.all([
                 fetchQueueItems(workUnitId, selectedQueueKey, queueSummaries, { force: true }),
                 fetchQueueSummaries(workUnitId),
             ]);
         },
-        [fetchQueueItems, fetchQueueSummaries, queueSummaries, selectedQueueKey, workUnitId]
+        [fetchQueueItems, fetchQueueSummaries, queueSummaries, selectedQueueKey, viewScopeFingerprint, workUnitId]
     );
 
     const queueSummariesRef = useRef(queueSummaries);
@@ -1490,7 +1505,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         if (!workUnitId || !selectedQueueKey) return;
         const onUpdated = (_ev: Event) => {
             const summaries = queueSummariesRef.current;
-            deleteQueueRowCacheKeysForWorkUnit(queueRowClientCacheRef.current, accessScopeFingerprint, workUnitId);
+            deleteQueueRowCacheKeysForWorkUnit(queueRowClientCacheRef.current, viewScopeFingerprint, workUnitId);
             void Promise.all([
                 fetchQueueItems(workUnitId, selectedQueueKey, summaries, { force: true }),
                 fetchQueueSummaries(workUnitId),
@@ -1499,7 +1514,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         /** Drawer saves dispatch `adminv2:opportunity-updated` — bust row cache + refetch summaries for this lane (not drawer-only). */
         window.addEventListener("adminv2:opportunity-updated", onUpdated as EventListener);
         return () => window.removeEventListener("adminv2:opportunity-updated", onUpdated as EventListener);
-    }, [fetchQueueItems, fetchQueueSummaries, selectedQueueKey, workUnitId]);
+    }, [fetchQueueItems, fetchQueueSummaries, selectedQueueKey, viewScopeFingerprint, workUnitId]);
 
     /** Row fetch starts once the work-unit shell and selection exist; does not wait on summaries (counts come from summaries; rows always `omit_total_count`). */
     useEffect(() => {
