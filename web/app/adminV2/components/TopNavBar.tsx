@@ -8,7 +8,9 @@ import { palette, neutral, derived } from "@/styles/tokens/colors";
 import { markWorkUnitNavigationStart } from "@/lib/perf/markWorkUnitNavigationStart";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import QuickMessageModal from "@/app/adminV2/components/QuickMessageModal";
-import { MessageSquare } from "lucide-react";
+import { useGlobalAssistant } from "@/contexts/GlobalAssistantContext";
+import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
+import { MessageSquare, Sparkles } from "lucide-react";
 
 function normalizeAdminPath(pathname: string): string {
   if (pathname === "/admin/v2" || pathname.startsWith("/admin/v2/")) {
@@ -78,6 +80,8 @@ export default function TopNavBar() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [quickMessageOpen, setQuickMessageOpen] = useState(false);
+  const { openAssistant, currentContext } = useGlobalAssistant();
+  const taskAssistEnabled = isTaskAssistV1UiEnabled();
 
   // NOTE:
   // Header-level unread indicators removed in V1.
@@ -200,6 +204,22 @@ export default function TopNavBar() {
           <MessageSquare className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden strokeWidth={2} />
           Messages
         </button>
+        {taskAssistEnabled ? (
+          <button
+            type="button"
+            onClick={() => openAssistant()}
+            className="inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium leading-none"
+            style={secondaryTabStyle(false)}
+            title="Task Assist — draft and review outbound messages (not layout assistant or AI log)"
+            data-global-assistant-header-trigger="true"
+          >
+            <Sparkles className="h-3.5 w-3.5 shrink-0 opacity-90" aria-hidden strokeWidth={2} />
+            Assistant
+            {currentContext?.label ? (
+              <span className="max-w-[88px] truncate opacity-80">· {currentContext.label}</span>
+            ) : null}
+          </button>
+        ) : null}
         <AdminV2NavLink
           href="/adminV2/ai-activity"
           active={isAiActivity}

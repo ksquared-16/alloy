@@ -24,7 +24,7 @@ const TASK_ASSIST_SOURCE_GLOBS = [
         "types.ts",
         "index.ts",
     ].map((f) => join("lib/agent/taskAssist", f)),
-    "components/admin/taskAssist/TaskAssistV1OpportunityPanel.tsx",
+    "components/admin/taskAssist/TaskAssistOpportunityWorkspace.tsx",
 ];
 
 /** Executable references to legacy tables — comments may mention them for operators. */

@@ -11,7 +11,9 @@ import Sidebar from "./Sidebar";
 import InspectorPanel from "./InspectorPanel";
 import AICommandBar from "./AICommandBar";
 import AICommandSurfaceShell from "./aiCommandSurface/AICommandSurfaceShell";
+import GlobalAssistantShell from "./globalAssistant/GlobalAssistantShell";
 import RecentAiActionsStrip from "./aiActivity/RecentAiActionsStrip";
+import { GlobalAssistantProvider } from "@/contexts/GlobalAssistantContext";
 import BreadcrumbBar from "./navigation/BreadcrumbBar";
 import KPIBand from "./dashboard/KPIBand";
 import SystemCanvas from "./canvas/SystemCanvas";
@@ -125,6 +127,7 @@ export default function AdminV2Shell({
 
   if (isWorkspaceV2Route || isAiActivityRoute || isSettingsRoute || isWorkflowsRoute || isFormsRoute) {
     return (
+      <GlobalAssistantProvider>
       <div
         className="flex h-screen w-full overflow-hidden"
         style={{ backgroundColor: neutral.background }}
@@ -219,10 +222,13 @@ export default function AdminV2Shell({
           )}
         </div>
       </div>
+      <GlobalAssistantShell />
+      </GlobalAssistantProvider>
     );
   }
 
   return (
+    <GlobalAssistantProvider>
     <div
       className="flex h-screen w-full overflow-hidden"
       style={{ backgroundColor: neutral.background }}
@@ -303,5 +309,7 @@ export default function AdminV2Shell({
         </div>
       </div>
     </div>
+    <GlobalAssistantShell />
+    </GlobalAssistantProvider>
   );
 }
