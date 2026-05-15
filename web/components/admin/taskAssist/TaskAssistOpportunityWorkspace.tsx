@@ -41,6 +41,9 @@ export type TaskAssistOpportunityWorkspaceProps = {
     command_bootstrap?: TaskAssistCommandBootstrap | null;
     /** Bumps when a new bootstrap should apply (e.g. entity id + timestamp). */
     command_bootstrap_key?: string | null;
+    /** Command bar compact flow — hides heavy V1.1 list chrome until operator expands more options. */
+    command_bar_surface?: "compact" | "full";
+    show_v11_lists?: boolean;
 };
 
 function listText(lines: string[]): ReactNode {
@@ -147,6 +150,8 @@ export default function TaskAssistOpportunityWorkspace({
     source_surface = "global_shell",
     command_bootstrap = null,
     command_bootstrap_key = null,
+    command_bar_surface = "full",
+    show_v11_lists = true,
 }: TaskAssistOpportunityWorkspaceProps) {
     const v11 = isTaskAssistV1UiEnabled();
 
@@ -789,9 +794,9 @@ export default function TaskAssistOpportunityWorkspace({
                 ) : null}
             </div>
 
-            {v11 ? (
+            {v11 && (command_bar_surface !== "compact" || show_v11_lists) ? (
                 <div className="mt-3 space-y-3 border-t border-alloy-stone/15 pt-3" data-task-assist-v11-lists="true">
-                    <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/50">Saved & scheduled (V1.1)</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-alloy-midnight/50">Saved drafts & scheduled sends</p>
                     {listsLoading ? <p className="text-[11px] text-alloy-midnight/55">Loading lists…</p> : null}
 
                     <div>

@@ -17,6 +17,8 @@ const openDim = {
     allowedSiteLocationIds: null,
 };
 
+let activeScope: { locationIds: string[] | null } = { locationIds: null };
+
 vi.mock("@/lib/admin/accessScope", () => ({
     accessScopeRestrictsData: () => false,
     recordReadableWithoutDeptSiteLinkage: () => true,
@@ -25,7 +27,29 @@ vi.mock("@/lib/admin/accessScope", () => ({
         locationIds: null,
         impossible: false,
     })),
-    applyRecordScopeConstraintsToQuery: vi.fn((q: unknown) => q),
+    applyRecordScopeConstraintsToQuery: vi.fn((q: unknown, c: { locationIds?: string[] | null }) => {
+        activeScope = { locationIds: c.locationIds ?? null };
+        return q;
+    }),
+}));
+
+vi.mock("@/lib/admin/resolveQueueRecordScopeConstraints", () => ({
+    resolveQueueRecordScopeConstraints: vi.fn(async (_s, _o, _d, siteId: string | null) => {
+        if (siteId === "north-site") {
+            return {
+                recordScopeImpossible: false,
+                recordScopeConstraints: {
+                    workUnitIds: null,
+                    locationIds: ["loc-north"],
+                    impossible: false,
+                },
+            };
+        }
+        return {
+            recordScopeImpossible: false,
+            recordScopeConstraints: { workUnitIds: null, locationIds: null, impossible: false },
+        };
+    }),
 }));
 
 type Row = Record<string, unknown>;
@@ -65,6 +89,10 @@ function createSearchSupabase(orgId: string, tables: Record<string, Row[]>) {
                         String(r.name ?? "").toLowerCase().includes(token) ||
                         String(r.title ?? "").toLowerCase().includes(token)
                 );
+            }
+            if (tableName === "opportunities" && activeScope.locationIds?.length) {
+                const allowed = new Set(activeScope.locationIds.map(String));
+                rows = rows.filter((r) => r.location_id && allowed.has(String(r.location_id)));
             }
             return { data: rows.slice(0, limitN), error: null };
         };
@@ -111,6 +139,7 @@ function createSearchSupabase(orgId: string, tables: Record<string, Row[]>) {
 describe("runTaskAssistEntitySearch", () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        activeScope = { locationIds: null };
     });
 
     it("finds opportunity via customer household when query says Mitchell family", async () => {
@@ -234,6 +263,93 @@ describe("runTaskAssistEntitySearch", () => {
         });
 
         expect(candidates).toHaveLength(0);
+    });
+
+    it("respects workspace_site_id for customer bridge opportunities", async () => {
+        const supabase = createSearchSupabase(ORG_A, {
+            opportunities: [
+                {
+                    id: OPP_ID,
+                    org_id: ORG_A,
+                    name: "Mitchell household",
+                    customer_id: CUST_ID,
+                    location_id: "loc-north",
+                },
+                {
+                    id: "opp-south",
+                    org_id: ORG_A,
+                    name: "Mitchell household South",
+                    customer_id: "cust-south",
+                    location_id: "loc-south",
+                },
+            ],
+            customers: [
+                { id: CUST_ID, org_id: ORG_A, name: "Mitchell household" },
+                { id: "cust-south", org_id: ORG_A, name: "Mitchell household South" },
+            ],
+            persons: [],
+            contacts: [],
+            customer_members: [],
+            locations: [
+                { id: "loc-north", org_id: ORG_A, label: "North Campus" },
+                { id: "loc-south", org_id: ORG_A, label: "South Campus" },
+            ],
+        });
+
+        const { candidates } = await runTaskAssistEntitySearch({
+            supabase,
+            orgId: ORG_A,
+            accessDim: openDim,
+            rawQ: "Mitchell",
+            workspaceSiteId: "north-site",
+        });
+
+        expect(candidates).toHaveLength(1);
+        expect(candidates[0]?.entity_id).toBe(OPP_ID);
+        expect(candidates[0]?.disambiguation?.location_name).toBe("North Campus");
+    });
+
+    it("respects workspace_site_id for primary person bridge", async () => {
+        const supabase = createSearchSupabase(ORG_A, {
+            opportunities: [
+                {
+                    id: OPP_ID,
+                    org_id: ORG_A,
+                    name: "North inquiry",
+                    customer_id: CUST_ID,
+                    primary_person_id: PERSON_ID,
+                    location_id: "loc-north",
+                },
+                {
+                    id: "opp-south",
+                    org_id: ORG_A,
+                    name: "South inquiry",
+                    customer_id: CUST_ID,
+                    primary_person_id: PERSON_ID,
+                    location_id: "loc-south",
+                },
+            ],
+            persons: [{ id: PERSON_ID, org_id: ORG_A, first_name: "Sarah", last_name: "Mitchell", full_name: "Sarah Mitchell" }],
+            customers: [],
+            contacts: [],
+            customer_members: [],
+            locations: [
+                { id: "loc-north", org_id: ORG_A, label: "North Campus" },
+                { id: "loc-south", org_id: ORG_A, label: "South Campus" },
+            ],
+        });
+
+        const { candidates } = await runTaskAssistEntitySearch({
+            supabase,
+            orgId: ORG_A,
+            accessDim: openDim,
+            rawQ: "Mitchell",
+            workspaceSiteId: "north-site",
+        });
+
+        expect(candidates).toHaveLength(1);
+        expect(candidates[0]?.entity_id).toBe(OPP_ID);
+        expect(candidates[0]?.source).toBe("primary_person");
     });
 
     it("dedupes same opportunity from multiple variants", async () => {

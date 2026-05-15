@@ -16,12 +16,15 @@ export function taskAssistEntitySearchUrl(params: {
     entity_type?: "all" | "opportunities";
     limit?: number;
     include_customers?: boolean;
+    workspace_site_id?: string | null;
 }): string {
     const sp = new URLSearchParams();
     sp.set("q", params.q);
     if (params.entity_type) sp.set("entity_type", params.entity_type);
     if (params.limit != null) sp.set("limit", String(params.limit));
     if (params.include_customers === false) sp.set("include_customers", "false");
+    const siteId = params.workspace_site_id?.trim();
+    if (siteId) sp.set("workspace_site_id", siteId);
     return `${TASK_ASSIST_ENTITY_SEARCH_URL}?${sp.toString()}`;
 }
 
@@ -30,6 +33,7 @@ export async function fetchTaskAssistEntitySearch(params: {
     entity_type?: "all" | "opportunities";
     limit?: number;
     include_customers?: boolean;
+    workspace_site_id?: string | null;
 }): Promise<Response> {
     return fetch(taskAssistEntitySearchUrl(params), { credentials: "include" });
 }

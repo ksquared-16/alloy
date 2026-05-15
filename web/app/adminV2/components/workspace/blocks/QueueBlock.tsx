@@ -622,6 +622,14 @@ export function CrmCompactQueuePreview({
               <span className="adminv2-ws-crm-queue-preview__title" title={slots.primaryIdentity}>
                 {slots.primaryIdentity}
               </span>
+              {slots.locationContext?.trim() ? (
+                <span
+                  className="adminv2-ws-crm-queue-preview__location-badge shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium text-alloy-midnight/70"
+                  data-queue-preview-slot="location"
+                >
+                  {slots.locationContext.trim()}
+                </span>
+              ) : null}
             </div>
             {slots.attentionReason?.trim() ? (
               <div className="adminv2-ws-crm-queue-preview__attention-headline">{slots.attentionReason.trim()}</div>

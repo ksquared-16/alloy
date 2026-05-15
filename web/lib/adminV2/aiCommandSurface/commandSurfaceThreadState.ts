@@ -54,3 +54,21 @@ export function toggleActionCardExpanded(
         }),
     };
 }
+
+type TaskAssistActionCard = Extract<
+    Extract<CommandSurfaceThreadTurn, { kind: "action_card" }>["card"],
+    { type: "task_assist" }
+>;
+
+export function patchTaskAssistActionCard(
+    state: CommandSurfaceThreadState,
+    turnId: string,
+    patch: Partial<TaskAssistActionCard>
+): CommandSurfaceThreadState {
+    return {
+        turns: state.turns.map((t) => {
+            if (t.id !== turnId || t.kind !== "action_card" || t.card.type !== "task_assist") return t;
+            return { ...t, card: { ...t.card, ...patch } };
+        }),
+    };
+}

@@ -28,12 +28,23 @@ describe("AICommandSurfaceShell Interaction Layer V1", () => {
         expect(src).toContain("CommandSurfaceThread");
     });
 
-    it("thread hosts Task Assist workspace inside action cards", () => {
+    it("thread hosts compact Task Assist actions before full workspace", () => {
         const threadSrc = readFileSync(threadPath, "utf8");
         expect(threadSrc).toContain("TaskAssistOpportunityWorkspace");
         expect(threadSrc).toContain("data-command-surface-task-assist-action-card");
         expect(threadSrc).toContain('source_surface="command_bar"');
         expect(threadSrc).toContain("command_bootstrap");
+        expect(threadSrc).toContain('uiPhase === "choose"');
+        expect(threadSrc).toContain("I found these matching records.");
+        expect(threadSrc).toContain("Draft message");
+        expect(threadSrc).toContain("Schedule for later");
+    });
+
+    it("shell opens choose phase with follow-up notice after candidate confirm", () => {
+        const shellSrc = readFileSync(shellPath, "utf8");
+        expect(shellSrc).toContain("taskAssistFollowUpNoticeText");
+        expect(shellSrc).toContain('uiPhase: "choose"');
+        expect(shellSrc).toContain("onChooseTaskAssistAction");
     });
 
     it("exports stable focus event name for GlobalAssistantContext", () => {

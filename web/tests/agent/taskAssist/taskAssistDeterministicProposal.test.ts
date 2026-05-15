@@ -16,6 +16,7 @@ function baseContext(overrides: Partial<TaskAssistOpportunityContextV1> = {}): T
         customer_id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
         household_label: "Nguyen family",
         primary_person_id: PERSON,
+        primary_child_display_name: null,
         children_summary: "One inquiry child profile is linked.",
         activity_summary: "Note added",
         last_activity_at: "2026-05-01T12:00:00.000Z",
@@ -46,7 +47,7 @@ describe("buildDeterministicTaskAssistSuggestionV1", () => {
         expect(p.apply_intent).toEqual({ kind: "none" });
         expect(p.selected_recipient).toBeNull();
         expect(p.draft_body).toContain("tour availability");
-        expect(p.draft_body).toContain("Summer inquiry");
+        expect(p.context_summary).toContain("Summer inquiry");
         expect(p.draft_subject).toBeNull();
         expect(p.recipient_candidates).toHaveLength(1);
         expect(p.suggestion_id).toHaveLength(48);

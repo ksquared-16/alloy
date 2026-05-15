@@ -16,6 +16,7 @@ import {
 } from "@/lib/adminV2/aiCommandSurface/aiCommandSurfaceModel";
 import { dispatchAiActivityRefresh } from "@/app/adminV2/components/aiActivity/RecentAiActionsStrip";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
+import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import { looksLikeAmbientOnlyCommand } from "@/lib/agent/taskAssist/taskAssistCommandBarResolution";
 import {
   buildTaskAssistCommandBootstrap,
@@ -29,6 +30,7 @@ import {
   appendThreadTurn,
   createEmptyThreadState,
   newThreadTurnId,
+  patchTaskAssistActionCard,
   toggleActionCardExpanded,
   updateThreadTurn,
 } from "@/lib/adminV2/aiCommandSurface/commandSurfaceThreadState";
@@ -40,6 +42,11 @@ import CommandSurfaceThread from "@/app/adminV2/components/aiCommandSurface/Comm
 import type { TaskAssistEntitySearchCandidate } from "@/lib/agent/taskAssist/taskAssistEntitySearchTypes";
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
 import { formatTaskAssistEntitySearchNoMatchMessage } from "@/lib/agent/taskAssist/taskAssistEntitySearchVariants";
+import {
+  bootstrapForTaskAssistCompactAction,
+  taskAssistFollowUpNoticeText,
+  type TaskAssistCompactAction,
+} from "@/lib/agent/taskAssist/taskAssistCompactActionCard";
 import { fetchTaskAssistEntitySearch, readJson } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
 import {
     ADMIN_V2_FOCUS_COMMAND_BAR,
@@ -451,6 +458,8 @@ export default function AICommandSurfaceShell() {
   const shellRootRef = useRef<HTMLElement | null>(null);
 
   const globalAssistant = useGlobalAssistantOptional();
+  const siteFilter = useWorkspaceSiteFilter();
+  const selectedSiteId = siteFilter?.selectedSiteId ?? null;
   const taskAssistUiEnabled = isTaskAssistV1UiEnabled();
 
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -504,6 +513,7 @@ export default function AICommandSurfaceShell() {
         warnings: [],
         workflow_blocked: false,
       });
+      const locationLabel = candidate.disambiguation?.location_name ?? null;
       setThread((prev) => {
         let next = appendThreadTurn(prev, {
           kind: "target_confirmed",
@@ -511,20 +521,55 @@ export default function AICommandSurfaceShell() {
           intent,
         });
         next = appendThreadTurn(next, {
+          kind: "assistant_notice",
+          text: taskAssistFollowUpNoticeText(candidate, locationLabel),
+        });
+        next = appendThreadTurn(next, {
           kind: "action_card",
           card: {
             type: "task_assist",
             entityId: candidate.entity_id,
             entityLabel: candidate.label,
+            locationLabel,
             bootstrap,
             bootstrapKey: `${candidate.entity_id}-${Date.now()}`,
             expanded: false,
+            uiPhase: "choose",
+            chosenAction: null,
+            showMoreOptions: false,
           },
         });
         return next;
       });
     },
     [globalAssistant]
+  );
+
+  const onChooseTaskAssistAction = useCallback(
+    (turnId: string, action: TaskAssistCompactAction) => {
+      setThread((prev) => {
+        const turn = prev.turns.find((t) => t.id === turnId && t.kind === "action_card" && t.card.type === "task_assist");
+        if (!turn || turn.kind !== "action_card" || turn.card.type !== "task_assist") return prev;
+        const intentTurn = [...prev.turns].reverse().find((t) => t.kind === "candidate_results" || t.kind === "target_confirmed");
+        const intent = intentTurn?.kind === "candidate_results" ? intentTurn.intent : intentTurn?.kind === "target_confirmed" ? intentTurn.intent : null;
+        const bootstrap = bootstrapForTaskAssistCompactAction(intent, action);
+        return patchTaskAssistActionCard(prev, turnId, {
+          bootstrap,
+          bootstrapKey: `${turn.card.entityId}-${action}-${Date.now()}`,
+          uiPhase: "workspace",
+          chosenAction: action,
+          expanded: true,
+        });
+      });
+    },
+    [setThread]
+  );
+
+  const onToggleTaskAssistMoreOptions = useCallback(
+    (turnId: string) => {
+      setThread((prev) => patchTaskAssistActionCard(prev, turnId, { showMoreOptions: true }));
+    },
+    [setThread]
   );
 
   const runTaskAssistRoute = useCallback(
@@ -565,7 +610,11 @@ export default function AICommandSurfaceShell() {
 
       const qEff = commandSurfaceEntitySearchQuery(cmd, slots, intent);
       try {
-        const res = await fetchTaskAssistEntitySearch({ q: qEff, entity_type: "all" });
+        const res = await fetchTaskAssistEntitySearch({
+          q: qEff,
+          entity_type: "all",
+          workspace_site_id: selectedSiteId,
+        });
         const j = await readJson<{
           ok?: boolean;
           candidates?: TaskAssistEntitySearchCandidate[];
@@ -622,7 +671,7 @@ export default function AICommandSurfaceShell() {
         );
       }
     },
-    [globalAssistant, taskAssistUiEnabled]
+    [globalAssistant, selectedSiteId, taskAssistUiEnabled]
   );
 
   const runJobLayoutRoute = useCallback(async (submitted: string) => {
@@ -938,8 +987,10 @@ export default function AICommandSurfaceShell() {
                 busy={busy}
                 onPickCandidate={(turnId, candidate, intent) => confirmTaskAssistTarget(turnId, candidate, intent)}
                 onConfirmCandidate={confirmTaskAssistTarget}
-                onToggleActionCard={(turnId) => setThread((prev) => toggleActionCardExpanded(prev, turnId))}
-                renderJobLayoutCardActions={renderJobLayoutCardActions}
+          onToggleActionCard={(turnId) => setThread((prev) => toggleActionCardExpanded(prev, turnId))}
+          onChooseTaskAssistAction={onChooseTaskAssistAction}
+          onToggleTaskAssistMoreOptions={onToggleTaskAssistMoreOptions}
+          renderJobLayoutCardActions={renderJobLayoutCardActions}
               />
             </div>
           ) : null}

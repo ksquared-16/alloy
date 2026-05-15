@@ -189,6 +189,8 @@ export type CrmCompactRowSemanticSlots = {
   rowPreviewLabelAgeBand?: string | null;
   programContext: string | null;
   roomContext: string | null;
+  /** Site / campus label from opportunity `location_id` when enriched on queue rows. */
+  locationContext?: string | null;
   ageContext: string | null;
   attentionReason: string | null;
   /**

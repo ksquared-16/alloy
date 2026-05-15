@@ -6,7 +6,9 @@ import {
     recordReadableWithoutDeptSiteLinkage,
     resolveRecordScopeConstraints,
     type AdminAccessScopeDimensions,
+    type RecordScopeConstraints,
 } from "@/lib/admin/accessScope";
+import { resolveQueueRecordScopeConstraints } from "@/lib/admin/resolveQueueRecordScopeConstraints";
 import {
     CRM_ENTITY_SEARCH_UUID_RE,
     sanitizeCrmSearchToken,
@@ -68,11 +70,16 @@ function buildCandidate(
     matched: string[],
     conf: TaskAssistEntitySearchConfidence,
     customerName: string | null,
-    subtitleExtra?: string | null
+    subtitleExtra?: string | null,
+    locationName?: string | null
 ): TaskAssistEntitySearchCandidate {
     const rawNum = o.opportunity_number;
     const n = rawNum != null && rawNum !== "" ? Number(rawNum) : null;
-    const subtitleParts = [customerName ? `Customer: ${customerName}` : null, subtitleExtra].filter(Boolean);
+    const subtitleParts = [
+        locationName ? `Location: ${locationName}` : null,
+        customerName ? `Customer: ${customerName}` : null,
+        subtitleExtra,
+    ].filter(Boolean);
     return {
         entity_type: "opportunities",
         entity_id: o.id,
@@ -84,20 +91,55 @@ function buildCandidate(
         disambiguation: {
             customer_name: customerName,
             opportunity_number: n != null && Number.isFinite(n) ? n : null,
+            location_name: locationName ?? null,
         },
     };
+}
+
+async function resolveEntitySearchScope(
+    supabase: SupabaseClient,
+    orgId: string,
+    dim: AdminAccessScopeDimensions,
+    workspaceSiteId: string | null | undefined
+): Promise<{ impossible: boolean; constraints: RecordScopeConstraints | null }> {
+    const siteId = workspaceSiteId?.trim() || null;
+    if (siteId) {
+        const scoped = await resolveQueueRecordScopeConstraints(supabase, orgId, dim, siteId);
+        return { impossible: scoped.recordScopeImpossible, constraints: scoped.recordScopeConstraints };
+    }
+    const c = await resolveRecordScopeConstraints(supabase, orgId, dim);
+    if (c.impossible) return { impossible: true, constraints: null };
+    return { impossible: false, constraints: c };
+}
+
+async function fetchLocationLabelsById(
+    supabase: SupabaseClient,
+    orgId: string,
+    locationIds: string[]
+): Promise<Map<string, string>> {
+    const out = new Map<string, string>();
+    const ids = [...new Set(locationIds.map(String).filter(Boolean))];
+    if (!ids.length) return out;
+    const { data, error } = await supabase
+        .from("locations")
+        .select("id, label, name, address1")
+        .eq("org_id", orgId)
+        .in("id", ids as any);
+    if (error) throw new Error(error.message);
+    for (const row of (data ?? []) as { id: string; label?: string | null; name?: string | null; address1?: string | null }[]) {
+        const label = (row.label ?? row.name ?? row.address1 ?? "").trim();
+        if (label) out.set(String(row.id), label);
+    }
+    return out;
 }
 
 async function fetchOpportunitiesByNamePattern(
     supabase: SupabaseClient,
     orgId: string,
-    dim: AdminAccessScopeDimensions,
+    scopeCons: RecordScopeConstraints,
     pattern: string,
     limit: number
 ): Promise<OppRow[]> {
-    const scopeCons = await resolveRecordScopeConstraints(supabase, orgId, dim);
-    if (scopeCons.impossible) return [];
-
     let q = supabase.from("opportunities").select(OPP_SELECT).eq("org_id", orgId);
     q = applyRecordScopeConstraintsToQuery(q, scopeCons);
     const orExpr = `name.ilike.${pattern},title.ilike.${pattern}`;
@@ -109,12 +151,9 @@ async function fetchOpportunitiesByNamePattern(
 async function fetchOpportunityByUuid(
     supabase: SupabaseClient,
     orgId: string,
-    dim: AdminAccessScopeDimensions,
+    scopeCons: RecordScopeConstraints,
     id: string
 ): Promise<OppRow | null> {
-    const scopeCons = await resolveRecordScopeConstraints(supabase, orgId, dim);
-    if (scopeCons.impossible) return null;
-
     let q = supabase
         .from("opportunities")
         .select(OPP_SELECT)
@@ -129,14 +168,12 @@ async function fetchOpportunityByUuid(
 async function fetchOpportunitiesForCustomerIds(
     supabase: SupabaseClient,
     orgId: string,
-    dim: AdminAccessScopeDimensions,
+    scopeCons: RecordScopeConstraints,
     customerIds: string[],
     perCustomer: number,
     totalCap: number
 ): Promise<OppRow[]> {
     if (!customerIds.length) return [];
-    const scopeCons = await resolveRecordScopeConstraints(supabase, orgId, dim);
-    if (scopeCons.impossible) return [];
 
     const out: OppRow[] = [];
     for (const cid of customerIds) {
@@ -159,13 +196,11 @@ async function fetchOpportunitiesForCustomerIds(
 async function fetchOpportunitiesByPrimaryPersonIds(
     supabase: SupabaseClient,
     orgId: string,
-    dim: AdminAccessScopeDimensions,
+    scopeCons: RecordScopeConstraints,
     personIds: string[],
     limit: number
 ): Promise<OppRow[]> {
     if (!personIds.length) return [];
-    const scopeCons = await resolveRecordScopeConstraints(supabase, orgId, dim);
-    if (scopeCons.impossible) return [];
 
     let q = supabase
         .from("opportunities")
@@ -181,13 +216,11 @@ async function fetchOpportunitiesByPrimaryPersonIds(
 async function fetchOpportunitiesByPrimaryContactIds(
     supabase: SupabaseClient,
     orgId: string,
-    dim: AdminAccessScopeDimensions,
+    scopeCons: RecordScopeConstraints,
     contactIds: string[],
     limit: number
 ): Promise<OppRow[]> {
     if (!contactIds.length) return [];
-    const scopeCons = await resolveRecordScopeConstraints(supabase, orgId, dim);
-    if (scopeCons.impossible) return [];
 
     let q = supabase
         .from("opportunities")
@@ -326,6 +359,8 @@ export type RunTaskAssistEntitySearchParams = {
     limit?: number;
     /** When true and scope is org-wide for dept+site, also match customers and map to their opportunities. */
     includeCustomers?: boolean;
+    /** Header view-site filter — intersected with permission scope (same as queue APIs). */
+    workspaceSiteId?: string | null;
 };
 
 export type RunTaskAssistEntitySearchResult = {
@@ -346,32 +381,61 @@ export async function runTaskAssistEntitySearch(params: RunTaskAssistEntitySearc
     const includeCustomers = params.includeCustomers !== false;
     const dim = params.accessDim;
 
+    const scopeResolved = await resolveEntitySearchScope(
+        params.supabase,
+        params.orgId,
+        dim,
+        params.workspaceSiteId
+    );
+    if (scopeResolved.impossible || !scopeResolved.constraints) {
+        return { q: primaryToken, variants, candidates: [] };
+    }
+    const scopeCons = scopeResolved.constraints;
+
     if (variants.length === 0 && !CRM_ENTITY_SEARCH_UUID_RE.test(params.rawQ.trim())) {
         return { q: sanitizeCrmSearchToken(params.rawQ), variants: [], candidates: [] };
     }
 
     const byId = new Map<string, TaskAssistEntitySearchCandidate>();
+    const oppRowsById = new Map<string, OppRow>();
 
-    const push = (c: TaskAssistEntitySearchCandidate) => {
+    const push = (c: TaskAssistEntitySearchCandidate, row?: OppRow) => {
         if (!byId.has(c.entity_id)) byId.set(c.entity_id, c);
+        if (row) oppRowsById.set(c.entity_id, row);
     };
 
     const remaining = () => Math.max(0, limit - byId.size);
 
     if (CRM_ENTITY_SEARCH_UUID_RE.test(params.rawQ.trim())) {
         const id = params.rawQ.trim();
-        const row = await fetchOpportunityByUuid(params.supabase, params.orgId, dim, id);
+        const row = await fetchOpportunityByUuid(params.supabase, params.orgId, scopeCons, id);
         if (row) {
-            push(buildCandidate(row, "uuid_match", ["id"], "high", null));
+            push(buildCandidate(row, "uuid_match", ["id"], "high", null), row);
         }
-        return { q: id, variants: [id], candidates: [...byId.values()] };
+        const locationIds = [...oppRowsById.values()].map((o) => o.location_id).filter(Boolean) as string[];
+        const locLabels = await fetchLocationLabelsById(params.supabase, params.orgId, locationIds);
+        const candidates = [...byId.values()].map((c) => {
+            const opp = oppRowsById.get(c.entity_id);
+            const loc = opp?.location_id ? locLabels.get(String(opp.location_id)) ?? null : null;
+            if (!loc) return c;
+            return buildCandidate(
+                opp!,
+                c.source,
+                c.matched_fields,
+                c.confidence,
+                c.disambiguation?.customer_name ?? null,
+                null,
+                loc
+            );
+        });
+        return { q: id, variants: [id], candidates };
     }
 
     for (const variant of variants) {
         if (remaining() <= 0) break;
         const pattern = ilikePattern(variant);
         const tokenLen = variant.length;
-        const opps = await fetchOpportunitiesByNamePattern(params.supabase, params.orgId, dim, pattern, remaining());
+        const opps = await fetchOpportunitiesByNamePattern(params.supabase, params.orgId, scopeCons, pattern, remaining());
         for (const o of opps) {
             const tl = variant.toLowerCase();
             const matched: string[] = [];
@@ -385,7 +449,8 @@ export async function runTaskAssistEntitySearch(params: RunTaskAssistEntitySearc
                     matched,
                     confidenceForMatch(false, tokenLen, "name"),
                     null
-                )
+                ),
+                o
             );
         }
     }
@@ -399,7 +464,7 @@ export async function runTaskAssistEntitySearch(params: RunTaskAssistEntitySearc
                 const oppsFromCust = await fetchOpportunitiesForCustomerIds(
                     params.supabase,
                     params.orgId,
-                    dim,
+                    scopeCons,
                     [...custMap.keys()],
                     4,
                     remaining()
@@ -414,7 +479,8 @@ export async function runTaskAssistEntitySearch(params: RunTaskAssistEntitySearc
                             ["customer.name", "opportunity.customer_id"],
                             confidenceForMatch(false, primaryToken.length, "customer"),
                             cn
-                        )
+                        ),
+                        o
                     );
                 }
             }
@@ -426,7 +492,7 @@ export async function runTaskAssistEntitySearch(params: RunTaskAssistEntitySearc
                 const oppsFromMembers = await fetchOpportunitiesForCustomerIds(
                     params.supabase,
                     params.orgId,
-                    dim,
+                    scopeCons,
                     [...memberByCustomer.keys()],
                     4,
                     remaining()
@@ -442,7 +508,8 @@ export async function runTaskAssistEntitySearch(params: RunTaskAssistEntitySearc
                             confidenceForMatch(false, primaryToken.length, "person"),
                             null,
                             memberLabel ? `Matched member: ${memberLabel}` : null
-                        )
+                        ),
+                        o
                     );
                 }
             }
@@ -455,7 +522,7 @@ export async function runTaskAssistEntitySearch(params: RunTaskAssistEntitySearc
             const oppsFromPerson = await fetchOpportunitiesByPrimaryPersonIds(
                 params.supabase,
                 params.orgId,
-                dim,
+                scopeCons,
                 [...personMap.keys()],
                 remaining()
             );
@@ -471,7 +538,8 @@ export async function runTaskAssistEntitySearch(params: RunTaskAssistEntitySearc
                         confidenceForMatch(false, primaryToken.length, "person"),
                         null,
                         personLabel ? `Matched contact: ${personLabel}` : "Matched primary contact"
-                    )
+                    ),
+                    o
                 );
             }
         }
@@ -483,7 +551,7 @@ export async function runTaskAssistEntitySearch(params: RunTaskAssistEntitySearc
             const oppsFromContact = await fetchOpportunitiesByPrimaryContactIds(
                 params.supabase,
                 params.orgId,
-                dim,
+                scopeCons,
                 [...contactMap.keys()],
                 remaining()
             );
@@ -499,15 +567,39 @@ export async function runTaskAssistEntitySearch(params: RunTaskAssistEntitySearc
                         confidenceForMatch(false, primaryToken.length, "person"),
                         null,
                         contactLabel ? `Matched contact: ${contactLabel}` : "Matched primary contact"
-                    )
+                    ),
+                    o
                 );
             }
         }
     }
 
+    const locationIds = [...oppRowsById.values()].map((o) => o.location_id).filter(Boolean) as string[];
+    const locLabels = await fetchLocationLabelsById(params.supabase, params.orgId, locationIds);
+    const candidates = [...byId.values()].slice(0, limit).map((c) => {
+        const opp = oppRowsById.get(c.entity_id);
+        const loc = opp?.location_id ? locLabels.get(String(opp.location_id)) ?? null : null;
+        if (!loc) return c;
+        const subtitleExtra =
+            c.subtitle
+                ?.split(" · ")
+                .filter((p) => !p.startsWith("Location:") && !p.startsWith("Customer:"))
+                .join(" · ")
+                .trim() || null;
+        return buildCandidate(
+            opp!,
+            c.source,
+            c.matched_fields,
+            c.confidence,
+            c.disambiguation?.customer_name ?? null,
+            subtitleExtra,
+            loc
+        );
+    });
+
     return {
         q: primaryToken,
         variants,
-        candidates: [...byId.values()].slice(0, limit),
+        candidates,
     };
 }

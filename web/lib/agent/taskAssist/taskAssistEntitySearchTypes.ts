@@ -21,6 +21,7 @@ export type TaskAssistEntitySearchCandidate = {
     disambiguation?: {
         customer_name?: string | null;
         opportunity_number?: string | number | null;
+        location_name?: string | null;
     };
 };
 

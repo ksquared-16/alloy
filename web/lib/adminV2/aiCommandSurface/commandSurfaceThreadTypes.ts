@@ -1,5 +1,6 @@
 import type { JobOverviewPlannerSuccess } from "@/lib/agent/planner/jobOverviewPlannerTypes";
 import type { TaskAssistCommandBootstrap, TaskAssistCommandIntent } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
+import type { TaskAssistCompactAction } from "@/lib/agent/taskAssist/taskAssistCompactActionCard";
 import type { TaskAssistEntitySearchCandidate } from "@/lib/agent/taskAssist/taskAssistEntitySearchTypes";
 import type { AIStatusBadge, ResponseKind } from "@/lib/adminV2/aiCommandSurface/aiCommandSurfaceModel";
 
@@ -38,9 +39,14 @@ export type CommandSurfaceThreadTurn =
                     type: "task_assist";
                     entityId: string;
                     entityLabel: string;
+                    locationLabel?: string | null;
                     bootstrap: TaskAssistCommandBootstrap;
                     bootstrapKey: string;
                     expanded: boolean;
+                    /** choose = compact action buttons; workspace = Task Assist review surface */
+                    uiPhase: "choose" | "workspace";
+                    chosenAction?: TaskAssistCompactAction | null;
+                    showMoreOptions?: boolean;
                 }
               | {
                     type: "job_layout";

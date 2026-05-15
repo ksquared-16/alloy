@@ -7,6 +7,7 @@ import { badgeLabel } from "@/lib/adminV2/aiCommandSurface/aiCommandSurfaceModel
 import { WORKFLOW_ASSIST_NOTICE_TEXT } from "@/lib/adminV2/aiCommandSurface/commandSurfaceRouter";
 import type { CommandSurfaceThreadTurn } from "@/lib/adminV2/aiCommandSurface/commandSurfaceThreadTypes";
 import type { TaskAssistCommandIntent } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
+import type { TaskAssistCompactAction } from "@/lib/agent/taskAssist/taskAssistCompactActionCard";
 import type { TaskAssistEntitySearchCandidate } from "@/lib/agent/taskAssist/taskAssistEntitySearchTypes";
 import { neutral, derived, brand, semantic } from "@/styles/tokens/colors";
 
@@ -79,6 +80,8 @@ export type CommandSurfaceThreadProps = {
     ) => void;
     onConfirmCandidate: (turnId: string, candidate: TaskAssistEntitySearchCandidate, intent: TaskAssistCommandIntent | null) => void;
     onToggleActionCard: (turnId: string) => void;
+    onChooseTaskAssistAction?: (turnId: string, action: TaskAssistCompactAction) => void;
+    onToggleTaskAssistMoreOptions?: (turnId: string) => void;
     renderJobLayoutCardActions?: (turnId: string) => ReactNode;
 };
 
@@ -88,6 +91,8 @@ export default function CommandSurfaceThread({
     onPickCandidate,
     onConfirmCandidate,
     onToggleActionCard,
+    onChooseTaskAssistAction,
+    onToggleTaskAssistMoreOptions,
     renderJobLayoutCardActions,
 }: CommandSurfaceThreadProps) {
     if (turns.length === 0) {
@@ -129,7 +134,7 @@ export default function CommandSurfaceThread({
                                     <div className="text-[11px] font-semibold" style={{ color: CMD.textLabel }}>
                                         {turn.candidates.length === 1 ?
                                             "Confirm who you mean"
-                                        :   "Pick an opportunity"}
+                                        :   "I found these matching records."}
                                     </div>
                                     {intentSummary(turn.intent) ? (
                                         <div className="text-[10px]" style={{ color: CMD.textSupporting }}>
@@ -189,42 +194,91 @@ export default function CommandSurfaceThread({
                         );
                     case "action_card":
                         if (turn.card.type === "task_assist") {
-                            const { bootstrap, entityId, entityLabel, expanded, bootstrapKey } = turn.card;
+                            const {
+                                bootstrap,
+                                entityId,
+                                entityLabel,
+                                expanded,
+                                bootstrapKey,
+                                uiPhase = "choose",
+                                showMoreOptions = false,
+                            } = turn.card;
+                            const compactActions: { id: TaskAssistCompactAction; label: string }[] = [
+                                { id: "draft_message", label: "Draft message" },
+                                { id: "send_now", label: "Send now" },
+                                { id: "schedule_later", label: "Schedule for later" },
+                                { id: "create_reminder", label: "Create reminder" },
+                            ];
                             return (
                                 <AssistantBubble key={turn.id}>
                                     <div className="space-y-2" data-command-surface-task-assist-action-card="true">
-                                        <div className="flex flex-wrap items-center justify-between gap-2">
-                                            <div>
-                                                <div className="text-[12px] font-semibold">{taskAssistActionLabel(bootstrap)}</div>
-                                                <div className="text-[10px]" style={{ color: CMD.textSupporting }}>
-                                                    {entityLabel}
-                                                    {bootstrap.instruction ?
-                                                        ` · “${bootstrap.instruction.length > 64 ? `${bootstrap.instruction.slice(0, 61)}…` : bootstrap.instruction}”`
-                                                    :   null}
+                                        {uiPhase === "choose" ? (
+                                            <>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {compactActions.map((a) => (
+                                                        <button
+                                                            key={a.id}
+                                                            type="button"
+                                                            disabled={busy}
+                                                            data-command-surface-task-assist-compact-action={a.id}
+                                                            className="rounded-full border px-2.5 py-1 text-[11px] font-semibold hover:bg-alloy-stone/[0.06] disabled:opacity-50"
+                                                            style={{ borderColor: derived.border, color: CMD.textBody }}
+                                                            onClick={() => onChooseTaskAssistAction?.(turn.id, a.id)}
+                                                        >
+                                                            {a.label}
+                                                        </button>
+                                                    ))}
                                                 </div>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                className="rounded-md border px-2.5 py-1 text-[11px] font-semibold"
-                                                style={{ borderColor: derived.border, color: CMD.textBody }}
-                                                onClick={() => onToggleActionCard(turn.id)}
-                                            >
-                                                {expanded ? "Collapse" : "Review & approve"}
-                                            </button>
-                                        </div>
-                                        {expanded ? (
-                                            <TaskAssistOpportunityWorkspace
-                                                entityId={entityId}
-                                                active
-                                                source_surface="command_bar"
-                                                command_bootstrap={bootstrap}
-                                                command_bootstrap_key={bootstrapKey}
-                                                className="mb-0 border-0 bg-transparent px-0 py-1 shadow-none"
-                                            />
+                                                <p className="text-[10px]" style={{ color: CMD.textLabel }}>
+                                                    Nothing sends until you review and approve.
+                                                </p>
+                                            </>
                                         ) : (
-                                            <p className="text-[10px]" style={{ color: CMD.textLabel }}>
-                                                Expand to draft, save, schedule, or create a reminder — nothing sends automatically.
-                                            </p>
+                                            <>
+                                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                                    <div>
+                                                        <div className="text-[12px] font-semibold">{taskAssistActionLabel(bootstrap)}</div>
+                                                        <div className="text-[10px]" style={{ color: CMD.textSupporting }}>
+                                                            {entityLabel}
+                                                        </div>
+                                                    </div>
+                                                    <button
+                                                        type="button"
+                                                        className="rounded-md border px-2.5 py-1 text-[11px] font-semibold"
+                                                        style={{ borderColor: derived.border, color: CMD.textBody }}
+                                                        onClick={() => onToggleActionCard(turn.id)}
+                                                    >
+                                                        {expanded ? "Collapse" : "Review & approve"}
+                                                    </button>
+                                                </div>
+                                                {expanded ? (
+                                                    <TaskAssistOpportunityWorkspace
+                                                        entityId={entityId}
+                                                        active
+                                                        source_surface="command_bar"
+                                                        command_bootstrap={bootstrap}
+                                                        command_bootstrap_key={bootstrapKey}
+                                                        command_bar_surface="compact"
+                                                        show_v11_lists={showMoreOptions}
+                                                        className="mb-0 border-0 bg-transparent px-0 py-1 shadow-none"
+                                                    />
+                                                ) : (
+                                                    <p className="text-[10px]" style={{ color: CMD.textLabel }}>
+                                                        Open review to edit the draft, pick a recipient, and approve before anything sends.
+                                                    </p>
+                                                )}
+                                                {!showMoreOptions ? (
+                                                    <button
+                                                        type="button"
+                                                        className="text-[10px] font-semibold underline-offset-2 hover:underline"
+                                                        style={{ color: brand.secondary }}
+                                                        data-command-surface-task-assist-more-options="true"
+                                                        onClick={() => onToggleTaskAssistMoreOptions?.(turn.id)}
+                                                    >
+                                                        More options (saved drafts, schedule history)
+                                                    </button>
+                                                ) : null}
+                                            </>
                                         )}
                                     </div>
                                 </AssistantBubble>

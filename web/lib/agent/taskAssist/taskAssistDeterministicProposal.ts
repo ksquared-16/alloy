@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 
+import { formatTaskAssistDraftOpening } from "@/lib/agent/taskAssist/taskAssistDraftMessageNormalize";
 import type { TaskAssistOpportunityContextV1 } from "@/lib/agent/taskAssist/taskAssistOpportunityContext";
 import type { TaskAssistSuggestionV1 } from "@/lib/agent/taskAssist/types";
 import { TASK_ASSIST_AGENT_KEY } from "@/lib/agent/taskAssist/types";
@@ -46,28 +47,13 @@ export function buildDeterministicTaskAssistSuggestionV1(params: {
     const statusLine = params.context.status_label ?? params.context.status_key ?? "unknown status";
     const context_summary = truncate(`${params.context.opportunity_label} · ${statusLine}`, 240);
 
-    const bodyLines: string[] = [];
-    bodyLines.push(truncate(params.instruction, 4000));
-    bodyLines.push("");
-    bodyLines.push(`— Opportunity: ${params.context.opportunity_label} (${statusLine}).`);
-    if (params.context.household_label) {
-        bodyLines.push(`— Household: ${params.context.household_label}.`);
-    }
-    if (params.context.activity_summary) {
-        bodyLines.push(`— Recent activity: ${truncate(params.context.activity_summary, 400)}.`);
-    }
-    if (params.context.children_summary) {
-        bodyLines.push(`— ${params.context.children_summary}`);
-    }
-    if (params.channel === "sms") {
-        bodyLines.push("");
-        bodyLines.push("Thanks — reply when you can.");
-    } else {
-        bodyLines.push("");
-        bodyLines.push("Thank you for your time.");
-    }
+    const draftOpening = formatTaskAssistDraftOpening({
+        instruction: params.instruction,
+        channel: params.channel,
+        context: params.context,
+    });
 
-    const draft_body = bodyLines.join("\n").slice(0, 8000);
+    const draft_body = draftOpening.slice(0, 8000);
 
     const draft_subject =
         params.channel === "email" ? truncate(`Follow-up: ${params.context.opportunity_label}`, 200) : null;

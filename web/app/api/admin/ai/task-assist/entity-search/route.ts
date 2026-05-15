@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 import { getAdminAccessContextCached } from "@/lib/admin/getAdminAccessContext";
 import { scopeDimensionsFromAccess } from "@/lib/admin/accessScope";
+import { parseWorkspaceSiteIdFromSearchParams } from "@/lib/admin/resolveQueueRecordScopeConstraints";
 import { sanitizeCrmSearchToken } from "@/lib/admin/forms/crmEntitySearchShared";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { runTaskAssistEntitySearch } from "@/lib/agent/taskAssist/taskAssistEntitySearchService";
@@ -66,6 +67,8 @@ export async function GET(request: NextRequest) {
     const dim = scopeDimensionsFromAccess(access);
 
     try {
+        const workspaceSiteId = parseWorkspaceSiteIdFromSearchParams(url.searchParams);
+
         const { q, candidates, variants } = await runTaskAssistEntitySearch({
             supabase,
             orgId: ctx.orgId,
@@ -73,6 +76,7 @@ export async function GET(request: NextRequest) {
             rawQ,
             limit,
             includeCustomers: includeCustomers && entityType === "all",
+            workspaceSiteId,
         });
 
         return NextResponse.json({ ok: true, q, variants, candidates });

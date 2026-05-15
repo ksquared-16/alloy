@@ -196,6 +196,7 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
             : null;
 
     const roomContext = (row as { _room_label?: string | null })._room_label?.trim() || null;
+    const locationContext = (row as { _location_label?: string | null })._location_label?.trim() || null;
 
     const attnPres = buildQueueOperationalAttentionPresentation(row as Record<string, unknown>, { queueScan: true });
     const attentionReason =
@@ -290,6 +291,7 @@ export function buildEnrollmentCrmRowSemanticSlots(row: OppRow, options?: BuildE
         crmFactGroups,
         programContext,
         roomContext,
+        locationContext,
         attentionReason,
         queuePriorityExplanation,
         attentionSuggestionPreview: attentionSuggestionPreviewResolved,

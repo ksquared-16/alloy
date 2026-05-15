@@ -59,6 +59,7 @@ type OpportunityRowPreview = {
     primary_person_id?: string | null;
     primary_contact_id: string | null;
     work_unit_id: string | null;
+    location_id?: string | null;
     quote_total?: number | string | null;
     estimated_price_cents?: number | string | null;
     monetary_value_cents?: number | string | null;
@@ -913,7 +914,15 @@ async function enrichOpportunityRows(params: {
     const opportunityIds = [...new Set(rows.map((r) => String(r.id ?? "").trim()).filter(Boolean))];
 
     const tParallel0 = Date.now();
-    const [personsTimed, contactsTimed, customersTimed, membersTimed, defsTimed, tourBookingsTimed] = await Promise.all([
+    const locationIds = [
+        ...new Set(
+            rows
+                .map((r) => (r as { location_id?: unknown }).location_id)
+                .filter((x): x is string => typeof x === "string" && x.trim() !== "")
+        ),
+    ];
+
+    const [personsTimed, contactsTimed, customersTimed, membersTimed, defsTimed, tourBookingsTimed, locationsTimed] = await Promise.all([
         plan.persons && personIds.length
             ? timedAwait(
                   supabase
@@ -959,8 +968,27 @@ async function enrichOpportunityRows(params: {
                       .in("status_key", [...TOUR_BOOKING_ACTIVE_NON_TERMINAL_STATUS_KEYS] as any)
               )
             : timedAwait(emptyRel),
+        locationIds.length
+            ? timedAwait(
+                  supabase
+                      .from("locations")
+                      .select("id, label, name, address1")
+                      .eq("org_id", orgId)
+                      .in("id", locationIds as any)
+              )
+            : timedAwait(emptyRel),
     ]);
     const parallelMainMs = Date.now() - tParallel0;
+
+    const locationLabelById = new Map<string, string>();
+    const locationRows = (locationsTimed.v as { data?: unknown[] | null }).data;
+    for (const raw of Array.isArray(locationRows) ? locationRows : []) {
+        const row = raw as { id?: string; label?: string | null; name?: string | null; address1?: string | null };
+        const id = String(row.id ?? "").trim();
+        if (!id) continue;
+        const label = (row.label ?? row.name ?? row.address1 ?? "").trim();
+        if (label) locationLabelById.set(id, label);
+    }
 
     const tourBookingByOppId = new Map<string, { start_at: string; timezone: string }>();
     for (const raw of (tourBookingsTimed.v as any).data ?? []) {
@@ -1214,9 +1242,13 @@ async function enrichOpportunityRows(params: {
                     ? [{ primary: childDisplay.trim(), secondary: programCombined }]
                     : undefined;
 
+        const locId = (r as { location_id?: string | null }).location_id;
+        const locationLabel = locId ? locationLabelById.get(String(locId)) ?? null : null;
+
         return {
             ...r,
             title: r.name ?? null,
+            _location_label: locationLabel,
             _customer_name: customer?.name ?? null,
             _primary_contact_line: contactName ?? null,
             _primary_phone: contactPhone ?? null,
@@ -1384,7 +1416,7 @@ export async function loadOpportunityNeedsAttentionRows(params: {
     let q = params.supabase
         .from("opportunities")
         .select(
-            "id, name, status_key, quote_total, estimated_price_cents, monetary_value_cents, customer_id, primary_person_id, primary_contact_id, work_unit_id, metadata, created_at, updated_at"
+            "id, name, status_key, quote_total, estimated_price_cents, monetary_value_cents, customer_id, primary_person_id, primary_contact_id, work_unit_id, location_id, metadata, created_at, updated_at"
         )
         .eq("org_id", params.orgId)
         .eq("work_unit_id", params.workUnitId)
@@ -2101,7 +2133,7 @@ export async function getWorkUnitQueueSummaries(params: {
         const countQ = applyOpsToJobQuery(oppScopedCountBase() as never, ops);
         const previewQ0 = supabase
             .from("opportunities")
-            .select("id, name, title, status_key, customer_id, primary_person_id, primary_contact_id, work_unit_id, metadata, created_at, updated_at")
+            .select("id, name, title, status_key, customer_id, primary_person_id, primary_contact_id, work_unit_id, location_id, metadata, created_at, updated_at")
             .eq("org_id", params.orgId)
             .eq("work_unit_id", params.workUnitId);
         const previewQ0Scoped = scopeFilter ? applyRecordScopeConstraintsToQuery(previewQ0 as never, scopeFilter) : (previewQ0 as never);
@@ -2657,7 +2689,7 @@ export async function getWorkUnitQueueItems(params: {
 
     const itemsBaseRaw = supabase
         .from("opportunities")
-        .select("id, name, status_key, customer_id, primary_person_id, primary_contact_id, metadata, created_at, updated_at")
+        .select("id, name, status_key, customer_id, primary_person_id, primary_contact_id, location_id, metadata, created_at, updated_at")
         .eq("org_id", params.orgId)
         .eq("work_unit_id", params.workUnitId);
 
