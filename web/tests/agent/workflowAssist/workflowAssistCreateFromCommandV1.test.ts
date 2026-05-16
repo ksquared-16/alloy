@@ -38,6 +38,32 @@ describe("parseWorkflowAssistCreateIntent", () => {
         expect(built.request.draft.name).toBe("Tour Reminder Draft");
         expect(built.request.draft.event_type).toBe("opportunity_schedule_tour_followup");
         expect(built.request.draft.entity_type).toBe("opportunity");
+        expect(built.request.draft.draft_action_scaffolds?.length).toBe(1);
+        expect(built.interpreted.scope_label).toBe("Org-wide");
+    });
+
+    it("includes department scope from route context", () => {
+        const deptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+        const intent = parseWorkflowAssistCreateIntent("Create a workflow that sends a reminder before tours")!;
+        const built = buildWorkflowAssistCreateProposeFromIntent(intent, "reminder before tours", {
+            scope: { department_id: deptId },
+            scope_labels: { department_name: "Enrollment" },
+        });
+        if (built.request.proposal_kind !== "create_workflow") return;
+        expect(built.request.draft.metadata?.scope?.department_id).toBe(deptId);
+        expect(built.interpreted.scope_label).toContain("Enrollment");
+    });
+
+    it("includes work-unit scope from route context", () => {
+        const deptId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+        const wuId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+        const intent = parseWorkflowAssistCreateIntent("Create a workflow that sends a reminder before tours")!;
+        const built = buildWorkflowAssistCreateProposeFromIntent(intent, "reminder", {
+            scope: { department_id: deptId, work_unit_id: wuId },
+            scope_labels: { department_name: "Enrollment", work_unit_name: "Intake" },
+        });
+        if (built.request.proposal_kind !== "create_workflow") return;
+        expect(built.request.draft.metadata?.scope?.work_unit_id).toBe(wuId);
     });
 });
 

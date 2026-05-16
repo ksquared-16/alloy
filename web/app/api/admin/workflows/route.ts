@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdmin } from "@/lib/adminAuth";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
 
-const WORKFLOW_CREATE_KEYS = ["name", "description", "event_type", "entity_type", "enabled"] as const;
+const WORKFLOW_CREATE_KEYS = ["name", "description", "event_type", "entity_type", "enabled", "metadata"] as const;
 
 /** GET: list workflows for caller org (admin + ops). */
 export async function GET() {

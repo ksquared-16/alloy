@@ -21,6 +21,7 @@ import { KpiStripSkeleton } from "@/components/admin/workspace/KpiStripSkeleton"
 import { workspaceRouteParam } from "@/lib/workspace/workspaceRouteParam";
 import ActionsBlock from "@/app/adminV2/components/workspace/blocks/ActionsBlock";
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import type { WorkspaceAction } from "@/lib/ui-v2/workspace-actions";
 import type { KPIVm } from "@/lib/ui-v2/workspace-types";
 import type { ResolvedActionForClient } from "@/lib/admin/actions/types";
@@ -38,10 +39,7 @@ import {
     writeDepartmentPageCache,
 } from "@/lib/workspace/adminV2WorkspaceSessionCache";
 import { AutomationWorkflowsBlock } from "@/app/adminV2/components/workspace/blocks/AutomationWorkflowsBlock";
-import {
-    filterWorkflowsForWorkspaceAutomationSurface,
-    WORKSPACE_AUTOMATION_METADATA_GAP_NOTE,
-} from "@/lib/workspace/workspaceAutomationWorkflowFilter";
+import type { WorkflowScopePartitionV1 } from "@/lib/workflows/workflowScopeMetadata";
 import { resolveKpisForDepartment } from "@/lib/kpi/resolver";
 import type { WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
 import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
@@ -288,7 +286,8 @@ export default function AdminV2WorkspaceDepartmentPage() {
 
     const [workflowKpis, setWorkflowKpis] = useState<WorkflowKpis>(DEFAULT_WF_KPIS);
     const [workflowKpisLoading, setWorkflowKpisLoading] = useState(false);
-    const [workflowsSummary, setWorkflowsSummary] = useState<WorkflowSummaryRow[] | null>(null);
+    const [workflowPartitions, setWorkflowPartitions] = useState<WorkflowScopePartitionV1 | null>(null);
+    const globalAssistant = useGlobalAssistantOptional();
 
     const [deptAttentionBuckets, setDeptAttentionBuckets] = useState<DeptAttentionBucket[] | null>(null);
     const [deptAttentionPreviewTotal, setDeptAttentionPreviewTotal] = useState<number | null>(null);
@@ -337,6 +336,15 @@ export default function AdminV2WorkspaceDepartmentPage() {
         });
     }, [departmentId, orgId, principalUserId, accessScopeFingerprint]);
 
+    useEffect(() => {
+        if (!globalAssistant || !departmentId) return;
+        globalAssistant.setWorkspaceScope({
+            department_id: departmentId,
+            department_name: dept?.name ?? null,
+        });
+        return () => globalAssistant.setWorkspaceScope(null);
+    }, [globalAssistant, departmentId, dept?.name]);
+
     /** Workflow KPIs deferred until department shell geometry has committed — off the navigation critical path. */
     useEffect(() => {
         if (!departmentId || deptLoading || !dept?.id || deptWorkUnits === null) return;
@@ -348,18 +356,19 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 const init = workspaceDataFetchInit();
                 const [kRes, sRes] = await Promise.all([
                     fetch("/api/admin/workflow-runs?list=kpis", init),
-                    fetch("/api/admin/workflows/summary?variant=workspace", init),
+                    fetch(
+                        `/api/admin/workflows/summary?variant=workspace&department_id=${encodeURIComponent(departmentId)}`,
+                        init
+                    ),
                 ]);
                 const kBody = (await kRes.json().catch(() => ({}))) as { kpis?: Partial<WorkflowKpis> };
-                const sJson = (await sRes.json().catch(() => ({}))) as { workflows?: WorkflowSummaryRow[] };
+                const sJson = (await sRes.json().catch(() => ({}))) as {
+                    workflows?: WorkflowSummaryRow[];
+                    partitions?: WorkflowScopePartitionV1;
+                };
                 if (!cancelled) {
                     if (kRes.ok && kBody.kpis) setWorkflowKpis({ ...DEFAULT_WF_KPIS, ...kBody.kpis });
-                    if (sRes.ok) {
-                        const all = Array.isArray(sJson.workflows) ? sJson.workflows : [];
-                        setWorkflowsSummary(
-                            filterWorkflowsForWorkspaceAutomationSurface(all) as WorkflowSummaryRow[]
-                        );
-                    }
+                    if (sRes.ok && sJson.partitions) setWorkflowPartitions(sJson.partitions);
                 }
             } catch {
                 // non-fatal
@@ -1186,9 +1195,8 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                     running_last_7d: workflowKpis.running_last_7d,
                                     success_rate_last_7d: workflowKpis.success_rate_last_7d,
                                 }}
-                                workflows={workflowsSummary}
+                                partitions={workflowPartitions}
                                 href="/adminV2/workflows"
-                                metadataAssociationNote={WORKSPACE_AUTOMATION_METADATA_GAP_NOTE}
                             />
                         </div>
                     }

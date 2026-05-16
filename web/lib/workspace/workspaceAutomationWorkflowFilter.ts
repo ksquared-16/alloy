@@ -1,37 +1,37 @@
 /**
- * Client-side filter for workspace automation panels.
- * Workflows table has no department_id / work_unit_id — org-wide list + entity-type heuristic only.
+ * Workspace automation panels — partition workflows by metadata.scope.
  */
 
-export type WorkspaceAutomationWorkflowRow = {
-    id: string;
-    name: string | null;
-    event_type: string | null;
-    entity_type: string | null;
-    enabled: boolean | null;
-    steps_count: number;
-    last_run?: { id: string; status: string; started_at: string; has_failed_action?: boolean } | null;
-};
+import {
+    partitionWorkflowsByWorkspaceScope,
+    type WorkflowScopePartitionV1,
+    type WorkflowWithScopeRow,
+} from "@/lib/workflows/workflowScopeMetadata";
 
-const ENROLLMENT_ENTITY_TYPES = new Set(["opportunity", "opportunities", "tour_bookings"]);
+export type WorkspaceAutomationWorkflowRow = WorkflowWithScopeRow;
 
-/** Shown on department/work-unit automation panels until workflows carry dept/WU metadata. */
+/** @deprecated Use scoped partitions; shown only when heuristic fallback is active. */
 export const WORKSPACE_AUTOMATION_METADATA_GAP_NOTE =
-    "Workflows are not linked to departments or work units in the database yet. Showing org-wide enrollment-adjacent automations.";
+    "No workflows are scoped to this department or work unit yet. Showing org-wide enrollment-adjacent automations as a fallback.";
 
-/**
- * Prefer enrollment-adjacent entity types on department/work-unit surfaces.
- * Full dept/WU linkage requires future workflow metadata (see sprint doc).
- */
-export function filterWorkflowsForWorkspaceAutomationSurface(
+export type WorkspaceAutomationWorkflowPartitions = WorkflowScopePartitionV1;
+
+export function partitionWorkflowsForWorkspaceAutomationSurface(
     rows: WorkspaceAutomationWorkflowRow[],
-    opts: { enrollmentAdjacent?: boolean } = {}
-): WorkspaceAutomationWorkflowRow[] {
-    const { enrollmentAdjacent = true } = opts;
-    if (!enrollmentAdjacent) return rows;
-    const filtered = rows.filter((w) => {
-        const et = (w.entity_type ?? "").trim().toLowerCase();
-        return !et || ENROLLMENT_ENTITY_TYPES.has(et);
-    });
-    return filtered.length > 0 ? filtered : rows.slice(0, 8);
+    context: { department_id?: string | null; work_unit_id?: string | null }
+): WorkspaceAutomationWorkflowPartitions {
+    return partitionWorkflowsByWorkspaceScope(rows, context);
+}
+
+/** Flat list for legacy callers — scoped first, then org-wide, then heuristic. */
+export function flattenWorkspaceAutomationPartitions(parts: WorkspaceAutomationWorkflowPartitions): WorkspaceAutomationWorkflowRow[] {
+    const out = [
+        ...parts.scoped_work_unit,
+        ...parts.scoped_department,
+        ...parts.org_wide,
+        ...(parts.uses_heuristic_fallback ? parts.heuristic : []),
+    ];
+    if (out.length > 0) return out;
+    const all = [...parts.scoped_work_unit, ...parts.scoped_department, ...parts.org_wide, ...parts.heuristic];
+    return all.slice(0, 8);
 }

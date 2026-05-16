@@ -123,10 +123,27 @@ export async function POST(request: NextRequest) {
         );
     }
 
+    const scope_labels =
+        body != null && typeof body === "object" && !Array.isArray(body) ?
+            {
+                department_name:
+                    typeof (body as { scope_labels?: { department_name?: unknown } }).scope_labels?.department_name ===
+                    "string" ?
+                        (body as { scope_labels: { department_name: string } }).scope_labels.department_name
+                    :   null,
+                work_unit_name:
+                    typeof (body as { scope_labels?: { work_unit_name?: unknown } }).scope_labels?.work_unit_name ===
+                    "string" ?
+                        (body as { scope_labels: { work_unit_name: string } }).scope_labels.work_unit_name
+                    :   null,
+            }
+        :   undefined;
+
     const suggestion = buildWorkflowAssistSuggestionV1({
         orgId: ctx.orgId,
         actorUserId: ctx.userId,
         parsed: parsed.value,
+        scope_labels,
     });
 
     return NextResponse.json({ ok: true, suggestion });

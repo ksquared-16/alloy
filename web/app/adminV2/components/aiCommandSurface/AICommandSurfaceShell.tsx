@@ -1192,13 +1192,17 @@ export default function AICommandSurfaceShell() {
   const proposeWorkflowAssistBody = useCallback(
     async (
       body: WorkflowAssistProposeRequestV1,
-      createInterpreted?: WorkflowAssistCreateProposeBuildV1["interpreted"]
+      createInterpreted?: WorkflowAssistCreateProposeBuildV1["interpreted"],
+      scopeLabels?: WorkflowAssistCreateProposeBuildV1["scope_labels"]
     ) => {
       const res = await fetch("/api/admin/ai/workflow-assist/propose", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          ...body,
+          ...(scopeLabels ? { scope_labels: scopeLabels } : {}),
+        }),
       });
       const j = (await res.json()) as {
         ok?: boolean;
@@ -1229,10 +1233,23 @@ export default function AICommandSurfaceShell() {
 
   const runWorkflowAssistCreateRoute = useCallback(
     async (submitted: string, createIntent: WorkflowAssistCreateIntentV1) => {
-      const built = buildWorkflowAssistCreateProposeFromIntent(createIntent, submitted);
-      await proposeWorkflowAssistBody(built.request, built.interpreted);
+      const ws = globalAssistant?.workspaceScope;
+      const built = buildWorkflowAssistCreateProposeFromIntent(createIntent, submitted, {
+        scope:
+          ws ?
+            {
+              department_id: ws.department_id,
+              ...(ws.work_unit_id ? { work_unit_id: ws.work_unit_id } : {}),
+            }
+          : null,
+        scope_labels: {
+          department_name: ws?.department_name ?? null,
+          work_unit_name: ws?.work_unit_name ?? null,
+        },
+      });
+      await proposeWorkflowAssistBody(built.request, built.interpreted, built.scope_labels);
     },
-    [proposeWorkflowAssistBody]
+    [globalAssistant?.workspaceScope, proposeWorkflowAssistBody]
   );
 
   const workflowAssistMutation = useMemo<WorkflowAssistThreadMutationHandlersV1>(

@@ -4,12 +4,33 @@ import type { AdminContextSuccess } from "@/lib/admin/getAdminContext";
 import { logAdminAudit } from "@/lib/adminAuth";
 import type { WorkflowAssistSuggestionV1 } from "@/lib/agent/workflowAssist/workflowAssistProposalV1";
 import { verifyWorkflowAssistSuggestionId } from "@/lib/agent/workflowAssist/workflowAssistProposalV1";
+import type { WorkflowAssistDraftActionScaffoldV1 } from "@/lib/workflows/workflowScopeMetadata";
 
 export type WorkflowAssistApplyExecResult =
     | { ok: true; workflow_id: string; workflow: Record<string, unknown> }
     | { ok: false; error: string; message: string; status: number };
 
 const ALLOWED_PATCH = ["name", "description", "event_type", "entity_type", "enabled"] as const;
+
+async function insertWorkflowActionScaffolds(
+    supabase: SupabaseClient,
+    orgId: string,
+    workflowId: string,
+    scaffolds: WorkflowAssistDraftActionScaffoldV1[]
+): Promise<{ ok: true } | { ok: false; message: string }> {
+    if (!scaffolds.length) return { ok: true };
+    const rows = scaffolds.map((a) => ({
+        workflow_id: workflowId,
+        org_id: orgId,
+        action_order: a.action_order,
+        action_type: String(a.action_type ?? "log").trim() || "log",
+        target_entity: a.target_entity != null ? String(a.target_entity) : null,
+        payload: a.payload && typeof a.payload === "object" ? a.payload : {},
+    }));
+    const { error } = await supabase.from("workflow_actions").insert(rows);
+    if (error) return { ok: false, message: error.message };
+    return { ok: true };
+}
 
 /**
  * Applies a validated {@link WorkflowAssistSuggestionV1} using the same field rules as
@@ -45,6 +66,9 @@ export async function executeWorkflowAssistApply(params: {
             entity_type: row.entity_type,
             enabled: false,
         };
+        if (row.metadata && typeof row.metadata === "object") {
+            insertRow.metadata = row.metadata;
+        }
         const { data, error } = await supabase.from("workflows").insert([insertRow]).select().single();
         if (error || !data) {
             return {
@@ -56,6 +80,20 @@ export async function executeWorkflowAssistApply(params: {
         }
         const wf = data as Record<string, unknown>;
         const wid = String(wf.id ?? "");
+
+        const scaffolds = proposal.draft_action_scaffolds ?? [];
+        if (scaffolds.length > 0) {
+            const ins = await insertWorkflowActionScaffolds(supabase, ctx.orgId, wid, scaffolds);
+            if (!ins.ok) {
+                return {
+                    ok: false,
+                    error: "WORKFLOW_ACTION_SCAFFOLD_FAILED",
+                    message: ins.message,
+                    status: 400,
+                };
+            }
+        }
+
         logAdminAudit({
             entity: "workflows",
             id: wid,

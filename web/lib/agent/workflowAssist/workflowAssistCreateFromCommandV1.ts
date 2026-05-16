@@ -3,6 +3,12 @@
  */
 
 import type { WorkflowAssistProposeRequestV1 } from "@/lib/agent/workflowAssist/workflowAssistProposalV1";
+import {
+    buildTourReminderActionScaffolds,
+    buildWorkflowAssistScopeDisplay,
+    type WorkflowAssistDraftActionScaffoldV1,
+    type WorkflowScopeMetadataV1,
+} from "@/lib/workflows/workflowScopeMetadata";
 
 export type WorkflowAssistCreateTemplateIdV1 = "tour_reminder" | "enrollment_when_move" | "generic_stub";
 
@@ -82,26 +88,58 @@ export function parseWorkflowAssistCreateIntent(raw: string): WorkflowAssistCrea
     return null;
 }
 
+export type WorkflowAssistCreateRouteContextV1 = {
+    scope?: WorkflowScopeMetadataV1 | null;
+    scope_labels?: { department_name?: string | null; work_unit_name?: string | null };
+};
+
 export type WorkflowAssistCreateProposeBuildV1 = {
     request: WorkflowAssistProposeRequestV1;
+    scope_labels?: { department_name?: string | null; work_unit_name?: string | null };
     interpreted: {
         template_id: WorkflowAssistCreateTemplateIdV1;
         headline: string;
         trigger_label: string;
         actions_label: string;
+        scope_label: string;
         unknowns: string[];
+        draft_action_scaffolds?: WorkflowAssistDraftActionScaffoldV1[];
     };
 };
+
+function metadataForCreate(
+    template_id: WorkflowAssistCreateTemplateIdV1,
+    scope: WorkflowScopeMetadataV1 | null | undefined,
+    draft_actions?: WorkflowAssistDraftActionScaffoldV1[]
+) {
+    const hasScope = Boolean(scope?.department_id || scope?.work_unit_id);
+    if (!hasScope && !draft_actions?.length) return undefined;
+    return {
+        ...(hasScope && scope ? { scope } : {}),
+        workflow_assist: {
+            source: "workflow_assist_create_v1",
+            template_id,
+            ...(draft_actions?.length ? { draft_actions } : {}),
+        },
+    };
+}
 
 /** Map create intent + original command to a propose POST body. */
 export function buildWorkflowAssistCreateProposeFromIntent(
     intent: WorkflowAssistCreateIntentV1,
-    command: string
+    command: string,
+    routeContext: WorkflowAssistCreateRouteContextV1 = {}
 ): WorkflowAssistCreateProposeBuildV1 {
     const days = parseDaysBeforeTour(command);
+    const scope = routeContext.scope ?? null;
+    const scope_display = buildWorkflowAssistScopeDisplay({
+        scope,
+        labels: routeContext.scope_labels,
+    });
 
     if (intent.template_id === "tour_reminder") {
         const leadDays = days ?? 3;
+        const draft_action_scaffolds = buildTourReminderActionScaffolds(leadDays);
         return {
             request: {
                 version: 1,
@@ -110,20 +148,27 @@ export function buildWorkflowAssistCreateProposeFromIntent(
                     name: "Tour Reminder Draft",
                     description:
                         `Assist-generated disabled draft: reminder ~${leadDays} day(s) before tour-related enrollment signals. ` +
-                        "Review trigger timing, conditions, and message actions in Automations before enabling. Not production-ready.",
+                        "Action scaffold requires review. Review message content before enabling. Workflow remains disabled.",
                     event_type: "opportunity_schedule_tour_followup",
                     entity_type: "opportunity",
                     enabled: false,
+                    metadata: metadataForCreate("tour_reminder", scope, draft_action_scaffolds),
+                    draft_action_scaffolds,
                 },
             },
+            scope_labels: routeContext.scope_labels,
             interpreted: {
                 template_id: "tour_reminder",
                 headline: "Proposed tour reminder workflow (disabled draft)",
                 trigger_label: `opportunity_schedule_tour_followup · opportunity (~${leadDays}d before tour — configure in Automations)`,
-                actions_label: "No actions scaffolded — add reminder/message steps in Automations",
+                actions_label:
+                    "1 scaffolded log step (placeholder) — intended SMS reminder stored in metadata; review before enabling",
+                scope_label: scope_display.label,
+                draft_action_scaffolds,
                 unknowns: [
                     "Exact offset timing and channel are not set by Assist.",
                     "Conditions (site, status, tour date field) must be configured manually.",
+                    "Action scaffold requires review — does not send or schedule messages while disabled.",
                 ],
             },
         };
@@ -142,13 +187,16 @@ export function buildWorkflowAssistCreateProposeFromIntent(
                     event_type: "opportunity_status_changed",
                     entity_type: "opportunity",
                     enabled: false,
+                    metadata: metadataForCreate("enrollment_when_move", scope),
                 },
             },
+            scope_labels: routeContext.scope_labels,
             interpreted: {
                 template_id: "enrollment_when_move",
                 headline: "Proposed status-move workflow (disabled draft)",
                 trigger_label: "opportunity_status_changed · opportunity (placeholder)",
                 actions_label: "No transition actions scaffolded — configure status change steps in Automations",
+                scope_label: scope_display.label,
                 unknowns: [
                     "Source status / form-complete event not inferred from this command.",
                     "Target status (e.g. Ready to Enroll) must be set in workflow conditions/actions.",
@@ -168,13 +216,16 @@ export function buildWorkflowAssistCreateProposeFromIntent(
                 event_type: "opportunity_status_changed",
                 entity_type: "opportunity",
                 enabled: false,
+                metadata: metadataForCreate("generic_stub", scope),
             },
         },
+        scope_labels: routeContext.scope_labels,
         interpreted: {
             template_id: "generic_stub",
             headline: "Proposed workflow (disabled draft)",
             trigger_label: "opportunity_status_changed · opportunity (placeholder)",
             actions_label: "No steps scaffolded",
+            scope_label: scope_display.label,
             unknowns: ["No template matched this command — configure manually in Automations."],
         },
     };

@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
+import type { WorkflowScopePartitionV1 } from "@/lib/workflows/workflowScopeMetadata";
+import { WORKSPACE_AUTOMATION_METADATA_GAP_NOTE } from "@/lib/workspace/workspaceAutomationWorkflowFilter";
 import "@/app/adminV2/components/workspace/workspace.css";
 
 export type AutomationWorkflowKpis = {
@@ -30,9 +32,72 @@ function humanTrigger(eventType: string | null): string {
     return "Runs on configured trigger";
 }
 
+function WorkflowListSection(props: {
+    kicker: string;
+    hint: string;
+    rows: AutomationWorkflowSummaryRow[];
+    limit?: number;
+}) {
+    if (!props.rows.length) return null;
+    const limit = props.limit ?? 4;
+    return (
+        <section className="adminv2-ws-automation-telemetry__workflows" aria-label={props.kicker}>
+            <div className="adminv2-ws-automation-telemetry__workflows-head">
+                <span className="adminv2-ws-automation-telemetry__workflows-kicker">{props.kicker}</span>
+                <span className="adminv2-ws-automation-telemetry__workflows-hint">{props.hint}</span>
+            </div>
+            <ul className="adminv2-ws-automation-telemetry__workflow-list" role="list">
+                {props.rows.slice(0, limit).map((w) => (
+                    <li key={w.id} className="adminv2-ws-automation-workflow-row">
+                        <div className="adminv2-ws-automation-workflow-row__rail" aria-hidden />
+                        <div className="adminv2-ws-automation-workflow-row__body">
+                            <div className="adminv2-ws-automation-workflow-row__name">{w.name ?? w.id}</div>
+                            <div className="adminv2-ws-automation-workflow-row__meta">
+                                <span className="adminv2-ws-automation-workflow-row__trigger">{humanTrigger(w.event_type)}</span>
+                                <span className="adminv2-ws-automation-workflow-row__sep" aria-hidden>
+                                    ·
+                                </span>
+                                <span className="adminv2-ws-automation-workflow-row__steps">
+                                    {w.steps_count} step{w.steps_count === 1 ? "" : "s"}
+                                </span>
+                                {w.last_run ?
+                                    <>
+                                        <span className="adminv2-ws-automation-workflow-row__sep" aria-hidden>
+                                            ·
+                                        </span>
+                                        <span
+                                            className={
+                                                w.last_run.has_failed_action || w.last_run.status === "failed" ?
+                                                    "adminv2-ws-automation-workflow-row__run--failed"
+                                                :   "adminv2-ws-automation-workflow-row__run"
+                                            }
+                                        >
+                                            Last run {w.last_run.status}
+                                        </span>
+                                    </>
+                                : null}
+                            </div>
+                        </div>
+                        <span
+                            className={
+                                w.enabled === false
+                                    ? "adminv2-ws-automation-workflow-row__chip adminv2-ws-automation-workflow-row__chip--disabled"
+                                    : "adminv2-ws-automation-workflow-row__chip adminv2-ws-automation-workflow-row__chip--enabled"
+                            }
+                        >
+                            {w.enabled === false ? "Off" : "Live"}
+                        </span>
+                    </li>
+                ))}
+            </ul>
+        </section>
+    );
+}
+
 export function AutomationWorkflowsBlock(props: {
     kpis: AutomationWorkflowKpis;
-    workflows: AutomationWorkflowSummaryRow[] | null;
+    workflows?: AutomationWorkflowSummaryRow[] | null;
+    partitions?: WorkflowScopePartitionV1 | null;
     title?: string;
     href?: string;
     /** When true, numeric stats show placeholders until the first KPI fetch completes. */
@@ -44,13 +109,23 @@ export function AutomationWorkflowsBlock(props: {
 }) {
     const {
         kpis,
-        workflows,
+        workflows = null,
+        partitions = null,
         title = "Automations",
         href = "/adminV2/workflows",
         kpisLoading = false,
         metadataAssociationNote = null,
         workflowAssistHref = null,
     } = props;
+
+    const scopedWu = partitions?.scoped_work_unit ?? [];
+    const scopedDept = partitions?.scoped_department ?? [];
+    const orgWide = partitions?.org_wide ?? [];
+    const heuristic = partitions?.uses_heuristic_fallback ? (partitions?.heuristic ?? []) : [];
+    const hasPartitions = Boolean(partitions);
+    const associationNote =
+        partitions?.uses_heuristic_fallback ? WORKSPACE_AUTOMATION_METADATA_GAP_NOTE
+        : metadataAssociationNote;
 
     const failuresHot = !kpisLoading && kpis.failed_last_7d > 0;
     const successConcern =
@@ -66,7 +141,7 @@ export function AutomationWorkflowsBlock(props: {
                     <p className="adminv2-ws-automation-telemetry__kicker">Workflow telemetry</p>
                     <h3 className="adminv2-ws-automation-telemetry__title">{title}</h3>
                     <p className="adminv2-ws-automation-telemetry__subtitle">
-                        Live runs, reliability, and the workflows tied to this workspace surface.
+                        Live runs, reliability, and workflows scoped to this workspace surface.
                     </p>
                 </div>
                 <div className="adminv2-ws-automation-telemetry__mast-actions">
@@ -91,9 +166,9 @@ export function AutomationWorkflowsBlock(props: {
                 </div>
             </header>
 
-            {metadataAssociationNote ?
+            {associationNote ?
                 <p className="adminv2-ws-automation-telemetry__association-note" data-ws-automation-metadata-gap="true">
-                    {metadataAssociationNote}
+                    {associationNote}
                 </p>
             : null}
 
@@ -148,60 +223,30 @@ export function AutomationWorkflowsBlock(props: {
                 </section>
             </div>
 
-            {workflows?.length ? (
-                <section className="adminv2-ws-automation-telemetry__workflows" aria-label="Relevant workflows">
-                    <div className="adminv2-ws-automation-telemetry__workflows-head">
-                        <span className="adminv2-ws-automation-telemetry__workflows-kicker">In scope</span>
-                        <span className="adminv2-ws-automation-telemetry__workflows-hint">
-                            Org workflows (enrollment-adjacent entity types)
-                        </span>
-                    </div>
-                    <ul className="adminv2-ws-automation-telemetry__workflow-list" role="list">
-                        {workflows.slice(0, 4).map((w) => (
-                            <li key={w.id} className="adminv2-ws-automation-workflow-row">
-                                <div className="adminv2-ws-automation-workflow-row__rail" aria-hidden />
-                                <div className="adminv2-ws-automation-workflow-row__body">
-                                    <div className="adminv2-ws-automation-workflow-row__name">{w.name ?? w.id}</div>
-                                    <div className="adminv2-ws-automation-workflow-row__meta">
-                                        <span className="adminv2-ws-automation-workflow-row__trigger">{humanTrigger(w.event_type)}</span>
-                                        <span className="adminv2-ws-automation-workflow-row__sep" aria-hidden>
-                                            ·
-                                        </span>
-                                        <span className="adminv2-ws-automation-workflow-row__steps">
-                                            {w.steps_count} step{w.steps_count === 1 ? "" : "s"}
-                                        </span>
-                                        {w.last_run ?
-                                            <>
-                                                <span className="adminv2-ws-automation-workflow-row__sep" aria-hidden>
-                                                    ·
-                                                </span>
-                                                <span
-                                                    className={
-                                                        w.last_run.has_failed_action || w.last_run.status === "failed" ?
-                                                            "adminv2-ws-automation-workflow-row__run--failed"
-                                                        :   "adminv2-ws-automation-workflow-row__run"
-                                                    }
-                                                >
-                                                    Last run {w.last_run.status}
-                                                </span>
-                                            </>
-                                        : null}
-                                    </div>
-                                </div>
-                                <span
-                                    className={
-                                        w.enabled === false
-                                            ? "adminv2-ws-automation-workflow-row__chip adminv2-ws-automation-workflow-row__chip--disabled"
-                                            : "adminv2-ws-automation-workflow-row__chip adminv2-ws-automation-workflow-row__chip--enabled"
-                                    }
-                                >
-                                    {w.enabled === false ? "Off" : "Live"}
-                                </span>
-                            </li>
-                        ))}
-                    </ul>
-                </section>
-            ) : null}
+            {hasPartitions ?
+                <>
+                    <WorkflowListSection
+                        kicker="Scoped to this work unit"
+                        hint="metadata.scope.work_unit_id"
+                        rows={scopedWu}
+                    />
+                    <WorkflowListSection
+                        kicker="Scoped to this department"
+                        hint="metadata.scope.department_id"
+                        rows={scopedDept}
+                    />
+                    <WorkflowListSection kicker="Org-wide" hint="No department/work-unit scope in metadata" rows={orgWide} />
+                    {heuristic.length ?
+                        <WorkflowListSection
+                            kicker="Enrollment-adjacent (fallback)"
+                            hint="Legacy workflows without metadata.scope"
+                            rows={heuristic}
+                        />
+                    : null}
+                </>
+            : workflows?.length ?
+                <WorkflowListSection kicker="In scope" hint="Workflow list" rows={workflows} />
+            : null}
         </div>
     );
 }

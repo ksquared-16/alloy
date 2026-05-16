@@ -4,6 +4,14 @@
 
 import { createHash } from "node:crypto";
 
+import {
+    buildWorkflowAssistScopeDisplay,
+    buildWorkflowMetadataWithScope,
+    type WorkflowAssistDraftActionScaffoldV1,
+    type WorkflowAssistScopeDisplayV1,
+    type WorkflowAssistWorkflowMetadataV1,
+} from "@/lib/workflows/workflowScopeMetadata";
+
 export const WORKFLOW_ASSIST_AGENT_KEY = "workflow_assist" as const;
 
 export type WorkflowAssistProposalKindV1 = "create_workflow" | "edit_workflow" | "pause_workflow";
@@ -16,6 +24,8 @@ export type WorkflowAssistCreateDraftV1 = {
     entity_type: string;
     /** Default false in builder when omitted. */
     enabled?: boolean;
+    metadata?: WorkflowAssistWorkflowMetadataV1;
+    draft_action_scaffolds?: WorkflowAssistDraftActionScaffoldV1[];
 };
 
 export type WorkflowAssistEditPatchV1 = Partial<{
@@ -56,9 +66,12 @@ export type WorkflowAssistSuggestionV1 = {
     /** Target workflow for edit/pause; null for create. */
     target_workflow_id: string | null;
     /** Full row to insert on apply (create). */
-    draft_row: WorkflowAssistCreateDraftV1 & { enabled: boolean } | null;
+    draft_row: (WorkflowAssistCreateDraftV1 & { enabled: boolean; metadata?: Record<string, unknown> }) | null;
     /** Partial update on apply (edit / pause uses { enabled: false }). */
     patch: WorkflowAssistEditPatchV1 | null;
+    /** Inserted on apply when template provides scaffolds (e.g. tour reminder log step). */
+    draft_action_scaffolds?: WorkflowAssistDraftActionScaffoldV1[] | null;
+    scope_display?: WorkflowAssistScopeDisplayV1 | null;
     reasoning: { summary: string; warnings: string[] };
     approval_required: true;
 };
@@ -122,16 +135,29 @@ export function canonicalForWorkflowAssistSuggestionId(
     return `wa-${h.digest("hex").slice(0, 32)}`;
 }
 
+export function canonicalCreateWorkflowAssistSuggestionBody(proposal: WorkflowAssistSuggestionV1): unknown {
+    return {
+        draft: proposal.draft_row,
+        draft_action_scaffolds: proposal.draft_action_scaffolds ?? null,
+        scope_display: proposal.scope_display ?? null,
+    };
+}
+
 export function computeWorkflowAssistSuggestionId(
     orgId: string,
     proposalKind: WorkflowAssistProposalKindV1,
     draftRow: WorkflowAssistSuggestionV1["draft_row"],
     patch: WorkflowAssistSuggestionV1["patch"],
-    targetWorkflowId: string | null
+    targetWorkflowId: string | null,
+    createExtras?: { draft_action_scaffolds?: unknown; scope_display?: unknown }
 ): string {
     const body =
         proposalKind === "create_workflow" ?
-            { draft: draftRow }
+            {
+                draft: draftRow,
+                draft_action_scaffolds: createExtras?.draft_action_scaffolds ?? null,
+                scope_display: createExtras?.scope_display ?? null,
+            }
         : proposalKind === "pause_workflow" ?
             { workflow_id: targetWorkflowId, patch }
         : { workflow_id: targetWorkflowId, patch };
@@ -180,6 +206,26 @@ export function parseWorkflowAssistProposeRequest(body: unknown): ParseWorkflowA
                 status: 400,
             };
         }
+        const metadataRaw = draft.metadata;
+        let metadata: WorkflowAssistWorkflowMetadataV1 | undefined;
+        if (metadataRaw != null && typeof metadataRaw === "object" && !Array.isArray(metadataRaw)) {
+            metadata = metadataRaw as WorkflowAssistWorkflowMetadataV1;
+            const scope = metadata.scope;
+            if (scope) {
+                if (scope.department_id != null && !isUuidString(String(scope.department_id))) {
+                    return { ok: false, error: "INVALID_DRAFT", message: "metadata.scope.department_id must be a UUID.", status: 400 };
+                }
+                if (scope.work_unit_id != null && !isUuidString(String(scope.work_unit_id))) {
+                    return { ok: false, error: "INVALID_DRAFT", message: "metadata.scope.work_unit_id must be a UUID.", status: 400 };
+                }
+            }
+        }
+        let draft_action_scaffolds: WorkflowAssistDraftActionScaffoldV1[] | undefined;
+        if (Array.isArray(draft.draft_action_scaffolds)) {
+            draft_action_scaffolds = draft.draft_action_scaffolds
+                .filter((a): a is WorkflowAssistDraftActionScaffoldV1 => a != null && typeof a === "object")
+                .slice(0, 8);
+        }
         return {
             ok: true,
             value: {
@@ -191,6 +237,8 @@ export function parseWorkflowAssistProposeRequest(body: unknown): ParseWorkflowA
                     event_type,
                     entity_type,
                     enabled: false,
+                    ...(metadata ? { metadata } : {}),
+                    ...(draft_action_scaffolds?.length ? { draft_action_scaffolds } : {}),
                 },
             },
         };
@@ -256,22 +304,35 @@ export function buildWorkflowAssistSuggestionV1(input: {
     orgId: string;
     actorUserId: string;
     parsed: WorkflowAssistProposeRequestV1;
+    scope_labels?: { department_name?: string | null; work_unit_name?: string | null };
 }): WorkflowAssistSuggestionV1 {
     const generated_at_iso = new Date().toISOString();
     const warnings: string[] = [];
 
     if (input.parsed.proposal_kind === "create_workflow") {
         const d = input.parsed.draft;
+        const metadataRecord = buildWorkflowMetadataWithScope({
+            scope: d.metadata?.scope ?? null,
+            workflow_assist: d.metadata?.workflow_assist,
+        });
         const draft_row = {
             name: d.name,
             description: d.description ?? null,
             event_type: d.event_type,
             entity_type: d.entity_type,
             enabled: false,
+            ...(Object.keys(metadataRecord).length > 0 ? { metadata: metadataRecord } : {}),
         };
+        const draft_action_scaffolds = d.draft_action_scaffolds?.length ? d.draft_action_scaffolds : null;
+        const scope_display = buildWorkflowAssistScopeDisplay({
+            scope: d.metadata?.scope ?? null,
+            labels: input.scope_labels,
+        });
         warnings.push("Workflow will be created disabled. Review in Automations before enabling.");
         if (d.name === "Tour Reminder Draft") {
-            warnings.push("Reminder timing and message actions are not configured by Assist.");
+            warnings.push("Action scaffold requires review.");
+            warnings.push("Review message content before enabling.");
+            warnings.push("Workflow remains disabled until enabled in Automations.");
         }
         if (d.name === "Status transition draft (review required)") {
             warnings.push("Form-complete trigger and target status must be configured manually.");
@@ -281,7 +342,8 @@ export function buildWorkflowAssistSuggestionV1(input: {
             "create_workflow",
             draft_row,
             null,
-            null
+            null,
+            { draft_action_scaffolds, scope_display }
         );
         return {
             version: 1,
@@ -294,8 +356,10 @@ export function buildWorkflowAssistSuggestionV1(input: {
             target_workflow_id: null,
             draft_row,
             patch: null,
+            draft_action_scaffolds,
+            scope_display,
             reasoning: {
-                summary: `Create disabled workflow “${draft_row.name}” on ${draft_row.event_type} / ${draft_row.entity_type}.`,
+                summary: `Create disabled workflow “${draft_row.name}” (${scope_display.label}) on ${draft_row.event_type} / ${draft_row.entity_type}.`,
                 warnings,
             },
             approval_required: true,
@@ -358,13 +422,20 @@ export function buildWorkflowAssistSuggestionV1(input: {
 }
 
 export function verifyWorkflowAssistSuggestionId(proposal: WorkflowAssistSuggestionV1): boolean {
-    const expected = computeWorkflowAssistSuggestionId(
-        proposal.org_id,
-        proposal.proposal_kind,
-        proposal.draft_row,
-        proposal.patch,
-        proposal.target_workflow_id
-    );
+    const expected =
+        proposal.proposal_kind === "create_workflow" ?
+            canonicalForWorkflowAssistSuggestionId(
+                proposal.org_id,
+                "create_workflow",
+                canonicalCreateWorkflowAssistSuggestionBody(proposal)
+            )
+        :   computeWorkflowAssistSuggestionId(
+                proposal.org_id,
+                proposal.proposal_kind,
+                proposal.draft_row,
+                proposal.patch,
+                proposal.target_workflow_id
+            );
     return expected === proposal.suggestion_id;
 }
 

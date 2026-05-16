@@ -30,6 +30,14 @@ export type GlobalAssistantEntityContext = {
     available_actions?: GlobalAssistantAction[];
 };
 
+/** AdminV2 workspace route context for Workflow Assist create proposals (metadata.scope). */
+export type GlobalAssistantWorkspaceScope = {
+    department_id: string;
+    department_name?: string | null;
+    work_unit_id?: string | null;
+    work_unit_name?: string | null;
+};
+
 export type CommandSurfaceMode = "job_overview" | "task_assist";
 
 export type CommandSurfaceJobCardUiState = Record<
@@ -47,6 +55,9 @@ type GlobalAssistantContextValue = {
     commandSurfaceMode: CommandSurfaceMode;
     setCommandSurfaceMode: (mode: CommandSurfaceMode) => void;
     currentContext: GlobalAssistantEntityContext | null;
+    /** Department / work-unit page scope for Workflow Assist create drafts. */
+    workspaceScope: GlobalAssistantWorkspaceScope | null;
+    setWorkspaceScope: (scope: GlobalAssistantWorkspaceScope | null) => void;
     /** Scroll/focus the bottom command bar; optional mode hint for Task Assist vs job layout. */
     focusCommandBar: (detail?: AdminV2FocusCommandBarDetail) => void;
     /** @deprecated Card 9 — use {@link focusCommandBar}. Kept for compatibility. */
@@ -74,6 +85,7 @@ const GlobalAssistantContext = createContext<GlobalAssistantContextValue | null>
 export function GlobalAssistantProvider({ children }: { children: ReactNode }) {
     const [commandSurfaceMode, setCommandSurfaceMode] = useState<CommandSurfaceMode>("job_overview");
     const [currentContext, setCurrentContext] = useState<GlobalAssistantEntityContext | null>(null);
+    const [workspaceScope, setWorkspaceScopeState] = useState<GlobalAssistantWorkspaceScope | null>(null);
 
     const [sessionLoaded] = useState(() => loadPersistedCommandSurfaceSession());
     const [commandSurfaceThread, setCommandSurfaceThreadState] = useState<CommandSurfaceThreadState>(
@@ -139,6 +151,10 @@ export function GlobalAssistantProvider({ children }: { children: ReactNode }) {
         setCurrentContext(context);
     }, []);
 
+    const setWorkspaceScope = useCallback((scope: GlobalAssistantWorkspaceScope | null) => {
+        setWorkspaceScopeState(scope);
+    }, []);
+
     const openAssistantWithContext = useCallback(
         (context: GlobalAssistantEntityContext) => {
             setCurrentContext(context);
@@ -153,6 +169,8 @@ export function GlobalAssistantProvider({ children }: { children: ReactNode }) {
             commandSurfaceMode,
             setCommandSurfaceMode,
             currentContext,
+            workspaceScope,
+            setWorkspaceScope,
             focusCommandBar,
             openAssistant,
             closeAssistant,
@@ -169,6 +187,8 @@ export function GlobalAssistantProvider({ children }: { children: ReactNode }) {
         [
             commandSurfaceMode,
             currentContext,
+            workspaceScope,
+            setWorkspaceScope,
             focusCommandBar,
             openAssistant,
             closeAssistant,

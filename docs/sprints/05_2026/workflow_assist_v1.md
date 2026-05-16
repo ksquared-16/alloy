@@ -62,7 +62,7 @@
 | **Stabilization (role UX + guardrails)** | **Shipped:** **`GET /api/admin/ai/workflow-assist/capabilities`** (`can_propose_and_apply_workflow_assist` = compatibility **`admin`**); Orchestrator hides propose CTAs for ops and disables Apply unless admin; create proposal card stresses **disabled draft / template starter / review in Automations**; deterministic create template description warns placeholders are generic. |
 | **NL create routing (vertical slice)** | **Shipped:** `parseWorkflowAssistCreateIntent` + `buildWorkflowAssistCreateProposeFromIntent` — Orchestrator routes create/make/automation-when and tour-reminder phrasing to **`workflow_assist_proposal`** (not read summary). Templates: **`tour_reminder`**, **`enrollment_when_move`**, **`generic_stub`**. Apply still **`enabled: false`** only. |
 | **Explain name lookup** | **Shipped (narrow):** why-blocked commands without ambient context → Task Assist entity search on extracted family name; single high-confidence opportunity → Explain v1; multiple → candidate picker with explain confirm. |
-| **Dept / work-unit automation visibility** | **Partial:** `AutomationWorkflowsBlock` on department + work-unit pages; KPIs + workflow rows + last run; metadata gap note (no `workflows.department_id`). Filter: org-wide enrollment-adjacent entity types. |
+| **Dept / work-unit automation visibility** | **Shipped (metadata scope):** `workflows.metadata.scope` + partitioned `AutomationWorkflowsBlock` (scoped WU / dept / org-wide / heuristic fallback). |
 
 ### Staging migration naming (do not rename if applied)
 
@@ -395,6 +395,48 @@ Response: `{ ok: true, explain_engine: 1, explanation, trace }`.
 - Data: `GET /api/admin/workflow-runs?list=kpis` + `GET /api/admin/workflows/summary?variant=workspace` (workspace variant includes **last_run** per workflow).
 - Filter: `filterWorkflowsForWorkspaceAutomationSurface` — opportunity / tour_bookings entity types when present.
 - **Metadata gap:** `workflows` has no `department_id` or `work_unit_id`; panels show **`WORKSPACE_AUTOMATION_METADATA_GAP_NOTE`** and org-wide heuristic list until linkage exists.
+
+---
+
+## 15. Metadata scope + tour reminder action scaffold (shipped)
+
+### Metadata scope model (V1)
+
+Migration: `supabase/migrations/20260516143000_workflows_metadata_scope.sql` adds `workflows.metadata jsonb`.
+
+```json
+{
+  "scope": {
+    "department_id": "<uuid>",
+    "work_unit_id": "<uuid optional>"
+  },
+  "workflow_assist": {
+    "source": "workflow_assist_create_v1",
+    "template_id": "tour_reminder",
+    "draft_actions": [ "... intended steps documented ..." ]
+  }
+}
+```
+
+**Phase 2 (optional):** FK columns `workflows.department_id` / `workflows.work_unit_id` if query volume or integrity rules require it. V1 avoids schema churn beyond `metadata`.
+
+### Workspace panels
+
+- `GET /api/admin/workflows/summary?variant=workspace&department_id=&work_unit_id=` returns `partitions` when scope query params are set.
+- `AutomationWorkflowsBlock` sections: **Scoped to this work unit**, **Scoped to this department**, **Org-wide**, **Enrollment-adjacent (fallback)** when no scoped rows exist.
+- `GlobalAssistantContext.workspaceScope` set from department/work-unit pages so create proposals inherit route context.
+
+### Tour reminder scaffold
+
+- Inserts one **`log`** `workflow_actions` row with `assist_scaffold: true` (safe — workflow stays **disabled**).
+- `metadata.workflow_assist.draft_actions` records intended `create_message` SMS step for manual configuration.
+- Proposal card copy: **Action scaffold requires review**, **Review message content before enabling**, **Workflow remains disabled**.
+
+### Limitations
+
+- Scaffold does not send or schedule messages.
+- Offset timing / conditions still configured in Automations.
+- Legacy workflows without `metadata.scope` appear under heuristic fallback only.
 
 ---
 

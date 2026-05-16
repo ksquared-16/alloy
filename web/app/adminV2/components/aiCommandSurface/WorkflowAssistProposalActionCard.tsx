@@ -122,6 +122,9 @@ export function WorkflowAssistProposalActionCard({
             </p>
             {isCreate ?
                 <>
+                    <p className="text-[10px] font-semibold" style={{ color: CMD.textLabel }}>
+                        Scope: {suggestion.scope_display?.label ?? createInterpreted?.scope_label ?? "Org-wide"}
+                    </p>
                     {createInterpreted ?
                         <dl className="grid gap-1 text-[10px]" style={{ color: CMD.textSupporting }}>
                             <ProposalDetailRow label="Trigger" value={createInterpreted.trigger_label} />

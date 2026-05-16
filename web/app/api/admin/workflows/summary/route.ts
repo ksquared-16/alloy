@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabaseAdmin";
 import { requireAdminOrOps } from "@/lib/adminAuth";
 import { adminContextFailureResponse, getAdminContextCached } from "@/lib/admin/getAdminContext";
+import {
+    isUuidString,
+    partitionWorkflowsByWorkspaceScope,
+    type WorkflowWithScopeRow,
+} from "@/lib/workflows/workflowScopeMetadata";
 
 type WorkflowSummaryRow = {
     id: string;
@@ -10,6 +15,7 @@ type WorkflowSummaryRow = {
     entity_type: string | null;
     event_type: string | null;
     steps_count: number;
+    metadata?: Record<string, unknown> | null;
     last_run: {
         id: string;
         status: string;
@@ -41,12 +47,18 @@ export async function GET(request: NextRequest) {
     const orgId = ctx.orgId;
 
     const variant = (request.nextUrl.searchParams.get("variant") ?? "").trim();
+    const departmentId = (request.nextUrl.searchParams.get("department_id") ?? "").trim();
+    const workUnitId = (request.nextUrl.searchParams.get("work_unit_id") ?? "").trim();
+    const scopeContext = {
+        department_id: isUuidString(departmentId) ? departmentId : null,
+        work_unit_id: isUuidString(workUnitId) ? workUnitId : null,
+    };
 
     if (variant === "workspace") {
         const supabase = createAdminClient();
         const wfPromise = supabase
             .from("workflows")
-            .select("id, name, enabled, entity_type, event_type")
+            .select("id, name, enabled, entity_type, event_type, metadata")
             .eq("org_id", orgId)
             .order("updated_at", { ascending: false });
         const actPromise = supabase.from("workflow_actions").select("id, workflow_id").eq("org_id", orgId);
@@ -103,6 +115,7 @@ export async function GET(request: NextRequest) {
 
         const rows: WorkflowSummaryRow[] = (workflows ?? []).map((w) => {
             const id = String((w as { id: string }).id);
+            const md = (w as { metadata?: unknown }).metadata;
             return {
                 id,
                 name: (w as { name?: string | null }).name ?? null,
@@ -110,6 +123,7 @@ export async function GET(request: NextRequest) {
                 entity_type: (w as { entity_type?: string | null }).entity_type ?? null,
                 event_type: (w as { event_type?: string | null }).event_type ?? null,
                 steps_count: stepsCountByWorkflowId.get(id) ?? 0,
+                metadata: md && typeof md === "object" && !Array.isArray(md) ? (md as Record<string, unknown>) : {},
                 last_run: lastRunByWorkflowId.get(id) ?? null,
             };
         });
@@ -123,6 +137,11 @@ export async function GET(request: NextRequest) {
                 parallel_queries_ms: parallelCardMs,
                 workflow_count: rows.length,
             });
+        }
+
+        if (scopeContext.department_id || scopeContext.work_unit_id) {
+            const partitions = partitionWorkflowsByWorkspaceScope(rows as WorkflowWithScopeRow[], scopeContext);
+            return NextResponse.json({ workflows: rows, partitions });
         }
 
         return NextResponse.json({ workflows: rows });
