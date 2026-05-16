@@ -66,11 +66,24 @@ export function buildWorkUnitLaneSearchParams(
     return sp;
 }
 
-function dispatchLaneQueryCommitted(urlKey: string): void {
+let laneUrlSyncTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * Best-effort address-bar sync for shareable URLs. Does not notify React — lane UI state is local.
+ */
+export function scheduleWorkUnitLaneUrlSync(
+    opts: WorkUnitLaneQueryCommit & { caller?: string; workUnitId?: string | null }
+): void {
     if (typeof window === "undefined") return;
-    window.dispatchEvent(
-        new CustomEvent(ADMINV2_WORK_UNIT_LANE_QUERY_EVENT, { detail: { urlKey } })
-    );
+    if (laneUrlSyncTimer != null) clearTimeout(laneUrlSyncTimer);
+    laneUrlSyncTimer = setTimeout(() => {
+        laneUrlSyncTimer = null;
+        const sp = buildWorkUnitLaneSearchParams(readWorkUnitUrlSearchSnapshot(), opts);
+        replaceWorkUnitBrowserSearch(sp, {
+            caller: opts.caller ?? "scheduleWorkUnitLaneUrlSync",
+            workUnitId: opts.workUnitId ?? null,
+        });
+    }, 0);
 }
 
 /**
@@ -113,12 +126,11 @@ export function replaceWorkUnitBrowserSearch(
         workUnitId: opts?.workUnitId ?? null,
         stack: captureRouteDebugStack(),
     });
-    dispatchLaneQueryCommitted(nextUrl);
     opts?.onCommitted?.();
     return true;
 }
 
-/** Commit lane keys on the current work-unit URL; no-op when unchanged. */
+/** @deprecated Prefer {@link scheduleWorkUnitLaneUrlSync} — lane UI must not read URL after writes. */
 export function commitWorkUnitLaneQueryUrl(
     opts: WorkUnitLaneQueryCommit & { caller?: string; workUnitId?: string | null },
     onCommitted?: () => void

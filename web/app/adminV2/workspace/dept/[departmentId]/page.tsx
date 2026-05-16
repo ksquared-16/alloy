@@ -8,6 +8,7 @@ import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import { appendWorkspaceSiteToUrl } from "@/lib/adminV2/workspaceSiteFilterClient";
 import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
 import { adminV2BeforeRouteNavigation } from "@/lib/adminV2/shellNavigation";
+import { logAdminV2NavDebug } from "@/lib/debug/adminV2NavDebug";
 import {
     WorkspacePairedOperPanel,
     WorkspacePairedOperPanelsGrid,
@@ -149,6 +150,11 @@ function DeptOperConsoleQueueRow(props: {
             href={href}
             prefetch={shouldDisableAdminV2LinkPrefetch(href) ? false : undefined}
             onClick={() => {
+                logAdminV2NavDebug({
+                    event: "deptQueueCardClick",
+                    clickedHref: href,
+                    routerAction: "link",
+                });
                 adminV2BeforeRouteNavigation({ closeDrawer: adminDrawer?.closeDrawer });
             }}
             className={`adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact ${tier} no-underline text-inherit hover:opacity-[0.98]`}

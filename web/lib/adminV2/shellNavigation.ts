@@ -6,5 +6,8 @@ import { markWorkUnitNavigationStart } from "@/lib/perf/markWorkUnitNavigationSt
  */
 export function adminV2BeforeRouteNavigation(opts?: { closeDrawer?: () => void }): void {
     markWorkUnitNavigationStart();
-    opts?.closeDrawer?.();
+    const close = opts?.closeDrawer;
+    if (!close) return;
+    /** Defer so drawer state does not synchronously re-render during Next <Link> navigation. */
+    queueMicrotask(() => close());
 }

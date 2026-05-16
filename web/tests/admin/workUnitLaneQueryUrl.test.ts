@@ -30,7 +30,6 @@ describe("workUnitLaneQueryUrl", () => {
         const wrote = replaceWorkUnitBrowserSearch(sp, { caller: "test" });
         expect(wrote).toBe(false);
         expect(window.history.replaceState).not.toHaveBeenCalled();
-        expect(window.dispatchEvent).not.toHaveBeenCalled();
     });
 
     it("writes replaceState only when lane query changes", () => {
@@ -45,6 +44,5 @@ describe("workUnitLaneQueryUrl", () => {
         const wrote = replaceWorkUnitBrowserSearch(sp, { caller: "test" });
         expect(wrote).toBe(true);
         expect(window.history.replaceState).toHaveBeenCalledWith({}, "", nextUrl);
-        expect(window.dispatchEvent).toHaveBeenCalled();
     });
 });

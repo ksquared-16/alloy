@@ -47,12 +47,14 @@ describe("Work-unit queue tab shallow routing", () => {
     it("uses shared lane URL helper with replaceState guard (not router) for queue tabs", () => {
         const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
         const lib = read("lib/adminV2/workUnitLaneQueryUrl.ts");
-        expect(page).toContain("commitWorkUnitLaneQueryUrl");
+        expect(page).toContain("scheduleWorkUnitLaneUrlSync");
         expect(lib).toMatch(/replaceWorkUnitBrowserSearch[\s\S]*?previousUrl === nextUrl/);
         expect(lib).toMatch(/window\.history\.replaceState/);
-        const tabHandler = page.match(/const handleQueueTabChange = useCallback\([\s\S]*?\}, \[commitLaneQueryUrl\]\);/)?.[0];
+        const tabHandler = page.match(
+            /const handleQueueTabChange = useCallback\([\s\S]*?scheduleWorkUnitLaneUrlSync[\s\S]*?\[setSelectedQueueKeyTraced, workUnitId\]/
+        )?.[0];
         expect(tabHandler).toBeTruthy();
-        expect(tabHandler).toContain("commitLaneQueryUrl");
+        expect(tabHandler).toContain("scheduleWorkUnitLaneUrlSync");
         expect(tabHandler).not.toMatch(/router\.(push|replace)/);
     });
 
@@ -65,19 +67,16 @@ describe("Work-unit queue tab shallow routing", () => {
         expect(bootstrapDeps).not.toMatch(/searchParams/);
     });
 
-    it("lane sync effect does not depend on raw searchParams object", () => {
+    it("does not sync selectedQueueKey from URL on every shallow lane rev", () => {
         const src = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
-        const laneSync = src.match(
-            /Browser back\/forward[\s\S]*?setSelectedQueueKey\(\(prev\)[\s\S]*?\}, \[queueSummaries, wuLaneSearchRev\]\);/
-        )?.[0];
-        expect(laneSync).toBeTruthy();
-        expect(laneSync).not.toMatch(/,\s*searchParams\s*[\],]/);
+        expect(src).not.toContain("wuLaneSearchRev");
+        expect(src).toContain("scheduleWorkUnitLaneUrlSync");
+        expect(src).toContain("laneUnmappedOnly");
     });
 
-    it("TopNavBar queue href tracks window lane URL on work-unit routes", () => {
+    it("TopNavBar queue href uses pathname only on work-unit routes", () => {
         const src = read("app/adminV2/components/TopNavBar.tsx");
-        expect(src).toContain("ADMINV2_WORK_UNIT_LANE_QUERY_EVENT");
-        expect(src).toContain("workUnitLaneUrlKey");
+        expect(src).toMatch(/queueHref = isQueueContext \? normalizedPath/);
     });
 });
 
