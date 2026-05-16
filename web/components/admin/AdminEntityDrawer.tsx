@@ -20,11 +20,12 @@ import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 import RelatedRecordsTabs from "@/components/admin/RelatedRecordsTabs";
 import EntityDocumentsSection from "@/components/admin/EntityDocumentsSection";
 import CommunicationsDrawerSection from "@/components/admin/communications/CommunicationsDrawerSection";
-import OpportunityOperationalTasksSection from "@/components/admin/opportunity/OpportunityOperationalTasksSection";
+import OpportunityOperationalCompactStrip from "@/components/admin/opportunity/OpportunityOperationalCompactStrip";
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
 import {
     ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS,
     ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH,
+    type OpportunityFocusOperationalTasksDetail,
 } from "@/lib/adminV2/opportunityDrawerTaskEvents";
 import {
     scheduleDeferredCommunicationsDrawerPrefetch,
@@ -103,7 +104,6 @@ import {
 import JobRecordModalV2, { isCleaningJobRecord } from "@/components/admin/drawer/JobRecordModalV2";
 import ScheduleRecordModalV2 from "@/components/admin/drawer/ScheduleRecordModalV2";
 import OperationalAttentionHeaderStrip from "@/components/admin/drawer/OperationalAttentionHeaderStrip";
-import OperationalAttentionDrawerSection from "@/components/admin/drawer/OperationalAttentionDrawerSection";
 import { isScheduleCanceledStatusKey } from "@/lib/admin/scheduleCanceledStatus";
 import { AdminCollectPaymentModal, type AdminCollectPaymentModalContext } from "@/components/admin/AdminCollectPaymentModal";
 import { JobReceivableChargesPanel, jobTotalSummaryLabel } from "@/components/admin/JobReceivableChargesPanel";
@@ -2921,18 +2921,24 @@ export default function AdminEntityDrawer() {
 
     useEffect(() => {
         const onFocusOperationalTasks = (ev: Event) => {
-            const ce = ev as CustomEvent<{ opportunity_id?: string }>;
+            const ce = ev as CustomEvent<OpportunityFocusOperationalTasksDetail>;
             const id = typeof ce.detail?.opportunity_id === "string" ? ce.detail.opportunity_id.trim() : "";
             if (!id || drawer.type !== "opportunities" || drawer.id !== id) return;
             setDrawerTab("overview");
             window.dispatchEvent(
                 new CustomEvent(ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH, { detail: { opportunity_id: id } })
             );
+            const taskId = typeof ce.detail?.task_id === "string" ? ce.detail.task_id.trim() : "";
             requestAnimationFrame(() => {
-                document.querySelector("[data-admin-opportunity-operational-tasks]")?.scrollIntoView({
+                document.querySelector("[data-admin-opportunity-operational-strip]")?.scrollIntoView({
                     behavior: "smooth",
                     block: "nearest",
                 });
+                if (taskId) {
+                    document
+                        .querySelector(`[data-operational-task-chip="${taskId}"]`)
+                        ?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+                }
             });
         };
         window.addEventListener(ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS, onFocusOperationalTasks as EventListener);
@@ -5324,7 +5330,16 @@ export default function AdminEntityDrawer() {
         isOpportunityExistingView && drawer.id && !loading && data != null && entityRowReady
             ? (
                   <div
-                      className={`flex flex-wrap gap-2 items-center ${
+                      className={`flex flex-col items-end gap-1.5 ${
+                          drawerShellVariant === "adminV2"
+                              ? opportunityInquiryWorkflowDrawer
+                                  ? "max-w-full"
+                                  : "max-w-full"
+                              : ""
+                      }`}
+                  >
+                  <div
+                      className={`flex flex-wrap gap-2 items-center justify-end ${
                           drawerShellVariant === "adminV2"
                               ? opportunityInquiryWorkflowDrawer
                                   ? "rounded-xl border border-admin-border/45 bg-white/80 px-2.5 py-2 shadow-sm ring-1 ring-alloy-stone/10"
@@ -5397,6 +5412,17 @@ export default function AdminEntityDrawer() {
                               </>
                           );
                       })()}
+                  </div>
+                  {drawer.id && drawer.id !== "new" && isTaskAssistV1UiEnabled() ? (
+                      <OpportunityOperationalCompactStrip
+                          opportunityId={drawer.id}
+                          overviewData={
+                              entityDataMatchesDrawer(data, drawer.id) ?
+                                  (data as Record<string, unknown>)
+                              :   null
+                          }
+                      />
+                  ) : null}
                   </div>
               )
             : null;
@@ -6767,9 +6793,6 @@ export default function AdminEntityDrawer() {
                     />
                 );
             }
-            if (isTaskAssistV1UiEnabled() && drawer.id && drawer.id !== "new") {
-                out.operational_tasks_followups = <OpportunityOperationalTasksSection opportunityId={drawer.id} />;
-            }
             return out;
         }
         return {};
@@ -7364,26 +7387,8 @@ export default function AdminEntityDrawer() {
             overviewSections = overviewSections.filter((s) => s.key !== "operational_attention");
             overviewSections = overviewSections.filter((s) => s.key !== "tour_scheduling");
         }
-        if (
-            drawer.type === "opportunities" &&
-            overviewData &&
-            !(overviewData as { _create?: boolean })._create &&
-            isTaskAssistV1UiEnabled()
-        ) {
-            if (!overviewSections.some((s) => s.key === "operational_tasks_followups")) {
-                overviewSections = [
-                    ...overviewSections,
-                    {
-                        key: "operational_tasks_followups",
-                        title: "Operational tasks & follow-ups",
-                        defaultExpanded: true,
-                        collapsible: true,
-                        gridCols: 1,
-                        fields: [],
-                        locked: true,
-                    },
-                ];
-            }
+        if (drawer.type === "opportunities") {
+            overviewSections = overviewSections.filter((s) => s.key !== "operational_tasks_followups");
         }
         return overviewSections;
     }, [drawer.type, overviewData, presentationType, recordChromeSchedule.layout, recordChromeOpportunity.layout]);
@@ -10297,22 +10302,6 @@ export default function AdminEntityDrawer() {
                                 </p>
                             </div>
                         )}
-                    {drawerTab === "overview" &&
-                        drawer.type === "opportunities" &&
-                        drawer.id &&
-                        drawer.id !== "new" &&
-                        !(data as { _create?: boolean })?._create &&
-                        !useConfigDrivenOverview &&
-                        overviewData && (
-                            <section
-                                className="mb-3 rounded-xl border border-admin-border bg-white/80 px-2.5 py-2.5 shadow-sm"
-                                data-drawer-section="operational_attention_detail_legacy"
-                            >
-                                <OperationalAttentionDrawerSection
-                                    overviewData={overviewData as Record<string, unknown>}
-                                />
-                            </section>
-                        )}
                     {drawerTab === "overview" && useConfigDrivenOverview && presentationType && (
                         isJobDrawerV2 && drawer.type === "jobs" ? (
                             showJobRecordModalV2 ? (
@@ -10781,20 +10770,6 @@ export default function AdminEntityDrawer() {
                                 ) : null}
                                 {drawer.type === "opportunities" && !opportunityInquiryWorkflowDrawer ? opportunityQuoteSummaryNode : null}
                                 {drawer.type === "opportunities" && !opportunityInquiryWorkflowDrawer ? opportunityQuoteIntakeNode : null}
-                                {drawer.type === "opportunities" &&
-                                    overviewData &&
-                                    !(overviewData as { _create?: boolean })._create &&
-                                    drawer.id &&
-                                    drawer.id !== "new" && (
-                                        <section
-                                            className="mb-3 rounded-xl border border-admin-border bg-white/80 px-2.5 py-2.5 shadow-sm"
-                                            data-drawer-section="operational_attention_detail"
-                                        >
-                                            <OperationalAttentionDrawerSection
-                                                overviewData={overviewData as Record<string, unknown>}
-                                            />
-                                        </section>
-                                    )}
                                 <EntityDrawerOverview
                                     entityType={presentationType}
                                     data={entityDrawerOverviewData}

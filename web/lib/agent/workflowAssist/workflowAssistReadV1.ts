@@ -1,13 +1,16 @@
 /**
  * Workflow Assist V1 — read-only contracts (Cards 1–3) + thread UI hooks for proposal actions (Cards 4–5).
  * Proposal/apply payloads live in `workflowAssistProposalV1.ts`.
+ * Explain v0 contracts live in `workflowAssistExplainV1.ts`.
  */
+
+import type { WorkflowAssistExplainCardPayloadV1 } from "@/lib/agent/workflowAssist/workflowAssistExplainV1";
 
 export const WORKFLOW_ASSIST_AGENT_KEY = "workflow_assist" as const;
 
 /** Sub-intent for deterministic routing (Orchestrator → read cards). */
 export type WorkflowAssistReadSubIntentV1 =
-    | "explain_placeholder"
+    | "explain_v0"
     | "failed_runs_last_7d"
     | "enrollment_touch"
     | "workflow_summary";
@@ -72,7 +75,7 @@ export function parseWorkflowAssistReadIntent(
     if (explainish) {
         return {
             version: 1,
-            sub_intent: "explain_placeholder",
+            sub_intent: "explain_v0",
             parse_reason: ctx.hasAmbientOpportunity ? "why_blocked_ambient" : "why_blocked_generic",
         };
     }
@@ -153,12 +156,7 @@ export type WorkflowAssistReadCardPayloadV1 =
           subline?: string;
           workflows: WorkflowAssistSummaryRowV1[];
       }
-    | {
-          variant: "explain_placeholder";
-          headline: string;
-          checklist: string[];
-          ambient_entity: { entity_type: string; entity_id: string } | null;
-      };
+    | WorkflowAssistExplainCardPayloadV1;
 
 type SummaryApiRow = {
     id: string;
@@ -235,24 +233,14 @@ export function buildWorkflowAssistReadCardPayload(
     const failedKpiNum = typeof failedKpi === "number" && !Number.isNaN(failedKpi) ? failedKpi : null;
 
     switch (intent.sub_intent) {
-        case "explain_placeholder": {
-            const checklist = [
-                "Confirm the triggering event fired (status change, form completion, message queued, etc.).",
-                "Check the workflow is enabled and matches event type + entity type for this org.",
-                "Review conditions on the workflow — a failed condition skips or stops the run.",
-                "Open Automations → select the workflow → inspect the latest run and step errors.",
-                "If the record never reached the expected status, trace the admin action or PATCH path that should emit `workflow_events`.",
-            ];
+        case "explain_v0":
             return {
-                ok: true,
-                payload: {
-                    variant: "explain_placeholder",
-                    headline: "Why didn’t this run or move the record?",
-                    checklist,
-                    ambient_entity: ambient,
-                },
+                ok: false,
+                error: workflowAssistErrorEnvelope(
+                    "bad_response",
+                    "Explain v0 is loaded via GET /api/admin/ai/workflow-assist/explain, not summary aggregation."
+                ),
             };
-        }
         case "failed_runs_last_7d": {
             const runsBody = runs7dJson as { runs?: unknown; error?: string } | null;
             if (runsBody?.error) {

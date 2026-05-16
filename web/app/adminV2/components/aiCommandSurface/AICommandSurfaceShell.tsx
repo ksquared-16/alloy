@@ -33,6 +33,11 @@ import {
 } from "@/lib/agent/workflowAssist/workflowAssistReadV1";
 import type { WorkflowAssistProposeRequestV1, WorkflowAssistSuggestionV1 } from "@/lib/agent/workflowAssist/workflowAssistProposalV1";
 import {
+  buildWorkflowAssistExplainCardPayload,
+  buildWorkflowAssistExplainV1,
+  type WorkflowAssistExplainResponseV1,
+} from "@/lib/agent/workflowAssist/workflowAssistExplainV1";
+import {
   commandSurfaceEntitySearchQuery,
   routeCommandSurface,
 } from "@/lib/adminV2/aiCommandSurface/commandSurfaceRouter";
@@ -742,7 +747,8 @@ export default function AICommandSurfaceShell() {
           }
         : null;
 
-      const needsSummary = intent.sub_intent !== "explain_placeholder";
+      const isExplain = intent.sub_intent === "explain_v0";
+      const needsSummary = !isExplain;
       const needsRuns = intent.sub_intent === "failed_runs_last_7d";
 
       const appendRead = (args: {
@@ -761,6 +767,56 @@ export default function AICommandSurfaceShell() {
       };
 
       try {
+        if (isExplain) {
+          if (!ambientEntity) {
+            const explanation = buildWorkflowAssistExplainV1({
+              request: { version: 1, entity_type: "", entity_id: "" },
+              normalized_entity_type: "",
+              events: [],
+              workflows: [],
+              runs: [],
+              failed_actions: [],
+            });
+            appendRead({
+              payload: buildWorkflowAssistExplainCardPayload(explanation),
+              error: null,
+            });
+            return;
+          }
+          const qs = new URLSearchParams({
+            entity_type: ambientEntity.entity_type,
+            entity_id: ambientEntity.entity_id,
+            range: "30d",
+          });
+          const exRes = await fetch(`/api/admin/ai/workflow-assist/explain?${qs.toString()}`, {
+            credentials: "include",
+            headers: { Accept: "application/json" },
+          });
+          const exJson = (await exRes.json().catch(() => ({}))) as {
+            ok?: boolean;
+            explanation?: WorkflowAssistExplainResponseV1;
+            message?: string;
+            error?: string;
+          };
+          if (!exRes.ok || !exJson.ok || !exJson.explanation) {
+            const msg = exJson.message ?? exJson.error ?? `HTTP ${exRes.status}`;
+            appendRead({
+              payload: null,
+              error: workflowAssistErrorEnvelope(
+                exRes.status === 403 ? "forbidden" : "fetch_failed",
+                msg,
+                exRes.status
+              ),
+            });
+            return;
+          }
+          appendRead({
+            payload: buildWorkflowAssistExplainCardPayload(exJson.explanation),
+            error: null,
+          });
+          return;
+        }
+
         let summaryJson: unknown = { workflows: [] };
 
         if (needsSummary) {

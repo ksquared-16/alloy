@@ -10,7 +10,7 @@ import {
 describe("parseWorkflowAssistReadIntent", () => {
     it("classifies explain / why-not-moved", () => {
         const p = parseWorkflowAssistReadIntent("Why didn't this family get moved?", { hasAmbientOpportunity: true });
-        expect(p.sub_intent).toBe("explain_placeholder");
+        expect(p.sub_intent).toBe("explain_v0");
         expect(p.parse_reason).toContain("ambient");
     });
 
@@ -130,20 +130,14 @@ describe("buildWorkflowAssistReadCardPayload", () => {
         expect(out.payload.failed_last_7d_kpi).toBe(3);
     });
 
-    it("builds explain placeholder without summary body", () => {
+    it("explain_v0 does not build from summary aggregation", () => {
         const intent: WorkflowAssistReadIntentV1 = {
             version: 1,
-            sub_intent: "explain_placeholder",
+            sub_intent: "explain_v0",
             parse_reason: "test",
         };
-        const ambient = { entity_type: "opportunities" as const, entity_id: "00000000-0000-4000-8000-000000000001" };
-        const out = buildWorkflowAssistReadCardPayload(intent, { workflows: [] }, null, null, ambient);
-        expect(out.ok).toBe(true);
-        if (!out.ok) return;
-        expect(out.payload.variant).toBe("explain_placeholder");
-        if (out.payload.variant !== "explain_placeholder") return;
-        expect(out.payload.checklist.length).toBeGreaterThan(2);
-        expect(out.payload.ambient_entity).toEqual(ambient);
+        const out = buildWorkflowAssistReadCardPayload(intent, { workflows: [] }, null, null, null);
+        expect(out.ok).toBe(false);
     });
 
     it("exposes workflow-assist propose/apply API routes (Cards 4–5)", async () => {
@@ -154,6 +148,7 @@ describe("buildWorkflowAssistReadCardPayload", () => {
         const base = join(here, "../../../app/api/admin/ai/workflow-assist");
         expect(existsSync(join(base, "propose", "route.ts"))).toBe(true);
         expect(existsSync(join(base, "apply", "route.ts"))).toBe(true);
+        expect(existsSync(join(base, "explain", "route.ts"))).toBe(true);
     });
 
     it("rejects bad summary response", () => {

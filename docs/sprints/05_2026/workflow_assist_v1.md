@@ -1,7 +1,7 @@
 # Sprint: Workflow Assist V1 (Agent #3)
 
 **Path:** `docs/sprints/05_2026/workflow_assist_v1.md`  
-**Status:** **Cards 1–5 + stabilization shipped** — read-only cards, deterministic propose/apply, role-aware Orchestrator UX (`GET …/capabilities`), create-template guardrails, edit API tests. LLM, durable proposals, bulk pause, explain correlation remain deferred.  
+**Status:** **Cards 1–5 + stabilization + Explain v0 shipped** — read-only cards, deterministic propose/apply, role-aware UX, create-template guardrails, **`GET /api/admin/ai/workflow-assist/explain`** (deterministic checklist). LLM, durable proposals, bulk pause, deep condition correlation remain deferred.  
 **Prerequisites:** `docs/sprints/05_2026/agent_interaction_layer_v1.md` (Orchestrator + thread + action cards), `docs/sprints/05_2026/task_assist_v1_1.md` (Task Assist patterns), `docs/sprints/05_2026/ai_agents_v1.md` §9 (`WorkflowAssistSuggestionV1` template), `docs/product/ai-system.md`, `docs/system/actions-and-workflows.md`.
 
 **Non-goals for this document:** Task Assist transactional scope; new workflow execution engine; autonomous `executeWorkflowRun` from NL; childcare-only automation rules in platform code.
@@ -27,7 +27,7 @@
 |------|--------|----------------|
 | **Card 1** | **Shipped** | `web/lib/agent/workflowAssist/workflowAssistReadV1.ts` — `WorkflowAssistReadIntentV1`, `WorkflowAssistReadSubIntentV1`, `WorkflowAssistReadCardPayloadV1`, `WorkflowAssistErrorEnvelopeV1`, `parseWorkflowAssistReadIntent`, `buildWorkflowAssistReadCardPayload`, `workflowAssistErrorEnvelope`, `WorkflowAssistThreadMutationHandlersV1` (UI hooks for propose buttons on read cards). |
 | **Card 2** | **Shipped** | `routeCommandSurface` route kind **`workflow_assist`**; shell `runWorkflowAssistRoute` appends **`workflow_assist_read`** thread turns. Legacy **`workflow_notice`** turn still renders static copy for old sessions. |
-| **Card 3** | **Shipped** | Read-only thread card UI `WorkflowAssistReadThreadCard.tsx` — **summary**, **failed runs (7d sample + links)**, **enrollment keyword filter**, **explain placeholder** checklist. Data from **`GET /api/admin/workflows/summary`**, **`GET /api/admin/workflow-runs?range=7d&limit=100`**, **`GET /api/admin/workflow-runs?list=kpis`** (failed card only). |
+| **Card 3** | **Shipped** | Read-only thread card UI `WorkflowAssistReadThreadCard.tsx` — **summary**, **failed runs (7d sample + links)**, **enrollment keyword filter**, **Explain v0** checklist card. Summary/failed data from **`GET /api/admin/workflows/summary`**, **`GET /api/admin/workflow-runs?…`**. Explain from **`GET /api/admin/ai/workflow-assist/explain`**. |
 | **Card 4** | **Shipped** | **`POST /api/admin/ai/workflow-assist/propose`** — `requireAdmin` (ops excluded); portal + org `ai_policy` with feature **`workflow_assist_draft`**. **`GET /api/admin/ai/workflow-assist/capabilities`** — read-only hint for UI (`can_propose_and_apply_workflow_assist` mirrors propose/apply admin gate). Read cards expose **Propose disable** / **Propose disabled draft (template starter)** when capabilities allow; otherwise **`WORKFLOW_ASSIST_PORTAL_MUTATION_BLOCKED_USER_MESSAGE`**. |
 | **Card 5** | **Shipped** | **`POST /api/admin/ai/workflow-assist/apply`** — **`requireAdmin` only** (ops get 403); proposal **Apply** disabled in UI unless **`GET …/capabilities`** reports admin. Validates **`WorkflowAssistApplyRequestV1`** + semantic checks; **`executeWorkflowAssistApply`** uses the same field allowlist as admin workflow routes (`insert` create always **`enabled: false`**; `update` for edit/pause) + **`logAdminAudit`**. UI: **`WorkflowAssistProposalActionCard`** — preview, **Admin approval required**, **Apply as admin**, success/error. |
 
@@ -51,7 +51,8 @@
 
 | Topic | State |
 |-------|--------|
-| **Explain v1** | **Placeholder only** — no correlation engine; no new explain API. |
+| **Explain v0** | **Shipped** — deterministic read-only **`GET /api/admin/ai/workflow-assist/explain`** + Orchestrator **`explain_v0`** intent; inspects `workflow_events`, `workflows`, `workflow_runs`, `workflow_action_runs`. Does **not** evaluate live conditions or entity status history. |
+| **Explain v1** | **Deferred** — condition-level correlation, entity status timeline, multi-workflow disambiguation, optional LLM narrative. |
 | **Failed runs list** | Client filters last-100 runs; KPI line approximate. |
 | **`WORKFLOW_ASSIST_NOTICE_TEXT`** | Still used for legacy `workflow_notice` copy only. |
 | **Durable `workflow_assist_proposals`** | **Not implemented** — ephemeral suggestion JSON + client-held card (same pattern as early Task Assist). |
@@ -117,7 +118,7 @@ The migration **`supabase/migrations/20260522180000_staging_demo_org_ai_policy_t
 | **No Workflow Assist durable proposals** | Medium | Task Assist has `task_assist_proposals`; Workflow Assist uses **ephemeral** suggestions until compliance requires retention. |
 | **No durable workflow proposals** | Medium | Unlike agent v0/v1/v2, workflows have **no** proposal/apply_audit DEFINER pair — direct Supabase from admin routes today. |
 | **NL → intent beyond regex** | Low–Med | `WORKFLOW_RE` is coarse; may false-positive/false-negative; no structured `normalized_key` pipeline in code yet. |
-| **Explain “why didn’t X move?”** | High product gap | Requires **correlation** across entity state, `workflow_events`, matching workflows, conditions, and run logs — **partially** available via DB + APIs; **no** single “explain” endpoint today. |
+| **Explain “why didn’t X move?”** | **Partially addressed (v0)** | **`GET …/workflow-assist/explain`** correlates events → workflows → runs; does **not** yet trace entity status history or per-condition evaluation. |
 | **Pause all enrollment workflows** | Not implemented | Only per-workflow **`enabled`** flag via `PATCH`; no bulk/pause-by-tag API **Needs verification** in codebase for bulk ops. |
 | **Canvas / visual editor** | Out of V1 | UI explicitly says no canvas — Assist should not depend on one. |
 | **Department/site scoped workflows** | **Needs verification** | `workflows.org_id` exists; whether workflows are further scoped by department/site in RLS or payload — confirm before designing scoped “pause in my site.” |
@@ -298,12 +299,40 @@ All inside **Orchestrator thread** (`CommandSurfaceThread` + action cards) — n
 
 ---
 
-## 12. Recommended next feature batch (post-stabilization)
+## 12. Explain v0 (shipped)
+
+| Topic | Detail |
+|-------|--------|
+| **API** | `GET /api/admin/ai/workflow-assist/explain` — query: `entity_type`, `entity_id`, optional `workflow_id`, `event_type`, `range` (`24h` \| `7d` \| `30d`). |
+| **Auth** | `requireAdminOrOps` + org scope (read-only; **no** `workflow_assist_draft` policy). |
+| **Data sources** | `workflow_events` (entity-scoped, time window), `workflows` (match `event_type` + `entity_type`, org + global), `workflow_runs` (by `event_id`), `workflow_action_runs` (failed steps). |
+| **Outcomes** | `insufficient_context`, `no_event_found`, `no_matching_workflow`, `workflow_disabled`, `no_run_created`, `run_failed`, `action_failed`, `run_successful`, `run_skipped`, `insufficient_data`. |
+| **UI** | Orchestrator routes “why didn’t…” to **`explain_v0`**; shell calls explain API when ambient opportunity context exists; otherwise **Needs more context** card (no apply CTAs). |
+| **Deterministic** | Pure builder `buildWorkflowAssistExplainV1` — not LLM; checklist + confidence + Automations links. |
+
+### Explain v0 limitations
+
+- Requires **entity_type + entity_id** (ambient opportunity in command surface, or explicit query params).
+- Uses **latest event** in window as anchor; does not compare multiple candidate events.
+- Does **not** read `workflow_conditions` evaluation, entity status tables, or comms delivery logs.
+- Global workflows (`org_id` null) included in matching query; run enrichment uses org-scoped workflow names.
+- **“Successful run”** does not prove business outcome (wrong template, skipped manual step, etc.).
+
+### Explain v1 ideas (deferred)
+
+- Condition checklist from last run payload / condition rows.
+- Status-change timeline vs expected `opportunity_status_changed` payload.
+- Pin `workflow_id` / `event_type` from operator utterance (slot extract).
+- Optional LLM narrative **on top of** structured checklist (policy-gated).
+
+---
+
+## 13. Recommended next feature batch (post–Explain v0)
 
 1. **Edit from read cards** — narrow, safe patch (e.g. rename) with preview, still admin-only apply.  
-2. **Explain v0** — structured checklist backed by read-only workflow/run APIs.  
+2. **Explain v1** — condition + entity status correlation (still read-only).  
 3. **Durable proposals** — if compliance requires retained drafts + audit rows.  
-4. **Optional: propose for ops** — only if product explicitly widens policy (separate from apply); would need new gate design.
+4. **Optional: propose for ops** — only if product explicitly widens policy (separate from apply).
 
 ---
 

@@ -8,7 +8,8 @@ const sectionPath = join(
     "../../../components/admin/opportunity/OpportunityOperationalTasksSection.tsx"
 );
 
-describe("OpportunityOperationalTasksSection", () => {
+/** Legacy section kept for API helpers; drawer uses {@link OpportunityOperationalCompactStrip}. */
+describe("OpportunityOperationalTasksSection (legacy module)", () => {
     it("lists tasks via operational-tasks API client and listens for refresh event", () => {
         const src = readFileSync(sectionPath, "utf8");
         expect(src).toContain("fetchOperationalTasks");

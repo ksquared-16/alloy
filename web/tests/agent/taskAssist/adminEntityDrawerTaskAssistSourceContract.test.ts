@@ -10,7 +10,8 @@ describe("AdminEntityDrawer Task Assist placement (Card 8)", () => {
         const src = readFileSync(drawerPath, "utf8");
         expect(src).not.toContain("TaskAssistV1OpportunityPanel");
         expect(src).not.toContain("TaskAssistOpportunityLauncher");
-        expect(src).toContain("OpportunityOperationalTasksSection");
+        expect(src).toContain("OpportunityOperationalCompactStrip");
+        expect(src).not.toContain("OpportunityOperationalTasksSection");
         expect(src).not.toContain("TaskAssistOpportunityWorkspace");
     });
 });

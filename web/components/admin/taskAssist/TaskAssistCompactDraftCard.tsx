@@ -16,6 +16,7 @@ import {
     mergeForSendApplyPreview,
     recipientHasChannelHint,
 } from "@/lib/agent/taskAssist/taskAssistV1ClientPayloads";
+import { ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH } from "@/lib/adminV2/opportunityDrawerTaskEvents";
 import {
     buildScheduleSendBody,
     createCommunicationScheduledSend,
@@ -286,6 +287,13 @@ export default function TaskAssistCompactDraftCard({
             setSuccess(
                 "Scheduled send saved to communication_scheduled_sends. It will send at the chosen time — not immediately."
             );
+            if (typeof window !== "undefined") {
+                window.dispatchEvent(
+                    new CustomEvent(ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH, {
+                        detail: { opportunity_id: entityId },
+                    })
+                );
+            }
             setPhase("success");
         } catch (e: unknown) {
             setError(formatTaskAssistClientError((e as Error).message));

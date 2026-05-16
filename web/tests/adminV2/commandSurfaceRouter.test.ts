@@ -54,6 +54,14 @@ describe("routeCommandSurface", () => {
         expect(r.workflowAssistReadIntent?.sub_intent).toBe("failed_runs_last_7d");
     });
 
+    it("routes why-didnt workflow question to explain_v0", () => {
+        const r = routeCommandSurface("Why didn't the workflow run for this opportunity?", {
+            hasAmbientOpportunity: true,
+        });
+        expect(r.route).toBe("workflow_assist");
+        expect(r.workflowAssistReadIntent?.sub_intent).toBe("explain_v0");
+    });
+
     it("non-workflow routes set workflowAssistReadIntent null", () => {
         const r = routeCommandSurface("text the Smith family about tour");
         expect(r.route).toBe("task_assist");

@@ -50,32 +50,82 @@ function WorkflowAssistReadCardBody({
     ) : null;
 
     switch (payload.variant) {
-        case "explain_placeholder":
+        case "explain_v0": {
+            const ex = payload.explanation;
+            const confidenceLabel =
+                ex.confidence === "high" ? "High confidence" : ex.confidence === "medium" ? "Medium confidence" : "Low confidence";
             return (
                 <div className="space-y-2" data-command-surface-workflow-assist-explain="true">
                     <div className="text-[13px] font-semibold">{payload.headline}</div>
-                    <p className="text-[11px]" style={{ color: CMD.textSupporting }}>
-                        Full correlation across events, conditions, and entity history is not wired yet. Use this checklist
-                        and Automations for authoritative run detail.
+                    <p className="text-[11px]" style={{ color: CMD.textSupporting }} data-command-surface-workflow-assist-explain-summary>
+                        Deterministic checklist from workflow_events, workflows, and runs — not an AI guess.
                     </p>
-                    {payload.ambient_entity ?
-                        <p className="text-[10px]" style={{ color: CMD.textLabel }}>
-                            Context: opportunity{" "}
-                            <span className="font-mono" data-command-surface-workflow-assist-ambient-entity>
-                                {payload.ambient_entity.entity_id.slice(0, 8)}…
-                            </span>
+                    {payload.needs_more_context ?
+                        <p
+                            className="rounded-md border px-2 py-1.5 text-[11px]"
+                            style={{ borderColor: derived.border, color: semantic.warning }}
+                            data-command-surface-workflow-assist-explain-needs-context
+                        >
+                            Needs more context: open or select a record in the workspace, then ask again.
                         </p>
                     : null}
-                    <ol className="list-decimal space-y-1 pl-4 text-[11px]" data-command-surface-workflow-assist-checklist>
-                        {payload.checklist.map((line, i) => (
-                            <li key={i} style={{ color: CMD.textBody }}>
-                                {line}
+                    <p className="text-[10px]" style={{ color: CMD.textLabel }} data-command-surface-workflow-assist-explain-confidence>
+                        {confidenceLabel} · {ex.status.replace(/_/g, " ")}
+                    </p>
+                    <p className="text-[11px] font-medium" style={{ color: CMD.textBody }}>
+                        {ex.likely_reason}
+                    </p>
+                    <p className="text-[11px]" style={{ color: CMD.textSupporting }}>
+                        <span className="font-semibold">Next: </span>
+                        {ex.recommended_action}
+                    </p>
+                    <ul className="space-y-2" data-command-surface-workflow-assist-explain-checklist>
+                        {ex.checklist.map((item) => (
+                            <li
+                                key={item.id}
+                                className="rounded-md border px-2 py-1.5 text-[10px]"
+                                style={{ borderColor: derived.border }}
+                                data-command-surface-workflow-assist-explain-checklist-item={item.id}
+                            >
+                                <div className="font-semibold" style={{ color: CMD.textBody }}>
+                                    {item.what_checked}
+                                </div>
+                                <div style={{ color: CMD.textSupporting }}>Found: {item.what_found}</div>
+                                {item.likely_reason ?
+                                    <div style={{ color: CMD.textLabel }}>Likely: {item.likely_reason}</div>
+                                : null}
+                                {item.recommended_action ?
+                                    <div style={{ color: CMD.textLabel }}>Action: {item.recommended_action}</div>
+                                : null}
                             </li>
                         ))}
-                    </ol>
+                    </ul>
+                    <div className="flex flex-wrap gap-2">
+                        {ex.links.automations_href ?
+                            <Link
+                                href={ex.links.automations_href}
+                                className="text-[11px] font-semibold underline-offset-2 hover:underline"
+                                style={{ color: brand.secondary }}
+                                data-command-surface-workflow-assist-explain-open-automations
+                            >
+                                Open Automations
+                            </Link>
+                        : null}
+                        {ex.links.run_id && ex.links.run_href ?
+                            <Link
+                                href={ex.links.run_href}
+                                className="text-[11px] font-semibold underline-offset-2 hover:underline"
+                                style={{ color: brand.secondary }}
+                                data-command-surface-workflow-assist-explain-open-run
+                            >
+                                View run
+                            </Link>
+                        : null}
+                    </div>
                     {parseHint}
                 </div>
             );
+        }
         case "failed_runs":
             return (
                 <div className="space-y-2" data-command-surface-workflow-assist-failed-runs="true">
