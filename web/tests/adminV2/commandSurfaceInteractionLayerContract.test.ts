@@ -51,10 +51,18 @@ describe("Interaction Layer V1 command surface contract (Card 7)", () => {
         expect(q.toLowerCase()).not.toContain("excited");
     });
 
-    it("workflow phrase routes to workflow_assist", () => {
+    it("when/move workflow phrase routes to workflow_assist create proposal (not read summary)", () => {
         const r = routeCommandSurface("when forms complete move them to ready to enroll");
         expect(r.route).toBe("workflow_assist");
+        expect(r.workflowAssistCreateIntent?.template_id).toBe("enrollment_when_move");
+        expect(r.workflowAssistReadIntent).toBeNull();
+    });
+
+    it("workflow summary phrase routes to workflow_assist read", () => {
+        const r = routeCommandSurface("show me all workflows");
+        expect(r.route).toBe("workflow_assist");
         expect(r.workflowAssistReadIntent?.sub_intent).toBe("workflow_summary");
+        expect(r.workflowAssistCreateIntent).toBeNull();
     });
 
     it("job layout command routes to job_layout", () => {

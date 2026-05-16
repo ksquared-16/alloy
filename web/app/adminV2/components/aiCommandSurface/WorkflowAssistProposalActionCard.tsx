@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 
+import type { WorkflowAssistCreateProposeBuildV1 } from "@/lib/agent/workflowAssist/workflowAssistCreateFromCommandV1";
 import type { WorkflowAssistSuggestionV1 } from "@/lib/agent/workflowAssist/workflowAssistProposalV1";
 import { WORKFLOW_ASSIST_PORTAL_MUTATION_BLOCKED_USER_MESSAGE } from "@/lib/agent/workflowAssist/workflowAssistReadV1";
 import { brand, derived, neutral, semantic } from "@/styles/tokens/colors";
@@ -11,6 +12,17 @@ const CMD = {
     textSupporting: "rgba(39, 63, 82, 0.78)",
     textLabel: "rgba(39, 63, 82, 0.52)",
 } as const;
+
+function ProposalDetailRow({ label, value }: { label: string; value: string }) {
+    return (
+        <div className="flex gap-2">
+            <dt className="shrink-0 font-semibold" style={{ color: CMD.textLabel }}>
+                {label}
+            </dt>
+            <dd>{value}</dd>
+        </div>
+    );
+}
 
 type ApplyJson =
     | {
@@ -25,9 +37,11 @@ type ApplyJson =
 
 export function WorkflowAssistProposalActionCard({
     suggestion,
+    createInterpreted,
     applyAllowed = true,
 }: {
     suggestion: WorkflowAssistSuggestionV1;
+    createInterpreted?: WorkflowAssistCreateProposeBuildV1["interpreted"];
     /** When false, Apply stays disabled (session cannot mutate workflows via Assist). */
     applyAllowed?: boolean;
 }) {
@@ -99,18 +113,33 @@ export function WorkflowAssistProposalActionCard({
                 </div>
             : null}
             <p className="text-[11px] font-semibold" style={{ color: CMD.textBody }}>
-                {isCreate ?
-                    `Create disabled workflow: ${suggestion.draft_row?.name ?? "—"}`
-                : suggestion.proposal_kind === "pause_workflow" ?
-                    `Disable workflow ${suggestion.target_workflow_id ?? ""}`
-                :   `Edit workflow ${suggestion.target_workflow_id ?? ""}`}
+                {createInterpreted?.headline ??
+                    (isCreate ?
+                        `Create disabled workflow: ${suggestion.draft_row?.name ?? "—"}`
+                    : suggestion.proposal_kind === "pause_workflow" ?
+                        `Disable workflow ${suggestion.target_workflow_id ?? ""}`
+                    :   `Edit workflow ${suggestion.target_workflow_id ?? ""}`)}
             </p>
             {isCreate ?
-                <p className="text-[10px] leading-snug" style={{ color: CMD.textSupporting }}>
-                    Uses generic trigger placeholders ({suggestion.draft_row?.event_type ?? "—"} /{" "}
-                    {suggestion.draft_row?.entity_type ?? "—"}). This is not production-ready and stays off until you
-                    review in Automations.
-                </p>
+                <>
+                    {createInterpreted ?
+                        <dl className="grid gap-1 text-[10px]" style={{ color: CMD.textSupporting }}>
+                            <ProposalDetailRow label="Trigger" value={createInterpreted.trigger_label} />
+                            <ProposalDetailRow label="Actions" value={createInterpreted.actions_label} />
+                        </dl>
+                    : null}
+                    <p className="text-[10px] leading-snug" style={{ color: CMD.textSupporting }}>
+                        Review in Automations before enabling. Trigger: {suggestion.draft_row?.event_type ?? "—"} /{" "}
+                        {suggestion.draft_row?.entity_type ?? "—"}. Not production-ready.
+                    </p>
+                    {createInterpreted?.unknowns.length ?
+                        <ul className="list-disc pl-4 text-[10px]" style={{ color: CMD.textLabel }}>
+                            {createInterpreted.unknowns.map((u, i) => (
+                                <li key={i}>{u}</li>
+                            ))}
+                        </ul>
+                    : null}
+                </>
             : null}
             <p className="text-[10px]" style={{ color: CMD.textSupporting }}>
                 {suggestion.reasoning.summary}

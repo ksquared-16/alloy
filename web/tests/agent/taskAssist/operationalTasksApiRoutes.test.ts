@@ -18,6 +18,7 @@ const {
     mockSummarize,
     mockComplete,
     mockCancel,
+    mockUpdateFields,
 } = vi.hoisted(() => ({
     mockGetAdminContextCached: vi.fn(),
     mockAssertRowOrg: vi.fn(),
@@ -27,6 +28,7 @@ const {
     mockSummarize: vi.fn(),
     mockComplete: vi.fn(),
     mockCancel: vi.fn(),
+    mockUpdateFields: vi.fn(),
 }));
 
 vi.mock("@/lib/admin/getAdminContext", async () => {
@@ -53,6 +55,7 @@ vi.mock("@/lib/admin/operationalTasksService", async () => {
         summarizeOperationalTaskCounts: (...args: unknown[]) => mockSummarize(...args),
         completeOperationalTask: (...args: unknown[]) => mockComplete(...args),
         cancelOperationalTask: (...args: unknown[]) => mockCancel(...args),
+        updateOperationalTaskFields: (...args: unknown[]) => mockUpdateFields(...args),
     };
 });
 
@@ -131,6 +134,21 @@ describe("operational-tasks admin routes", () => {
         expect(res.status).toBe(200);
         expect(mockComplete).toHaveBeenCalledOnce();
         expect(mockCancel).not.toHaveBeenCalled();
+    });
+
+    it("PATCH fields updates open task", async () => {
+        mockUpdateFields.mockResolvedValue({
+            ok: true,
+            row: { id: taskId, title: "Updated", status: "open" },
+        });
+        const req = new NextRequest(`http://localhost/api/admin/operational-tasks/${taskId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title: "Updated", due_at: "2026-06-01T09:00:00.000Z" }),
+        });
+        const res = await patchTask(req, { params: Promise.resolve({ id: taskId }) });
+        expect(res.status).toBe(200);
+        expect(mockUpdateFields).toHaveBeenCalledOnce();
     });
 
     it("PATCH cancel delegates to service", async () => {

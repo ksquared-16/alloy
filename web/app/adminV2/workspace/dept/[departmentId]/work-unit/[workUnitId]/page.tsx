@@ -7,6 +7,10 @@ import { useSearchParams } from "next/navigation";
 import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import WorkUnitWorkspace from "@/app/adminV2/components/workspace/shells/WorkUnitWorkspace";
 import { AutomationWorkflowsBlock } from "@/app/adminV2/components/workspace/blocks/AutomationWorkflowsBlock";
+import {
+    filterWorkflowsForWorkspaceAutomationSurface,
+    WORKSPACE_AUTOMATION_METADATA_GAP_NOTE,
+} from "@/lib/workspace/workspaceAutomationWorkflowFilter";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import {
@@ -735,8 +739,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
             if (kRes.ok && kBody.kpis) setWorkflowKpis({ ...DEFAULT_WF_KPIS, ...kBody.kpis });
             if (sRes.ok) {
                 const all = Array.isArray(sJson.workflows) ? sJson.workflows : [];
-                const relevant = all.filter((w) => (w.entity_type ?? "").toLowerCase() === "opportunity");
-                setWorkflowsSummary(relevant);
+                setWorkflowsSummary(
+                    filterWorkflowsForWorkspaceAutomationSurface(all) as WorkflowSummaryRow[]
+                );
             }
         } catch {
             // non-fatal
@@ -2808,6 +2813,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 }}
                                 workflows={workflowsSummary}
                                 href="/adminV2/workflows"
+                                metadataAssociationNote={WORKSPACE_AUTOMATION_METADATA_GAP_NOTE}
                             />
                         }
                     />

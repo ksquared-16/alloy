@@ -50,13 +50,21 @@ export async function GET(request: NextRequest) {
             .eq("org_id", orgId)
             .order("updated_at", { ascending: false });
         const actPromise = supabase.from("workflow_actions").select("id, workflow_id").eq("org_id", orgId);
+        const runPromise = supabase
+            .from("workflow_runs")
+            .select("id, workflow_id, status, started_at, completed_at")
+            .eq("org_id", orgId)
+            .order("started_at", { ascending: false })
+            .limit(200);
 
         const tp0 = Date.now();
-        const [{ data: workflows, error: wfErr }, { data: actions, error: actErr }] = await Promise.all([wfPromise, actPromise]);
+        const [{ data: workflows, error: wfErr }, { data: actions, error: actErr }, { data: recentRuns, error: runErr }] =
+            await Promise.all([wfPromise, actPromise, runPromise]);
         const parallelCardMs = Date.now() - tp0;
 
         if (wfErr) return NextResponse.json({ error: wfErr.message }, { status: 500 });
         if (actErr) return NextResponse.json({ error: actErr.message }, { status: 500 });
+        if (runErr) return NextResponse.json({ error: runErr.message }, { status: 500 });
 
         const stepsCountByWorkflowId = new Map<string, number>();
         for (const a of actions ?? []) {
@@ -65,7 +73,35 @@ export async function GET(request: NextRequest) {
             stepsCountByWorkflowId.set(wid, (stepsCountByWorkflowId.get(wid) ?? 0) + 1);
         }
 
-        const rows: WorkflowCardRow[] = (workflows ?? []).map((w) => {
+        const runIds = (recentRuns ?? []).map((r) => (r as { id: string }).id);
+        let runIdsWithFailedAction = new Set<string>();
+        if (runIds.length) {
+            const { data: failedRows } = await supabase
+                .from("workflow_action_runs")
+                .select("workflow_run_id")
+                .eq("org_id", orgId)
+                .in("workflow_run_id", runIds as string[])
+                .eq("status", "failed");
+            runIdsWithFailedAction = new Set(
+                (failedRows ?? []).map((r) => String((r as { workflow_run_id: string }).workflow_run_id))
+            );
+        }
+
+        const lastRunByWorkflowId = new Map<string, WorkflowSummaryRow["last_run"]>();
+        for (const r of recentRuns ?? []) {
+            const wid = String((r as { workflow_id?: string }).workflow_id ?? "");
+            if (!wid || lastRunByWorkflowId.has(wid)) continue;
+            const id = String((r as { id: string }).id);
+            lastRunByWorkflowId.set(wid, {
+                id,
+                status: String((r as { status?: string }).status ?? "unknown"),
+                started_at: String((r as { started_at?: string }).started_at ?? ""),
+                completed_at: ((r as { completed_at?: string | null }).completed_at ?? null) as string | null,
+                has_failed_action: runIdsWithFailedAction.has(id),
+            });
+        }
+
+        const rows: WorkflowSummaryRow[] = (workflows ?? []).map((w) => {
             const id = String((w as { id: string }).id);
             return {
                 id,
@@ -74,6 +110,7 @@ export async function GET(request: NextRequest) {
                 entity_type: (w as { entity_type?: string | null }).entity_type ?? null,
                 event_type: (w as { event_type?: string | null }).event_type ?? null,
                 steps_count: stepsCountByWorkflowId.get(id) ?? 0,
+                last_run: lastRunByWorkflowId.get(id) ?? null,
             };
         });
 

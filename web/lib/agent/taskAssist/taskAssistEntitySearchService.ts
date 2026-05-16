@@ -30,6 +30,7 @@ import {
     buildTaskAssistEntitySearchVariants,
     primaryTaskAssistEntitySearchToken,
 } from "@/lib/agent/taskAssist/taskAssistEntitySearchVariants";
+import { editDistanceOneTokens, similarityRatio } from "@/lib/agent/taskAssist/taskAssistStringSimilarity";
 import type {
     TaskAssistEntitySearchCandidate,
     TaskAssistEntitySearchConfidence,
@@ -635,9 +636,43 @@ export async function runTaskAssistEntitySearch(params: RunTaskAssistEntitySearc
         );
     });
 
-    const candidates = applyLabelDisambiguationForDuplicates(
+    let candidates = applyLabelDisambiguationForDuplicates(
         dedupeTaskAssistEntitySearchCandidates(withLocation).slice(0, limit)
     );
+
+    if (candidates.length === 0 && primaryToken.length >= 4) {
+        const fuzzyVariants = editDistanceOneTokens(primaryToken);
+        for (const variant of fuzzyVariants) {
+            if (remaining() <= 0) break;
+            const pattern = ilikePattern(variant);
+            const opps = await fetchOpportunitiesByNamePattern(params.supabase, params.orgId, scopeCons, pattern, remaining());
+            for (const o of opps) {
+                const label = oppLabel(o);
+                if (similarityRatio(primaryToken, label) < 0.62) continue;
+                push(
+                    buildCandidate(o, "opportunity_name", ["name", "fuzzy_match"], "low", null, "Did you mean match"),
+                    o
+                );
+            }
+        }
+        const fuzzyWithLoc = [...byId.values()].map((c) => {
+            const opp = oppRowsById.get(c.entity_id);
+            const loc = opp?.location_id ? locLabels.get(String(opp.location_id)) ?? null : null;
+            if (!opp || !loc) return c;
+            return buildCandidate(
+                opp,
+                c.source,
+                [...c.matched_fields, "fuzzy_match"],
+                c.confidence,
+                c.disambiguation?.customer_name ?? null,
+                c.subtitle,
+                loc
+            );
+        });
+        candidates = applyLabelDisambiguationForDuplicates(
+            dedupeTaskAssistEntitySearchCandidates(fuzzyWithLoc).slice(0, Math.min(limit, 3))
+        );
+    }
 
     return {
         q: primaryToken,

@@ -3,24 +3,21 @@
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { ListTodo } from "lucide-react";
 
-import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import {
     ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH,
 } from "@/lib/adminV2/opportunityDrawerTaskEvents";
-import { fetchOperationalTasksSummary, readJson } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
+import { ADMIN_V2_OPEN_TASKS_MODAL, fetchOperationalTasksSummary, readJson } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
 import { neutral } from "@/styles/tokens/colors";
 
 type TaskCounts = { open: number; due_soon: number; overdue: number };
 
-/**
- * In-app task visibility (V1): badge + link to My tasks.
- * Future: email digest, SMS/Slack, push — not implemented here.
- */
 export default function OperationalTasksNavBadge({
     tabStyle,
+    onOpenModal,
 }: {
     tabStyle: (active: boolean) => CSSProperties;
+    onOpenModal: () => void;
 }) {
     const enabled = isTaskAssistV1UiEnabled();
     const [counts, setCounts] = useState<TaskCounts | null>(null);
@@ -29,10 +26,7 @@ export default function OperationalTasksNavBadge({
         if (!enabled) return;
         try {
             const res = await fetchOperationalTasksSummary();
-            const json = await readJson<{
-                ok?: boolean;
-                counts?: TaskCounts;
-            }>(res);
+            const json = await readJson<{ ok?: boolean; counts?: TaskCounts }>(res);
             if (res.ok && json.ok && json.counts) {
                 setCounts(json.counts);
             }
@@ -46,12 +40,15 @@ export default function OperationalTasksNavBadge({
         void load();
         const id = window.setInterval(() => void load(), 120_000);
         const onRefresh = () => void load();
+        const onOpen = () => onOpenModal();
         window.addEventListener(ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH, onRefresh);
+        window.addEventListener(ADMIN_V2_OPEN_TASKS_MODAL, onOpen);
         return () => {
             window.clearInterval(id);
             window.removeEventListener(ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH, onRefresh);
+            window.removeEventListener(ADMIN_V2_OPEN_TASKS_MODAL, onOpen);
         };
-    }, [enabled, load]);
+    }, [enabled, load, onOpenModal]);
 
     if (!enabled) return null;
 
@@ -63,9 +60,9 @@ export default function OperationalTasksNavBadge({
         :   `My tasks — ${open} open`;
 
     return (
-        <AdminV2NavLink
-            href="/adminV2/tasks"
-            active={false}
+        <button
+            type="button"
+            onClick={onOpenModal}
             className="relative inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-[11px] font-medium leading-none"
             style={tabStyle(false)}
             title={title}
@@ -89,6 +86,6 @@ export default function OperationalTasksNavBadge({
                     {open > 99 ? "99+" : open}
                 </span>
             ) : null}
-        </AdminV2NavLink>
+        </button>
     );
 }

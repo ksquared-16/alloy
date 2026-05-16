@@ -10,8 +10,10 @@ import {
 import type { TaskAssistCommandBootstrap } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
 import { timingHintToDatetimeLocal } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
 import { formatTaskAssistClientError } from "@/lib/agent/taskAssist/taskAssistClientErrorMessages";
-import { taskAssistReminderCreatedNotice } from "@/lib/agent/taskAssist/taskAssistOrchestratorCopy";
+import { detectOperationalAnomalies } from "@/lib/agent/taskAssist/taskAssistOperationalAnomalies";
+import { fetchEntityOperationalAnomalyContext } from "@/lib/agent/taskAssist/taskAssistEntityOperationalFetch";
 import { buildOperationalTaskBody, createOperationalTask, readJson } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
+import TaskAssistAnomalyWarningCard from "@/components/admin/taskAssist/TaskAssistAnomalyWarningCard";
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
 import { computeReminderSubmitDisabled, minDatetimeLocalValue } from "@/components/admin/taskAssist/TaskAssistOpportunityWorkspace";
 
@@ -42,6 +44,8 @@ export default function TaskAssistCompactReminderCard({
     const [error, setError] = useState<string | null>(null);
     const [success, setSuccess] = useState<string | null>(null);
     const [lastCreated, setLastCreated] = useState<{ id: string; title: string; due_at: string; status: string } | null>(null);
+    const [anomaly, setAnomaly] = useState<ReturnType<typeof detectOperationalAnomalies>>(null);
+    const [anomalyAcknowledged, setAnomalyAcknowledged] = useState(false);
 
     useEffect(() => {
         setTitle(bootstrap.reminder_title?.trim() || "Follow up");
@@ -53,6 +57,8 @@ export default function TaskAssistCompactReminderCard({
         setError(null);
         setSuccess(null);
         setLastCreated(null);
+        setAnomaly(null);
+        setAnomalyAcknowledged(false);
     }, [bootstrapKey, bootstrap.reminder_title, bootstrap.reminder_due_hint, bootstrap.timing_hint_text]);
 
     const targetSummary = useMemo(() => {
@@ -71,10 +77,27 @@ export default function TaskAssistCompactReminderCard({
         setError(null);
         setSuccess(null);
         try {
+            const dueIso = new Date(dueLocal).toISOString();
+            if (!anomalyAcknowledged) {
+                const ctx = await fetchEntityOperationalAnomalyContext(entityId);
+                const warning = detectOperationalAnomalies({
+                    intent: "create_reminder",
+                    title,
+                    dueAtIso: dueIso,
+                    openTasks: ctx.openTasks,
+                    pendingScheduledSends: ctx.pendingScheduledSends,
+                    openProposals: ctx.openProposals,
+                });
+                if (warning) {
+                    setAnomaly(warning);
+                    setSubmitLoading(false);
+                    return;
+                }
+            }
             const body = buildOperationalTaskBody({
                 entityId,
                 title,
-                dueAtIso: new Date(dueLocal).toISOString(),
+                dueAtIso: dueIso,
                 proposalId: null,
                 description: notes.trim() || null,
             });
@@ -86,7 +109,7 @@ export default function TaskAssistCompactReminderCard({
                 message?: string | null;
             }>(res);
             if (!res.ok || !json.ok) throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
-            setSuccess(taskAssistReminderCreatedNotice(title));
+            setSuccess("Reminder created.");
             if (json.task) {
                 setLastCreated({
                     id: String(json.task.id),
@@ -107,7 +130,7 @@ export default function TaskAssistCompactReminderCard({
         } finally {
             setSubmitLoading(false);
         }
-    }, [v11, reminderDisabled, entityId, title, dueLocal, notes]);
+    }, [v11, reminderDisabled, entityId, title, dueLocal, notes, anomalyAcknowledged]);
 
     const onViewCreated = useCallback(() => {
         if (!lastCreated || typeof window === "undefined") return;
@@ -139,7 +162,21 @@ export default function TaskAssistCompactReminderCard({
         <div className="space-y-2" data-task-assist-compact-reminder="true">
             <p className="text-[10px] text-alloy-midnight/60">{targetSummary}</p>
             <p className="text-[11px] font-semibold text-alloy-midnight/85">Reminder / follow-up task</p>
-            <p className="text-[10px] text-alloy-midnight/55">Operational task only — nothing sends automatically.</p>
+            {anomaly && !anomalyAcknowledged ? (
+                <TaskAssistAnomalyWarningCard
+                    warning={anomaly}
+                    busy={submitLoading}
+                    onKeepBoth={() => {
+                        setAnomalyAcknowledged(true);
+                        setAnomaly(null);
+                        void onSubmit();
+                    }}
+                    onCancel={() => {
+                        setAnomaly(null);
+                        setAnomalyAcknowledged(false);
+                    }}
+                />
+            ) : null}
             {success ? (
                 <p className="text-[11px] font-medium text-emerald-800/90" data-task-assist-compact-reminder-success="true">
                     {success}

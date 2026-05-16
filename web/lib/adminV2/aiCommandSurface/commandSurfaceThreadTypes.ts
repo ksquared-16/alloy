@@ -1,4 +1,5 @@
 import type { JobOverviewPlannerSuccess } from "@/lib/agent/planner/jobOverviewPlannerTypes";
+import type { TaskAssistClarificationKind } from "@/lib/agent/taskAssist/taskAssistClarification";
 import type { TaskAssistCommandBootstrap, TaskAssistCommandIntent } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
 import type { TaskAssistCompactAction } from "@/lib/agent/taskAssist/taskAssistCompactActionCard";
 import type { TaskAssistEntitySearchCandidate } from "@/lib/agent/taskAssist/taskAssistEntitySearchTypes";
@@ -31,6 +32,10 @@ export type CommandSurfaceThreadTurn =
           kind: "candidate_results";
           candidates: TaskAssistEntitySearchCandidate[];
           intent: TaskAssistCommandIntent | null;
+          workflowExplain?: {
+              submittedCommand: string;
+              intent: WorkflowAssistReadIntentV1;
+          } | null;
           at: string;
       }
     | {
@@ -71,6 +76,8 @@ export type CommandSurfaceThreadTurn =
               | {
                     type: "workflow_assist_proposal";
                     suggestion: WorkflowAssistSuggestionV1;
+                    /** Present for NL create commands — extra proposal UX (not in suggestion hash). */
+                    createInterpreted?: import("@/lib/agent/workflowAssist/workflowAssistCreateFromCommandV1").WorkflowAssistCreateProposeBuildV1["interpreted"];
                 }
               | {
                     type: "config_layout_assist_proposal";
@@ -99,6 +106,22 @@ export type CommandSurfaceThreadTurn =
           kind: "error";
           text: string;
           at: string;
+      }
+    | {
+          id: string;
+          kind: "task_clarification";
+          clarificationKind: TaskAssistClarificationKind;
+          candidate: TaskAssistEntitySearchCandidate;
+          intent: TaskAssistCommandIntent;
+          at: string;
+      }
+    | {
+          id: string;
+          kind: "fuzzy_entity_suggestion";
+          candidate: TaskAssistEntitySearchCandidate;
+          queryToken: string;
+          intent: TaskAssistCommandIntent | null;
+          at: string;
       };
 
 export type CommandSurfaceThreadState = {
@@ -113,6 +136,10 @@ export type CommandSurfaceThreadTurnInput =
           kind: "candidate_results";
           candidates: TaskAssistEntitySearchCandidate[];
           intent: TaskAssistCommandIntent | null;
+          workflowExplain?: {
+              submittedCommand: string;
+              intent: WorkflowAssistReadIntentV1;
+          } | null;
       }
     | {
           kind: "target_confirmed";
@@ -131,4 +158,16 @@ export type CommandSurfaceThreadTurnInput =
           payload: WorkflowAssistReadCardPayloadV1 | null;
           error: WorkflowAssistErrorEnvelopeV1 | null;
       }
-    | { kind: "error"; text: string };
+    | { kind: "error"; text: string }
+    | {
+          kind: "task_clarification";
+          clarificationKind: TaskAssistClarificationKind;
+          candidate: TaskAssistEntitySearchCandidate;
+          intent: TaskAssistCommandIntent;
+      }
+    | {
+          kind: "fuzzy_entity_suggestion";
+          candidate: TaskAssistEntitySearchCandidate;
+          queryToken: string;
+          intent: TaskAssistCommandIntent | null;
+      };

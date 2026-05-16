@@ -211,9 +211,7 @@ export default function TaskAssistCompactDraftCard({
             if (!res.ok || !json.ok || !json.send?.communication_message_id) {
                 throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
             }
-            setSuccess(
-                "Message queued for delivery (communication_messages). Nothing else sends until you approve future actions."
-            );
+            setSuccess("Message sent.");
             setPhase("success");
         } catch (e: unknown) {
             setError(formatTaskAssistClientError((e as Error).message));
@@ -232,7 +230,7 @@ export default function TaskAssistCompactDraftCard({
             if (!res.ok || !json.ok) {
                 throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
             }
-            setSuccess("Draft saved to task_assist_proposals for later review.");
+            setSuccess("Draft saved.");
         } catch (e: unknown) {
             setError(formatTaskAssistClientError((e as Error).message));
         } finally {
@@ -284,9 +282,7 @@ export default function TaskAssistCompactDraftCard({
             if (!res.ok || !json.ok) {
                 throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
             }
-            setSuccess(
-                "Scheduled send saved to communication_scheduled_sends. It will send at the chosen time — not immediately."
-            );
+            setSuccess("Message scheduled.");
             if (typeof window !== "undefined") {
                 window.dispatchEvent(
                     new CustomEvent(ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH, {

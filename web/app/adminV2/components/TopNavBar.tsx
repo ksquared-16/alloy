@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabaseClient";
 import { palette, neutral, derived } from "@/styles/tokens/colors";
 import { markWorkUnitNavigationStart } from "@/lib/perf/markWorkUnitNavigationStart";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
+import MyTasksModal from "@/app/adminV2/components/MyTasksModal";
 import OperationalTasksNavBadge from "@/app/adminV2/components/OperationalTasksNavBadge";
 import QuickMessageModal from "@/app/adminV2/components/QuickMessageModal";
 import { MessageSquare } from "lucide-react";
@@ -79,6 +80,7 @@ export default function TopNavBar() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [quickMessageOpen, setQuickMessageOpen] = useState(false);
+  const [tasksModalOpen, setTasksModalOpen] = useState(false);
   // NOTE:
   // Header-level unread indicators removed in V1.
   // Future notification system will use a dedicated bell icon with aggregated counts.
@@ -190,7 +192,7 @@ export default function TopNavBar() {
         >
           Queue
         </AdminV2NavLink>
-        <OperationalTasksNavBadge tabStyle={secondaryTabStyle} />
+        <OperationalTasksNavBadge tabStyle={secondaryTabStyle} onOpenModal={() => setTasksModalOpen(true)} />
         <button
           type="button"
           onClick={() => setQuickMessageOpen(true)}
@@ -220,6 +222,7 @@ export default function TopNavBar() {
         Sign out
       </button>
       <QuickMessageModal open={quickMessageOpen} onClose={() => setQuickMessageOpen(false)} />
+      <MyTasksModal open={tasksModalOpen} onClose={() => setTasksModalOpen(false)} />
     </header>
   );
 }

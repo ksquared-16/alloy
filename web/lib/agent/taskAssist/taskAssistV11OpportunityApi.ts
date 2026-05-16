@@ -210,3 +210,17 @@ export async function patchOperationalTaskStatus(id: string, status: "completed"
         body: JSON.stringify({ status }),
     });
 }
+
+export async function patchOperationalTaskFields(
+    id: string,
+    fields: { title?: string; description?: string | null; due_at?: string }
+): Promise<Response> {
+    return fetch(`${OPERATIONAL_TASKS_URL}/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        credentials: "include",
+        headers: JSON_HEADERS,
+        body: JSON.stringify(fields),
+    });
+}
+
+export const ADMIN_V2_OPEN_TASKS_MODAL = "adminv2:open-tasks-modal";

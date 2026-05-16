@@ -350,6 +350,63 @@ export async function cancelOperationalTask(params: {
     return { ok: true, row };
 }
 
+export async function updateOperationalTaskFields(params: {
+    supabase: SupabaseClient;
+    orgId: string;
+    taskId: string;
+    title?: string;
+    description?: string | null;
+    dueAtIso?: string;
+}): Promise<{ ok: true; row: OperationalTaskRow } | { ok: false; error: string; message: string; status: number }> {
+    const cur = await getOperationalTaskById(params);
+    if (!cur.ok) return cur;
+    if (cur.row.status !== "open") {
+        return { ok: false, error: "INVALID_STATUS", message: "Only open tasks can be edited.", status: 409 };
+    }
+
+    const patch: Record<string, unknown> = {};
+    if (params.title != null) {
+        const t = params.title.trim();
+        if (!t) return { ok: false, error: "TITLE_REQUIRED", message: "title cannot be empty.", status: 400 };
+        patch.title = t;
+    }
+    if (params.description !== undefined) {
+        patch.description = params.description?.trim() || null;
+    }
+    if (params.dueAtIso != null) {
+        const dueMs = Date.parse(params.dueAtIso);
+        if (Number.isNaN(dueMs)) {
+            return { ok: false, error: "DUE_INVALID", message: "due_at must be a valid ISO datetime.", status: 400 };
+        }
+        patch.due_at = new Date(dueMs).toISOString();
+    }
+    if (!Object.keys(patch).length) {
+        return { ok: true, row: cur.row };
+    }
+
+    const { data, error } = await params.supabase
+        .from("operational_tasks")
+        .update(patch)
+        .eq("org_id", params.orgId)
+        .eq("id", params.taskId)
+        .eq("status", "open")
+        .select("*")
+        .maybeSingle();
+
+    if (error || !data) {
+        return { ok: false, error: "DB_UPDATE_FAILED", message: error?.message ?? "Update failed.", status: 409 };
+    }
+    const row = mapTaskRow(data as Record<string, unknown>);
+    if (row.source === "task_assist") {
+        await syncOpportunityNextFollowUpFromOperationalTasks({
+            supabase: params.supabase,
+            orgId: params.orgId,
+            opportunityId: row.entity_id,
+        });
+    }
+    return { ok: true, row };
+}
+
 export function validateOperationalTaskCreateBody(body: unknown): { ok: false; error: string; message: string } | { ok: true; value: {
     entity_id: string;
     title: string;

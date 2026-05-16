@@ -38,6 +38,10 @@ import {
     writeDepartmentPageCache,
 } from "@/lib/workspace/adminV2WorkspaceSessionCache";
 import { AutomationWorkflowsBlock } from "@/app/adminV2/components/workspace/blocks/AutomationWorkflowsBlock";
+import {
+    filterWorkflowsForWorkspaceAutomationSurface,
+    WORKSPACE_AUTOMATION_METADATA_GAP_NOTE,
+} from "@/lib/workspace/workspaceAutomationWorkflowFilter";
 import { resolveKpisForDepartment } from "@/lib/kpi/resolver";
 import type { WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
 import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
@@ -352,8 +356,9 @@ export default function AdminV2WorkspaceDepartmentPage() {
                     if (kRes.ok && kBody.kpis) setWorkflowKpis({ ...DEFAULT_WF_KPIS, ...kBody.kpis });
                     if (sRes.ok) {
                         const all = Array.isArray(sJson.workflows) ? sJson.workflows : [];
-                        const relevant = all.filter((w) => (w.entity_type ?? "").toLowerCase() === "opportunity");
-                        setWorkflowsSummary(relevant);
+                        setWorkflowsSummary(
+                            filterWorkflowsForWorkspaceAutomationSurface(all) as WorkflowSummaryRow[]
+                        );
                     }
                 }
             } catch {
@@ -1183,6 +1188,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                 }}
                                 workflows={workflowsSummary}
                                 href="/adminV2/workflows"
+                                metadataAssociationNote={WORKSPACE_AUTOMATION_METADATA_GAP_NOTE}
                             />
                         </div>
                     }

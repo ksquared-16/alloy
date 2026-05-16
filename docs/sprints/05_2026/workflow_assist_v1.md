@@ -60,6 +60,9 @@
 | **Bulk pause / tag mute** | **Not implemented** — only single-workflow pause proposal. |
 | **Edit from UI** | Read cards surface **pause** and **create template** only; arbitrary **edit_workflow** is API-ready (propose + apply covered by tests) but not exposed as buttons yet. |
 | **Stabilization (role UX + guardrails)** | **Shipped:** **`GET /api/admin/ai/workflow-assist/capabilities`** (`can_propose_and_apply_workflow_assist` = compatibility **`admin`**); Orchestrator hides propose CTAs for ops and disables Apply unless admin; create proposal card stresses **disabled draft / template starter / review in Automations**; deterministic create template description warns placeholders are generic. |
+| **NL create routing (vertical slice)** | **Shipped:** `parseWorkflowAssistCreateIntent` + `buildWorkflowAssistCreateProposeFromIntent` — Orchestrator routes create/make/automation-when and tour-reminder phrasing to **`workflow_assist_proposal`** (not read summary). Templates: **`tour_reminder`**, **`enrollment_when_move`**, **`generic_stub`**. Apply still **`enabled: false`** only. |
+| **Explain name lookup** | **Shipped (narrow):** why-blocked commands without ambient context → Task Assist entity search on extracted family name; single high-confidence opportunity → Explain v1; multiple → candidate picker with explain confirm. |
+| **Dept / work-unit automation visibility** | **Partial:** `AutomationWorkflowsBlock` on department + work-unit pages; KPIs + workflow rows + last run; metadata gap note (no `workflows.department_id`). Filter: org-wide enrollment-adjacent entity types. |
 
 ### Staging migration naming (do not rename if applied)
 
@@ -356,6 +359,42 @@ Response: `{ ok: true, explain_engine: 1, explanation, trace }`.
 2. **Multi-event explain** — let operator pick which `workflow_events` row to anchor.  
 3. **Durable proposals** — if compliance requires retained drafts + audit rows.  
 4. **Trace-backed recommendations** — suggest disable workflow / fix condition (still human-approved).
+
+---
+
+## 14. NL create templates + workspace automation visibility (shipped)
+
+### Creation intent routing
+
+- Parser: `web/lib/agent/workflowAssist/workflowAssistCreateFromCommandV1.ts` — sub-intent **`create_workflow_proposal`**.
+- Orchestrator: `routeCommandSurface` checks create **before** `parseWorkflowAssistReadIntent` so create language does not fall through to **`workflow_summary`**.
+- Shell: `runWorkflowAssistCreateRoute` → **`POST …/workflow-assist/propose`** → **`workflow_assist_proposal`** action card (not `workflow_assist_read`).
+
+### Supported deterministic create templates
+
+| Template id | Example commands | Draft defaults |
+|-------------|------------------|----------------|
+| **`tour_reminder`** | “Create a workflow that sends a reminder 3 days before tours”; “Send a reminder before tours” | Name **Tour Reminder Draft**; `event_type` **`opportunity_schedule_tour_followup`**; `entity_type` **`opportunity`**; `enabled: false`; no action steps scaffolded. |
+| **`enrollment_when_move`** | “When forms complete move them to Ready to Enroll”; “Create an automation when a tour is scheduled” (when-clause) | Name **Status transition draft (review required)**; `event_type` **`opportunity_status_changed`** (placeholder); warnings call out target status / form event unknowns. |
+| **`generic_stub`** | Other “create workflow/automation” without a matched template | Same generic starter as read-card **Propose disabled draft** button. |
+
+### Unsupported create requests
+
+- Arbitrary action graphs, delays, channels, or multi-step logic (configure in Automations).
+- Auto-enable or autonomous execution (apply always inserts **`enabled: false`**).
+- LLM-generated workflow definitions (not in default path).
+
+### Disabled-draft safety model (unchanged)
+
+- Propose builds suggestion with **`enabled: false`**; apply re-enforces false on insert.
+- Admin-only propose/apply; ops see read cards and blocked mutation copy.
+
+### Department / work-unit automation panels
+
+- UI: `AutomationWorkflowsBlock` in department context column and work-unit footer (`data-ws-lane-kind="automation_workflows"`).
+- Data: `GET /api/admin/workflow-runs?list=kpis` + `GET /api/admin/workflows/summary?variant=workspace` (workspace variant includes **last_run** per workflow).
+- Filter: `filterWorkflowsForWorkspaceAutomationSurface` — opportunity / tour_bookings entity types when present.
+- **Metadata gap:** `workflows` has no `department_id` or `work_unit_id`; panels show **`WORKSPACE_AUTOMATION_METADATA_GAP_NOTE`** and org-wide heuristic list until linkage exists.
 
 ---
 

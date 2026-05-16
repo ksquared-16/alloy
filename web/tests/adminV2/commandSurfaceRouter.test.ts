@@ -56,12 +56,17 @@ describe("routeCommandSurface", () => {
         expect(r.route).toBe("config_layout_assist");
     });
 
-    it("routes workflow phrase to workflow_assist with read intent", () => {
+    it("routes when/move workflow phrase to create proposal intent", () => {
         const r = routeCommandSurface("when forms complete move them to ready to enroll");
         expect(r.route).toBe("workflow_assist");
-        expect(r.workflowAssistReadIntent?.sub_intent).toBe("workflow_summary");
+        expect(r.workflowAssistCreateIntent?.template_id).toBe("enrollment_when_move");
+        expect(r.workflowAssistReadIntent).toBeNull();
+    });
+
+    it("routes explicit create workflow to create intent", () => {
+        const r = routeCommandSurface("Create a workflow that sends a reminder 3 days before tours");
+        expect(r.workflowAssistCreateIntent?.template_id).toBe("tour_reminder");
         expect(WORKFLOW_ASSIST_NOTICE_TEXT).toContain("Workflow Assist");
-        expect(WORKFLOW_ASSIST_NOTICE_TEXT).toContain("coming next");
     });
 
     it("routes failed-workflow phrase to workflow_assist failed_runs intent", () => {

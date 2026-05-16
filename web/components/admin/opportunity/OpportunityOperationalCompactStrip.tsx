@@ -188,18 +188,6 @@ export default function OpportunityOperationalCompactStrip({
         });
     }, [popoverTaskId, openTasks]);
 
-    const onViewTaskFromPopover = useCallback(() => {
-        if (!popoverTaskId || typeof window === "undefined") return;
-        window.dispatchEvent(
-            new CustomEvent(ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS, {
-                detail: { opportunity_id: opportunityId, task_id: popoverTaskId },
-            })
-        );
-        if (adminDrawer) {
-            adminDrawer.openDrawer({ type: "opportunities", id: opportunityId, opportunityWorkspaceContext: null });
-        }
-    }, [adminDrawer, opportunityId, popoverTaskId]);
-
     if (!v11) return null;
 
     const hasChips = openTasks.length > 0 || pendingSends.length > 0 || showNextFollowUp;
@@ -264,7 +252,6 @@ export default function OpportunityOperationalCompactStrip({
                                     anchorRef={popoverAnchorRef}
                                     onClose={() => setPopoverTaskId(null)}
                                     onUpdated={() => void load()}
-                                    onViewTask={onViewTaskFromPopover}
                                 />
                             ) : null}
                         </div>

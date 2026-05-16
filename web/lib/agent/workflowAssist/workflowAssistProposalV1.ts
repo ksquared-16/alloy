@@ -269,7 +269,13 @@ export function buildWorkflowAssistSuggestionV1(input: {
             entity_type: d.entity_type,
             enabled: false,
         };
-        warnings.push("Workflow will be created disabled. Enable manually in Automations after review.");
+        warnings.push("Workflow will be created disabled. Review in Automations before enabling.");
+        if (d.name === "Tour Reminder Draft") {
+            warnings.push("Reminder timing and message actions are not configured by Assist.");
+        }
+        if (d.name === "Status transition draft (review required)") {
+            warnings.push("Form-complete trigger and target status must be configured manually.");
+        }
         const suggestion_id = computeWorkflowAssistSuggestionId(
             input.orgId,
             "create_workflow",

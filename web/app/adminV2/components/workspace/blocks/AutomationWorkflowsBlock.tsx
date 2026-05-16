@@ -17,6 +17,11 @@ export type AutomationWorkflowSummaryRow = {
     event_type: string | null;
     enabled: boolean | null;
     steps_count: number;
+    last_run?: {
+        status: string;
+        started_at: string;
+        has_failed_action?: boolean;
+    } | null;
 };
 
 function humanTrigger(eventType: string | null): string {
@@ -32,8 +37,20 @@ export function AutomationWorkflowsBlock(props: {
     href?: string;
     /** When true, numeric stats show placeholders until the first KPI fetch completes. */
     kpisLoading?: boolean;
+    /** Shown when workflows lack department/work-unit linkage (org-wide heuristic list). */
+    metadataAssociationNote?: string | null;
+    /** Optional command-bar deep link for Workflow Assist. */
+    workflowAssistHref?: string | null;
 }) {
-    const { kpis, workflows, title = "Automations", href = "/adminV2/workflows", kpisLoading = false } = props;
+    const {
+        kpis,
+        workflows,
+        title = "Automations",
+        href = "/adminV2/workflows",
+        kpisLoading = false,
+        metadataAssociationNote = null,
+        workflowAssistHref = null,
+    } = props;
 
     const failuresHot = !kpisLoading && kpis.failed_last_7d > 0;
     const successConcern =
@@ -52,15 +69,33 @@ export function AutomationWorkflowsBlock(props: {
                         Live runs, reliability, and the workflows tied to this workspace surface.
                     </p>
                 </div>
-                <Link
-                    href={href}
-                    prefetch={shouldDisableAdminV2LinkPrefetch(href) ? false : undefined}
-                    className="adminv2-ws-automation-telemetry__review"
-                >
-                    Review
-                    <span aria-hidden> →</span>
-                </Link>
+                <div className="adminv2-ws-automation-telemetry__mast-actions">
+                    <Link
+                        href={href}
+                        prefetch={shouldDisableAdminV2LinkPrefetch(href) ? false : undefined}
+                        className="adminv2-ws-automation-telemetry__review"
+                    >
+                        Open Automations
+                        <span aria-hidden> →</span>
+                    </Link>
+                    {workflowAssistHref ?
+                        <Link
+                            href={workflowAssistHref}
+                            prefetch={shouldDisableAdminV2LinkPrefetch(workflowAssistHref) ? false : undefined}
+                            className="adminv2-ws-automation-telemetry__review adminv2-ws-automation-telemetry__review--secondary"
+                            data-ws-ask-workflow-assist="true"
+                        >
+                            Ask Workflow Assist
+                        </Link>
+                    : null}
+                </div>
             </header>
+
+            {metadataAssociationNote ?
+                <p className="adminv2-ws-automation-telemetry__association-note" data-ws-automation-metadata-gap="true">
+                    {metadataAssociationNote}
+                </p>
+            : null}
 
             <div className="adminv2-ws-automation-telemetry__groups" role="group" aria-label="Automation metrics">
                 <section className="adminv2-ws-automation-telemetry__group" aria-label="Throughput">
@@ -117,7 +152,9 @@ export function AutomationWorkflowsBlock(props: {
                 <section className="adminv2-ws-automation-telemetry__workflows" aria-label="Relevant workflows">
                     <div className="adminv2-ws-automation-telemetry__workflows-head">
                         <span className="adminv2-ws-automation-telemetry__workflows-kicker">In scope</span>
-                        <span className="adminv2-ws-automation-telemetry__workflows-hint">Configured for this entity</span>
+                        <span className="adminv2-ws-automation-telemetry__workflows-hint">
+                            Org workflows (enrollment-adjacent entity types)
+                        </span>
                     </div>
                     <ul className="adminv2-ws-automation-telemetry__workflow-list" role="list">
                         {workflows.slice(0, 4).map((w) => (
@@ -133,6 +170,22 @@ export function AutomationWorkflowsBlock(props: {
                                         <span className="adminv2-ws-automation-workflow-row__steps">
                                             {w.steps_count} step{w.steps_count === 1 ? "" : "s"}
                                         </span>
+                                        {w.last_run ?
+                                            <>
+                                                <span className="adminv2-ws-automation-workflow-row__sep" aria-hidden>
+                                                    ·
+                                                </span>
+                                                <span
+                                                    className={
+                                                        w.last_run.has_failed_action || w.last_run.status === "failed" ?
+                                                            "adminv2-ws-automation-workflow-row__run--failed"
+                                                        :   "adminv2-ws-automation-workflow-row__run"
+                                                    }
+                                                >
+                                                    Last run {w.last_run.status}
+                                                </span>
+                                            </>
+                                        : null}
                                     </div>
                                 </div>
                                 <span

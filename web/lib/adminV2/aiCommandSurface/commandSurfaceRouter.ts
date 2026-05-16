@@ -13,6 +13,10 @@ import {
 import { isConfigLayoutAssistLikeCommand } from "@/lib/agent/configLayoutAssist/configLayoutAssistIntent";
 import { extractCommandSurfaceSlots, type CommandSurfaceSlots } from "./commandSurfaceSlotExtract";
 import {
+    parseWorkflowAssistCreateIntent,
+    type WorkflowAssistCreateIntentV1,
+} from "@/lib/agent/workflowAssist/workflowAssistCreateFromCommandV1";
+import {
     parseWorkflowAssistReadIntent,
     type WorkflowAssistReadIntentV1,
 } from "@/lib/agent/workflowAssist/workflowAssistReadV1";
@@ -36,10 +40,12 @@ export type CommandSurfaceRouteResult = {
     clarifyMessage: string | null;
     /** Set when `route === "workflow_assist"` (read-only Workflow Assist). */
     workflowAssistReadIntent: WorkflowAssistReadIntentV1 | null;
+    /** Set when operator asks to create/propose a workflow draft (Cards 4–5). */
+    workflowAssistCreateIntent: WorkflowAssistCreateIntentV1 | null;
 };
 
 export const WORKFLOW_ASSIST_NOTICE_TEXT =
-    "That's a workflow configuration request. Workflow Assist is coming next — read-only for now.";
+    "That's a workflow request. Workflow Assist can summarize runs, explain outcomes, and propose disabled drafts for admin review.";
 export const WORKFLOW_ASSIST_AUTOMATIONS_HREF = "/adminV2/workflows";
 
 const CLARIFY_DEFAULT =
@@ -59,6 +65,45 @@ function configLayoutAssistSignals(slots: CommandSurfaceSlots, input: string): b
     return isConfigLayoutAssistLikeCommand(input);
 }
 
+/** Read-only workflow queries (summary, failures, explain) beat when/move create-language parsing. */
+function workflowReadTakesPrecedenceOverCreate(
+    input: string,
+    read: WorkflowAssistReadIntentV1
+): boolean {
+    switch (read.sub_intent) {
+        case "failed_runs_last_7d":
+        case "explain_v1":
+        case "enrollment_touch":
+            return true;
+        case "workflow_summary":
+            return (
+                /\b(show|list|summary|which|all)\b/i.test(input) && /\bworkflows?\b/i.test(input)
+            );
+        default:
+            return false;
+    }
+}
+
+function resolveWorkflowAssistIntents(
+    input: string,
+    ctx: CommandSurfaceRouteContext
+): {
+    workflowAssistReadIntent: WorkflowAssistReadIntentV1 | null;
+    workflowAssistCreateIntent: WorkflowAssistCreateIntentV1 | null;
+} {
+    const workflowAssistReadIntent = parseWorkflowAssistReadIntent(input, {
+        hasAmbientOpportunity: ctx.hasAmbientOpportunity,
+    });
+    const createCandidate = parseWorkflowAssistCreateIntent(input);
+    if (createCandidate && workflowReadTakesPrecedenceOverCreate(input, workflowAssistReadIntent)) {
+        return { workflowAssistReadIntent, workflowAssistCreateIntent: null };
+    }
+    if (createCandidate) {
+        return { workflowAssistReadIntent: null, workflowAssistCreateIntent: createCandidate };
+    }
+    return { workflowAssistReadIntent, workflowAssistCreateIntent: null };
+}
+
 function jobLayoutSignals(slots: CommandSurfaceSlots, intent: TaskAssistCommandIntent): boolean {
     if (intent.workflow_blocked) return false;
     if (slots.layout_verb && !slots.comms_verb && !slots.reminder_verb) return true;
@@ -76,7 +121,7 @@ function jobLayoutSignals(slots: CommandSurfaceSlots, intent: TaskAssistCommandI
  * Orchestrator: route operator NL to the correct specialist without UI mode tabs.
  *
  * Precedence:
- * 1. workflow-like → workflow_assist (Workflow Assist read-only cards)
+ * 1. workflow-like → workflow_assist (read cards or create-proposal notice; create wins over default read summary)
  * 2. comms / reminder / schedule → task_assist (Task Assist specialist)
  * 3. field / section / drawer config → config_layout_assist
  * 4. job / layout overview → job_layout
@@ -91,15 +136,17 @@ export function routeCommandSurface(
     const taskAssistIntent = parseTaskAssistCommandIntent(input);
 
     if (slots.workflow_like || taskAssistIntent.workflow_blocked) {
-        const workflowAssistReadIntent = parseWorkflowAssistReadIntent(input, {
-            hasAmbientOpportunity: ctx.hasAmbientOpportunity,
-        });
+        const { workflowAssistReadIntent, workflowAssistCreateIntent } = resolveWorkflowAssistIntents(
+            input,
+            ctx
+        );
         return {
             route: "workflow_assist",
             slots,
             taskAssistIntent,
             clarifyMessage: null,
             workflowAssistReadIntent,
+            workflowAssistCreateIntent,
         };
     }
 
@@ -110,6 +157,7 @@ export function routeCommandSurface(
             taskAssistIntent,
             clarifyMessage: null,
             workflowAssistReadIntent: null,
+            workflowAssistCreateIntent: null,
         };
     }
 
@@ -120,6 +168,7 @@ export function routeCommandSurface(
             taskAssistIntent,
             clarifyMessage: null,
             workflowAssistReadIntent: null,
+            workflowAssistCreateIntent: null,
         };
     }
 
@@ -130,6 +179,7 @@ export function routeCommandSurface(
             taskAssistIntent,
             clarifyMessage: null,
             workflowAssistReadIntent: null,
+            workflowAssistCreateIntent: null,
         };
     }
 
@@ -140,6 +190,7 @@ export function routeCommandSurface(
             taskAssistIntent,
             clarifyMessage: null,
             workflowAssistReadIntent: null,
+            workflowAssistCreateIntent: null,
         };
     }
 
@@ -150,6 +201,7 @@ export function routeCommandSurface(
             taskAssistIntent,
             clarifyMessage: null,
             workflowAssistReadIntent: null,
+            workflowAssistCreateIntent: null,
         };
     }
 
@@ -159,6 +211,7 @@ export function routeCommandSurface(
         taskAssistIntent,
         clarifyMessage: CLARIFY_DEFAULT,
         workflowAssistReadIntent: null,
+        workflowAssistCreateIntent: null,
     };
 }
 

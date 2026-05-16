@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 
+import TaskAssistClarificationCard from "@/components/admin/taskAssist/TaskAssistClarificationCard";
 import TaskAssistCompactDraftCard from "@/components/admin/taskAssist/TaskAssistCompactDraftCard";
 import TaskAssistCompactReminderCard from "@/components/admin/taskAssist/TaskAssistCompactReminderCard";
 import TaskAssistOpportunityWorkspace from "@/components/admin/taskAssist/TaskAssistOpportunityWorkspace";
@@ -14,6 +15,7 @@ import {
     WORKFLOW_ASSIST_NOTICE_TEXT,
 } from "@/lib/adminV2/aiCommandSurface/commandSurfaceRouter";
 import type { CommandSurfaceThreadTurn } from "@/lib/adminV2/aiCommandSurface/commandSurfaceThreadTypes";
+import type { TaskAssistClarificationKind } from "@/lib/agent/taskAssist/taskAssistClarification";
 import type { TaskAssistCommandIntent } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
 import { formatCandidateDebugLine } from "@/lib/agent/taskAssist/taskAssistEntitySearchDisambiguation";
 import type { TaskAssistEntitySearchCandidate } from "@/lib/agent/taskAssist/taskAssistEntitySearchTypes";
@@ -87,7 +89,12 @@ export type CommandSurfaceThreadProps = {
         candidate: TaskAssistEntitySearchCandidate,
         intent: TaskAssistCommandIntent | null
     ) => void;
-    onConfirmCandidate: (turnId: string, candidate: TaskAssistEntitySearchCandidate, intent: TaskAssistCommandIntent | null) => void;
+    onConfirmCandidate: (
+        turnId: string,
+        candidate: TaskAssistEntitySearchCandidate,
+        intent: TaskAssistCommandIntent | null,
+        workflowExplain?: { submittedCommand: string; intent: import("@/lib/agent/workflowAssist/workflowAssistReadV1").WorkflowAssistReadIntentV1 } | null
+    ) => void;
     onToggleActionCard: (turnId: string) => void;
     onToggleTaskAssistMoreOptions?: (turnId: string) => void;
     renderJobLayoutCardActions?: (turnId: string) => ReactNode;
@@ -96,6 +103,18 @@ export type CommandSurfaceThreadProps = {
     workflowAssistMutationsAllowed?: boolean;
     /** Shown on read cards when mutations are not allowed for this session. */
     workflowAssistMutationBlockedReason?: string | null;
+    onClarificationChip?: (
+        turnId: string,
+        candidate: TaskAssistEntitySearchCandidate,
+        intent: TaskAssistCommandIntent,
+        kind: TaskAssistClarificationKind,
+        payload: { goalText?: string; timingText?: string; custom?: boolean }
+    ) => void;
+    onConfirmFuzzySuggestion?: (
+        turnId: string,
+        candidate: TaskAssistEntitySearchCandidate,
+        intent: TaskAssistCommandIntent | null
+    ) => void;
 };
 
 export default function CommandSurfaceThread({
@@ -109,6 +128,8 @@ export default function CommandSurfaceThread({
     workflowAssistMutation,
     workflowAssistMutationsAllowed = false,
     workflowAssistMutationBlockedReason,
+    onClarificationChip,
+    onConfirmFuzzySuggestion,
 }: CommandSurfaceThreadProps) {
     const showSearchDebug = process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test";
 
@@ -181,7 +202,7 @@ export default function CommandSurfaceThread({
                                                     style={{ borderColor: derived.border, color: CMD.textBody }}
                                                     onClick={() =>
                                                         turn.candidates.length === 1 ?
-                                                            onConfirmCandidate(turn.id, c, turn.intent)
+                                                            onConfirmCandidate(turn.id, c, turn.intent, turn.workflowExplain)
                                                         :   onPickCandidate(turn.id, c, turn.intent)
                                                     }
                                                 >
@@ -208,7 +229,14 @@ export default function CommandSurfaceThread({
                                             disabled={busy}
                                             className="rounded-md bg-alloy-midnight/90 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-50"
                                             data-command-surface-confirm-target="true"
-                                            onClick={() => onConfirmCandidate(turn.id, turn.candidates[0]!, turn.intent)}
+                                            onClick={() =>
+                                                onConfirmCandidate(
+                                                    turn.id,
+                                                    turn.candidates[0]!,
+                                                    turn.intent,
+                                                    turn.workflowExplain
+                                                )
+                                            }
                                         >
                                             Confirm target
                                         </button>
@@ -218,12 +246,52 @@ export default function CommandSurfaceThread({
                         );
                     case "target_confirmed":
                         return null;
+                    case "task_clarification":
+                        return (
+                            <AssistantBubble key={turn.id}>
+                                <TaskAssistClarificationCard
+                                    kind={turn.clarificationKind}
+                                    disabled={busy}
+                                    onChip={(payload) =>
+                                        onClarificationChip?.(
+                                            turn.id,
+                                            turn.candidate,
+                                            turn.intent,
+                                            turn.clarificationKind,
+                                            payload
+                                        )
+                                    }
+                                />
+                            </AssistantBubble>
+                        );
+                    case "fuzzy_entity_suggestion":
+                        return (
+                            <AssistantBubble key={turn.id}>
+                                <div className="space-y-2" data-command-surface-fuzzy-suggestion="true">
+                                    <p className="text-[12px] font-medium">
+                                        Did you mean {turn.candidate.label}?
+                                    </p>
+                                    <button
+                                        type="button"
+                                        disabled={busy}
+                                        className="rounded-md bg-alloy-midnight/90 px-3 py-1.5 text-[11px] font-semibold text-white disabled:opacity-45"
+                                        data-command-surface-fuzzy-confirm="true"
+                                        onClick={() =>
+                                            onConfirmFuzzySuggestion?.(turn.id, turn.candidate, turn.intent)
+                                        }
+                                    >
+                                        Yes, use {turn.candidate.label}
+                                    </button>
+                                </div>
+                            </AssistantBubble>
+                        );
                     case "action_card":
                         if (turn.card.type === "workflow_assist_proposal") {
                             return (
                                 <AssistantBubble key={turn.id}>
                                     <WorkflowAssistProposalActionCard
                                         suggestion={turn.card.suggestion}
+                                        createInterpreted={turn.card.createInterpreted}
                                         applyAllowed={workflowAssistMutationsAllowed}
                                     />
                                 </AssistantBubble>

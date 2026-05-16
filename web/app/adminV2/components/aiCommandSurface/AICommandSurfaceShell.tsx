@@ -33,7 +33,18 @@ import {
 } from "@/lib/agent/workflowAssist/workflowAssistReadV1";
 import type { ConfigurationProposalV1 } from "@/lib/agent/configLayoutAssist/configurationProposalV1";
 import type { ConfigLayoutAssistTraceV1 } from "@/lib/agent/configLayoutAssist/configLayoutAssistTypes";
+import {
+  buildWorkflowAssistCreateProposeFromIntent,
+  type WorkflowAssistCreateIntentV1,
+  type WorkflowAssistCreateProposeBuildV1,
+} from "@/lib/agent/workflowAssist/workflowAssistCreateFromCommandV1";
+import {
+  extractExplainEntitySearchQuery,
+  pickExplainEntityCandidate,
+} from "@/lib/agent/workflowAssist/workflowAssistExplainEntityLookup";
 import type { WorkflowAssistProposeRequestV1, WorkflowAssistSuggestionV1 } from "@/lib/agent/workflowAssist/workflowAssistProposalV1";
+import { dedupeTaskAssistEntitySearchCandidates } from "@/lib/agent/taskAssist/taskAssistEntitySearchDedupe";
+import type { TaskAssistEntitySearchCandidate } from "@/lib/agent/taskAssist/taskAssistEntitySearchTypes";
 import {
   buildWorkflowAssistExplainCardPayload,
   type WorkflowAssistExplainResponseV1,
@@ -58,11 +69,17 @@ import type {
   CommandSurfaceThreadTurn,
 } from "@/lib/adminV2/aiCommandSurface/commandSurfaceThreadTypes";
 import CommandSurfaceThread from "@/app/adminV2/components/aiCommandSurface/CommandSurfaceThread";
-import type { TaskAssistEntitySearchCandidate } from "@/lib/agent/taskAssist/taskAssistEntitySearchTypes";
 import { isTaskAssistV1UiEnabled } from "@/lib/agent/taskAssist/taskAssistV1UiGate";
 import { formatTaskAssistEntitySearchNoMatchMessage } from "@/lib/agent/taskAssist/taskAssistEntitySearchVariants";
 import { taskAssistFollowUpNoticeText } from "@/lib/agent/taskAssist/taskAssistCompactActionCard";
-import { dedupeTaskAssistEntitySearchCandidates } from "@/lib/agent/taskAssist/taskAssistEntitySearchDedupe";
+import {
+    clarificationPromptText,
+    mergeClarificationIntoIntent,
+    needsMessageGoalClarification,
+    reminderClarificationKind,
+    type TaskAssistClarificationKind,
+} from "@/lib/agent/taskAssist/taskAssistClarification";
+import { primaryTaskAssistEntitySearchToken } from "@/lib/agent/taskAssist/taskAssistEntitySearchVariants";
 import { fetchTaskAssistEntitySearch, readJson } from "@/lib/agent/taskAssist/taskAssistV11OpportunityApi";
 import {
     ADMIN_V2_FOCUS_COMMAND_BAR,
@@ -524,11 +541,18 @@ export default function AICommandSurfaceShell() {
   const [busy, setBusy] = useState(false);
   const [workflowAssistMutationCapable, setWorkflowAssistMutationCapable] = useState<boolean | null>(null);
   const [viewportH, setViewportH] = useState<number>(typeof window !== "undefined" ? window.innerHeight : 900);
+  const threadScrollRef = useRef<HTMLDivElement>(null);
+  const userScrolledUpRef = useRef(false);
+  const pendingClarificationRef = useRef<{
+    candidate: TaskAssistEntitySearchCandidate;
+    intent: TaskAssistCommandIntent;
+    awaiting: TaskAssistClarificationKind;
+  } | null>(null);
 
   const panelMaxHeight = useMemo(() => clampExpandedHeightPx(viewportH), [viewportH]);
 
-  const confirmTaskAssistTarget = useCallback(
-    (_turnId: string, candidate: TaskAssistEntitySearchCandidate, intent: TaskAssistCommandIntent | null) => {
+  const proceedToTaskAssistAction = useCallback(
+    (candidate: TaskAssistEntitySearchCandidate, intent: TaskAssistCommandIntent) => {
       if (!globalAssistant) return;
       globalAssistant.setAssistantContext({
         entity_type: "opportunities",
@@ -578,6 +602,158 @@ export default function AICommandSurfaceShell() {
       });
     },
     [globalAssistant, setThread]
+  );
+
+  const runWorkflowAssistExplainForEntity = useCallback(
+    async (
+      submitted: string,
+      intent: WorkflowAssistReadIntentV1,
+      candidate: TaskAssistEntitySearchCandidate
+    ) => {
+      const appendRead = (args: {
+        payload: WorkflowAssistReadCardPayloadV1 | null;
+        error: WorkflowAssistErrorEnvelopeV1 | null;
+      }) => {
+        setThread((prev) =>
+          appendThreadTurn(prev, {
+            kind: "workflow_assist_read",
+            submittedCommand: submitted,
+            intent,
+            payload: args.payload,
+            error: args.error,
+          })
+        );
+      };
+      try {
+        const qs = new URLSearchParams({
+          entity_type: "opportunities",
+          entity_id: candidate.entity_id,
+          range: "30d",
+        });
+        const exRes = await fetch(`/api/admin/ai/workflow-assist/explain?${qs.toString()}`, {
+          credentials: "include",
+          headers: { Accept: "application/json" },
+        });
+        const exJson = (await exRes.json().catch(() => ({}))) as {
+          ok?: boolean;
+          explanation?: WorkflowAssistExplainResponseV1;
+          trace?: WorkflowOperationalTraceV1;
+          message?: string;
+          error?: string;
+        };
+        if (!exRes.ok || !exJson.ok || !exJson.explanation) {
+          const msg = exJson.message ?? exJson.error ?? `HTTP ${exRes.status}`;
+          appendRead({
+            payload: null,
+            error: workflowAssistErrorEnvelope(
+              exRes.status === 403 ? "forbidden" : "fetch_failed",
+              msg,
+              exRes.status
+            ),
+          });
+          return;
+        }
+        appendRead({
+          payload: buildWorkflowAssistExplainCardPayload(exJson.explanation, exJson.trace),
+          error: null,
+        });
+      } catch (e) {
+        appendRead({
+          payload: null,
+          error: workflowAssistErrorEnvelope(
+            "fetch_failed",
+            e instanceof Error ? e.message : "Workflow Assist explain failed."
+          ),
+        });
+      }
+    },
+    [setThread]
+  );
+
+  const confirmTaskAssistTarget = useCallback(
+    (
+      _turnId: string,
+      candidate: TaskAssistEntitySearchCandidate,
+      intent: TaskAssistCommandIntent | null,
+      workflowExplain?: { submittedCommand: string; intent: WorkflowAssistReadIntentV1 } | null
+    ) => {
+      if (workflowExplain) {
+        void runWorkflowAssistExplainForEntity(workflowExplain.submittedCommand, workflowExplain.intent, candidate);
+        return;
+      }
+      if (!globalAssistant || !intent) return;
+      if (needsMessageGoalClarification(intent)) {
+        pendingClarificationRef.current = { candidate, intent, awaiting: "message_goal" };
+        setThread((prev) =>
+          appendThreadTurn(prev, {
+            kind: "task_clarification",
+            clarificationKind: "message_goal",
+            candidate,
+            intent,
+          })
+        );
+        return;
+      }
+      const remKind = reminderClarificationKind(intent);
+      if (remKind) {
+        pendingClarificationRef.current = { candidate, intent, awaiting: remKind };
+        setThread((prev) =>
+          appendThreadTurn(prev, {
+            kind: "task_clarification",
+            clarificationKind: remKind,
+            candidate,
+            intent,
+          })
+        );
+        return;
+      }
+      proceedToTaskAssistAction(candidate, intent);
+    },
+    [globalAssistant, proceedToTaskAssistAction, runWorkflowAssistExplainForEntity, setThread]
+  );
+
+  const onClarificationChip = useCallback(
+    (
+      _turnId: string,
+      candidate: TaskAssistEntitySearchCandidate,
+      intent: TaskAssistCommandIntent,
+      kind: TaskAssistClarificationKind,
+      payload: { goalText?: string; timingText?: string; custom?: boolean }
+    ) => {
+      if (payload.custom) {
+        pendingClarificationRef.current = { candidate, intent, awaiting: kind };
+        setThread((prev) =>
+          appendThreadTurn(prev, {
+            kind: "assistant_notice",
+            text: clarificationPromptText(kind),
+          })
+        );
+        return;
+      }
+      let merged = mergeClarificationIntoIntent(intent, {
+        goalText: payload.goalText,
+        timingText: payload.timingText,
+      });
+      if (kind === "message_goal" && needsMessageGoalClarification(merged)) return;
+      if (kind === "reminder_what") {
+        const nextKind = reminderClarificationKind(merged);
+        if (nextKind) {
+          pendingClarificationRef.current = { candidate, intent: merged, awaiting: nextKind };
+          setThread((prev) =>
+            appendThreadTurn(prev, {
+              kind: "task_clarification",
+              clarificationKind: nextKind,
+              candidate,
+              intent: merged,
+            })
+          );
+          return;
+        }
+      }
+      pendingClarificationRef.current = null;
+      proceedToTaskAssistAction(candidate, merged);
+    },
+    [proceedToTaskAssistAction, setThread]
   );
 
   const onToggleTaskAssistMoreOptions = useCallback(
@@ -666,6 +842,20 @@ export default function AICommandSurfaceShell() {
             appendThreadTurn(prev, {
               kind: "error",
               text: formatTaskAssistEntitySearchNoMatchMessage(qEff),
+            })
+          );
+          return;
+        }
+        const fuzzyOnly =
+            list.length === 1 && list[0]!.matched_fields.some((f) => f === "fuzzy_match");
+        if (fuzzyOnly) {
+          const c = list[0]!;
+          setThread((prev) =>
+            appendThreadTurn(prev, {
+              kind: "fuzzy_entity_suggestion",
+              candidate: c,
+              queryToken: primaryTaskAssistEntitySearchToken(qEff),
+              intent,
             })
           );
           return;
@@ -771,6 +961,48 @@ export default function AICommandSurfaceShell() {
       try {
         if (isExplain) {
           if (!ambientEntity) {
+            const nameQ = extractExplainEntitySearchQuery(submitted);
+            if (nameQ) {
+              try {
+                const res = await fetchTaskAssistEntitySearch({
+                  q: nameQ,
+                  entity_type: "all",
+                  workspace_site_id: selectedSiteId,
+                });
+                const j = await readJson<{
+                  ok?: boolean;
+                  candidates?: TaskAssistEntitySearchCandidate[];
+                }>(res);
+                if (res.ok && j.ok !== false) {
+                  const list = dedupeTaskAssistEntitySearchCandidates(
+                    Array.isArray(j.candidates) ? j.candidates : []
+                  );
+                  const picked = pickExplainEntityCandidate(list);
+                  if (picked.kind === "single") {
+                    await runWorkflowAssistExplainForEntity(submitted, intent, picked.candidate);
+                    return;
+                  }
+                  if (picked.kind === "multiple") {
+                    setThread((prev) => {
+                      let next = appendThreadTurn(prev, {
+                        kind: "assistant_notice",
+                        text: `I found several records matching “${nameQ}”. Which opportunity should I explain workflows for?`,
+                      });
+                      next = appendThreadTurn(next, {
+                        kind: "candidate_results",
+                        candidates: list.filter((c) => c.entity_type === "opportunities").slice(0, 8),
+                        intent: null,
+                        workflowExplain: { submittedCommand: submitted, intent },
+                      });
+                      return next;
+                    });
+                    return;
+                  }
+                }
+              } catch {
+                /* fall through to insufficient-context trace */
+              }
+            }
             const trace = buildWorkflowOperationalTraceV1({
               entity_type: "",
               entity_id: "",
@@ -903,7 +1135,7 @@ export default function AICommandSurfaceShell() {
         });
       }
     },
-    [globalAssistant, setThread]
+    [globalAssistant, runWorkflowAssistExplainForEntity, selectedSiteId, setThread]
   );
 
   const runConfigLayoutAssistRoute = useCallback(
@@ -958,7 +1190,10 @@ export default function AICommandSurfaceShell() {
   );
 
   const proposeWorkflowAssistBody = useCallback(
-    async (body: WorkflowAssistProposeRequestV1) => {
+    async (
+      body: WorkflowAssistProposeRequestV1,
+      createInterpreted?: WorkflowAssistCreateProposeBuildV1["interpreted"]
+    ) => {
       const res = await fetch("/api/admin/ai/workflow-assist/propose", {
         method: "POST",
         credentials: "include",
@@ -985,11 +1220,19 @@ export default function AICommandSurfaceShell() {
       setThread((prev) =>
         appendThreadTurn(prev, {
           kind: "action_card",
-          card: { type: "workflow_assist_proposal", suggestion },
+          card: { type: "workflow_assist_proposal", suggestion, createInterpreted },
         })
       );
     },
     [setThread]
+  );
+
+  const runWorkflowAssistCreateRoute = useCallback(
+    async (submitted: string, createIntent: WorkflowAssistCreateIntentV1) => {
+      const built = buildWorkflowAssistCreateProposeFromIntent(createIntent, submitted);
+      await proposeWorkflowAssistBody(built.request, built.interpreted);
+    },
+    [proposeWorkflowAssistBody]
   );
 
   const workflowAssistMutation = useMemo<WorkflowAssistThreadMutationHandlersV1>(
@@ -1031,6 +1274,37 @@ export default function AICommandSurfaceShell() {
     queueMicrotask(() => inputRef.current?.focus());
 
     setThread((prev) => appendThreadTurn(prev, { kind: "user_message", text: cmd }));
+
+    const pending = pendingClarificationRef.current;
+    if (pending) {
+      const merged = mergeClarificationIntoIntent(pending.intent, {
+        goalText:
+            pending.awaiting === "message_goal" || pending.awaiting === "reminder_what" ? cmd : undefined,
+        timingText: pending.awaiting === "reminder_when" ? cmd : undefined,
+      });
+      if (pending.awaiting === "message_goal" && needsMessageGoalClarification(merged)) {
+        return;
+      }
+      if (pending.awaiting === "reminder_what") {
+        const nextKind = reminderClarificationKind(merged);
+        if (nextKind) {
+          pendingClarificationRef.current = { candidate: pending.candidate, intent: merged, awaiting: nextKind };
+          setThread((prev) =>
+            appendThreadTurn(prev, {
+              kind: "task_clarification",
+              clarificationKind: nextKind,
+              candidate: pending.candidate,
+              intent: merged,
+            })
+          );
+          return;
+        }
+      }
+      pendingClarificationRef.current = null;
+      proceedToTaskAssistAction(pending.candidate, merged);
+      return;
+    }
+
     setBusy(true);
 
     const routed = routeCommandSurface(cmd, {
@@ -1042,6 +1316,10 @@ export default function AICommandSurfaceShell() {
     try {
       switch (routed.route) {
         case "workflow_assist": {
+          if (routed.workflowAssistCreateIntent) {
+            await runWorkflowAssistCreateRoute(cmd, routed.workflowAssistCreateIntent);
+            break;
+          }
           const intent = routed.workflowAssistReadIntent;
           if (!intent) {
             setThread((prev) => appendThreadTurn(prev, { kind: "workflow_notice" }));
@@ -1078,9 +1356,36 @@ export default function AICommandSurfaceShell() {
     globalAssistant,
     runConfigLayoutAssistRoute,
     runJobLayoutRoute,
+    proceedToTaskAssistAction,
     runTaskAssistRoute,
+    runWorkflowAssistCreateRoute,
     runWorkflowAssistRoute,
   ]);
+
+  useEffect(() => {
+    const el = threadScrollRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      userScrolledUpRef.current = el.scrollHeight - el.scrollTop - el.clientHeight > 48;
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, [threadExpanded]);
+
+  useEffect(() => {
+    const el = threadScrollRef.current;
+    if (!el || !threadExpanded) return;
+    const last = thread.turns[thread.turns.length - 1];
+    const force =
+        last?.kind === "user_message" ||
+        last?.kind === "action_card" ||
+        last?.kind === "task_clarification" ||
+        last?.kind === "fuzzy_entity_suggestion";
+    if (!force && userScrolledUpRef.current) return;
+    requestAnimationFrame(() => {
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    });
+  }, [thread.turns, threadExpanded, busy]);
 
   const applyJobLayoutCard = useCallback(
     async (turnId: string) => {
@@ -1298,7 +1603,7 @@ export default function AICommandSurfaceShell() {
             </div>
           ) : null}
           {threadExpanded ? (
-            <div className="max-h-[min(52vh,440px)] overflow-y-auto rounded-b-none">
+            <div ref={threadScrollRef} className="max-h-[min(52vh,440px)] overflow-y-auto rounded-b-none">
               {busy && thread.turns[thread.turns.length - 1]?.kind === "user_message" ? (
                 <div className="px-3 py-2 text-[11px]" style={{ color: CMD.textSupporting }}>
                   Working…
@@ -1309,6 +1614,8 @@ export default function AICommandSurfaceShell() {
                 busy={busy}
                 onPickCandidate={(turnId, candidate, intent) => confirmTaskAssistTarget(turnId, candidate, intent)}
                 onConfirmCandidate={confirmTaskAssistTarget}
+                onConfirmFuzzySuggestion={(_turnId, candidate, intent) => confirmTaskAssistTarget("", candidate, intent)}
+                onClarificationChip={onClarificationChip}
                 onToggleActionCard={(turnId) => setThread((prev) => toggleActionCardExpanded(prev, turnId))}
                 onToggleTaskAssistMoreOptions={onToggleTaskAssistMoreOptions}
                 renderJobLayoutCardActions={renderJobLayoutCardActions}

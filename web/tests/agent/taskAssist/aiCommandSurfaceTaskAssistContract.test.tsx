@@ -48,6 +48,8 @@ describe("AICommandSurfaceShell Interaction Layer V1", () => {
         expect(threadSrc).toContain('case "target_confirmed"');
         expect(threadSrc).toContain("return null");
         expect(threadSrc).toContain("autoPropose");
+        expect(threadSrc).toContain("TaskAssistClarificationCard");
+        expect(threadSrc).toContain("fuzzy_entity_suggestion");
     });
 
     it("thread renders workflow assist read + proposal action wiring", () => {
@@ -75,6 +77,10 @@ describe("AICommandSurfaceShell Interaction Layer V1", () => {
         expect(shellSrc).toContain("dedupeTaskAssistEntitySearchCandidates");
         expect(shellSrc).toContain("I found");
         expect(shellSrc).toContain("Which one?");
+        expect(shellSrc).toContain("pendingClarificationRef");
+        expect(shellSrc).toContain("needsMessageGoalClarification");
+        expect(shellSrc).toContain("fuzzy_entity_suggestion");
+        expect(shellSrc).toContain("threadScrollRef");
     });
 
     it("exports stable focus event name for GlobalAssistantContext", () => {
