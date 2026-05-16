@@ -4,6 +4,12 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useParams } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
+import {
+    commitWorkUnitLaneQueryUrl,
+    logAdminV2RouterNavigation,
+    queueParamFromWindow,
+    readWorkUnitUrlSearchSnapshot,
+} from "@/lib/adminV2/workUnitLaneQueryUrl";
 import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import WorkUnitWorkspace from "@/app/adminV2/components/workspace/shells/WorkUnitWorkspace";
 import { AutomationWorkflowsBlock } from "@/app/adminV2/components/workspace/blocks/AutomationWorkflowsBlock";
@@ -132,34 +138,6 @@ function expandNeedsAttentionQueueSummariesForPills(
         }
     }
     return out;
-}
-
-function queueParamFromWindow(): string {
-    if (typeof window === "undefined") return "";
-    try {
-        return new URL(window.location.href).searchParams.get("queue")?.trim() ?? "";
-    } catch {
-        return "";
-    }
-}
-
-function readWorkUnitUrlSearchSnapshot(): URLSearchParams {
-    if (typeof window === "undefined") return new URLSearchParams();
-    try {
-        return new URLSearchParams(window.location.search);
-    } catch {
-        return new URLSearchParams();
-    }
-}
-
-/** Shallow lane query sync — preserves Next `history.state`; avoids App Router navigations that remount this page. */
-function replaceWorkUnitBrowserSearch(next: URLSearchParams, onCommitted?: () => void): void {
-    if (typeof window === "undefined") return;
-    const path = window.location.pathname;
-    const qs = next.toString();
-    const url = qs ? `${path}?${qs}` : path;
-    window.history.replaceState(window.history.state, "", url);
-    onCommitted?.();
 }
 
 /** Lane selection from definition + URL only — before exact summaries (Phase 3.1). */
@@ -350,6 +328,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const workUnitId = workspaceRouteParam(params.workUnitId);
     const searchParams = useSearchParams();
     const router = useRouter();
+    const legacyFilterStatusKeys = (searchParams?.get("status_keys") ?? "").trim();
+    const legacyFilterAttentionReason = (searchParams?.get("attention_reason") ?? "").trim();
+    const legacyFilterAttentionReasonCode = (searchParams?.get("attention_reason_code") ?? "").trim();
+    const legacyFilterActivitySignalKey = (searchParams?.get("activity_signal_key") ?? "").trim();
     const { orgId, principalUserId, accessScopeFingerprint } = useWorkspaceOrg();
     const siteFilter = useWorkspaceSiteFilter();
     const selectedSiteId = siteFilter?.selectedSiteId ?? null;
@@ -398,6 +380,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const bootstrapWuRef = useRef<WorkUnitRow | null>(null);
     const firstUsefulPaintMarkedRef = useRef(false);
     const seededWorkUnitShellRef = useRef(false);
+    /** User changed lane via tabs/buckets — bootstrap must not overwrite selection when summaries arrive. */
+    const userLaneTouchedRef = useRef(false);
     /** Bumped on shallow `history.replaceState` / `popstate` so lane query mirrors `window.location` without Next navigation. */
     const [wuLaneSearchRev, setWuLaneSearchRev] = useState(0);
     /** Queue-tab interaction: emit `queue_tab_rows_ready` once when row fetch finishes. */
@@ -584,57 +568,63 @@ export default function AdminV2OpportunityWorkUnitPage() {
     }, [queueDef, queueSummaries, allRecordsQueueKey]);
 
     const unmappedOnly = useMemo(() => {
-        const sp =
-            typeof window !== "undefined"
-                ? readWorkUnitUrlSearchSnapshot()
-                : new URLSearchParams(searchParams?.toString() ?? "");
+        const sp = readWorkUnitUrlSearchSnapshot();
         return sp.get("unmapped")?.trim() === "1";
-    }, [wuLaneSearchRev, searchParams, departmentId, workUnitId]);
+    }, [wuLaneSearchRev]);
 
     const attentionBucketKeyLive = useMemo(() => {
-        const sp =
-            typeof window !== "undefined"
-                ? readWorkUnitUrlSearchSnapshot()
-                : new URLSearchParams(searchParams?.toString() ?? "");
+        const sp = readWorkUnitUrlSearchSnapshot();
         return (sp.get("attention_bucket") ?? "").trim();
-    }, [wuLaneSearchRev, searchParams]);
+    }, [wuLaneSearchRev]);
 
     selectedQueueKeyRef.current = selectedQueueKey;
     unmappedOnlyRef.current = unmappedOnly;
     const attentionBucketKeyRef = useRef("");
     attentionBucketKeyRef.current = attentionBucketKeyLive;
 
+    const bumpWuLaneSearchRev = useCallback(() => {
+        setWuLaneSearchRev((x) => x + 1);
+    }, []);
+
     const commitLaneQueryUrl = useCallback(
-        (opts: { queueKey: string; unmappedActive: boolean; attentionBucket?: string }) => {
-            if (typeof window === "undefined") return;
-            const sp = readWorkUnitUrlSearchSnapshot();
-            sp.set("queue", opts.queueKey);
-            if (opts.unmappedActive) sp.set("unmapped", "1");
-            else sp.delete("unmapped");
-            const na = opts.queueKey.trim().toLowerCase() === "needs_attention";
-            if (!na) {
-                sp.delete("attention_bucket");
-            } else if (opts.attentionBucket !== undefined) {
-                const v = opts.attentionBucket.trim();
-                if (v) sp.set("attention_bucket", v);
-                else sp.delete("attention_bucket");
-            }
-            replaceWorkUnitBrowserSearch(sp, () => setWuLaneSearchRev((x) => x + 1));
+        (opts: { queueKey: string; unmappedActive: boolean; attentionBucket?: string; caller?: string }) => {
+            const wrote = commitWorkUnitLaneQueryUrl(
+                {
+                    queueKey: opts.queueKey,
+                    unmappedActive: opts.unmappedActive,
+                    attentionBucket: opts.attentionBucket,
+                    caller: opts.caller ?? "commitLaneQueryUrl",
+                    workUnitId,
+                },
+                bumpWuLaneSearchRev
+            );
+            return wrote;
         },
-        []
+        [bumpWuLaneSearchRev, workUnitId]
     );
 
     const handleQueueTabChange = useCallback((nextKey: string, opts?: { unmappedActive?: boolean }) => {
         const unmappedActive = opts?.unmappedActive ?? false;
+        const prevKey = selectedQueueKeyRef.current;
+        const sp = readWorkUnitUrlSearchSnapshot();
+        const urlQueue = (sp.get("queue") ?? "").trim();
+        const urlUnmapped = sp.get("unmapped")?.trim() === "1";
+        if (prevKey === nextKey && urlQueue === nextKey && urlUnmapped === unmappedActive) {
+            return;
+        }
+        userLaneTouchedRef.current = true;
         if (typeof window !== "undefined" && typeof performance !== "undefined") {
             pendingQueueTabPerfRef.current = true;
             alloyPerfSet("queue_tab_change_start", performance.now());
         }
-        setSelectedQueueKey(nextKey);
+        if (prevKey !== nextKey) {
+            setSelectedQueueKey(nextKey);
+        }
         const na = nextKey.trim().toLowerCase() === "needs_attention";
         commitLaneQueryUrl({
             queueKey: nextKey,
             unmappedActive,
+            caller: "handleQueueTabChange",
             ...(na ? { attentionBucket: "" } : {}),
         });
     }, [commitLaneQueryUrl]);
@@ -674,6 +664,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         queueRowsBufferRef.current = [];
         queueRowClientCacheRef.current.clear();
         primaryLaneRowsSettledOnceRef.current = false;
+        userLaneTouchedRef.current = false;
     }, [departmentId, workUnitId]);
 
     useEffect(() => {
@@ -732,17 +723,14 @@ export default function AdminV2OpportunityWorkUnitPage() {
         return () => window.removeEventListener(ADMIN_V2_WORKFLOW_AUTOMATION_REFRESH, onRefresh);
     }, [departmentId, workUnitId, refreshWorkflowPanels]);
 
-    /** Browser back/forward: sync selected queue + `unmapped` from the real location (shallow tabs do not update Next `searchParams`). */
+    /** Browser back/forward + shallow lane commits: sync selection from `window.location` (not Next `searchParams`). */
     useEffect(() => {
         if (!queueSummaries?.length) return;
-        const sp =
-            typeof window !== "undefined"
-                ? readWorkUnitUrlSearchSnapshot()
-                : new URLSearchParams(searchParams?.toString() ?? "");
+        const sp = readWorkUnitUrlSearchSnapshot();
         const qFromUrl = (sp.get("queue") ?? "").trim();
         if (!qFromUrl || !queueSummaries.some((x) => x.key === qFromUrl)) return;
         setSelectedQueueKey((prev) => (prev !== qFromUrl ? qFromUrl : prev));
-    }, [queueSummaries, wuLaneSearchRev, searchParams]);
+    }, [queueSummaries, wuLaneSearchRev]);
 
     const loadWorkUnitDeferredSupplement = useCallback(async () => {
         if (!workUnitId || !departmentId) return;
@@ -1130,11 +1118,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
         (bucketKey: string | null) => {
             if (!workUnitId) return;
             const next = (bucketKey ?? "").trim();
+            userLaneTouchedRef.current = true;
             setSelectedQueueKey("needs_attention");
             commitLaneQueryUrl({
                 queueKey: "needs_attention",
                 unmappedActive: false,
                 attentionBucket: bucketKey ?? "",
+                caller: "handleAttentionBucketSelect",
             });
             void fetchQueueItems(workUnitId, "needs_attention", null, {
                 force: true,
@@ -1295,7 +1285,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     setWuPlacementRows(undefined);
                     setWuScopeHasPlacements(false);
                     if (qFromUrlEffective) setSelectedQueueKey(qFromUrlEffective);
-                } else if (!cancelled && qFromUrlEffective) {
+                } else if (!cancelled && qFromUrlEffective && !userLaneTouchedRef.current) {
                     setSelectedQueueKey(qFromUrlEffective);
                 }
 
@@ -1465,7 +1455,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 });
                             }
                             const initial = deriveSelectedQueueKeyFromSummaries(wu, qs, qFromUrlEffective);
-                            if (initial) {
+                            if (initial && !userLaneTouchedRef.current) {
                                 setSelectedQueueKey(initial);
                                 if (rowKeyUsedForBootstrap === null) {
                                     void fetchQueueItems(workUnitId, initial, null);
@@ -2466,16 +2456,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const model = useMemo(() => {
         if (!workUnit || !dept || !oq) return null;
         const rawItems = oq.items ?? [];
-        const statusKeysRaw = (searchParams?.get("status_keys") ?? "").trim();
+        const statusKeysRaw = legacyFilterStatusKeys;
         const statusKeys = statusKeysRaw
             ? statusKeysRaw
                   .split(",")
                   .map((s) => s.trim().toLowerCase())
                   .filter(Boolean)
             : [];
-        const attentionReason = (searchParams?.get("attention_reason") ?? "").trim();
-        const attentionReasonCode = (searchParams?.get("attention_reason_code") ?? "").trim();
-        const activitySignalKey = (searchParams?.get("activity_signal_key") ?? "").trim();
+        const attentionReason = legacyFilterAttentionReason;
+        const attentionReasonCode = legacyFilterAttentionReasonCode;
+        const activitySignalKey = legacyFilterActivitySignalKey;
 
         const filteredItems = rawItems.filter((it) => {
             if (statusKeys.length) {
@@ -2524,7 +2514,19 @@ export default function AdminV2OpportunityWorkUnitPage() {
             rightRailResolved: enrollmentRightRailResolved ?? [],
             rowPreviewFieldLabels: queueUi?.row_preview.fieldLabels ?? null,
         });
-    }, [departmentId, dept, enrollmentRightRailResolved, oq, opportunityQueueRowActions, queueUi, searchParams, workUnit]);
+    }, [
+        departmentId,
+        dept,
+        enrollmentRightRailResolved,
+        oq,
+        opportunityQueueRowActions,
+        queueUi,
+        legacyFilterStatusKeys,
+        legacyFilterAttentionReason,
+        legacyFilterAttentionReasonCode,
+        legacyFilterActivitySignalKey,
+        workUnit,
+    ]);
 
     const workUnitKpiContext = useMemo(() => {
         if (!workUnit?.id || !departmentId) return null;
@@ -2741,6 +2743,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     return;
                 }
                 if (er?.kind === "navigate" && er.href) {
+                    logAdminV2RouterNavigation("router.push", "workUnitQueueAction", er.href, workUnitId);
                     router.push(er.href);
                     return;
                 }

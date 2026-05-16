@@ -2,6 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import {
+  ADMINV2_WORK_UNIT_LANE_QUERY_EVENT,
+  workUnitDocumentUrlKey,
+} from "@/lib/adminV2/workUnitLaneQueryUrl";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import { createClient } from "@/lib/supabaseClient";
 import { palette, neutral, derived } from "@/styles/tokens/colors";
@@ -81,6 +85,8 @@ export default function TopNavBar() {
   const router = useRouter();
   const [quickMessageOpen, setQuickMessageOpen] = useState(false);
   const [tasksModalOpen, setTasksModalOpen] = useState(false);
+  /** Mirrors shallow lane `history.replaceState` (Next `searchParams` stays stale on work-unit pages). */
+  const [workUnitLaneUrlKey, setWorkUnitLaneUrlKey] = useState("");
   // NOTE:
   // Header-level unread indicators removed in V1.
   // Future notification system will use a dedicated bell icon with aggregated counts.
@@ -110,6 +116,18 @@ export default function TopNavBar() {
 
   const normalizedPath = useMemo(() => normalizeAdminPath(pathname), [pathname]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const sync = () => setWorkUnitLaneUrlKey(workUnitDocumentUrlKey());
+    sync();
+    window.addEventListener("popstate", sync);
+    window.addEventListener(ADMINV2_WORK_UNIT_LANE_QUERY_EVENT, sync);
+    return () => {
+      window.removeEventListener("popstate", sync);
+      window.removeEventListener(ADMINV2_WORK_UNIT_LANE_QUERY_EVENT, sync);
+    };
+  }, [normalizedPath]);
+
   const isQueueContext = WORK_UNIT_QUEUE_PATH.test(normalizedPath);
   const isWorkspaceOverview =
     (normalizedPath === "/adminV2/workspace" ||
@@ -120,11 +138,14 @@ export default function TopNavBar() {
 
   const queueHref = useMemo(() => {
     if (isQueueContext) {
+      if (typeof window !== "undefined" && workUnitLaneUrlKey.startsWith(normalizedPath)) {
+        return workUnitLaneUrlKey;
+      }
       const qs = searchParams?.toString() ?? "";
       return qs ? `${normalizedPath}?${qs}` : normalizedPath;
     }
     return "/adminV2/workspace";
-  }, [isQueueContext, normalizedPath, searchParams]);
+  }, [isQueueContext, normalizedPath, searchParams, workUnitLaneUrlKey]);
 
   const tabStyle = (active: boolean) =>
     active
