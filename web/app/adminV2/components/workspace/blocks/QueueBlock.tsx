@@ -20,6 +20,7 @@ import { DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS } from "@/lib/ui-v2/queueUiConfi
 import { normalizePreviewLooseDateTokens } from "@/lib/adminFormatters";
 import { CRM_COMPACT_VALUE_DOT_SEP } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
 import { QueueRowPlacementPriorityStrip } from "@/app/adminV2/components/workspace/blocks/QueueRowPlacementPriorityStrip";
+import { WorkUnitQueueCompactRowSkeleton } from "@/components/admin/workspace/WorkUnitQueueCompactRowSkeleton";
 import {
     formatPlacementGroupHeaderTitle,
     placementWaitlistGroupRowMode,
@@ -937,16 +938,12 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
           aria-busy={Boolean(queue.rowsRefreshing)}
           role="list"
         >
-        {queue.rowsLoading && queue.items.length === 0 ? (
-          <li className="adminv2-ws-wu-queue-empty-wrap" role="status" aria-busy="true" aria-label="Loading queue rows">
-            <div className="adminv2-ws-wu-queue-empty-panel">
-              <p className="adminv2-ws-wu-queue-empty-title">Loading…</p>
-              {queue.laneQueueLabel?.trim() ? (
-                <p className="adminv2-ws-wu-queue-empty-queue text-alloy-forge/55">{queue.laneQueueLabel.trim()}</p>
-              ) : null}
-            </div>
-          </li>
-        ) : !queue.rowsLoading && queue.items.length === 0 ? (
+        {queue.rowsLoading && queue.items.length === 0
+          ? Array.from({ length: 6 }, (_, i) => (
+              <WorkUnitQueueCompactRowSkeleton key={`queue-row-skel-${i}`} variant="standard" />
+            ))
+          : null}
+        {!queue.rowsLoading && queue.items.length === 0 ? (
           <li className="adminv2-ws-wu-queue-empty-wrap" role="status">
             <div className="adminv2-ws-wu-queue-empty-panel">
               <p className="adminv2-ws-wu-queue-empty-title">No records</p>

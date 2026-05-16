@@ -67,6 +67,8 @@ type Props = {
   kpiStripPlaceholder?: boolean;
   /** After background rollup replaces quick tile stats — soft opacity lift on department zone */
   workspaceRollupRefined?: boolean;
+  /** Cold load: skeleton department tiles before GET /api/admin/departments returns. */
+  departmentsPending?: boolean;
 };
 
 function formatInt(n: number | null | undefined): string {
@@ -98,6 +100,7 @@ export function WorkspaceRootShell({
   workspaceKpiStrip,
   kpiStripPlaceholder = false,
   workspaceRollupRefined = false,
+  departmentsPending = false,
 }: Props) {
   const displayName = (orgName && orgName.trim()) || "Your organization";
 
@@ -198,6 +201,8 @@ export function WorkspaceRootShell({
               workspaceBasePath={WORKSPACE_BASE}
               departments={departments}
               deptTileStats={deptTileStats}
+              deptTileStatsPending={departmentsPending || !workspaceRollupRefined}
+              departmentsPending={departmentsPending}
               tileVariant="workspaceRoot"
               omitOuterChrome
             />

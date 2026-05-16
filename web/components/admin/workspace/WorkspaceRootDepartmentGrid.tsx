@@ -39,6 +39,10 @@ type Props = {
     workspaceBasePath: string;
     departments: WorkspaceRootDepartmentRow[];
     deptTileStats?: WorkspaceRootDeptTileStats;
+    /** When true, reserve stats line height with a skeleton (no coarse→refined number flash). */
+    deptTileStatsPending?: boolean;
+    /** Cold load: render placeholder tiles when `departments` is still empty. */
+    departmentsPending?: boolean;
     /** `workspaceRoot`: larger tiles + stats lines (org workspace index). */
     tileVariant?: "default" | "workspaceRoot";
     /** When true, render only the department section (parent must supply `data-ws-surface="company"` + company v2 classes). */
@@ -53,6 +57,8 @@ export function WorkspaceRootDepartmentGrid({
     workspaceBasePath,
     departments,
     deptTileStats,
+    deptTileStatsPending = false,
+    departmentsPending = false,
     tileVariant = "default",
     omitOuterChrome = false,
 }: Props) {
@@ -67,6 +73,33 @@ export function WorkspaceRootDepartmentGrid({
                     : "adminv2-ws-company-v2-dept-grid"
             }
         >
+            {departmentsPending && departments.length === 0
+                ? Array.from({ length: 4 }, (_, i) => (
+                      <div
+                          key={`dept-tile-skel-${i}`}
+                          className={[
+                              "adminv2-ws-company-dept-tile pointer-events-none select-none",
+                              root ? "adminv2-ws-company-dept-tile--workspace-root" : "",
+                          ]
+                              .filter(Boolean)
+                              .join(" ")}
+                          data-ws-company-dept-tone="neutral"
+                          aria-busy="true"
+                      >
+                          <div className="adminv2-ws-company-dept-tile-head">
+                              <span className="block h-5 w-[min(72%,11rem)] rounded skeleton-pulse bg-alloy-stone/16" />
+                          </div>
+                          <span className="adminv2-ws-company-dept-tile-desc flex-1 block mt-2">
+                              <span className="block h-3.5 w-full max-w-[16rem] rounded skeleton-pulse bg-alloy-stone/12" />
+                              <span className="block h-3.5 w-[82%] max-w-[14rem] rounded skeleton-pulse bg-alloy-stone/10 mt-1.5" />
+                          </span>
+                          <div className="mt-auto pt-2 flex flex-col gap-1 min-h-[2.75rem]">
+                              <span className="inline-block h-3.5 w-[min(72%,9rem)] rounded skeleton-pulse bg-alloy-stone/16" />
+                              <span className="inline-block h-3 w-24 rounded skeleton-pulse bg-alloy-stone/10" />
+                          </div>
+                      </div>
+                  ))
+                : null}
             {departments.map((d) => {
                             const tone = alloyFamilyToWorkspaceTileTone(
                                 resolveVisualContext({
@@ -108,8 +141,12 @@ export function WorkspaceRootDepartmentGrid({
                                         <h3 className="adminv2-ws-company-dept-tile-name">{d.name}</h3>
                                     </div>
                                     <p className="adminv2-ws-company-dept-tile-desc flex-1">{desc}</p>
-                                    <div className="mt-auto pt-2 flex flex-col gap-1">
-                                        {statsLine ? (
+                                    <div className="mt-auto pt-2 flex flex-col gap-1 min-h-[2.75rem]">
+                                        {deptTileStatsPending ? (
+                                            <p className="text-xs font-semibold tabular-nums min-h-[1.125rem]" aria-busy="true">
+                                                <span className="inline-block h-3.5 w-[min(72%,9rem)] rounded skeleton-pulse bg-alloy-stone/16" />
+                                            </p>
+                                        ) : statsLine ? (
                                             <p className="text-xs font-semibold tabular-nums" style={{ color: neutral.textPrimary }}>
                                                 {statsLine}
                                             </p>

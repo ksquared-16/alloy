@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from "react";
 import { usePathname } from "next/navigation";
+import type { OpportunityDrawerQueuePreviewSeed } from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
 import type { OperationalVisualContext } from "@/lib/visualContext";
 
 /** Entity kinds that can open in the admin stack drawer (must match API + presentation registry usage). */
@@ -69,6 +70,8 @@ interface AdminDrawerState {
     defaultOpportunitySurface?: "quote_intake";
     /** Optional queue/work-unit scope for opportunity drawer header actions (see `OpportunityWorkspaceContext`). */
     opportunityWorkspaceContext?: OpportunityWorkspaceContext | null;
+    /** Queue row preview for immediate drawer header before entity GET returns. */
+    opportunityQueuePreviewSeed?: OpportunityDrawerQueuePreviewSeed | null;
 }
 
 export type DrawerStackItem = {
@@ -83,6 +86,7 @@ export type DrawerStackItem = {
     operationalVisualContext?: OperationalVisualContext;
     defaultOpportunitySurface?: "quote_intake";
     opportunityWorkspaceContext?: OpportunityWorkspaceContext | null;
+    opportunityQueuePreviewSeed?: OpportunityDrawerQueuePreviewSeed | null;
 };
 
 interface AdminDrawerContextValue {
@@ -104,6 +108,7 @@ interface AdminDrawerContextValue {
         operationalVisualContext?: OperationalVisualContext;
         defaultOpportunitySurface?: "quote_intake";
         opportunityWorkspaceContext?: OpportunityWorkspaceContext | null;
+        opportunityQueuePreviewSeed?: OpportunityDrawerQueuePreviewSeed | null;
     }) => void;
     goBack: () => void;
     closeDrawer: () => void;
@@ -140,6 +145,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
             operationalVisualContext?: OperationalVisualContext;
             defaultOpportunitySurface?: "quote_intake";
             opportunityWorkspaceContext?: OpportunityWorkspaceContext | null;
+            opportunityQueuePreviewSeed?: OpportunityDrawerQueuePreviewSeed | null;
         }) => {
             setDrawer((prev) => {
                 const prevType = prev.type;
@@ -159,6 +165,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                             operationalVisualContext: prev.operationalVisualContext,
                             defaultOpportunitySurface: prev.defaultOpportunitySurface,
                             opportunityWorkspaceContext: prev.opportunityWorkspaceContext,
+                            opportunityQueuePreviewSeed: prev.opportunityQueuePreviewSeed,
                         },
                     ]);
                 }
@@ -175,6 +182,8 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                     defaultOpportunitySurface: params.defaultOpportunitySurface,
                     opportunityWorkspaceContext:
                         params.type === "opportunities" ? params.opportunityWorkspaceContext ?? null : null,
+                    opportunityQueuePreviewSeed:
+                        params.type === "opportunities" ? params.opportunityQueuePreviewSeed ?? null : null,
                 };
             });
         },
@@ -198,6 +207,7 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
                     operationalVisualContext: item.operationalVisualContext,
                     defaultOpportunitySurface: item.defaultOpportunitySurface,
                     opportunityWorkspaceContext: item.opportunityWorkspaceContext,
+                    opportunityQueuePreviewSeed: item.opportunityQueuePreviewSeed,
                 });
             }
             return next;

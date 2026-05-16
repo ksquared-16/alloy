@@ -120,7 +120,7 @@ import {
     type PaymentRowLike,
 } from "@/lib/admin/jobPaymentSummary";
 import { useRecordChromeConfig } from "@/hooks/useRecordChromeConfig";
-import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
+import { dedupeAdminFetch, dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { prefetchWorkspaceChildcareInquiryOptionSets } from "@/lib/workspace/workspaceChildcareInquiryOptionSets";
 import { adminEntityRefetchShouldBlockDrawerShell } from "@/lib/ui-v2/adminV2EntityDrawerLoading";
@@ -894,6 +894,20 @@ function DrawerWorkflowHeaderQuickActionsSkeleton() {
             <DrawerQuietSkeletonBar className="h-9 w-[5.25rem]" />
             <DrawerQuietSkeletonBar className="h-9 w-24" />
             <DrawerQuietSkeletonBar className="h-9 w-28" />
+        </div>
+    );
+}
+
+function DrawerRecordTabStripGateSkeleton({ tabCount = 4 }: { tabCount?: number }) {
+    return (
+        <div
+            className="flex min-h-[2.875rem] flex-wrap gap-0.5 rounded-lg border border-admin-border bg-white p-0.5"
+            aria-busy="true"
+            aria-label="Loading record tabs"
+        >
+            {Array.from({ length: tabCount }, (_, i) => (
+                <DrawerQuietSkeletonBar key={i} className="h-9 min-w-[4.25rem] flex-1 max-w-[6.5rem] rounded-md" />
+            ))}
         </div>
     );
 }
@@ -1921,7 +1935,7 @@ export default function AdminEntityDrawer() {
             alloyPerfSet("drawer_entity_request_start", now);
             if (drawer.type === "opportunities") alloyPerfSet("drawer_opportunity_visible_req", now);
         }
-        fetch(url)
+        dedupeAdminFetch(url, workspaceDataFetchInit())
             .then((res) => {
                 captureDrawerEntityResponsePerf(res);
                 if (!res.ok) throw new Error(res.status === 404 ? "Not found" : "Failed to load");
@@ -1966,7 +1980,7 @@ export default function AdminEntityDrawer() {
         if (typeof window !== "undefined" && typeof performance !== "undefined") {
             alloyPerfSet("drawer_opportunity_full_req", performance.now());
         }
-        fetch(url, { signal: ac.signal })
+        dedupeAdminFetch(url, { ...workspaceDataFetchInit(), signal: ac.signal })
             .then((res) => {
                 captureDrawerEntityResponsePerf(res);
                 if (!res.ok) throw new Error(res.status === 404 ? "Not found" : "Failed to load");
@@ -5080,10 +5094,19 @@ export default function AdminEntityDrawer() {
         drawer.type === "opportunities" &&
         !!drawer.id &&
         drawer.id !== "new";
+    const opportunityDrawerQueueBootstrap =
+        drawer.type === "opportunities" &&
+        !!drawer.id &&
+        drawer.id !== "new" &&
+        Boolean(drawer.opportunityQueuePreviewSeed);
     /** Workflow chrome, or any existing opportunity while record layout fetch is in flight — keep inquiry-shaped header/tabs (no classic subtitle swap). */
     const opportunityInquiryWorkflowDrawerShell =
         opportunityInquiryWorkflowDrawer ||
-        (drawer.type === "opportunities" && !!drawer.id && drawer.id !== "new" && !recordChromeOpportunity.configResolved);
+        (drawer.type === "opportunities" &&
+            !!drawer.id &&
+            drawer.id !== "new" &&
+            !recordChromeOpportunity.configResolved &&
+            !opportunityDrawerQueueBootstrap);
     /** Centered record modal for jobs and for linked entities opened from a job (same Admin V2 stack). */
     const useAdminV2RecordModalPresentation =
         drawerShellVariant === "adminV2" &&
@@ -5896,6 +5919,13 @@ export default function AdminEntityDrawer() {
         !!overviewData &&
         !(overviewData as { _create?: boolean })._create;
 
+    const opportunityDrawerTabsPending =
+        drawer.type === "opportunities" &&
+        !!drawer.id &&
+        drawer.id !== "new" &&
+        !(overviewData && (overviewData as { _create?: boolean })._create) &&
+        !opportunityDrawerShellSettled;
+
     /** Inquiry workflow (or record-chrome loading for an existing opportunity): fixed top tabs; no Related. */
     const drawerTabStripKeys = useMemo((): DrawerTabKey[] => {
         if (drawer.type !== "opportunities" || !drawer.id || drawer.id === "new") {
@@ -5905,7 +5935,7 @@ export default function AdminEntityDrawer() {
             return tabList;
         }
         if (!opportunityDrawerShellSettled) {
-            return OPPORTUNITY_INQUIRY_WORKFLOW_TAB_STRIP;
+            return [];
         }
         if (opportunityRecordGateWorkflowLayout) {
             return OPPORTUNITY_INQUIRY_WORKFLOW_TAB_STRIP;
@@ -7957,11 +7987,14 @@ export default function AdminEntityDrawer() {
                 onSelect={setDrawerTab}
                 tabButtonsDisabled={drawerGateLoading}
             />
+        ) : opportunityDrawerTabsPending && isOpportunityRecordModalTarget ? (
+            <DrawerRecordTabStripGateSkeleton tabCount={OPPORTUNITY_INQUIRY_WORKFLOW_TAB_STRIP.length} />
         ) : (drawerReady || drawerGateLoading) &&
           ["jobs", "schedules", "opportunities", "customers", "contacts", "customer_members", "persons", "vendors", "locations", "payments", "discount_redemptions", "service_offerings", "service_plan_templates", "addons", "subscriptions", "documents"].includes(
               drawer.type,
           ) &&
-          !(overviewData && (overviewData as { _create?: boolean })._create) ? (
+          !(overviewData && (overviewData as { _create?: boolean })._create) &&
+          drawerTabStripKeys.length > 0 ? (
             <div className="flex min-h-[2.875rem] flex-wrap gap-0.5 rounded-lg border border-admin-border bg-white p-0.5">
                 {drawerTabStripKeys.map((tab) => (
                     <button
@@ -7990,14 +8023,20 @@ export default function AdminEntityDrawer() {
                   .filter(Boolean)
                   .join(" · ") || undefined
             : undefined;
+    const opportunityQueuePreviewSeed = drawer.opportunityQueuePreviewSeed;
     const drawerTitleResolved =
         isOpportunityRecordModalTarget &&
         drawer.type === "opportunities" &&
         drawer.id !== "new" &&
         !opportunityDrawerShellSettled &&
         !error
-            ? "Inquiry"
-            : drawerGateLoading
+            ? opportunityQueuePreviewSeed?.title?.trim() ||
+              (opportunityDrawerQueueBootstrap
+                  ? `Loading ${getEntityLabel(labels, drawer.type, "singular").toLowerCase()}…`
+                  : "Inquiry")
+            : drawerGateLoading && opportunityQueuePreviewSeed?.title?.trim()
+              ? opportunityQueuePreviewSeed.title.trim()
+              : drawerGateLoading
               ? `Loading ${drawer.type ? getEntityLabel(labels, drawer.type, "singular").toLowerCase() : "record"}…`
               : drawer.type === "opportunities" &&
                   overviewData &&
@@ -8031,7 +8070,10 @@ export default function AdminEntityDrawer() {
                     : title != null
                       ? String(title)
                       : "—";
-    const headerSubtitleBase = jobV2MetaSubtitle ?? drawerHeaderRecordSubtitle ?? undefined;
+    const headerSubtitleBase =
+        drawerGateLoading && drawer.type === "opportunities" && opportunityQueuePreviewSeed?.subtitle?.trim()
+            ? opportunityQueuePreviewSeed.subtitle.trim()
+            : jobV2MetaSubtitle ?? drawerHeaderRecordSubtitle ?? undefined;
     const workflowCompactRecordNum =
         drawer.type === "opportunities" && opportunityInquiryWorkflowDrawer && typeof headerSubtitleBase === "string"
             ? (() => {
@@ -8099,12 +8141,13 @@ export default function AdminEntityDrawer() {
     const opportunityWorkflowHeaderChromePending =
         drawer.type === "opportunities" &&
         opportunityInquiryWorkflowDrawerShell &&
+        !opportunityDrawerQueueBootstrap &&
         (drawerGateLoading || opportunityRecordChromePending || opportunityResolvedHeaderLoading);
 
     const headerSubtitleForDrawer =
         opportunityWorkflowHeaderChromePending ? (
             <DrawerOpportunityWorkflowSubtitleGateSkeleton />
-        ) : drawerGateLoading ? (
+        ) : drawerGateLoading && !(drawer.type === "opportunities" && opportunityQueuePreviewSeed?.subtitle?.trim()) ? (
             <DrawerSubtitleGateSkeleton />
         ) : (
             headerSubtitleResolved
@@ -8201,14 +8244,14 @@ export default function AdminEntityDrawer() {
                         modalOpportunityWorkflow={
                             !!(
                                 opportunityRecordChromeBodyShell &&
-                                (opportunityInquiryWorkflowDrawer || opportunityRecordChromePending)
+                                opportunityInquiryWorkflowDrawer
                             )
                         }
                         modalOpportunityClassic={
                             !!(
                                 opportunityRecordChromeBodyShell &&
-                                recordChromeOpportunity.configResolved &&
-                                !opportunityInquiryWorkflowDrawer
+                                ((recordChromeOpportunity.configResolved && !opportunityInquiryWorkflowDrawer) ||
+                                    (opportunityDrawerQueueBootstrap && opportunityRecordChromePending))
                             )
                         }
                         recordGateOpportunityWorkflowShape={recordGateOpportunityWorkflowShape}

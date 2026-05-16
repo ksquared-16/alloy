@@ -26,7 +26,8 @@ import {
 import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { useAdminViewerTimezone } from "@/contexts/AdminViewerTimezoneContext";
-import { AdminV2RouteLoadingState } from "@/components/admin/workspace/AdminV2RouteLoadingState";
+import { KpiStripSkeleton } from "@/components/admin/workspace/KpiStripSkeleton";
+import { WorkUnitQueueCompactRowSkeletonList } from "@/components/admin/workspace/WorkUnitQueueCompactRowSkeleton";
 import type { ResolvedActionForClient, ResolvedActionsBySlot } from "@/lib/admin/actions/types";
 import { applyRegistryResolvedActionClient } from "@/lib/admin/actions/applyRegistryResolvedActionClient";
 import { REGISTRY_RIGHT_RAIL_ACTION_ID_PREFIX } from "@/lib/workspace/viewModels/enrollmentRightRailMerge";
@@ -59,7 +60,11 @@ import {
     type QueueUiRowPreviewAction,
     type QueueUiRowPreviewField,
 } from "@/lib/ui-v2/queueUiConfig";
-import { dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
+import {
+    findQueuePreviewItemById,
+    opportunityDrawerSeedFromQueueItem,
+} from "@/lib/admin/opportunityDrawerQueuePreviewSeed";
+import { dedupeAdminFetch, dedupeAdminFetchWithTtl } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { alloyPerfSet } from "@/lib/perf/alloyPerfGlobal";
 import { UpdateStatusAddNoteModal } from "@/components/admin/opportunity/actions/UpdateStatusAddNoteModal";
 import { ContactAttemptedModal } from "@/components/admin/opportunity/actions/ContactAttemptedModal";
@@ -390,6 +395,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const pendingQueueTabPerfRef = useRef(false);
     /** Last settled preview rows — keeps list visible while `queueItems` is briefly null during lane changes. */
     const queueRowsBufferRef = useRef<QueuePreviewItemVm[]>([]);
+    /** Latest rendered queue row VMs — used to seed opportunity drawer header on open. */
+    const queueDisplayItemsRef = useRef<QueuePreviewItemVm[]>([]);
     const queueRowClientCacheRef = useRef(new Map<string, QueueRowClientCacheBucket<QueueItemsResult>>());
     const selectedQueueKeyRef = useRef<string | null>(null);
     const laneUnmappedOnlyRef = useRef(false);
@@ -761,7 +768,10 @@ export default function AdminV2OpportunityWorkUnitPage() {
         }
 
         try {
-            const res = await fetch(`/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`, init);
+            const res = await dedupeAdminFetch(
+                `/api/admin/work-units?department_id=${encodeURIComponent(departmentId)}`,
+                init
+            );
             const j = (await res.json().catch(() => ({}))) as { items?: Array<{ id: string; key?: string | null }> };
             if (res.ok) {
                 const naWu = (j.items ?? []).find((r) => String(r.key ?? "").trim().toLowerCase() === "needs_attention");
@@ -927,7 +937,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     alloyPerfSet("queue_rows_request_start", performance.now());
                     alloyPerfSet("rows_req", performance.now());
                 }
-                const res = await fetch(route, init);
+                const res = await dedupeAdminFetch(route, init);
                 if (touchUiPerf && typeof window !== "undefined" && typeof performance !== "undefined") {
                     alloyPerfSet("queue_rows_response_headers", performance.now());
                     alloyPerfSet("rows_resp", performance.now());
@@ -1138,7 +1148,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             if (typeof window !== "undefined" && typeof performance !== "undefined") {
                 alloyPerfSet("work_unit_summaries_request_start", performance.now());
             }
-            const res = await fetch(route, init);
+            const res = await dedupeAdminFetch(route, init);
             if (typeof window !== "undefined" && typeof performance !== "undefined") {
                 alloyPerfSet("work_unit_summaries_response_headers", performance.now());
             }
@@ -1282,7 +1292,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     alloyPerfSet("work_unit_summaries_request_start", performance.now());
                 }
 
-                const summariesP = fetch(queueListRoute, init).then(async (res) => {
+                const summariesP = dedupeAdminFetch(queueListRoute, init).then(async (res) => {
                     const hdrT = performance.now();
                     if (typeof window !== "undefined" && typeof performance !== "undefined") {
                         alloyPerfSet("summaries_resp", hdrT);
@@ -1304,7 +1314,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 if (typeof window !== "undefined" && typeof performance !== "undefined") {
                     alloyPerfSet("work_unit_detail_req", performance.now());
                 }
-                const wuP = fetch(wuUrl, init).then(async (res) => {
+                const wuP = dedupeAdminFetch(wuUrl, init).then(async (res) => {
                     if (typeof window !== "undefined" && typeof performance !== "undefined") {
                         alloyPerfSet("work_unit_detail_resp", performance.now());
                     }
@@ -1315,7 +1325,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 if (typeof window !== "undefined" && typeof performance !== "undefined") {
                     alloyPerfSet("dept_req", performance.now());
                 }
-                const deptP = fetch(deptUrl, init).then(async (res) => {
+                const deptP = dedupeAdminFetch(deptUrl, init).then(async (res) => {
                     if (typeof window !== "undefined" && typeof performance !== "undefined") {
                         alloyPerfSet("dept_resp", performance.now());
                     }
@@ -1331,7 +1341,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     void fetchQueueItems(workUnitId, qFromUrlEffective, null);
                 }
 
-                const wuR = await wuP;
+                const [wuR, deptR] = await Promise.all([wuP, deptP]);
 
                 if (!wuR.res.ok) throw new Error(wuR.j.error ?? "Failed to load work unit");
 
@@ -1351,8 +1361,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         rowKeyUsedForBootstrap = navRowKey;
                     }
                 }
-
-                const deptR = await deptP;
 
                 if (!deptR.res.ok) throw new Error(deptR.j.error ?? "Failed to load department");
 
@@ -2282,6 +2290,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
         /** During lane transitions, always show buffered rows so we never flash another lane's hydrated list. */
         const rowsRefreshing = tabSwitchInFlight;
         const displayItems = rowsRefreshing ? queueRowsBufferRef.current : liveVmItems;
+        queueDisplayItemsRef.current = displayItems;
 
         const laneTitle = workUnit.name ?? "Queue";
         const errorLine = queueItemsError
@@ -2657,7 +2666,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 openDrawer({ type: "schedules", id });
                 return;
             }
-            openDrawer({ type: "opportunities", id, ...oppDrawerExtra });
+            const previewRow =
+                findQueuePreviewItemById(queueDisplayItemsRef.current, id) ??
+                findQueuePreviewItemById(queueRowsBufferRef.current, id);
+            const opportunityQueuePreviewSeed = previewRow
+                ? opportunityDrawerSeedFromQueueItem(previewRow)
+                : undefined;
+            openDrawer({
+                type: "opportunities",
+                id,
+                ...oppDrawerExtra,
+                opportunityQueuePreviewSeed,
+            });
         },
         [openDrawer, oppDrawerExtra]
     );
@@ -2980,7 +3000,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
             subtitle=""
         >
             {workUnitPageBlockingLoad ? (
-                <AdminV2RouteLoadingState variant="work_unit" showRibbon={false} />
+                <div
+                    className="adminv2-ws-root adminv2-ws-work-unit adminv2-ws-wu-v2 adminv2-ws-dept-v2-contain"
+                    data-ws-surface="work_unit"
+                    aria-busy="true"
+                >
+                    <KpiStripSkeleton id="wu-blocking-kpi-skeleton" />
+                    <div className="adminv2-ws-dept-v2-operational-row adminv2-ws-dept-v2-operational-row--double mt-4">
+                        <WorkUnitQueueCompactRowSkeletonList count={6} variant="standard" ariaLabel="Loading queue" />
+                    </div>
+                </div>
             ) : workUnitShellReady && effectiveModel ? (
                 <>
                     {actionFeedback ? (
