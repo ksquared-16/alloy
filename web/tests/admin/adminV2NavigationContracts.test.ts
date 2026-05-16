@@ -16,14 +16,10 @@ describe("AdminV2 shell navigation helpers", () => {
         expect(src).not.toMatch(/\bpreventDefault\s*\(/);
     });
 
-    it("dept queue row Link uses adminV2BeforeRouteNavigation without preventDefault", () => {
+    it("dept queue row uses adminV2HardNavigate with router.push", () => {
         const src = read("app/adminV2/workspace/dept/[departmentId]/page.tsx");
         expect(src).toContain("function DeptOperConsoleQueueRow");
-        expect(src).toMatch(
-            /DeptOperConsoleQueueRow[\s\S]*?adminV2BeforeRouteNavigation\(\{ closeDrawer/
-        );
-        const rowBlock = src.match(/function DeptOperConsoleQueueRow[\s\S]*?^}/m)?.[0] ?? "";
-        expect(rowBlock).not.toContain("preventDefault");
+        expect(src).toMatch(/DeptOperConsoleQueueRow[\s\S]*?adminV2HardNavigate\(router, href/);
     });
 
     it("sidebar shell links close drawer via adminV2BeforeRouteNavigation", () => {
@@ -73,12 +69,18 @@ describe("Work-unit queue tab shallow routing", () => {
         expect(src).toContain('aria-current="page"');
     });
 
-    it("AdminV2NavLink always renders Link and suppresses only same-href clicks", () => {
+    it("AdminV2NavLink uses explicit router.push for cross-route clicks", () => {
         const src = read("app/adminV2/components/navigation/AdminV2NavLink.tsx");
         expect(src).toContain("isCurrentRoute");
-        expect(src).toContain("if (isCurrentRoute)");
+        expect(src).toContain("router.push(hrefStr)");
         expect(src).not.toContain('return (\n            <span');
         expect(src).not.toMatch(/\buseLinkStatus\s*\(/);
+    });
+
+    it("shell navigation closes drawer synchronously (no microtask defer)", () => {
+        const src = read("lib/adminV2/shellNavigation.ts");
+        expect(src).not.toContain("queueMicrotask");
+        expect(src).toContain("adminV2HardNavigate");
     });
 });
 
@@ -97,9 +99,9 @@ describe("AdminV2 click debug utility", () => {
 });
 
 describe("AdminV2 shell chrome above drawer backdrop", () => {
-    it("sidebar and top nav use z-75 while drawer backdrop is lower", () => {
-        expect(read("app/adminV2/components/Sidebar.tsx")).toContain("z-[75]");
-        expect(read("app/adminV2/components/AdminV2Shell.tsx")).toContain("z-[75]");
+    it("sidebar and top nav use z-100 while drawer backdrop is lower", () => {
+        expect(read("app/adminV2/components/Sidebar.tsx")).toContain("z-[100]");
+        expect(read("app/adminV2/components/AdminV2Shell.tsx")).toContain("z-[100]");
         expect(read("components/admin/Drawer.tsx")).toContain("ADMINV2_DRAWER_BACKDROP_Z");
         expect(read("components/admin/Drawer.tsx")).toContain("ADMINV2_SHELL_CHROME_Z");
     });

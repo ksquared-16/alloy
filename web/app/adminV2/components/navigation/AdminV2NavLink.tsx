@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { type ComponentProps, type MouseEvent, type ReactNode } from "react";
+import { adminV2BeforeRouteNavigation } from "@/lib/adminV2/shellNavigation";
 import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
+import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
 
 function normalizeNavPath(path: string): string {
     if (path.length > 1 && path.endsWith("/")) return path.slice(0, -1);
@@ -19,6 +21,20 @@ function hrefPathOnly(href: ComponentProps<typeof Link>["href"]): string | null 
     return null;
 }
 
+function hrefString(href: ComponentProps<typeof Link>["href"]): string | null {
+    if (typeof href === "string") return href;
+    if (href && typeof href === "object") {
+        const pathname = (href as { pathname?: string | null }).pathname ?? "";
+        const search =
+            typeof (href as { search?: string | null }).search === "string"
+                ? (href as { search: string }).search
+                : "";
+        if (!pathname) return null;
+        return search ? `${pathname}${search.startsWith("?") ? search : `?${search}`}` : pathname;
+    }
+    return null;
+}
+
 type NextLinkProps = ComponentProps<typeof Link>;
 
 export type AdminV2NavLinkProps = NextLinkProps & {
@@ -27,9 +43,9 @@ export type AdminV2NavLinkProps = NextLinkProps & {
 };
 
 /**
- * Next.js App Router link with pressed/active affordances via `adminv2-nav-link` styles.
- * Always renders a real `<Link>` so shell navigation never becomes a non-navigating `<span>`.
- * Same-route clicks are suppressed to avoid redundant RSC churn.
+ * AdminV2 shell navigation — uses explicit `router.push` on primary click so route changes
+ * commit reliably (avoids soft-nav cancellation when workspace RSC work is in flight).
+ * Middle-click / modified clicks still use native Link behavior.
  */
 export function AdminV2NavLink({
     className,
@@ -37,11 +53,14 @@ export function AdminV2NavLink({
     children,
     prefetch,
     onClick,
+    href,
     ...rest
 }: AdminV2NavLinkProps) {
     const pathname = usePathname();
-    const hrefStr = hrefPathOnly(rest.href);
-    const hrefPath = hrefStr?.split(/[?#]/)[0] ?? null;
+    const router = useRouter();
+    const adminDrawer = useAdminDrawerOptional();
+    const hrefStr = hrefString(href);
+    const hrefPath = hrefStr?.split(/[?#]/)[0] ?? hrefPathOnly(href);
     const isCurrentRoute =
         hrefPath != null && normalizeNavPath(pathname) === normalizeNavPath(hrefPath);
     const isHighlighted = Boolean(active || isCurrentRoute);
@@ -61,15 +80,22 @@ export function AdminV2NavLink({
 
     const handleClick = (e: MouseEvent<HTMLAnchorElement>) => {
         onClick?.(e);
-        /** Section highlight (`active`) must not block drilling to a different href (e.g. dept → workspace root). */
-        if (isCurrentRoute) {
+        if (e.defaultPrevented) return;
+        if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        if (!hrefStr) return;
+        if (isCurrentRoute && !hrefStr.includes("?")) {
             e.preventDefault();
+            return;
         }
+        e.preventDefault();
+        adminV2BeforeRouteNavigation({ closeDrawer: adminDrawer?.closeDrawer });
+        router.push(hrefStr);
     };
 
     return (
         <Link
             {...rest}
+            href={href}
             prefetch={resolvedPrefetch === undefined ? false : resolvedPrefetch}
             className={merged}
             aria-current={isHighlighted ? "page" : undefined}

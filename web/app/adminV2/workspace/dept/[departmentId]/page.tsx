@@ -6,8 +6,7 @@ import Link from "next/link";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import { appendWorkspaceSiteToUrl } from "@/lib/adminV2/workspaceSiteFilterClient";
-import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
-import { adminV2BeforeRouteNavigation } from "@/lib/adminV2/shellNavigation";
+import { adminV2HardNavigate } from "@/lib/adminV2/shellNavigation";
 import { logAdminV2NavDebug } from "@/lib/debug/adminV2NavDebug";
 import {
     WorkspacePairedOperPanel,
@@ -134,6 +133,7 @@ function DeptOperConsoleQueueRow(props: {
     attentionBucketKey?: string;
 }) {
     const { href, title, label, iconKey, total, countsDeferred, variant, attentionBucketKey } = props;
+    const router = useRouter();
     const adminDrawer = useAdminDrawerOptional();
     const tier =
         variant === "attention"
@@ -148,14 +148,16 @@ function DeptOperConsoleQueueRow(props: {
     return (
         <Link
             href={href}
-            prefetch={shouldDisableAdminV2LinkPrefetch(href) ? false : undefined}
-            onClick={() => {
+            prefetch={false}
+            onClick={(e) => {
+                if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
                 logAdminV2NavDebug({
                     event: "deptQueueCardClick",
                     clickedHref: href,
-                    routerAction: "link",
+                    routerAction: "router.push",
                 });
-                adminV2BeforeRouteNavigation({ closeDrawer: adminDrawer?.closeDrawer });
+                e.preventDefault();
+                adminV2HardNavigate(router, href, { closeDrawer: adminDrawer?.closeDrawer });
             }}
             className={`adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-dept-oper-queue-link relative z-[1] cursor-pointer pointer-events-auto ${tier} no-underline text-inherit hover:opacity-[0.98]`}
             data-ws-wu-urgency={urgency}

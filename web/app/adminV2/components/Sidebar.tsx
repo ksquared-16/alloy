@@ -108,7 +108,7 @@ export default function Sidebar({
 
     return (
         <aside
-            className="relative z-[75] flex flex-col flex-shrink-0 min-h-0 border-r transition-[width] duration-200 ease-out overflow-hidden"
+            className="relative z-[100] flex flex-col flex-shrink-0 min-h-0 border-r transition-[width] duration-200 ease-out overflow-hidden"
             style={{
                 width: railWidth,
                 backgroundColor: neutral.surface,

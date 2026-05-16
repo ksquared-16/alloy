@@ -138,7 +138,7 @@ export default function AdminV2Shell({
         <div className="flex flex-1 flex-col min-w-0 min-h-0 overflow-hidden">
           {workspaceSiteFilterSubtree ? (
             <WorkspaceSiteFilterGate>
-              <div className="relative z-[75] shrink-0">
+              <div className="relative z-[100] shrink-0">
                 <Suspense
                   fallback={
                     <div
@@ -182,7 +182,7 @@ export default function AdminV2Shell({
             </WorkspaceSiteFilterGate>
           ) : (
             <>
-              <div className="relative z-[75] shrink-0">
+              <div className="relative z-[100] shrink-0">
                 <Suspense
                   fallback={
                     <div

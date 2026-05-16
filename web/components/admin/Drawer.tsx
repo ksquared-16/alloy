@@ -1,6 +1,7 @@
 "use client";
 
-import React, { type CSSProperties, isValidElement, useEffect } from "react";
+import React, { type CSSProperties, isValidElement, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { neutral, derived, palette } from "@/styles/tokens/colors";
 
 /**
@@ -12,7 +13,8 @@ import { neutral, derived, palette } from "@/styles/tokens/colors";
 export const ADMINV2_DRAWER_BACKDROP_Z = 60;
 export const ADMINV2_DRAWER_PANEL_Z = 70;
 /** Above drawer panel; below drawer-adjacent modals (z-80+). */
-export const ADMINV2_SHELL_CHROME_Z = 75;
+/** Sidebar + top nav — above portaled drawer (panel z-70). */
+export const ADMINV2_SHELL_CHROME_Z = 100;
 
 interface DrawerProps {
     isOpen: boolean;
@@ -82,6 +84,11 @@ export default function Drawer({
     recordModalTone,
     recordModalContextStyle,
 }: DrawerProps) {
+    const [portalReady, setPortalReady] = useState(false);
+    useEffect(() => {
+        setPortalReady(true);
+    }, []);
+
     useEffect(() => {
         if (isOpen) {
             document.body.style.overflow = "hidden";
@@ -334,8 +341,8 @@ export default function Drawer({
         </>
     );
 
-    if (isModal) {
-        return (
+    const drawerLayer =
+        isModal ? (
             <>
                 <div
                     className="adminv2-drawer-modal-dim fixed inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity duration-200 pointer-events-none"
@@ -343,49 +350,46 @@ export default function Drawer({
                     aria-hidden
                 />
                 <div
-                    className="fixed inset-0 flex items-center justify-center p-3 sm:p-6 pointer-events-none"
-                    style={{ zIndex: zIndexPanel }}
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="admin-drawer-title"
+                    data-adminv2-drawer="true"
+                    data-adminv2-record-modal="true"
+                    data-adminv2-record-modal-tone={cleaningRecordModalTone ? "cleaning-v2" : undefined}
+                    className={`adminv2-drawer-modal-panel pointer-events-auto fixed left-1/2 top-1/2 flex max-h-[min(920px,92vh)] w-[min(calc(100vw-1.5rem),80rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-solid shadow-2xl animate-in fade-in zoom-in-[0.99] duration-300 ${cleaningRecordModalTone ? "min-h-[min(520px,78vh)]" : ""} ${panelClassName ?? "max-w-5xl"}`}
+                    style={
+                        cleaningRecordModalTone && recordModalContextStyle
+                            ? { ...recordModalContextStyle, ...panelStyle, zIndex: zIndexPanel }
+                            : { ...panelStyle, zIndex: zIndexPanel }
+                    }
                 >
-                    <div
-                        data-adminv2-drawer="true"
-                        data-adminv2-record-modal="true"
-                        data-adminv2-record-modal-tone={cleaningRecordModalTone ? "cleaning-v2" : undefined}
-                        className={`pointer-events-auto flex max-h-[min(920px,92vh)] w-full flex-col overflow-hidden rounded-2xl border border-solid shadow-2xl animate-in fade-in zoom-in-[0.99] duration-300 ${cleaningRecordModalTone ? "min-h-[min(520px,78vh)]" : ""} ${panelClassName ?? "max-w-5xl"}`}
-                        style={
-                            cleaningRecordModalTone && recordModalContextStyle
-                                ? { ...recordModalContextStyle, ...panelStyle }
-                                : panelStyle
-                        }
-                        role="dialog"
-                        aria-modal="true"
-                        aria-labelledby="admin-drawer-title"
-                    >
-                        {headerBlock}
-                    </div>
+                    {headerBlock}
+                </div>
+            </>
+        ) : (
+            <>
+                <div
+                    className="adminv2-drawer-sidebar-dim fixed inset-0 bg-black/50 pointer-events-none"
+                    style={{ zIndex: zIndexBackdrop }}
+                    aria-hidden
+                />
+                <div
+                    role="dialog"
+                    aria-modal="true"
+                    aria-labelledby="admin-drawer-title"
+                    data-adminv2-drawer={isV2 ? "true" : undefined}
+                    className={`adminv2-drawer-sidebar-panel pointer-events-auto fixed inset-y-0 right-0 left-auto flex w-[min(100vw,42rem)] max-w-2xl flex-col border shadow-xl ${panelClassName ?? ""} ${
+                        isV2 ? "border-solid" : `bg-admin-surface-card border-admin-border ${accentColor ? "" : "border-l-4 border-alloy-blue/40"}`
+                    }`}
+                    style={panelStyle}
+                >
+                    {headerBlock}
                 </div>
             </>
         );
-    }
 
-    return (
-        <>
-            <div
-                className="adminv2-drawer-sidebar-dim fixed inset-0 bg-black/50 pointer-events-none"
-                style={{ zIndex: zIndexBackdrop }}
-                aria-hidden
-            />
-            <div
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="admin-drawer-title"
-                data-adminv2-drawer={isV2 ? "true" : undefined}
-                className={`adminv2-drawer-sidebar-panel pointer-events-auto fixed inset-y-0 right-0 left-auto flex w-[min(100vw,42rem)] max-w-2xl flex-col border shadow-xl ${panelClassName ?? ""} ${
-                    isV2 ? "border-solid" : `bg-admin-surface-card border-admin-border ${accentColor ? "" : "border-l-4 border-alloy-blue/40"}`
-                }`}
-                style={panelStyle}
-            >
-                {headerBlock}
-            </div>
-        </>
-    );
+    if (!portalReady || typeof document === "undefined") {
+        return null;
+    }
+    return createPortal(drawerLayer, document.body);
 }

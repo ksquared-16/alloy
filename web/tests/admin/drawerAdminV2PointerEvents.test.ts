@@ -36,5 +36,11 @@ describe("AdminV2 sidebar drawer pointer-events contract", () => {
         expect(drawerSource).toContain("adminv2-drawer-modal-dim");
         expect(drawerSource).toMatch(/adminv2-drawer-modal-dim[\s\S]*?pointer-events-none/);
         expect(drawerSource).not.toMatch(/adminv2-drawer-modal-dim[\s\S]*?onClick=\{onClose\}/);
+        expect(drawerSource).toContain("adminv2-drawer-modal-panel");
+    });
+
+    it("portals drawer layers to document.body", () => {
+        expect(drawerSource).toContain("createPortal");
+        expect(drawerSource).toContain("document.body");
     });
 });

@@ -2,12 +2,20 @@ import { markWorkUnitNavigationStart } from "@/lib/perf/markWorkUnitNavigationSt
 
 /**
  * Run before shell / dept drill-in navigation. Never calls preventDefault —
- * Next.js <Link> must receive the native click to navigate.
+ * callers use explicit router.push after this returns.
  */
 export function adminV2BeforeRouteNavigation(opts?: { closeDrawer?: () => void }): void {
     markWorkUnitNavigationStart();
-    const close = opts?.closeDrawer;
-    if (!close) return;
-    /** Defer so drawer state does not synchronously re-render during Next <Link> navigation. */
-    queueMicrotask(() => close());
+    /** Close synchronously so fixed drawer layers cannot intercept the next paint. */
+    opts?.closeDrawer?.();
+}
+
+/** Preferred drill-in path when Next `<Link>` soft navigation is cancelled by in-flight RSC work. */
+export function adminV2HardNavigate(
+    router: { push: (href: string) => void },
+    href: string,
+    opts?: { closeDrawer?: () => void }
+): void {
+    adminV2BeforeRouteNavigation(opts);
+    router.push(href);
 }
