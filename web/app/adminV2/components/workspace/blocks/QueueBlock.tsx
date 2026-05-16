@@ -903,7 +903,7 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
         ) : null}
         <ul
           className={`adminv2-ws-queue-list adminv2-ws-wu-queue-list relative z-0 transition-opacity duration-[180ms] ease-out ${
-            queue.rowsRefreshing ? "opacity-[0.76] pointer-events-none" : "opacity-100"
+            queue.rowsRefreshing ? "opacity-[0.76]" : "opacity-100"
           }`}
           aria-busy={Boolean(queue.rowsRefreshing)}
           role="list"
