@@ -9,6 +9,11 @@ const navBadge = join(
     "../../../app/adminV2/components/OperationalTasksNavBadge.tsx"
 );
 const modal = join(dirname(fileURLToPath(import.meta.url)), "../../../app/adminV2/components/MyTasksModal.tsx");
+const panel = join(dirname(fileURLToPath(import.meta.url)), "../../../app/adminV2/components/MyTasksPanel.tsx");
+const queueBlock = join(
+    dirname(fileURLToPath(import.meta.url)),
+    "../../../app/adminV2/components/workspace/blocks/QueueBlock.tsx"
+);
 
 describe("My tasks modal UX", () => {
     it("opens modal from top nav button not page navigation", () => {
@@ -23,5 +28,18 @@ describe("My tasks modal UX", () => {
         expect(src).toContain("fixed inset-0");
         expect(src).toContain("MyTasksPanel");
         expect(src).toContain('data-adminv2-tasks-modal="true"');
+        expect(src).toContain("if (!open) return null");
+    });
+
+    it("MyTasksPanel uses optional drawer context for top-nav modal and fallback page", () => {
+        const src = readFileSync(panel, "utf8");
+        expect(src).toContain("useAdminDrawerOptional");
+        expect(src).not.toContain("useAdminDrawer()");
+        expect(src).toContain("Array.isArray(json.tasks) ? json.tasks : []");
+    });
+
+    it("work-unit QueueBlock still dispatches open_record on row click", () => {
+        const src = readFileSync(queueBlock, "utf8");
+        expect(src).toContain('actionId: "open_record"');
     });
 });

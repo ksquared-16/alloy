@@ -181,6 +181,13 @@ export default function OpportunityOperationalCompactStrip({
         return () => window.removeEventListener(ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS, onFocus as EventListener);
     }, [opportunityId]);
 
+    const popoverAnchorRef = useRef<HTMLButtonElement | null>(null);
+
+    useEffect(() => {
+        popoverAnchorRef.current =
+            popoverTaskId ? chipRefs.current.get(popoverTaskId) ?? null : null;
+    }, [popoverTaskId, openTasks]);
+
     useEffect(() => {
         if (!popoverTaskId) return;
         requestAnimationFrame(() => {
@@ -192,12 +199,6 @@ export default function OpportunityOperationalCompactStrip({
 
     const hasChips = openTasks.length > 0 || pendingSends.length > 0 || showNextFollowUp;
     if (!hasChips && !loading && !error) return null;
-
-    const popoverAnchorRef = useRef<HTMLButtonElement | null>(null);
-    useEffect(() => {
-        popoverAnchorRef.current =
-            popoverTaskId ? chipRefs.current.get(popoverTaskId) ?? null : null;
-    }, [popoverTaskId, openTasks]);
 
     return (
         <div

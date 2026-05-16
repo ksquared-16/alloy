@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
 import {
     ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS,
     ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH,
@@ -64,7 +64,7 @@ export type MyTasksPanelProps = {
 
 export default function MyTasksPanel({ compact = false, onClose }: MyTasksPanelProps) {
     const v11 = isTaskAssistV1UiEnabled();
-    const adminDrawer = useAdminDrawer();
+    const adminDrawer = useAdminDrawerOptional();
     const [filter, setFilter] = useState<OperationalTaskWorkspaceFilter>("open");
     const [tasks, setTasks] = useState<MyTasksTaskRow[]>([]);
     const [loading, setLoading] = useState(false);
@@ -82,10 +82,10 @@ export default function MyTasksPanel({ compact = false, onClose }: MyTasksPanelP
         try {
             const res = await fetchWorkspaceOperationalTasks(filter);
             const json = await readJson<{ ok?: boolean; tasks?: MyTasksTaskRow[]; error?: string; message?: string }>(res);
-            if (!res.ok || !json.ok || !Array.isArray(json.tasks)) {
+            if (!res.ok || !json.ok) {
                 throw new Error(formatTaskAssistClientError(json.message || json.error, json.error));
             }
-            setTasks(json.tasks);
+            setTasks(Array.isArray(json.tasks) ? json.tasks : []);
         } catch (e: unknown) {
             setError(formatTaskAssistClientError((e as Error).message));
             setTasks([]);
@@ -114,8 +114,8 @@ export default function MyTasksPanel({ compact = false, onClose }: MyTasksPanelP
 
     const onOpenRecord = useCallback(
         (task: MyTasksTaskRow) => {
-            if (task.entity_type !== "opportunities") return;
-            adminDrawer?.openDrawer({
+            if (task.entity_type !== "opportunities" || !adminDrawer) return;
+            adminDrawer.openDrawer({
                 type: "opportunities",
                 id: task.entity_id,
                 opportunityWorkspaceContext: null,
@@ -299,13 +299,15 @@ export default function MyTasksPanel({ compact = false, onClose }: MyTasksPanelP
                                             ) : null}
                                         </div>
                                         <div className="flex shrink-0 flex-wrap gap-1">
-                                            <button
-                                                type="button"
-                                                className="rounded-md border border-alloy-stone/30 px-2 py-1 text-[10px] font-semibold"
-                                                onClick={() => onOpenRecord(t)}
-                                            >
-                                                Open record
-                                            </button>
+                                            {t.entity_type === "opportunities" && adminDrawer ? (
+                                                <button
+                                                    type="button"
+                                                    className="rounded-md border border-alloy-stone/30 px-2 py-1 text-[10px] font-semibold"
+                                                    onClick={() => onOpenRecord(t)}
+                                                >
+                                                    Open record
+                                                </button>
+                                            ) : null}
                                             {t.status === "open" ? (
                                                 <>
                                                     <button

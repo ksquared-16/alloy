@@ -23,6 +23,15 @@ describe("OpportunityOperationalCompactStrip", () => {
         expect(src).toContain("ADMIN_V2_OPPORTUNITY_OPERATIONAL_TASKS_REFRESH");
         expect(src).toContain("ADMIN_V2_OPPORTUNITY_FOCUS_OPERATIONAL_TASKS");
     });
+
+    it("keeps popover anchor hooks before conditional returns (Rules of Hooks)", () => {
+        const src = readFileSync(stripPath, "utf8");
+        const anchorRefIdx = src.indexOf("const popoverAnchorRef = useRef");
+        const v11ReturnIdx = src.indexOf("if (!v11) return null");
+        expect(anchorRefIdx).toBeGreaterThan(-1);
+        expect(v11ReturnIdx).toBeGreaterThan(-1);
+        expect(anchorRefIdx).toBeLessThan(v11ReturnIdx);
+    });
 });
 
 describe("AdminEntityDrawer operational strip wiring", () => {
