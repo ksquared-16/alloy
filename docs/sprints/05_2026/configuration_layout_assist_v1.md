@@ -28,7 +28,7 @@
 | **1–4** | **Implemented** | `field_requirement_policy`, `interaction_policy`, section management, `layoutIntegrityValidator`, admin layout-integrity GET. |
 | **5** | **Implemented** | `ConfigurationProposalV1` contract — validate, normalize, serialize, risk, permissions. |
 | **6** | **Implemented** | `config_layout_assist_proposals` table + lifecycle state machine (no apply in PATCH). |
-| **7** | **Implemented** | Migration `20260523150000_config_assist_permissions_seed.sql`; `configurationProposalAccess.ts`; operation→permission map. Legacy role fallback opt-in via `CONFIG_LAYOUT_ASSIST_LEGACY_ROLE_FALLBACK=true`. |
+| **7** | **Implemented** | Migration `20260523150000_config_assist_permissions_seed.sql`; `configurationProposalAccess.ts`; operation→permission map. Legacy admin/ops fallback **on by default**; set `CONFIG_LAYOUT_ASSIST_LEGACY_ROLE_FALLBACK=false` to require seeded grants only. Approve + apply transitions require `config_assist.apply`. |
 | **8** | **Implemented** | `config_layout_assist` route in Orchestrator; `POST /api/admin/ai/config-layout-assist/propose`; deterministic `buildDeterministicConfigurationProposal`; thread card `config_layout_assist_proposal`. |
 | **9** | **Implemented** | Settings hub `/adminV2/settings/config-proposals` — list, detail, diff preview, lifecycle actions, recommendation vs applied banners. |
 | **10** | **Implemented** | `apply/configurationProposalApply.ts` + `POST .../proposals/[id]/apply`; read-after-write verification via `buildApplyVerificationResult`; transitions to `applied` / `failed`. |

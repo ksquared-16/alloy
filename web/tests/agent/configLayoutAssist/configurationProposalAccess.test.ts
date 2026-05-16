@@ -26,10 +26,17 @@ describe("configurationProposalAccess", () => {
         ).toBe(true);
     });
 
-    it("denies without permission or legacy fallback", () => {
+    it("denies without permission or legacy fallback when explicitly disabled", () => {
         expect(
             hasConfigLayoutAssistPermission({ permissionKeys: [], roleKeys: ["admin"] }, "config_assist.apply")
         ).toBe(false);
+    });
+
+    it("allows org admin via legacy fallback by default", () => {
+        delete process.env.CONFIG_LAYOUT_ASSIST_LEGACY_ROLE_FALLBACK;
+        expect(
+            hasConfigLayoutAssistPermission({ permissionKeys: [], roleKeys: ["admin"] }, "config_assist.generate")
+        ).toBe(true);
     });
 
     it("maps operation kinds to field permissions", () => {

@@ -23,9 +23,12 @@ const ALL_CONFIG_ASSIST_KEYS: readonly ConfigurationProposalPermissionKey[] = [
     "data_quality.view",
 ];
 
+/** Default true so org admins work before/without permission seed migration; set env to false to require grants. */
 function legacyRoleFallbackEnabled(): boolean {
     const v = process.env.CONFIG_LAYOUT_ASSIST_LEGACY_ROLE_FALLBACK?.trim().toLowerCase();
-    return v === "true" || v === "1" || v === "yes";
+    if (v === "false" || v === "0" || v === "no") return false;
+    if (v === "true" || v === "1" || v === "yes") return true;
+    return true;
 }
 
 export function hasConfigLayoutAssistPermission(

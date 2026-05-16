@@ -146,18 +146,20 @@ export default function ConfigLayoutProposalsClient({ initialId }: { initialId?:
             });
         }
         if (s === "reviewed" && canReview) {
-            actions.push({ label: "Approve", onClick: () => void transition("approved"), variant: "primary" });
             actions.push({
                 label: "Reject",
                 onClick: () => void transition("rejected", { rejection_reason: "Rejected after review." }),
                 variant: "danger",
             });
         }
-        if (s === "approved" && canApply) {
+        if (s === "reviewed" && canApply) {
+            actions.push({ label: "Approve", onClick: () => void transition("approved"), variant: "primary" });
+        }
+        if (s === "approved" && canApply && detail.apply_mode !== "recommendation_only") {
             actions.push({ label: "Apply (authoritative APIs)", onClick: () => void applyApproved(), variant: "primary" });
         }
         return actions;
-    }, [detail?.state, canReview, canApply, transition, applyApproved]);
+    }, [detail?.state, detail?.apply_mode, canReview, canApply, transition, applyApproved]);
 
     return (
         <div className="flex flex-col gap-4 lg:flex-row">
@@ -264,6 +266,18 @@ export default function ConfigLayoutProposalsClient({ initialId }: { initialId?:
                                 Recommendation / pending — no config mutation until you approve and apply.
                             </p>
                         )}
+
+                        {detail.state === "reviewed" && canReview && !canApply ? (
+                            <p className="text-xs text-alloy-midnight/55">
+                                Approve and apply require <span className="font-mono">config_assist.apply</span>.
+                            </p>
+                        ) : null}
+
+                        {detail.apply_mode === "recommendation_only" && detail.state === "approved" ? (
+                            <p className="text-xs text-alloy-midnight/55">
+                                This proposal is recommendation-only; there are no configuration mutations to apply.
+                            </p>
+                        ) : null}
 
                         {lifecycleActions.length > 0 ? (
                             <div className="flex flex-wrap gap-2">

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { applyConfigurationProposal } from "@/lib/agent/configLayoutAssist/apply/configurationProposalApply";
+import {
+    applyConfigurationProposal,
+    assertProposalCanBeApplied,
+} from "@/lib/agent/configLayoutAssist/apply/configurationProposalApply";
 import { buildApplyVerificationResult } from "@/lib/agent/configLayoutAssist/apply/applyVerification";
 import {
     forbidUnlessApplyPermission,
@@ -50,6 +53,14 @@ export async function POST(
         );
     }
 
+    const canApply = assertProposalCanBeApplied(cur.record.proposal_json, cur.record.apply_mode);
+    if (!canApply.ok) {
+        return NextResponse.json(
+            { ok: false, error: "NOT_APPLICABLE", message: canApply.message },
+            { status: 409 }
+        );
+    }
+
     const applied = await applyConfigurationProposal({
         supabase,
         orgId: admin.orgId,
@@ -60,7 +71,8 @@ export async function POST(
     });
 
     if (!applied.ok) {
-        return NextResponse.json({ ok: false, error: applied.error, message: applied.message }, { status: 403 });
+        const status = applied.error === "NOT_APPLICABLE" ? 409 : 403;
+        return NextResponse.json({ ok: false, error: applied.error, message: applied.message }, { status });
     }
 
     const verification = buildApplyVerificationResult({

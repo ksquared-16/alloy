@@ -10,7 +10,12 @@ import { validateSelectLikeConfig } from "@/lib/fields/fieldDefinitionConfig";
 import { mergeFieldDefinitionPoliciesFromBody } from "@/lib/fields/fieldDefinitionPolicyWrite";
 import { logAdminAudit } from "@/lib/adminAuth";
 
-import type { ConfigurationOperationKindV1, ConfigurationOperationV1, ConfigurationProposalV1 } from "../configurationProposalV1";
+import {
+    CONFIGURATION_MUTATING_OPERATION_KINDS,
+    type ConfigurationOperationKindV1,
+    type ConfigurationOperationV1,
+    type ConfigurationProposalV1,
+} from "../configurationProposalV1";
 import { assertPermissionsForOperationKinds } from "../configurationProposalAccess";
 import type { AdminAccessContextSuccess } from "@/lib/admin/getAdminAccessContext";
 
@@ -36,6 +41,22 @@ export type ApplyOperationResult = {
     verification_warning?: string;
     field_definition_id?: string;
 };
+
+export function assertProposalCanBeApplied(
+    proposal: ConfigurationProposalV1,
+    applyMode: string
+): { ok: true } | { ok: false; message: string } {
+    if (applyMode === "recommendation_only") {
+        return { ok: false, message: "recommendation_only proposals cannot be applied." };
+    }
+    const mutating = proposal.proposed_operations.filter(
+        (o) => (CONFIGURATION_MUTATING_OPERATION_KINDS as readonly string[]).includes(o.kind)
+    );
+    if (mutating.length === 0) {
+        return { ok: false, message: "Proposal has no mutating operations to apply." };
+    }
+    return { ok: true };
+}
 
 export type ApplyConfigurationProposalResult =
     | {
@@ -346,8 +367,13 @@ export async function applyConfigurationProposal(params: {
     proposal: ConfigurationProposalV1;
     access: Pick<AdminAccessContextSuccess, "roleKeys" | "permissionKeys">;
 }): Promise<ApplyConfigurationProposalResult> {
+    const applicable = assertProposalCanBeApplied(params.proposal, params.proposal.apply_mode);
+    if (!applicable.ok) {
+        return { ok: false, error: "NOT_APPLICABLE", message: applicable.message };
+    }
+
     const kinds = params.proposal.proposed_operations
-        .filter((o) => o.kind !== "data_quality_recommendation")
+        .filter((o) => (CONFIGURATION_MUTATING_OPERATION_KINDS as readonly string[]).includes(o.kind))
         .map((o) => o.kind);
     const perm = assertPermissionsForOperationKinds(params.access, kinds);
     if (!perm.ok) {

@@ -112,7 +112,7 @@ export function normalizeConfigurationProposal(
 ): ConfigurationProposalV1 {
     const opts = { ...DEFAULT_OPTIONS, ...options };
 
-    let ops = sortOperationsDeterministic(ensureOperationPermissions(proposal.proposed_operations));
+    const ops = sortOperationsDeterministic(ensureOperationPermissions(proposal.proposed_operations));
 
     const inferred = inferImpactedFromOperations(ops);
     const impacted_entities =
