@@ -24,6 +24,7 @@ export type WorkflowAssistExplainStatusV1 =
     | "no_matching_workflow"
     | "workflow_disabled"
     | "no_run_created"
+    | "condition_mismatch"
     | "run_failed"
     | "action_failed"
     | "run_successful"
@@ -50,6 +51,8 @@ export type WorkflowAssistExplainLinksV1 = {
 
 export type WorkflowAssistExplainResponseV1 = {
     version: 1;
+    /** `0` = Explain v0 checklist; `1` = operational trace (Explain v1). */
+    explain_engine: 0 | 1;
     status: WorkflowAssistExplainStatusV1;
     confidence: WorkflowAssistExplainConfidenceV1;
     headline: string;
@@ -65,12 +68,16 @@ export type WorkflowAssistExplainResponseV1 = {
         range?: string | null;
         latest_event_type?: string | null;
         latest_event_at?: string | null;
+        trace_id?: string | null;
     };
 };
 
 export type WorkflowAssistExplainApiSuccessV1 = {
     ok: true;
+    explain_engine: 0 | 1;
     explanation: WorkflowAssistExplainResponseV1;
+    /** Present when `explain_engine === 1`. */
+    trace?: import("@/lib/agent/workflowAssist/workflowAssistOperationalTraceV1").WorkflowOperationalTraceV1;
 };
 
 export type WorkflowAssistExplainApiFailureV1 = {
@@ -246,6 +253,7 @@ export function buildWorkflowAssistExplainV1(data: WorkflowAssistExplainSourceDa
     if (!normalized_entity_type || !request.entity_id.trim()) {
         return {
             version: 1,
+            explain_engine: 0,
             status: "insufficient_context",
             confidence: "high",
             headline: "Needs more context",
@@ -282,6 +290,7 @@ export function buildWorkflowAssistExplainV1(data: WorkflowAssistExplainSourceDa
     if (!events.length) {
         return {
             version: 1,
+            explain_engine: 0,
             status: "no_event_found",
             confidence: "medium",
             headline: "No workflow event found for this record",
@@ -337,6 +346,7 @@ export function buildWorkflowAssistExplainV1(data: WorkflowAssistExplainSourceDa
     if (!matched.length) {
         return {
             version: 1,
+            explain_engine: 0,
             status: "no_matching_workflow",
             confidence: "high",
             headline: "Event found, but no matching workflow",
@@ -384,6 +394,7 @@ export function buildWorkflowAssistExplainV1(data: WorkflowAssistExplainSourceDa
         links.automations_href = automationsHref(wf.id);
         return {
             version: 1,
+            explain_engine: 0,
             status: "workflow_disabled",
             confidence: "high",
             headline: "Matching workflow exists but is disabled",
@@ -398,6 +409,7 @@ export function buildWorkflowAssistExplainV1(data: WorkflowAssistExplainSourceDa
     if (!latestRun) {
         return {
             version: 1,
+            explain_engine: 0,
             status: "no_run_created",
             confidence: "medium",
             headline: "Event and workflow match, but no run was recorded",
@@ -428,6 +440,7 @@ export function buildWorkflowAssistExplainV1(data: WorkflowAssistExplainSourceDa
         });
         return {
             version: 1,
+            explain_engine: 0,
             status: "run_failed",
             confidence: "high",
             headline: "Workflow run failed",
@@ -451,6 +464,7 @@ export function buildWorkflowAssistExplainV1(data: WorkflowAssistExplainSourceDa
         });
         return {
             version: 1,
+            explain_engine: 0,
             status: "action_failed",
             confidence: "high",
             headline: "Workflow run completed with a failed action",
@@ -467,6 +481,7 @@ export function buildWorkflowAssistExplainV1(data: WorkflowAssistExplainSourceDa
     if (runStatus === "skipped" || latestRun.skip_reason) {
         return {
             version: 1,
+            explain_engine: 0,
             status: "run_skipped",
             confidence: "high",
             headline: "Workflow run was skipped",
@@ -485,6 +500,7 @@ export function buildWorkflowAssistExplainV1(data: WorkflowAssistExplainSourceDa
     if (runStatus === "completed") {
         return {
             version: 1,
+            explain_engine: 0,
             status: "run_successful",
             confidence: "high",
             headline: "Workflow run appears successful",
@@ -501,6 +517,7 @@ export function buildWorkflowAssistExplainV1(data: WorkflowAssistExplainSourceDa
     if (runStatus === "running") {
         return {
             version: 1,
+            explain_engine: 0,
             status: "insufficient_data",
             confidence: "medium",
             headline: "Workflow run is still in progress",
@@ -514,6 +531,7 @@ export function buildWorkflowAssistExplainV1(data: WorkflowAssistExplainSourceDa
 
     return {
         version: 1,
+        explain_engine: 0,
         status: "insufficient_data",
         confidence: "low",
         headline: "Not enough data to determine",
@@ -533,21 +551,25 @@ export function workflowAssistExplainApiFailure(
     return { ok: false, error, message, ...(envelope ? { envelope } : {}) };
 }
 
-/** Card payload for Orchestrator read thread (Explain v0). */
+/** Card payload for Orchestrator read thread (Explain v0 / v1). */
 export type WorkflowAssistExplainCardPayloadV1 = {
-    variant: "explain_v0";
+    variant: "explain_v0" | "explain_v1";
     headline: string;
     explanation: WorkflowAssistExplainResponseV1;
     needs_more_context: boolean;
+    trace?: import("@/lib/agent/workflowAssist/workflowAssistOperationalTraceV1").WorkflowOperationalTraceV1;
 };
 
 export function buildWorkflowAssistExplainCardPayload(
-    explanation: WorkflowAssistExplainResponseV1
+    explanation: WorkflowAssistExplainResponseV1,
+    trace?: import("@/lib/agent/workflowAssist/workflowAssistOperationalTraceV1").WorkflowOperationalTraceV1
 ): WorkflowAssistExplainCardPayloadV1 {
+    const variant = explanation.explain_engine === 1 ? "explain_v1" : "explain_v0";
     return {
-        variant: "explain_v0",
+        variant,
         headline: explanation.headline,
         explanation,
         needs_more_context: explanation.status === "insufficient_context",
+        ...(trace ? { trace } : {}),
     };
 }

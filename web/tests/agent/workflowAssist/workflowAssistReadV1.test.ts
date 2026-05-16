@@ -10,7 +10,7 @@ import {
 describe("parseWorkflowAssistReadIntent", () => {
     it("classifies explain / why-not-moved", () => {
         const p = parseWorkflowAssistReadIntent("Why didn't this family get moved?", { hasAmbientOpportunity: true });
-        expect(p.sub_intent).toBe("explain_v0");
+        expect(p.sub_intent).toBe("explain_v1");
         expect(p.parse_reason).toContain("ambient");
     });
 

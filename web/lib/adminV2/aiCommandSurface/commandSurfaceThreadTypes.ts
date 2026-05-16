@@ -8,6 +8,8 @@ import type {
     WorkflowAssistReadIntentV1,
     WorkflowAssistThreadMutationHandlersV1,
 } from "@/lib/agent/workflowAssist/workflowAssistReadV1";
+import type { ConfigurationProposalV1 } from "@/lib/agent/configLayoutAssist/configurationProposalV1";
+import type { ConfigLayoutAssistTraceV1 } from "@/lib/agent/configLayoutAssist/configLayoutAssistTypes";
 import type { WorkflowAssistSuggestionV1 } from "@/lib/agent/workflowAssist/workflowAssistProposalV1";
 import type { AIStatusBadge, ResponseKind } from "@/lib/adminV2/aiCommandSurface/aiCommandSurfaceModel";
 
@@ -69,6 +71,12 @@ export type CommandSurfaceThreadTurn =
               | {
                     type: "workflow_assist_proposal";
                     suggestion: WorkflowAssistSuggestionV1;
+                }
+              | {
+                    type: "config_layout_assist_proposal";
+                    proposal: ConfigurationProposalV1;
+                    trace: ConfigLayoutAssistTraceV1;
+                    persistedProposalId: string | null;
                 };
           at: string;
       }

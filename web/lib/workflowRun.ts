@@ -2485,3 +2485,72 @@ export async function executeWorkflowRun(
         };
     }
 }
+
+/** Read-only condition row for Workflow Assist operational trace (mirrors `workflow_conditions`). */
+export type WorkflowConditionInspectRow = {
+    id?: string | null;
+    target_entity?: string | null;
+    field_path?: string | null;
+    field?: string | null;
+    operator?: string | null;
+    value?: unknown;
+    value_jsonb?: unknown;
+    enabled?: boolean | null;
+};
+
+export type WorkflowConditionInspectResult = {
+    condition_id: string;
+    target_entity: string | null;
+    field_path: string | null;
+    operator: string;
+    expected: unknown;
+    actual: unknown;
+    passed: boolean;
+    enabled: boolean;
+    eval_error: string | null;
+};
+
+/**
+ * Deterministic condition inspection using the same evaluation path as `executeWorkflowRun`.
+ * Read-only — does not mutate runs or workflows.
+ */
+export function inspectWorkflowConditions(
+    payload: Record<string, unknown>,
+    defaultEntityType: string | null,
+    conditions: WorkflowConditionInspectRow[]
+): WorkflowConditionInspectResult[] {
+    return conditions.map((c, index) => {
+        const enabled = c.enabled !== false;
+        const field_path = (c.field_path ?? c.field ?? "").trim() || null;
+        const operator = String(c.operator ?? "eq").trim().toLowerCase();
+        const condition_id = c.id != null && String(c.id).trim() ? String(c.id).trim() : `condition-${index}`;
+        try {
+            const actual = getConditionActual(payload, defaultEntityType, c);
+            const passed = evaluateCondition(payload, defaultEntityType, c);
+            const expected = c.value_jsonb !== undefined && c.value_jsonb !== null ? c.value_jsonb : c.value;
+            return {
+                condition_id,
+                target_entity: c.target_entity ?? defaultEntityType ?? null,
+                field_path,
+                operator,
+                expected,
+                actual,
+                passed,
+                enabled,
+                eval_error: null,
+            };
+        } catch (err) {
+            return {
+                condition_id,
+                target_entity: c.target_entity ?? defaultEntityType ?? null,
+                field_path,
+                operator,
+                expected: c.value_jsonb !== undefined && c.value_jsonb !== null ? c.value_jsonb : c.value,
+                actual: undefined,
+                passed: false,
+                enabled,
+                eval_error: err instanceof Error ? err.message : String(err),
+            };
+        }
+    });
+}

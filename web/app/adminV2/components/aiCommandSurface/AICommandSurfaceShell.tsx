@@ -31,12 +31,16 @@ import {
   type WorkflowAssistReadIntentV1,
   type WorkflowAssistThreadMutationHandlersV1,
 } from "@/lib/agent/workflowAssist/workflowAssistReadV1";
+import type { ConfigurationProposalV1 } from "@/lib/agent/configLayoutAssist/configurationProposalV1";
+import type { ConfigLayoutAssistTraceV1 } from "@/lib/agent/configLayoutAssist/configLayoutAssistTypes";
 import type { WorkflowAssistProposeRequestV1, WorkflowAssistSuggestionV1 } from "@/lib/agent/workflowAssist/workflowAssistProposalV1";
 import {
   buildWorkflowAssistExplainCardPayload,
-  buildWorkflowAssistExplainV1,
   type WorkflowAssistExplainResponseV1,
 } from "@/lib/agent/workflowAssist/workflowAssistExplainV1";
+import { buildWorkflowOperationalTraceV1 } from "@/lib/agent/workflowAssist/workflowAssistOperationalTraceBuilder";
+import { buildWorkflowAssistExplainFromTraceV1 } from "@/lib/agent/workflowAssist/workflowAssistExplainFromTraceV1";
+import type { WorkflowOperationalTraceV1 } from "@/lib/agent/workflowAssist/workflowAssistOperationalTraceV1";
 import {
   commandSurfaceEntitySearchQuery,
   routeCommandSurface,
@@ -109,6 +113,7 @@ function lastThreadPreviewText(turns: CommandSurfaceThreadTurn[]): string | null
       if (turn.card.type === "task_assist") return turn.card.entityLabel?.trim() || null;
       if (turn.card.type === "job_layout") return turn.card.headline?.trim() || "Job layout";
       if (turn.card.type === "workflow_assist_proposal") return "Workflow Assist proposal";
+      if (turn.card.type === "config_layout_assist_proposal") return "Configuration proposal";
     }
   }
   return null;
@@ -744,7 +749,7 @@ export default function AICommandSurfaceShell() {
           }
         : null;
 
-      const isExplain = intent.sub_intent === "explain_v0";
+      const isExplain = intent.sub_intent === "explain_v0" || intent.sub_intent === "explain_v1";
       const needsSummary = !isExplain;
       const needsRuns = intent.sub_intent === "failed_runs_last_7d";
 
@@ -766,16 +771,25 @@ export default function AICommandSurfaceShell() {
       try {
         if (isExplain) {
           if (!ambientEntity) {
-            const explanation = buildWorkflowAssistExplainV1({
-              request: { version: 1, entity_type: "", entity_id: "" },
+            const trace = buildWorkflowOperationalTraceV1({
+              entity_type: "",
+              entity_id: "",
               normalized_entity_type: "",
+              range: "30d",
+              workflow_id_filter: null,
+              event_type_filter: null,
               events: [],
               workflows: [],
               runs: [],
-              failed_actions: [],
+              conditions_by_workflow: {},
+              actions_by_run: {},
             });
+            const explanation = buildWorkflowAssistExplainFromTraceV1(
+              { version: 1, entity_type: "", entity_id: "", range: "30d" },
+              trace
+            );
             appendRead({
-              payload: buildWorkflowAssistExplainCardPayload(explanation),
+              payload: buildWorkflowAssistExplainCardPayload(explanation, trace),
               error: null,
             });
             return;
@@ -791,7 +805,9 @@ export default function AICommandSurfaceShell() {
           });
           const exJson = (await exRes.json().catch(() => ({}))) as {
             ok?: boolean;
+            explain_engine?: number;
             explanation?: WorkflowAssistExplainResponseV1;
+            trace?: WorkflowOperationalTraceV1;
             message?: string;
             error?: string;
           };
@@ -808,7 +824,7 @@ export default function AICommandSurfaceShell() {
             return;
           }
           appendRead({
-            payload: buildWorkflowAssistExplainCardPayload(exJson.explanation),
+            payload: buildWorkflowAssistExplainCardPayload(exJson.explanation, exJson.trace),
             error: null,
           });
           return;
@@ -888,6 +904,57 @@ export default function AICommandSurfaceShell() {
       }
     },
     [globalAssistant, setThread]
+  );
+
+  const runConfigLayoutAssistRoute = useCallback(
+    async (cmd: string) => {
+      try {
+        const res = await fetch("/api/admin/ai/config-layout-assist/propose", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify({ command: cmd, persist: true }),
+        });
+        const j = (await res.json()) as {
+          ok?: boolean;
+          proposal?: ConfigurationProposalV1;
+          trace?: ConfigLayoutAssistTraceV1;
+          persisted_proposal_id?: string | null;
+          error?: string;
+          message?: string;
+        };
+        if (!res.ok || !j.ok || !j.proposal || !j.trace) {
+          setThread((prev) =>
+            appendThreadTurn(prev, {
+              kind: "error",
+              text: `Configuration Assist could not build a proposal: ${j.message ?? j.error ?? `HTTP ${res.status}`}`,
+            })
+          );
+          return;
+        }
+        const proposal = j.proposal as ConfigurationProposalV1;
+        const trace = j.trace as ConfigLayoutAssistTraceV1;
+        setThread((prev) =>
+          appendThreadTurn(prev, {
+            kind: "action_card",
+            card: {
+              type: "config_layout_assist_proposal",
+              proposal,
+              trace,
+              persistedProposalId: j.persisted_proposal_id ?? null,
+            },
+          })
+        );
+      } catch (e) {
+        setThread((prev) =>
+          appendThreadTurn(prev, {
+            kind: "error",
+            text: e instanceof Error ? e.message : "Configuration Assist request failed.",
+          })
+        );
+      }
+    },
+    [setThread]
   );
 
   const proposeWorkflowAssistBody = useCallback(
@@ -991,6 +1058,9 @@ export default function AICommandSurfaceShell() {
             })
           );
           break;
+        case "config_layout_assist":
+          await runConfigLayoutAssistRoute(cmd);
+          break;
         case "job_layout":
           await runJobLayoutRoute(cmd);
           break;
@@ -1002,7 +1072,15 @@ export default function AICommandSurfaceShell() {
       setBusy(false);
       queueMicrotask(() => inputRef.current?.focus());
     }
-  }, [busy, commandText, globalAssistant, runJobLayoutRoute, runTaskAssistRoute, runWorkflowAssistRoute]);
+  }, [
+    busy,
+    commandText,
+    globalAssistant,
+    runConfigLayoutAssistRoute,
+    runJobLayoutRoute,
+    runTaskAssistRoute,
+    runWorkflowAssistRoute,
+  ]);
 
   const applyJobLayoutCard = useCallback(
     async (turnId: string) => {

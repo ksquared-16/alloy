@@ -50,15 +50,20 @@ function WorkflowAssistReadCardBody({
     ) : null;
 
     switch (payload.variant) {
-        case "explain_v0": {
+        case "explain_v0":
+        case "explain_v1": {
             const ex = payload.explanation;
+            const trace = payload.trace;
+            const isV1 = payload.variant === "explain_v1" && trace != null;
             const confidenceLabel =
                 ex.confidence === "high" ? "High confidence" : ex.confidence === "medium" ? "Medium confidence" : "Low confidence";
             return (
-                <div className="space-y-2" data-command-surface-workflow-assist-explain="true">
+                <div className="space-y-2" data-command-surface-workflow-assist-explain="true" data-command-surface-workflow-assist-explain-engine={isV1 ? "1" : "0"}>
                     <div className="text-[13px] font-semibold">{payload.headline}</div>
                     <p className="text-[11px]" style={{ color: CMD.textSupporting }} data-command-surface-workflow-assist-explain-summary>
-                        Deterministic checklist from workflow_events, workflows, and runs — not an AI guess.
+                        {isV1 ?
+                            "Operational trace from events, conditions, runs, and actions — deterministic, not an AI guess."
+                        :   "Deterministic checklist from workflow_events, workflows, and runs — not an AI guess."}
                     </p>
                     {payload.needs_more_context ?
                         <p
@@ -79,6 +84,21 @@ function WorkflowAssistReadCardBody({
                         <span className="font-semibold">Next: </span>
                         {ex.recommended_action}
                     </p>
+                    {isV1 && trace && trace.timeline.length > 0 ?
+                        <ol className="max-h-[min(220px,36vh)] space-y-1 overflow-y-auto border-l-2 pl-3" data-command-surface-workflow-assist-explain-timeline style={{ borderColor: derived.border }}>
+                            {trace.timeline.map((entry) => (
+                                <li key={entry.id} className="text-[10px]" data-command-surface-workflow-assist-timeline-entry={entry.kind}>
+                                    <span className="font-mono text-[9px]" style={{ color: CMD.textLabel }}>
+                                        {new Date(entry.occurred_at).toLocaleString()}
+                                    </span>
+                                    <div className="font-semibold" style={{ color: CMD.textBody }}>
+                                        {entry.label}
+                                    </div>
+                                    <div style={{ color: CMD.textSupporting }}>{entry.detail}</div>
+                                </li>
+                            ))}
+                        </ol>
+                    : null}
                     <ul className="space-y-2" data-command-surface-workflow-assist-explain-checklist>
                         {ex.checklist.map((item) => (
                             <li

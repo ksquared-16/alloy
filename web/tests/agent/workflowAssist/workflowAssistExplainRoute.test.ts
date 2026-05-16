@@ -27,7 +27,7 @@ vi.mock("@/lib/admin/getAdminContext", async () => {
     };
 });
 
-vi.mock("@/lib/agent/workflowAssist/workflowAssistExplainService", () => ({
+vi.mock("@/lib/agent/workflowAssist/workflowAssistOperationalTraceFetch", () => ({
     fetchWorkflowAssistExplainV1: (...args: unknown[]) => mockFetchExplain(...args),
 }));
 
@@ -55,26 +55,55 @@ describe("GET /api/admin/ai/workflow-assist/explain", () => {
         expect(res.status).toBe(400);
     });
 
-    it("returns explanation for ops (read-only)", async () => {
+    it("returns explanation and trace for ops (read-only)", async () => {
         mockFetchExplain.mockResolvedValue({
-            version: 1,
-            status: "no_event_found",
-            confidence: "medium",
-            headline: "No workflow event found for this record",
-            likely_reason: "test",
-            recommended_action: "test",
-            checklist: [],
-            links: {},
-            context: { entity_type: "opportunities", entity_id: "abc" },
+            explanation: {
+                version: 1,
+                explain_engine: 1,
+                status: "no_event_found",
+                confidence: "medium",
+                headline: "No workflow event found for this record",
+                likely_reason: "test",
+                recommended_action: "test",
+                checklist: [],
+                links: {},
+                context: { entity_type: "opportunities", entity_id: "abc" },
+            },
+            trace: {
+                version: 1,
+                trace_id: "abc123",
+                entity_type: "opportunities",
+                entity_id: "abc",
+                range: null,
+                anchored_event: null,
+                workflows: [],
+                primary_workflow_id: null,
+                primary_run: null,
+                condition_results: [],
+                action_results: [],
+                status_transitions: [],
+                timeline: [],
+                outcome: "no_event_found",
+                confidence: "medium",
+                inspect_next: [],
+            },
         });
         const req = new NextRequest(
             "http://localhost/api/admin/ai/workflow-assist/explain?entity_type=opportunities&entity_id=00000000-0000-4000-8000-000000000001"
         );
         const res = await GET(req);
         expect(res.status).toBe(200);
-        const j = (await res.json()) as { ok?: boolean; explanation?: { status?: string } };
+        const j = (await res.json()) as {
+            ok?: boolean;
+            explain_engine?: number;
+            explanation?: { status?: string; explain_engine?: number };
+            trace?: { trace_id?: string };
+        };
         expect(j.ok).toBe(true);
+        expect(j.explain_engine).toBe(1);
         expect(j.explanation?.status).toBe("no_event_found");
+        expect(j.explanation?.explain_engine).toBe(1);
+        expect(j.trace?.trace_id).toBe("abc123");
         expect(mockFetchExplain).toHaveBeenCalledTimes(1);
         expect(mockFetchExplain.mock.calls[0]![1]).toBe(orgId);
     });

@@ -26,10 +26,10 @@ function source(partial: Partial<WorkflowAssistExplainSourceDataV1>): WorkflowAs
     };
 }
 
-describe("parseWorkflowAssistReadIntent explain_v0", () => {
-    it("classifies why-not-moved to explain_v0", () => {
+describe("parseWorkflowAssistReadIntent explain_v1", () => {
+    it("classifies why-not-moved to explain_v1", () => {
         const p = parseWorkflowAssistReadIntent("Why didn't this family get moved?", { hasAmbientOpportunity: true });
-        expect(p.sub_intent).toBe("explain_v0");
+        expect(p.sub_intent).toBe("explain_v1");
     });
 });
 
@@ -51,6 +51,7 @@ describe("buildWorkflowAssistExplainV1", () => {
 
     it("returns no_event_found when events empty", () => {
         const ex = buildWorkflowAssistExplainV1(source({}));
+        expect(ex.explain_engine).toBe(0);
         expect(ex.status).toBe("no_event_found");
     });
 

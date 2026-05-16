@@ -11,6 +11,7 @@ export const WORKFLOW_ASSIST_AGENT_KEY = "workflow_assist" as const;
 /** Sub-intent for deterministic routing (Orchestrator → read cards). */
 export type WorkflowAssistReadSubIntentV1 =
     | "explain_v0"
+    | "explain_v1"
     | "failed_runs_last_7d"
     | "enrollment_touch"
     | "workflow_summary";
@@ -75,7 +76,7 @@ export function parseWorkflowAssistReadIntent(
     if (explainish) {
         return {
             version: 1,
-            sub_intent: "explain_v0",
+            sub_intent: "explain_v1",
             parse_reason: ctx.hasAmbientOpportunity ? "why_blocked_ambient" : "why_blocked_generic",
         };
     }
@@ -234,11 +235,12 @@ export function buildWorkflowAssistReadCardPayload(
 
     switch (intent.sub_intent) {
         case "explain_v0":
+        case "explain_v1":
             return {
                 ok: false,
                 error: workflowAssistErrorEnvelope(
                     "bad_response",
-                    "Explain v0 is loaded via GET /api/admin/ai/workflow-assist/explain, not summary aggregation."
+                    "Explain is loaded via GET /api/admin/ai/workflow-assist/explain, not summary aggregation."
                 ),
             };
         case "failed_runs_last_7d": {

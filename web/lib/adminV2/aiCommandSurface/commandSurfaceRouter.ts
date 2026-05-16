@@ -10,13 +10,19 @@ import {
     type TaskAssistCommandIntent,
 } from "@/lib/agent/taskAssist/taskAssistCommandIntent";
 
+import { isConfigLayoutAssistLikeCommand } from "@/lib/agent/configLayoutAssist/configLayoutAssistIntent";
 import { extractCommandSurfaceSlots, type CommandSurfaceSlots } from "./commandSurfaceSlotExtract";
 import {
     parseWorkflowAssistReadIntent,
     type WorkflowAssistReadIntentV1,
 } from "@/lib/agent/workflowAssist/workflowAssistReadV1";
 
-export type CommandSurfaceRouteKind = "workflow_assist" | "task_assist" | "job_layout" | "clarify";
+export type CommandSurfaceRouteKind =
+    | "workflow_assist"
+    | "task_assist"
+    | "config_layout_assist"
+    | "job_layout"
+    | "clarify";
 
 export type CommandSurfaceRouteContext = {
     /** True when drawer / launcher set an opportunity on GlobalAssistantContext. */
@@ -47,6 +53,12 @@ function taskAssistSignals(slots: CommandSurfaceSlots, intent: TaskAssistCommand
     return false;
 }
 
+function configLayoutAssistSignals(slots: CommandSurfaceSlots, input: string): boolean {
+    if (slots.workflow_like || slots.comms_verb || slots.reminder_verb) return false;
+    if (slots.config_layout_like) return true;
+    return isConfigLayoutAssistLikeCommand(input);
+}
+
 function jobLayoutSignals(slots: CommandSurfaceSlots, intent: TaskAssistCommandIntent): boolean {
     if (intent.workflow_blocked) return false;
     if (slots.layout_verb && !slots.comms_verb && !slots.reminder_verb) return true;
@@ -66,9 +78,10 @@ function jobLayoutSignals(slots: CommandSurfaceSlots, intent: TaskAssistCommandI
  * Precedence:
  * 1. workflow-like → workflow_assist (Workflow Assist read-only cards)
  * 2. comms / reminder / schedule → task_assist (Task Assist specialist)
- * 3. job / layout overview → job_layout
- * 4. entity-only or ambient pronoun → task_assist (search / confirm)
- * 5. otherwise → clarify
+ * 3. field / section / drawer config → config_layout_assist
+ * 4. job / layout overview → job_layout
+ * 5. entity-only or ambient pronoun → task_assist (search / confirm)
+ * 6. otherwise → clarify
  */
 export function routeCommandSurface(
     input: string,
@@ -87,6 +100,16 @@ export function routeCommandSurface(
             taskAssistIntent,
             clarifyMessage: null,
             workflowAssistReadIntent,
+        };
+    }
+
+    if (configLayoutAssistSignals(slots, input)) {
+        return {
+            route: "config_layout_assist",
+            slots,
+            taskAssistIntent,
+            clarifyMessage: null,
+            workflowAssistReadIntent: null,
         };
     }
 

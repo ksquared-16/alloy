@@ -1,7 +1,7 @@
 # Sprint: Workflow Assist V1 (Agent #3)
 
 **Path:** `docs/sprints/05_2026/workflow_assist_v1.md`  
-**Status:** **Cards 1–5 + stabilization + Explain v0 shipped** — read-only cards, deterministic propose/apply, role-aware UX, create-template guardrails, **`GET /api/admin/ai/workflow-assist/explain`** (deterministic checklist). LLM, durable proposals, bulk pause, deep condition correlation remain deferred.  
+**Status:** **Cards 1–5 + stabilization + Explain v1 (operational trace) shipped** — read-only cards, deterministic propose/apply, role-aware UX, create-template guardrails, **`GET /api/admin/ai/workflow-assist/explain`** returns Explain v1 with **`WorkflowOperationalTraceV1`**. LLM, durable proposals, bulk pause, multi-event disambiguation remain deferred.  
 **Prerequisites:** `docs/sprints/05_2026/agent_interaction_layer_v1.md` (Orchestrator + thread + action cards), `docs/sprints/05_2026/task_assist_v1_1.md` (Task Assist patterns), `docs/sprints/05_2026/ai_agents_v1.md` §9 (`WorkflowAssistSuggestionV1` template), `docs/product/ai-system.md`, `docs/system/actions-and-workflows.md`.
 
 **Non-goals for this document:** Task Assist transactional scope; new workflow execution engine; autonomous `executeWorkflowRun` from NL; childcare-only automation rules in platform code.
@@ -51,8 +51,8 @@
 
 | Topic | State |
 |-------|--------|
-| **Explain v0** | **Shipped** — deterministic read-only **`GET /api/admin/ai/workflow-assist/explain`** + Orchestrator **`explain_v0`** intent; inspects `workflow_events`, `workflows`, `workflow_runs`, `workflow_action_runs`. Does **not** evaluate live conditions or entity status history. |
-| **Explain v1** | **Deferred** — condition-level correlation, entity status timeline, multi-workflow disambiguation, optional LLM narrative. |
+| **Explain v1 (operational trace)** | **Shipped** — **`GET /api/admin/ai/workflow-assist/explain`** returns `{ explain_engine: 1, explanation, trace }`; Orchestrator **`explain_v1`** intent. Trace correlates events → workflows → conditions (same eval as `executeWorkflowRun`) → runs → action_runs; timeline + status transitions from event/run payloads. |
+| **Explain v0** | **Superseded in API** — v0 builder remains for tests; production path uses trace builder. |
 | **Failed runs list** | Client filters last-100 runs; KPI line approximate. |
 | **`WORKFLOW_ASSIST_NOTICE_TEXT`** | Still used for legacy `workflow_notice` copy only. |
 | **Durable `workflow_assist_proposals`** | **Not implemented** — ephemeral suggestion JSON + client-held card (same pattern as early Task Assist). |
@@ -299,40 +299,63 @@ All inside **Orchestrator thread** (`CommandSurfaceThread` + action cards) — n
 
 ---
 
-## 12. Explain v0 (shipped)
+## 12. Operational trace + Explain v1 (shipped)
 
-| Topic | Detail |
-|-------|--------|
-| **API** | `GET /api/admin/ai/workflow-assist/explain` — query: `entity_type`, `entity_id`, optional `workflow_id`, `event_type`, `range` (`24h` \| `7d` \| `30d`). |
-| **Auth** | `requireAdminOrOps` + org scope (read-only; **no** `workflow_assist_draft` policy). |
-| **Data sources** | `workflow_events` (entity-scoped, time window), `workflows` (match `event_type` + `entity_type`, org + global), `workflow_runs` (by `event_id`), `workflow_action_runs` (failed steps). |
-| **Outcomes** | `insufficient_context`, `no_event_found`, `no_matching_workflow`, `workflow_disabled`, `no_run_created`, `run_failed`, `action_failed`, `run_successful`, `run_skipped`, `insufficient_data`. |
-| **UI** | Orchestrator routes “why didn’t…” to **`explain_v0`**; shell calls explain API when ambient opportunity context exists; otherwise **Needs more context** card (no apply CTAs). |
-| **Deterministic** | Pure builder `buildWorkflowAssistExplainV1` — not LLM; checklist + confidence + Automations links. |
+### Doctrine
 
-### Explain v0 limitations
+- **Operational trace** is the reusable read-only correlation layer: one normalized `WorkflowOperationalTraceV1` per explain request.
+- Trace is built from **authoritative DB tables only** — no LLM, no replay, no mutations.
+- Condition inspection reuses **`inspectWorkflowConditions`** from `workflowRun.ts` (same operators/paths as runtime).
+- Explain **conclusion** is derived from trace outcome — checklist and timeline are projections of trace, not separate truth.
 
-- Requires **entity_type + entity_id** (ambient opportunity in command surface, or explicit query params).
-- Uses **latest event** in window as anchor; does not compare multiple candidate events.
-- Does **not** read `workflow_conditions` evaluation, entity status tables, or comms delivery logs.
-- Global workflows (`org_id` null) included in matching query; run enrichment uses org-scoped workflow names.
-- **“Successful run”** does not prove business outcome (wrong template, skipped manual step, etc.).
+### Modules
 
-### Explain v1 ideas (deferred)
+| Module | Role |
+|--------|------|
+| `workflowAssistOperationalTraceV1.ts` | Trace + timeline contracts |
+| `workflowAssistOperationalTraceBuilder.ts` | Pure trace builder + outcome derivation |
+| `workflowAssistOperationalTraceFetch.ts` | Org-scoped fetch + assemble source data |
+| `workflowAssistExplainFromTraceV1.ts` | Explain card copy from trace |
+| `workflowRun.ts` → `inspectWorkflowConditions` | Shared condition evaluation |
 
-- Condition checklist from last run payload / condition rows.
-- Status-change timeline vs expected `opportunity_status_changed` payload.
-- Pin `workflow_id` / `event_type` from operator utterance (slot extract).
-- Optional LLM narrative **on top of** structured checklist (policy-gated).
+### API
+
+`GET /api/admin/ai/workflow-assist/explain` — query: `entity_type`, `entity_id`, optional `workflow_id`, `event_type`, `range`.
+
+Response: `{ ok: true, explain_engine: 1, explanation, trace }`.
+
+**Auth:** `requireAdminOrOps` (read-only; no `workflow_assist_draft`).
+
+**Outcomes:** v0 set plus **`condition_mismatch`** when run skipped / conditions fail.
+
+### UI
+
+- Orchestrator **`explain_v1`** intent (why-not-moved phrasing).
+- **`WorkflowAssistReadThreadCard`**: checklist + **operational timeline** + Automations/run links.
+- Read-only badge; no apply from explain card.
+
+### Limitations
+
+- Anchors on **latest** `workflow_events` row in window (no multi-event picker).
+- Status timeline from **event/run payloads** only (not full entity audit log).
+- Does not inspect comms delivery, form completion, or external integrations.
+- Condition eval uses **stored run/event payload** — may differ from live entity if payload was sparse at run time.
+- Global workflows (`org_id` null) included in definition matching.
+
+### Future extensibility
+
+- Trace `trace_id` stable hash for persistence, diff, and recommendation systems.
+- Optional LLM narrative **on top of** trace JSON (policy-gated).
+- Multi-workflow disambiguation when several enabled workflows match one event.
 
 ---
 
-## 13. Recommended next feature batch (post–Explain v0)
+## 13. Recommended next feature batch (post–Explain v1)
 
-1. **Edit from read cards** — narrow, safe patch (e.g. rename) with preview, still admin-only apply.  
-2. **Explain v1** — condition + entity status correlation (still read-only).  
+1. **Edit from read cards** — narrow, safe patch with preview, admin-only apply.  
+2. **Multi-event explain** — let operator pick which `workflow_events` row to anchor.  
 3. **Durable proposals** — if compliance requires retained drafts + audit rows.  
-4. **Optional: propose for ops** — only if product explicitly widens policy (separate from apply).
+4. **Trace-backed recommendations** — suggest disable workflow / fix condition (still human-approved).
 
 ---
 

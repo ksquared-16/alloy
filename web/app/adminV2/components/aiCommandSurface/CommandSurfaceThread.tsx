@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import TaskAssistCompactDraftCard from "@/components/admin/taskAssist/TaskAssistCompactDraftCard";
 import TaskAssistCompactReminderCard from "@/components/admin/taskAssist/TaskAssistCompactReminderCard";
 import TaskAssistOpportunityWorkspace from "@/components/admin/taskAssist/TaskAssistOpportunityWorkspace";
+import { ConfigLayoutAssistProposalThreadCard } from "@/app/adminV2/components/aiCommandSurface/ConfigLayoutAssistProposalThreadCard";
 import { WorkflowAssistProposalActionCard } from "@/app/adminV2/components/aiCommandSurface/WorkflowAssistProposalActionCard";
 import { WorkflowAssistReadThreadCard } from "@/app/adminV2/components/aiCommandSurface/WorkflowAssistReadThreadCard";
 import { badgeLabel } from "@/lib/adminV2/aiCommandSurface/aiCommandSurfaceModel";
@@ -224,6 +225,17 @@ export default function CommandSurfaceThread({
                                     <WorkflowAssistProposalActionCard
                                         suggestion={turn.card.suggestion}
                                         applyAllowed={workflowAssistMutationsAllowed}
+                                    />
+                                </AssistantBubble>
+                            );
+                        }
+                        if (turn.card.type === "config_layout_assist_proposal") {
+                            return (
+                                <AssistantBubble key={turn.id}>
+                                    <ConfigLayoutAssistProposalThreadCard
+                                        proposal={turn.card.proposal}
+                                        trace={turn.card.trace}
+                                        persistedProposalId={turn.card.persistedProposalId}
                                     />
                                 </AssistantBubble>
                             );

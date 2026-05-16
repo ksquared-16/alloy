@@ -41,6 +41,21 @@ describe("routeCommandSurface", () => {
         expect(r.route).toBe("job_layout");
     });
 
+    it("routes field config command to config_layout_assist", () => {
+        const r = routeCommandSurface("Create Preferred Start Date field");
+        expect(r.route).toBe("config_layout_assist");
+    });
+
+    it("routes layout integrity question to config_layout_assist", () => {
+        const r = routeCommandSurface("Show layouts with inconsistencies");
+        expect(r.route).toBe("config_layout_assist");
+    });
+
+    it("prefers config_layout_assist over job_layout for drawer field commands", () => {
+        const r = routeCommandSurface("Expose subsidy tier in the summary drawer");
+        expect(r.route).toBe("config_layout_assist");
+    });
+
     it("routes workflow phrase to workflow_assist with read intent", () => {
         const r = routeCommandSurface("when forms complete move them to ready to enroll");
         expect(r.route).toBe("workflow_assist");
@@ -60,7 +75,7 @@ describe("routeCommandSurface", () => {
             hasAmbientOpportunity: true,
         });
         expect(r.route).toBe("workflow_assist");
-        expect(r.workflowAssistReadIntent?.sub_intent).toBe("explain_v0");
+        expect(r.workflowAssistReadIntent?.sub_intent).toBe("explain_v1");
     });
 
     it("non-workflow routes set workflowAssistReadIntent null", () => {

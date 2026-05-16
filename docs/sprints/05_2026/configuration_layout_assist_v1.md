@@ -1,7 +1,7 @@
 # Sprint: Configuration / Layout Assist V1 (Agent #4)
 
 **Path:** `docs/sprints/05_2026/configuration_layout_assist_v1.md`  
-**Status:** **Documentation + audit lock (Card 0)** — no product implementation in this pass.  
+**Status:** **Cards 1–10 implemented (vertical slice)** — primitives, proposal contract, persistence, permissions, Orchestrator routing, review UX, apply adapters. Cards 11–12 deferred.  
 **Prerequisites:** `docs/sprints/05_2026/agent_interaction_layer_v1.md` (Orchestrator + thread + action cards), `docs/sprints/05_2026/workflow_assist_v1.md` (propose/apply + permission patterns), `docs/system/configuration-system.md`, `docs/system/record-system.md`, `docs/product/ai-system.md`.
 
 **Non-goals for this document:** Autonomous config mutation; raw SQL from agents; service-role bypass; childcare-only field keys in platform code; replacing human Settings UI; merging Task Assist or Workflow Assist responsibilities.
@@ -18,6 +18,41 @@
 | **Agent count (V1)** | **One** Orchestrator-facing specialist: **`ConfigurationLayoutAssistService`**, with **internal domains** (layout, fields, sections, requirements, editability, data_quality, explainability). **Do not** ship four disconnected agents in V1. |
 | **Schema** | **Do not invent tables** in product code without a documented migration card. Prefer extending existing tables/APIs; document gaps as **Card 1–4** prerequisites. |
 | **Vertical neutrality** | Example prompts (“Preferred Start Date”, “subsidy tier”, “tour date”) are **documentation examples**; platform catalogs stay industry-agnostic. |
+
+---
+
+## Implementation status (2026-05-16)
+
+| Card | Status | Notes |
+|------|--------|--------|
+| **1–4** | **Implemented** | `field_requirement_policy`, `interaction_policy`, section management, `layoutIntegrityValidator`, admin layout-integrity GET. |
+| **5** | **Implemented** | `ConfigurationProposalV1` contract — validate, normalize, serialize, risk, permissions. |
+| **6** | **Implemented** | `config_layout_assist_proposals` table + lifecycle state machine (no apply in PATCH). |
+| **7** | **Implemented** | Migration `20260523150000_config_assist_permissions_seed.sql`; `configurationProposalAccess.ts`; operation→permission map. Legacy role fallback opt-in via `CONFIG_LAYOUT_ASSIST_LEGACY_ROLE_FALLBACK=true`. |
+| **8** | **Implemented** | `config_layout_assist` route in Orchestrator; `POST /api/admin/ai/config-layout-assist/propose`; deterministic `buildDeterministicConfigurationProposal`; thread card `config_layout_assist_proposal`. |
+| **9** | **Implemented** | Settings hub `/adminV2/settings/config-proposals` — list, detail, diff preview, lifecycle actions, recommendation vs applied banners. |
+| **10** | **Implemented** | `apply/configurationProposalApply.ts` + `POST .../proposals/[id]/apply`; read-after-write verification via `buildApplyVerificationResult`; transitions to `applied` / `failed`. |
+| **11–12** | **Deferred** | Dedicated analyze/explain routes; rollback execution. |
+
+### Adapter architecture (Card 10)
+
+- **Entry:** `POST /api/admin/config-layout-assist/proposals/[id]/apply` (requires `approved` + `config_assist.apply` + per-operation grants).
+- **Flow:** `applyConfigurationProposal` → per-operation adapter → org-scoped `field_definitions` writes (same policy merge as admin field APIs) → `buildApplyVerificationResult` → lifecycle transition.
+- **Supported apply kinds (V1):** `create_field`, `update_field`, `set_field_requirement`, `set_field_interaction`, `set_field_write_target`, `expose_field_on_layout`, `hide_field_on_layout`, `move_field_to_section`.
+- **Unsupported kinds** return explicit errors (no silent skip). `data_quality_recommendation` is recommendation-only (skipped for verification).
+- **Verification:** Re-fetch field row after patch; failed verification → `failed` state with `failed_reason` + diagnostics in `proposal_json.metadata.apply_verification`.
+
+### Proposal lifecycle
+
+`draft` → `reviewed` | `rejected` → `approved` → `applied` | `failed` → (`rolled_back` deferred). Apply is **never** triggered from propose or Orchestrator card — only from Settings after approval.
+
+### Remaining gaps / TODOs
+
+- Section / layout / option-set apply adapters (`create_section`, `reorder_section`, `update_option_set`, record-drawer JSON).
+- Stale `expected_updated_at` optimistic locking on apply (field visibility RPC path not wired).
+- Workflow events on lifecycle transitions (audit log only today).
+- `org_settings.metadata.ai_policy` feature flag `config_layout_assist_draft` (permissions-only gate today).
+- Rollback (`rolled_back`) execution path.
 
 ---
 
@@ -718,8 +753,8 @@ All UX lives in the **Orchestrator thread** — proposal action cards, no separa
 
 **Acceptance criteria:**
 
-- [ ] Field/layout NL routes to Config/Layout Assist, not Task Assist.
-- [ ] Job layout commands remain functional (explicit regression tests).
+- [x] Field/layout NL routes to Config/Layout Assist, not Task Assist.
+- [x] Job layout commands remain functional (explicit regression tests).
 
 **Non-goals:** Full NL understanding (deterministic keywords first).
 
@@ -740,8 +775,8 @@ All UX lives in the **Orchestrator thread** — proposal action cards, no separa
 
 **Acceptance criteria:**
 
-- [ ] Apply disabled when `permission_requirements` not met.
-- [ ] Before/after visible for at least one operation kind.
+- [x] Apply only from Settings after approval (Orchestrator card links to review; no thread Apply).
+- [x] Before/after visible for operations in Settings detail.
 
 **Non-goals:** Settings page redesign.
 
@@ -763,9 +798,9 @@ All UX lives in the **Orchestrator thread** — proposal action cards, no separa
 
 **Acceptance criteria:**
 
-- [ ] Apply uses same validators as human Settings saves.
-- [ ] Stale version returns structured `failed` with safe message.
-- [ ] Read-after-write calls effective preview or GET field definition.
+- [x] Apply uses same validators as human Settings saves (`mergeFieldDefinitionPoliciesFromBody`, field key rules).
+- [ ] Stale version returns structured `failed` with safe message (deferred — no lock timestamp on apply yet).
+- [x] Read-after-write re-fetches field definition after patch.
 
 **Non-goals:** New Supabase tables for field values.
 

@@ -180,6 +180,9 @@ export default function AdminV2SettingsIndexPage() {
                         <SettingsCard href="/adminV2/settings/layouts" title="Layouts" accent="records">
                             Runtime drawer layouts (record_drawer_layouts); safe workflow v1 section order for opportunities.
                         </SettingsCard>
+                        <SettingsCard href="/adminV2/settings/config-proposals" title="Config proposals" accent="records">
+                            Review and apply Configuration / Layout Assist proposals (human approval required).
+                        </SettingsCard>
                     </SettingsTileGrid>
                 </Group>
             </div>

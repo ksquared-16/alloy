@@ -16,8 +16,11 @@ const EMAIL_RE = /\bemail\b/i;
 const TIMING_RE =
     /\b(tomorrow|next\s+week|later|tonight|this\s+evening|schedule(?:d)?|send\s+later|at\s+\d{1,2}(?::\d{2})?\s*(?:am|pm)?)\b/i;
 
+const CONFIG_LAYOUT_ASSIST_RE =
+    /\b(field|fields|section|drawer|visibility|required|read[\s-]?only|editable|option\s+set|subsidy|preferred\s+start|tour\s+date|header|summary|inconsistenc\w*|layout\s+problem|why\s+can'?t\s+i\s+edit|create\s+.+\s+field|expose\s+|field\s+definition)\b/i;
+
 const JOB_LAYOUT_RE =
-    /\b(job\s+overview|overview\s+layout|overview|layout|panel|section|widget|configure|customer[\s-]?focused|make\s+the|hide|show|rearrange|reorder|more\s+customer)\b/i;
+    /\b(job\s+overview|overview\s+layout|overview|panel|widget|configure|customer[\s-]?focused|make\s+the|rearrange|reorder|more\s+customer)\b/i;
 
 const STRIP_COMMS_PREFIX =
     /^\s*(please\s+)?(text|sms|email|message|send|draft|notify)\s+/i;
@@ -40,6 +43,7 @@ export type CommandSurfaceSlots = {
     comms_verb: boolean;
     reminder_verb: boolean;
     layout_verb: boolean;
+    config_layout_like: boolean;
     workflow_like: boolean;
 };
 
@@ -102,6 +106,7 @@ export function extractCommandSurfaceSlots(input: string): CommandSurfaceSlots {
             comms_verb: false,
             reminder_verb: false,
             layout_verb: false,
+            config_layout_like: false,
             workflow_like: false,
         };
     }
@@ -115,7 +120,8 @@ export function extractCommandSurfaceSlots(input: string): CommandSurfaceSlots {
 
     const comms_verb = MESSAGE_RE.test(raw);
     const reminder_verb = REMINDER_RE.test(raw);
-    const layout_verb = JOB_LAYOUT_RE.test(raw);
+    const config_layout_like = CONFIG_LAYOUT_ASSIST_RE.test(raw);
+    const layout_verb = !config_layout_like && JOB_LAYOUT_RE.test(raw);
     const workflow_like = WORKFLOW_RE.test(raw);
 
     let working = raw;
@@ -140,8 +146,9 @@ export function extractCommandSurfaceSlots(input: string): CommandSurfaceSlots {
         comms_verb,
         reminder_verb,
         layout_verb,
+        config_layout_like,
         workflow_like,
     };
 }
 
-export { WORKFLOW_RE, MESSAGE_RE, REMINDER_RE, JOB_LAYOUT_RE, TIMING_RE };
+export { WORKFLOW_RE, MESSAGE_RE, REMINDER_RE, JOB_LAYOUT_RE, CONFIG_LAYOUT_ASSIST_RE, TIMING_RE };
