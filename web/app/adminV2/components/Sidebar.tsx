@@ -8,6 +8,7 @@ import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLi
 import { workspaceDataFetchInit } from "@/lib/workspace/workspaceDataFetch";
 import { dedupeAdminFetch } from "@/lib/workspace/workspaceAdminFetchDedupe";
 import { markWorkUnitNavigationStart } from "@/lib/perf/markWorkUnitNavigationStart";
+import { useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
 
 const WORKSPACE = "/adminV2/workspace";
 const SETTINGS_HREF = "/adminV2/settings";
@@ -40,7 +41,11 @@ export default function Sidebar({
     onToggle: () => void;
 }) {
     const pathname = usePathname();
+    const adminDrawer = useAdminDrawerOptional();
     const path = useMemo(() => normalizeAdminPath(pathname), [pathname]);
+    const onShellNavigate = () => {
+        adminDrawer?.closeDrawer();
+    };
     const { departmentId, workUnitId } = parseWorkspaceRoute(path);
     const onWorkspace = path === WORKSPACE || path.startsWith(`${WORKSPACE}/`);
     const onSettings = path.startsWith(SETTINGS_HREF);
@@ -103,7 +108,7 @@ export default function Sidebar({
 
     return (
         <aside
-            className="relative z-[65] flex flex-col flex-shrink-0 min-h-0 border-r transition-[width] duration-200 ease-out overflow-hidden"
+            className="relative z-[75] flex flex-col flex-shrink-0 min-h-0 border-r transition-[width] duration-200 ease-out overflow-hidden"
             style={{
                 width: railWidth,
                 backgroundColor: neutral.surface,
@@ -181,6 +186,7 @@ export default function Sidebar({
                             active={onSettings}
                             className="adminv2-sidebar-rail-link"
                             style={{ color: brand.primary }}
+                            onClick={onShellNavigate}
                         >
                             <Settings size={20} strokeWidth={1.75} />
                         </AdminV2NavLink>
@@ -282,6 +288,7 @@ export default function Sidebar({
                             active={onSettings}
                             className="rounded-md px-2 py-1.5 font-medium hover:bg-alloy-stone/10"
                             style={{ color: brand.primary }}
+                            onClick={onShellNavigate}
                         >
                             <span className="inline-flex items-center gap-2">
                                 <Settings size={16} strokeWidth={1.75} />

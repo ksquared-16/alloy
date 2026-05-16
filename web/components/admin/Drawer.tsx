@@ -3,6 +3,17 @@
 import React, { type CSSProperties, isValidElement, useEffect } from "react";
 import { neutral, derived, palette } from "@/styles/tokens/colors";
 
+/**
+ * AdminV2 entity drawer stacking (see docs in sidebar branch below):
+ * - Shell chrome (sidebar, top nav) must stay above the dim layer so Settings/links work in one click.
+ * - Dim is pointer-events-none so workspace routes under the panel receive clicks.
+ * - Panel is right-docked with an explicit max width — never a full-viewport hit target.
+ */
+export const ADMINV2_DRAWER_BACKDROP_Z = 60;
+export const ADMINV2_DRAWER_PANEL_Z = 70;
+/** Above drawer panel; below drawer-adjacent modals (z-80+). */
+export const ADMINV2_SHELL_CHROME_Z = 75;
+
 interface DrawerProps {
     isOpen: boolean;
     onClose: () => void;
@@ -81,6 +92,15 @@ export default function Drawer({
             document.body.style.overflow = "";
         };
     }, [isOpen]);
+
+    useEffect(() => {
+        if (!isOpen) return;
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === "Escape") onClose();
+        };
+        window.addEventListener("keydown", onKeyDown);
+        return () => window.removeEventListener("keydown", onKeyDown);
+    }, [isOpen, onClose]);
 
     if (!isOpen) return null;
 
@@ -351,15 +371,18 @@ export default function Drawer({
     return (
         <>
             <div
-                className="fixed inset-0 bg-black/50 pointer-events-none"
+                className="adminv2-drawer-sidebar-dim fixed inset-0 bg-black/50 pointer-events-none"
                 style={{ zIndex: zIndexBackdrop }}
                 aria-hidden
             />
             <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="admin-drawer-title"
                 data-adminv2-drawer={isV2 ? "true" : undefined}
-                className={`fixed right-0 top-0 bottom-0 w-full shadow-xl flex flex-col border ${
-                    panelClassName ?? "max-w-2xl"
-                } ${isV2 ? "border-solid" : `bg-admin-surface-card border-admin-border ${accentColor ? "" : "border-l-4 border-alloy-blue/40"}`}`}
+                className={`adminv2-drawer-sidebar-panel pointer-events-auto fixed inset-y-0 right-0 left-auto flex w-[min(100vw,42rem)] max-w-full flex-col border shadow-xl ${panelClassName ?? "max-w-2xl"} ${
+                    isV2 ? "border-solid" : `bg-admin-surface-card border-admin-border ${accentColor ? "" : "border-l-4 border-alloy-blue/40"}`
+                }`}
                 style={panelStyle}
             >
                 {headerBlock}

@@ -1,0 +1,34 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+
+const drawerPath = join(dirname(fileURLToPath(import.meta.url)), "../../components/admin/Drawer.tsx");
+const drawerSource = readFileSync(drawerPath, "utf8");
+
+describe("AdminV2 sidebar drawer pointer-events contract", () => {
+    it("sidebar dim is visual-only and does not capture clicks", () => {
+        expect(drawerSource).toContain("adminv2-drawer-sidebar-dim");
+        expect(drawerSource).toMatch(
+            /adminv2-drawer-sidebar-dim[\s\S]*?pointer-events-none/
+        );
+    });
+
+    it("sidebar panel is right-docked with explicit width cap and pointer-events-auto", () => {
+        expect(drawerSource).toContain("adminv2-drawer-sidebar-panel");
+        expect(drawerSource).toMatch(
+            /adminv2-drawer-sidebar-panel[\s\S]*?pointer-events-auto/
+        );
+        expect(drawerSource).toContain("left-auto");
+        expect(drawerSource).toContain("w-[min(100vw,42rem)]");
+        expect(drawerSource).not.toMatch(
+            /adminv2-drawer-sidebar-dim[\s\S]*?onClick=\{onClose\}/
+        );
+    });
+
+    it("documents shell chrome z-index above drawer backdrop", () => {
+        expect(drawerSource).toContain("ADMINV2_SHELL_CHROME_Z");
+        expect(drawerSource).toContain("ADMINV2_DRAWER_BACKDROP_Z");
+        expect(drawerSource).toContain("ADMINV2_DRAWER_PANEL_Z");
+    });
+});

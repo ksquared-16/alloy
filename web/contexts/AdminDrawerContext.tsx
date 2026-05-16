@@ -209,14 +209,13 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
         setStack([]);
     }, []);
 
-    /** Route changes should not leave an entity drawer intercepting shell navigation. */
+    /**
+     * Route changes close the drawer after navigation (pathname updates).
+     * Shell links must stay clickable while open — see Drawer sidebar dim (`pointer-events-none`).
+     */
     useEffect(() => {
-        setDrawer((prev) => {
-            if (prev.type == null && prev.id == null) return prev;
-            return { type: null, id: null };
-        });
-        setStack([]);
-    }, [pathname]);
+        closeDrawer();
+    }, [pathname, closeDrawer]);
 
     const previousDrawer = stack.length > 0 ? stack[stack.length - 1] : null;
 

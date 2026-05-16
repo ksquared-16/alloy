@@ -4,7 +4,10 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import "@/app/adminV2/components/workspace/workspace.css";
-import Drawer from "@/components/admin/Drawer";
+import Drawer, {
+    ADMINV2_DRAWER_BACKDROP_Z,
+    ADMINV2_DRAWER_PANEL_Z,
+} from "@/components/admin/Drawer";
 import {
     useAdminDrawer,
     type AdminDrawerEntityType,
@@ -8154,7 +8157,7 @@ export default function AdminEntityDrawer() {
 
     return (
         <Drawer
-            isOpen
+            isOpen={Boolean(drawer.type && drawer.id)}
             onClose={closeDrawer}
             title={drawerTitleResolved}
             headerSubtitle={headerSubtitleForDrawer}
@@ -8165,8 +8168,8 @@ export default function AdminEntityDrawer() {
             headerActions={headerActionsForDrawer}
             headerSignals={headerSignalsForDrawer}
             headerExtra={drawerHeaderExtra}
-            zIndexBackdrop={60}
-            zIndexPanel={70}
+            zIndexBackdrop={ADMINV2_DRAWER_BACKDROP_Z}
+            zIndexPanel={ADMINV2_DRAWER_PANEL_Z}
             accentColor={drawer.type ? DRAWER_ACCENT_COLORS[drawer.type] : undefined}
             variant={drawerShellVariant}
             presentation={useAdminV2RecordModalPresentation ? "modal" : "sidebar"}
