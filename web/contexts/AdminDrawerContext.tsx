@@ -1,6 +1,7 @@
 "use client";
 
-import { createContext, useCallback, useContext, useState, ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import type { OperationalVisualContext } from "@/lib/visualContext";
 
 /** Entity kinds that can open in the admin stack drawer (must match API + presentation registry usage). */
@@ -122,6 +123,7 @@ export function useAdminDrawerOptional() {
 }
 
 export function AdminDrawerProvider({ children }: { children: ReactNode }) {
+    const pathname = usePathname();
     const [drawer, setDrawer] = useState<AdminDrawerState>({ type: null, id: null });
     const [stack, setStack] = useState<DrawerStackItem[]>([]);
 
@@ -206,6 +208,15 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
         setDrawer({ type: null, id: null });
         setStack([]);
     }, []);
+
+    /** Route changes should not leave an entity drawer intercepting shell navigation. */
+    useEffect(() => {
+        setDrawer((prev) => {
+            if (prev.type == null && prev.id == null) return prev;
+            return { type: null, id: null };
+        });
+        setStack([]);
+    }, [pathname]);
 
     const previousDrawer = stack.length > 0 ? stack[stack.length - 1] : null;
 

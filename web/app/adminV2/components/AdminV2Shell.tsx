@@ -138,19 +138,21 @@ export default function AdminV2Shell({
         <div className="flex flex-1 flex-col min-w-0 min-h-0 overflow-hidden">
           {workspaceSiteFilterSubtree ? (
             <WorkspaceSiteFilterGate>
-              <Suspense
-                fallback={
-                  <div
-                    className="flex h-12 flex-shrink-0 items-center px-4 text-sm text-white/70"
-                    style={{ backgroundColor: palette.midnightForge }}
-                    aria-hidden
-                  >
-                    Loading…
-                  </div>
-                }
-              >
-                <TopNavBar />
-              </Suspense>
+              <div className="relative z-[65] shrink-0">
+                <Suspense
+                  fallback={
+                    <div
+                      className="flex h-12 flex-shrink-0 items-center px-4 text-sm text-white/70"
+                      style={{ backgroundColor: palette.midnightForge }}
+                      aria-hidden
+                    >
+                      Loading…
+                    </div>
+                  }
+                >
+                  <TopNavBar />
+                </Suspense>
+              </div>
               <div
                 data-adminv2-workspace-ambient-root
                 className="relative flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden"
@@ -180,19 +182,21 @@ export default function AdminV2Shell({
             </WorkspaceSiteFilterGate>
           ) : (
             <>
-              <Suspense
-                fallback={
-                  <div
-                    className="flex h-12 flex-shrink-0 items-center px-4 text-sm text-white/70"
-                    style={{ backgroundColor: palette.midnightForge }}
-                    aria-hidden
-                  >
-                    Loading…
-                  </div>
-                }
-              >
-                <TopNavBar />
-              </Suspense>
+              <div className="relative z-[65] shrink-0">
+                <Suspense
+                  fallback={
+                    <div
+                      className="flex h-12 flex-shrink-0 items-center px-4 text-sm text-white/70"
+                      style={{ backgroundColor: palette.midnightForge }}
+                      aria-hidden
+                    >
+                      Loading…
+                    </div>
+                  }
+                >
+                  <TopNavBar />
+                </Suspense>
+              </div>
               <div
                 data-adminv2-workspace-ambient-root
                 className="relative flex flex-1 min-h-0 min-w-0 flex-col overflow-hidden"

@@ -20,7 +20,7 @@ import { AdminV2RouteLoadingState } from "@/components/admin/workspace/AdminV2Ro
 import { KpiStripSkeleton } from "@/components/admin/workspace/KpiStripSkeleton";
 import { workspaceRouteParam } from "@/lib/workspace/workspaceRouteParam";
 import ActionsBlock from "@/app/adminV2/components/workspace/blocks/ActionsBlock";
-import { useAdminDrawer } from "@/contexts/AdminDrawerContext";
+import { useAdminDrawer, useAdminDrawerOptional } from "@/contexts/AdminDrawerContext";
 import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import type { WorkspaceAction } from "@/lib/ui-v2/workspace-actions";
 import type { KPIVm } from "@/lib/ui-v2/workspace-types";
@@ -133,6 +133,7 @@ function DeptOperConsoleQueueRow(props: {
     attentionBucketKey?: string;
 }) {
     const { href, title, label, iconKey, total, countsDeferred, variant, attentionBucketKey } = props;
+    const adminDrawer = useAdminDrawerOptional();
     const tier =
         variant === "attention"
             ? "adminv2-ws-wu-queue-card--tier-warning adminv2-ws-dept-attention-bucket-tile"
@@ -147,7 +148,10 @@ function DeptOperConsoleQueueRow(props: {
         <Link
             href={href}
             prefetch={shouldDisableAdminV2LinkPrefetch(href) ? false : undefined}
-            onClick={markWorkUnitNavigationStart}
+            onClick={() => {
+                markWorkUnitNavigationStart();
+                adminDrawer?.closeDrawer();
+            }}
             className={`adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact ${tier} no-underline text-inherit hover:opacity-[0.98]`}
             data-ws-wu-urgency={urgency}
             data-attention-bucket-key={attentionBucketKey}

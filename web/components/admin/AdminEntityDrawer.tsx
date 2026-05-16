@@ -5327,7 +5327,12 @@ export default function AdminEntityDrawer() {
     }, [opportunityResolvedHeaderActions]);
 
     const opportunityHeaderQuickActionsNode =
-        isOpportunityExistingView && drawer.id && !loading && data != null && entityRowReady
+        isOpportunityExistingView &&
+        drawer.id &&
+        !loading &&
+        data != null &&
+        entityRowReady &&
+        !opportunityResolvedHeaderLoading
             ? (
                   <div
                       className={`flex flex-col items-end gap-1.5 ${
@@ -8091,7 +8096,7 @@ export default function AdminEntityDrawer() {
     const opportunityWorkflowHeaderChromePending =
         drawer.type === "opportunities" &&
         opportunityInquiryWorkflowDrawerShell &&
-        (drawerGateLoading || opportunityRecordChromePending);
+        (drawerGateLoading || opportunityRecordChromePending || opportunityResolvedHeaderLoading);
 
     const headerSubtitleForDrawer =
         opportunityWorkflowHeaderChromePending ? (
@@ -8126,16 +8131,19 @@ export default function AdminEntityDrawer() {
     const workflowOpportunityUsesTitleRailActions =
         drawer.type === "opportunities" && opportunityInquiryWorkflowDrawerShell;
 
+    const opportunityHeaderActionsPending =
+        drawer.type === "opportunities" && isOpportunityExistingView && opportunityResolvedHeaderLoading;
+
     const headerActionsForDrawer = workflowOpportunityUsesTitleRailActions
         ? undefined
-        : drawerGateLoading
+        : drawerGateLoading || opportunityHeaderActionsPending
           ? (
                 <div
                     className="flex min-h-[40px] w-full flex-wrap items-center justify-end gap-2"
                     aria-busy="true"
                 >
-                    {drawerHeaderActions}
-                    <DrawerQuietSkeletonBar className="hidden h-9 w-28 sm:block" />
+                    <DrawerQuietSkeletonBar className="h-9 w-28" />
+                    <DrawerQuietSkeletonBar className="h-9 w-24" />
                     <DrawerQuietSkeletonBar className="h-9 w-24" />
                 </div>
             )

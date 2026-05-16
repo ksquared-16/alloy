@@ -33,6 +33,21 @@ export type CachedDepartmentPage = {
     summariesComplete: boolean;
 };
 
+export type CachedWorkUnitPage = {
+    v: typeof SCHEMA_V;
+    savedAtMs: number;
+    departmentId: string;
+    dept: { id: string; name: string | null; key: string | null };
+    workUnit: {
+        id: string;
+        name: string | null;
+        key: string | null;
+        department_id: string;
+        queue_definition?: unknown;
+        metadata?: unknown;
+    };
+};
+
 function workspaceRootKey(orgId: string, principalUserId: string | null, accessScopeFingerprint: string): string {
     const u = (principalUserId ?? "").trim() || "__anon__";
     const fp = (accessScopeFingerprint ?? "").trim() || "scope:unknown";
@@ -48,6 +63,18 @@ function departmentPageKey(
     const u = (principalUserId ?? "").trim() || "__anon__";
     const fp = (accessScopeFingerprint ?? "").trim() || "scope:unknown";
     return `alloy:v${SCHEMA_V}:admV2:ws:dept:${orgId}:${departmentId}:${u}:${fp}`;
+}
+
+function workUnitPageKey(
+    orgId: string,
+    departmentId: string,
+    workUnitId: string,
+    principalUserId: string | null,
+    accessScopeFingerprint: string
+): string {
+    const u = (principalUserId ?? "").trim() || "__anon__";
+    const fp = (accessScopeFingerprint ?? "").trim() || "scope:unknown";
+    return `alloy:v${SCHEMA_V}:admV2:ws:wu:${orgId}:${departmentId}:${workUnitId}:${u}:${fp}`;
 }
 
 function readJson(raw: string | null): unknown {
@@ -108,6 +135,47 @@ export function readDepartmentPageCache(
     const row = data as Partial<CachedDepartmentPage>;
     if (row.v !== SCHEMA_V || !row.dept?.id || !Array.isArray(row.workUnits)) return null;
     return row as CachedDepartmentPage;
+}
+
+export type WritableWorkUnitPageSnapshot = Omit<CachedWorkUnitPage, "v" | "savedAtMs">;
+
+export function readWorkUnitPageCache(
+    orgId: string | null,
+    departmentId: string,
+    workUnitId: string,
+    principalUserId: string | null,
+    accessScopeFingerprint: string
+): CachedWorkUnitPage | null {
+    if (!orgId || !departmentId || !workUnitId || typeof window === "undefined") return null;
+    const fp = (accessScopeFingerprint ?? "").trim() || "scope:unknown";
+    const data = readJson(sessionStorage.getItem(workUnitPageKey(orgId, departmentId, workUnitId, principalUserId, fp)));
+    if (!data || typeof data !== "object") return null;
+    const row = data as Partial<CachedWorkUnitPage>;
+    if (row.v !== SCHEMA_V || row.departmentId !== departmentId || row.workUnit?.id !== workUnitId) return null;
+    return row as CachedWorkUnitPage;
+}
+
+export function writeWorkUnitPageCache(
+    orgId: string | null,
+    principalUserId: string | null,
+    accessScopeFingerprint: string,
+    payload: WritableWorkUnitPageSnapshot
+): void {
+    if (!orgId || !payload.departmentId || !payload.workUnit?.id || typeof window === "undefined") return;
+    const fp = (accessScopeFingerprint ?? "").trim() || "scope:unknown";
+    try {
+        const body: CachedWorkUnitPage = {
+            ...payload,
+            v: SCHEMA_V,
+            savedAtMs: Date.now(),
+        };
+        sessionStorage.setItem(
+            workUnitPageKey(orgId, payload.departmentId, payload.workUnit.id, principalUserId, fp),
+            JSON.stringify(body)
+        );
+    } catch {
+        /* quota / privacy mode */
+    }
 }
 
 export function writeDepartmentPageCache(

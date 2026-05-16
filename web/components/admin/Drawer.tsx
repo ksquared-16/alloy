@@ -351,9 +351,9 @@ export default function Drawer({
     return (
         <>
             <div
-                className="fixed inset-0 bg-black/50"
+                className="fixed inset-0 bg-black/50 pointer-events-none"
                 style={{ zIndex: zIndexBackdrop }}
-                onClick={onClose}
+                aria-hidden
             />
             <div
                 data-adminv2-drawer={isV2 ? "true" : undefined}

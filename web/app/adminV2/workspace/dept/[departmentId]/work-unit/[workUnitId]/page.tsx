@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
@@ -46,6 +46,7 @@ import { buildDefaultWorkUnitKpis } from "@/lib/kpi/baseline";
 import { workUnitContextFromParts } from "@/lib/kpi/surfaceContext";
 import type { WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
 import { workspaceRouteParam } from "@/lib/workspace/workspaceRouteParam";
+import { readWorkUnitPageCache, writeWorkUnitPageCache } from "@/lib/workspace/adminV2WorkspaceSessionCache";
 import { validateQueueDefinition, type QueueDefinitionV1 } from "@/lib/config/queueDefinitionSchema";
 import {
     getQueueUiConfig,
@@ -349,7 +350,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const workUnitId = workspaceRouteParam(params.workUnitId);
     const searchParams = useSearchParams();
     const router = useRouter();
-    const { accessScopeFingerprint } = useWorkspaceOrg();
+    const { orgId, principalUserId, accessScopeFingerprint } = useWorkspaceOrg();
     const siteFilter = useWorkspaceSiteFilter();
     const selectedSiteId = siteFilter?.selectedSiteId ?? null;
     const viewScopeFingerprint = workspaceViewCacheFingerprint(accessScopeFingerprint, selectedSiteId);
@@ -396,6 +397,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const pendingDeferredAfterWudRef = useRef(false);
     const bootstrapWuRef = useRef<WorkUnitRow | null>(null);
     const firstUsefulPaintMarkedRef = useRef(false);
+    const seededWorkUnitShellRef = useRef(false);
     /** Bumped on shallow `history.replaceState` / `popstate` so lane query mirrors `window.location` without Next navigation. */
     const [wuLaneSearchRev, setWuLaneSearchRev] = useState(0);
     /** Queue-tab interaction: emit `queue_tab_rows_ready` once when row fetch finishes. */
@@ -1202,6 +1204,19 @@ export default function AdminV2OpportunityWorkUnitPage() {
         }
     }, [selectedSiteId]);
 
+    /** Session cache → shell before paint on work-unit revisit (revalidated over the network). */
+    useLayoutEffect(() => {
+        seededWorkUnitShellRef.current = false;
+        if (!departmentId || !workUnitId || !orgId) return;
+        const hit = readWorkUnitPageCache(orgId, departmentId, workUnitId, principalUserId, accessScopeFingerprint);
+        if (!hit || hit.departmentId !== departmentId || hit.workUnit.id !== workUnitId) return;
+        seededWorkUnitShellRef.current = true;
+        setDept(hit.dept);
+        setWorkUnit(hit.workUnit as WorkUnitRow);
+        setLoading(false);
+        setError(null);
+    }, [departmentId, workUnitId, orgId, principalUserId, accessScopeFingerprint]);
+
     useEffect(() => {
         if (!departmentId || !workUnitId) {
             setLoading(false);
@@ -1241,14 +1256,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 alloyPerfSet("route_nav_start", routeStart);
                 alloyPerfSet("work_unit_start", routeStart);
             }
-            setLoading(true);
+            const preserveShell = seededWorkUnitShellRef.current;
+            setLoading(!preserveShell);
             setError(null);
             const init = workspaceDataFetchInit();
             workUnitDeferredScheduledRef.current = false;
             workUnitDetailReadyRef.current = false;
             pendingDeferredAfterWudRef.current = false;
             bootstrapWuRef.current = null;
-            firstUsefulPaintMarkedRef.current = false;
+            if (!preserveShell) firstUsefulPaintMarkedRef.current = false;
 
             const qFromUrlEffective = (
                 queueParamFromWindow() ||
@@ -1256,7 +1272,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             ).trim();
 
             try {
-                if (!cancelled) {
+                if (!cancelled && !preserveShell) {
                     setWorkUnit(null);
                     setDept(null);
                     setOq(null);
@@ -1275,9 +1291,12 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     queueItemsLastFetchSigRef.current = null;
                     queueRowLeaseSigsRef.current.clear();
                     queueRowClientCacheRef.current.clear();
+                    queueRowsBufferRef.current = [];
                     setWuPlacementRows(undefined);
                     setWuScopeHasPlacements(false);
                     if (qFromUrlEffective) setSelectedQueueKey(qFromUrlEffective);
+                } else if (!cancelled && qFromUrlEffective) {
+                    setSelectedQueueKey(qFromUrlEffective);
                 }
 
                 const wuUrl = `/api/admin/work-units/${encodeURIComponent(workUnitId)}`;
@@ -1366,8 +1385,16 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 if (!deptR.res.ok) throw new Error(deptR.j.error ?? "Failed to load department");
 
                 if (!cancelled) {
+                    const deptRow = deptR.j as DeptRow;
                     setWorkUnit(wu);
-                    setDept(deptR.j as DeptRow);
+                    setDept(deptRow);
+                    if (orgId) {
+                        writeWorkUnitPageCache(orgId, principalUserId, accessScopeFingerprint, {
+                            departmentId,
+                            dept: deptRow,
+                            workUnit: wu,
+                        });
+                    }
                 }
 
                 workUnitDetailReadyRef.current = true;
@@ -1545,7 +1572,18 @@ export default function AdminV2OpportunityWorkUnitPage() {
         return () => {
             cancelled = true;
         };
-    }, [departmentId, workUnitId, selectedSiteId, fetchQueueItems, requestWorkUnitDeferredSupplement, markFirstUsefulPaintOnce]);
+    }, [
+        departmentId,
+        workUnitId,
+        selectedSiteId,
+        orgId,
+        principalUserId,
+        accessScopeFingerprint,
+        fetchQueueItems,
+        requestWorkUnitDeferredSupplement,
+        markFirstUsefulPaintOnce,
+        searchParams,
+    ]);
 
     const invalidate = useCallback(
         (opts?: { entity_type?: string; entity_id?: string; action_key?: string }) => {
@@ -2828,7 +2866,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const workUnitKpiStripPlaceholder = !suppressWorkUnitKpiStrip && wuPlacementRows === undefined;
 
     /** Shell + header render after WU + dept; queue summaries and rows stay in-lane (Phase 3.1). */
-    const workUnitPageCoherent = !loading && Boolean(workUnit) && Boolean(dept) && !error;
+    const workUnitShellReady = Boolean(workUnit) && Boolean(dept) && !error;
+    const workUnitPageBlockingLoad = loading && !workUnitShellReady;
 
     return (
         <WorkspaceChrome
@@ -2841,9 +2880,9 @@ export default function AdminV2OpportunityWorkUnitPage() {
             title={wuName}
             subtitle=""
         >
-            {!workUnitPageCoherent ? (
+            {workUnitPageBlockingLoad ? (
                 <AdminV2RouteLoadingState variant="work_unit" showRibbon={false} />
-            ) : effectiveModel ? (
+            ) : workUnitShellReady && effectiveModel ? (
                 <>
                     {actionFeedback ? (
                         <div
