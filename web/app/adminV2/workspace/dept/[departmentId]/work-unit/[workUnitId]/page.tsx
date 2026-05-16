@@ -7,6 +7,7 @@ import { logAdminV2RouterNavigation } from "@/lib/adminV2/workUnitLaneQueryUrl";
 import { readWorkUnitInitialLocationParams } from "@/lib/adminV2/workUnitInitialLocation";
 import { logAdminV2NavDebug } from "@/lib/debug/adminV2NavDebug";
 import { recordAdminV2RouteChurnAttempt } from "@/lib/debug/adminV2RouteChurnGuard";
+import { logAdminV2QueueRowClick } from "@/lib/debug/adminV2QueueRowClickDebug";
 import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import WorkUnitWorkspace from "@/app/adminV2/components/workspace/shells/WorkUnitWorkspace";
 import { AutomationWorkflowsBlock } from "@/app/adminV2/components/workspace/blocks/AutomationWorkflowsBlock";
@@ -2371,6 +2372,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 placementProjectionHint: undefined,
                 placementDisplay: placementDiagnostics?.display,
                 rollupSummary: undefined,
+                queueEntityType: entity,
                 rowsLoading,
                 rowsRefreshing,
             },
@@ -2624,8 +2626,60 @@ export default function AdminV2OpportunityWorkUnitPage() {
     );
     const oppDrawerExtra = opportunityWorkspaceContext ? { opportunityWorkspaceContext } : {};
 
+    const openWorkUnitQueueRecord = useCallback(
+        (itemId: string, entityType: "opportunity" | "job" | "schedule", source: string) => {
+            const id = itemId.trim();
+            if (!id) {
+                logAdminV2QueueRowClick({
+                    phase: "open_drawer",
+                    itemId,
+                    actionId: "open_record",
+                    handlerReached: source,
+                    drawerCalled: false,
+                    extra: { reason: "empty_item_id" },
+                });
+                return;
+            }
+            logAdminV2QueueRowClick({
+                phase: "open_drawer",
+                itemId: id,
+                actionId: "open_record",
+                queueKey: selectedQueueKeyRef.current,
+                entityType,
+                handlerReached: source,
+                drawerCalled: true,
+            });
+            if (entityType === "job") {
+                openDrawer({ type: "jobs", id, jobRecordSurface: "drawer" });
+                return;
+            }
+            if (entityType === "schedule") {
+                openDrawer({ type: "schedules", id });
+                return;
+            }
+            openDrawer({ type: "opportunities", id, ...oppDrawerExtra });
+        },
+        [openDrawer, oppDrawerExtra]
+    );
+
     const onAction = useCallback(
         async (action: WorkspaceAction) => {
+            if (action.type === "queue.item.action") {
+                logAdminV2QueueRowClick({
+                    phase: "onAction",
+                    itemId: action.itemId,
+                    actionId: action.actionId,
+                    queueId: action.queueId,
+                    queueKey: selectedQueueKeyRef.current,
+                    handlerReached: "onAction_entry",
+                    extra: {
+                        payloadSource:
+                            action.payload && typeof action.payload === "object"
+                                ? (action.payload as { source?: string }).source ?? null
+                                : null,
+                    },
+                });
+            }
             if (
                 action.type === "actions.block" &&
                 action.actionId.startsWith(REGISTRY_RIGHT_RAIL_ACTION_ID_PREFIX)
@@ -2656,6 +2710,23 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 }
                 return;
             }
+            if (action.type === "queue.item.action" && action.actionId === "open_record" && action.itemId) {
+                const payload =
+                    action.payload && typeof action.payload === "object"
+                        ? (action.payload as Record<string, unknown>)
+                        : {};
+                const fromPayload =
+                    typeof payload.entityType === "string" ? payload.entityType.trim().toLowerCase() : "";
+                const queueEt = queueItems?.queue.entity_type;
+                const entityType =
+                    fromPayload === "job" || fromPayload === "schedule" || fromPayload === "opportunity"
+                        ? (fromPayload as "opportunity" | "job" | "schedule")
+                        : queueEt === "job" || queueEt === "schedule"
+                          ? queueEt
+                          : "opportunity";
+                openWorkUnitQueueRecord(action.itemId, entityType, "open_record_branch");
+                return;
+            }
             if (
                 action.type === "queue.item.action" &&
                 action.payload &&
@@ -2665,6 +2736,32 @@ export default function AdminV2OpportunityWorkUnitPage() {
                 action.itemId
             ) {
                 const resolved = queueRowResolvedByKey.get(action.actionId);
+                if (resolved?.action_type === "open_drawer") {
+                    logAdminV2QueueRowClick({
+                        phase: "registry_action",
+                        itemId: action.itemId,
+                        actionId: action.actionId,
+                        queueKey: selectedQueueKeyRef.current,
+                        handlerReached: "registry_open_drawer",
+                        registryKey: resolved.key,
+                        drawerCalled: true,
+                    });
+                    await applyRegistryResolvedActionClient(resolved, {
+                        router,
+                        openDrawer: (opts) => openDrawer(opts),
+                        entityId: action.itemId,
+                        departmentId,
+                        workUnitId: workUnit?.id ?? null,
+                        invalidate,
+                        needsAttentionHref,
+                        context: {
+                            surface: "queue_row",
+                            department_id: departmentId,
+                            work_unit_id: workUnit?.id ?? null,
+                        },
+                    });
+                    return;
+                }
                 if (resolved && resolved.action_type === "open_form") {
                     const formKey =
                         resolved.payload?.form_key != null ? String(resolved.payload.form_key).trim() : "";
@@ -2678,6 +2775,34 @@ export default function AdminV2OpportunityWorkUnitPage() {
                         setContactAttemptedOpen(true);
                         return;
                     }
+                }
+                if (resolved) {
+                    logAdminV2QueueRowClick({
+                        phase: "registry_action",
+                        itemId: action.itemId,
+                        actionId: action.actionId,
+                        queueKey: selectedQueueKeyRef.current,
+                        handlerReached: "applyRegistryResolvedActionClient",
+                        registryKey: resolved.key,
+                    });
+                    const out = await applyRegistryResolvedActionClient(resolved, {
+                        router,
+                        openDrawer: (opts) => openDrawer(opts),
+                        entityId: action.itemId,
+                        departmentId,
+                        workUnitId: workUnit?.id ?? null,
+                        invalidate,
+                        needsAttentionHref,
+                        context: {
+                            surface: "queue_row",
+                            department_id: departmentId,
+                            work_unit_id: workUnit?.id ?? null,
+                        },
+                    });
+                    if (!out.ok && out.error) {
+                        console.warn("[work-unit queue row]", out.error);
+                    }
+                    return;
                 }
                 const res = await fetch("/api/admin/actions/execute", {
                     method: "POST",
@@ -2705,6 +2830,14 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     };
                 };
                 if (!res.ok || !json.ok) {
+                    logAdminV2QueueRowClick({
+                        phase: "registry_action",
+                        itemId: action.itemId,
+                        actionId: action.actionId,
+                        queueKey: selectedQueueKeyRef.current,
+                        handlerReached: "registry_execute_failed",
+                        extra: { error: json.error ?? res.status },
+                    });
                     return;
                 }
                 const er = json.execution_result;
@@ -2731,29 +2864,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
                     return;
                 }
                 invalidate({ entity_type: "opportunity", entity_id: action.itemId, action_key: action.actionId });
-                return;
-            }
-            if (action.type === "queue.item.action" && action.actionId === "open_record") {
-                const payload =
-                    action.payload && typeof action.payload === "object"
-                        ? (action.payload as Record<string, unknown>)
-                        : {};
-                const fromPayload =
-                    typeof payload.entityType === "string" ? payload.entityType.trim().toLowerCase() : "";
-                const queueEt = queueItems?.queue.entity_type;
-                const entityType =
-                    fromPayload === "job" || fromPayload === "schedule" || fromPayload === "opportunity"
-                        ? fromPayload
-                        : queueEt ?? "opportunity";
-                if (entityType === "job") {
-                    openDrawer({ type: "jobs", id: action.itemId, jobRecordSurface: "drawer" });
-                    return;
-                }
-                if (entityType === "schedule") {
-                    openDrawer({ type: "schedules", id: action.itemId });
-                    return;
-                }
-                openDrawer({ type: "opportunities", id: action.itemId, ...oppDrawerExtra });
                 return;
             }
             if (action.type === "queue.item.action" && action.actionId && action.itemId) {
@@ -2816,11 +2926,15 @@ export default function AdminV2OpportunityWorkUnitPage() {
             needsAttentionHref,
             needsAttentionWorkUnitId,
             openDrawer,
+            openWorkUnitQueueRecord,
             oppDrawerExtra,
             opportunityWorkspaceContext,
             queueItems?.queue.entity_type,
+            queueRowResolvedByKey,
             router,
             workUnit?.id,
+            invalidate,
+            needsAttentionHref,
         ]
     );
 

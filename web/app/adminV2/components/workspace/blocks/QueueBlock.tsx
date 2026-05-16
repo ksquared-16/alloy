@@ -15,6 +15,7 @@ import type {
   WorkUnitQueueCrmFactPartVm,
 } from "@/lib/ui-v2/workspace-types";
 import type { WorkspaceActionHandler } from "@/lib/ui-v2/workspace-actions";
+import { logAdminV2QueueRowClick } from "@/lib/debug/adminV2QueueRowClickDebug";
 import { DEFAULT_QUEUE_ROW_PREVIEW_FIELD_LABELS } from "@/lib/ui-v2/queueUiConfig";
 import { normalizePreviewLooseDateTokens } from "@/lib/adminFormatters";
 import { CRM_COMPACT_VALUE_DOT_SEP } from "@/lib/ui-v2/crmQueueRowPreviewPresentation";
@@ -42,6 +43,29 @@ function queueRowEntityPayload(queue: QueueVm): Record<string, unknown> {
 function mergeQueueActionPayload(queue: QueueVm, extra?: Record<string, unknown>): Record<string, unknown> | undefined {
   const merged = { ...(extra ?? {}), ...queueRowEntityPayload(queue) };
   return Object.keys(merged).length ? merged : undefined;
+}
+
+function fireQueueRowOpenRecord(
+  queue: QueueVm,
+  itemId: string,
+  onAction: WorkspaceActionHandler,
+  surface: "card" | "keyboard" | "chip"
+) {
+  logAdminV2QueueRowClick({
+    phase: "queue_row_click",
+    itemId,
+    actionId: "open_record",
+    queueId: queue.id,
+    entityType: queue.queueEntityType ?? null,
+    handlerReached: `QueueBlock_${surface}`,
+  });
+  onAction({
+    type: "queue.item.action",
+    queueId: queue.id,
+    itemId,
+    actionId: "open_record",
+    payload: mergeQueueActionPayload(queue),
+  });
 }
 
 function fireViewAll(queue: QueueVm, onAction: WorkspaceActionHandler) {
@@ -160,8 +184,13 @@ function workUnitSectionKey(item: QueueItemVm): string | undefined {
 
 function queueQuickActionDispatchId(qa: QueueItemQuickActionVm): string {
   const withAction = qa as QueueItemQuickActionVm & { actionId?: string };
-  if (typeof withAction.actionId === "string" && withAction.actionId.trim()) return withAction.actionId.trim();
+  const payload = qa.payload as { actionType?: string; source?: string } | undefined;
+  if (payload?.actionType === "open_drawer") return "open_record";
+  if (typeof withAction.actionId === "string" && withAction.actionId.trim() === "open_record") {
+    return "open_record";
+  }
   if (qa.id === "open") return "open_record";
+  if (typeof withAction.actionId === "string" && withAction.actionId.trim()) return withAction.actionId.trim();
   return qa.id;
 }
 
@@ -1002,32 +1031,18 @@ function WorkUnitQueueLane({ queue, onAction }: { queue: QueueVm; onAction: Work
               ) : null}
               {rowMode !== "header_only" ? (
               <div
-                className={`adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card--tier-${tier}${
+                className={`adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-wu-queue-card-interactive relative z-[1] cursor-pointer pointer-events-auto adminv2-ws-wu-queue-card--tier-${tier}${
                   attentionAccent ? " adminv2-ws-wu-queue-card--attention-accent" : ""
                 }`}
                 data-ws-wu-urgency={tier}
                 data-ws-needs-attention={attentionAccent ? "true" : undefined}
                 role="button"
                 tabIndex={0}
-                onClick={() =>
-                  onAction({
-                    type: "queue.item.action",
-                    queueId: queue.id,
-                    itemId: item.id,
-                    actionId: "open_record",
-                    payload: mergeQueueActionPayload(queue),
-                  })
-                }
+                onClick={() => fireQueueRowOpenRecord(queue, item.id, onAction, "card")}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
-                    onAction({
-                      type: "queue.item.action",
-                      queueId: queue.id,
-                      itemId: item.id,
-                      actionId: "open_record",
-                      payload: mergeQueueActionPayload(queue),
-                    });
+                    fireQueueRowOpenRecord(queue, item.id, onAction, "keyboard");
                   }
                 }}
               >

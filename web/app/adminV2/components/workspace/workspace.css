@@ -6259,6 +6259,11 @@
   );
 }
 
+/* Lane refresh must not block row clicks — shimmer is visual-only; rows stay interactive. */
+[data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-list[aria-busy="true"] .adminv2-ws-wu-queue-card-interactive {
+  pointer-events: auto;
+}
+
 [data-ws-surface="work_unit"].adminv2-ws-wu-v2 .adminv2-ws-wu-queue-card-compact-text {
   flex: 1;
   min-width: 0;
