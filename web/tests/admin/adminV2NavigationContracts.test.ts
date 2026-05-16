@@ -44,18 +44,11 @@ describe("AdminDrawerProvider pathname close", () => {
 });
 
 describe("Work-unit queue tab shallow routing", () => {
-    it("uses shared lane URL helper with replaceState guard (not router) for queue tabs", () => {
+    it("queue tabs are local state only (no shallow URL sync on work-unit page)", () => {
         const page = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
-        const lib = read("lib/adminV2/workUnitLaneQueryUrl.ts");
-        expect(page).toContain("scheduleWorkUnitLaneUrlSync");
-        expect(lib).toMatch(/replaceWorkUnitBrowserSearch[\s\S]*?previousUrl === nextUrl/);
-        expect(lib).toMatch(/window\.history\.replaceState/);
-        const tabHandler = page.match(
-            /const handleQueueTabChange = useCallback\([\s\S]*?scheduleWorkUnitLaneUrlSync[\s\S]*?\[setSelectedQueueKeyTraced, workUnitId\]/
-        )?.[0];
-        expect(tabHandler).toBeTruthy();
-        expect(tabHandler).toContain("scheduleWorkUnitLaneUrlSync");
-        expect(tabHandler).not.toMatch(/router\.(push|replace)/);
+        expect(page).not.toContain("scheduleWorkUnitLaneUrlSync");
+        expect(page).not.toMatch(/\buseSearchParams\s*\(/);
+        expect(page).toContain("readWorkUnitInitialLocationParams");
     });
 
     it("bootstrap effect does not depend on Next searchParams identity", () => {
@@ -67,16 +60,23 @@ describe("Work-unit queue tab shallow routing", () => {
         expect(bootstrapDeps).not.toMatch(/searchParams/);
     });
 
-    it("does not sync selectedQueueKey from URL on every shallow lane rev", () => {
+    it("does not sync selectedQueueKey from URL after mount", () => {
         const src = read("app/adminV2/workspace/dept/[departmentId]/work-unit/[workUnitId]/page.tsx");
         expect(src).not.toContain("wuLaneSearchRev");
-        expect(src).toContain("scheduleWorkUnitLaneUrlSync");
+        expect(src).not.toMatch(/addEventListener\s*\(\s*["']popstate["']/);
         expect(src).toContain("laneUnmappedOnly");
     });
 
-    it("TopNavBar queue href uses pathname only on work-unit routes", () => {
+    it("TopNavBar queue tab is a no-op span when already on work-unit route", () => {
         const src = read("app/adminV2/components/TopNavBar.tsx");
-        expect(src).toMatch(/queueHref = isQueueContext \? normalizedPath/);
+        expect(src).toContain("isQueueContext ?");
+        expect(src).toContain('aria-current="page"');
+    });
+
+    it("AdminV2NavLink renders span without prefetch when route is current", () => {
+        const src = read("app/adminV2/components/navigation/AdminV2NavLink.tsx");
+        expect(src).toContain("isCurrentRoute");
+        expect(src).not.toMatch(/\buseLinkStatus\s*\(/);
     });
 });
 

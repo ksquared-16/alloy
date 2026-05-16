@@ -5,7 +5,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { AdminV2NavLink } from "@/app/adminV2/components/navigation/AdminV2NavLink";
 import { createClient } from "@/lib/supabaseClient";
 import { palette, neutral, derived } from "@/styles/tokens/colors";
-import { markWorkUnitNavigationStart } from "@/lib/perf/markWorkUnitNavigationStart";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
 import MyTasksModal from "@/app/adminV2/components/MyTasksModal";
 import OperationalTasksNavBadge from "@/app/adminV2/components/OperationalTasksNavBadge";
@@ -174,18 +173,27 @@ export default function TopNavBar() {
         >
           Overview
         </AdminV2NavLink>
-        <AdminV2NavLink
-          href={queueHref}
-          active={isQueueContext}
-          className="px-2 py-1 rounded text-xs font-medium"
-          style={tabStyle(isQueueContext)}
-          title="Opens the current work unit queue when you are in workspace queue context; otherwise Workspace."
-          onClick={() => {
-            if (queueHref.includes("/work-unit/")) markWorkUnitNavigationStart();
-          }}
-        >
-          Queue
-        </AdminV2NavLink>
+        {isQueueContext ? (
+          <span
+            className="adminv2-nav-link adminv2-nav-link--active px-2 py-1 rounded text-xs font-medium"
+            style={tabStyle(true)}
+            aria-current="page"
+            title="Current work unit queue"
+          >
+            <span className="adminv2-nav-link__inner">Queue</span>
+          </span>
+        ) : (
+          <AdminV2NavLink
+            href={queueHref}
+            active={false}
+            prefetch={false}
+            className="px-2 py-1 rounded text-xs font-medium"
+            style={tabStyle(false)}
+            title="Workspace queue context"
+          >
+            Queue
+          </AdminV2NavLink>
+        )}
         <OperationalTasksNavBadge tabStyle={secondaryTabStyle} onOpenModal={() => setTasksModalOpen(true)} />
         <button
           type="button"

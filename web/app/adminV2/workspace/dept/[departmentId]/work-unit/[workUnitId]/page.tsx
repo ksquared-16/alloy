@@ -3,14 +3,10 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { useRouter } from "next/navigation";
-import { useSearchParams } from "next/navigation";
-import {
-    logAdminV2RouterNavigation,
-    queueParamFromWindow,
-    readWorkUnitUrlSearchSnapshot,
-    scheduleWorkUnitLaneUrlSync,
-} from "@/lib/adminV2/workUnitLaneQueryUrl";
+import { logAdminV2RouterNavigation } from "@/lib/adminV2/workUnitLaneQueryUrl";
+import { readWorkUnitInitialLocationParams } from "@/lib/adminV2/workUnitInitialLocation";
 import { logAdminV2NavDebug } from "@/lib/debug/adminV2NavDebug";
+import { recordAdminV2RouteChurnAttempt } from "@/lib/debug/adminV2RouteChurnGuard";
 import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import WorkUnitWorkspace from "@/app/adminV2/components/workspace/shells/WorkUnitWorkspace";
 import { AutomationWorkflowsBlock } from "@/app/adminV2/components/workspace/blocks/AutomationWorkflowsBlock";
@@ -327,12 +323,13 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const params = useParams();
     const departmentId = workspaceRouteParam(params.departmentId);
     const workUnitId = workspaceRouteParam(params.workUnitId);
-    const searchParams = useSearchParams();
     const router = useRouter();
-    const legacyFilterStatusKeys = (searchParams?.get("status_keys") ?? "").trim();
-    const legacyFilterAttentionReason = (searchParams?.get("attention_reason") ?? "").trim();
-    const legacyFilterAttentionReasonCode = (searchParams?.get("attention_reason_code") ?? "").trim();
-    const legacyFilterActivitySignalKey = (searchParams?.get("activity_signal_key") ?? "").trim();
+    /** Frozen on work-unit mount — do not subscribe to Next search params (triggers RSC churn on query changes). */
+    const initialLocationRef = useRef(readWorkUnitInitialLocationParams());
+    const legacyFilterStatusKeys = initialLocationRef.current.statusKeys;
+    const legacyFilterAttentionReason = initialLocationRef.current.attentionReason;
+    const legacyFilterAttentionReasonCode = initialLocationRef.current.attentionReasonCode;
+    const legacyFilterActivitySignalKey = initialLocationRef.current.activitySignalKey;
     const { orgId, principalUserId, accessScopeFingerprint } = useWorkspaceOrg();
     const siteFilter = useWorkspaceSiteFilter();
     const selectedSiteId = siteFilter?.selectedSiteId ?? null;
@@ -383,7 +380,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
     const seededWorkUnitShellRef = useRef(false);
     /** User changed lane via tabs/buckets — bootstrap must not overwrite selection when summaries arrive. */
     const userLaneTouchedRef = useRef(false);
-    /** Lane filter UI — source of truth (URL is best-effort sync only, never read back into state except popstate). */
+    /** Lane filter UI — source of truth; URL is not synced after mount. */
     const [laneUnmappedOnly, setLaneUnmappedOnly] = useState(false);
     const [attentionBucketKey, setAttentionBucketKey] = useState("");
     /** When true, skip the next selectedQueueKey effect fetch (handler already fetched). */
@@ -590,41 +587,22 @@ export default function AdminV2OpportunityWorkUnitPage() {
         });
     }, []);
 
-    /** Seed lane UI from URL once per work-unit route (deep links); never re-sync from shallow replaceState. */
+    /** Seed lane UI from URL once per work-unit route (deep link from dept card). No URL sync after mount. */
     useLayoutEffect(() => {
         if (!workUnitId) return;
-        const sp = readWorkUnitUrlSearchSnapshot();
-        const qFromUrl = queueParamFromWindow().trim();
-        if (qFromUrl) {
-            setSelectedQueueKey((prev) => {
-                logAdminV2NavDebug({
-                    event: "selectedQueueKey",
-                    source: "laneInitFromUrl",
-                    selectedQueueKeyBefore: prev,
-                    selectedQueueKeyAfter: qFromUrl,
-                    overwrite: prev !== qFromUrl,
-                });
-                return qFromUrl;
-            });
+        initialLocationRef.current = readWorkUnitInitialLocationParams();
+        const init = initialLocationRef.current;
+        recordAdminV2RouteChurnAttempt("work-unit-lane-init");
+        if (init.queue) {
+            setSelectedQueueKeyTraced("laneInitFromUrl", init.queue);
         }
-        setLaneUnmappedOnly(sp.get("unmapped")?.trim() === "1");
-        setAttentionBucketKey((sp.get("attention_bucket") ?? "").trim());
-    }, [departmentId, workUnitId]);
+        setLaneUnmappedOnly(init.unmapped);
+        setAttentionBucketKey(init.attentionBucket);
+    }, [departmentId, workUnitId, setSelectedQueueKeyTraced]);
 
     useEffect(() => {
-        if (typeof window === "undefined") return;
-        const onPopState = () => {
-            const sp = readWorkUnitUrlSearchSnapshot();
-            const qFromUrl = (sp.get("queue") ?? "").trim();
-            if (qFromUrl) {
-                setSelectedQueueKeyTraced("popstate", qFromUrl);
-            }
-            setLaneUnmappedOnly(sp.get("unmapped")?.trim() === "1");
-            setAttentionBucketKey((sp.get("attention_bucket") ?? "").trim());
-        };
-        window.addEventListener("popstate", onPopState);
-        return () => window.removeEventListener("popstate", onPopState);
-    }, [setSelectedQueueKeyTraced]);
+        recordAdminV2RouteChurnAttempt("work-unit-mount");
+    }, [departmentId, workUnitId]);
 
     useEffect(() => {
         if (!actionFeedback) return;
@@ -1119,15 +1097,8 @@ export default function AdminV2OpportunityWorkUnitPage() {
             if (na) {
                 setAttentionBucketKey("");
             }
-            scheduleWorkUnitLaneUrlSync({
-                queueKey: nextKey,
-                unmappedActive,
-                caller: "handleQueueTabChange",
-                workUnitId,
-                ...(na ? { attentionBucket: "" } : {}),
-            });
         },
-        [setSelectedQueueKeyTraced, workUnitId]
+        [setSelectedQueueKeyTraced]
     );
 
     const handleAttentionBucketSelect = useCallback(
@@ -1139,13 +1110,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
             setSelectedQueueKeyTraced("handleAttentionBucketSelect", "needs_attention");
             setLaneUnmappedOnly(false);
             setAttentionBucketKey(next);
-            scheduleWorkUnitLaneUrlSync({
-                queueKey: "needs_attention",
-                unmappedActive: false,
-                attentionBucket: bucketKey ?? "",
-                caller: "handleAttentionBucketSelect",
-                workUnitId,
-            });
             void fetchQueueItems(workUnitId, "needs_attention", null, {
                 force: true,
                 attentionBucketOverride: next,
@@ -1276,10 +1240,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
             bootstrapWuRef.current = null;
             if (!preserveShell) firstUsefulPaintMarkedRef.current = false;
 
-            const qFromUrlEffective = (
-                queueParamFromWindow() ||
-                (typeof searchParams !== "undefined" ? (searchParams?.get("queue") ?? "") : "")
-            ).trim();
+            const qFromUrlEffective = initialLocationRef.current.queue.trim();
 
             try {
                 if (!cancelled && !preserveShell) {

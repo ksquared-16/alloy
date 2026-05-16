@@ -1,9 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useLinkStatus } from "next/link";
-import { Suspense, type ComponentProps, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
+import { type ComponentProps, type ReactNode } from "react";
 import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
+
+function normalizeNavPath(path: string): string {
+    if (path.length > 1 && path.endsWith("/")) return path.slice(0, -1);
+    return path;
+}
 
 function hrefPathOnly(href: ComponentProps<typeof Link>["href"]): string | null {
     if (typeof href === "string") return href;
@@ -12,18 +17,6 @@ function hrefPathOnly(href: ComponentProps<typeof Link>["href"]): string | null 
         if (typeof p === "string") return p;
     }
     return null;
-}
-
-function NavLinkInner({ children }: { children: ReactNode }) {
-    const { pending } = useLinkStatus();
-    return (
-        <span
-            data-adminv2-nav-pending={pending ? "true" : undefined}
-            className={pending ? "adminv2-nav-link__inner adminv2-nav-link__inner--pending" : "adminv2-nav-link__inner"}
-        >
-            {children}
-        </span>
-    );
 }
 
 type NextLinkProps = ComponentProps<typeof Link>;
@@ -41,7 +34,11 @@ export type AdminV2NavLinkProps = NextLinkProps & {
  * Pass `prefetch={true}` to opt into viewport prefetch for a specific link when intentional.
  */
 export function AdminV2NavLink({ className, active, children, prefetch, ...rest }: AdminV2NavLinkProps) {
+    const pathname = usePathname();
     const hrefStr = hrefPathOnly(rest.href);
+    const hrefPath = hrefStr?.split(/[?#]/)[0] ?? null;
+    const isCurrentRoute =
+        hrefPath != null && normalizeNavPath(pathname) === normalizeNavPath(hrefPath);
     const resolvedPrefetch =
         prefetch !== undefined
             ? prefetch
@@ -49,11 +46,16 @@ export function AdminV2NavLink({ className, active, children, prefetch, ...rest 
               ? false
               : undefined;
     const merged = ["adminv2-nav-link", active ? "adminv2-nav-link--active" : "", className].filter(Boolean).join(" ");
+    if (active || isCurrentRoute) {
+        return (
+            <span className={merged} aria-current="page">
+                <span className="adminv2-nav-link__inner">{children}</span>
+            </span>
+        );
+    }
     return (
-        <Link {...rest} prefetch={resolvedPrefetch} className={merged}>
-            <Suspense fallback={<span className="adminv2-nav-link__inner">{children}</span>}>
-                <NavLinkInner>{children}</NavLinkInner>
-            </Suspense>
+        <Link {...rest} prefetch={resolvedPrefetch === undefined ? false : resolvedPrefetch} className={merged}>
+            <span className="adminv2-nav-link__inner">{children}</span>
         </Link>
     );
 }
