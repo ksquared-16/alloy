@@ -66,7 +66,7 @@
 
 ### Staging migration naming (do not rename if applied)
 
-The migration **`supabase/migrations/20260522180000_staging_demo_org_ai_policy_task_assist_draft.sql`** merges **`task_assist_draft`** and **`workflow_assist_draft`** for the childcare staging org. If this migration **already ran** in an environment, **do not rename** the file — add a **new** migration for further policy tweaks.
+The migration **`supabase/migrations/20260522180000_staging_demo_org_ai_policy_task_assist_draft.sql`** merges **`task_assist_draft`** (and later file edits added **`workflow_assist_draft`** in-repo). If that migration **already ran** before `workflow_assist_draft` was added to the file, apply the follow-up **`supabase/migrations/20260523170000_staging_demo_org_ai_policy_workflow_assist_draft.sql`** (idempotent union for org `93667019-bd28-49b5-a688-acc9bb1e0a19`). **Do not rename** applied migration files.
 
 ### Intentionally deferred (unchanged)
 
