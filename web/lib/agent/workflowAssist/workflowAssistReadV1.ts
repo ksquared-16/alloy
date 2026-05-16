@@ -120,6 +120,8 @@ export type WorkflowAssistSummaryRowV1 = {
 
 export type WorkflowAssistThreadMutationHandlersV1 = {
     onProposePause: (workflowId: string) => Promise<void>;
+    onProposeRename: (workflowId: string, currentName: string) => Promise<void>;
+    onProposeDescription: (workflowId: string) => Promise<void>;
     onProposeCreateTemplate: () => Promise<void>;
 };
 

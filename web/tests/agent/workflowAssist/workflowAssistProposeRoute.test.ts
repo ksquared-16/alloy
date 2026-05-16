@@ -44,10 +44,34 @@ vi.mock("@/lib/admin/getAdminAccessContext", async () => {
     };
 });
 
+const mockWorkflowMaybeSingle = vi.hoisted(() =>
+    vi.fn().mockResolvedValue({
+        data: {
+            name: "Before",
+            description: null,
+            enabled: true,
+            event_type: "opportunity_schedule_tour_followup",
+            entity_type: "opportunity",
+        },
+        error: null,
+    })
+);
+
 vi.mock("@/lib/supabaseAdmin", () => ({
     createAdminClient: vi.fn(() => ({
-        from: (...args: unknown[]) => {
-            fromSpy(...args);
+        from: (table: string) => {
+            fromSpy(table);
+            if (table === "workflows") {
+                return {
+                    select: () => ({
+                        eq: () => ({
+                            eq: () => ({
+                                maybeSingle: mockWorkflowMaybeSingle,
+                            }),
+                        }),
+                    }),
+                };
+            }
             return {
                 select: () => ({
                     eq: () => ({
@@ -156,20 +180,24 @@ describe("POST /api/admin/ai/workflow-assist/propose", () => {
         expect(j.error).toBe("UNSUPPORTED_PROPOSAL_KIND");
     });
 
-    it("returns suggestion for valid pause_workflow and does not query workflows table", async () => {
+    it("returns suggestion for valid pause_workflow with edit_review from workflows row", async () => {
         vi.stubEnv("AI_ENRICHMENT_USE_PERMISSION_REQUIRED", "true");
         vi.stubEnv("AI_ENRICHMENT_STUB_ENABLED", "true");
         const res = await POST(
             postJson({ version: 1, proposal_kind: "pause_workflow", workflow_id: wfId }),
         );
         expect(res.status).toBe(200);
-        const j = (await res.json()) as { ok?: boolean; suggestion?: { proposal_kind?: string; suggestion_id?: string } };
+        const j = (await res.json()) as {
+            ok?: boolean;
+            suggestion?: { proposal_kind?: string; suggestion_id?: string; edit_review?: unknown[] };
+        };
         expect(j.ok).toBe(true);
         expect(j.suggestion?.proposal_kind).toBe("pause_workflow");
         expect(j.suggestion?.suggestion_id).toMatch(/^wa-[0-9a-f]{32}$/);
+        expect(j.suggestion?.edit_review?.length).toBeGreaterThan(0);
         const tables = fromSpy.mock.calls.map((c) => c[0]);
         expect(tables).toContain("org_settings");
-        expect(tables.every((t) => t !== "workflows")).toBe(true);
+        expect(tables).toContain("workflows");
     });
 
     it("returns suggestion for edit_workflow with allowed patch fields", async () => {
@@ -192,6 +220,6 @@ describe("POST /api/admin/ai/workflow-assist/propose", () => {
         expect(j.suggestion?.proposal_kind).toBe("edit_workflow");
         expect(j.suggestion?.patch?.name).toBe("Renamed via Assist");
         const tables = fromSpy.mock.calls.map((c) => c[0]);
-        expect(tables).not.toContain("workflows");
+        expect(tables).toContain("workflows");
     });
 });

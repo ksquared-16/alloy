@@ -2,9 +2,12 @@
 
 import { useCallback, useState } from "react";
 
+import { dispatchAiActivityRefresh } from "@/app/adminV2/components/aiActivity/RecentAiActionsStrip";
+import { dispatchWorkflowAutomationRefresh } from "@/lib/adminV2/aiCommandSurface/workflowAssistWorkspaceEvents";
 import type { WorkflowAssistCreateProposeBuildV1 } from "@/lib/agent/workflowAssist/workflowAssistCreateFromCommandV1";
 import type { WorkflowAssistSuggestionV1 } from "@/lib/agent/workflowAssist/workflowAssistProposalV1";
 import { WORKFLOW_ASSIST_PORTAL_MUTATION_BLOCKED_USER_MESSAGE } from "@/lib/agent/workflowAssist/workflowAssistReadV1";
+import { useGlobalAssistantOptional } from "@/contexts/GlobalAssistantContext";
 import { brand, derived, neutral, semantic } from "@/styles/tokens/colors";
 
 const CMD = {
@@ -45,6 +48,7 @@ export function WorkflowAssistProposalActionCard({
     /** When false, Apply stays disabled (session cannot mutate workflows via Assist). */
     applyAllowed?: boolean;
 }) {
+    const globalAssistant = useGlobalAssistantOptional();
     const [busy, setBusy] = useState(false);
     const [done, setDone] = useState<ApplyJson | null>(null);
 
@@ -70,6 +74,12 @@ export function WorkflowAssistProposalActionCard({
                 return;
             }
             setDone(j);
+            const ws = globalAssistant?.workspaceScope;
+            dispatchWorkflowAutomationRefresh({
+                department_id: ws?.department_id ?? null,
+                work_unit_id: ws?.work_unit_id ?? null,
+            });
+            dispatchAiActivityRefresh();
         } catch (e) {
             setDone({
                 ok: false,
@@ -79,9 +89,10 @@ export function WorkflowAssistProposalActionCard({
         } finally {
             setBusy(false);
         }
-    }, [suggestion, applyAllowed]);
+    }, [suggestion, applyAllowed, globalAssistant?.workspaceScope]);
 
     const isCreate = suggestion.proposal_kind === "create_workflow";
+    const editReview = suggestion.edit_review ?? [];
 
     return (
         <div className="space-y-2" data-command-surface-workflow-assist-proposal-card="true">
@@ -143,6 +154,27 @@ export function WorkflowAssistProposalActionCard({
                         </ul>
                     : null}
                 </>
+            : null}
+            {editReview.length ?
+                <dl
+                    className="space-y-1.5 rounded-md border px-2 py-1.5 text-[10px]"
+                    style={{ borderColor: derived.border, color: CMD.textSupporting }}
+                    data-command-surface-workflow-assist-edit-review="true"
+                >
+                    {editReview.map((row) => (
+                        <div key={row.field} className="grid gap-0.5">
+                            <dt className="font-semibold" style={{ color: CMD.textLabel }}>
+                                {row.label}
+                            </dt>
+                            <dd>
+                                <span style={{ color: CMD.textLabel }}>Current:</span> {row.current}
+                            </dd>
+                            <dd>
+                                <span style={{ color: CMD.textLabel }}>Proposed:</span> {row.proposed}
+                            </dd>
+                        </div>
+                    ))}
+                </dl>
             : null}
             <p className="text-[10px]" style={{ color: CMD.textSupporting }}>
                 {suggestion.reasoning.summary}

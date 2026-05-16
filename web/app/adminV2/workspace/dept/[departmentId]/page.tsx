@@ -39,6 +39,11 @@ import {
     writeDepartmentPageCache,
 } from "@/lib/workspace/adminV2WorkspaceSessionCache";
 import { AutomationWorkflowsBlock } from "@/app/adminV2/components/workspace/blocks/AutomationWorkflowsBlock";
+import {
+    ADMIN_V2_WORKFLOW_AUTOMATION_REFRESH,
+    workflowAutomationRefreshMatchesPage,
+} from "@/lib/adminV2/aiCommandSurface/workflowAssistWorkspaceEvents";
+import { fetchWorkflowAutomationWorkspacePanels } from "@/lib/workspace/fetchWorkflowAutomationWorkspacePanels";
 import type { WorkflowScopePartitionV1 } from "@/lib/workflows/workflowScopeMetadata";
 import { resolveKpisForDepartment } from "@/lib/kpi/resolver";
 import type { WorkspaceKpiPlacementRow } from "@/lib/kpi/types";
@@ -345,49 +350,43 @@ export default function AdminV2WorkspaceDepartmentPage() {
         return () => globalAssistant.setWorkspaceScope(null);
     }, [globalAssistant, departmentId, dept?.name]);
 
+    const refreshWorkflowPanels = useCallback(async () => {
+        if (!departmentId) return;
+        setWorkflowKpisLoading(true);
+        try {
+            const { kpis, partitions } = await fetchWorkflowAutomationWorkspacePanels({
+                department_id: departmentId,
+                init: workspaceDataFetchInit(),
+            });
+            setWorkflowKpis({ ...DEFAULT_WF_KPIS, ...kpis });
+            if (partitions) setWorkflowPartitions(partitions);
+        } catch {
+            // non-fatal
+        } finally {
+            setWorkflowKpisLoading(false);
+        }
+    }, [departmentId]);
+
+    const askWorkflowAssist = useCallback(() => {
+        const label = dept?.name?.trim() || "this department";
+        globalAssistant?.focusCommandBar({
+            seedCommand: `Show workflows for ${label}`,
+            expandThread: true,
+        });
+    }, [globalAssistant, dept?.name]);
+
     /** Workflow KPIs deferred until department shell geometry has committed — off the navigation critical path. */
     useEffect(() => {
         if (!departmentId || deptLoading || !dept?.id || deptWorkUnits === null) return;
         let cancelled = false;
-        const load = async () => {
-            if (cancelled) return;
-            setWorkflowKpisLoading(true);
-            try {
-                const init = workspaceDataFetchInit();
-                const [kRes, sRes] = await Promise.all([
-                    fetch("/api/admin/workflow-runs?list=kpis", init),
-                    fetch(
-                        `/api/admin/workflows/summary?variant=workspace&department_id=${encodeURIComponent(departmentId)}`,
-                        init
-                    ),
-                ]);
-                const kBody = (await kRes.json().catch(() => ({}))) as { kpis?: Partial<WorkflowKpis> };
-                const sJson = (await sRes.json().catch(() => ({}))) as {
-                    workflows?: WorkflowSummaryRow[];
-                    partitions?: WorkflowScopePartitionV1;
-                };
-                if (!cancelled) {
-                    if (kRes.ok && kBody.kpis) setWorkflowKpis({ ...DEFAULT_WF_KPIS, ...kBody.kpis });
-                    if (sRes.ok && sJson.partitions) setWorkflowPartitions(sJson.partitions);
-                }
-            } catch {
-                // non-fatal
-            } finally {
-                if (!cancelled) setWorkflowKpisLoading(false);
-            }
-        };
         let idleId = 0;
+        const run = () => {
+            if (!cancelled) void refreshWorkflowPanels();
+        };
         if (typeof window !== "undefined" && typeof requestIdleCallback !== "undefined") {
-            idleId = requestIdleCallback(
-                () => {
-                    void load();
-                },
-                { timeout: 2000 }
-            );
+            idleId = requestIdleCallback(run, { timeout: 2000 });
         } else {
-            idleId = window.setTimeout(() => {
-                void load();
-            }, 160);
+            idleId = window.setTimeout(run, 160);
         }
         return () => {
             cancelled = true;
@@ -397,7 +396,18 @@ export default function AdminV2WorkspaceDepartmentPage() {
                 window.clearTimeout(idleId);
             }
         };
-    }, [departmentId, deptLoading, dept?.id, deptWorkUnits]);
+    }, [departmentId, deptLoading, dept?.id, deptWorkUnits, refreshWorkflowPanels]);
+
+    useEffect(() => {
+        if (!departmentId) return;
+        const onRefresh = (ev: Event) => {
+            const detail = (ev as CustomEvent<{ department_id?: string | null; work_unit_id?: string | null }>).detail;
+            if (!workflowAutomationRefreshMatchesPage(detail, { department_id: departmentId })) return;
+            void refreshWorkflowPanels();
+        };
+        window.addEventListener(ADMIN_V2_WORKFLOW_AUTOMATION_REFRESH, onRefresh);
+        return () => window.removeEventListener(ADMIN_V2_WORKFLOW_AUTOMATION_REFRESH, onRefresh);
+    }, [departmentId, refreshWorkflowPanels]);
 
     useEffect(() => {
         if (!departmentId) {
@@ -1197,6 +1207,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                                 }}
                                 partitions={workflowPartitions}
                                 href="/adminV2/workflows"
+                                onAskWorkflowAssist={askWorkflowAssist}
                             />
                         </div>
                     }

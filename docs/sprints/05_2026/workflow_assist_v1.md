@@ -440,4 +440,40 @@ Migration: `supabase/migrations/20260516143000_workflows_metadata_scope.sql` add
 
 ---
 
+## 16. Product completion loop (shipped)
+
+### Post-apply refresh
+
+- On successful Workflow Assist apply (`WorkflowAssistProposalActionCard`), dispatches `alloy-adminv2-workflow-automation-refresh` with `GlobalAssistantContext.workspaceScope` (`department_id`, optional `work_unit_id`).
+- Department and work-unit pages listen and refetch via `fetchWorkflowAutomationWorkspacePanels` (KPIs + `partitions`) without full route reload.
+- Thread proposal card success state is preserved (no thread reset).
+
+### Ask Workflow Assist (workspace)
+
+- `AutomationWorkflowsBlock` **`onAskWorkflowAssist`** → `focusCommandBar({ seedCommand, expandThread: true })` (no separate assistant surface).
+- Department seed: `Show workflows for {department name}`.
+- Work-unit seed: `Create a workflow for {work unit} in {department}`.
+- `workspaceScope` remains set while the page is mounted for create propose context.
+
+### Edit-from-read (narrow v1)
+
+Read / failed-run / enrollment rows expose admin-only CTAs when capabilities allow:
+
+| Action | Propose kind | Allowed patch |
+|--------|--------------|---------------|
+| Propose disable | `pause_workflow` | `enabled: false` |
+| Propose rename | `edit_workflow` | `name` (prompt or ` (review)` fallback) |
+| Propose description | `edit_workflow` | `description` |
+
+**Blocked:** enable workflow, `event_type` / `entity_type`, action graph, conditions, triggers.
+
+Proposal cards show **`edit_review`** rows (current vs proposed) loaded from DB on propose. Non-admin: CTAs hidden / Apply disabled with portal mutation copy.
+
+### Remaining gaps
+
+- FK `department_id` / `work_unit_id` on `workflows` (Phase 2).
+- Timed reminder / real `create_message` actions; LLM generation; auto-enable; autonomous execution; broad workflow editor.
+
+---
+
 **When to update this doc:** Card 0 amendments; first route shipped; permission key seeded; any intentional change to `requireAdmin` vs ops for workflow mutations.

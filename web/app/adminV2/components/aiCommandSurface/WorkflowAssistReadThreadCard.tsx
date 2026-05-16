@@ -30,6 +30,50 @@ function MutationBlockedCallout({ message }: { message: string }) {
     );
 }
 
+function WorkflowAssistRowMutationActions({
+    workflowId,
+    workflowName,
+    mutation,
+}: {
+    workflowId: string;
+    workflowName: string;
+    mutation: WorkflowAssistThreadMutationHandlersV1;
+}) {
+    const btnClass = "shrink-0 rounded border px-2 py-0.5 text-[10px] font-semibold";
+    const btnStyle = { borderColor: derived.border, color: CMD.textBody };
+    return (
+        <div className="flex shrink-0 flex-col gap-1">
+            <button
+                type="button"
+                className={btnClass}
+                style={btnStyle}
+                data-command-surface-workflow-assist-propose-pause
+                onClick={() => void mutation.onProposePause(workflowId)}
+            >
+                Propose disable
+            </button>
+            <button
+                type="button"
+                className={btnClass}
+                style={btnStyle}
+                data-command-surface-workflow-assist-propose-rename
+                onClick={() => void mutation.onProposeRename(workflowId, workflowName)}
+            >
+                Propose rename
+            </button>
+            <button
+                type="button"
+                className={btnClass}
+                style={btnStyle}
+                data-command-surface-workflow-assist-propose-description
+                onClick={() => void mutation.onProposeDescription(workflowId)}
+            >
+                Propose description
+            </button>
+        </div>
+    );
+}
+
 function WorkflowAssistReadCardBody({
     payload,
     intent,
@@ -191,15 +235,11 @@ function WorkflowAssistReadCardBody({
                                         </div>
                                     </div>
                                     {mutation ?
-                                        <button
-                                            type="button"
-                                            className="shrink-0 rounded border px-2 py-0.5 text-[10px] font-semibold"
-                                            style={{ borderColor: derived.border, color: CMD.textBody }}
-                                            data-command-surface-workflow-assist-propose-pause-from-run
-                                            onClick={() => void mutation.onProposePause(r.workflow_id)}
-                                        >
-                                            Propose disable
-                                        </button>
+                                        <WorkflowAssistRowMutationActions
+                                            workflowId={r.workflow_id}
+                                            workflowName={r.workflow_name ?? "Workflow"}
+                                            mutation={mutation}
+                                        />
                                     : null}
                                 </li>
                             ))}
@@ -261,15 +301,11 @@ function WorkflowAssistReadCardBody({
                                         </span>
                                     </div>
                                     {mutation ?
-                                        <button
-                                            type="button"
-                                            className="shrink-0 rounded border px-2 py-0.5 text-[10px] font-semibold"
-                                            style={{ borderColor: derived.border, color: CMD.textBody }}
-                                            data-command-surface-workflow-assist-propose-pause
-                                            onClick={() => void mutation.onProposePause(w.workflow_id)}
-                                        >
-                                            Propose disable
-                                        </button>
+                                        <WorkflowAssistRowMutationActions
+                                            workflowId={w.workflow_id}
+                                            workflowName={w.name}
+                                            mutation={mutation}
+                                        />
                                     : null}
                                 </li>
                             ))}
@@ -333,15 +369,11 @@ function WorkflowAssistReadCardBody({
                                         </span>
                                     </div>
                                     {mutation ?
-                                        <button
-                                            type="button"
-                                            className="shrink-0 rounded border px-2 py-0.5 text-[10px] font-semibold"
-                                            style={{ borderColor: derived.border, color: CMD.textBody }}
-                                            data-command-surface-workflow-assist-propose-pause
-                                            onClick={() => void mutation.onProposePause(w.workflow_id)}
-                                        >
-                                            Propose disable
-                                        </button>
+                                        <WorkflowAssistRowMutationActions
+                                            workflowId={w.workflow_id}
+                                            workflowName={w.name}
+                                            mutation={mutation}
+                                        />
                                     : null}
                                 </li>
                             ))}

@@ -139,11 +139,26 @@ export async function POST(request: NextRequest) {
             }
         :   undefined;
 
+    let edit_before = null;
+    if (parsed.value.proposal_kind === "edit_workflow" || parsed.value.proposal_kind === "pause_workflow") {
+        const wid = parsed.value.workflow_id;
+        const { data: wfRow } = await supabase
+            .from("workflows")
+            .select("name, description, enabled, event_type, entity_type")
+            .eq("id", wid)
+            .eq("org_id", ctx.orgId)
+            .maybeSingle();
+        if (wfRow && typeof wfRow === "object") {
+            edit_before = wfRow;
+        }
+    }
+
     const suggestion = buildWorkflowAssistSuggestionV1({
         orgId: ctx.orgId,
         actorUserId: ctx.userId,
         parsed: parsed.value,
         scope_labels,
+        edit_before,
     });
 
     return NextResponse.json({ ok: true, suggestion });

@@ -42,6 +42,13 @@ import {
   extractExplainEntitySearchQuery,
   pickExplainEntityCandidate,
 } from "@/lib/agent/workflowAssist/workflowAssistExplainEntityLookup";
+import {
+  buildWorkflowAssistEditDescriptionProposeBody,
+  buildWorkflowAssistEditRenameProposeBody,
+  buildWorkflowAssistPauseProposeBody,
+  WORKFLOW_ASSIST_DESCRIPTION_NOTE_DEFAULT,
+  workflowAssistRenameFallbackName,
+} from "@/lib/agent/workflowAssist/workflowAssistEditFromReadV1";
 import type { WorkflowAssistProposeRequestV1, WorkflowAssistSuggestionV1 } from "@/lib/agent/workflowAssist/workflowAssistProposalV1";
 import { dedupeTaskAssistEntitySearchCandidates } from "@/lib/agent/taskAssist/taskAssistEntitySearchDedupe";
 import type { TaskAssistEntitySearchCandidate } from "@/lib/agent/taskAssist/taskAssistEntitySearchTypes";
@@ -1254,7 +1261,31 @@ export default function AICommandSurfaceShell() {
 
   const workflowAssistMutation = useMemo<WorkflowAssistThreadMutationHandlersV1>(
     () => ({
-      onProposePause: (workflowId) => proposeWorkflowAssistBody({ version: 1, proposal_kind: "pause_workflow", workflow_id: workflowId }),
+      onProposePause: (workflowId) => proposeWorkflowAssistBody(buildWorkflowAssistPauseProposeBody(workflowId)),
+      onProposeRename: async (workflowId, currentName) => {
+        const prompted =
+          typeof window !== "undefined" ?
+            window.prompt("Proposed workflow name", currentName)?.trim()
+          : null;
+        const proposed =
+          prompted && prompted !== currentName.trim() ? prompted : workflowAssistRenameFallbackName(currentName);
+        await proposeWorkflowAssistBody(
+          buildWorkflowAssistEditRenameProposeBody({ workflow_id: workflowId, proposed_name: proposed })
+        );
+      },
+      onProposeDescription: async (workflowId) => {
+        const prompted =
+          typeof window !== "undefined" ?
+            window.prompt("Proposed description", WORKFLOW_ASSIST_DESCRIPTION_NOTE_DEFAULT)?.trim()
+          : null;
+        const proposed = prompted || WORKFLOW_ASSIST_DESCRIPTION_NOTE_DEFAULT;
+        await proposeWorkflowAssistBody(
+          buildWorkflowAssistEditDescriptionProposeBody({
+            workflow_id: workflowId,
+            proposed_description: proposed,
+          })
+        );
+      },
       onProposeCreateTemplate: () => proposeWorkflowAssistBody(WORKFLOW_ASSIST_CREATE_PROPOSE_BODY),
     }),
     [proposeWorkflowAssistBody]
@@ -1556,11 +1587,17 @@ export default function AICommandSurfaceShell() {
       if (detail.preferMode && globalAssistant) {
         globalAssistant.setCommandSurfaceMode(detail.preferMode);
       }
+      if (detail.seedCommand) {
+        setCommandText(detail.seedCommand);
+      }
+      if (detail.expandThread) {
+        setThreadExpanded(true);
+      }
       inputRef.current?.focus();
     };
     window.addEventListener(ADMIN_V2_FOCUS_COMMAND_BAR, onFocusBar as EventListener);
     return () => window.removeEventListener(ADMIN_V2_FOCUS_COMMAND_BAR, onFocusBar as EventListener);
-  }, [globalAssistant]);
+  }, [globalAssistant, setThreadExpanded]);
 
   const hasThread = thread.turns.length > 0;
   const threadPreview = useMemo(() => lastThreadPreviewText(thread.turns), [thread.turns]);

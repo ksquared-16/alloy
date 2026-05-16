@@ -7,6 +7,11 @@ import { useSearchParams } from "next/navigation";
 import { WorkspaceChrome } from "@/components/admin/workspace/WorkspaceChrome";
 import WorkUnitWorkspace from "@/app/adminV2/components/workspace/shells/WorkUnitWorkspace";
 import { AutomationWorkflowsBlock } from "@/app/adminV2/components/workspace/blocks/AutomationWorkflowsBlock";
+import {
+    ADMIN_V2_WORKFLOW_AUTOMATION_REFRESH,
+    workflowAutomationRefreshMatchesPage,
+} from "@/lib/adminV2/aiCommandSurface/workflowAssistWorkspaceEvents";
+import { fetchWorkflowAutomationWorkspacePanels } from "@/lib/workspace/fetchWorkflowAutomationWorkspacePanels";
 import type { WorkflowScopePartitionV1 } from "@/lib/workflows/workflowScopeMetadata";
 import { useWorkspaceOrg } from "@/contexts/WorkspaceOrgContext";
 import { useWorkspaceSiteFilter } from "@/contexts/WorkspaceSiteFilterContext";
@@ -679,6 +684,51 @@ export default function AdminV2OpportunityWorkUnitPage() {
         });
         return () => globalAssistant.setWorkspaceScope(null);
     }, [globalAssistant, departmentId, workUnitId, dept?.name, workUnit?.name]);
+
+    const refreshWorkflowPanels = useCallback(async () => {
+        if (!departmentId || !workUnitId) return;
+        setWorkflowKpisLoading(true);
+        try {
+            const { kpis, partitions } = await fetchWorkflowAutomationWorkspacePanels({
+                department_id: departmentId,
+                work_unit_id: workUnitId,
+                init: workspaceDataFetchInit(),
+            });
+            setWorkflowKpis({ ...DEFAULT_WF_KPIS, ...kpis });
+            if (partitions) setWorkflowPartitions(partitions);
+        } catch {
+            // non-fatal
+        } finally {
+            setWorkflowKpisLoading(false);
+        }
+    }, [departmentId, workUnitId]);
+
+    const askWorkflowAssist = useCallback(() => {
+        const wuLabel = workUnit?.name?.trim() || "this work unit";
+        const deptLabel = dept?.name?.trim() || "this department";
+        globalAssistant?.focusCommandBar({
+            seedCommand: `Create a workflow for ${wuLabel} in ${deptLabel}`,
+            expandThread: true,
+        });
+    }, [globalAssistant, workUnit?.name, dept?.name]);
+
+    useEffect(() => {
+        if (!departmentId || !workUnitId) return;
+        const onRefresh = (ev: Event) => {
+            const detail = (ev as CustomEvent<{ department_id?: string | null; work_unit_id?: string | null }>).detail;
+            if (
+                !workflowAutomationRefreshMatchesPage(detail, {
+                    department_id: departmentId,
+                    work_unit_id: workUnitId,
+                })
+            ) {
+                return;
+            }
+            void refreshWorkflowPanels();
+        };
+        window.addEventListener(ADMIN_V2_WORKFLOW_AUTOMATION_REFRESH, onRefresh);
+        return () => window.removeEventListener(ADMIN_V2_WORKFLOW_AUTOMATION_REFRESH, onRefresh);
+    }, [departmentId, workUnitId, refreshWorkflowPanels]);
 
     /** Browser back/forward: sync selected queue + `unmapped` from the real location (shallow tabs do not update Next `searchParams`). */
     useEffect(() => {
@@ -2824,6 +2874,7 @@ export default function AdminV2OpportunityWorkUnitPage() {
                                 }}
                                 partitions={workflowPartitions}
                                 href="/adminV2/workflows"
+                                onAskWorkflowAssist={askWorkflowAssist}
                             />
                         }
                     />

@@ -4,4 +4,8 @@ export const ADMIN_V2_FOCUS_COMMAND_BAR = "alloy-adminv2-focus-command-bar" as c
 export type AdminV2FocusCommandBarDetail = {
     /** When set, the command surface should switch to this mode after focus. */
     preferMode?: "job_overview" | "task_assist";
+    /** Prefill the command input (e.g. Ask Workflow Assist from workspace automation). */
+    seedCommand?: string;
+    /** Expand the thread panel when focusing so prior Assist turns stay visible. */
+    expandThread?: boolean;
 };

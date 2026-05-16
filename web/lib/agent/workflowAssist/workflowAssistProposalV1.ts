@@ -55,6 +55,13 @@ export type WorkflowAssistProposeRequestV1 =
           reason?: string | null;
       };
 
+export type WorkflowAssistEditReviewRowV1 = {
+    field: string;
+    label: string;
+    current: string;
+    proposed: string;
+};
+
 export type WorkflowAssistSuggestionV1 = {
     version: 1;
     agent_key: typeof WORKFLOW_ASSIST_AGENT_KEY;
@@ -72,9 +79,82 @@ export type WorkflowAssistSuggestionV1 = {
     /** Inserted on apply when template provides scaffolds (e.g. tour reminder log step). */
     draft_action_scaffolds?: WorkflowAssistDraftActionScaffoldV1[] | null;
     scope_display?: WorkflowAssistScopeDisplayV1 | null;
+    /** Current vs proposed values for edit/pause review cards. */
+    edit_review?: WorkflowAssistEditReviewRowV1[] | null;
     reasoning: { summary: string; warnings: string[] };
     approval_required: true;
 };
+
+export type WorkflowAssistEditBeforeRowV1 = {
+    name?: string | null;
+    description?: string | null;
+    enabled?: boolean | null;
+    event_type?: string | null;
+    entity_type?: string | null;
+};
+
+export function buildWorkflowAssistEditReviewRows(input: {
+    proposal_kind: "edit_workflow" | "pause_workflow";
+    patch: WorkflowAssistEditPatchV1;
+    before: WorkflowAssistEditBeforeRowV1 | null;
+}): WorkflowAssistEditReviewRowV1[] {
+    if (input.proposal_kind === "pause_workflow") {
+        const enabled = input.before?.enabled;
+        return [
+            {
+                field: "enabled",
+                label: "Status",
+                current: enabled === false ? "Disabled" : "Enabled",
+                proposed: "Disabled",
+            },
+        ];
+    }
+    const before = input.before;
+    const rows: WorkflowAssistEditReviewRowV1[] = [];
+    const patch = input.patch;
+    if (patch.name !== undefined) {
+        rows.push({
+            field: "name",
+            label: "Name",
+            current: (before?.name ?? "—").trim() || "—",
+            proposed: patch.name,
+        });
+    }
+    if (patch.description !== undefined) {
+        const cur = before?.description;
+        rows.push({
+            field: "description",
+            label: "Description",
+            current: cur == null || String(cur).trim() === "" ? "—" : String(cur),
+            proposed: patch.description == null || String(patch.description).trim() === "" ? "—" : String(patch.description),
+        });
+    }
+    if (patch.enabled === false) {
+        rows.push({
+            field: "enabled",
+            label: "Status",
+            current: before?.enabled === false ? "Disabled" : "Enabled",
+            proposed: "Disabled",
+        });
+    }
+    if (patch.event_type !== undefined) {
+        rows.push({
+            field: "event_type",
+            label: "Trigger event",
+            current: before?.event_type ?? "—",
+            proposed: patch.event_type,
+        });
+    }
+    if (patch.entity_type !== undefined) {
+        rows.push({
+            field: "entity_type",
+            label: "Entity type",
+            current: before?.entity_type ?? "—",
+            proposed: patch.entity_type,
+        });
+    }
+    return rows;
+}
 
 export type WorkflowAssistApplyRequestV1 = {
     version: 1;
@@ -277,7 +357,17 @@ export function parseWorkflowAssistProposeRequest(body: unknown): ParseWorkflowA
                 continue;
             }
             if (k === "enabled") {
-                if (typeof patchRaw[k] === "boolean") patch.enabled = patchRaw[k];
+                if (typeof patchRaw[k] === "boolean") {
+                    if (patchRaw[k] === true) {
+                        return {
+                            ok: false,
+                            error: "UNSUPPORTED_ENABLED",
+                            message: "Enabling workflows via Assist is not allowed.",
+                            status: 400,
+                        };
+                    }
+                    patch.enabled = patchRaw[k];
+                }
                 continue;
             }
             if (typeof patchRaw[k] === "string") {
@@ -305,6 +395,7 @@ export function buildWorkflowAssistSuggestionV1(input: {
     actorUserId: string;
     parsed: WorkflowAssistProposeRequestV1;
     scope_labels?: { department_name?: string | null; work_unit_name?: string | null };
+    edit_before?: WorkflowAssistEditBeforeRowV1 | null;
 }): WorkflowAssistSuggestionV1 {
     const generated_at_iso = new Date().toISOString();
     const warnings: string[] = [];
@@ -375,6 +466,11 @@ export function buildWorkflowAssistSuggestionV1(input: {
             input.parsed.workflow_id
         );
         warnings.push("Disables automation for this workflow until re-enabled in Automations.");
+        const edit_review = buildWorkflowAssistEditReviewRows({
+            proposal_kind: "pause_workflow",
+            patch,
+            before: input.edit_before ?? null,
+        });
         return {
             version: 1,
             agent_key: WORKFLOW_ASSIST_AGENT_KEY,
@@ -386,6 +482,7 @@ export function buildWorkflowAssistSuggestionV1(input: {
             target_workflow_id: input.parsed.workflow_id,
             draft_row: null,
             patch,
+            edit_review,
             reasoning: {
                 summary: `Disable (pause) workflow ${input.parsed.workflow_id}.`,
                 warnings,
@@ -402,6 +499,11 @@ export function buildWorkflowAssistSuggestionV1(input: {
         input.parsed.workflow_id
     );
     warnings.push("Applies only allowed workflow fields; conditions and actions are unchanged.");
+    const edit_review = buildWorkflowAssistEditReviewRows({
+        proposal_kind: "edit_workflow",
+        patch,
+        before: input.edit_before ?? null,
+    });
     return {
         version: 1,
         agent_key: WORKFLOW_ASSIST_AGENT_KEY,
@@ -413,6 +515,7 @@ export function buildWorkflowAssistSuggestionV1(input: {
         target_workflow_id: input.parsed.workflow_id,
         draft_row: null,
         patch,
+        edit_review,
         reasoning: {
             summary: `Update workflow ${input.parsed.workflow_id} with ${Object.keys(patch).join(", ")}.`,
             warnings,

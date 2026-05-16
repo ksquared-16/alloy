@@ -121,6 +121,14 @@ export async function executeWorkflowAssistApply(params: {
 
     const updates: Record<string, unknown> = {};
     const patchRec = patch as Record<string, unknown>;
+    if (patchRec.enabled === true) {
+        return {
+            ok: false,
+            error: "UNSUPPORTED_ENABLED",
+            message: "Enabling workflows via Assist is not allowed.",
+            status: 400,
+        };
+    }
     for (const key of ALLOWED_PATCH) {
         if (patchRec[key] === undefined) continue;
         updates[key] = patchRec[key];

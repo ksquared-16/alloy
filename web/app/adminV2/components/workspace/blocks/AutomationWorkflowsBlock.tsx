@@ -104,8 +104,10 @@ export function AutomationWorkflowsBlock(props: {
     kpisLoading?: boolean;
     /** Shown when workflows lack department/work-unit linkage (org-wide heuristic list). */
     metadataAssociationNote?: string | null;
-    /** Optional command-bar deep link for Workflow Assist. */
+    /** Optional command-bar deep link for Workflow Assist (legacy). */
     workflowAssistHref?: string | null;
+    /** Focus command surface with seeded Workflow Assist prompt (preferred). */
+    onAskWorkflowAssist?: (() => void) | null;
 }) {
     const {
         kpis,
@@ -116,6 +118,7 @@ export function AutomationWorkflowsBlock(props: {
         kpisLoading = false,
         metadataAssociationNote = null,
         workflowAssistHref = null,
+        onAskWorkflowAssist = null,
     } = props;
 
     const scopedWu = partitions?.scoped_work_unit ?? [];
@@ -153,7 +156,16 @@ export function AutomationWorkflowsBlock(props: {
                         Open Automations
                         <span aria-hidden> →</span>
                     </Link>
-                    {workflowAssistHref ?
+                    {onAskWorkflowAssist ?
+                        <button
+                            type="button"
+                            className="adminv2-ws-automation-telemetry__review adminv2-ws-automation-telemetry__review--secondary"
+                            data-ws-ask-workflow-assist="true"
+                            onClick={onAskWorkflowAssist}
+                        >
+                            Ask Workflow Assist
+                        </button>
+                    : workflowAssistHref ?
                         <Link
                             href={workflowAssistHref}
                             prefetch={shouldDisableAdminV2LinkPrefetch(workflowAssistHref) ? false : undefined}
