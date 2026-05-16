@@ -109,8 +109,9 @@ export default function TopNavBar() {
   const normalizedPath = useMemo(() => normalizeAdminPath(pathname), [pathname]);
 
   const isQueueContext = WORK_UNIT_QUEUE_PATH.test(normalizedPath);
-  const isWorkspaceOverview =
-    (normalizedPath === "/adminV2/workspace" ||
+  const isWorkspaceOverviewExact = normalizedPath === "/adminV2/workspace";
+  const isWorkspaceOverviewSection =
+    (isWorkspaceOverviewExact ||
       /^\/adminV2\/workspace\/dept\/[^/]+\/?$/.test(normalizedPath)) &&
     !isQueueContext;
   const isAiActivity = normalizedPath === "/adminV2/ai-activity";
@@ -167,9 +168,9 @@ export default function TopNavBar() {
       <nav className="flex items-center gap-1.5 shrink-0 pl-1" aria-label="Perspective tabs">
         <AdminV2NavLink
           href="/adminV2/workspace"
-          active={isWorkspaceOverview}
+          active={isWorkspaceOverviewSection}
           className="px-2 py-1 rounded text-xs font-medium"
-          style={tabStyle(isWorkspaceOverview)}
+          style={tabStyle(isWorkspaceOverviewSection)}
         >
           Overview
         </AdminV2NavLink>

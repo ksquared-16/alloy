@@ -89,7 +89,7 @@ export default function AdminV2WorkspaceClientProviders({
                   <AdminDrawerProvider>
                     <AdminV2ClickDebugInstaller />
                     <div
-                      className="adminv2-workspace-scroll-surface relative z-[50] min-h-0 flex-1 overflow-auto px-4 py-3 sm:px-5"
+                      className="adminv2-workspace-scroll-surface relative z-0 min-h-0 flex-1 overflow-auto px-4 py-3 sm:px-5"
                       style={workspaceScrollStyle}
                     >
                       {children}

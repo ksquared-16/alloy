@@ -31,4 +31,10 @@ describe("AdminV2 sidebar drawer pointer-events contract", () => {
         expect(drawerSource).toContain("ADMINV2_DRAWER_BACKDROP_Z");
         expect(drawerSource).toContain("ADMINV2_DRAWER_PANEL_Z");
     });
+
+    it("modal record drawer dim does not capture workspace clicks", () => {
+        expect(drawerSource).toContain("adminv2-drawer-modal-dim");
+        expect(drawerSource).toMatch(/adminv2-drawer-modal-dim[\s\S]*?pointer-events-none/);
+        expect(drawerSource).not.toMatch(/adminv2-drawer-modal-dim[\s\S]*?onClick=\{onClose\}/);
+    });
 });

@@ -157,7 +157,7 @@ function DeptOperConsoleQueueRow(props: {
                 });
                 adminV2BeforeRouteNavigation({ closeDrawer: adminDrawer?.closeDrawer });
             }}
-            className={`adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact ${tier} no-underline text-inherit hover:opacity-[0.98]`}
+            className={`adminv2-ws-wu-queue-card adminv2-ws-wu-queue-card--compact adminv2-ws-dept-oper-queue-link relative z-[1] cursor-pointer pointer-events-auto ${tier} no-underline text-inherit hover:opacity-[0.98]`}
             data-ws-wu-urgency={urgency}
             data-attention-bucket-key={attentionBucketKey}
             title={title}
@@ -874,14 +874,22 @@ export default function AdminV2WorkspaceDepartmentPage() {
         return deptLoading;
     }, [departmentId, deptLoading]);
 
-    /** Both paired lanes finished their independent fetches — reveal real cards together (no early Needs Attention fill). */
-    const deptPairedOperSurfacesReady = useMemo(() => {
+    /** Throughput lane: work units + optional pipeline lanes — do not wait on attention buckets. */
+    const deptThroughputOperReady = useMemo(() => {
         if (!departmentId || deptLoading || deptWorkUnits === null) return false;
-        return !deptPipelineExecLoading && !deptAttentionBucketsLoading;
-    }, [departmentId, deptLoading, deptWorkUnits, deptPipelineExecLoading, deptAttentionBucketsLoading]);
+        return !deptPipelineExecLoading;
+    }, [departmentId, deptLoading, deptWorkUnits, deptPipelineExecLoading]);
 
-    const showDeptPairedOperSkeleton =
-        !!dept && !departmentPageBlockingLoad && !deptWorkUnitsError && !deptPairedOperSurfacesReady;
+    const deptAttentionOperReady = useMemo(() => {
+        if (!departmentId || deptLoading) return false;
+        return !deptAttentionBucketsLoading;
+    }, [departmentId, deptLoading, deptAttentionBucketsLoading]);
+
+    const showDeptThroughputOperSkeleton =
+        !!dept && !departmentPageBlockingLoad && !deptWorkUnitsError && !deptThroughputOperReady;
+
+    const showDeptAttentionOperSkeleton =
+        !!dept && !departmentPageBlockingLoad && !deptAttentionBucketsError && !deptAttentionOperReady;
 
     useEffect(() => {
         if (!isEnrollmentLikeDepartmentKey(deptKey) || !departmentId || !primaryWorkUnit?.id) {
@@ -1015,10 +1023,16 @@ export default function AdminV2WorkspaceDepartmentPage() {
 
     const execPanelTitle = deptPipelineExecSurface?.panelTitle ?? "Work Unit Queue";
 
-    const throughputPairedPanels = (
-        <WorkspacePairedOperPanelsGrid>
-            <WorkspacePairedOperPanel tone="throughput" ariaLabel={execPanelTitle} title={execPanelTitle}>
-                <ul className="adminv2-ws-queue-list" role="list">
+    const throughputLaneBody = showDeptThroughputOperSkeleton ? (
+        <ul className="adminv2-ws-queue-list" role="list">
+            <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
+                <div className="rounded-lg border border-admin-border bg-white/50 px-3 py-3 text-xs text-alloy-midnight/55">
+                    Loading work units…
+                </div>
+            </li>
+        </ul>
+    ) : (
+        <ul className="adminv2-ws-queue-list" role="list">
                     {deptWorkUnitsError ? (
                         <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
                             <div className="rounded-lg border border-admin-border bg-white/50 px-3 py-2 text-xs text-alloy-ember">
@@ -1081,13 +1095,9 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         </>
                     )}
                 </ul>
-            </WorkspacePairedOperPanel>
-            <WorkspacePairedOperPanel
-                tone="attention"
-                ariaLabel="Needs Attention"
-                title="Needs Attention"
-                titleClassName="adminv2-ws-queue-title--section-primary-type"
-            >
+    );
+
+    const attentionLaneBody = (
                 <ul className="adminv2-ws-queue-list" role="list">
                     {deptAttentionBucketsError ? (
                         <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
@@ -1137,6 +1147,30 @@ export default function AdminV2WorkspaceDepartmentPage() {
                         );
                     })}
                 </ul>
+    );
+
+    const throughputPairedPanels = (
+        <WorkspacePairedOperPanelsGrid>
+            <WorkspacePairedOperPanel tone="throughput" ariaLabel={execPanelTitle} title={execPanelTitle}>
+                {throughputLaneBody}
+            </WorkspacePairedOperPanel>
+            <WorkspacePairedOperPanel
+                tone="attention"
+                ariaLabel="Needs Attention"
+                title="Needs Attention"
+                titleClassName="adminv2-ws-queue-title--section-primary-type"
+            >
+                {showDeptAttentionOperSkeleton ? (
+                    <ul className="adminv2-ws-queue-list" role="list">
+                        <li className="adminv2-ws-wu-queue-item-wrap" role="listitem">
+                            <div className="rounded-lg border border-admin-border bg-white/50 px-3 py-3 text-xs text-alloy-midnight/55">
+                                Loading operational buckets…
+                            </div>
+                        </li>
+                    </ul>
+                ) : (
+                    attentionLaneBody
+                )}
             </WorkspacePairedOperPanel>
         </WorkspacePairedOperPanelsGrid>
     );
@@ -1192,13 +1226,7 @@ export default function AdminV2WorkspaceDepartmentPage() {
                             </div>
                         ) : null
                     }
-                    throughputSlot={
-                        showDeptPairedOperSkeleton ? (
-                            <DeptPairedOperQueuesSkeleton throughputTitle={execPanelTitle} />
-                        ) : (
-                            throughputPairedPanels
-                        )
-                    }
+                    throughputSlot={throughputPairedPanels}
                     attentionSlot={null}
                     contextSlot={
                         <div

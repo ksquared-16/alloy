@@ -73,9 +73,11 @@ describe("Work-unit queue tab shallow routing", () => {
         expect(src).toContain('aria-current="page"');
     });
 
-    it("AdminV2NavLink renders span without prefetch when route is current", () => {
+    it("AdminV2NavLink always renders Link and suppresses only same-href clicks", () => {
         const src = read("app/adminV2/components/navigation/AdminV2NavLink.tsx");
         expect(src).toContain("isCurrentRoute");
+        expect(src).toContain("if (isCurrentRoute)");
+        expect(src).not.toContain('return (\n            <span');
         expect(src).not.toMatch(/\buseLinkStatus\s*\(/);
     });
 });

@@ -338,9 +338,8 @@ export default function Drawer({
         return (
             <>
                 <div
-                    className="fixed inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity duration-200"
+                    className="adminv2-drawer-modal-dim fixed inset-0 bg-black/40 backdrop-blur-[2px] transition-opacity duration-200 pointer-events-none"
                     style={{ zIndex: zIndexBackdrop }}
-                    onClick={onClose}
                     aria-hidden
                 />
                 <div
