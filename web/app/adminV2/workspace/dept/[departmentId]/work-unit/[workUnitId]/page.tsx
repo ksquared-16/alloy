@@ -1582,7 +1582,6 @@ export default function AdminV2OpportunityWorkUnitPage() {
         fetchQueueItems,
         requestWorkUnitDeferredSupplement,
         markFirstUsefulPaintOnce,
-        searchParams,
     ]);
 
     const invalidate = useCallback(

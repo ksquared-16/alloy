@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import type { OperationalVisualContext } from "@/lib/visualContext";
 
@@ -210,10 +210,19 @@ export function AdminDrawerProvider({ children }: { children: ReactNode }) {
     }, []);
 
     /**
-     * Route changes close the drawer after navigation (pathname updates).
-     * Shell links must stay clickable while open — see Drawer sidebar dim (`pointer-events-none`).
+     * Close drawer only when the pathname segment changes — not on provider mount,
+     * and not on shallow `history.replaceState` queue tabs (pathname unchanged).
      */
+    const pathnameRef = useRef(pathname);
+    const drawerCloseMountedRef = useRef(false);
     useEffect(() => {
+        if (!drawerCloseMountedRef.current) {
+            drawerCloseMountedRef.current = true;
+            pathnameRef.current = pathname;
+            return;
+        }
+        if (pathnameRef.current === pathname) return;
+        pathnameRef.current = pathname;
         closeDrawer();
     }, [pathname, closeDrawer]);
 

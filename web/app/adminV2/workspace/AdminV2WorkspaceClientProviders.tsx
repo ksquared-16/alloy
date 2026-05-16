@@ -5,6 +5,7 @@ import { AdminDrawerProvider } from "@/contexts/AdminDrawerContext";
 import { AdminVerticalProvider } from "@/contexts/AdminVerticalContext";
 import { EntityLabelsProvider, type EntityLabelsMap } from "@/contexts/EntityLabelsContext";
 import AdminEntityDrawer from "@/components/admin/AdminEntityDrawer";
+import AdminV2ClickDebugInstaller from "@/app/adminV2/components/AdminV2ClickDebugInstaller";
 import type { EntityLabelsBootstrapMap } from "@/lib/admin/entityLabelsServer";
 import { AdminOrgOperationalTimezoneProvider } from "@/contexts/AdminOrgOperationalTimezoneContext";
 import { AdminViewerTimezoneProvider, type AdminViewerTimezoneValue } from "@/contexts/AdminViewerTimezoneContext";
@@ -86,6 +87,7 @@ export default function AdminV2WorkspaceClientProviders({
               >
                 <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
                   <AdminDrawerProvider>
+                    <AdminV2ClickDebugInstaller />
                     <div
                       className="adminv2-workspace-scroll-surface relative z-[50] min-h-0 flex-1 overflow-auto px-4 py-3 sm:px-5"
                       style={workspaceScrollStyle}

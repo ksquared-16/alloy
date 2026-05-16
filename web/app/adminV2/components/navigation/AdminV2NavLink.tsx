@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useLinkStatus } from "next/link";
-import type { ComponentProps, ReactNode } from "react";
+import { Suspense, type ComponentProps, type ReactNode } from "react";
 import { shouldDisableAdminV2LinkPrefetch } from "@/app/adminV2/components/navigation/adminV2HeavyRoutePrefetch";
 
 function hrefPathOnly(href: ComponentProps<typeof Link>["href"]): string | null {
@@ -51,7 +51,9 @@ export function AdminV2NavLink({ className, active, children, prefetch, ...rest 
     const merged = ["adminv2-nav-link", active ? "adminv2-nav-link--active" : "", className].filter(Boolean).join(" ");
     return (
         <Link {...rest} prefetch={resolvedPrefetch} className={merged}>
-            <NavLinkInner>{children}</NavLinkInner>
+            <Suspense fallback={<span className="adminv2-nav-link__inner">{children}</span>}>
+                <NavLinkInner>{children}</NavLinkInner>
+            </Suspense>
         </Link>
     );
 }

@@ -380,7 +380,7 @@ export default function Drawer({
                 aria-modal="true"
                 aria-labelledby="admin-drawer-title"
                 data-adminv2-drawer={isV2 ? "true" : undefined}
-                className={`adminv2-drawer-sidebar-panel pointer-events-auto fixed inset-y-0 right-0 left-auto flex w-[min(100vw,42rem)] max-w-full flex-col border shadow-xl ${panelClassName ?? "max-w-2xl"} ${
+                className={`adminv2-drawer-sidebar-panel pointer-events-auto fixed inset-y-0 right-0 left-auto flex w-[min(100vw,42rem)] max-w-2xl flex-col border shadow-xl ${panelClassName ?? ""} ${
                     isV2 ? "border-solid" : `bg-admin-surface-card border-admin-border ${accentColor ? "" : "border-l-4 border-alloy-blue/40"}`
                 }`}
                 style={panelStyle}
